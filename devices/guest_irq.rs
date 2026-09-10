@@ -12,7 +12,7 @@
 //! `try_inject_guest_irq`) so Linux EOI matches. This module is live only
 //! while the product ISO window is armed. Host/CI never prints `ISO-INSTALL-OK`.
 
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 
 /// IOAPIC MMIO window (QEMU/ICH).
 pub const IOAPIC_GPA: u64 = 0xFEC0_0000;
@@ -139,27 +139,96 @@ fn product_live() -> bool {
     crate::devices::ide_cdrom::product_iso_window_armed()
 }
 
-static PREFER_PIT: AtomicBool = AtomicBool::new(false);
+static PREFER_PIT_ONCE: AtomicBool = AtomicBool::new(false);
+static PREFER_PIT_HOLD: AtomicBool = AtomicBool::new(false);
+/// After PIC 11 is taken, the next peek/take prefers PIT if both are
+/// pending **1:1 until** Alpine usbdelay finishes, then every third
+/// PIC 11 (3:1) so apk overlay INTx and jiffies both move.
+/// Iron `fc3053a` / `34148045050`: level INTx starved IRQ0 during
+/// `usbdelay=30` (`n=1089`). Iron `c2cd099` / `34172103709`: stopping
+/// yield after `media: ok` still froze apk at `n=1345`.
+/// linux PIC IRQ11 yield PIT. linux PIC IRQ11 yield until mount.
+/// linux PIC IRQ11 yield 3 after mount.
+static IRQ11_YIELD_PIT: AtomicBool = AtomicBool::new(false);
+static PIC11_SINCE_PIT: AtomicU8 = AtomicU8::new(0);
 static FIRMWARE_WIRE: AtomicBool = AtomicBool::new(false);
+/// Linux itself wrote IOAPIC pin 2. Firmware virtual-wire leftover does not
+/// count — that leftover made iron `c61942b` skip PIC virtio (no
+/// `linux PIC IRQ0`, apk `n=1345`). linux PIC before leftover GSI 2.
+static LINUX_IOAPIC_GSI2: AtomicBool = AtomicBool::new(false);
+/// 8259 INTA counts for IRQ 0 (PIT) and IRQ 4 (COM1) since reset.
+/// UART THRE chain telemetry.
+static TAKE_IRQ0: AtomicU32 = AtomicU32::new(0);
+static TAKE_IRQ4: AtomicU32 = AtomicU32::new(0);
+
+/// Master 8259 registers plus INTA counts. UART THRE chain telemetry.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PicMasterSnap {
+    pub irr: u8,
+    pub imr: u8,
+    pub isr: u8,
+    pub ready: bool,
+    pub take_irq0: u32,
+    pub take_irq4: u32,
+}
+
+/// Snapshot the master 8259 as the inject path sees it. Not `ISO-INSTALL-OK`.
+pub fn pic_master_snap() -> PicMasterSnap {
+    with_irq(|c| PicMasterSnap {
+        irr: c.master.irr,
+        imr: c.master.imr,
+        isr: c.master.isr,
+        ready: c.master.ready,
+        take_irq0: TAKE_IRQ0.load(Ordering::Acquire),
+        take_irq4: TAKE_IRQ4.load(Ordering::Acquire),
+    })
+}
 
 pub fn reset() {
-    PREFER_PIT.store(false, Ordering::Release);
+    PREFER_PIT_ONCE.store(false, Ordering::Release);
+    PREFER_PIT_HOLD.store(false, Ordering::Release);
+    IRQ11_YIELD_PIT.store(false, Ordering::Release);
+    PIC11_SINCE_PIT.store(0, Ordering::Release);
     FIRMWARE_WIRE.store(false, Ordering::Release);
+    LINUX_IOAPIC_GSI2.store(false, Ordering::Release);
+    TAKE_IRQ0.store(0, Ordering::Release);
+    TAKE_IRQ4.store(0, Ordering::Release);
     with_irq(|c| *c = IrqChip::empty());
 }
 
-/// Linux product-ISO I/O: deliver PIT once even if UART IRR is also set.
-/// UART still beats PIT after this inject so auto-answer is not starved.
-/// linux PIT prefer once. Not `ISO-INSTALL-OK`.
-pub fn prefer_pit_once() {
-    PREFER_PIT.store(true, Ordering::Release);
+fn prefer_pit_priority() -> bool {
+    PREFER_PIT_HOLD.load(Ordering::Acquire) || PREFER_PIT_ONCE.load(Ordering::Acquire)
 }
 
-/// Prefer PIT over UART while virtio probe still needs kworker. Clear
-/// after both functions reach DRIVER_OK so COM1 auto-answer is not starved.
-/// linux PIT prefer until DRIVER_OK. Not `ISO-INSTALL-OK`.
+/// Linux product-ISO I/O: deliver PIT once even if UART IRR is also set.
+/// Consumed on the next PIT take. Overlay uses [`prefer_pit_hold`] instead
+/// (`idle=poll` never HLT; once is gone before the next kick).
+/// linux PIT prefer once. linux PIT once after DRIVER_OK.
+/// linux HLT PIT during apk. linux PIT after DRIVER_OK until login.
+/// Not `ISO-INSTALL-OK`.
+pub fn prefer_pit_once() {
+    PREFER_PIT_ONCE.store(true, Ordering::Release);
+}
+
+/// Hold PIT over UART until cleared. Not consumed on PIT take.
+/// Virtio probe and apk overlay (`idle=poll`) need this; getty `login:`
+/// clears it so auto-answer is not starved.
+/// linux PIT hold until login. linux PIT prefer until DRIVER_OK.
+/// Not `ISO-INSTALL-OK`.
+pub fn prefer_pit_hold(need: bool) {
+    PREFER_PIT_HOLD.store(need, Ordering::Release);
+    if need {
+        crate::devices::guest_serial_answer::note_overlay_hold();
+    }
+}
+
+/// Prefer PIT over UART while virtio probe still needs kworker, or while
+/// apk overlay has not reached getty `login:`. Iron `20e8b70` /
+/// `34076175624` consumed PIT-once then froze at `n=1345`.
+/// linux PIT prefer until DRIVER_OK. linux PIT hold until login.
+/// Not `ISO-INSTALL-OK`.
 pub fn prefer_pit_until_driver_ok(need: bool) {
-    PREFER_PIT.store(need, Ordering::Release);
+    prefer_pit_hold(need);
 }
 
 /// True when GPA is the product-ISO IOAPIC 4 KiB window (not the HPET sink).
@@ -259,12 +328,34 @@ pub fn lower_gsi(gsi: u8) {
     });
 }
 
+/// PCI INTx (virtio IRQ 11) is level. Edge INTA drops IRR before Linux
+/// `handle_edge_irq` EOIs and `vp_interrupt` reads ISR.
+/// linux virtio PIC level INTx. Not `ISO-INSTALL-OK`.
+fn pic_level_intx(irq: u8) -> bool {
+    irq == VIRTIO_PIC_IRQ
+}
+
+fn unmask_pic_locked(c: &mut IrqChip, irq: u8) {
+    if irq < 8 {
+        c.master.imr &= !(1 << irq);
+    } else {
+        c.slave.imr &= !(1 << (irq - 8));
+        c.master.imr &= !(1 << PIC_SLAVE_IRQ);
+    }
+}
+
 fn raise_pic_locked(c: &mut IrqChip, irq: u8) {
     if irq < 8 {
         c.master.irr |= 1 << irq;
     } else {
         c.slave.irr |= 1 << (irq - 8);
         c.master.irr |= 1 << PIC_SLAVE_IRQ;
+    }
+    if pic_level_intx(irq) {
+        // linux PIC IRQ11 unmask. Linux x86_64 skipped IO-APIC
+        // (`MADT or MP tables are not detected`); IRQ 11 stays masked
+        // unless a device `request_irq`s. apk overlay still needs INTx.
+        unmask_pic_locked(c, irq);
     }
 }
 
@@ -484,10 +575,33 @@ pub fn ioapic_pin_unmasked(pin: u8) -> bool {
     })
 }
 
-/// MADT IRQ0 ISO pin is live (Linux programmed GSI 2).
+/// MADT IRQ0 ISO pin is live (unmasked RTE). Firmware virtual-wire leftover
+/// also unmasks pin 2; Linux that skipped IO-APIC still needs PIC.
+/// Use [`linux_ioapic_gsi2_programmed`] for the Linux inject path.
 /// linux GSI 2 before PIC. Not `ISO-INSTALL-OK`.
 pub fn ioapic_gsi2_armed() -> bool {
     ioapic_pin_unmasked(PIT_IOAPIC_GSI)
+}
+
+/// Linux guest wrote IOAPIC pin 2 (MADT IRQ0 ISO). Firmware leftover is not
+/// this. linux PIC before leftover GSI 2. Not `ISO-INSTALL-OK`.
+pub fn linux_ioapic_gsi2_programmed() -> bool {
+    LINUX_IOAPIC_GSI2.load(Ordering::Acquire)
+}
+
+/// Latch a Linux IOAPIC window write that programs pin 2.
+/// linux PIC before leftover GSI 2. Not `ISO-INSTALL-OK`.
+pub fn note_linux_ioapic_write(off: u16) {
+    if (off & 0xff) != 0x10 {
+        return;
+    }
+    with_irq(|c| {
+        let n = c.ioapic.sel & 0xff;
+        let pin_lo = 0x10 + 2 * u32::from(PIT_IOAPIC_GSI);
+        if n == pin_lo || n == pin_lo.wrapping_add(1) {
+            LINUX_IOAPIC_GSI2.store(true, Ordering::Release);
+        }
+    });
 }
 
 /// Consume one PIC vector. Does not touch IOAPIC.
@@ -622,22 +736,31 @@ fn ioapic_pin_is_io(pin: u8) -> bool {
         || pin == UART_GSI
 }
 
-/// Prefer ATA/virtio/UART over PIT pin 2 unless Linux latched prefer-once.
-/// IOAPIC I/O over PIT. firmware virtual-wire GSI 14. Not `ISO-INSTALL-OK`.
+/// Prefer ATA/virtio over PIT pin 2. Hold/once beats UART only (apk jiffies
+/// vs ttyS0), not virtio INTx — iron `c61942b` / `34135448354` froze apk at
+/// `n=1345` when leftover GSI 2 + hold stole PIC virtio.
+/// IOAPIC I/O over PIT. linux PIT hold UART not virtio.
+/// firmware virtual-wire GSI 14. Not `ISO-INSTALL-OK`.
 fn ioapic_peek_pin(c: &IrqChip) -> Option<(u8, u8)> {
-    if PREFER_PIT.load(Ordering::Acquire) {
-        if let Some(vec) = ioapic_pin_ready(c, PIT_IOAPIC_GSI) {
-            return Some((PIT_IOAPIC_GSI, vec));
-        }
-    }
     for pin in IOAPIC_IO_PINS {
+        if prefer_pit_priority() && pin == UART_GSI {
+            continue;
+        }
         if let Some(vec) = ioapic_pin_ready(c, pin) {
             return Some((pin, vec));
         }
     }
+    if let Some(vec) = ioapic_pin_ready(c, PIT_IOAPIC_GSI) {
+        return Some((PIT_IOAPIC_GSI, vec));
+    }
+    if prefer_pit_priority() {
+        if let Some(vec) = ioapic_pin_ready(c, UART_GSI) {
+            return Some((UART_GSI, vec));
+        }
+    }
     for pin in 0..IOAPIC_PINS {
         let pin = pin as u8;
-        if ioapic_pin_is_io(pin) {
+        if ioapic_pin_is_io(pin) || pin == PIT_IOAPIC_GSI {
             continue;
         }
         if let Some(vec) = ioapic_pin_ready(c, pin) {
@@ -655,16 +778,40 @@ fn pic_pending_irq(c: &IrqChip) -> Option<u8> {
     if master_req == 0 {
         return None;
     }
-    if master_req & (1 << PIC_SLAVE_IRQ) != 0 && c.slave.ready && c.slave.vector >= 16 {
+    let slave_irq = if master_req & (1 << PIC_SLAVE_IRQ) != 0
+        && c.slave.ready
+        && c.slave.vector >= 16
+    {
         let slave_req = c.slave.irr & !c.slave.imr & !c.slave.isr;
         if slave_req != 0 {
-            return Some(8 + slave_req.trailing_zeros() as u8);
+            Some(8 + slave_req.trailing_zeros() as u8)
+        } else {
+            None
         }
+    } else {
+        None
+    };
+    let pit = prefer_pit_priority() && (master_req & 1) != 0;
+    // linux PIC IRQ11 yield PIT. linux PIC IRQ11 yield until mount.
+    // linux PIC IRQ11 yield 3 after mount.
+    // Honor IRQ11_YIELD_PIT whenever it is armed. Mount status only
+    // changes how often pic_take arms it (1:1 before usbdelay, 3:1
+    // after). Iron `c2cd099` / `34172103709` gated this on
+    // `!apk_media_mounted()`, so the 3:1 counter never yielded PIT and
+    // apk froze at `n=1345` again.
+    if slave_irq == Some(VIRTIO_PIC_IRQ)
+        && pit
+        && IRQ11_YIELD_PIT.load(Ordering::Acquire)
+    {
+        return Some(0);
+    }
+    if let Some(irq) = slave_irq {
+        return Some(irq);
     }
     // UART (IRQ 4) and other master devices beat PIT so timer ticks cannot
     // starve COM1 auto-answer. Linux I/O may latch prefer-once so jiffies
     // still move while THRE IRR is stuck.
-    if PREFER_PIT.load(Ordering::Acquire) && (master_req & 1) != 0 {
+    if pit {
         return Some(0);
     }
     let master_dev = master_req & !1 & !(1 << PIC_SLAVE_IRQ);
@@ -691,7 +838,26 @@ fn pic_peek(c: &IrqChip) -> Option<u8> {
 fn pic_take(c: &mut IrqChip) -> Option<u8> {
     let irq = pic_pending_irq(c)?;
     if irq == 0 {
-        PREFER_PIT.store(false, Ordering::Release);
+        TAKE_IRQ0.fetch_add(1, Ordering::AcqRel);
+    } else if irq == 4 {
+        TAKE_IRQ4.fetch_add(1, Ordering::AcqRel);
+    }
+    if irq == 0 {
+        PREFER_PIT_ONCE.store(false, Ordering::Release);
+        IRQ11_YIELD_PIT.store(false, Ordering::Release);
+        PIC11_SINCE_PIT.store(0, Ordering::Release);
+    } else if irq == VIRTIO_PIC_IRQ {
+        if crate::devices::guest_serial_answer::apk_media_mounted() {
+            let n = PIC11_SINCE_PIT
+                .fetch_add(1, Ordering::AcqRel)
+                .saturating_add(1);
+            IRQ11_YIELD_PIT.store(n >= 3, Ordering::Release);
+            if n >= 3 {
+                PIC11_SINCE_PIT.store(0, Ordering::Release);
+            }
+        } else {
+            IRQ11_YIELD_PIT.store(true, Ordering::Release);
+        }
     }
     if irq < 8 {
         c.master.irr &= !(1 << irq);
@@ -701,7 +867,9 @@ fn pic_take(c: &mut IrqChip) -> Option<u8> {
         Some(c.master.vector.wrapping_add(irq))
     } else {
         let s = irq - 8;
-        c.slave.irr &= !(1 << s);
+        if !pic_level_intx(irq) {
+            c.slave.irr &= !(1 << s);
+        }
         if !c.slave.aeoi {
             c.slave.isr |= 1 << s;
             c.master.isr |= 1 << PIC_SLAVE_IRQ;

@@ -1,19 +1,19 @@
 ---
 hda_version: 1
-last_updated: 2026-09-07
-last_commit: 96ff8faa766e3880a3d8e2c0ec2b56599a128306
-last_commit_short: 96ff8fa
+last_updated: 2026-09-10
+last_commit: PENDING
+last_commit_short: PENDING
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
-months_to_everest: 0.5
+months_to_everest: 0.25
 months_to_everest_prev: 0.5
-velocity_commits_30d: 378
-velocity_gates_30d: 61
-overall_pct: 95
-confidence: high
+velocity_commits_30d: 612
+velocity_gates_30d: 63
+overall_pct: 98
+confidence: medium
 baseline_date: 2026-07-20
 baseline_months: 4.5
-everest_eta_month: "2026-09"
+everest_eta_month: "2026-10"
 summit_core_pct: 88
 summit_efi_pct: 95
 summit_r640_pct: 98
@@ -37,20 +37,20 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 
 | Metric | Value | Δ vs previous HDA |
 |--------|------:|-------------------|
-| **Overall product readiness** | **95%** | +1 (P0-14 E4 SPA VMLAUNCH + re-entry on iron) |
-| **Months to Mount Everest** | **0.5** | held (TLS/console + distro remain) |
-| **ETA month** | **2026-09** | held |
-| **Confidence** | high | E2+E3+E3b+E5+Phase F+P0-14 stamps on COM2; SPA guest is SHELL stub; TLS/console + distro residual |
+| **Overall product readiness** | **98%** | **+2** — **E5 closed on the real R640** (UDisk `56a3ffd` / run `34480107961`, 2026-09-10): after the third iron `RAYNU-V-M7-ISO-INSTALL-OK`, `reboot` → F7 relaunch → installed GRUB 2.12 countdown `2s→1s→0s` → **`RAYNU-V-RAYNU-F-DISK-BOOT-OK`** → second `Linux version 6.12.13-0-lts` with `root=UUID=9af18543-…` → `EXT4-fs (vda2): mounted` → OpenRC → `login:` → `/proc/cmdline` from the installed system. Whole ISO → installer → virtio-blk → reboot-to-disk loop on iron. Not +8: Phase B (SPA/REST starts that disk) is still the SHELL stub, so E4 is not honest yet |
+| **Months to Mount Everest** | **0.25** | **−0.25** (E5 mechanism DONE on iron end-to-end; the only Everest-path work left is Phase B glue — SPA create-VM/attach-media launches the RayNu-F ISO/disk path instead of the SHELL stub — plus console/TLS polish that ADR-009 already defers) |
+| **ETA month** | **2026-10** | held (formula gives 2026-09; kept at 2026-10 until Phase B has one iron flash) |
+| **Confidence** | medium | E2+E3+E3b+Phase F+P0-14+**E5 (install + reboot-to-disk)** stamps on COM2. Every E5 iron surprise (console THRE, VMCS overwrite, exit-cap) had a named root cause and a host-side fix; Phase B reuses the closed RayNu-F path from the SPA, but has not been flashed yet |
 | **Hypervisor core (VMX/EPT/Linux/multi-VM)** | ~88% | proved on real R640 through M4 |
 | **Ship EFI artifact** | ~95% | M7.0 + iron kits under `releases/` |
 | **Real R640 boot** | ~98% | E2 closed; Redfish/soak follow-ons only |
-| **vSphere-like UI (network)** | ~96% | E3 + E3b + Phase F + P0-14 closed; SHELL stub not distro; TLS/console residual |
-| **Deploy Linux ISO** | ~99% | Nested RayNu-F alpine-extended install + reboot-to-disk (`fe4785a`); iron `ISO-INSTALL-OK` open |
+| **vSphere-like UI (network)** | ~96% | E3 + E3b + Phase F + P0-14 closed; **Phase B open**: SPA start must launch the RayNu-F ISO/installed-disk path (today SHELL stub); TLS/console residual |
+| **Deploy Linux ISO** | ~99% | **DONE on iron end-to-end** (`59ac070` install-to-disk; `56a3ffd` reboot-to-disk: `DISK-BOOT-OK`, second Linux `root=UUID=`, `login:`). Remaining 1%: ISO blob upload / UEFI catalog persist / multi-distro matrix are post-Everest polish |
 | **Production bar (M6.8–M6.9)** | **100%** | soak + EXT closed on Latitude |
 
 ```
-Months to Everest  █░░░░░░░░░░░░░░░░░░░  0.5 mo  (was 1.5)
-Overall %          ███████████████████░  95%
+Months to Everest  ░░░░░░░░░░░░░░░░░░░░  0.25 mo  (was 0.5)
+Overall %          ████████████████████  98%
 ```
 
 **How the month number moves:** faster closed Everest-path work → `months_to_everest` shrinks and `everest_eta_month` pulls closer. Stalls / new scope → it slips. See [Velocity model](#velocity-model).
@@ -106,7 +106,7 @@ All must be true (no hand-waving):
 | Hardware CI on R640 | MISSING | optional in M6 plan |
 
 ### Summit C — vSphere-like UI
-**Status: NEAR · ~96% · ~0.5 months residual (TLS/console polish + distro waits on Summit D)**
+**Status: NEAR · ~96% · ~0.25 months residual (Phase B: SPA start → RayNu-F ISO/installed-disk path; TLS/console polish)**
 
 | Item | Status | Evidence / gap |
 |------|--------|----------------|
@@ -129,7 +129,7 @@ All must be true (no hand-waving):
 | E4 SPA VMLAUNCH (private EPT) | **DONE** | `RAYNU-V-M7-E4-SPA-LAUNCH-OK` + shadow re-entry; SHELL stub; [2026-08-21-e4-spa-shadow-reentry-ok.md](evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md) |
 
 ### Summit D — Deploy Linux ISO
-**Status: NEAR · ~90% · ~0.25–0.5 months residual (iron distro installer)**
+**Status: DONE ON IRON · ~99% · ~0.0 months residual on the mechanism (install 2026-09-10 `59ac070`; reboot-to-disk 2026-09-10 `56a3ffd` — `DISK-BOOT-OK`, second Linux `root=UUID=`, `login:`); upload/persist/matrix are polish**
 
 | Item | Status | Evidence / gap |
 |------|--------|----------------|
@@ -145,8 +145,8 @@ All must be true (no hand-waving):
 | QEMU lab reboot-to-disk | DONE (host/TCG arm) | boot2 `isoreboot.txt` + synth img → `BOOTED-FROM-DISK`; soft-pass arm-only on TCG |
 | ISO parse / El Torito / EFI boot img | DONE (guest CD EFI) | Iron COM2 `0be7283` `OVMF-ELTORITO-OK` `RN-ELT` n=197992; not distro installer |
 | CD-ROM attach | DONE (firmware StartImage) | GuestVisible PCI IDE/ATAPI + El Torito FAT ESP BOOTX64; not `ISO-INSTALL-OK` |
-| Guest UEFI firmware blob | PARTIAL (RayNu-F nested F7 reboot-to-disk; iron E5 open) | Iron UDisk `55a3602` reached RayNu-F `EBS-OK` then stopped on first Linux WRMSR because cap=1 outlived launch; collapse now only until `RAYNU_F_RAN`. Prior: `088ab25` sat in OVMF CpuSleep. ADR-016/017: nested `fe4785a` alpine-extended `setup-disk -m sys` → F7 relaunch → `RAYNU-V-RAYNU-F-DISK-BOOT-OK` → second Linux `root=UUID=698a922a-3a7d-45ea-9da3-2b11403af82a` (ext4 `/dev/vda2`, FAT ESP `/dev/vda1`); nested `3492ebc` had GRUB rescue `disk `,gpt2' not found`; re-run `088ab25` shows the reset path (`src=kbc`, i8042 `0xFE`); not iron / not Everest E5. 4 GB front-USB2 Cruzer unblocks alpine-extended retain (977.5 MiB Micro cannot hold ~994 MiB). Operator: [r640_f7_iso_iron.md](runbooks/r640_f7_iso_iron.md). Evidence: [fe4785a](evidence/nested/2026-09-05-fe4785a-f7-reboot-to-disk.md), [088ab25](evidence/nested/2026-09-05-088ab25-f7-reset-src-kbc.md) |
-| Persistent install + reboot-to-disk | **DONE (stamps)** | Iron Cruzer `BOOTED-FROM-DISK` 2026-08-16; guest FS residual |
+| Guest UEFI firmware blob | **DONE on iron — install and reboot-to-disk (RayNu-F ADR-016)** | **Iron UDisk `56a3ffd` / run `34480107961` (2026-09-10): the whole loop.** Third iron `RAYNU-V-M7-ISO-INSTALL-OK` → `reboot` → `guest reset requested src=kbc n=1` → `relaunch after reset` → `GPT ESP lba=2048 sectors=98304 part=1` → `BOOTX64.EFI bytes=139264` → `image=DISK-BOOTX64` → installed GRUB 2.12 countdown `2s → 1s → 0s` (no `RayNu-F stop` line; the wall cap never fired) → `Booting 'Alpine Linux v3.21, with Linux lts'` → `START-IMAGE-OK` → **`RAYNU-V-RAYNU-F-DISK-BOOT-OK`** → `EBS-OK` → second `Linux version 6.12.13-0-lts` `root=UUID=9af18543-…` `modules=sd-mod,usb-storage,ext4` → `EXT4-fs (vda2): mounted filesystem` → `fsck` `vda2`+`vda1` → OpenRC → `login:` → `cat /proc/cmdline` from the installed system. History: `59ac070` (install closed; F7 relaunch VMCLEAR/VMPTRLD — 81 KiB stack temporary over the VMCS), `975f8fc` (relaunch + installed GRUB menu; fixed 1 M exit-cap fired inside GRUB's 2 s menu poll loop), `56a3ffd` (RayNu-F wall cap: time, not exits, bounds the loader phase). Evidence: [2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md](evidence/r640/2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md) |
+| Persistent install + reboot-to-disk | **DONE on iron (distro)** | `56a3ffd` 2026-09-10: `setup-disk` → `reboot` → installed GRUB → second Linux from `vda2` → `login:`. Leftover-DRAM disk survives a **guest** reset only; host-reboot persistence is post-Everest |
 | Upload ISO via API/UI | PARTIAL | REST `/iso/{id}/deploy` + `/install`; blob upload residual |
 | Multi-OS image types | **WIRED (host)** | REST/SPA `linux_iso` \| `windows_iso` \| `generic_uefi` ([ADR-014](adr/ADR-014.md) Stage 0); Windows install later |
 | Multi-distro matrix | MISSING | — |
@@ -164,7 +164,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 | M+1 | 2026-08 | **R640 iron bring-up** → **E2 closed** | `RAYNU-V-R640-BOOT-OK` on COM2 | **DONE (M7.5 iron)** |
 | M+2 | 2026-09 | E3b native NIC lab (QEMU e1000) + ISO residual | ADR-013 Phase C | **Phase C DONE (QEMU)** |
 | M+3 | 2026-08 | E3b iron HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | **DONE (M7.8 iron)** |
-| M+4 | 2026-09 | TLS/console + distro installer | remaining Everest | **ETA** (nested F7 `088ab25`; 4 GB Cruzer unblocks iron attempt; `ISO-INSTALL-OK` open) |
+| M+4 | 2026-10 | Phase B (SPA → installed disk) + TLS/console | remaining Everest | **ETA** (**E5 DONE on iron 2026-09-10**: install `59ac070`, reboot-to-disk `56a3ffd` / `34480107961` — `DISK-BOOT-OK`, second Linux `root=UUID=`, `login:`; open: Phase B — SPA create-VM/attach-media starts the RayNu-F path instead of the SHELL stub) |
 | M+5 | 2026-10 | Buffer / M7 closed on all E1–E6 | **M7 Mount Everest** | BUFFER |
 
 ### Timeline burn-down
@@ -172,12 +172,12 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 ```
 2026-07 ████████  HDA + M6 closed (Latitude)
 2026-08 ████████  R640 boot (E2) + E3b HTTP-OK
-2026-09 ████░░░░  TLS/console + distro installer  ← months_to_everest ≈ 0.5
+2026-09 ███████░  E5 DONE on iron (install + reboot-to-disk); Phase B SPA glue  ← months_to_everest ≈ 0.25
 2026-10 ░░░░░░░░  buffer
 2026-11 ░░░░░░░░  buffer
 ```
 
-**Pull-forward rule:** E2 closed 2026-08-15; E3 bring-up closed 2026-08-16; **E3b closed 2026-08-20**; **P0-14 closed 2026-08-21**. Shrink further when a real distro installer lands. Document why in [Changelog](#hda-changelog).
+**Pull-forward rule:** E2 closed 2026-08-15; E3 bring-up closed 2026-08-16; **E3b closed 2026-08-20**; **P0-14 closed 2026-08-21**; **E5 install-to-disk closed on iron 2026-09-10** (`59ac070`); **F7 relaunch + installed-disk GRUB reached on iron 2026-09-10** (`975f8fc`, exit-cap ended it); **E5 reboot-to-disk closed on iron 2026-09-10** (`56a3ffd`: `DISK-BOOT-OK`, second Linux `root=UUID=`, `login:`) → months 0.5→0.25. Shrink to 0 when the iron SPA starts the installed disk (Phase B). Document why in [Changelog](#hda-changelog).
 
 ---
 
@@ -238,7 +238,8 @@ Ordered for critical path (parallelize B with D design):
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | `mgmt/iso` wired; El Torito/CD-ROM residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | **DONE host extract-boot smoke**; El Torito/CD-ROM residual |
 | P0-7 | **M7.4** Create-VM API/UI (CPU/RAM/disk/ISO) | C+D | 0.25 | P0-5, P0-6 | **DONE host SPA smoke**; console/TLS/NIC residual |
-| P0-8 | Install-to-disk + reboot-to-disk path | D | **DONE (stamps)** | P0-6, P0-7 | Iron `BOOTED-FROM-DISK` 2026-08-16; guest FS residual |
+| P0-8 | Install-to-disk + reboot-to-disk path | D | **DONE (iron distro)** | P0-6, P0-7 | Iron `ISO-INSTALL-OK` `59ac070` + `DISK-BOOT-OK` / second Linux `root=UUID=` `56a3ffd` 2026-09-10; Phase B (SPA start) is P0-63 |
+| P0-63 | **Phase B** SPA/REST create-VM + attach-media → RayNu-F ISO / installed-disk launch on iron | C+D | 0.25 | P0-8, P0-14 | `mgmt/api.rs`, `assets/webui.html`, `vmx/guest_uefi.rs` launch trigger (today ESP `raynuf.txt` flag + Stage 46 product ISO on ESP); iron SPA start is the SHELL stub `2b795a0` |
 | P0-9 | M6.9 external audit + spec review | E6 | **DONE** | proofs green | `docs/`, `ept_model/`, `mgmt/ext` |
 | P0-10 | R640 soak / hardware confidence | E2 | 0.5 | P0-2 | `tools/`, `mgmt/soak` — post M7.5 |
 | P0-11 | **M8 sketch** vMotion-like / DRS-like / hot-add | — | — | M7 closed | deferred — not M7 critical path |
@@ -349,14 +350,12 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | raynu-f-direct-iron |
-| Summary | **Iron COM2 (UDisk, `55a3602` / run `34067879816`): RayNu-F direct worked** (`stop n=1` → `image=ISO-BOOTX64` → GRUB `Linux lts` → `EBS-OK`) then the first Linux WRMSR (`reason=0x20` `rip=0xb00013f`) hit `n=2 < cap=1` because `guest_uefi_raynu_f_resume_cap` still collapsed while `RAYNU_F_RAN` was already true. `leave_to_e4` printed `restore host xcr0` + `product ISO hold`. Fix: collapse only while `requested && !RAYNU_F_RAN` (`guest_uefi_raynu_f_collapse_ovmf_leg`); after launch Linux gets the 16M product cap. Stop dump skips blocking `write_str` when earlycon share is on; nowait line carries `cap=`. Host-tested; not ISO-INSTALL-OK. |
-| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Iron reached F6b then a self-inflicted cap. Nested-only evidence must not drop months. |
-| Gates touched | none. Host tests `raynu_f_flag_collapses_ovmf_leg_to_first_exit` + `raynu_f_linux_handoff_restores_product_cap`. |
-| Months Δ | 0.5→0.5 |
+| Commit | pit-during-apk |
+| Summary | **Iron COM2 (UDisk, `56a3ffd` / run `34480107961`) — E5 closed on the real R640: reboot-to-disk.** `build: sha=56a3ffda8406`. Install re-ran clean (`RAYNU-V-M7-ISO-INSTALL-OK`, third time on iron) → `reboot` → `guest reset requested src=kbc n=1` → `relaunch after reset (F7)` → `GPT ESP lba=2048 sectors=98304 part=1` → `\EFI\BOOT\BOOTX64.EFI bytes=139264` → `image=DISK-BOOTX64` → `MEM-OK`/`BLOCKIO-OK`/`CONOUT-OK` → installed GRUB 2.12 menu, countdown `2s → 1s → 0s` (the `975f8fc` exit-cap is gone; the 180 s wall cap never fired — no `RayNu-F stop` line in the log) → `Booting 'Alpine Linux v3.21, with Linux lts'` → `Loading Linux lts` / `Loading initial ramdisk` → `StartImage entry=0x2b09515` → `RAYNU-V-RAYNU-F-START-IMAGE-OK` → **`RAYNU-V-RAYNU-F-DISK-BOOT-OK`** → `EFI stub: Loaded initrd` → `RAYNU-V-RAYNU-F-EBS-OK` → **second `Linux version 6.12.13-0-lts`** with `root=UUID=9af18543-bbaf-475e-925a-60ab53d49847 ro modules=sd-mod,usb-storage,ext4 … rootfstype=ext4` → `EXT4-fs (vda2): mounted filesystem` → `Mounting root: ok.` → OpenRC → `fsck` `/dev/vda2` + `/dev/vda1` → `Welcome to Alpine Linux 3.21` → `login: root` → `cat /proc/cmdline` from the installed system. This commit is docs + honesty strings only (evidence doc, runbook, progress, HDA, site copy, residual notes in `vmx/guest_uefi.rs` / `mgmt/m7_e5_raynu_f_f7_gate.rs`, CLAUDE.md lived line); no firmware or hypervisor code changed. |
+| Everest impact | months **0.5 → 0.25**; overall **96 → 98**; ETA 2026-10 held. **E5 DONE on iron** (ISO → UEFI installer → virtio-blk → reboot to disk → login). Not claiming Everest: Phase B — the iron SPA/REST create-VM + attach-media path still launches the SHELL stub (`2b795a0`); it must start the RayNu-F ISO/installed-disk path. New P0-63 tracks it (0.25 mo). |
+| Gates touched | **`RAYNU-V-RAYNU-F-DISK-BOOT-OK` CLOSED on real R640** (E5 reboot-to-disk; progress.md new row). `RAYNU-V-M7-ISO-INSTALL-OK` re-confirmed. Host: `cargo test --no-default-features -- --test-threads=1`; `./tools/sync-hda-site.sh --check`. |
+| Months Δ | 0.5→0.25 |
 
-
----
 
 ## Blockers & risks (Everest-relevant)
 
@@ -364,9 +363,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 |----|----------------|----------|-------------|
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
 | H2 | TLS / console polish | MED | Plaintext HTTP closed on iron (E3b); TLS deferred (ADR-009); guest VNC residual |
-| H3 | Guest UEFI CD not bootable | MED | **Iron UDisk F7 `55a3602` (run `34067879816`) reached RayNu-F** (`direct` → `ISO-BOOTX64` → `EBS-OK`) then stopped on Linux WRMSR `reason=0x20 rip=0xb00013f` because cap=1 still applied after `RAYNU_F_RAN`. Collapse now only until launch; do not F11 `34067879816` again. Prior: Iron UDisk F7 attempt 2026-09-06 (`088ab25`) never reached RayNu-F: the OVMF scaffold leg only stops on fault or the 16_777_216 cap, and iron OVMF parks in CpuSleep `0x7f0680d0` instead of faulting at SEC like nested KVM (`788930c` n=1043). `raynuf.txt` now caps the leg at 1 exit (`GUEST_UEFI_RAYNU_F_DIRECT_CAP`); re-flash from this commit's CI pin.** F7 nested reboot-to-disk **proven** on `raynuvsrv1` `fe4785a` and re-run `088ab25` with reset lines visible (`src=kbc n=1` → `relaunch after reset` → `DISK-BOOT-OK` + second Linux `root=UUID=`; not ISO-INSTALL-OK). CF9 / triple-fault reset classification host-tested only. Nested `3492ebc` had GRUB rescue `disk `,gpt2' not found` (HD node on HANDLE_DISK); Vendor whole-disk path names hd0. ATAPI `sectors>0` closed (P0-59); Stage 45 El Torito closed on iron COM2 `0be7283`; P0-60 G1 EPT closed; G0 relocate closed (`M4-NVM-OK`); M4.3 host-slab closed (`M4-BLK-OK` `0x10c00000`); Stage 46 OPEN (ESP product ISO + virtio-pci queues + PIC/IOAPIC inject + 16550/ttyS0 + SOL RX + Alpine auto-answer `BOOTLOADER=grub` `USE_EFI=1` mkdir `/media/cdrom` `virtio_pci` `mdev -s` wait `/dev/vda` `sr_mod` `isofs` `-t iso9660` `-s 0` `[y/N]` still hears `bootloader?` / `Which disk` / `No disks available`→n + `How would you like`→sys + apk repos overwrite + `squashfs,virtio_blk console=ttyS0` + xAPIC 4K trap/`lapic_virt` + IOAPIC→LAPIC IRR/ISR + guest-UEFI CR8 TPR exiting + `alpine_dev=vdb` + PIT IRQ 0 + i8253 16-bit + GRUB `set timeout=1` / efi_gop / all_video / `terminal_output console` serial + MMIO XCHG/MOVSX/moffs + group-1 AND/OR/XOR/ADD/ADC/SBB/SUB + group-2 SHL/SHR/SAR/ROL/ROR/RCL/RCR + CMOV/SETCC + PREFETCH/NOP/CLFLUSH + BSF/BSR + IMUL + MUL/IMUL DX:AX + DIV/IDIV + MOVNTI + SHLD/SHRD + CMPXCHG8B + TZCNT/LZCNT/POPCNT + PUSH/POP r/m + MOVS/STOS/LODS + CALL/JMP r/m + CMPS/SCAS + MOVUPS/MOVDQU XMM trampoline + flash-RIP insn fetch + reserve install disk before scratch and report-RAM + iron product-ISO 512MiB pool (`iso=0`/nested 256MiB) + CS.base+RIP MMIO fetch + peek RIP when CS.base+RIP misses flash + MMIO skip-len from fetched bytes when VMCS len is 0 + Alpine BOOT_SIZE=48 ESP + port 0x61 TMR2_OUT + arm ISO window before disk attach + skip 256MiB disk when report-RAM would starve + ISO patches ASCII-only (NUL pad either side so alpine-virt grub.cfg `set timeout=1` still patches; no gzip vmlinuz) + flashcruzer detached HEAD infers origin branch + xAPIC EAX fallback when skip-len 1-15 even if n>0 + register-form ALU (mem and dest-reg) + TEST/CMP/ALU RFLAGS + INC/DEC/NOT/NEG + BT/BTS/BTR/BTC + CMPXCHG/XADD + 31-sector ATAPI PIO + chained virtio OUT + read-only ISO virtio `00:03.0` + 4KiB GPA copies + virtio IOAPIC pin 11 + MMIO fetch across pages + hold when armed; lab stub still E4; armed nested product cap 16_777_216 + leftover DRAM above PRECISE fills 1008 report-RAM 2MiB, iso=0 stays 32; nested product-ISO seeds leftover + delay_loop skip-10 to ret + RAX=1 + Linux hide hypervisor/0x4000 scan + GRUB lpj=4194304 no_timer_check tsc=reliable clocksource=tsc idle=poll + HPET 1ms on CPUID/MSR/EPT + HPET TSC-delta on UART COM I/O cap 4us + ISO9660 grub.cfg Data Length 143→208 + Linux hypervisor_cpuid_base GPR bump to 0x4000FF00 + alpine-virt native_cpuid push %rbx RSP slot + Linux printk ticks every 4096 + guest UART nowait (do not clear COM2_LIVE) + Linux CPUID GenuineIntel + NX + guest UART TX ring drain + guest UART TX ring drain 4/exit + linux earlycon share TX ring + linux earlycon quiet ticks + linux earlycon hush HV + linux earlycon share product ISO + cpu_flush on tick cadence even when share + linux earlycon share first CPUID + linux earlycon skip #PF dump + linux earlycon skip exc deliver + linux earlycon share first high-half + poll ISO-INSTALL-OK every resume + ISO-INSTALL-OK on GPT not 16KiB + setup-disk before apk update + 256MiB disk leftover report-RAM + linux earlycon share first bootimg + guest UART TX drain COM2 independent + linux earlycon pace LSR THRE + report-RAM EPT pre-map + cpu_flush skip leftover pre-map + cpu_flush leftover per walk + linux unhandled nowait stop + virtio MMIO eax fallback + linux NMI inject + linux MMIO decode retry + linux EAX fallback skip 3 + IOAPIC decode fail nowait + linux MOV DR skip + virtio BAR trap over scratch + PIIX3 ISA BAR RAZ + packed virtio common cfg + virtio MMIO raises PIT + virtio MMIO off= + virtio MMIO eax fallback size; packed virtio common cfg write; virtio MMIO polls lapic; linux I/O does not raise PIT (iron MADT stop); linux xAPIC EPT insn_len 0; linux preempt deadloop noskip; linux PIT prefer once; linux PIT prefer until DRIVER_OK; UART reassert RX not THRE; product ISO fw_cfg ACPI MADT (iso=0 named files stay 3); linux PIC before LAPIC; linux PIC IRQ0; MADT IRQ0 ISO GSI 2; PIT skips IOAPIC pin 0; linux GSI 2 before PIC; fw_cfg IoReadFifo8 fills RAM (skip HV identity PML4 dest); PIIX4 PM1 SCI_EN; DSDT PCI0 _PRT; DSDT PCI0 _CRS; linux hides duplicate slot0 IDE; linux hides PIIX IDE; linux high-half hides PIIX; linux-line alpine_dev=vdb; linux-line virtio_pci; linux ATA floating bus; fw_cfg skip dest n=; fw_cfg identity overlay; HV identity PML4 0x400000; PEI dest holds ACPI tables; fw_cfg dest_ok fill dest=; dest_ok fill log cap 8; ACPI tables ZONE_FSEG; FSEG dest holds ACPI tables; linux-line ata_piix blacklist; linux-line piix_init blacklist; FADT FACS; flash 8663f56; flashcruzer reject 2d6b109 dest skip; auto-answer / # without login; product ISO POST_DXE_TAIL skip; emergency mount+exit; linux-line usbdelay; io string (rep insb); 0xB000 dword timer; HLT stall quiet tick print-only; do not F11 9ce65ae; firmware virtual-wire PIC; firmware virtual-wire AEOI; firmware virtual-wire GSI 2; firmware HLT force IF; firmware HLT skip after inject; firmware HLT activity active; firmware LAPIC timer expiry; IOAPIC I/O over PIT; firmware virtual-wire GSI 14; flash 5c0f7a2; do not F11 2ae4544; product ISO fw_cfg bootorder virtio-iso scsi@3 first; do not F11 eac424b; do not F11 8e81c2e; do not F11 daf3195; do not F11 b26c86a; firmware HLT wait-for-PIT before ATA; iron COM2 b5c3a9c dest_ok then skip-after-inject ataio=0; iron COM2 24c5fa6 wait-for-irq then PIT livelock; firmware PIT one-shot after first wake; iron COM2 e3cbfa5 one-shot then HLT hang; firmware HLT skip after PIT one-shot; iron COM2 184ee61 cmdwr=6 wr=0x0 pcicmd=0x1; honor IDE pci cmd no OR 0x0001; iron COM2 abba969 honor pcicmd=0 wr=0 still ataio=0; print IDE pci cmdwr seq; iron COM2 060c504 seq=0,0,0,0,0,0; EnableAttributes 0x0005 after write-0; iron COM2 c144001 EnableAttributes pcicmd=0x5 still ataio=0; print last PCI CF8 on HLT; iron COM2 61991be HLT cf8=0x0 still ataio=0; print last enabled CF8; iron COM2 5de9e1c HLT cf8en=0x80004008 host 00:08.0+08 still ataio=0; print last IDE CF8; iron COM2 7ba1ccf HLT cf8ide=0x80000930 PIIX 00:01.1+30 Expansion ROM still ataio=0; print last IDE ROM BAR write; iron COM2 118edcf HLT romwr=0xfffffffe size probe still ataio=0; do not F11 118edcf; product ISO hides duplicate slot0 IDE; iron COM2 27eda8c hide-slot0 still ataio=0; do not F11 27eda8c; print HLT retaddr; iron COM2 2d4ab51 HLT ret=0x7ff0e055 still ataio=0; do not F11 2d4ab51; firmware ConIn CR; iron COM2 6c4bfde ConIn CR still ataio=0; do not F11 6c4bfde; print HLT callsite; iron COM2 0b770cd HLT rethx=0xe056ff41b84d8b48 still ataio=0; do not F11 0b770cd; firmware WaitForEvent return; iron COM2 c8d504d ZeroMem ept fill never printed (0x34 is preempt not EPT) still ataio=0; do not F11 c8d504d; firmware WFE preempt skip; iron COM2 d0e44d4 WFE skip len=12 rip=0x7ff0e7e8 still ataio=0; do not F11 d0e44d4; firmware WFE state4 poke; iron COM2 9474ab6 WFE state4 poke dest=0x7ff18340 then #PF cr2=0xffffffffffffffb8 rip=0x7ff0e018 still ataio=0; do not F11 9474ab6; firmware WFE event #PF). extract-boot is lab MVP only | |
+| H3 | ~~Guest UEFI CD not bootable / no reboot-to-disk on iron~~ | — | **Resolved** 2026-09-10 (`56a3ffd` / run `34480107961`): `RAYNU-V-RAYNU-F-DISK-BOOT-OK` + second Linux `root=UUID=` from `vda` + `login:` on the real R640. Chain: `59ac070` install-to-disk (`ISO-INSTALL-OK`) → F7 VMCLEAR/VMPTRLD (81 KiB `FirmwareState::new()` stack temporary over the VMCS; template reset + 32-page stack guard) → `975f8fc` relaunch into the installed GRUB menu, 1 M exit-cap inside GRUB's 2 s menu poll loop (~2 exits/µs) → `56a3ffd` RayNu-F wall cap (time, not exits, bounds the loader phase). Earlier: `916af96` THRE chain telemetry → UART TX ring room + line-rate pace + COM2 FIFO burst fixed the `apk` console stall. Evidence: [2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md](evidence/r640/2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md). Do not F11 `34474850361` / `34425781629` for Phase A; `34480107961` is the Phase A reference pin. |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
-| H5 | Latitude ≠ full product loop | MED | E2+E3+E3b+E5+Phase F+P0-14 stamps closed; SPA guest is SHELL CPUID stub; TLS/console + distro remain |
+| H5 | Phase B — iron SPA still launches the SHELL stub | MED | E2+E3+E3b+E5+Phase F+P0-14 stamps closed on iron; E5 mechanism is driven today by the ESP `raynuf.txt` flag + Stage 46 product ISO on ESP. Everest closes when SPA/REST create-VM + attach-media starts the RayNu-F ISO/installed-disk path (P0-63). TLS deferred (ADR-009); console UI thin |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
 | H8 | ~~Phase F coexist not closed on iron~~ | — | **Resolved** 2026-08-20 (`HOST-NIC coexist listening` + `HOST-NIC-HTTP-OK` while VMX on; G1–G3 parked) |
@@ -376,6 +375,33 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-10 | pit-during-apk | 0.25 | 98 | **Iron UDisk `56a3ffd` / run `34480107961`: E5 CLOSED on the real R640 — reboot-to-disk.** Third iron `RAYNU-V-M7-ISO-INSTALL-OK` → `reboot` → F7 relaunch → `GPT ESP lba=2048` → installed GRUB 2.12 countdown `2s→1s→0s` (wall cap never fired) → `Booting 'Alpine Linux v3.21, with Linux lts'` → **`RAYNU-V-RAYNU-F-DISK-BOOT-OK`** → `EBS-OK` → second `Linux version 6.12.13-0-lts` `root=UUID=9af18543-…` → `EXT4-fs (vda2): mounted` → OpenRC → `login:` → `/proc/cmdline` from the installed system; months 0.5→0.25; overall 96→98; summit ISO 98→99; H3 resolved; new P0-63 Phase B (SPA start → RayNu-F path; iron SPA is still the SHELL stub `2b795a0`); Everest not claimed; docs/honesty-strings-only commit |
+| 2026-09-10 | pit-during-apk | 0.5 | 96 | **Iron UDisk `975f8fc` / run `34474850361`: F7 relaunch worked on the R640** — `src=kbc n=1` → `relaunch after reset` → `GPT ESP lba=2048 sectors=98304 part=1` → `image=DISK-BOOTX64` → installed GRUB 2.12 menu (`executed automatically in 2s`) → `stop exit-cap exits=1048577 svc=492778`: GRUB `run_menu` polls ReadKeyStroke + serial LSR with no idle (~2 exits/µs on iron), the fixed 1 M exit-count cap fired inside GRUB's own timeout; fix: RayNu-F wall cap (180 s wall from launch/relaunch, checked every 4096 exits; exit count `1<<30` u32-wrap guard only; `wall_ms=` on stop lines); months 0.5 held; overall 96 held; iron `DISK-BOOT-OK` not claimed; iron P0-14 stays 2b795a0 |
+| 2026-09-10 | pit-during-apk | 0.5 | 96 | **Iron UDisk `59ac070` / run `34425781629`: `RAYNU-V-M7-ISO-INSTALL-OK` on the real R640** — `916af96` console fix landed (apk 25 pkgs in 0.5 s; heartbeat `room=3177..4096 pace=3360→5811 fifo=1 drained→97346 win→17488`), `setup-disk -m sys /dev/vda` GPT+grub+initramfs `Installation finished. No error reported.`; `reboot` → F7 relaunch failed `VMCLEAR/VMPTRLD`: release asm shows `raynu_f_reset_relaunch` 81,024-byte frame (`FirmwareState::new()` PagePool on stack) on a 16 KiB host stack with the private VMCS as the next frame down; fix: `.rdata` `RAYNU_F_STATE_TEMPLATE` memcpy (frame 40 B), host stack 4→32 pages + guard page checked before F7 VMCLEAR, split VMCLEAR/VMPTRLD lines `rev=/want=/guard=`, `flush_guest_tx()` before share-off; months 0.75→0.5; overall 94→96; iron `DISK-BOOT-OK` not claimed; iron P0-14 stays 2b795a0 |
+| 2026-09-10 | pit-during-apk | 0.75 | 94 | Iron UDisk `916af96` / run `34420783162`: THRE chain telemetry named the link (`pend=0` with `ring=0` `com2_lsr=0x0`; take4≈iir THRE≈lsr ON; ~15 exits/s × 1 byte; own MMIO lines filled the 2 KiB ring) — guest THRE was gated on host COM2 LSR + empty ring at exit time. Fix pin: guest UART TX ring room (THRE = room ≥ 1024+16, 4 KiB ring) + guest UART line-rate pace (preemption timer 250 µs while ring non-empty; paced ticks no HPET/PIT/exit-count) + COM2 FIFO burst (16/window on 16550A) + virtio MMIO kick throttle; heartbeat `room= pace= fifo= drained= win=`; months 0.75 held; do not F11 34420783162; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-09 | pit-during-apk | 0.75 | 94 | Iron UDisk `8b6ed1a` / run `34415711199`: THRE level lived, COM2 identical to f229d14 probe (apk in n_tty_write, text only around SysRq IRQ4, n=1373, PIT paced n=1375); not regression, not fix; telemetry pin: `virtio stall dump thre` every heartbeat (IER/latch/pend/ring/COM2 LSR/IIR+LSR classes/THR+ETBEI/raise+lower/8259 IRR IMR ISR/take0 take4) + `build: sha=` banner; months 0.75 held; do not F11 34415711199; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-09 | pit-during-apk | 0.75 | 94 | Iron UDisk `f229d14` / run `34354322953` probe answered: SysRq t shows apk in n_tty_write→wait_woken (stdout ttyS0), 16 bytes flushed per IRQ4; root cause lost 16550 THRE interrupt (IIR clear then LSR THRE=0 under SOL back-pressure); fix UART THRE level until stop_tx; not virtio, not timer; do not F11 34354322953; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-09 | pit-during-apk | 0.75 | 94 | Iron UDisk `09b5842` / run `34302053558`: PIT paced lived, apk still asleep (rings empty, CPU idle); ten-flash review: stimulus pins refuted their own hypotheses; probe pin (virtio stall dump ring + SysRq w/m/t/l over COM1 BREAK + RIP samples + sysrq_always_enabled); heuristic PIT/INTx pins frozen; months 0.5→0.75, ETA 2026-10; do not F11 34302053558; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-09 | pit-during-apk | 0.5 | 95 | Iron UDisk `2b3cc1e` / run `34300317331`: PIT hold lived then unpaced IRQ0 soft lockup / reason=0x1e; virtio stall dump PIT paced; do not F11 34300317331; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-09 | pit-during-apk | 0.5 | 95 | Iron UDisk `b8ac361` / run `34297632324`: notify-reset lived (no flood) then apk n=1370 INTx no 0x300; virtio stall dump PIT hold; do not F11 34297632324; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-09 | pit-during-apk | 0.5 | 95 | Iron UDisk `6d0c58a` / run `34292570282`: stall dump INTx lived then dump/ISR flood; virtio stall dump notify reset; do not F11 34292570282; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-08 | pit-during-apk | 0.5 | 95 | Iron UDisk `ba5bf8f` / run `34290078274`: stall dump PIT lived (live==last) then apk n=1373; virtio stall dump INTx; do not F11 34290078274; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-08 | pit-during-apk | 0.5 | 95 | Iron COM2 confirmed `a580299` / 34227607779 empty-ring dump n=1373; flash ba5bf8f / 34290078274 (UEFI-release green); do not F11 34227607779; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-08 | pit-during-apk | 0.5 | 95 | Iron UDisk `a580299` / run `34227607779`: INTx hold lived past n=1345 then empty-ring dump n=1373; virtio stall dump PIT; do not F11 34227607779; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-08 | pit-during-apk | 0.5 | 95 | Iron UDisk `34968f7` / run `34224368343`: used.idx + stall dump lived (usbdelay n=1118) then apk n=1345; virtio shared INTx hold; do not F11 34224368343; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-08 | pit-during-apk | 0.5 | 95 | Iron UDisk `e717fb4` / run `34220740109`: DATA_SEGS=128 still apk n=1345; do not wait; virtio used idx + drain on ISR + stall dump + GET_ID; do not F11 34220740109; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-08 | pit-during-apk | 0.5 | 95 | Iron UDisk `6cfabee` / run `34218742196`: yield until mount lived then apk n=1345; 3:1 not the stall; virtio chain all segs (DATA_SEGS was 16); do not F11 34218742196; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-08 | pit-during-apk | 0.5 | 95 | Iron UDisk `c2cd099` / run `34172103709`: Mounting boot media ok then apk n=1345; stop-yield after media:ok did not move apk; 1:1 then 3:1 PIC 11:PIT; do not F11 34172103709; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-07 | pit-during-apk | 0.5 | 95 | Iron UDisk `6692898` / run `34170268004`: Mounting boot media ok then apk n=1345; FLUSH drain did not help; PIC 11 yield until mount; do not F11 34170268004; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-07 | pit-during-apk | 0.5 | 95 | Iron UDisk `9652262` / run `34149809660`: Mounting boot media ok then apk n=1345 after disk ISR ACK; virtio drain FLUSH raises INTx on 0-byte used-idx; do not F11 34149809660; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-07 | pit-during-apk | 0.5 | 95 | Iron UDisk `fc3053a` / run `34148045050`: linux PIC IRQ0 + linux virtio PIC 11 then freeze at mount n=1089 (usbdelay=30); PIC 11 yields PIT; do not F11 34148045050; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-07 | pit-during-apk | 0.5 | 95 | Iron UDisk `fcac0cd` / run `34145652767`: INTx reassert then n=1345; vec=0x30 is Linux PIC IRQ0; level virtio PIC INTx + IRQ11 unmask + 0x30/0x3b log match; do not F11 34145652767; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-07 | pit-during-apk | 0.5 | 95 | Iron UDisk `0a9b552` / run `34141401594`: leftover GSI 2 no-op on RayNu-F; same apk n=1345; shared virtio INTx reassert + drain without notify + MMIO PIT until DRIVER_OK; do not F11 34141401594; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-07 | pit-during-apk | 0.5 | 95 | Iron UDisk `c61942b` / run `34135448354`: paced PIT lived (DRIVER_OK, no soft lockup) then apk n=1345 with no linux PIC IRQ0 (leftover GSI 2 stole PIC virtio); linux PIC before leftover GSI 2; do not F11 34135448354; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-07 | pit-during-apk | 0.5 | 95 | Iron UDisk `69102aa` / run `34080595540`: MADT passed; virtio_pci_probe `vp_set_status`/`iowrite8` IRQ0 storm (`soft lockup`) then I/O `reason=0x1e` hold; raise PIT on resume only after both DRIVER_OK; do not F11 34080595540; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-07 | pit-during-apk | 0.5 | 95 | Iron UDisk `c815ccc` / run `34078335291`: APIC MADT then I/O `reason=0x1e` `restore host xcr0` (PIT hold from firmware queue-arm + PHASE_LOGIN); arm PIT only after Linux DEVICE_STATUS / both DRIVER_OK; do not F11 34078335291; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-07 | pit-during-apk | 0.5 | 95 | Iron UDisk `20e8b70` / run `34076175624`: same `n=1345` freeze (`idle=poll` never HLT; PIT-once consumed so UART wins); hold PIT until login: + raise PIT on overlay resume; do not F11 34076175624; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-07 | pit-during-apk | 0.5 | 95 | Iron UDisk `46fd345` / run `34069352671`: Linux 6.12.13-lts on RayNu-F stalled at Alpine `Installing packages` (last virtio MMIO n=1281) because UART beat PIT after DRIVER_OK; PIT-once on virtio MMIO + preempt after DRIVER_OK (HLT keeps UART); DRIVER_OK nowait; virtio heartbeat 64; do not F11 34069352671; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-07 | raynu-f-direct-iron | 0.5 | 95 | Iron UDisk `55a3602` / run `34067879816`: RayNu-F direct + EBS-OK then Linux WRMSR `reason=0x20 rip=0xb00013f` stopped (`n=2 < cap=1`); collapse OVMF cap only while `requested && !RAYNU_F_RAN`; stop nowait carries `cap=`; do not F11 34067879816; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-06 | raynu-f-direct-iron | 0.5 | 95 | Iron UDisk F7 `088ab25` COM2 diagnosed: RayNu-F only launches from the OVMF stop path; nested stopped at SEC (`788930c` n=1043 reason=0x30) but iron OVMF parked in CpuSleep 0x7f0680d0 toward the 16_777_216 cap (`ea30da1`); `raynuf.txt` now collapses the OVMF leg to 1 exit (`guest_uefi_raynu_f_resume_cap`, note `RayNu-F direct — OVMF leg bypassed`); runbook Phase A fixed; host-tested; do not F11 088ab25 for F7 again; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-06 | iron-f7-4g-cruzer | 0.5 | 95 | Iron detect: front USB2 is LogiLink UDisk 4026531840 serial General_UDisk-0:0 lsusb abcd:1234 (not Cruzer Micro); flash identity accepts UDisk; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
@@ -864,13 +890,13 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ```
 Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
-Now:           E2+E3+E3b+E5+Phase F stamps CLOSED; native BCM5720 HTTP after BOOT-OK with VMX on (`:38` / 10.99.99.126:8443)
-Months left:   0.5  (ETA ~ 2026-09)
-Next move:     On raynuvsrv1 run ~/projects/raynuv/flashcruzer.sh; F11 Cruzer; spec/start (WANT shadow restore, no error 7)
+Now:           E2+E3+E3b+Phase F+P0-14 CLOSED; E5 CLOSED on iron 2026-09-10 (56a3ffd: ISO-INSTALL-OK → reboot → DISK-BOOT-OK → second Linux root=UUID= → login:)
+Months left:   0.25  (ETA 2026-10 held)
+Next move:     Phase B — SPA/REST create-VM + attach ISO must launch the RayNu-F ISO/installed-disk path on iron (today: ESP raynuf.txt flag; iron SPA start is the SHELL stub 2b795a0)
 Tcp4 residual: Floppy publishes PXE/HTTP, not Tcp4 SB (platform limit)
 SNP after EBS: dead — native BCM5720 is the durable mgmt path (E3b closed 2026-08-20)
 Preserve:      releases/v0.1.0-adr013-baseline
-Do not claim:  Mount Everest / E4 closed (first SPA VMLAUNCH OK; slot 1 re-entry zeros/error 7 is not a close)
+Do not claim:  Mount Everest / E4 closed (E5 mechanism is closed on iron; the SPA does not start that disk yet)
 ```
 
 Public checklist: [`docs/runbooks/r640_iron_week.md`](runbooks/r640_iron_week.md) ·

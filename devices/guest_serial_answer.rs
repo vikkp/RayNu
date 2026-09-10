@@ -8,9 +8,9 @@
 //! into RBR. Lab UART stub never calls this. Host/CI never prints
 //! `ISO-INSTALL-OK`.
 
-use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 
-const WIN: usize = 24;
+const WIN: usize = 48;
 const QCAP: usize = 768;
 const YES_MAX: u8 = 4;
 
@@ -142,6 +142,21 @@ static GRUB_SENT: AtomicBool = AtomicBool::new(false);
 static NEXT_YES_IS_NO: AtomicBool = AtomicBool::new(false);
 /// Initramfs `/ # ` already queued [`MOUNT_EXIT`]. Stay PHASE_LOGIN.
 static MOUNT_SENT: AtomicBool = AtomicBool::new(false);
+/// Alpine `Mounting boot media: ok.` / `usbdelay=30` done. PIC 11 then
+/// yields PIT only every third take (3:1) so apk overlay INTx and
+/// jiffies both move. Iron `c2cd099` / `34172103709`: stopping yield
+/// after `media: ok` still froze at virtio `n=1345`.
+/// linux PIC IRQ11 yield until mount. linux PIC IRQ11 yield 3 after mount.
+/// Not `ISO-INSTALL-OK`.
+static MEDIA_MOUNTED: AtomicBool = AtomicBool::new(false);
+/// Alpine `Installing packages` (UART, not usbdelay TSC). INTx pulse
+/// after empty-ring dump only then. Iron `6d0c58a` / `34292570282`
+/// pulsed during usbdelay and apk ISR ACK re-armed the dump.
+/// virtio stall dump notify reset. Not `ISO-INSTALL-OK`.
+static PACKAGES_OVERLAY: AtomicBool = AtomicBool::new(false);
+/// Host TSC when PIT-hold armed (DRIVER_OK). `usbdelay=30` fallback.
+static HOLD_TSC: AtomicU64 = AtomicU64::new(0);
+static MOUNT_LOG: AtomicBool = AtomicBool::new(false);
 /// F7: `reboot\r` queued after the install completed.
 static REBOOT_SENT: AtomicBool = AtomicBool::new(false);
 /// F7: second Linux boot after RayNu-F relaunch. `reset()` does not clear this.
@@ -165,6 +180,10 @@ pub fn reset() {
     GRUB_SENT.store(false, Ordering::Release);
     NEXT_YES_IS_NO.store(false, Ordering::Release);
     MOUNT_SENT.store(false, Ordering::Release);
+    MEDIA_MOUNTED.store(false, Ordering::Release);
+    PACKAGES_OVERLAY.store(false, Ordering::Release);
+    HOLD_TSC.store(0, Ordering::Release);
+    MOUNT_LOG.store(false, Ordering::Release);
     REBOOT_SENT.store(false, Ordering::Release);
     // SECOND_BOOT is sticky on UEFI so a uart reset after `begin_second_boot`
     // cannot re-arm SETUP. Host tests start from a clean first-boot flag.
@@ -188,6 +207,13 @@ fn ends_with(win: &[u8], wlen: usize, needle: &[u8]) -> bool {
         return false;
     }
     &win[wlen - needle.len()..wlen] == needle
+}
+
+fn window_contains(win: &[u8], wlen: usize, needle: &[u8]) -> bool {
+    if needle.is_empty() || wlen < needle.len() {
+        return false;
+    }
+    win[..wlen].windows(needle.len()).any(|w| w == needle)
 }
 
 fn is_yes_prompt(win: &[u8], wlen: usize) -> bool {
@@ -230,6 +256,21 @@ pub fn note_tx(b: u8) {
         } else {
             a.win.copy_within(1..WIN, 0);
             a.win[WIN - 1] = b;
+        }
+        if !PACKAGES_OVERLAY.load(Ordering::Acquire)
+            && (window_contains(&a.win, a.wlen, b"Installing p")
+                || window_contains(&a.win, a.wlen, b"packages to"))
+        {
+            PACKAGES_OVERLAY.store(true, Ordering::Release);
+            MEDIA_MOUNTED.store(true, Ordering::Release);
+        }
+        if !MEDIA_MOUNTED.load(Ordering::Acquire)
+            && (window_contains(&a.win, a.wlen, b"media: ok")
+                || window_contains(&a.win, a.wlen, b"boot media: ok")
+                || window_contains(&a.win, a.wlen, b"Installing p")
+                || window_contains(&a.win, a.wlen, b"packages to"))
+        {
+            MEDIA_MOUNTED.store(true, Ordering::Release);
         }
         match phase {
             PHASE_LOGIN if !GRUB_SENT.load(Ordering::Acquire) && ends_with(&a.win, a.wlen, GRUB) => {
@@ -314,6 +355,71 @@ pub fn take_rx() -> Option<u8> {
 /// Host tests / gate: queued reply length.
 pub fn queued() -> usize {
     with(|a| a.qn)
+}
+
+/// Alpine init overlay (`Installing packages to root filesystem`) runs
+/// before getty `login:`. Hold PIT over UART (`idle=poll` never HLT) so
+/// apk `sleep` jiffies move. After `login:` UART wins auto-answer.
+/// linux PIT hold until login. Not `ISO-INSTALL-OK`.
+pub fn apk_overlay_needs_pit() -> bool {
+    PHASE.load(Ordering::Acquire) == PHASE_LOGIN
+}
+
+/// PIT-hold just armed (Linux virtio DRIVER_OK). Starts the `usbdelay=30`
+/// TSC fallback so yield-until-mount does not depend on COM1 matching.
+pub fn note_overlay_hold() {
+    if HOLD_TSC.load(Ordering::Acquire) == 0 {
+        HOLD_TSC.store(crate::arch::cpu::rdtsc(), Ordering::Release);
+    }
+}
+
+fn usbdelay_elapsed() -> bool {
+    // Host tests latch via UART needles. A 30s TSC fallback would flip
+    // later irq tests to 3:1 if `prefer_pit_hold` ran earlier in the suite.
+    if cfg!(test) {
+        return false;
+    }
+    let start = HOLD_TSC.load(Ordering::Acquire);
+    if start == 0 {
+        return false;
+    }
+    let mut hz = crate::boot::raynu_f_flag::tsc_hz();
+    if hz == 0 {
+        hz = 2_100_000_000;
+    }
+    crate::arch::cpu::rdtsc().wrapping_sub(start) >= hz.saturating_mul(30)
+}
+
+/// True after guest COM1 printed `Mounting boot media: ok` / apk start,
+/// or after 30s host TSC from DRIVER_OK (`usbdelay=30`).
+/// Iron `c2cd099` / `34172103709`: same apk `n=1345` after mount ok.
+/// linux PIC IRQ11 yield until mount. linux PIC IRQ11 yield 3 after mount.
+/// Not `ISO-INSTALL-OK`.
+pub fn apk_media_mounted() -> bool {
+    if MEDIA_MOUNTED.load(Ordering::Acquire) {
+        return true;
+    }
+    if usbdelay_elapsed() {
+        MEDIA_MOUNTED.store(true, Ordering::Release);
+        true
+    } else {
+        false
+    }
+}
+
+/// True after guest COM1 printed `Installing packages` (not usbdelay TSC).
+/// Iron `6d0c58a` / `34292570282`: usbdelay dump+INTx loop before mount.
+/// virtio stall dump notify reset. Not `ISO-INSTALL-OK`.
+pub fn apk_packages_overlay_active() -> bool {
+    PACKAGES_OVERLAY.load(Ordering::Acquire)
+}
+
+/// One-shot COM2 note when usbdelay/mount latch first becomes true.
+pub fn take_media_mounted_log() -> bool {
+    apk_media_mounted()
+        && MOUNT_LOG
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
 }
 
 #[cfg(test)]

@@ -201,15 +201,15 @@ fn product_iso_esp_retain_rejects_lab_size_and_hold_follows_window() {
 fn patch_iso_linux_serial_console_same_length_and_idempotent() {
     assert_eq!(ISO_SERIAL_CONSOLE_FROM.len(), ISO_SERIAL_CONSOLE_TO.len());
     assert_eq!(ISO_GRUB_LINUX_FROM.len(), ISO_GRUB_LINUX_TO.len());
-    assert_eq!(ISO_GRUB_LINUX_FROM.len(), 277);
-    assert_eq!(ISO_GRUB_CFG_PATCHED_SIZE, 302);
+    assert_eq!(ISO_GRUB_LINUX_FROM.len(), 298);
+    assert_eq!(ISO_GRUB_CFG_PATCHED_SIZE, 323);
     assert_eq!(ISO_GRUB_LINUX_LTS_FROM.len(), ISO_GRUB_LINUX_LTS_TO.len());
-    assert_eq!(ISO_GRUB_LINUX_LTS_FROM.len(), 274);
+    assert_eq!(ISO_GRUB_LINUX_LTS_FROM.len(), 295);
     assert_eq!(ISO_GRUB_CFG_LTS_ORIG_SIZE, 140);
-    assert_eq!(ISO_GRUB_CFG_LTS_PATCHED_SIZE, 299);
-    assert_eq!(ISO_GRUB_LINUX_EXT_FROM.len(), 274);
+    assert_eq!(ISO_GRUB_CFG_LTS_PATCHED_SIZE, 320);
+    assert_eq!(ISO_GRUB_LINUX_EXT_FROM.len(), 295);
     assert_eq!(ISO_GRUB_CFG_EXT_ORIG_SIZE, 182);
-    assert_eq!(ISO_GRUB_CFG_EXT_PATCHED_SIZE, 299);
+    assert_eq!(ISO_GRUB_CFG_EXT_PATCHED_SIZE, 320);
     assert_eq!(ISO_ALPINE_DEV_FROM.len(), ISO_ALPINE_DEV_TO.len());
     assert_eq!(ISO_TTY0_FROM.len(), ISO_TTY0_TO.len());
     assert_eq!(ISO_GRUB_TIMEOUT1_FROM.len(), ISO_GRUB_TIMEOUT1_TO.len());
@@ -288,6 +288,7 @@ fn patch_iso_linux_serial_console_same_length_and_idempotent() {
     assert!(!g.contains("alpine_dev=vdb"));
     assert!(g.contains("initcall_blacklist=piix_init"));
     assert!(g.contains(" efi=noruntime "));
+    assert!(g.contains(" sysrq_always_enabled "), "linux-line sysrq_always_enabled");
     assert!(!g.contains("ata_piix_init"));
     assert!(g.contains("virtio_pci"));
     assert!(g.contains("virtio_blk"));
@@ -319,7 +320,7 @@ fn patch_iso_linux_serial_console_same_length_and_idempotent() {
     assert_eq!(patch_iso_linux_serial_console(&mut ext), 1);
     let e = core::str::from_utf8(&ext[..10 + ISO_GRUB_LINUX_LTS_TO.len()]).unwrap();
     assert!(e.contains("vmlinuz-lts modules=loop,squashfs,virtio_pci,virtio_blk console=ttyS0"));
-    assert!(e.contains(" efi=noruntime \ninitrd\t/boot/initramfs-lts\n}\n"));
+    assert!(e.contains(" efi=noruntime sysrq_always_enabled \ninitrd\t/boot/initramfs-lts\n}\n"));
     assert!(!e.contains("ucode"));
     assert!(ext[10 + ISO_GRUB_LINUX_LTS_TO.len()..].iter().all(|b| *b == 0));
     assert_eq!(patch_iso_linux_serial_console(&mut ext), 0);
@@ -443,7 +444,7 @@ fn patch_iso_linux_grows_alpine_standard_grub_cfg_iso9660_data_length() {
     let s = core::str::from_utf8(patched).unwrap();
     assert!(s.starts_with("set timeout=0\n\nmenuentry \"Linux lts\" {\n"));
     assert!(s.contains("linux\t/boot/vmlinuz-lts modules=loop,squashfs,virtio_pci,virtio_blk console=ttyS0"));
-    assert!(s.contains("initcall_blacklist=piix_init efi=noruntime \n"));
+    assert!(s.contains("initcall_blacklist=piix_init efi=noruntime sysrq_always_enabled \n"));
     assert!(s.contains("initrd\t/boot/initramfs-lts"));
     assert!(s.ends_with("}\n"));
     assert_eq!(s.bytes().filter(|b| *b == b'{').count(), 1);
@@ -474,7 +475,7 @@ fn patch_iso_linux_grows_alpine_extended_grub_cfg_iso9660_data_length() {
     let patched = &iso[data..data + ISO_GRUB_CFG_EXT_PATCHED_SIZE as usize];
     let s = core::str::from_utf8(patched).unwrap();
     assert!(s.starts_with("set timeout=0\n\nmenuentry \"Linux lts\" {\n"));
-    assert!(s.contains("initcall_blacklist=piix_init efi=noruntime \n"));
+    assert!(s.contains("initcall_blacklist=piix_init efi=noruntime sysrq_always_enabled \n"));
     assert!(s.ends_with("initrd\t/boot/initramfs-lts\n}\n"));
     assert!(!s.contains("ucode"));
     assert_eq!(s.bytes().filter(|b| *b == b'{').count(), 1);

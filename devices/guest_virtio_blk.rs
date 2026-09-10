@@ -37,7 +37,7 @@ use crate::devices::guest_platform::{
     boot_order_cd_then_disk, pci_bdf, pci_cfg_offset, HOST_BRIDGE_DEVICE, HOST_BRIDGE_VENDOR,
     PCI_HEADER_MULTIFUNCTION,
 };
-use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 
 /// QEMU / serial marker when guest-UEFI sees virtio-blk + CD→disk order.
 pub const M7_E5_OVMF_VIRTIO_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VIRTIO-OK";
@@ -83,6 +83,9 @@ pub const VIRTIO_BLK_ISO_FEATURES: u64 = VIRTIO_F_VERSION_1 | VIRTIO_BLK_F_FLUSH
 pub const VIRTIO_BLK_T_IN: u32 = 0;
 pub const VIRTIO_BLK_T_OUT: u32 = 1;
 pub const VIRTIO_BLK_T_FLUSH: u32 = 4;
+/// Linux `VIRTIO_BLK_T_GET_ID`. Not a feature bit; QEMU always handles it.
+/// virtio GET_ID. Not `ISO-INSTALL-OK`.
+pub const VIRTIO_BLK_T_GET_ID: u32 = 8;
 pub const VIRTIO_BLK_S_OK: u8 = 0;
 pub const VIRTIO_BLK_S_IOERR: u8 = 1;
 
@@ -94,8 +97,11 @@ const QUEUE_MAX: u16 = 128;
 const SECTOR: usize = 512;
 const VRING_DESC_F_NEXT: u16 = 1;
 const VRING_DESC_F_WRITE: u16 = 2;
-/// Linux blk-mq maps each bio_vec as a descriptor. Cap the chain.
-const DATA_SEGS: usize = 16;
+/// Linux blk-mq maps each bio_vec as a descriptor. Cap at the vq size so
+/// apk overlay ISO reads (many 4K pages) are not truncated with status OK.
+/// Iron `6cfabee` / `34218742196`: 3:1 latch lived (`yield until mount`)
+/// then apk froze at virtio `n=1345`. `DATA_SEGS` was 16. virtio chain all segs.
+const DATA_SEGS: usize = QUEUE_MAX as usize;
 
 struct VirtioPci {
     visible: bool,
@@ -116,9 +122,20 @@ struct VirtioPci {
     queue_driver: u64,
     queue_device: u64,
     last_avail: u16,
+    /// Device-side used.idx. Do not skip avail when a used-ring GPA write
+    /// fails (iron `e717fb4` / `34220740109` apk `n=1345`). virtio used idx.
+    used_idx: u16,
     isr: u8,
     notify_pending: bool,
+    /// Last guest avail.idx seen by drain (COM2 stall dump).
+    seen_avail: u16,
     readonly: bool,
+    /// Last completed request (COM2 stall dump): avail head, status GPA,
+    /// header type and sector. virtio stall dump ring.
+    last_head: u16,
+    last_status_gpa: u64,
+    last_ty: u32,
+    last_sector: u64,
 }
 
 impl VirtioPci {
@@ -142,11 +159,27 @@ impl VirtioPci {
             queue_driver: 0,
             queue_device: 0,
             last_avail: 0,
+            used_idx: 0,
             isr: 0,
             notify_pending: false,
+            seen_avail: 0,
             readonly: false,
+            last_head: 0,
+            last_status_gpa: 0,
+            last_ty: 0,
+            last_sector: 0,
         }
     }
+}
+
+/// Last request completed by [`process_blk_queue`] (COM2 stall dump).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct LastReq {
+    pub head: u16,
+    pub status_gpa: u64,
+    pub ty: u32,
+    pub sector: u64,
+    pub any: bool,
 }
 
 struct VirtioBox {
@@ -184,6 +217,10 @@ static BYTES_WRITTEN: AtomicU64 = AtomicU64::new(0);
 static ISO_PTR: AtomicU64 = AtomicU64::new(0);
 static ISO_LEN: AtomicU64 = AtomicU64::new(0);
 static ISO_READ: AtomicU64 = AtomicU64::new(0);
+/// GPA→HPA misses inside [`process_blk_queue`] (ring, header, status or
+/// used-ring write). Never reset; COM2 stall dump prints it.
+/// virtio stall dump ring.
+static XLATE_FAIL: AtomicU32 = AtomicU32::new(0);
 static ISO_VISIBLE: AtomicBool = AtomicBool::new(false);
 static ISO_OK: AtomicBool = AtomicBool::new(false);
 /// PEI `PciRead16(00:00.0 DID)` must be i440FX so `HostBridgeDevId==0x1237`.
@@ -309,7 +346,9 @@ pub const VIRTIO_STATUS_DRIVER_OK: u8 = 4;
 /// Linux kworker / `msleep` need PIT to beat UART until both product-ISO
 /// virtio-blk functions (`00:02.0` install disk, `00:03.0` ISO) reach
 /// DRIVER_OK. After that, UART must beat PIT so ttyS0 TX and Alpine
-/// serial auto-answer work. Lab / iso=0 (queues off) is false.
+/// serial auto-answer work — except one-shot PIT on virtio MMIO / preempt
+/// / HLT-until-login / UART LSR so apk overlay reads keep jiffies moving.
+/// Lab / iso=0 (queues off) is false.
 /// linux PIT prefer until DRIVER_OK. Not `ISO-INSTALL-OK`.
 pub fn virtio_needs_pit_over_uart() -> bool {
     with_box(|b| {
@@ -317,6 +356,25 @@ pub fn virtio_needs_pit_over_uart() -> bool {
             v.queues_armed && (v.status & VIRTIO_STATUS_DRIVER_OK) == 0
         }
         pending(&b.disk) || pending(&b.iso)
+    })
+}
+
+/// Linux has written DEVICE_STATUS (probe started). Firmware queue-arm at
+/// launch does not count. Iron `c815ccc` / `34078335291`: PHASE_LOGIN +
+/// queues-armed treated early kernel as virtio probe and injected PIT
+/// during APIC setup (`reason=0x1e` I/O then `restore host xcr0`).
+/// linux PIT after virtio probe. Not `ISO-INSTALL-OK`.
+pub fn virtio_linux_probe_started() -> bool {
+    with_box(|b| b.disk.status != 0 || b.iso.status != 0)
+}
+
+/// Both product-ISO virtio functions have DRIVER_OK. Overlay PIT hold
+/// starts here, not at PHASE_LOGIN. linux PIT hold after DRIVER_OK.
+/// Not `ISO-INSTALL-OK`.
+pub fn virtio_both_driver_ok() -> bool {
+    with_box(|b| {
+        (b.disk.status & VIRTIO_STATUS_DRIVER_OK) != 0
+            && (b.iso.status & VIRTIO_STATUS_DRIVER_OK) != 0
     })
 }
 
@@ -673,6 +731,170 @@ pub fn mmio_read_iso(off: u16, size: u8) -> u64 {
     mmio_read_dev(true, off, size)
 }
 
+/// Either product-ISO virtio function still has ISR=1 (INTx asserted).
+/// linux virtio INTx reassert. Not `ISO-INSTALL-OK`.
+pub fn virtio_isr_latched() -> bool {
+    with_box(|b| b.disk.isr != 0 || b.iso.isr != 0)
+}
+
+/// COM2 snapshot when virtio MMIO goes quiet during apk. virtio stall dump.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct VirtioStallSnap {
+    pub disk_last: u16,
+    pub iso_last: u16,
+    pub disk_used: u16,
+    pub iso_used: u16,
+    pub disk_avail: u16,
+    pub iso_avail: u16,
+    pub disk_isr: u8,
+    pub iso_isr: u8,
+    pub disk_kick: bool,
+    pub iso_kick: bool,
+}
+
+pub fn virtio_stall_snap() -> VirtioStallSnap {
+    with_box(|b| VirtioStallSnap {
+        disk_last: b.disk.last_avail,
+        iso_last: b.iso.last_avail,
+        disk_used: b.disk.used_idx,
+        iso_used: b.iso.used_idx,
+        disk_avail: b.disk.seen_avail,
+        iso_avail: b.iso.seen_avail,
+        disk_isr: b.disk.isr,
+        iso_isr: b.iso.isr,
+        disk_kick: b.disk.notify_pending,
+        iso_kick: b.iso.notify_pending,
+    })
+}
+
+/// Guest avail.idx from the live driver ring (not last drain).
+/// Iron `a580299` / `34227607779`: second dump `seen_avail` matched
+/// `last`/`used`; live idx tells a lost kick from a true empty queue.
+/// virtio stall dump PIT.
+/// Not `ISO-INSTALL-OK`.
+pub fn virtio_live_avail_idx(iso: bool, translate: impl Fn(u64) -> Option<u64>) -> u16 {
+    let gpa = with_box(|b| {
+        if iso {
+            b.iso.queue_driver
+        } else {
+            b.disk.queue_driver
+        }
+    });
+    if gpa == 0 {
+        return 0;
+    }
+    read_u16(&translate, gpa.wrapping_add(2)).unwrap_or(0)
+}
+
+/// What Linux sees in its own ring for one function: in-guest `used.idx`,
+/// the last used element we wrote, the status byte at the last request's
+/// status GPA, and that request's header. Iron `09b5842` / `34302053558`:
+/// device-side counters all matched (`last==used==avail==live`) yet apk
+/// never kicked again; this shows whether the completion Linux is waiting
+/// for actually landed in guest memory. virtio stall dump ring.
+/// Not `ISO-INSTALL-OK`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct VirtioRingLive {
+    pub qsize: u16,
+    pub used_idx_mem: u16,
+    pub avail_flags: u16,
+    pub used_flags: u16,
+    pub last_id: u32,
+    pub last_len: u32,
+    pub last_head: u16,
+    pub last_status: u8,
+    pub last_ty: u32,
+    pub last_sector: u64,
+}
+
+pub fn virtio_ring_live(iso: bool, translate: impl Fn(u64) -> Option<u64>) -> VirtioRingLive {
+    let (qsize, used_idx, avail_gpa, used_gpa, head, status_gpa, ty, sector) = with_box(|b| {
+        let v = if iso { &b.iso } else { &b.disk };
+        (
+            v.queue_size,
+            v.used_idx,
+            v.queue_driver,
+            v.queue_device,
+            v.last_head,
+            v.last_status_gpa,
+            v.last_ty,
+            v.last_sector,
+        )
+    });
+    let mut out = VirtioRingLive {
+        qsize,
+        last_head: head,
+        last_ty: ty,
+        last_sector: sector,
+        ..VirtioRingLive::default()
+    };
+    if used_gpa == 0 || qsize == 0 {
+        return out;
+    }
+    out.used_idx_mem = read_u16(&translate, used_gpa.wrapping_add(2)).unwrap_or(0xffff);
+    out.used_flags = read_u16(&translate, used_gpa).unwrap_or(0xffff);
+    if avail_gpa != 0 {
+        out.avail_flags = read_u16(&translate, avail_gpa).unwrap_or(0xffff);
+    }
+    let slot = (used_idx.wrapping_sub(1) as usize) % (qsize as usize);
+    let mut elt = [0u8; 8];
+    if read_bytes(&translate, used_gpa + 4 + (slot as u64) * 8, &mut elt) {
+        out.last_id = u32::from_le_bytes(elt[0..4].try_into().unwrap_or([0; 4]));
+        out.last_len = u32::from_le_bytes(elt[4..8].try_into().unwrap_or([0; 4]));
+    }
+    if status_gpa != 0 {
+        let mut st = [0u8; 1];
+        if read_bytes(&translate, status_gpa, &mut st) {
+            out.last_status = st[0];
+        } else {
+            out.last_status = 0xff;
+        }
+    }
+    out
+}
+
+/// GPA→HPA misses seen by the virtio drain since boot. virtio stall dump ring.
+pub fn virtio_xlate_fail_count() -> u32 {
+    XLATE_FAIL.load(Ordering::Acquire)
+}
+
+/// Pulse shared PIC IRQ 11 with ISR=1 on both functions so Linux
+/// re-harvests used.idx after an empty-ring stall dump.
+/// Iron `ba5bf8f` / `34290078274`: `virtio stall dump PIT` lived,
+/// `disk_live==disk_last` `iso_live==iso_last` `n=1373`, still hung.
+/// virtio stall dump INTx.
+/// Not `ISO-INSTALL-OK`.
+pub fn virtio_stall_pulse_intx() {
+    with_box(|b| {
+        b.disk.isr = 1;
+        b.iso.isr = 1;
+    });
+    crate::devices::guest_irq::raise_virtio();
+    crate::devices::guest_irq::raise_virtio_iso();
+}
+
+/// After one function's ISR read dropped shared PIC IRQ 11, keep the line
+/// high if the sibling still has ISR=1. apk overlay uses vda+vdb on the
+/// same INTx. virtio shared INTx. Not `ISO-INSTALL-OK`.
+pub fn reassert_virtio_shared_intx() {
+    let (disk, iso) = with_box(|b| (b.disk.isr != 0, b.iso.isr != 0));
+    if disk {
+        crate::devices::guest_irq::raise_virtio();
+    }
+    if iso {
+        crate::devices::guest_irq::raise_virtio_iso();
+    }
+}
+
+/// Do not drop PIC 11 while a sibling virtio function still has ISR=1.
+/// Iron `34968f7` / `34224368343`: used.idx lived (usbdelay stall dump
+/// last==used isr=0) then apk froze at `n=1345` after disk ISR ACK with
+/// no ISO ISR read after ISO notify `n=1281`. virtio shared INTx hold.
+/// Not `ISO-INSTALL-OK`.
+pub fn virtio_shared_intx_hold(sibling_isr: bool) -> bool {
+    sibling_isr
+}
+
 fn mmio_read_dev(iso: bool, off: u16, size: u8) -> u64 {
     let val = if iso {
         with_iso(|v| mmio_read_locked(v, off, size))
@@ -680,7 +902,11 @@ fn mmio_read_dev(iso: bool, off: u16, size: u8) -> u64 {
         with_virtio(|v| mmio_read_locked(v, off, size))
     };
     if off == OFF_ISR {
-        if iso {
+        // virtio shared INTx hold: ISR read-to-clear is per-function;
+        // PIC 11 is the OR of both. Do not lower while the sibling is latched.
+        if virtio_shared_intx_hold(virtio_isr_latched()) {
+            reassert_virtio_shared_intx();
+        } else if iso {
             crate::devices::guest_irq::lower_virtio_iso();
         } else {
             crate::devices::guest_irq::lower_virtio();
@@ -836,8 +1062,10 @@ fn common_cfg_write_byte(v: &mut VirtioPci, off: u16, b: u8) {
             if v.status == 0 {
                 v.queue_enable = 0;
                 v.last_avail = 0;
+                v.used_idx = 0;
                 v.notify_pending = false;
                 v.isr = 0;
+                v.seen_avail = 0;
             }
         }
         0x16 | 0x17 => {
@@ -1053,9 +1281,20 @@ pub fn process_blk_queue_in(
             None
         }
     };
+    let mut used_idx = 0u16;
     process_blk_queue(
-        qsize, last_avail, desc_gpa, avail_gpa, used_gpa, disk, &translate, false,
+        qsize,
+        last_avail,
+        &mut used_idx,
+        desc_gpa,
+        avail_gpa,
+        used_gpa,
+        disk,
+        &translate,
+        false,
+        &mut LastReq::default(),
     )
+    .0
 }
 
 /// Walk a split virtqueue against a read-only backing (product ISO `/dev/vdb`).
@@ -1077,9 +1316,20 @@ pub fn process_iso_queue_in(
             None
         }
     };
+    let mut used_idx = 0u16;
     process_blk_queue(
-        qsize, last_avail, desc_gpa, avail_gpa, used_gpa, disk, &translate, true,
+        qsize,
+        last_avail,
+        &mut used_idx,
+        desc_gpa,
+        avail_gpa,
+        used_gpa,
+        disk,
+        &translate,
+        true,
+        &mut LastReq::default(),
     )
+    .0
 }
 
 fn page_left(gpa: u64) -> usize {
@@ -1186,23 +1436,28 @@ fn xfer_data_seg(
 fn process_blk_queue(
     qsize: u16,
     last_avail: &mut u16,
+    used_idx: &mut u16,
     desc_gpa: u64,
     avail_gpa: u64,
     used_gpa: u64,
     disk: &mut [u8],
     translate: &impl Fn(u64) -> Option<u64>,
     readonly: bool,
-) -> u32 {
+    last_req: &mut LastReq,
+) -> (u32, u16, u16) {
     if qsize == 0 {
-        return 0;
+        return (0, 0, 0);
     }
     let Some(avail_idx) = read_u16(translate, avail_gpa + 2) else {
-        return 0;
+        XLATE_FAIL.fetch_add(1, Ordering::AcqRel);
+        return (0, 0, 0);
     };
     let mut written = 0u32;
+    let mut nreq = 0u16;
     while *last_avail != avail_idx {
         let slot = (*last_avail as usize) % (qsize as usize);
         let Some(head) = read_u16(translate, avail_gpa + 4 + (slot as u64) * 2) else {
+            XLATE_FAIL.fetch_add(1, Ordering::AcqRel);
             break;
         };
         let mut desc = head;
@@ -1219,6 +1474,7 @@ fn process_blk_queue(
             let d_off = desc_gpa + u64::from(desc) * 16;
             let mut raw = [0u8; 16];
             if !read_bytes(translate, d_off, &mut raw) {
+                XLATE_FAIL.fetch_add(1, Ordering::AcqRel);
                 break;
             }
             let addr = u64::from_le_bytes(raw[0..8].try_into().unwrap_or([0; 8]));
@@ -1227,6 +1483,7 @@ fn process_blk_queue(
             let next = u16::from_le_bytes(raw[14..16].try_into().unwrap_or([0; 2]));
             if !got_hdr && len >= 16 {
                 if !read_bytes(translate, addr, &mut hdr) {
+                    XLATE_FAIL.fetch_add(1, Ordering::AcqRel);
                     break;
                 }
                 got_hdr = true;
@@ -1246,8 +1503,31 @@ fn process_blk_queue(
         let sector = u64::from_le_bytes(hdr[8..16].try_into().unwrap_or([0; 8]));
         let mut status = VIRTIO_BLK_S_IOERR;
         let mut req_bytes = 0u32;
+        let mut in_len = 0u32;
         if ty == VIRTIO_BLK_T_FLUSH {
             status = VIRTIO_BLK_S_OK;
+        } else if ty == VIRTIO_BLK_T_GET_ID {
+            // virtio GET_ID. Empty serial is OK; IOERR hung some guests.
+            status = VIRTIO_BLK_S_OK;
+            for &(gpa, len, device_write) in segs[..nseg].iter() {
+                if !device_write || len == 0 {
+                    continue;
+                }
+                let mut off = 0u32;
+                while off < len {
+                    let n = (len - off).min(64);
+                    let z = [0u8; 64];
+                    if !write_bytes(translate, gpa + u64::from(off), &z[..n as usize]) {
+                        status = VIRTIO_BLK_S_IOERR;
+                        break;
+                    }
+                    off = off.saturating_add(n);
+                    in_len = in_len.saturating_add(n);
+                }
+                if status != VIRTIO_BLK_S_OK {
+                    break;
+                }
+            }
         } else if readonly && ty == VIRTIO_BLK_T_OUT {
             status = VIRTIO_BLK_S_IOERR;
         } else if nseg > 0 {
@@ -1269,6 +1549,9 @@ fn process_blk_queue(
                 if status != VIRTIO_BLK_S_OK {
                     break;
                 }
+                if device_write {
+                    in_len = in_len.saturating_add(len);
+                }
                 byte_off = byte_off.saturating_add(len as usize);
             }
             if readonly && ty == VIRTIO_BLK_T_IN && status == VIRTIO_BLK_S_OK {
@@ -1278,18 +1561,37 @@ fn process_blk_queue(
             }
         }
         if status_gpa != 0 {
-            let _ = write_bytes(translate, status_gpa, &[status]);
+            if !write_bytes(translate, status_gpa, &[status]) {
+                XLATE_FAIL.fetch_add(1, Ordering::AcqRel);
+                break;
+            }
+            in_len = in_len.saturating_add(1);
         }
-        let used_idx = read_u16(translate, used_gpa + 2).unwrap_or(0);
-        let uslot = (used_idx as usize) % (qsize as usize);
+        let uslot = (*used_idx as usize) % (qsize as usize);
         let mut used_elt = [0u8; 8];
         used_elt[0..4].copy_from_slice(&(u32::from(head)).to_le_bytes());
-        used_elt[4..8].copy_from_slice(&1u32.to_le_bytes());
-        let _ = write_bytes(translate, used_gpa + 4 + (uslot as u64) * 8, &used_elt);
-        let _ = write_u16(translate, used_gpa + 2, used_idx.wrapping_add(1));
+        used_elt[4..8].copy_from_slice(&in_len.to_le_bytes());
+        if !write_bytes(translate, used_gpa + 4 + (uslot as u64) * 8, &used_elt) {
+            XLATE_FAIL.fetch_add(1, Ordering::AcqRel);
+            break;
+        }
+        if !write_u16(translate, used_gpa + 2, used_idx.wrapping_add(1)) {
+            XLATE_FAIL.fetch_add(1, Ordering::AcqRel);
+            break;
+        }
+        core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+        *used_idx = used_idx.wrapping_add(1);
         *last_avail = last_avail.wrapping_add(1);
+        nreq = nreq.saturating_add(1);
+        *last_req = LastReq {
+            head,
+            status_gpa,
+            ty,
+            sector,
+            any: true,
+        };
     }
-    written
+    (written, nreq, avail_idx)
 }
 
 /// Bytes the guest read from the ISO virtio since last take (iron serial).
@@ -1302,7 +1604,16 @@ pub fn take_iso_read_note() -> Option<u64> {
     }
 }
 
-fn take_notify(v: &mut VirtioPci) -> (bool, bool, u16, u16, u64, u64, u64) {
+fn note_last_req(v: &mut VirtioPci, r: &LastReq) {
+    if r.any {
+        v.last_head = r.head;
+        v.last_status_gpa = r.status_gpa;
+        v.last_ty = r.ty;
+        v.last_sector = r.sector;
+    }
+}
+
+fn take_queue(v: &mut VirtioPci) -> (bool, bool, u16, u16, u16, u64, u64, u64) {
     let p = v.notify_pending;
     v.notify_pending = false;
     if p {
@@ -1310,86 +1621,128 @@ fn take_notify(v: &mut VirtioPci) -> (bool, bool, u16, u16, u64, u64, u64) {
     }
     (
         p,
-        p && v.queue_enable != 0,
+        v.queue_enable != 0,
         v.queue_size,
         v.last_avail,
+        v.used_idx,
         v.queue_desc,
         v.queue_driver,
         v.queue_device,
     )
 }
 
-/// Drain pending notifies using `translate` (GPA → HPA).
-///
-/// Returns install-disk OUT bytes. ISO IN is counted separately
-/// ([`take_iso_read_note`]).
-pub fn drain_queue(translate: fn(u64) -> Option<u64>) -> u32 {
-    let disk_n = drain_disk(translate);
-    drain_iso(translate);
+/// Drain published avail idx using `translate` (GPA → HPA). Kick/notify is
+/// optional (virtio drain without notify). Returns install-disk OUT bytes.
+/// ISO IN is counted separately ([`take_iso_read_note`]).
+/// A completed FLUSH has 0 data bytes; still latch ISR and raise INTx
+/// (iron `9652262` / `34149809660`: apk overlay froze at virtio `n=1345`
+/// after a disk ISR ACK). virtio drain FLUSH. Not `ISO-INSTALL-OK`.
+pub fn drain_queue(translate: impl Fn(u64) -> Option<u64>) -> u32 {
+    let disk_n = drain_disk(&translate);
+    drain_iso(&translate);
     disk_n
 }
 
-fn drain_disk(translate: fn(u64) -> Option<u64>) -> u32 {
-    let (notified, pending, qsize, last, desc, avail, used) = with_virtio(|v| take_notify(v));
-    if notified {
-        crate::devices::guest_irq::raise_virtio();
-    }
-    if !pending {
+fn drain_disk(translate: &impl Fn(u64) -> Option<u64>) -> u32 {
+    let (notified, enabled, qsize, last, used_i, desc, avail, used) =
+        with_virtio(|v| take_queue(v));
+    if !enabled {
+        if notified {
+            crate::devices::guest_irq::raise_virtio();
+        }
         return 0;
     }
     let hpa = DISK_HPA.load(Ordering::Acquire);
     let dlen = DISK_LEN.load(Ordering::Acquire) as usize;
     if hpa == 0 || dlen == 0 {
+        if notified {
+            crate::devices::guest_irq::raise_virtio();
+        }
         return 0;
     }
     // SAFETY: attach_disk installed exclusive disk frames.
     let disk = unsafe { core::slice::from_raw_parts_mut(hpa as *mut u8, dlen) };
     let mut last_avail = last;
-    let n = process_blk_queue(
+    let mut used_idx = used_i;
+    let mut last_req = LastReq::default();
+    let (n, nreq, avail) = process_blk_queue(
         qsize,
         &mut last_avail,
+        &mut used_idx,
         desc,
         avail,
         used,
         disk,
-        &translate,
+        translate,
         false,
+        &mut last_req,
     );
-    with_virtio(|v| v.last_avail = last_avail);
+    with_virtio(|v| {
+        v.last_avail = last_avail;
+        v.used_idx = used_idx;
+        v.seen_avail = avail;
+        note_last_req(v, &last_req);
+        // virtio drain FLUSH: used-idx moved even when OUT bytes are 0.
+        if nreq > 0 {
+            v.isr = 1;
+        }
+    });
+    if notified || nreq > 0 {
+        crate::devices::guest_irq::raise_virtio();
+    }
     if n > 0 {
         BYTES_WRITTEN.fetch_add(u64::from(n), Ordering::AcqRel);
     }
     n
 }
 
-fn drain_iso(translate: fn(u64) -> Option<u64>) {
-    let (notified, pending, qsize, last, desc, avail, used) = with_iso(|v| take_notify(v));
-    if notified {
-        crate::devices::guest_irq::raise_virtio_iso();
-    }
-    if !pending {
+fn drain_iso(translate: &impl Fn(u64) -> Option<u64>) {
+    let (notified, enabled, qsize, last, used_i, desc, avail, used) =
+        with_iso(|v| take_queue(v));
+    if !enabled {
+        if notified {
+            crate::devices::guest_irq::raise_virtio_iso();
+        }
         return;
     }
     let ptr = ISO_PTR.load(Ordering::Acquire);
     let ilen = ISO_LEN.load(Ordering::Acquire) as usize;
     if ptr == 0 || ilen == 0 {
+        if notified {
+            crate::devices::guest_irq::raise_virtio_iso();
+        }
         return;
     }
     // SAFETY: product ISO window is retained until reset; readonly rejects OUT.
     // KANI-TARGET: virtio-iso IN from product window (outside Proven Core).
     let disk = unsafe { core::slice::from_raw_parts_mut(ptr as *mut u8, ilen) };
     let mut last_avail = last;
-    let n = process_blk_queue(
+    let mut used_idx = used_i;
+    let mut last_req = LastReq::default();
+    let (n, nreq, avail_seen) = process_blk_queue(
         qsize,
         &mut last_avail,
+        &mut used_idx,
         desc,
         avail,
         used,
         disk,
-        &translate,
+        translate,
         true,
+        &mut last_req,
     );
-    with_iso(|v| v.last_avail = last_avail);
+    with_iso(|v| {
+        v.last_avail = last_avail;
+        v.used_idx = used_idx;
+        v.seen_avail = avail_seen;
+        note_last_req(v, &last_req);
+        if nreq > 0 {
+            v.isr = 1;
+        }
+    });
+    if notified || nreq > 0 {
+        crate::devices::guest_irq::raise_virtio_iso();
+    }
     if n > 0 {
         ISO_READ.fetch_add(u64::from(n), Ordering::AcqRel);
     }

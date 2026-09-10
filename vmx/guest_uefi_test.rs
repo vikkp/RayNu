@@ -3,6 +3,14 @@ use super::{
     guest_uefi_report_ram_should_premap, GUEST_UEFI_REPORT_RAM_PRODUCT_EXTRA,
 };
 use super::{
+    guest_uefi_host_stack_guard_ok, guest_uefi_host_stack_headroom, GUEST_UEFI_HOST_STACK_GUARD_BYTE,
+    GUEST_UEFI_HOST_STACK_GUARD_PAGES, GUEST_UEFI_HOST_STACK_PAGES,
+};
+use super::{
+    raynu_f_wall_cap_hit, raynu_f_wall_check_due, raynu_f_wall_elapsed_ms, RAYNU_F_EXIT_CAP, RAYNU_F_WALL_CAP_S,
+    RAYNU_F_WALL_CHECK_MASK,
+};
+use super::{
     apply_guest_cr4_write, atapi_read_evidence, both_pci_evidence, copy_flash_at, copy_low_ram_at, dxe_or_cd_boot_evidence,
     xapic_fetch_miss_eax_fallback,
     xapic_eax_fallback_skip_len,
@@ -82,8 +90,17 @@ use super::{
     virtio_mmio_retry_decode_len, guest_uefi_linux_mov_dr_len,
     guest_uefi_virtio_bar_overlaps_scratch, guest_uefi_virtio_bar_should_trap,
     guest_uefi_virtio_mmio_raises_pit, guest_uefi_virtio_mmio_polls_lapic,
+    guest_uefi_linux_virtio_mmio_raises_pit, guest_uefi_linux_reassert_virtio_intx,
+    guest_uefi_linux_virtio_pic_vec,
+    guest_uefi_linux_prefer_pit_during_apk, guest_uefi_linux_hlt_uart_after_driver_ok,
+    guest_uefi_linux_hlt_prefer_pit_during_apk, guest_uefi_linux_uart_prefer_pit_during_apk,
+    guest_uefi_linux_prefer_pit_hold, guest_uefi_linux_raise_pit_on_resume,
+    guest_uefi_linux_raise_pit_on_resume_due, guest_uefi_linux_pit_resume_elapsed,
+    guest_uefi_linux_pit_jiffies_now, LINUX_PIT_RESUME_MIN_TSC,
+    guest_uefi_virtio_mmio_heartbeat,
     guest_uefi_linux_io_raises_pit, guest_uefi_linux_preempt_deadloop_noskip,
-    guest_uefi_linux_pic_before_lapic, guest_uefi_pic_before_lapic,
+    guest_uefi_linux_pic_before_lapic, guest_uefi_linux_pic_before_leftover_gsi2,
+    guest_uefi_pic_before_lapic,
     guest_uefi_firmware_hlt_ignores_tpr,
     guest_uefi_firmware_hlt_wait_for_irq,
     guest_uefi_firmware_hlt_wait_for_irq_oneshot,
@@ -110,6 +127,20 @@ use super::{
     guest_uefi_linux_gsi2_before_pic,
     guest_uefi_pit_skips_ioapic_pin0,
     guest_uefi_virtio_drain_every_resume,
+    guest_uefi_virtio_drain_on_isr,
+    guest_uefi_virtio_stall_dump,
+    guest_uefi_virtio_stall_dump_reset_on_mmio,
+    guest_uefi_virtio_stall_dump_reset_on_notify,
+    guest_uefi_virtio_stall_dump_pit,
+    guest_uefi_virtio_stall_dump_pit_hold,
+    guest_uefi_virtio_stall_dump_pit_paced, guest_uefi_virtio_stall_probe, StallProbe,
+    STALL_PROBE_TSC_PER_SEC,
+    guest_uefi_virtio_stall_empty,
+    guest_uefi_virtio_stall_dump_intx,
+    guest_uefi_virtio_mmio_heartbeat_kick,
+    guest_uefi_virtio_mmio_kick_line_due, VIRTIO_MMIO_KICK_LINE_MIN_TSC,
+    guest_uefi_uart_pace_wanted, guest_uefi_uart_pace_ticks, guest_uefi_preempt_arm,
+    UART_PACE_US,
     GUEST_UEFI_INTR_TYPE_NMI,
     guest_uefi_pt_paint_vga_uc, guest_uefi_pt_leaf_4k_for, guest_uefi_gpa_in_vga_fix_uc,
     GUEST_UEFI_CPU_FLUSH_UNSUPPORTED, GUEST_UEFI_CPU_FLUSH_JNZ_OFF, GUEST_UEFI_IRON_CPU_FLUSH_GPA,
@@ -1541,12 +1572,26 @@ fn marker_and_residual_honest() {
     assert!(guest_uefi_virtio_mmio_raises_pit(true, true), "virtio MMIO raises PIT");
     assert!(!guest_uefi_virtio_mmio_raises_pit(false, true), "iso=0 firmware no extra PIT");
     assert!(!guest_uefi_virtio_mmio_raises_pit(true, false));
+    assert!(
+        guest_uefi_linux_virtio_mmio_raises_pit(true, true, true),
+        "linux virtio MMIO PIT until DRIVER_OK"
+    );
+    assert!(
+        !guest_uefi_linux_virtio_mmio_raises_pit(true, true, false),
+        "after DRIVER_OK virtio MMIO does not raise unpaced PIT"
+    );
+    assert!(!guest_uefi_linux_virtio_mmio_raises_pit(false, true, true));
     assert!(guest_uefi_virtio_mmio_polls_lapic(true, true), "virtio MMIO polls lapic");
     assert!(!guest_uefi_virtio_mmio_polls_lapic(false, true), "iso=0 firmware no extra lapic poll");
     assert!(!guest_uefi_virtio_mmio_polls_lapic(true, false));
     assert!(!guest_uefi_linux_io_raises_pit(true, true), "linux I/O does not raise PIT (iron MADT stop)");
     assert!(!guest_uefi_linux_io_raises_pit(false, true), "iso=0 firmware no extra I/O PIT");
     assert!(!guest_uefi_linux_io_raises_pit(true, false));
+    // Iron `c815ccc` / `34078335291`: `restore host xcr0 reason=0x1e` is
+    // EXIT_REASON_IO_INSTRUCTION (30), not XSETBV (55). leave_to_e4 always
+    // prints LAST_EXIT_REASON next to the XCR0 restore.
+    assert_eq!(crate::vmx::fields::EXIT_REASON_IO_INSTRUCTION, 0x1e);
+    assert_eq!(crate::vmx::fields::EXIT_REASON_XSETBV, 0x37);
     assert!(
         guest_uefi_linux_preempt_deadloop_noskip(true, true),
         "linux preempt deadloop noskip"
@@ -1570,6 +1615,81 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux preempt deadloop noskip"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT prefer once"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT prefer until DRIVER_OK"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT once after DRIVER_OK"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux HLT PIT during apk"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT after DRIVER_OK until login"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux UART PIT during apk"));
+    assert!(guest_uefi_linux_prefer_pit_during_apk(true) == false);
+    crate::devices::guest_irq::reset();
+    assert!(guest_uefi_linux_prefer_pit_during_apk(false));
+    crate::devices::guest_irq::reset();
+    assert!(guest_uefi_linux_hlt_prefer_pit_during_apk(true, true, false, true));
+    assert!(!guest_uefi_linux_hlt_prefer_pit_during_apk(true, true, false, false));
+    assert!(!guest_uefi_linux_hlt_prefer_pit_during_apk(true, true, true, true));
+    assert!(guest_uefi_linux_uart_prefer_pit_during_apk(true, false, true));
+    assert!(!guest_uefi_linux_uart_prefer_pit_during_apk(true, false, false));
+    assert!(!guest_uefi_linux_uart_prefer_pit_during_apk(false, false, true));
+    assert!(guest_uefi_linux_prefer_pit_hold(false, true, true, true), "linux PIT hold until login");
+    crate::devices::guest_irq::reset();
+    assert!(!guest_uefi_linux_prefer_pit_hold(false, true, false, false), "linux PIT after virtio probe");
+    assert!(!guest_uefi_linux_prefer_pit_hold(true, true, false, false));
+    assert!(guest_uefi_linux_prefer_pit_hold(true, true, true, false));
+    assert!(!guest_uefi_linux_prefer_pit_hold(false, false, true, true));
+    assert!(guest_uefi_linux_pit_jiffies_now(false, true, true, true), "linux PIT hold after DRIVER_OK");
+    assert!(!guest_uefi_linux_pit_jiffies_now(true, true, false, false));
+    assert!(guest_uefi_linux_raise_pit_on_resume(true, false, true, true), "linux PIT raise on overlay resume");
+    assert!(
+        !guest_uefi_linux_raise_pit_on_resume(false, true, true, false),
+        "linux PIT raise after DRIVER_OK not probe"
+    );
+    assert!(!guest_uefi_linux_raise_pit_on_resume(true, true, false, false));
+    assert!(!guest_uefi_linux_raise_pit_on_resume(false, false, false, false));
+    assert!(guest_uefi_linux_pit_resume_elapsed(0, 0, LINUX_PIT_RESUME_MIN_TSC));
+    assert!(!guest_uefi_linux_pit_resume_elapsed(1, 1, LINUX_PIT_RESUME_MIN_TSC));
+    assert!(guest_uefi_linux_pit_resume_elapsed(
+        LINUX_PIT_RESUME_MIN_TSC,
+        0,
+        LINUX_PIT_RESUME_MIN_TSC
+    ));
+    assert!(guest_uefi_linux_pit_resume_elapsed(2_000_001, 1, LINUX_PIT_RESUME_MIN_TSC));
+    assert!(guest_uefi_linux_raise_pit_on_resume_due(
+        true,
+        true,
+        LINUX_PIT_RESUME_MIN_TSC,
+        0,
+        LINUX_PIT_RESUME_MIN_TSC
+    ));
+    assert!(
+        !guest_uefi_linux_raise_pit_on_resume_due(true, true, 100, 1, LINUX_PIT_RESUME_MIN_TSC),
+        "linux PIT resume paced"
+    );
+    assert!(!guest_uefi_linux_raise_pit_on_resume_due(
+        true,
+        false,
+        LINUX_PIT_RESUME_MIN_TSC,
+        0,
+        LINUX_PIT_RESUME_MIN_TSC
+    ));
+    assert_eq!(LINUX_PIT_RESUME_MIN_TSC, 2_000_000, "linux PIT resume min tsc");
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT hold until login"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT raise on overlay resume"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT raise after DRIVER_OK not probe"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT resume paced"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT resume min tsc"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT after virtio probe"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT hold after DRIVER_OK"));
+    assert!(!guest_uefi_linux_hlt_uart_after_driver_ok(true, true, false, true));
+    assert!(guest_uefi_linux_hlt_uart_after_driver_ok(true, true, false, false));
+    assert!(!guest_uefi_linux_hlt_uart_after_driver_ok(true, true, true, false));
+    assert!(!guest_uefi_linux_hlt_uart_after_driver_ok(false, true, false, false));
+    assert!(guest_uefi_virtio_mmio_heartbeat(0));
+    assert!(guest_uefi_virtio_mmio_heartbeat(31));
+    assert!(guest_uefi_virtio_mmio_heartbeat(64));
+    assert!(!guest_uefi_virtio_mmio_heartbeat(65));
+    assert!(guest_uefi_virtio_mmio_heartbeat(1280), "virtio MMIO heartbeat 64");
+    assert!(!guest_uefi_virtio_mmio_heartbeat(1281));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio MMIO heartbeat 64"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux HLT UART after DRIVER_OK"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("UART reassert RX not THRE"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio drain every resume"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux virtio DRIVER_OK"));
@@ -1585,6 +1705,164 @@ fn marker_and_residual_honest() {
     assert!(guest_uefi_linux_pic_before_lapic(true, false));
     assert!(!guest_uefi_linux_pic_before_lapic(true, true));
     assert!(!guest_uefi_linux_pic_before_lapic(false, false));
+    assert!(
+        guest_uefi_linux_pic_before_leftover_gsi2(true, true, false),
+        "linux PIC before leftover GSI 2"
+    );
+    assert!(!guest_uefi_linux_pic_before_leftover_gsi2(true, true, true));
+    assert!(!guest_uefi_linux_pic_before_leftover_gsi2(false, true, false));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIC before leftover GSI 2"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT hold UART not virtio"));
+    assert!(
+        guest_uefi_linux_reassert_virtio_intx(true, true, true),
+        "linux virtio INTx reassert"
+    );
+    assert!(!guest_uefi_linux_reassert_virtio_intx(true, true, false));
+    assert!(!guest_uefi_linux_reassert_virtio_intx(false, true, true));
+    assert!(!guest_uefi_linux_reassert_virtio_intx(true, false, true));
+    assert!(guest_uefi_linux_virtio_pic_vec(0x2b), "linux virtio PIC 11");
+    assert!(guest_uefi_linux_virtio_pic_vec(0x3b), "linux x86_64 IRQ11 0x3b");
+    assert!(!guest_uefi_linux_virtio_pic_vec(0x20));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux virtio INTx reassert"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux virtio PIC 11"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux virtio PIC level INTx"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIC IRQ11 unmask"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIC IRQ0 vec 0x30"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIC IRQ11 yield PIT"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIC IRQ11 yield until mount"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIC IRQ11 yield 3 after mount"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux virtio MMIO PIT until DRIVER_OK"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio drain without notify"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio drain FLUSH"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio chain all segs"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio used idx"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio drain on ISR"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio stall dump"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio GET_ID"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio shared INTx"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio shared INTx hold"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio stall dump again"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio MMIO heartbeat kick"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio stall dump PIT"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio stall dump INTx"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio stall dump notify reset"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio stall dump PIT hold"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio stall dump PIT paced"));
+    assert!(
+        guest_uefi_virtio_drain_on_isr(false),
+        "virtio drain on ISR"
+    );
+    assert!(!guest_uefi_virtio_drain_on_isr(true));
+    assert!(
+        guest_uefi_virtio_stall_dump(4_000_000_001, 1, false),
+        "virtio stall dump"
+    );
+    assert!(!guest_uefi_virtio_stall_dump(4_000_000_001, 1, true));
+    assert!(!guest_uefi_virtio_stall_dump(4_000_000_000, 1, false));
+    assert!(
+        guest_uefi_virtio_stall_dump_reset_on_mmio(true),
+        "virtio stall dump again"
+    );
+    assert!(!guest_uefi_virtio_stall_dump_reset_on_mmio(false));
+    assert!(
+        guest_uefi_virtio_stall_dump_reset_on_notify(0x300, true),
+        "virtio stall dump notify reset"
+    );
+    assert!(
+        guest_uefi_virtio_stall_dump_reset_on_notify(0x50, true),
+        "virtio stall dump notify reset"
+    );
+    assert!(
+        guest_uefi_virtio_stall_dump_reset_on_notify(0x64, true),
+        "virtio stall dump notify reset"
+    );
+    assert!(
+        !guest_uefi_virtio_stall_dump_reset_on_notify(0x100, true),
+        "virtio stall dump notify reset"
+    );
+    assert!(!guest_uefi_virtio_stall_dump_reset_on_notify(0x100, false));
+    assert!(!guest_uefi_virtio_stall_dump_reset_on_notify(0x300, false));
+    assert!(
+        guest_uefi_virtio_stall_dump_pit(true),
+        "virtio stall dump PIT"
+    );
+    assert!(!guest_uefi_virtio_stall_dump_pit(false));
+    assert!(
+        guest_uefi_virtio_stall_dump_pit_hold(true, true),
+        "virtio stall dump PIT hold"
+    );
+    assert!(!guest_uefi_virtio_stall_dump_pit_hold(true, false));
+    assert!(!guest_uefi_virtio_stall_dump_pit_hold(false, true));
+    assert!(
+        guest_uefi_virtio_stall_dump_pit_paced(true, true),
+        "virtio stall dump PIT paced"
+    );
+    assert!(!guest_uefi_virtio_stall_dump_pit_paced(true, false));
+    assert!(!guest_uefi_virtio_stall_dump_pit_paced(false, true));
+    // virtio stall probe: samples, then SysRq w/m/t/l, then a final sample.
+    let s = STALL_PROBE_TSC_PER_SEC;
+    assert_eq!(guest_uefi_virtio_stall_probe(0, 0), None);
+    assert_eq!(guest_uefi_virtio_stall_probe(s / 4, 0), Some(StallProbe::Sample));
+    assert_eq!(guest_uefi_virtio_stall_probe(s / 2 - 1, 1), None);
+    assert_eq!(guest_uefi_virtio_stall_probe(s / 2, 1), Some(StallProbe::Sample));
+    assert_eq!(guest_uefi_virtio_stall_probe(s, 2), Some(StallProbe::Sample));
+    assert_eq!(guest_uefi_virtio_stall_probe(s - 1, 3), None);
+    assert_eq!(
+        guest_uefi_virtio_stall_probe(s, 3),
+        Some(StallProbe::Sysrq(b'w')),
+        "virtio stall probe"
+    );
+    assert_eq!(guest_uefi_virtio_stall_probe(4 * s, 4), Some(StallProbe::Sysrq(b'm')));
+    assert_eq!(guest_uefi_virtio_stall_probe(8 * s, 5), Some(StallProbe::Sysrq(b't')));
+    assert_eq!(guest_uefi_virtio_stall_probe(39 * s, 6), None);
+    assert_eq!(guest_uefi_virtio_stall_probe(40 * s, 6), Some(StallProbe::Sysrq(b'l')));
+    assert_eq!(guest_uefi_virtio_stall_probe(60 * s, 7), Some(StallProbe::Sample));
+    assert_eq!(guest_uefi_virtio_stall_probe(u64::MAX, 8), None, "probe ends");
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio stall dump ring"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio stall probe"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("UART sysrq break"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux-line sysrq_always_enabled"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("heuristic PIT/INTx pins frozen"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("UART THRE level until stop_tx"));
+    assert!(
+        guest_uefi_virtio_stall_empty(1093, 1093, 1052, 1052),
+        "virtio stall dump INTx"
+    );
+    assert!(!guest_uefi_virtio_stall_empty(1094, 1093, 1052, 1052));
+    assert!(
+        guest_uefi_virtio_stall_dump_intx(true, true),
+        "virtio stall dump INTx"
+    );
+    assert!(!guest_uefi_virtio_stall_dump_intx(true, false));
+    assert!(!guest_uefi_virtio_stall_dump_intx(false, true));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio stall dump INTx"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio stall dump notify reset"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio stall dump PIT hold"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio stall dump PIT paced"));
+    assert!(
+        guest_uefi_virtio_mmio_heartbeat_kick(100, 0x100, true, true),
+        "virtio MMIO heartbeat kick"
+    );
+    assert!(!guest_uefi_virtio_mmio_heartbeat_kick(100, 0x14, false, true));
+    assert!(
+        !guest_uefi_virtio_mmio_heartbeat_kick(100, 0x100, true, false),
+        "virtio MMIO kick throttle: iron 916af96 one line per apk hit filled the ring"
+    );
+    assert!(
+        guest_uefi_virtio_mmio_heartbeat_kick(128, 0x100, true, false),
+        "the every-64 heartbeat is never throttled"
+    );
+    assert!(guest_uefi_virtio_mmio_kick_line_due(5, 0, VIRTIO_MMIO_KICK_LINE_MIN_TSC));
+    assert!(guest_uefi_virtio_mmio_kick_line_due(
+        1 + VIRTIO_MMIO_KICK_LINE_MIN_TSC,
+        1,
+        VIRTIO_MMIO_KICK_LINE_MIN_TSC
+    ));
+    assert!(!guest_uefi_virtio_mmio_kick_line_due(
+        VIRTIO_MMIO_KICK_LINE_MIN_TSC,
+        1,
+        VIRTIO_MMIO_KICK_LINE_MIN_TSC
+    ));
     assert!(guest_uefi_pic_before_lapic(true, true, false));
     assert!(!guest_uefi_pic_before_lapic(true, true, true));
     assert!(!guest_uefi_pic_before_lapic(false, false, false));
@@ -1778,6 +2056,7 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_hlt_stall_quiet_tick(16385, 12, true, 1));
     assert!(!guest_uefi_hlt_stall_quiet_tick(16385, 0x1e, true, 0));
     assert!(guest_uefi_linux_pic_irq0_vec(0x20));
+    assert!(guest_uefi_linux_pic_irq0_vec(0x30), "linux PIC IRQ0 vec 0x30");
     assert!(!guest_uefi_linux_pic_irq0_vec(0x24));
     assert!(guest_uefi_linux_exc_error_code(8));
     assert!(guest_uefi_linux_exc_error_code(14));
@@ -3068,4 +3347,131 @@ fn raynu_f_linux_cea_idt_pt_walk() {
     assert!(src.contains("begin_second_boot"));
     assert!(src.contains("boot: RayNu-F guest reset requested src="));
     assert!(src.contains("boot: RayNu-F relaunch after reset (F7; not ISO-INSTALL-OK)"));
+}
+
+#[test]
+fn f7_relaunch_resets_firmware_state_without_a_stack_temporary() {
+    // Iron `59ac070` / `34425781629`: Alpine installed to vda and the
+    // install marker printed on the R640, then `reboot` → F7 relaunch failed
+    // `VMCLEAR/VMPTRLD`. Release asm: `raynu_f_reset_relaunch` reserved
+    // 81,024 bytes (`RAYNU_F_STATE = FirmwareState::new()` built PagePool on
+    // the stack) on a 16 KiB host stack; the private VMCS was the next frame
+    // down, so VMPTRLD read a foreign revision dword.
+    let src = include_str!("guest_uefi.rs");
+    assert!(src.contains("static RAYNU_F_STATE_TEMPLATE"));
+    assert!(src.contains("RayNu-F F7 template reset"));
+    assert!(
+        !src.contains("RAYNU_F_STATE = crate::raynu_f::FirmwareState::new()"),
+        "F7 must memcpy the .rdata template, never construct on the stack"
+    );
+    assert!(src.contains("core::ptr::addr_of!(RAYNU_F_STATE_TEMPLATE)"));
+    // The FirmwareState is ~84 KiB; the old 4-page stack could not hold it.
+    assert!(core::mem::size_of::<crate::raynu_f::FirmwareState>() > 4 * 4096);
+    assert!(core::mem::size_of::<crate::raynu_f::FirmwareState>() < 128 * 1024);
+    // Host stack: 32 pages + 1 guard page; the guard is checked before VMCLEAR.
+    assert!(GUEST_UEFI_HOST_STACK_PAGES >= 32);
+    assert_eq!(GUEST_UEFI_HOST_STACK_GUARD_PAGES, 1);
+    assert!(guest_uefi_host_stack_headroom(4, 81_024) < 0, "16 KiB overflowed");
+    assert!(guest_uefi_host_stack_headroom(GUEST_UEFI_HOST_STACK_PAGES, 81_024) > 0);
+    let guard = [GUEST_UEFI_HOST_STACK_GUARD_BYTE; 4096];
+    assert!(guest_uefi_host_stack_guard_ok(&guard));
+    let mut breached = guard;
+    breached[4095] = 0;
+    assert!(!guest_uefi_host_stack_guard_ok(&breached));
+    assert!(!guest_uefi_host_stack_guard_ok(&[]));
+    assert!(src.contains("fn guest_uefi_host_stack_guard_intact"));
+    assert!(src.contains("fn raynu_f_launch_vmcs_fail"));
+    assert!(src.contains("boot: guest-UEFI host stack top=0x"));
+    assert!(src.contains("boot: RayNu-F launch failed: "));
+    assert!(src.contains("(F2b/F7; guest-UEFI host stack guard; not ISO-INSTALL-OK)"));
+    assert!(!src.contains("launch failed: VMCLEAR/VMPTRLD (F2b)\""));
+    // The queued `guest reset requested src=` line is flushed before share
+    // mode ends (iron `59ac070` lost it).
+    assert!(src.contains("serial::flush_guest_tx()"));
+    assert!(src.contains("iron reboot-to-disk CLOSED on 56a3ffd run 34480107961"));
+    assert!(src.contains("Phase B SPA start not claimed"));
+}
+
+#[test]
+fn raynu_f_wall_cap_bounds_the_loader_phase_by_time_not_exits() {
+    // Iron `975f8fc` / `34474850361`: the F7 relaunch worked (GPT ESP, GRUB
+    // 2.12 menu on the installed disk, "executed automatically in 2s"), then
+    // `stop exit-cap exits=1048577 svc=492778`. GRUB's `run_menu` polls
+    // `grub_getkey_noblock` with no idle — ReadKeyStroke (svc) + serial LSR
+    // (I/O) per iteration — so an R640 made 1 M exits inside the 2 s timeout.
+    // A count is not a time bound; the wall clock is.
+    let src = include_str!("guest_uefi.rs");
+    assert!(RAYNU_F_EXIT_CAP >= 1 << 28, "count cap must not fire before GRUB's timeout on iron");
+    assert!((60..=600).contains(&RAYNU_F_WALL_CAP_S), "wall cap bounded but generous");
+    assert_eq!(RAYNU_F_WALL_CHECK_MASK, 0xFFF);
+    // 2.1 GHz TSC: 1 M exits at ~1 µs each is ~1 s — far under the cap.
+    let hz = 2_095_615_600u64;
+    assert_eq!(raynu_f_wall_elapsed_ms(1_000, 1_000 + hz, hz), 1_000);
+    assert_eq!(raynu_f_wall_elapsed_ms(1_000, 1_000 + hz / 2, hz), 500);
+    assert_eq!(raynu_f_wall_elapsed_ms(5_000, 1_000, hz), 0, "saturating");
+    assert!(!raynu_f_wall_cap_hit(1_000, 1_000 + 2 * hz, hz, RAYNU_F_WALL_CAP_S), "2 s GRUB timeout survives");
+    assert!(!raynu_f_wall_cap_hit(1_000, 1_000 + RAYNU_F_WALL_CAP_S * hz, hz, RAYNU_F_WALL_CAP_S), "exactly cap: not hit");
+    assert!(raynu_f_wall_cap_hit(1_000, 1_000 + (RAYNU_F_WALL_CAP_S + 1) * hz, hz, RAYNU_F_WALL_CAP_S));
+    assert!(!raynu_f_wall_cap_hit(0, u64::MAX, hz, RAYNU_F_WALL_CAP_S), "unarmed base never trips");
+    // Uncalibrated clock falls back to 1 GHz like the service clock.
+    assert_eq!(raynu_f_wall_elapsed_ms(0, 3_000_000_000, 0), 3_000);
+    // rdtsc only every 4096 exits on the hot path.
+    assert!(raynu_f_wall_check_due(0));
+    assert!(raynu_f_wall_check_due(4096));
+    assert!(!raynu_f_wall_check_due(1));
+    assert!(!raynu_f_wall_check_due(1_048_577));
+    // Surface: launch stamps the base, the exit path checks it, the stop
+    // summary prints the elapsed wall time.
+    assert!(src.contains("RAYNU_F_LAUNCH_TSC.store(cpu::rdtsc().max(1)"));
+    assert!(src.contains("raynu_f_stop(\"wall-cap\")"));
+    assert!(src.contains("raynu_f_stop(\"exit-cap\")"));
+    assert!(src.contains(" wall_ms="));
+    assert!(src.contains("RayNu-F wall cap"));
+}
+
+#[test]
+fn uart_line_rate_pace_clamps_preempt_without_stealing_the_nominal_tick() {
+    // guest UART line-rate pace: iron `916af96` / `34420783162` — every
+    // THRE-chain link agreed, but with `idle=poll` the only exits were ~15
+    // preemption ticks a second and each drained one byte toward SOL, so
+    // apk's console never emptied. While the shared TX ring holds bytes the
+    // preemption timer is clamped to UART_PACE_US; the nominal HPET/PIT
+    // tick keeps its deadline and paced exits are not time ticks.
+    assert!(guest_uefi_uart_pace_wanted(true, true, 1));
+    assert!(!guest_uefi_uart_pace_wanted(true, true, 0), "empty ring: nominal");
+    assert!(!guest_uefi_uart_pace_wanted(false, true, 100), "firmware / iso=0 never pace");
+    assert!(!guest_uefi_uart_pace_wanted(true, false, 100));
+    assert_eq!(UART_PACE_US, 250);
+    // 2.1 GHz Xeon, IA32_VMX_MISC shift 5: 250 µs = 525_000 TSC = 16_406 ticks.
+    assert_eq!(guest_uefi_uart_pace_ticks(2_100_000_000, 5), 16_406);
+    // Uncalibrated TSC falls back to 2 GHz; never zero ticks.
+    assert_eq!(guest_uefi_uart_pace_ticks(0, 5), 15_625);
+    assert_eq!(guest_uefi_uart_pace_ticks(1, 31), 1);
+    // Nominal reload 0x100000 at shift 5 = 33.5M TSC. Far from the deadline:
+    // clamp and mark paced.
+    let reload = 0x0010_0000u32;
+    let pace = 16_406u32;
+    let now = 1_000_000_000u64;
+    let due = now + (u64::from(reload) << 5);
+    assert_eq!(guest_uefi_preempt_arm(reload, true, pace, now, due, 5), (pace, true));
+    // Within one pacing period of the deadline: arm the remainder, real tick.
+    let close = due - (u64::from(pace) << 5) + 32;
+    let (v, paced) = guest_uefi_preempt_arm(reload, true, pace, close, due, 5);
+    assert!(!paced && v <= pace && v >= 1, "v={v}");
+    // Deadline already passed: fire at once as a real tick.
+    assert_eq!(guest_uefi_preempt_arm(reload, true, pace, due + 1, due, 5), (1, false));
+    // Not pacing: plain reload.
+    assert_eq!(guest_uefi_preempt_arm(reload, false, pace, now, due, 5), (reload, false));
+    assert_eq!(guest_uefi_preempt_arm(0, true, pace, now, due, 5), (0, false));
+    let src = include_str!("guest_uefi.rs");
+    assert!(src.contains("guest UART line-rate pace"));
+    assert!(src.contains("fn arm_preempt_on_resume"));
+    assert!(src.contains("UART_PACE_EXIT.load(Ordering::Acquire)"));
+    assert!(src.contains("cpu::rdmsr(IA32_VMX_MISC)"));
+    assert!(src.contains("virtio MMIO kick throttle"));
+    assert!(src.contains("\" pace=\""));
+    assert!(src.contains("\" fifo=\""));
+    assert!(include_str!("../boot/serial.rs").contains("guest UART TX ring room"));
+    assert!(include_str!("../boot/serial.rs").contains("guest UART COM2 FIFO burst"));
+    assert!(include_str!("../boot/raynu_f_flag.rs").contains("Always — RayNu-F"));
 }

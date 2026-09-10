@@ -7,7 +7,15 @@ cd "$ROOT"
 TARGET="${TARGET:-x86_64-unknown-uefi}"
 PROFILE="${PROFILE:-release}"
 
-echo "==> Building r640-hypervisor ($PROFILE / $TARGET)"
+# Build identity for the M0 banner (`build: sha=…`). CI supplies GITHUB_SHA;
+# local builds fall back to HEAD. `option_env!` in src/lib.rs reads this.
+if [[ -z "${RAYNU_BUILD_SHA:-}" ]]; then
+  RAYNU_BUILD_SHA="${GITHUB_SHA:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}"
+fi
+RAYNU_BUILD_SHA="${RAYNU_BUILD_SHA:0:12}"
+export RAYNU_BUILD_SHA
+
+echo "==> Building r640-hypervisor ($PROFILE / $TARGET) sha=$RAYNU_BUILD_SHA"
 cargo build \
   --"$PROFILE" \
   --target "$TARGET" \

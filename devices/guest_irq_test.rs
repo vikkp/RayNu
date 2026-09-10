@@ -6,7 +6,7 @@
     firmware_ata_vec, firmware_is_pit_vec,
     ATA_GSI, IOAPIC_GPA,
     IOAPIC_VERSION, PIT_IOAPIC_GSI, PIT_IRQ, VIRTIO_GSI, VIRTIO_ISO_GSI, VIRTIO_PIC_IRQ,
-    ioapic_gsi2_armed,
+    ioapic_gsi2_armed, linux_ioapic_gsi2_programmed, note_linux_ioapic_write, prefer_pit_hold,
 };
 use crate::devices::guest_platform::{self, is_platform_sink_gpa};
 use crate::devices::ide_cdrom::{
@@ -195,6 +195,10 @@ fn product_iso_firmware_virtual_wire_gsi2_repeats() {
     assert!(firmware_virtual_wire_armed());
     assert!(ioapic_gsi2_armed(), "firmware virtual-wire GSI 2");
     assert!(
+        !linux_ioapic_gsi2_programmed(),
+        "linux PIC before leftover GSI 2"
+    );
+    assert!(
         !crate::vmx::guest_uefi::guest_uefi_pic_before_lapic(true, true, false),
         "firmware virtual-wire GSI 2 beats PIC-first"
     );
@@ -208,6 +212,44 @@ fn product_iso_firmware_virtual_wire_gsi2_repeats() {
         take_ioapic_vector(),
         Some(0x20),
         "firmware virtual-wire GSI 2 AEOI"
+    );
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_linux_ioapic_gsi2_programmed_not_firmware_leftover() {
+    arm_product_iso();
+    arm_firmware_virtual_wire();
+    assert!(ioapic_gsi2_armed());
+    assert!(!linux_ioapic_gsi2_programmed(), "linux PIC before leftover GSI 2");
+    ioapic_write(0, 0x10 + 2 * u32::from(PIT_IOAPIC_GSI));
+    note_linux_ioapic_write(0);
+    assert!(!linux_ioapic_gsi2_programmed());
+    ioapic_write(0x10, 0x31);
+    note_linux_ioapic_write(0x10);
+    assert!(linux_ioapic_gsi2_programmed(), "linux PIC before leftover GSI 2");
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_linux_hold_virtio_ioapic_beats_pit() {
+    arm_product_iso();
+    pic_init_unmask_all();
+    ioapic_write(0, 0x10 + 2 * u32::from(PIT_IOAPIC_GSI));
+    ioapic_write(0x10, 0x31);
+    ioapic_write(0, 0x10 + 2 * u32::from(VIRTIO_GSI));
+    ioapic_write(0x10, 0x51);
+    prefer_pit_hold(true);
+    raise_pit();
+    raise_virtio();
+    assert_eq!(
+        take_inject_vector(),
+        Some(0x51),
+        "linux PIT hold UART not virtio"
     );
     reset();
     reset_cd();
@@ -779,6 +821,545 @@ fn product_iso_linux_pit_prefer_until_driver_ok_then_uart() {
 }
 
 #[test]
+fn product_iso_linux_pit_once_after_driver_ok_beats_uart_then_uart_wins() {
+    use crate::devices::guest_virtio_blk::{
+        mmio_write, mmio_write_iso, present as present_virtio, reset as reset_virtio,
+        virtio_needs_pit_over_uart, VIRTIO_STATUS_DRIVER_OK,
+    };
+    use crate::vmx::guest_uefi::guest_uefi_linux_prefer_pit_during_apk;
+    arm_product_iso();
+    reset_virtio();
+    assert!(present_virtio());
+    mmio_write(0x14, 1, u64::from(VIRTIO_STATUS_DRIVER_OK));
+    mmio_write_iso(0x14, 1, u64::from(VIRTIO_STATUS_DRIVER_OK));
+    assert!(!virtio_needs_pit_over_uart());
+    pic_init_unmask_all();
+    assert!(
+        guest_uefi_linux_prefer_pit_during_apk(virtio_needs_pit_over_uart()),
+        "linux PIT once after DRIVER_OK"
+    );
+    raise_pit();
+    raise_gsi(4);
+    assert_eq!(
+        take_inject_vector(),
+        Some(0x20 + PIT_IRQ),
+        "apk overlay PIT-once beats UART"
+    );
+    raise_pit();
+    raise_gsi(4);
+    assert_eq!(
+        take_inject_vector(),
+        Some(0x24),
+        "COM1 IRQ 4 must beat PIT after prefer-once is consumed"
+    );
+    reset();
+    reset_cd();
+    reset_virtio();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_linux_hlt_pit_during_apk_until_login_then_uart() {
+    use crate::devices::guest_serial_answer::{apk_overlay_needs_pit, note_tx, reset as reset_ans};
+    use crate::devices::guest_virtio_blk::{
+        mmio_write, mmio_write_iso, present as present_virtio, reset as reset_virtio,
+        virtio_needs_pit_over_uart, VIRTIO_STATUS_DRIVER_OK,
+    };
+    use crate::vmx::guest_uefi::{
+        guest_uefi_linux_hlt_prefer_pit_during_apk, guest_uefi_linux_hlt_uart_after_driver_ok,
+        guest_uefi_linux_prefer_pit_during_apk, guest_uefi_linux_uart_prefer_pit_during_apk,
+    };
+    arm_product_iso();
+    reset_virtio();
+    reset_ans();
+    assert!(present_virtio());
+    mmio_write(0x14, 1, u64::from(VIRTIO_STATUS_DRIVER_OK));
+    mmio_write_iso(0x14, 1, u64::from(VIRTIO_STATUS_DRIVER_OK));
+    assert!(!virtio_needs_pit_over_uart());
+    assert!(apk_overlay_needs_pit());
+    pic_init_unmask_all();
+    assert!(guest_uefi_linux_hlt_prefer_pit_during_apk(
+        true,
+        true,
+        virtio_needs_pit_over_uart(),
+        apk_overlay_needs_pit(),
+    ));
+    assert!(guest_uefi_linux_uart_prefer_pit_during_apk(
+        true,
+        virtio_needs_pit_over_uart(),
+        apk_overlay_needs_pit(),
+    ));
+    assert!(guest_uefi_linux_prefer_pit_during_apk(
+        virtio_needs_pit_over_uart()
+    ));
+    raise_pit();
+    raise_gsi(4);
+    assert_eq!(
+        take_inject_vector(),
+        Some(0x20 + PIT_IRQ),
+        "linux HLT PIT during apk"
+    );
+    for &b in b"login:" {
+        note_tx(b);
+    }
+    assert!(!apk_overlay_needs_pit());
+    assert!(guest_uefi_linux_hlt_uart_after_driver_ok(
+        true,
+        true,
+        virtio_needs_pit_over_uart(),
+        apk_overlay_needs_pit(),
+    ));
+    raise_pit();
+    raise_gsi(4);
+    assert_eq!(
+        take_inject_vector(),
+        Some(0x24),
+        "after login: UART beats PIT"
+    );
+    reset();
+    reset_cd();
+    reset_virtio();
+    reset_ans();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_linux_pit_hold_until_login_not_consumed() {
+    use crate::devices::guest_serial_answer::{apk_overlay_needs_pit, note_tx, reset as reset_ans};
+    use crate::devices::guest_virtio_blk::{
+        mmio_write, mmio_write_iso, present as present_virtio, reset as reset_virtio,
+        virtio_both_driver_ok, virtio_linux_probe_started, virtio_needs_pit_over_uart,
+        VIRTIO_STATUS_DRIVER_OK,
+    };
+    use crate::vmx::guest_uefi::{
+        guest_uefi_linux_prefer_pit_hold, guest_uefi_linux_raise_pit_on_resume,
+        guest_uefi_linux_raise_pit_on_resume_due, guest_uefi_linux_pit_resume_elapsed,
+        LINUX_PIT_RESUME_MIN_TSC,
+    };
+    arm_product_iso();
+    reset_virtio();
+    reset_ans();
+    assert!(present_virtio());
+    mmio_write(0x14, 1, u64::from(VIRTIO_STATUS_DRIVER_OK));
+    mmio_write_iso(0x14, 1, u64::from(VIRTIO_STATUS_DRIVER_OK));
+    assert!(!virtio_needs_pit_over_uart());
+    assert!(virtio_linux_probe_started());
+    assert!(virtio_both_driver_ok());
+    assert!(apk_overlay_needs_pit());
+    pic_init_unmask_all();
+    assert!(guest_uefi_linux_prefer_pit_hold(
+        virtio_needs_pit_over_uart(),
+        apk_overlay_needs_pit(),
+        virtio_linux_probe_started(),
+        virtio_both_driver_ok(),
+    ));
+    assert!(guest_uefi_linux_raise_pit_on_resume(
+        apk_overlay_needs_pit(),
+        virtio_needs_pit_over_uart(),
+        virtio_linux_probe_started(),
+        virtio_both_driver_ok(),
+    ));
+    assert!(guest_uefi_linux_raise_pit_on_resume_due(
+        apk_overlay_needs_pit(),
+        virtio_both_driver_ok(),
+        LINUX_PIT_RESUME_MIN_TSC,
+        0,
+        LINUX_PIT_RESUME_MIN_TSC,
+    ));
+    assert!(
+        !guest_uefi_linux_raise_pit_on_resume_due(
+            apk_overlay_needs_pit(),
+            virtio_both_driver_ok(),
+            100,
+            1,
+            LINUX_PIT_RESUME_MIN_TSC,
+        ),
+        "linux PIT resume paced"
+    );
+    assert!(guest_uefi_linux_pit_resume_elapsed(0, 0, LINUX_PIT_RESUME_MIN_TSC));
+    raise_pit();
+    raise_gsi(4);
+    assert_eq!(
+        take_inject_vector(),
+        Some(0x20 + PIT_IRQ),
+        "linux PIT hold until login"
+    );
+    let _ = pic_io(0x20, false, 1, 0x20);
+    raise_pit();
+    raise_gsi(4);
+    assert_eq!(
+        take_inject_vector(),
+        Some(0x20 + PIT_IRQ),
+        "hold is not consumed — idle=poll still sees jiffies"
+    );
+    let _ = pic_io(0x20, false, 1, 0x20);
+    raise_pit();
+    raise_virtio();
+    assert_eq!(
+        take_inject_vector(),
+        Some(0x20 + VIRTIO_PIC_IRQ),
+        "linux PIT hold UART not virtio"
+    );
+    crate::devices::guest_irq::lower_virtio();
+    for &b in b"login:" {
+        note_tx(b);
+    }
+    assert!(!apk_overlay_needs_pit());
+    assert!(!guest_uefi_linux_prefer_pit_hold(
+        virtio_needs_pit_over_uart(),
+        apk_overlay_needs_pit(),
+        virtio_linux_probe_started(),
+        virtio_both_driver_ok(),
+    ));
+    raise_pit();
+    raise_gsi(4);
+    assert_eq!(
+        take_inject_vector(),
+        Some(0x24),
+        "after login: UART beats PIT"
+    );
+    reset();
+    reset_cd();
+    reset_virtio();
+    reset_ans();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_virtio_shared_intx_survives_sibling_isr_read() {
+    use crate::devices::guest_virtio_blk::{
+        drain_queue, mmio_read, mmio_read_iso, mmio_write, mmio_write_iso, present as present_virtio,
+        reset as reset_virtio, virtio_isr_latched,
+    };
+    arm_product_iso();
+    reset_virtio();
+    assert!(present_virtio());
+    pic_init_unmask_all();
+    mmio_write(0x300, 2, 1);
+    mmio_write_iso(0x300, 2, 1);
+    let _ = drain_queue(|_| None);
+    assert!(virtio_isr_latched(), "virtio shared INTx");
+    assert_eq!(mmio_read(0x100, 1), 1, "disk ISR read-to-clear");
+    assert!(
+        virtio_isr_latched(),
+        "ISO ISR still latched after disk ISR read"
+    );
+    assert_eq!(
+        take_pic_vector(),
+        Some(0x20 + VIRTIO_PIC_IRQ),
+        "shared PIC 11 stays pending for the sibling"
+    );
+    assert_eq!(mmio_read_iso(0x100, 1), 1);
+    reset();
+    reset_cd();
+    reset_virtio();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_virtio_shared_intx_hold_zero_disk_isr() {
+    use crate::devices::guest_virtio_blk::{
+        drain_queue, mmio_read, mmio_write_iso, present as present_virtio,
+        reset as reset_virtio, virtio_isr_latched, virtio_shared_intx_hold,
+    };
+    arm_product_iso();
+    reset_virtio();
+    assert!(present_virtio());
+    pic_init_unmask_all();
+    mmio_write_iso(0x300, 2, 1);
+    let _ = drain_queue(|_| None);
+    assert!(virtio_isr_latched(), "ISO kick latches ISR");
+    assert!(virtio_shared_intx_hold(true), "virtio shared INTx hold");
+    assert_eq!(mmio_read(0x100, 1), 0, "disk ISR already clear");
+    assert!(
+        virtio_isr_latched(),
+        "ISO ISR still latched after zero disk ISR read"
+    );
+    assert_eq!(
+        take_pic_vector(),
+        Some(0x20 + VIRTIO_PIC_IRQ),
+        "PIC 11 stays pending when sibling ISR is 1"
+    );
+    reset();
+    reset_cd();
+    reset_virtio();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_virtio_flush_without_notify_raises_intx() {
+    use crate::devices::guest_virtio_blk::{
+        attach_disk, drain_queue, mmio_write, present as present_virtio, reset as reset_virtio,
+        virtio_isr_latched, VIRTIO_BLK_T_FLUSH,
+    };
+    arm_product_iso();
+    reset_virtio();
+    assert!(present_virtio());
+    pic_init_unmask_all();
+    let mut disk = vec![0u8; 4096];
+    // SAFETY: host test owns `disk` until reset_virtio.
+    assert!(unsafe { attach_disk(disk.as_mut_ptr() as u64, disk.len()) });
+    let mut guest = vec![0u8; 4096];
+    mmio_write(0x16, 2, 0);
+    mmio_write(0x18, 2, 4);
+    mmio_write(0x20, 8, 0);
+    mmio_write(0x28, 8, 256);
+    mmio_write(0x30, 8, 512);
+    mmio_write(0x1C, 2, 1);
+    let hdr_gpa = 0x300u64;
+    guest[hdr_gpa as usize..hdr_gpa as usize + 4]
+        .copy_from_slice(&VIRTIO_BLK_T_FLUSH.to_le_bytes());
+    guest[0x700] = 0xFF;
+    fn put_desc(mem: &mut [u8], i: u16, addr: u64, len: u32, flags: u16, next: u16) {
+        let o = (i as usize) * 16;
+        mem[o..o + 8].copy_from_slice(&addr.to_le_bytes());
+        mem[o + 8..o + 12].copy_from_slice(&len.to_le_bytes());
+        mem[o + 12..o + 14].copy_from_slice(&flags.to_le_bytes());
+        mem[o + 14..o + 16].copy_from_slice(&next.to_le_bytes());
+    }
+    put_desc(&mut guest, 0, hdr_gpa, 16, 1, 1);
+    put_desc(&mut guest, 1, 0x700, 1, 2, 0);
+    guest[256 + 2..256 + 4].copy_from_slice(&1u16.to_le_bytes());
+    guest[256 + 4..256 + 6].copy_from_slice(&0u16.to_le_bytes());
+    let base = guest.as_ptr() as u64;
+    let glen = guest.len() as u64;
+    let n = drain_queue(|gpa| {
+        if gpa < glen {
+            Some(base + gpa)
+        } else {
+            None
+        }
+    });
+    assert_eq!(n, 0, "FLUSH has no OUT bytes");
+    assert_eq!(guest[0x700], 0, "FLUSH status OK");
+    assert!(virtio_isr_latched(), "virtio drain FLUSH");
+    assert_eq!(
+        take_pic_vector(),
+        Some(0x20 + VIRTIO_PIC_IRQ),
+        "apk overlay FLUSH without kick still raises PIC 11"
+    );
+    reset();
+    reset_cd();
+    reset_virtio();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_virtio_pic_level_intx_retriggers_after_eoi() {
+    arm_product_iso();
+    pic_init_unmask_all();
+    raise_virtio();
+    assert_eq!(
+        take_pic_vector(),
+        Some(0x20 + VIRTIO_PIC_IRQ),
+        "linux virtio PIC level INTx"
+    );
+    // Linux handle_edge_irq EOIs before vp_interrupt reads ISR.
+    let _ = pic_io(0xA0, false, 1, 0x20);
+    let _ = pic_io(0x20, false, 1, 0x20);
+    assert_eq!(
+        take_pic_vector(),
+        Some(0x20 + VIRTIO_PIC_IRQ),
+        "level INTx stays pending until device ISR read"
+    );
+    crate::devices::guest_irq::lower_virtio();
+    let _ = pic_io(0xA0, false, 1, 0x20);
+    let _ = pic_io(0x20, false, 1, 0x20);
+    assert!(take_pic_vector().is_none(), "lower_virtio deasserts INTx");
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_virtio_pic_irq11_yields_pit_during_hold() {
+    use crate::devices::guest_serial_answer::reset as reset_ans;
+    arm_product_iso();
+    reset_ans();
+    pic_init_unmask_all();
+    prefer_pit_hold(true);
+    raise_virtio();
+    raise_pit();
+    assert_eq!(
+        take_pic_vector(),
+        Some(0x20 + VIRTIO_PIC_IRQ),
+        "first collision still delivers virtio PIC 11"
+    );
+    let _ = pic_io(0xA0, false, 1, 0x20);
+    let _ = pic_io(0x20, false, 1, 0x20);
+    assert_eq!(
+        take_pic_vector(),
+        Some(0x20 + PIT_IRQ),
+        "linux PIC IRQ11 yield PIT"
+    );
+    let _ = pic_io(0x20, false, 1, 0x20);
+    raise_pit();
+    assert_eq!(
+        take_pic_vector(),
+        Some(0x20 + VIRTIO_PIC_IRQ),
+        "after PIT turn, level INTx still pending"
+    );
+    reset();
+    reset_cd();
+    reset_ans();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_virtio_pic_irq11_three_to_one_after_mount() {
+    use crate::devices::guest_serial_answer::{
+        apk_media_mounted, note_tx, reset as reset_ans,
+    };
+    arm_product_iso();
+    reset_ans();
+    pic_init_unmask_all();
+    prefer_pit_hold(true);
+    for &b in b"Mounting boot media: ok." {
+        note_tx(b);
+    }
+    assert!(apk_media_mounted(), "linux PIC IRQ11 yield until mount");
+    raise_virtio();
+    raise_pit();
+    assert_eq!(
+        take_pic_vector(),
+        Some(0x20 + VIRTIO_PIC_IRQ),
+        "linux PIC IRQ11 yield 3 after mount: first"
+    );
+    let _ = pic_io(0xA0, false, 1, 0x20);
+    let _ = pic_io(0x20, false, 1, 0x20);
+    raise_pit();
+    assert_eq!(
+        take_pic_vector(),
+        Some(0x20 + VIRTIO_PIC_IRQ),
+        "linux PIC IRQ11 yield 3 after mount: second"
+    );
+    let _ = pic_io(0xA0, false, 1, 0x20);
+    let _ = pic_io(0x20, false, 1, 0x20);
+    raise_pit();
+    assert_eq!(
+        take_pic_vector(),
+        Some(0x20 + VIRTIO_PIC_IRQ),
+        "linux PIC IRQ11 yield 3 after mount: third arms yield"
+    );
+    let _ = pic_io(0xA0, false, 1, 0x20);
+    let _ = pic_io(0x20, false, 1, 0x20);
+    raise_pit();
+    assert_eq!(
+        take_pic_vector(),
+        Some(0x20 + PIT_IRQ),
+        "linux PIC IRQ11 yield 3 after mount"
+    );
+    reset();
+    reset_cd();
+    reset_ans();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_linux_x86_64_unmasks_virtio_pic_irq11() {
+    arm_product_iso();
+    // Linux x86_64 IRQ0_VECTOR 0x30 / slave 0x38. Leave IRQ 11 masked.
+    let _ = pic_io(0x20, false, 1, 0x11);
+    let _ = pic_io(0x21, false, 1, 0x30);
+    let _ = pic_io(0x21, false, 1, 0x04);
+    let _ = pic_io(0x21, false, 1, 0x01);
+    let _ = pic_io(0xA0, false, 1, 0x11);
+    let _ = pic_io(0xA1, false, 1, 0x38);
+    let _ = pic_io(0xA1, false, 1, 0x02);
+    let _ = pic_io(0xA1, false, 1, 0x01);
+    let _ = pic_io(0x21, false, 1, 0xFB); // unmask cascade only
+    let _ = pic_io(0xA1, false, 1, 0xFF); // all slave masked
+    raise_virtio();
+    assert_eq!(
+        take_pic_vector(),
+        Some(0x38 + VIRTIO_PIC_IRQ - 8),
+        "linux PIC IRQ11 unmask; linux PIC IRQ0 vec 0x30"
+    );
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_linux_early_kernel_uart_beats_pit() {
+    use crate::devices::guest_serial_answer::{apk_overlay_needs_pit, reset as reset_ans};
+    use crate::devices::guest_virtio_blk::{
+        mmio_write, present as present_virtio, reset as reset_virtio, virtio_both_driver_ok,
+        virtio_linux_probe_started, virtio_needs_pit_over_uart,
+    };
+    use crate::vmx::guest_uefi::{
+        guest_uefi_linux_pit_jiffies_now, guest_uefi_linux_prefer_pit_hold,
+        guest_uefi_linux_raise_pit_on_resume,
+    };
+    arm_product_iso();
+    reset_virtio();
+    reset_ans();
+    assert!(present_virtio());
+    assert!(
+        virtio_needs_pit_over_uart(),
+        "firmware queue-arm still pending DRIVER_OK"
+    );
+    assert!(
+        !virtio_linux_probe_started(),
+        "linux PIT after virtio probe"
+    );
+    assert!(!virtio_both_driver_ok());
+    assert!(apk_overlay_needs_pit(), "PHASE_LOGIN from boot");
+    assert!(
+        !guest_uefi_linux_pit_jiffies_now(
+            virtio_needs_pit_over_uart(),
+            apk_overlay_needs_pit(),
+            virtio_linux_probe_started(),
+            virtio_both_driver_ok(),
+        ),
+        "iron c815ccc: do not inject PIT during APIC setup"
+    );
+    pic_init_unmask_all();
+    assert!(!guest_uefi_linux_prefer_pit_hold(
+        virtio_needs_pit_over_uart(),
+        apk_overlay_needs_pit(),
+        virtio_linux_probe_started(),
+        virtio_both_driver_ok(),
+    ));
+    raise_pit();
+    raise_gsi(4);
+    assert_eq!(
+        take_inject_vector(),
+        Some(0x24),
+        "early kernel UART beats PIT"
+    );
+    mmio_write(0x14, 1, 1);
+    assert!(virtio_linux_probe_started(), "linux PIT after virtio probe");
+    assert!(guest_uefi_linux_prefer_pit_hold(
+        virtio_needs_pit_over_uart(),
+        apk_overlay_needs_pit(),
+        virtio_linux_probe_started(),
+        virtio_both_driver_ok(),
+    ));
+    assert!(
+        !guest_uefi_linux_raise_pit_on_resume(
+            apk_overlay_needs_pit(),
+            virtio_needs_pit_over_uart(),
+            virtio_linux_probe_started(),
+            virtio_both_driver_ok(),
+        ),
+        "linux PIT raise after DRIVER_OK not probe"
+    );
+    raise_pit();
+    raise_gsi(4);
+    assert_eq!(
+        take_inject_vector(),
+        Some(0x20 + PIT_IRQ),
+        "after DEVICE_STATUS, PIT hold for virtio probe"
+    );
+    reset();
+    reset_cd();
+    reset_virtio();
+    reset_ans();
+    guest_platform::reset();
+}
+
+#[test]
 fn lab_stub_raise_pit_does_not_inject() {
     reset();
     reset_cd();
@@ -811,6 +1392,52 @@ fn ioapic_level_keeps_irr_until_eoi_then_retries() {
     assert!(take_inject_vector().is_none());
     assert_eq!(crate::devices::guest_irq::take_ioapic_vector(), None);
     reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
+fn pic_master_snap_counts_irq0_and_irq4_takes() {
+    // UART THRE chain telemetry: the stall heartbeat prints master
+    // IRR/IMR/ISR plus INTA counts so iron can say whether IRQ 4 was ever
+    // taken while `apk` sat in `n_tty_write`.
+    use crate::devices::guest_irq::pic_master_snap;
+    arm_product_iso();
+    let s0 = pic_master_snap();
+    assert_eq!((s0.take_irq0, s0.take_irq4), (0, 0));
+    assert!(!s0.ready, "8259 not programmed yet");
+    let _ = pic_io(0x20, false, 1, 0x11);
+    let _ = pic_io(0x21, false, 1, 0x20);
+    let _ = pic_io(0x21, false, 1, 0x04);
+    let _ = pic_io(0x21, false, 1, 0x01);
+    let _ = pic_io(0xA0, false, 1, 0x11);
+    let _ = pic_io(0xA1, false, 1, 0x28);
+    let _ = pic_io(0xA1, false, 1, 0x02);
+    let _ = pic_io(0xA1, false, 1, 0x01);
+    let _ = pic_io(0x21, false, 1, 0xEE);
+    let _ = pic_io(0xA1, false, 1, 0xFF);
+    raise_pit();
+    raise_gsi(4);
+    let s1 = pic_master_snap();
+    assert!(s1.ready);
+    assert_eq!(s1.imr, 0xEE);
+    assert_eq!(s1.irr & 0x11, 0x11, "IRQ 0 and IRQ 4 latched");
+    assert_eq!(s1.isr, 0);
+    // No PIT preference armed: UART beats PIT on the master.
+    assert_eq!(take_pic_vector(), Some(0x24));
+    let s2 = pic_master_snap();
+    assert_eq!((s2.take_irq0, s2.take_irq4), (0, 1));
+    assert_eq!(s2.isr & 0x10, 0x10, "IRQ 4 in service until EOI");
+    let _ = pic_io(0x20, false, 1, 0x64);
+    assert_eq!(take_pic_vector(), Some(0x20));
+    let s3 = pic_master_snap();
+    assert_eq!((s3.take_irq0, s3.take_irq4), (1, 1));
+    let _ = pic_io(0x20, false, 1, 0x60);
+    assert_eq!(pic_master_snap().isr, 0);
+    reset();
+    let s4 = pic_master_snap();
+    assert_eq!((s4.take_irq0, s4.take_irq4), (0, 0), "reset clears INTA counts");
+    assert_eq!((s4.irr, s4.imr, s4.isr, s4.ready), (0, 0xFF, 0, false));
     reset_cd();
     guest_platform::reset();
 }

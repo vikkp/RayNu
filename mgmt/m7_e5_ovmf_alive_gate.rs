@@ -29,6 +29,7 @@ pub fn ovmf_alive_surface_present() -> bool {
         && !spa.contains("btn-vl")
         && adr.contains("RAYNU-V-M7-E5-OVMF-ALIVE-OK")
         && qemu.contains("RAYNU-V-M7-E5-OVMF-ALIVE-OK")
+        && qemu.contains("OVMF progress informational when RayNu-F ran")
         && guest.contains("CR4_GUEST_HOST_MASK")
         && guest.contains("CR4_VMXE")
         && guest.contains("GUEST_UEFI_CR4_OSXSAVE")

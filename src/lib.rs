@@ -55,3 +55,13 @@ pub mod raynu_f;
 /// Product identity banner printed on serial at boot.
 pub const BOOT_BANNER: &str =
     "RayNu-V r640-hypervisor — formally verified bare-metal hypervisor";
+
+/// Git SHA baked in by `tools/build.sh` (`RAYNU_BUILD_SHA`, from
+/// `GITHUB_SHA` in CI). Printed under the M0 banner so a COM2 log names the
+/// artifact that ran — iron `8b6ed1a` could not be told apart from the
+/// `f229d14` probe by behaviour alone. `local` when built without it.
+/// Diagnostic only; no behaviour keys off it. build sha banner.
+pub const BUILD_SHA: &str = match option_env!("RAYNU_BUILD_SHA") {
+    Some(s) => s,
+    None => "local",
+};

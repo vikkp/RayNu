@@ -119,7 +119,11 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// `ata_msleep` after `Freeing initrd` if PCI hide/floating-bus miss.
 /// Linux 6.12 `drivers/ata/ata_piix.c` registers `piix_init`, not
 /// `ata_piix_init` (`initcall_blacklist=` matches kallsyms). Four trailing
-/// FROM/TO length 277 / Data Length 302 (was 269/294 before `efi=noruntime`). linux-line virtio_pci.
+/// FROM/TO length 298 / Data Length 323 (277/302 before `sysrq_always_enabled`;
+/// 269/294 before `efi=noruntime`). linux-line virtio_pci.
+/// linux-line sysrq_always_enabled: the hypervisor sends a COM1 BREAK +
+/// `w`/`m`/`t`/`l` at the apk stall so Linux prints its own task state
+/// (UART sysrq break). `kernel.sysrq` stays 1 on Alpine anyway.
 /// linux-line efi=noruntime: RayNu-F (ADR-016) has no runtime services after
 /// EBS; nested `5a9e8e4` triple-faulted inside `efi_enter_virtual_mode`
 /// before reaching our `SetVirtualAddressMap` trampoline. Linux keeps the
@@ -236,10 +240,12 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// do not F11 a2acfc8 / --run 33391068937).
 /// product ISO hides PIIX IDE (iron COM2 `d61dc7e` ConnectAll CpuSleep; un-hidden).
 /// Not `ISO-INSTALL-OK`.
+const ISO_GRUB_LINUX_VIRT_STANZA: &[u8] =
+    b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,sd-mod,usb-storage quiet \ninitrd\t/boot/initramfs-virt\n}\n";
 pub const ISO_GRUB_LINUX_FROM: &[u8] =
-    b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,sd-mod,usb-storage quiet \ninitrd\t/boot/initramfs-virt\n}\n\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
+    &nul_pad::<{ ISO_GRUB_LINUX_TO.len() }>(ISO_GRUB_LINUX_VIRT_STANZA);
 pub const ISO_GRUB_LINUX_TO: &[u8] =
-    b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,virtio_pci,virtio_blk console=ttyS0 lpj=4194304 no_timer_check tsc=reliable clocksource=tsc idle=poll earlycon=uart8250,io,0x3f8 usbdelay=30 initcall_blacklist=piix_init efi=noruntime \ninitrd\t/boot/initramfs-virt\n}\n";
+    b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,virtio_pci,virtio_blk console=ttyS0 lpj=4194304 no_timer_check tsc=reliable clocksource=tsc idle=poll earlycon=uart8250,io,0x3f8 usbdelay=30 initcall_blacklist=piix_init efi=noruntime sysrq_always_enabled \ninitrd\t/boot/initramfs-virt\n}\n";
 const _: () = assert!(ISO_GRUB_LINUX_FROM.len() == ISO_GRUB_LINUX_TO.len());
 const fn trailing_zero_count(s: &[u8]) -> usize {
     let mut n = 0usize;
@@ -268,14 +274,14 @@ const fn nul_pad<const N: usize>(s: &[u8]) -> [u8; N] {
 /// alpine-standard 3.21.3 GRUB `"Linux lts"` stanza (`vmlinuz-lts` /
 /// `initramfs-lts`). Same grow as [`ISO_GRUB_LINUX_TO`] with the same kernel
 /// params; only the kernel/initrd names differ (3 bytes shorter per name,
-/// so Data Length 140 → 299 rather than 143 → 302). Nested proof of
+/// so Data Length 140 → 320 rather than 143 → 323). Nested proof of
 /// `USE_EFI=1 BOOTLOADER=grub` uses alpine-standard because alpine-virt's
 /// on-media `apks` lacks `grub-efi` / `dosfstools`; without this variant the
 /// grow is 0 hits and the kernel boots with only the 33-byte same-length swap
 /// (no `virtio_pci`, no `initcall_blacklist=piix_init`, no `efi=noruntime`)
 /// and stalls after `Freeing initrd`. linux-line lts stanza.
 pub const ISO_GRUB_LINUX_LTS_TO: &[u8] =
-    b"\"Linux lts\" {\nlinux\t/boot/vmlinuz-lts modules=loop,squashfs,virtio_pci,virtio_blk console=ttyS0 lpj=4194304 no_timer_check tsc=reliable clocksource=tsc idle=poll earlycon=uart8250,io,0x3f8 usbdelay=30 initcall_blacklist=piix_init efi=noruntime \ninitrd\t/boot/initramfs-lts\n}\n";
+    b"\"Linux lts\" {\nlinux\t/boot/vmlinuz-lts modules=loop,squashfs,virtio_pci,virtio_blk console=ttyS0 lpj=4194304 no_timer_check tsc=reliable clocksource=tsc idle=poll earlycon=uart8250,io,0x3f8 usbdelay=30 initcall_blacklist=piix_init efi=noruntime sysrq_always_enabled \ninitrd\t/boot/initramfs-lts\n}\n";
 const ISO_GRUB_LINUX_LTS_STANZA: &[u8] =
     b"\"Linux lts\" {\nlinux\t/boot/vmlinuz-lts modules=loop,squashfs,sd-mod,usb-storage quiet \ninitrd\t/boot/initramfs-lts\n}\n";
 pub const ISO_GRUB_LINUX_LTS_FROM: &[u8] =
@@ -285,7 +291,7 @@ const _: () = assert!(ISO_GRUB_LINUX_LTS_TO.len() == ISO_GRUB_LINUX_TO.len() - 3
 /// alpine-extended 3.21.3 GRUB `"Linux lts"` stanza: same kernel, but the
 /// initrd line is `/boot/intel-ucode.img /boot/amd-ucode.img
 /// /boot/initramfs-lts` (Data Length 182, LBA 385833). The grow rewrites it
-/// to [`ISO_GRUB_LINUX_LTS_TO`] (Data Length 182 → 299): the two ucode
+/// to [`ISO_GRUB_LINUX_LTS_TO`] (Data Length 182 → 320): the two ucode
 /// cpios are dropped because Linux skips early microcode when
 /// `X86_FEATURE_HYPERVISOR` is set and a guest must not WRMSR 0x79 anyway.
 /// alpine-extended is the only official x86_64 ISO whose on-media `apks`
@@ -312,7 +318,7 @@ pub const ISO_GRUB_CFG_LTS_PATCHED_SIZE: u32 =
     ISO_GRUB_CFG_LTS_ORIG_SIZE + trailing_zero_count(ISO_GRUB_LINUX_LTS_FROM) as u32;
 /// alpine-extended 3.21.3 `/boot/grub/grub.cfg` ISO9660 / Joliet Data Length.
 pub const ISO_GRUB_CFG_EXT_ORIG_SIZE: u32 = 182;
-/// alpine-extended Data Length after the grow (same TO as standard → 299).
+/// alpine-extended Data Length after the grow (same TO as standard → 320).
 pub const ISO_GRUB_CFG_EXT_PATCHED_SIZE: u32 =
     ISO_GRUB_CFG_EXT_ORIG_SIZE + trailing_zero_count(ISO_GRUB_LINUX_EXT_FROM) as u32;
 const _: () = assert!(ISO_GRUB_CFG_EXT_PATCHED_SIZE == ISO_GRUB_CFG_LTS_PATCHED_SIZE);
