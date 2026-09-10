@@ -1,6 +1,6 @@
 use super::{inject_sysrq, pio, poll_host_rx, push_host_rx, reassert_irq, reset};
 use crate::boot::serial::{
-    guest_tx_clear, set_guest_tx_test_sol_not_ready, set_linux_earlycon_share,
+    guest_tx_clear, set_guest_tx_test_ring_full, set_linux_earlycon_share,
 };
 
 #[test]
@@ -65,14 +65,14 @@ fn product_iso_thre_waits_for_sol_then_reasserts() {
     crate::devices::guest_irq::ioapic_write(0x10, 0x24);
     guest_tx_clear();
     set_linux_earlycon_share(true);
-    set_guest_tx_test_sol_not_ready(true);
+    set_guest_tx_test_ring_full(true);
     let _ = pio(0x03FA, false, 0x01);
     let _ = pio(0x03F9, false, 0x02);
     let (_, thr, _) = pio(0x03F8, false, b'a');
     assert_eq!(thr, Some(b'a'));
     assert!(
         crate::devices::guest_irq::take_inject_vector().is_none(),
-        "THR not empty while SOL is back-pressured"
+        "THR not empty while the shared ring has no room"
     );
     let (iir, _, _) = pio(0x03FA, true, 0);
     assert_eq!(iir, 0xC1, "no interrupt pending, latch kept");
@@ -80,7 +80,7 @@ fn product_iso_thre_waits_for_sol_then_reasserts() {
     assert_eq!(lsr & 0x20, 0);
     reassert_irq();
     assert!(crate::devices::guest_irq::take_inject_vector().is_none());
-    set_guest_tx_test_sol_not_ready(false);
+    set_guest_tx_test_ring_full(false);
     reassert_irq();
     assert_eq!(
         crate::devices::guest_irq::take_inject_vector(),
@@ -224,10 +224,10 @@ fn linux_earlycon_lsr_thre_follows_sol() {
     reset();
     guest_tx_clear();
     set_linux_earlycon_share(true);
-    set_guest_tx_test_sol_not_ready(true);
+    set_guest_tx_test_ring_full(true);
     let (lsr, _, _) = pio(0x03FD, true, 0);
-    assert_eq!(lsr & 0x60, 0, "THRE/TEMT clear while SOL not ready");
-    set_guest_tx_test_sol_not_ready(false);
+    assert_eq!(lsr & 0x60, 0, "THRE/TEMT clear while the shared ring has no room");
+    set_guest_tx_test_ring_full(false);
     let (lsr2, _, _) = pio(0x03FD, true, 0);
     assert_eq!(lsr2 & 0x60, 0x60);
     let src = include_str!("guest_uart.rs");
@@ -236,6 +236,72 @@ fn linux_earlycon_lsr_thre_follows_sol() {
     set_linux_earlycon_share(false);
     guest_tx_clear();
     reset();
+}
+
+#[test]
+fn thre_level_follows_ring_room_and_reasserts_after_drain() {
+    // guest UART TX ring room: iron `916af96` had `pend=0` with `ring=0`
+    // because THRE also needed host COM2 THRE at the sampling exit. The
+    // level is ring room only; the drain (exit / pacing timer) frees room
+    // and the next resume re-asserts IRQ 4.
+    use crate::boot::serial::{
+        drain_guest_tx, guest_tx_len, guest_tx_room, guest_tx_room_has_thre, write_byte_nowait,
+        GUEST_TX_CAP, GUEST_TX_RESERVE, GUEST_TX_THRE_BURST,
+    };
+    reset();
+    crate::devices::guest_irq::reset();
+    arm_product_iso_for_irq();
+    crate::devices::guest_irq::ioapic_write(0, 0x10 + 2 * 4);
+    crate::devices::guest_irq::ioapic_write(0x10, 0x24);
+    guest_tx_clear();
+    set_linux_earlycon_share(true);
+    let _ = pio(0x03FA, false, 0x01);
+    let _ = pio(0x03F9, false, 0x02);
+    assert_eq!(crate::devices::guest_irq::take_inject_vector(), Some(0x24));
+    crate::devices::guest_irq::ioapic_eoi(0x24);
+    // Host COM2 back-pressured: the ring cannot drain. Guest text fills it
+    // one byte past the THRE threshold.
+    crate::boot::serial::set_guest_tx_test_sol_not_ready(true);
+    crate::boot::serial::set_com2_fifo_for_test(true);
+    let fill = GUEST_TX_CAP - GUEST_TX_RESERVE - GUEST_TX_THRE_BURST + 1;
+    for _ in 0..fill {
+        write_byte_nowait(b'x');
+    }
+    assert_eq!(guest_tx_len(), fill);
+    assert!(!guest_tx_room_has_thre(guest_tx_room()));
+    let (lsr, _, _) = pio(0x03FD, true, 0);
+    assert_eq!(lsr & 0x60, 0, "no room above the reserve: THRE low");
+    let (iir, _, _) = pio(0x03FA, true, 0);
+    assert_eq!(iir & 0x07, 0x01, "IIR: no interrupt while THRE is low");
+    reassert_irq();
+    assert!(crate::devices::guest_irq::take_inject_vector().is_none());
+    // HV lines still fit in the reserve without evicting guest text.
+    write_byte_nowait(b'H');
+    assert_eq!(guest_tx_len(), fill + 1);
+    // SOL opens; one pacing exit drains one FIFO burst and that alone
+    // restores the level (host COM2 LSR is not consulted for guest THRE).
+    crate::boot::serial::set_guest_tx_test_sol_not_ready(false);
+    assert_eq!(drain_guest_tx(crate::boot::serial::GUEST_TX_DRAIN_PACE), 16);
+    assert!(guest_tx_room_has_thre(guest_tx_room()));
+    reassert_irq();
+    assert_eq!(
+        crate::devices::guest_irq::take_inject_vector(),
+        Some(0x24),
+        "IRQ 4 re-asserted once the ring has room again"
+    );
+    let (iir2, _, _) = pio(0x03FA, true, 0);
+    assert_eq!(iir2 & 0x07, 0x02);
+    let (lsr2, _, _) = pio(0x03FD, true, 0);
+    assert_eq!(lsr2 & 0x60, 0x60, "IIR and LSR agree: Linux loads tx_loadsz");
+    // Guest THR bytes land in the ring (host tests drain at once).
+    write_byte_nowait(b'!');
+    let src = include_str!("guest_uart.rs");
+    assert!(src.contains("guest UART TX ring room"));
+    set_linux_earlycon_share(false);
+    guest_tx_clear();
+    crate::devices::ide_cdrom::reset();
+    reset();
+    crate::devices::guest_irq::reset();
 }
 
 #[test]
@@ -251,7 +317,7 @@ fn thre_chain_counts_every_link() {
     crate::devices::guest_irq::ioapic_write(0x10, 0x24);
     guest_tx_clear();
     set_linux_earlycon_share(true);
-    set_guest_tx_test_sol_not_ready(false);
+    set_guest_tx_test_ring_full(false);
     assert_eq!(thre_chain(), Default::default(), "counters start at zero");
     let _ = pio(0x03FA, false, 0x01);
     // IER: ETBEI on (THRE level armed while the ring is empty).
@@ -276,8 +342,8 @@ fn thre_chain_counts_every_link() {
     let before = c.reassert_raise;
     reassert_irq();
     assert_eq!(thre_chain().reassert_raise, before + 1);
-    // SOL back-pressure: LSR reports THRE off, IIR reports no interrupt.
-    set_guest_tx_test_sol_not_ready(true);
+    // Ring full above the reserve: LSR reports THRE off, IIR no interrupt.
+    set_guest_tx_test_ring_full(true);
     let (lsr, _, _) = pio(0x03FD, true, 0);
     assert_eq!(lsr & 0x20, 0);
     let (iir, _, _) = pio(0x03FA, true, 0);
@@ -287,7 +353,7 @@ fn thre_chain_counts_every_link() {
     assert_eq!((c.lsr_thre_on, c.lsr_thre_off), (1, 1));
     assert_eq!((c.iir_rx, c.iir_thre, c.iir_none), (0, 1, 1));
     assert!(c.pio_lower >= 1, "PIO with nothing pending lowers IRQ 4");
-    set_guest_tx_test_sol_not_ready(false);
+    set_guest_tx_test_ring_full(false);
     // __stop_tx: ETBEI off ends the level.
     let _ = pio(0x03F9, false, 0x00);
     let c = thre_chain();

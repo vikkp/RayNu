@@ -37,6 +37,17 @@
 //! counted and printed with the stall heartbeat so the next flash names
 //! the broken link instead of guessing. UART THRE chain telemetry.
 //! Not `ISO-INSTALL-OK`.
+//!
+//! Iron `916af96` / `34420783162` named it: every counted link agreed
+//! (`take4` == `iir` THRE == `lsr_thre` ON, PIC IRR/IMR/ISR sane, ETBEI
+//! set) but the level was almost never true — `pend=0` even with `ring=0`
+//! because guest THRE was `com2_lsr` bit 5 **and** an empty ring, sampled
+//! only at VM exits, and under `idle=poll` the only exits were ~15
+//! preemption ticks a second, each draining one byte. Guest THRE now
+//! follows **ring room** (`guest_tx_room_has_thre`); the shared ring is the
+//! buffer and it drains toward iDRAC SOL on a line-rate pacing timer plus a
+//! whole 16550A FIFO per THRE window. guest UART TX ring room.
+//! Not `ISO-INSTALL-OK`.
 
 use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
@@ -216,9 +227,9 @@ fn rx_ready(u: &Uart) -> bool {
     u.rx_len > 0 || u.break_pending
 }
 
-/// THR empty for interrupt purposes: follows the shared TX ring / SOL when
-/// Linux earlycon share is on, else always empty. UART THRE level until
-/// stop_tx.
+/// THR empty for interrupt purposes: follows shared TX ring **room** when
+/// Linux earlycon share is on (not host COM2 LSR), else always empty.
+/// UART THRE level until stop_tx. guest UART TX ring room.
 fn tx_empty() -> bool {
     crate::boot::serial::guest_tx_guest_lsr_thre()
 }

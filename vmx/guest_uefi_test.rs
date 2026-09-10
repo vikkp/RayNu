@@ -130,6 +130,9 @@ use super::{
     guest_uefi_virtio_stall_empty,
     guest_uefi_virtio_stall_dump_intx,
     guest_uefi_virtio_mmio_heartbeat_kick,
+    guest_uefi_virtio_mmio_kick_line_due, VIRTIO_MMIO_KICK_LINE_MIN_TSC,
+    guest_uefi_uart_pace_wanted, guest_uefi_uart_pace_ticks, guest_uefi_preempt_arm,
+    UART_PACE_US,
     GUEST_UEFI_INTR_TYPE_NMI,
     guest_uefi_pt_paint_vga_uc, guest_uefi_pt_leaf_4k_for, guest_uefi_gpa_in_vga_fix_uc,
     GUEST_UEFI_CPU_FLUSH_UNSUPPORTED, GUEST_UEFI_CPU_FLUSH_JNZ_OFF, GUEST_UEFI_IRON_CPU_FLUSH_GPA,
@@ -1829,10 +1832,29 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio stall dump PIT hold"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio stall dump PIT paced"));
     assert!(
-        guest_uefi_virtio_mmio_heartbeat_kick(100, 0x100, true),
+        guest_uefi_virtio_mmio_heartbeat_kick(100, 0x100, true, true),
         "virtio MMIO heartbeat kick"
     );
-    assert!(!guest_uefi_virtio_mmio_heartbeat_kick(100, 0x14, false));
+    assert!(!guest_uefi_virtio_mmio_heartbeat_kick(100, 0x14, false, true));
+    assert!(
+        !guest_uefi_virtio_mmio_heartbeat_kick(100, 0x100, true, false),
+        "virtio MMIO kick throttle: iron 916af96 one line per apk hit filled the ring"
+    );
+    assert!(
+        guest_uefi_virtio_mmio_heartbeat_kick(128, 0x100, true, false),
+        "the every-64 heartbeat is never throttled"
+    );
+    assert!(guest_uefi_virtio_mmio_kick_line_due(5, 0, VIRTIO_MMIO_KICK_LINE_MIN_TSC));
+    assert!(guest_uefi_virtio_mmio_kick_line_due(
+        1 + VIRTIO_MMIO_KICK_LINE_MIN_TSC,
+        1,
+        VIRTIO_MMIO_KICK_LINE_MIN_TSC
+    ));
+    assert!(!guest_uefi_virtio_mmio_kick_line_due(
+        VIRTIO_MMIO_KICK_LINE_MIN_TSC,
+        1,
+        VIRTIO_MMIO_KICK_LINE_MIN_TSC
+    ));
     assert!(guest_uefi_pic_before_lapic(true, true, false));
     assert!(!guest_uefi_pic_before_lapic(true, true, true));
     assert!(!guest_uefi_pic_before_lapic(false, false, false));
@@ -3317,4 +3339,51 @@ fn raynu_f_linux_cea_idt_pt_walk() {
     assert!(src.contains("begin_second_boot"));
     assert!(src.contains("boot: RayNu-F guest reset requested src="));
     assert!(src.contains("boot: RayNu-F relaunch after reset (F7; not ISO-INSTALL-OK)"));
+}
+
+#[test]
+fn uart_line_rate_pace_clamps_preempt_without_stealing_the_nominal_tick() {
+    // guest UART line-rate pace: iron `916af96` / `34420783162` — every
+    // THRE-chain link agreed, but with `idle=poll` the only exits were ~15
+    // preemption ticks a second and each drained one byte toward SOL, so
+    // apk's console never emptied. While the shared TX ring holds bytes the
+    // preemption timer is clamped to UART_PACE_US; the nominal HPET/PIT
+    // tick keeps its deadline and paced exits are not time ticks.
+    assert!(guest_uefi_uart_pace_wanted(true, true, 1));
+    assert!(!guest_uefi_uart_pace_wanted(true, true, 0), "empty ring: nominal");
+    assert!(!guest_uefi_uart_pace_wanted(false, true, 100), "firmware / iso=0 never pace");
+    assert!(!guest_uefi_uart_pace_wanted(true, false, 100));
+    assert_eq!(UART_PACE_US, 250);
+    // 2.1 GHz Xeon, IA32_VMX_MISC shift 5: 250 µs = 525_000 TSC = 16_406 ticks.
+    assert_eq!(guest_uefi_uart_pace_ticks(2_100_000_000, 5), 16_406);
+    // Uncalibrated TSC falls back to 2 GHz; never zero ticks.
+    assert_eq!(guest_uefi_uart_pace_ticks(0, 5), 15_625);
+    assert_eq!(guest_uefi_uart_pace_ticks(1, 31), 1);
+    // Nominal reload 0x100000 at shift 5 = 33.5M TSC. Far from the deadline:
+    // clamp and mark paced.
+    let reload = 0x0010_0000u32;
+    let pace = 16_406u32;
+    let now = 1_000_000_000u64;
+    let due = now + (u64::from(reload) << 5);
+    assert_eq!(guest_uefi_preempt_arm(reload, true, pace, now, due, 5), (pace, true));
+    // Within one pacing period of the deadline: arm the remainder, real tick.
+    let close = due - (u64::from(pace) << 5) + 32;
+    let (v, paced) = guest_uefi_preempt_arm(reload, true, pace, close, due, 5);
+    assert!(!paced && v <= pace && v >= 1, "v={v}");
+    // Deadline already passed: fire at once as a real tick.
+    assert_eq!(guest_uefi_preempt_arm(reload, true, pace, due + 1, due, 5), (1, false));
+    // Not pacing: plain reload.
+    assert_eq!(guest_uefi_preempt_arm(reload, false, pace, now, due, 5), (reload, false));
+    assert_eq!(guest_uefi_preempt_arm(0, true, pace, now, due, 5), (0, false));
+    let src = include_str!("guest_uefi.rs");
+    assert!(src.contains("guest UART line-rate pace"));
+    assert!(src.contains("fn arm_preempt_on_resume"));
+    assert!(src.contains("UART_PACE_EXIT.load(Ordering::Acquire)"));
+    assert!(src.contains("cpu::rdmsr(IA32_VMX_MISC)"));
+    assert!(src.contains("virtio MMIO kick throttle"));
+    assert!(src.contains("\" pace=\""));
+    assert!(src.contains("\" fifo=\""));
+    assert!(include_str!("../boot/serial.rs").contains("guest UART TX ring room"));
+    assert!(include_str!("../boot/serial.rs").contains("guest UART COM2 FIFO burst"));
+    assert!(include_str!("../boot/raynu_f_flag.rs").contains("Always — RayNu-F"));
 }

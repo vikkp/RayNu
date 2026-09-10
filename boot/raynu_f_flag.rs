@@ -83,6 +83,28 @@ pub fn probe() {
     use uefi::fs::FileSystem;
     use uefi::CString16;
 
+    // Owned clock: calibrate TSC against the platform's Stall while boot
+    // services are still alive. Always — RayNu-F's `now_100ns` and the
+    // guest UART line-rate pace (Stage 46) both need it.
+    let t0 = crate::arch::cpu::rdtsc();
+    boot::stall(TSC_CALIB_STALL_US as usize);
+    let t1 = crate::arch::cpu::rdtsc();
+    match tsc_hz_from_delta(t1.wrapping_sub(t0)) {
+        Some(hz) => {
+            TSC_HZ.store(hz, Ordering::Release);
+            let mut buf = [0u8; 20];
+            let s = fmt_dec(hz, &mut buf);
+            crate::boot::serial::write_str("boot: RayNu-F tsc_hz=");
+            crate::boot::serial::write_str(s);
+            crate::boot::serial::write_line(" (pre-EBS Stall calibration)");
+        }
+        None => {
+            crate::boot::serial::write_line(
+                "boot: RayNu-F WARN tsc calibration implausible; clock falls back to 1 GHz",
+            );
+        }
+    }
+
     let image = boot::image_handle();
     let Ok(sfs) = boot::get_image_file_system(image) else {
         return;
@@ -95,26 +117,6 @@ pub fn probe() {
     if fs.read(p.as_ref()).is_ok() {
         REQUESTED.store(true, Ordering::Release);
         crate::boot::serial::write_line(RAYNU_F_REQUESTED_MARKER);
-        // Owned firmware clock: calibrate TSC against the platform's Stall
-        // while boot services are still alive.
-        let t0 = crate::arch::cpu::rdtsc();
-        boot::stall(TSC_CALIB_STALL_US as usize);
-        let t1 = crate::arch::cpu::rdtsc();
-        match tsc_hz_from_delta(t1.wrapping_sub(t0)) {
-            Some(hz) => {
-                TSC_HZ.store(hz, Ordering::Release);
-                let mut buf = [0u8; 20];
-                let s = fmt_dec(hz, &mut buf);
-                crate::boot::serial::write_str("boot: RayNu-F tsc_hz=");
-                crate::boot::serial::write_str(s);
-                crate::boot::serial::write_line(" (pre-EBS Stall calibration)");
-            }
-            None => {
-                crate::boot::serial::write_line(
-                    "boot: RayNu-F WARN tsc calibration implausible; clock falls back to 1 GHz",
-                );
-            }
-        }
     }
 }
 

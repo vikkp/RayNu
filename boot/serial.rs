@@ -12,7 +12,7 @@
 //! redirect. Post-M0 HV progress is port-I/O; without COM2 mirror, SOL stays
 //! frozen at M0 after ExitBootServices tears down ConOut.
 
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 /// Distinctive M0 gate marker — CI greps for this exact string on the serial log.
 pub const M0_BOOT_OK_MARKER: &str = "RAYNU-V-M0-BOOT-OK";
@@ -29,9 +29,30 @@ const COM2: u16 = 0x2F8;
 const THR_WAIT_SPINS: u32 = 200_000;
 /// Guest UART TX ring. Drops oldest when full so a late `ISO-INSTALL-OK`
 /// still reaches SOL. Not blocking. Not `ISO-INSTALL-OK` by itself.
-pub const GUEST_TX_CAP: usize = 2048;
+///
+/// Iron `916af96` / `34420783162`: `ring=2048` full with `com2_lsr=0x0` on
+/// the stall heartbeat — HV diag lines and guest console shared 2 KiB and
+/// drop-oldest shredded SOL. 4 KiB with [`GUEST_TX_RESERVE`] kept for HV
+/// lines. guest UART TX ring room. Not `ISO-INSTALL-OK`.
+pub const GUEST_TX_CAP: usize = 4096;
+/// Ring bytes kept free of guest console output so a stall heartbeat
+/// (~400 bytes) or `ISO-INSTALL-OK` never evicts guest text. The guest 16550
+/// reports THRE while `room >= GUEST_TX_RESERVE + GUEST_TX_THRE_BURST`.
+pub const GUEST_TX_RESERVE: usize = 1024;
+/// One Linux 8250 `tx_loadsz` (16550A FIFO). The guest THRE level needs room
+/// for a whole burst so `serial8250_tx_chars` never overruns the reserve.
+pub const GUEST_TX_THRE_BURST: usize = 16;
 /// Bytes to push toward SOL per guest `out` (keep the UART exit short).
 pub const GUEST_TX_DRAIN_CHUNK: usize = 64;
+/// Bytes to push on a UART line-rate pacing exit (one host FIFO burst).
+/// guest UART line-rate pace. Not `ISO-INSTALL-OK`.
+pub const GUEST_TX_DRAIN_PACE: usize = 16;
+/// Host COM2 bytes written per THRE=1 window when the port reported a
+/// working 16550A FIFO at init (IIR bits 7:6 both set after FCR 0xC7):
+/// THRE means the 16-byte TX FIFO is empty, so 16 slots are free. Linux
+/// `tx_loadsz` does the same on ttyS1. Without a FIFO one byte per window.
+/// guest UART COM2 FIFO burst. Not `ISO-INSTALL-OK`.
+pub const COM2_FIFO_BURST: usize = 16;
 /// Bytes to push on a non-UART VM-exit. Nested QEMU CI `be0f1cd` blasted
 /// 64 host THR bytes on every preemption/HLT exit while THRE stayed set,
 /// then E4 `/init` SIGSEGV hung until the 480s timeout (3/3). Iron SOL
@@ -42,6 +63,13 @@ pub const GUEST_TX_DRAIN_EXIT: usize = 4;
 /// Per-port liveness; cleared on THR timeout so a missing UART cannot stall boot.
 static mut COM1_LIVE: bool = true;
 static mut COM2_LIVE: bool = true;
+/// COM2 reported a 16550A FIFO at [`init`] (IIR bits 7:6 after FCR 0xC7).
+/// Host tests: `true`. guest UART COM2 FIFO burst.
+static COM2_FIFO: AtomicBool = AtomicBool::new(true);
+/// Bytes drained to COM2 while THRE was low would be lost; count the THRE
+/// windows we used and the bytes we moved for the stall heartbeat.
+static GUEST_TX_DRAINED: AtomicU32 = AtomicU32::new(0);
+static GUEST_TX_WINDOWS: AtomicU32 = AtomicU32::new(0);
 
 /// E4: host serial log ring for SPA / `GET /logs/serial` (not a guest console).
 pub const SERIAL_LOG_CAP: usize = 4096;
@@ -147,6 +175,36 @@ pub fn guest_tx_len() -> usize {
     unsafe { GUEST_TX_LEN }
 }
 
+/// Free bytes in the guest UART TX ring.
+pub fn guest_tx_room() -> usize {
+    GUEST_TX_CAP.saturating_sub(guest_tx_len())
+}
+
+/// Pure form of the guest THRE level: room for one more `tx_loadsz` burst
+/// above the HV reserve. guest UART TX ring room.
+pub fn guest_tx_room_has_thre(room: usize) -> bool {
+    room >= GUEST_TX_RESERVE + GUEST_TX_THRE_BURST
+}
+
+/// Bytes moved to COM2 / THRE windows used since reset (stall heartbeat).
+pub fn guest_tx_drain_stats() -> (u32, u32) {
+    (
+        GUEST_TX_DRAINED.load(Ordering::Acquire),
+        GUEST_TX_WINDOWS.load(Ordering::Acquire),
+    )
+}
+
+/// Whether COM2 showed a 16550A FIFO at init (bursts of [`COM2_FIFO_BURST`]).
+pub fn com2_fifo() -> bool {
+    COM2_FIFO.load(Ordering::Acquire)
+}
+
+/// Host-test hook for the FIFO flag.
+#[cfg(test)]
+pub fn set_com2_fifo_for_test(on: bool) {
+    COM2_FIFO.store(on, Ordering::Release);
+}
+
 /// Drop queued guest UART bytes (tests / guest-UEFI reset).
 pub fn guest_tx_clear() {
     unsafe {
@@ -182,8 +240,24 @@ fn guest_tx_sol_ready() -> bool {
     }
     #[cfg(not(target_os = "uefi"))]
     {
+        #[cfg(test)]
+        {
+            if GUEST_TX_TEST_SOL_NOT_READY.load(Ordering::Relaxed) {
+                return false;
+            }
+        }
         true
     }
+}
+
+#[cfg(test)]
+static GUEST_TX_TEST_SOL_NOT_READY: AtomicBool = AtomicBool::new(false);
+
+/// Host-test hook: pretend host COM2 (iDRAC SOL) THRE is low so the ring
+/// does not drain. Does **not** change the guest THRE level (ring room).
+#[cfg(test)]
+pub fn set_guest_tx_test_sol_not_ready(on: bool) {
+    GUEST_TX_TEST_SOL_NOT_READY.store(on, Ordering::Relaxed);
 }
 
 /// Raw host COM2 LSR (iDRAC SOL) for the THRE chain heartbeat; `0x60` on
@@ -206,12 +280,13 @@ pub fn guest_tx_sol_ready_peek() -> bool {
 }
 
 #[cfg(test)]
-static GUEST_TX_TEST_SOL_NOT_READY: AtomicBool = AtomicBool::new(false);
+static GUEST_TX_TEST_RING_FULL: AtomicBool = AtomicBool::new(false);
 
-/// Host-test hook: pretend iDRAC SOL THRE is clear.
+/// Host-test hook: pretend the guest TX ring has no room above the reserve
+/// (the guest THRE level reads low).
 #[cfg(test)]
-pub fn set_guest_tx_test_sol_not_ready(on: bool) {
-    GUEST_TX_TEST_SOL_NOT_READY.store(on, Ordering::Relaxed);
+pub fn set_guest_tx_test_ring_full(on: bool) {
+    GUEST_TX_TEST_RING_FULL.store(on, Ordering::Relaxed);
 }
 
 /// Guest 16550 LSR THRE/TEMT during Linux earlycon share.
@@ -219,13 +294,23 @@ pub fn set_guest_tx_test_sol_not_ready(on: bool) {
 /// Linux `serial8250_putc` polls LSR bit 5. Always-1 THRE lets printk
 /// `out` faster than iDRAC SOL can accept, then COM2 looks frozen mid-e820
 /// (iron `029ac8f` / `3dc7d11` hush-on-bootimg still cut at `[`). When
-/// share is on, THRE follows COM2 and an empty TX ring so earlycon cannot
-/// outrun SOL. Drain leftovers on the LSR poll. linux earlycon pace LSR
-/// THRE. Not `ISO-INSTALL-OK`.
+/// share is on, THRE follows **ring room**: the guest may write while the
+/// ring has [`GUEST_TX_THRE_BURST`] free above [`GUEST_TX_RESERVE`]. The
+/// ring, not the instantaneous host COM2 LSR, is the buffer; the ring is
+/// drained toward iDRAC SOL on every VM exit and on the line-rate pacing
+/// timer. linux earlycon pace LSR THRE. guest UART TX ring room.
+/// Not `ISO-INSTALL-OK`.
+///
+/// History: iron `916af96` / `34420783162` coupled THRE to `com2_lsr` bit 5
+/// **and** an empty ring, sampled only at VM exits. Under `idle=poll` the
+/// only exits were ~15 preemption ticks a second, each moving one byte, so
+/// `apk` (`n_tty_write`) got a 16-byte THRE IRQ per rare coincidence and
+/// its 4 KiB xmit buffer never drained (`pend=0` with `ring=0` and
+/// `com2_lsr=0x0` on every heartbeat).
 ///
 /// INVARIANTS:
-/// - `false` only while `linux_earlycon_share` is on and COM2 cannot take
-///   another byte (or the TX ring still holds a byte)
+/// - `false` only while `linux_earlycon_share` is on and the ring lacks
+///   `GUEST_TX_RESERVE + GUEST_TX_THRE_BURST` free bytes
 /// - Share off keeps LSR `0x60` (OVMF firmware serial / nested iso=0)
 ///
 /// VERIFICATION: L1 (host tests)
@@ -238,14 +323,14 @@ pub fn guest_tx_guest_lsr_thre() -> bool {
     // latches share.
     #[cfg(test)]
     {
-        if GUEST_TX_TEST_SOL_NOT_READY.load(Ordering::Relaxed) {
+        if GUEST_TX_TEST_RING_FULL.load(Ordering::Relaxed) {
             return false;
         }
     }
     if guest_tx_sol_ready() {
         let _ = drain_guest_tx(GUEST_TX_DRAIN_CHUNK);
     }
-    guest_tx_sol_ready() && guest_tx_len() == 0
+    guest_tx_room_has_thre(guest_tx_room())
 }
 
 fn guest_tx_write_ports(byte: u8) {
@@ -268,30 +353,57 @@ fn guest_tx_write_ports(byte: u8) {
     }
 }
 
+/// Bytes one COM2 THRE=1 window can take: a whole FIFO when COM2 has one.
+/// Pure form for host tests. guest UART COM2 FIFO burst.
+pub fn guest_tx_burst_for_window(fifo: bool, max_left: usize) -> usize {
+    if fifo {
+        COM2_FIFO_BURST.min(max_left)
+    } else {
+        1.min(max_left)
+    }
+}
+
 /// Write queued guest UART bytes while COM2 THRE is set. Never spins.
+///
+/// Each THRE=1 poll opens one window of [`guest_tx_burst_for_window`]
+/// bytes (16 with a 16550A FIFO — THRE means the FIFO is empty; iron
+/// `916af96` polled LSR before *every* byte, so one exit moved one byte).
 ///
 /// INVARIANTS:
 /// - At most `max` bytes leave the ring
 /// - Does not wait [`THR_WAIT_SPINS`] and does not clear COM1/COM2 liveness
 /// - COM1 not ready does not block COM2 (guest UART TX drain COM2 independent)
+/// - No byte is written to COM2 without a THRE=1 poll at most 15 bytes earlier
 ///
 /// VERIFICATION: L1 (host tests)
 pub fn drain_guest_tx(max: usize) -> usize {
     let mut n = 0usize;
+    let fifo = com2_fifo();
     while n < max {
         let empty = unsafe { GUEST_TX_LEN == 0 };
         if empty || !guest_tx_sol_ready() {
             break;
         }
-        // SAFETY: single-threaded HV; LEN>0 and HEAD in range after the empty check.
-        let byte = unsafe {
-            let b = GUEST_TX[GUEST_TX_HEAD];
-            GUEST_TX_HEAD = (GUEST_TX_HEAD + 1) % GUEST_TX_CAP;
-            GUEST_TX_LEN -= 1;
-            b
-        };
-        guest_tx_write_ports(byte);
-        n += 1;
+        GUEST_TX_WINDOWS.fetch_add(1, Ordering::AcqRel);
+        let burst = guest_tx_burst_for_window(fifo, max - n);
+        for _ in 0..burst {
+            let empty = unsafe { GUEST_TX_LEN == 0 };
+            if empty {
+                break;
+            }
+            // SAFETY: single-threaded HV; LEN>0 and HEAD in range after the empty check.
+            let byte = unsafe {
+                let b = GUEST_TX[GUEST_TX_HEAD];
+                GUEST_TX_HEAD = (GUEST_TX_HEAD + 1) % GUEST_TX_CAP;
+                GUEST_TX_LEN -= 1;
+                b
+            };
+            guest_tx_write_ports(byte);
+            n += 1;
+        }
+    }
+    if n != 0 {
+        GUEST_TX_DRAINED.fetch_add(n as u32, Ordering::AcqRel);
     }
     n
 }
@@ -310,10 +422,18 @@ pub fn init() {
         COM2_LIVE = true;
     }
     init_port(COM1);
-    init_port(COM2);
+    let iir = init_port(COM2);
+    COM2_FIFO.store(iir_reports_fifo(iir), Ordering::Release);
 }
 
-fn init_port(base: u16) {
+/// 16550A: IIR bits 7:6 read `11` once FCR bit 0 is set. `0xFF` is a
+/// floating (missing) port — treat as no FIFO so the drain stays one byte
+/// per window. Pure form for host tests. guest UART COM2 FIFO burst.
+pub fn iir_reports_fifo(iir: u8) -> bool {
+    iir != 0xFF && (iir & 0xC0) == 0xC0
+}
+
+fn init_port(base: u16) -> u8 {
     unsafe {
         outb(base + 1, 0x00); // Disable interrupts
         outb(base + 3, 0x80); // Enable DLAB
@@ -322,6 +442,7 @@ fn init_port(base: u16) {
         outb(base + 3, 0x03); // 8N1, DLAB off
         outb(base + 2, 0xC7); // Enable FIFO, clear, 14-byte threshold
         outb(base + 4, 0x0B); // IRQs enabled, RTS/DSR set
+        inb(base + 2) // IIR: FIFO enabled bits 7:6
     }
 }
 
@@ -555,6 +676,69 @@ mod serial_test {
         assert_eq!(n, GUEST_TX_CAP);
         assert_eq!(guest_tx_len(), 0);
         guest_tx_clear();
+    }
+
+    #[test]
+    fn guest_thre_follows_ring_room_not_com2() {
+        // guest UART TX ring room: iron 916af96 coupled guest THRE to
+        // com2_lsr bit 5 + empty ring sampled at ~15 exits/s (apk stuck in
+        // n_tty_write). The ring is the buffer now.
+        guest_tx_clear();
+        set_linux_earlycon_share(true);
+        assert!(guest_tx_guest_lsr_thre());
+        assert!(guest_tx_room_has_thre(GUEST_TX_CAP));
+        assert!(guest_tx_room_has_thre(GUEST_TX_RESERVE + GUEST_TX_THRE_BURST));
+        assert!(!guest_tx_room_has_thre(GUEST_TX_RESERVE + GUEST_TX_THRE_BURST - 1));
+        assert!(!guest_tx_room_has_thre(0));
+        assert_eq!(GUEST_TX_CAP, 4096);
+        assert_eq!(GUEST_TX_RESERVE, 1024);
+        assert_eq!(GUEST_TX_THRE_BURST, 16);
+        assert!(GUEST_TX_RESERVE + GUEST_TX_THRE_BURST < GUEST_TX_CAP);
+        set_linux_earlycon_share(false);
+        guest_tx_clear();
+        let s = include_str!("serial.rs");
+        assert!(s.contains("guest UART TX ring room"));
+        assert!(s.contains("fn guest_tx_room_has_thre"));
+        assert!(s.contains("fn guest_tx_room"));
+    }
+
+    #[test]
+    fn com2_fifo_window_takes_a_burst() {
+        // guest UART COM2 FIFO burst: THRE=1 on a 16550A means 16 free slots.
+        assert!(iir_reports_fifo(0xC1));
+        assert!(iir_reports_fifo(0xC2));
+        assert!(!iir_reports_fifo(0x01), "no FIFO bits");
+        assert!(!iir_reports_fifo(0x81), "16550 (non-A) FIFO unusable");
+        assert!(!iir_reports_fifo(0xFF), "floating port");
+        assert_eq!(guest_tx_burst_for_window(true, 64), COM2_FIFO_BURST);
+        assert_eq!(guest_tx_burst_for_window(true, 4), 4);
+        assert_eq!(guest_tx_burst_for_window(false, 64), 1);
+        assert_eq!(guest_tx_burst_for_window(false, 0), 0);
+        assert_eq!(COM2_FIFO_BURST, 16);
+        assert_eq!(GUEST_TX_DRAIN_PACE, 16);
+        guest_tx_clear();
+        set_com2_fifo_for_test(true);
+        let (d0, w0) = guest_tx_drain_stats();
+        for i in 0..40u8 {
+            guest_tx_push(i);
+        }
+        assert_eq!(drain_guest_tx(64), 40);
+        let (d1, w1) = guest_tx_drain_stats();
+        assert_eq!(d1 - d0, 40);
+        assert_eq!(w1 - w0, 3, "16 + 16 + 8 in three THRE windows");
+        set_com2_fifo_for_test(false);
+        for i in 0..5u8 {
+            guest_tx_push(i);
+        }
+        assert_eq!(drain_guest_tx(64), 5);
+        let (_, w2) = guest_tx_drain_stats();
+        assert_eq!(w2 - w1, 5, "one byte per window without a FIFO");
+        set_com2_fifo_for_test(true);
+        guest_tx_clear();
+        let s = include_str!("serial.rs");
+        assert!(s.contains("guest UART COM2 FIFO burst"));
+        assert!(s.contains("fn iir_reports_fifo"));
+        assert!(s.contains("fn guest_tx_burst_for_window"));
     }
 
     #[test]
