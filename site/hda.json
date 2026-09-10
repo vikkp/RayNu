@@ -9,7 +9,7 @@
   "last_commit_short": "PENDING",
   "last_updated": "2026-09-10",
   "months_to_everest": 0.25,
-  "months_to_everest_prev": 0.5,
+  "months_to_everest_prev": 0.25,
   "mount_everest_path": [
     "Ship EFI",
     "boot real R640",

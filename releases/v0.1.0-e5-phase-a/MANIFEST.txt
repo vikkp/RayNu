@@ -1,0 +1,12 @@
+RayNu-V EFI release kit
+Version: 0.1.0-e5-phase-a (git 56a3ffda8406 / CI 34480107961)
+Marker: RAYNU-V-M7-ISO-INSTALL-OK + RAYNU-V-RAYNU-F-DISK-BOOT-OK
+Contents:
+  r640-hypervisor.efi
+  r640-hypervisor.efi.sha256
+  VERSION
+  SHA256SUMS
+  MANIFEST.txt
+  README.md
+Evidence: docs/evidence/r640/2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md
+Deploy: see docs/runbooks/usb_idrac.md and docs/main_and_releases.md

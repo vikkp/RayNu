@@ -2,7 +2,12 @@
 
 **Marker:** `RAYNU-V-M7-SHIP-OK`  
 **Smoke:** `./tools/m7-ship-smoke.sh`  
-**Package:** `./tools/package-release.sh`
+**Package:** `./tools/package-release.sh`  
+**Named kits / `main` merge order:** [`docs/main_and_releases.md`](../main_and_releases.md)  
+**Site chrome (do not overwrite `main` layout):** `./tools/preserve-site-chrome.sh`
+
+Lived E5 Phase A kit (ISO → reboot-to-disk on R640): `releases/v0.1.0-e5-phase-a/`.
+That kit does **not** claim Phase B or Mount Everest.
 
 ## Story
 

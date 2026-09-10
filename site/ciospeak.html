@@ -14,6 +14,32 @@
       content="Your PowerEdge fleet has years left. Extend it with a clean-slate Type-1 hypervisor designed for machine-checked isolation."
     />
     <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://raynuv.com/ciospeak.html" />
+    <meta property="og:site_name" content="RayNu-V" />
+    <meta
+      property="og:image"
+      content="https://raynuv.com/assets/hero.jpg"
+    />
+    <meta property="og:image:width" content="2400" />
+    <meta property="og:image:height" content="1347" />
+    <meta
+      property="og:image:alt"
+      content="A lone climber with a headlamp ascending a snow ridge at dusk — the RayNu-V Mount Everest"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="RayNu-V · For CIOs & Directors"
+    />
+    <meta
+      name="twitter:description"
+      content="Your PowerEdge fleet has years left. Extend it with a clean-slate Type-1 hypervisor designed for machine-checked isolation."
+    />
+    <meta name="twitter:image" content="https://raynuv.com/assets/hero.jpg" />
+    <link rel="canonical" href="https://raynuv.com/ciospeak.html" />
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="assets/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -356,6 +382,10 @@
         color: var(--copper);
       }
 
+      .cio-ms__badge--nested {
+        color: var(--steel);
+      }
+
       .cio-ms-note {
         margin: 1rem 0 0;
         font-family: var(--font-mono);
@@ -550,6 +580,19 @@
     </style>
   </head>
   <body class="page-cio">
+    <nav class="site-nav site-nav--solid" aria-label="Site">
+      <a class="site-nav__brand" href="index.html">RayNu-V</a>
+      <div class="site-nav__links">
+        <a href="index.html#status" data-hide-sm>Status</a>
+        <a href="index.html#console" data-hide-sm>Console</a>
+        <a href="index.html#journey" data-hide-sm>Journey</a>
+        <a href="stories.html">Stories</a>
+        <a href="hda.html">Everest</a>
+        <a href="paper.html">Paper</a>
+        <a href="ciospeak.html" aria-current="page">CIO View</a>
+        <a href="https://github.com/vikkp/RayNu" data-hide-sm>GitHub</a>
+      </div>
+    </nav>
     <header class="cio-mast">
       <div class="cio-mast__inner">
         <p class="cio-mast__nav">
@@ -569,7 +612,9 @@
           <span aria-hidden="true">·</span>
           <span>Design partnerships open</span>
           <span aria-hidden="true">·</span>
-          <span>R640 iron markers closed</span>
+          <span>R640 iron through El Torito</span>
+          <span aria-hidden="true">·</span>
+          <span>Nested RayNu-F reboot-to-disk</span>
         </p>
         <div class="cio-cta">
           <a class="cta__primary" href="mailto:namaskaar@raynuv.com"
@@ -657,8 +702,12 @@
         <p>
           Early does not mean opaque. Lab gates through M6 are closed on Latitude +
           QEMU. Real PowerEdge R640 has closed boot, UEFI-HTTP, native host-NIC
-          HTTP beside VMX, and E4 SPA VMLAUNCH (SHELL stub). Residual work is
-          explicit: TLS/console and a real distro installer.
+          HTTP beside VMX, E4 SPA VMLAUNCH (SHELL stub), guest-firmware ATAPI,
+          and El Torito CD EFI. Nested RayNu-F completed an alpine-extended
+          sys-install — Alpine printed <em>Installation is complete. Please
+          reboot.</em> then rebooted to that disk. That is not the iron
+          installer. Residual work is explicit: iron installer + TLS/console.
+          We do not claim <code>ISO-INSTALL-OK</code>.
         </p>
         <div class="cio-milestones">
           <div class="cio-ms">
@@ -687,22 +736,49 @@
             <span class="cio-ms__badge">Closed</span>
           </div>
           <div class="cio-ms">
+            <span class="cio-ms__gate">R640 E5 · 44</span>
+            <span class="cio-ms__text">Guest firmware reads the CD (ATAPI READ(10), sectors=1) — <code>RAYNU-V-M7-E5-OVMF-ATAPI-OK</code></span>
+            <span class="cio-ms__badge">Closed</span>
+          </div>
+          <div class="cio-ms">
+            <span class="cio-ms__gate">R640 E5 · 45</span>
+            <span class="cio-ms__text">El Torito CD EFI on iron (catalog + boot image) — <code>RAYNU-V-M7-E5-OVMF-ELTORITO-OK</code></span>
+            <span class="cio-ms__badge">Closed</span>
+          </div>
+          <div class="cio-ms">
+            <span class="cio-ms__gate">E5 · 46</span>
+            <span class="cio-ms__text">RayNu-F nested alpine-extended sys-install complete — <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code> (2026-09-05). Nested ≠ R640.</span>
+            <span class="cio-ms__badge cio-ms__badge--nested">Nested</span>
+          </div>
+          <div class="cio-ms">
             <span class="cio-ms__gate">Residual</span>
-            <span class="cio-ms__text">TLS/console polish, real distro installer</span>
+            <span class="cio-ms__text">Iron installer + TLS/console polish (Cruzer still too small for alpine-extended). Nested sys-install is complete; Everest is not.</span>
             <span class="cio-ms__badge cio-ms__badge--open">Open</span>
           </div>
         </div>
         <p class="cio-ms-note">
           Full tracker and living verification paper are public. Claims never run ahead of evidence.
+          Stage 46 field story:
+          <a href="stories.html#raynu-f-2026-09-05-stage46">Please reboot</a>.
         </p>
         <figure class="cio-evidence">
-          <img
-            src="assets/r640-boot-ok-com2.png"
-            alt="Terminal showing RAYNU-V-R640-BOOT-OK on real PowerEdge R640 via iDRAC SOL"
-            width="1600"
-            height="900"
-            loading="lazy"
-          />
+          <picture>
+            <source
+              type="image/webp"
+              srcset="
+                assets/r640-boot-ok-com2-800.webp   800w,
+                assets/r640-boot-ok-com2-1556.webp 1556w
+              "
+              sizes="(max-width: 700px) 100vw, 36rem"
+            />
+            <img
+              src="assets/r640-boot-ok-com2.png"
+              alt="Terminal showing RAYNU-V-R640-BOOT-OK on real PowerEdge R640 via iDRAC SOL"
+              width="1556"
+              height="926"
+              loading="lazy"
+            />
+          </picture>
           <figcaption>Real PowerEdge R640 · iDRAC SOL · RAYNU-V-R640-BOOT-OK</figcaption>
         </figure>
       </section>

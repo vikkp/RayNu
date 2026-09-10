@@ -6,7 +6,7 @@ last_commit_short: PENDING
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 0.25
-months_to_everest_prev: 0.5
+months_to_everest_prev: 0.25
 velocity_commits_30d: 612
 velocity_gates_30d: 63
 overall_pct: 98
@@ -350,11 +350,11 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | pit-during-apk |
-| Summary | **Iron COM2 (UDisk, `56a3ffd` / run `34480107961`) — E5 closed on the real R640: reboot-to-disk.** `build: sha=56a3ffda8406`. Install re-ran clean (`RAYNU-V-M7-ISO-INSTALL-OK`, third time on iron) → `reboot` → `guest reset requested src=kbc n=1` → `relaunch after reset (F7)` → `GPT ESP lba=2048 sectors=98304 part=1` → `\EFI\BOOT\BOOTX64.EFI bytes=139264` → `image=DISK-BOOTX64` → `MEM-OK`/`BLOCKIO-OK`/`CONOUT-OK` → installed GRUB 2.12 menu, countdown `2s → 1s → 0s` (the `975f8fc` exit-cap is gone; the 180 s wall cap never fired — no `RayNu-F stop` line in the log) → `Booting 'Alpine Linux v3.21, with Linux lts'` → `Loading Linux lts` / `Loading initial ramdisk` → `StartImage entry=0x2b09515` → `RAYNU-V-RAYNU-F-START-IMAGE-OK` → **`RAYNU-V-RAYNU-F-DISK-BOOT-OK`** → `EFI stub: Loaded initrd` → `RAYNU-V-RAYNU-F-EBS-OK` → **second `Linux version 6.12.13-0-lts`** with `root=UUID=9af18543-bbaf-475e-925a-60ab53d49847 ro modules=sd-mod,usb-storage,ext4 … rootfstype=ext4` → `EXT4-fs (vda2): mounted filesystem` → `Mounting root: ok.` → OpenRC → `fsck` `/dev/vda2` + `/dev/vda1` → `Welcome to Alpine Linux 3.21` → `login: root` → `cat /proc/cmdline` from the installed system. This commit is docs + honesty strings only (evidence doc, runbook, progress, HDA, site copy, residual notes in `vmx/guest_uefi.rs` / `mgmt/m7_e5_raynu_f_f7_gate.rs`, CLAUDE.md lived line); no firmware or hypervisor code changed. |
-| Everest impact | months **0.5 → 0.25**; overall **96 → 98**; ETA 2026-10 held. **E5 DONE on iron** (ISO → UEFI installer → virtio-blk → reboot to disk → login). Not claiming Everest: Phase B — the iron SPA/REST create-VM + attach-media path still launches the SHELL stub (`2b795a0`); it must start the RayNu-F ISO/installed-disk path. New P0-63 tracks it (0.25 mo). |
-| Gates touched | **`RAYNU-V-RAYNU-F-DISK-BOOT-OK` CLOSED on real R640** (E5 reboot-to-disk; progress.md new row). `RAYNU-V-M7-ISO-INSTALL-OK` re-confirmed. Host: `cargo test --no-default-features -- --test-threads=1`; `./tools/sync-hda-site.sh --check`. |
-| Months Δ | 0.5→0.25 |
+| Commit | e5-phase-a-main |
+| Summary | **`main` merge hygiene + E5 Phase A kit.** Restore `site/` chrome from `origin/main` (nav, og/favicon, `styles.css`, stories/assets) so landing the iron pin does not strip the public site. Add `docs/main_and_releases.md`, `tools/preserve-site-chrome.sh`, and kit `releases/v0.1.0-e5-phase-a/` (CI EFI `56a3ffd` / run `34480107961`). No firmware change. Not Phase B iron. Not Everest. |
+| Everest impact | months **0.25 → 0.25**; overall **98 → 98**; ETA 2026-10 held. Merge order onto `main` is now a repo document; Phase B stays #239 / a later flash. |
+| Gates touched | Host: `./tools/preserve-site-chrome.sh --check`; `./tools/sync-hda-site.sh --check`; `cargo test --no-default-features -- --test-threads=1`. |
+| Months Δ | 0.25→0.25 |
 
 
 ## Blockers & risks (Everest-relevant)
@@ -375,6 +375,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-10 | e5-phase-a-main | 0.25 | 98 | **`main` merge hygiene + Phase A kit.** Restored public site chrome from `origin/main` (so the iron pin does not strip `styles.css` / stories / assets). `docs/main_and_releases.md` + `tools/preserve-site-chrome.sh` + `releases/v0.1.0-e5-phase-a` (CI `56a3ffd` / `34480107961`). Months 0.25 held; overall 98 held; Everest / Phase B iron not claimed |
 | 2026-09-10 | pit-during-apk | 0.25 | 98 | **Iron UDisk `56a3ffd` / run `34480107961`: E5 CLOSED on the real R640 — reboot-to-disk.** Third iron `RAYNU-V-M7-ISO-INSTALL-OK` → `reboot` → F7 relaunch → `GPT ESP lba=2048` → installed GRUB 2.12 countdown `2s→1s→0s` (wall cap never fired) → `Booting 'Alpine Linux v3.21, with Linux lts'` → **`RAYNU-V-RAYNU-F-DISK-BOOT-OK`** → `EBS-OK` → second `Linux version 6.12.13-0-lts` `root=UUID=9af18543-…` → `EXT4-fs (vda2): mounted` → OpenRC → `login:` → `/proc/cmdline` from the installed system; months 0.5→0.25; overall 96→98; summit ISO 98→99; H3 resolved; new P0-63 Phase B (SPA start → RayNu-F path; iron SPA is still the SHELL stub `2b795a0`); Everest not claimed; docs/honesty-strings-only commit |
 | 2026-09-10 | pit-during-apk | 0.5 | 96 | **Iron UDisk `975f8fc` / run `34474850361`: F7 relaunch worked on the R640** — `src=kbc n=1` → `relaunch after reset` → `GPT ESP lba=2048 sectors=98304 part=1` → `image=DISK-BOOTX64` → installed GRUB 2.12 menu (`executed automatically in 2s`) → `stop exit-cap exits=1048577 svc=492778`: GRUB `run_menu` polls ReadKeyStroke + serial LSR with no idle (~2 exits/µs on iron), the fixed 1 M exit-count cap fired inside GRUB's own timeout; fix: RayNu-F wall cap (180 s wall from launch/relaunch, checked every 4096 exits; exit count `1<<30` u32-wrap guard only; `wall_ms=` on stop lines); months 0.5 held; overall 96 held; iron `DISK-BOOT-OK` not claimed; iron P0-14 stays 2b795a0 |
 | 2026-09-10 | pit-during-apk | 0.5 | 96 | **Iron UDisk `59ac070` / run `34425781629`: `RAYNU-V-M7-ISO-INSTALL-OK` on the real R640** — `916af96` console fix landed (apk 25 pkgs in 0.5 s; heartbeat `room=3177..4096 pace=3360→5811 fifo=1 drained→97346 win→17488`), `setup-disk -m sys /dev/vda` GPT+grub+initramfs `Installation finished. No error reported.`; `reboot` → F7 relaunch failed `VMCLEAR/VMPTRLD`: release asm shows `raynu_f_reset_relaunch` 81,024-byte frame (`FirmwareState::new()` PagePool on stack) on a 16 KiB host stack with the private VMCS as the next frame down; fix: `.rdata` `RAYNU_F_STATE_TEMPLATE` memcpy (frame 40 B), host stack 4→32 pages + guard page checked before F7 VMCLEAR, split VMCLEAR/VMPTRLD lines `rev=/want=/guard=`, `flush_guest_tx()` before share-off; months 0.75→0.5; overall 94→96; iron `DISK-BOOT-OK` not claimed; iron P0-14 stays 2b795a0 |
@@ -895,12 +896,14 @@ Months left:   0.25  (ETA 2026-10 held)
 Next move:     Phase B — SPA/REST create-VM + attach ISO must launch the RayNu-F ISO/installed-disk path on iron (today: ESP raynuf.txt flag; iron SPA start is the SHELL stub 2b795a0)
 Tcp4 residual: Floppy publishes PXE/HTTP, not Tcp4 SB (platform limit)
 SNP after EBS: dead — native BCM5720 is the durable mgmt path (E3b closed 2026-08-20)
-Preserve:      releases/v0.1.0-adr013-baseline
+Preserve:      releases/v0.1.0-e5-phase-a (E5 Phase A) · releases/v0.1.0-adr013-baseline
 Do not claim:  Mount Everest / E4 closed (E5 mechanism is closed on iron; the SPA does not start that disk yet)
+Merge order:   docs/main_and_releases.md
 ```
 
 Public checklist: [`docs/runbooks/r640_iron_week.md`](runbooks/r640_iron_week.md) ·
-printable field guide: [`docs/runbooks/r640_field_guide.md`](runbooks/r640_field_guide.md).
+printable field guide: [`docs/runbooks/r640_field_guide.md`](runbooks/r640_field_guide.md) ·
+`main` merge + releases: [`docs/main_and_releases.md`](main_and_releases.md).
 
 ---
 

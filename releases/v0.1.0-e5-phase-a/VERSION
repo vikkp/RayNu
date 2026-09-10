@@ -1,0 +1,5 @@
+0.1.0-e5-phase-a
+git 56a3ffda8406
+ci_run 34480107961
+marker RAYNU-V-M7-ISO-INSTALL-OK + RAYNU-V-RAYNU-F-DISK-BOOT-OK
+iron EFI 56a3ffd; this kit is Linux CI rebuild from run 34480107961
