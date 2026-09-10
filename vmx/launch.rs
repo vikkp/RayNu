@@ -61,7 +61,7 @@ use crate::devices::virtio_blk::{
 };
 use crate::devices::virtio_net::{self, M4_NET_OK_MARKER};
 use crate::mgmt::iso_install;
-use crate::mgmt::spa_launch::{self, M7_E4_SPA_LAUNCH_OK_MARKER};
+use crate::mgmt::spa_launch::{self, M7_E4_SPA_LAUNCH_OK_MARKER, M7_PHASE_B_SPA_RAYNU_F_NOTE};
 
 /// Finish marker when IRQ4 inject is gone and IRQ0 stops at SHELL (M3.19).
 pub const M3_NOIRQ_OK_MARKER: &str = "RAYNU-V-M3-NOIRQ-OK";
@@ -3094,9 +3094,14 @@ unsafe fn try_spa_vmlaunch() {
     if !M4_LADDER_DONE {
         return;
     }
-    let Some(_gid) = spa_launch::take_spa_start() else {
+    let Some((_gid, kind)) = spa_launch::take_spa_start_kind() else {
         return;
     };
+    if kind == spa_launch::SpaStartKind::RayNuF {
+        serial::write_line(M7_PHASE_B_SPA_RAYNU_F_NOTE);
+        crate::vmx::guest_uefi::try_spa_product_iso_start();
+        return;
+    }
     if SPA_LAUNCHED {
         if SPA_VMPTRLD_FAILED {
             serial::write_line("boot: E4 SPA start — slot=1 parked (VMPTRLD fail; stay on G0)");

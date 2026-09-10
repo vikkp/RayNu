@@ -70,6 +70,17 @@ pub fn requested() -> bool {
     REQUESTED.load(Ordering::Acquire)
 }
 
+/// SPA/REST product-ISO start (Phase B / P0-63). Same latch as `raynuf.txt`.
+/// Does not print `ISO-INSTALL-OK`. Firmware serial is the SPA start note.
+pub fn request_from_spa() {
+    REQUESTED.store(true, Ordering::Release);
+}
+
+/// Clear the RayNu-F request latch (host tests).
+pub fn clear_request() {
+    REQUESTED.store(false, Ordering::Release);
+}
+
 /// Host tests only.
 #[cfg(test)]
 pub fn force_for_test(on: bool) {

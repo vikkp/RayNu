@@ -367,7 +367,17 @@ pub fn dispatch_rest(table: &mut VmTable, req: RestRequest<'_>) -> RestResponse 
             let resp = rest_lifecycle(table, CliCommand::Start { guest_id }, 200);
             if resp.status == 200 {
                 // Queue only. VMLAUNCH runs on the next coexist scheduler quantum.
-                super::spa_launch::note_spa_start(guest_id);
+                // Product ISO (ADR-014) → RayNu-F; iso=0 stays E4 SHELL.
+                let kind = table
+                    .get(guest_id)
+                    .map(|r| {
+                        super::spa_launch::kind_for_record(r.iso_id, r.image_type, r.disk_mib)
+                    })
+                    .unwrap_or(super::spa_launch::SpaStartKind::Shell);
+                super::spa_launch::note_spa_start_kind(guest_id, kind);
+                if kind == super::spa_launch::SpaStartKind::RayNuF {
+                    crate::boot::raynu_f_flag::request_from_spa();
+                }
             }
             resp
         }

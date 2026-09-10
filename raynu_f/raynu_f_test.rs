@@ -597,9 +597,10 @@ fn raynu_f_loader_testapp_and_plan() {
 #[test]
 fn raynu_f_launch_flag_is_opt_in() {
     use crate::boot::raynu_f_flag::{
-        force_for_test, requested, RAYNU_F_FLAG_PATH, RAYNU_F_REQUESTED_MARKER,
+        clear_request, force_for_test, requested, RAYNU_F_FLAG_PATH, RAYNU_F_REQUESTED_MARKER,
     };
-    // Default boot path: not requested. Host probe is a no-op.
+    // Default boot path: not requested. Drain SPA/REST latches from other tests.
+    clear_request();
     crate::boot::raynu_f_flag::probe();
     assert!(!requested());
     assert_eq!(RAYNU_F_FLAG_PATH, "\\EFI\\RayNu\\raynuf.txt");

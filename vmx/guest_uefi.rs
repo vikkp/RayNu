@@ -7078,6 +7078,38 @@ fn raynu_f_launch_vmcs_fail(which: &str, rev_seen: u32, rev_want: u32, guard_ok:
     serial::write_line(" (F2b/F7; guest-UEFI host stack guard; not ISO-INSTALL-OK)");
 }
 
+/// Phase B: SPA product-ISO start. Arms RayNu-F (same latch as `raynuf.txt`).
+/// Firmware: takes the stopped guest-UEFI VMCS; never falls through to SHELL.
+/// Missing slab / already-ran → return to the coexist scheduler (G0).
+/// Host: arms the flag only. Never prints `ISO-INSTALL-OK`.
+pub fn try_spa_product_iso_start() {
+    crate::boot::raynu_f_flag::request_from_spa();
+    #[cfg(target_os = "uefi")]
+    unsafe {
+        try_spa_product_iso_start_firmware();
+    }
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn try_spa_product_iso_start_firmware() {
+    if RAYNU_F_RAN.load(Ordering::Acquire) {
+        serial::write_line(
+            "boot: E4 SPA RayNu-F already ran (Phase B; not SHELL; not ISO-INSTALL-OK)",
+        );
+        return;
+    }
+    let vmcs = SAVED_VMCS;
+    let ram_hpa = RAM_HPA.load(Ordering::Acquire);
+    if vmcs == 0 || ram_hpa == 0 {
+        serial::write_line(
+            "boot: E4 SPA RayNu-F skipped: no VMCS/slab (Phase B; not SHELL; not ISO-INSTALL-OK)",
+        );
+        return;
+    }
+    RAYNU_F_RAN.store(true, Ordering::Release);
+    raynu_f_launch_on_stopped_vmcs();
+}
+
 /// F2b: reuse the halted private VMCS + identity slab to enter the RayNu-F
 /// test app in long mode. No new allocations: identity PTs, tables, app,
 /// stack, and a GDT (null + 64-bit code + data + 16-byte TSS) are written

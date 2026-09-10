@@ -738,6 +738,14 @@ Phase A closed on iron with `56a3ffd` (run `34480107961`, 2026-09-10).
    not persist across HV reboot unless we later persist it.
 2. SPA/REST: create-VM + attach so E4 is “SPA starts that installed disk,” not
    “list/start/stop a SHELL stub.”
+   - **Host wire (this slice, no iron flash):** `POST /vms/{id}/start` of a
+     typed product ISO queues `SpaStartKind::RayNuF` and arms the same latch
+     as `raynuf.txt`. Marker `RAYNU-V-M7-PHASE-B-SPA-WIRE-OK`. `iso=0` stays
+     E4 SHELL. Do not print `ISO-INSTALL-OK` from host/CI.
+   - **Iron Phase B still open:** flash only after host tests are green. COM2
+     must show the SPA start note launching RayNu-F (preferably **without**
+     ESP `\EFI\RayNu\raynuf.txt`, so boot is not the auto-path). Do not claim
+     Everest / E4 honesty until that COM2 exists.
 3. Still no TLS requirement for M7 (deferred).
 
 ---

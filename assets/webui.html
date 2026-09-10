@@ -35,10 +35,10 @@ button:disabled{opacity:.45;cursor:not-allowed}
 section{margin-bottom:1.75rem}
 </style>
 </head>
-<body data-raynu-webui="1" data-raynu-api="/vms" data-raynu-m7-ui="1" data-raynu-e4="1">
+<body data-raynu-webui="1" data-raynu-api="/vms" data-raynu-m7-ui="1" data-raynu-e4="1" data-raynu-phase-b="1">
 <header>
   <div class="brand">RayNu-V</div>
-  <p class="tag">Ops UI — create guests, typed ISO (ADR-014 UEFI-first), extract-boot is lab, host serial log (plaintext lab HTTP).</p>
+  <p class="tag">Ops UI — create guests, typed ISO (ADR-014 UEFI-first). Start with a typed ISO launches RayNu-F; iso=0 is E4 SHELL. extract-boot is lab. Host serial log (plaintext lab HTTP).</p>
 </header>
 <main>
   <section>
@@ -131,7 +131,7 @@ section{margin-bottom:1.75rem}
   <p class="status" id="status"></p>
   <p class="note">
     Host serial is HV UART (not guest console). TLS deferred (lab HTTP).
-    Product ISO is UEFI-first + typed (linux_iso / windows_iso / generic_uefi). extract-boot is lab.
+    Product ISO is UEFI-first + typed (linux_iso / windows_iso / generic_uefi). Start with a typed ISO launches RayNu-F (Phase B; not the SHELL stub). iso=0 stays E4 SHELL. extract-boot is lab.
     Host attach is El Torito (not guest UEFI). Firmware arm is not VMLAUNCH. FW box/load is not OVMF. Auth: ESP or bring-up.
   </p>
 </main>
@@ -179,7 +179,18 @@ section{margin-bottom:1.75rem}
 
   async function createVm(){const id=num("f-id",1),cpu=num("f-cpu",1),ram=num("f-ram",512),disk=num("f-disk",1024),iso=num("f-iso",0);const typEl=document.getElementById("f-image");const typ=typEl?typEl.value:"none";let path=API+"/"+id+"/spec/"+cpu+"/"+ram+"/"+disk+"/"+iso;if(iso!==0&&typ&&typ!=="none")path+="/"+typ;setStatus("Creating "+id+"…");const res=await api("POST",path);if(res.ok)remember(id);setStatus(res.ok?("Created "+id):("Create failed ("+res.status+")"));await listVms();}
 
-  async function startVm(id){setStatus("Starting "+id+"…");const res=await api("POST",API+"/"+id+"/start");setStatus(res.ok?("Started "+id):("Start failed ("+res.status+")"));await listVms();}
+  async function startVm(id){
+    setStatus("Starting "+id+"…");
+    let typ="", iso=0;
+    try{
+      const g=await api("GET",API+"/"+id);
+      if(g.ok){const body=await g.json();typ=(body&&body.image_type)||"";iso=body&&body.iso_id;}
+    }catch(e){}
+    const res=await api("POST",API+"/"+id+"/start");
+    const path=(typ&&iso)?("RayNu-F ISO"):("E4 SHELL");
+    setStatus(res.ok?("Started "+id+" ("+path+")"):("Start failed ("+res.status+")"));
+    await listVms();
+  }
 
   async function stopVm(id){setStatus("Stopping "+id+"…");const res=await api("POST",API+"/"+id+"/stop");setStatus(res.ok?("Stopped "+id):("Stop failed ("+res.status+")"));await listVms();}
 
@@ -216,7 +227,8 @@ section{margin-bottom:1.75rem}
         " iso=" + (vm.iso_id != null ? vm.iso_id : "0") +
         " nics=" + (vm.nics != null ? vm.nics : "1") +
         " type=" + (vm.image_type ? vm.image_type : "none") +
-        (vm.firmware ? (" fw=" + vm.firmware) : "");
+        (vm.firmware ? (" fw=" + vm.firmware) : "") +
+        ((vm.image_type && vm.iso_id) ? " path=RayNu-F" : " path=SHELL");
       row.innerHTML =
         '<span class="id">' + id + "</span>" +
         '<span><div class="meta">' + meta + '</div><div class="state">' + state + "</div></span>" +
