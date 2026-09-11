@@ -8,7 +8,7 @@
 - **Media:** Stage 46 product ISO `alpine-extended` (~994 MiB) from ESP; leftover-DRAM virtio install disk 1 GiB (`vda`, `hpa=0x140800000`)
 - **Firmware:** RayNu-F (ADR-016; own EFI system table + boot services, no OVMF)
 - **Claims:** **E5 Phase A whole loop on iron** — Alpine 3.21 ISO → UEFI installer under RayNu-F → `setup-disk -m sys` to virtio-blk `vda` → `RAYNU-V-M7-ISO-INSTALL-OK` → guest `reboot` → F7 relaunch → installed GRUB 2.12 → **`RAYNU-V-RAYNU-F-DISK-BOOT-OK`** → second `Linux version 6.12.13-0-lts` with `root=UUID=9af18543-…` → ext4 `/dev/vda2` mounted → OpenRC → `login:` → `cat /proc/cmdline` from the installed system
-- **Does not claim:** Everest closed (Phase B — SPA/REST registers the ISO, creates the VM, attaches media and starts *this* disk — is still the SHELL stub `2b795a0`); TLS; guest console UI; persistence of the leftover-DRAM disk across a **host** reboot; multi-distro
+- **Does not claim (as of 2026-09-10):** Everest / Phase B. **Superseded 2026-09-11:** Phase B closed on `f72b4276` / `34552377351`. Still does not claim: TLS; guest console UI; leftover-DRAM persist across a **host** reboot; multi-distro
 
 ## The loop, in COM2 order
 
@@ -69,7 +69,7 @@ in this log.
 
 ## Residual after this close
 
-- **Phase B (operator product / E4):** the SPA/REST create-VM + attach-media path on iron still launches the SHELL CPUID stub (`2b795a0`). Everest is closed when the SPA starts *this* installed disk.
+- **Phase B:** closed on iron 2026-09-11 (`f72b4276` / `34552377351`). See [`2026-09-11-f72b4276-phase-b-spa-iso-install-disk-boot-ok.md`](2026-09-11-f72b4276-phase-b-spa-iso-install-disk-boot-ok.md).
 - The leftover-DRAM install disk does not survive a **host** reboot of RayNu-V (persistence to ESP/NVMe is post-Everest).
 - Diagnostic COM2 noise (`guest-UEFI virtio MMIO` heartbeats, idle `virtio stall dump`) is now cosmetic and should be demoted.
 - TLS (deferred, ADR-009), guest console UI, live Redfish — unchanged.
