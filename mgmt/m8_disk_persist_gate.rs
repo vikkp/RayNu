@@ -20,7 +20,7 @@ pub const M8_DISK_PERSIST_GATE_MARKER: &str = M8_DISK_PERSIST_HOST_OK_MARKER;
 
 /// Honesty: host round-trip ≠ nested Alpine kill/restart ≠ iron persist.
 pub const M8_DISK_PERSIST_RESIDUAL_NOTE: &str =
-    "residual: persist-first attach_disk_keep + host File round-trip is not nested Alpine kill/restart and not iron RAYNU-V-M8-DISK-PERSIST-OK; leftover DRAM remains the fallback; M8_PERSIST_IMG file-RAM default off; distro OVMF ignores nvdimm/pc-dimm hotplug; tools/m8-persist-nested.sh is the nested two-boot harness; do not print ISO-INSTALL-OK";
+    "residual: persist-first attach_disk_keep + host File round-trip is not nested Alpine kill/restart and not iron RAYNU-V-M8-DISK-PERSIST-OK; MODE=keep planted GPT keep=1 is not nested-OK; leftover DRAM remains the fallback; M8_PERSIST_IMG file-RAM default off; distro OVMF ignores nvdimm/pc-dimm hotplug; tools/m8-persist-nested.sh is the nested two-boot harness; do not print ISO-INSTALL-OK";
 
 /// True when plan, markers, leftover fallback, persist-first attach, and exclusive-ownership notes exist.
 pub fn disk_persist_surface_present() -> bool {
@@ -42,6 +42,7 @@ pub fn disk_persist_surface_present() -> bool {
         && persist.contains("fn choose_install_disk_attach(")
         && persist.contains("fn take_persist_install_disk(")
         && persist.contains("fn reserve_persist_install_disk(")
+        && persist.contains("fn persist_install_disk_region(")
         && persist.contains("fn host_never_prints_iso_install_ok(")
         && persist.contains(M8_DISK_PERSIST_OK_MARKER)
         && persist.contains(M8_DISK_PERSIST_HOST_OK_MARKER)
@@ -63,7 +64,9 @@ pub fn disk_persist_surface_present() -> bool {
         && attach.contains("fn try_alloc_product_iso_install_disk(")
         && attach.contains("take_leftover_install_disk")
         && attach.contains("take_persist_install_disk")
+        && attach.contains("fn attach_persist_keep_on_vmx_skip(")
         && attach.contains("attach_disk_keep")
+        && include_str!("../src/main.rs").contains("attach_persist_keep_on_vmx_skip(")
         && virtio.contains("fn attach_disk_keep(")
         && virtio.contains("fn attach_disk(")
         && handoff.contains("PERSISTENT_MEMORY")
@@ -76,6 +79,8 @@ pub fn disk_persist_surface_present() -> bool {
         && persist.contains("fn nested_promotes_leftover_to_file_persist(")
         && nested.contains("MODE=smoke")
         && nested.contains("MODE=full")
+        && nested.contains("MODE=keep")
+        && nested.contains("plant_m8_persist_fixture")
         && nested.contains("M8_PERSIST_IMG")
         && nested.contains("file-RAM")
         && nested.contains("Installation is complete")

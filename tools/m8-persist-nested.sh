@@ -9,11 +9,16 @@
 # Iron COM2 marker RAYNU-V-M8-DISK-PERSIST-OK is forbidden here.
 #
 # file-RAM backend: QEMU initial RAM is M8_PERSIST_IMG (share=on).
+# MODE=smoke  one boot, persist reserve only. TCG ok. Not nested-OK.
+# MODE=keep   two boots, TCG ok. Boot 1 persist reserve, plant GPT+ESP+ext4
+#             into M8_PERSIST_IMG, kill HV, boot 2 keep=1. Not Alpine.
+#             Does not print nested-OK.
 # MODE=full   two boots (default). Boot 1 stops after Alpine install.
-#             Needs nested KVM (VMLAUNCH). TCG is smoke-only.
+#             Needs nested KVM (VMLAUNCH). TCG is smoke/keep only.
 #
 # Usage:
 #   MODE=smoke ./tools/m8-persist-nested.sh
+#   MODE=keep ./tools/m8-persist-nested.sh
 #   ./tools/m8-persist-nested.sh
 set -euo pipefail
 
@@ -41,7 +46,7 @@ NESTED_OK="RAYNU-V-M8-DISK-PERSIST-NESTED-OK"
 IRON_OK="RAYNU-V-M8-DISK-PERSIST-OK"
 ISO_OK="RAYNU-V-M7-ISO-INSTALL-OK"
 
-if [[ "$MODE" == "smoke" && -z "${PRODUCT_ISO:-}" ]]; then
+if [[ "$MODE" == "smoke" || "$MODE" == "keep" ]] && [[ -z "${PRODUCT_ISO:-}" ]]; then
   ISO_PATH="$SMOKE_ISO"
 else
   ISO_PATH="${PRODUCT_ISO:-$ALPINE_ISO}"
@@ -274,6 +279,26 @@ wait_serial_needle() {
   return 1
 }
 
+parse_persist_hpa() {
+  local log="$1"
+  grep -oE 'persist install disk hpa=0x[0-9a-fA-F]+' "$log" \
+    | tail -n1 \
+    | grep -oE '0x[0-9a-fA-F]+'
+}
+
+plant_keep_fixture() {
+  local log="$1"
+  local hpa
+  hpa=$(parse_persist_hpa "$log")
+  if [[ -z "$hpa" ]]; then
+    echo "error: no persist hpa in $log (not ISO-INSTALL-OK)" >&2
+    exit 1
+  fi
+  echo "==> plant GPT+ESP+ext4 at $hpa in $M8_PERSIST_IMG (not nested-OK; not iron; not ISO-INSTALL-OK)"
+  M8_PLANT_PATH="$M8_PERSIST_IMG" M8_PLANT_OFFSET="$hpa" \
+    cargo test --no-default-features plant_m8_persist_fixture -- --exact --nocapture
+}
+
 run_smoke() {
   echo "==> MODE=smoke — one boot, persist reserve only (not NESTED-OK, not iron)"
   reset_persist_img
@@ -397,6 +422,97 @@ run_full() {
   echo "$NESTED_OK"
 }
 
+run_keep() {
+  echo "==> MODE=keep — plant GPT, kill HV, boot2 keep=1 (not $NESTED_OK, not iron, not $ISO_OK)"
+  reset_persist_img
+  start_qemu "$SERIAL1" "$TIMEOUT_SMOKE" \
+    "$ROOT/target/m8-persist-keep1-stdout.log" \
+    "$ROOT/target/m8-persist-keep1-stderr.log"
+  local waited=0
+  while (( waited < 25 )); do
+    if [[ -s "$SERIAL1" ]]; then
+      break
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  if [[ ! -s "$SERIAL1" && "$QEMU_ACCEL" == "kvm" ]]; then
+    echo "==> kvm serial empty after ${waited}s; retry tcg (persist scan is PRE-VMLAUNCH)"
+    stop_qemu
+    QEMU_ACCEL=tcg
+    reset_persist_img
+    start_qemu "$SERIAL1" "$TIMEOUT_SMOKE" \
+      "$ROOT/target/m8-persist-keep1-stdout.log" \
+      "$ROOT/target/m8-persist-keep1-stderr.log"
+  fi
+  if wait_serial_needle "$SERIAL1" "persist install disk hpa="; then
+    sleep 2
+    stop_qemu
+  else
+    wait_qemu || true
+  fi
+  if [[ ! -s "$SERIAL1" ]]; then
+    echo "error: keep boot1 serial empty" >&2
+    cat "$ROOT/target/m8-persist-keep1-stderr.log" >&2 || true
+    exit 1
+  fi
+  scan "$SERIAL1"
+  forbid_markers "$SERIAL1"
+  require_persist_reserved "$SERIAL1"
+  if grep -qE 'virtio-blk install disk bytes=.* keep=1' "$SERIAL1"; then
+    echo "error: keep boot1 attached keep=1 on empty persist" >&2
+    exit 1
+  fi
+
+  plant_keep_fixture "$SERIAL1"
+
+  echo "==> boot2: same $M8_PERSIST_IMG ($(stat -c%s "$M8_PERSIST_IMG") bytes) after plant (not nested-OK)"
+  start_qemu "$SERIAL2" "$TIMEOUT_SMOKE" \
+    "$ROOT/target/m8-persist-keep2-stdout.log" \
+    "$ROOT/target/m8-persist-keep2-stderr.log"
+  waited=0
+  while (( waited < 25 )); do
+    if [[ -s "$SERIAL2" ]]; then
+      break
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  if [[ ! -s "$SERIAL2" && "$QEMU_ACCEL" == "kvm" ]]; then
+    echo "==> kvm serial empty after ${waited}s; retry tcg without wiping persist"
+    stop_qemu
+    QEMU_ACCEL=tcg
+    start_qemu "$SERIAL2" "$TIMEOUT_SMOKE" \
+      "$ROOT/target/m8-persist-keep2-stdout.log" \
+      "$ROOT/target/m8-persist-keep2-stderr.log"
+  fi
+  if wait_serial_needle "$SERIAL2" "keep=1"; then
+    sleep 2
+    stop_qemu
+  else
+    wait_qemu || true
+  fi
+  if [[ ! -s "$SERIAL2" ]]; then
+    echo "error: keep boot2 serial empty" >&2
+    cat "$ROOT/target/m8-persist-keep2-stderr.log" >&2 || true
+    exit 1
+  fi
+  scan "$SERIAL2"
+  forbid_markers "$SERIAL2"
+  require_persist_reserved "$SERIAL2"
+  if ! grep -qE 'virtio-blk install disk bytes=.* keep=1' "$SERIAL2"; then
+    echo "error: keep boot2 did not attach_disk_keep (keep=1)" >&2
+    grep -n 'virtio-blk install disk' "$SERIAL2" >&2 || true
+    grep -n 'VMXON-SKIP' "$SERIAL2" >&2 || true
+    exit 1
+  fi
+  if grep -qF "$NESTED_OK" "$SERIAL2"; then
+    echo "error: keep boot2 serial printed $NESTED_OK" >&2
+    exit 1
+  fi
+  echo "==> nested File RAM keep=1 after HV kill + plant (not $NESTED_OK; not iron $IRON_OK; not $ISO_OK)"
+}
+
 pick_accel
 prepare_host
 fetch_iso
@@ -404,9 +520,10 @@ build_efi
 
 case "$MODE" in
   smoke) run_smoke ;;
+  keep) run_keep ;;
   full) run_full ;;
   *)
-    echo "error: MODE=$MODE (want smoke|full)" >&2
+    echo "error: MODE=$MODE (want smoke|keep|full)" >&2
     exit 1
     ;;
 esac

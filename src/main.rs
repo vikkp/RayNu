@@ -156,6 +156,12 @@ fn run_m1_vmx(alloc: &mut memory::FrameAllocator) {
     if !arch::cpu::vmx_supported() {
         boot::serial::write_line("boot: CPUID.VMX clear — need KVM nested / VT-x");
         boot::serial::write_line(vmx::M1_VMXON_SKIP_MARKER);
+        // Nested TCG: keep-attach planted persist so MODE=keep can prove
+        // attach_disk_keep after HV kill. Empty persist is not attached.
+        // Alpine MODE=full still needs VMLAUNCH. Not nested-OK.
+        unsafe {
+            vmx::guest_uefi::attach_persist_keep_on_vmx_skip(alloc);
+        }
         return;
     }
 

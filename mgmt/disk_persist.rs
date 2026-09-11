@@ -371,8 +371,18 @@ static INSTALL_DISK_KEEP: AtomicBool = AtomicBool::new(false);
 
 /// True when handoff reserved a persist region that attach has not taken.
 pub fn persist_install_disk_reserved() -> bool {
-    PERSIST_DISK_HPA.load(Ordering::Acquire) != 0
-        && PERSIST_DISK_BYTES.load(Ordering::Acquire) != 0
+    persist_install_disk_region().is_some()
+}
+
+/// Persist HPA/size without taking. Nested TCG skip-path peeks before keep-attach.
+pub fn persist_install_disk_region() -> Option<(u64, u64)> {
+    let hpa = PERSIST_DISK_HPA.load(Ordering::Acquire);
+    let bytes = PERSIST_DISK_BYTES.load(Ordering::Acquire);
+    if hpa == 0 || bytes == 0 {
+        None
+    } else {
+        Some((hpa, bytes))
+    }
 }
 
 /// Record persist backing for [`take_persist_install_disk`]. `bytes == 0` clears.

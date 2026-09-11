@@ -38,7 +38,7 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 
 | Metric | Value | Δ vs previous HDA |
 |--------|------:|-------------------|
-| **Overall product readiness** | **99%** | **held** — Everest **CLOSED**. M8.0 persist-first attach + nested File RAM harness. Not 100%: nested Alpine kill/restart / iron persist / TLS / console |
+| **Overall product readiness** | **99%** | **held** — Everest **CLOSED**. M8.0 persist-first attach + nested File RAM + `MODE=keep`. Not 100%: nested Alpine kill/restart / iron persist / TLS / console |
 | **Months to Mount Everest** | **0.0** | **held** (summit reached 2026-09-11; `f72b4276` SPA ISO loop) |
 | **ETA month** | **2026-09** | **closed this month on iron**; next work is M8, not a slipped Everest |
 | **Confidence** | high | E1–E6 on COM2. M8 named separately so polish cannot reopen the summit |
@@ -167,7 +167,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 | M+2 | 2026-09 | E3b native NIC lab (QEMU e1000) + ISO residual | ADR-013 Phase C | **Phase C DONE (QEMU)** |
 | M+3 | 2026-08 | E3b iron HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | **DONE (M7.8 iron)** |
 | M+4 | 2026-09 | Phase B (SPA → installed disk) | remaining Everest | **DONE — EVEREST CLOSED** (`f72b4276` / `34552377351`) |
-| M+5 | 2026-10 | **M8.0** persist (file nested / LUN iron / leftover fallback) | `RAYNU-V-M8-DISK-PERSIST-OK` on COM2 | **NEXT** (nested harness; Alpine two-boot + iron open) |
+| M+5 | 2026-10 | **M8.0** persist (file nested / LUN iron / leftover fallback) | `RAYNU-V-M8-DISK-PERSIST-OK` on COM2 | **NEXT** (MODE=keep keep=1; Alpine two-boot + iron open) |
 
 ### Timeline burn-down
 
@@ -175,7 +175,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 2026-07 ████████  HDA + M6 closed (Latitude)
 2026-08 ████████  R640 boot (E2) + E3b HTTP-OK
 2026-09 ████████  E5 + Phase B — **Mount Everest CLOSED** (`f72b4276`)  ← months_to_everest = 0.0
-2026-10 ░░░░░░░░  M8.0 persist (nested harness; iron COM2 open)
+2026-10 ░░░░░░░░  M8.0 persist (MODE=keep keep=1; Alpine + iron COM2 open)
 2026-11 ░░░░░░░░  M8.1+ TLS/auth/console
 ```
 
@@ -245,7 +245,7 @@ Ordered for critical path (parallelize B with D design):
 | P0-9 | M6.9 external audit + spec review | E6 | **DONE** | proofs green | `docs/`, `ept_model/`, `mgmt/ext` |
 | P0-10 | R640 soak / hardware confidence | E2 | 0.5 | P0-2 | `tools/`, `mgmt/soak` — post M7.5 |
 | P0-11 | **M9 sketch** vMotion-like / DRS-like / hot-add | — | — | M8 | deferred — was M8 in ADR-009; **M9** after operator hardening (ADR-018) |
-| P0-64 | **M8** operator product hardening | — | IN PROGRESS | Everest closed | [ADR-018](adr/ADR-018.md) / [m8_plan.md](m8_plan.md). **M8.0** persist-first attach + `tools/m8-persist-nested.sh` (file-backed QEMU RAM; distro OVMF ignores nvdimm/pc-dimm). Nested Alpine `RAYNU-V-M8-DISK-PERSIST-NESTED-OK` open. Iron `RAYNU-V-M8-DISK-PERSIST-OK` open. Then TLS, auth, console UI, ISO upload, UEFI catalog, Windows later. |
+| P0-64 | **M8** operator product hardening | — | IN PROGRESS | Everest closed | [ADR-018](adr/ADR-018.md) / [m8_plan.md](m8_plan.md). **M8.0** persist-first attach + `tools/m8-persist-nested.sh` (file-backed QEMU RAM; `MODE=keep` planted GPT `keep=1` after HV kill on TCG is not nested-OK). Nested Alpine `RAYNU-V-M8-DISK-PERSIST-NESTED-OK` open. Iron `RAYNU-V-M8-DISK-PERSIST-OK` open. Then TLS, auth, console UI, ISO upload, UEFI catalog, Windows later. |
 
 ---
 
@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-disk-persist-nested-pcdimm |
-| Summary | **M8.0 nested File RAM.** Distro OVMF ignores nvdimm/pc-dimm hotplug. `M8_PERSIST_IMG` backs QEMU initial RAM (`QEMU_MEM=2560M`, share=on). Nested leftover above PRECISE promotes to persist. Harness TCG fallback after kvm_spurious_fault. `MODE=full` still needs nested KVM. Alpine two-boot + iron Force Off still open. Never `ISO-INSTALL-OK`. |
+| Commit | m8-disk-persist-nested-keep |
+| Summary | **M8.0 MODE=keep.** Plant GPT+ESP+ext4 into file-backed QEMU RAM, kill the HV process, second boot `attach_disk_keep` (`keep=1`) on TCG/VMXON-SKIP. Not Alpine. Does not print nested-OK or iron persist OK. `MODE=full` still needs nested KVM. Iron Force Off still open. Never `ISO-INSTALL-OK`. |
 | Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. |
-| Gates touched | `tools/m8-persist-nested.sh` + file-RAM File backend. `./tools/sync-hda-site.sh --check`. |
+| Gates touched | `tools/m8-persist-nested.sh MODE=keep` + skip-path persist keep-attach. `./tools/sync-hda-site.sh --check`. |
 | Months Δ | 0.0→0.0 (held) |
 
 
@@ -370,7 +370,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | H3 | ~~Guest UEFI CD not bootable / no reboot-to-disk on iron~~ | — | **Resolved** 2026-09-10 (`56a3ffd` / run `34480107961`): `RAYNU-V-RAYNU-F-DISK-BOOT-OK` + second Linux `root=UUID=` from `vda` + `login:` on the real R640. Chain: `59ac070` install-to-disk (`ISO-INSTALL-OK`) → F7 VMCLEAR/VMPTRLD (81 KiB `FirmwareState::new()` stack temporary over the VMCS; template reset + 32-page stack guard) → `975f8fc` relaunch into the installed GRUB menu, 1 M exit-cap inside GRUB's 2 s menu poll loop (~2 exits/µs) → `56a3ffd` RayNu-F wall cap (time, not exits, bounds the loader phase). Earlier: `916af96` THRE chain telemetry → UART TX ring room + line-rate pace + COM2 FIFO burst fixed the `apk` console stall. Evidence: [2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md](evidence/r640/2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md). Do not F11 `34474850361` / `34425781629` for Phase A; `34480107961` is the Phase A reference pin. |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
 | H5 | ~~Phase B — iron SPA still launches the SHELL stub~~ | — | **Resolved** 2026-09-11 (`f72b4276` / `34552377351`). Residual polish is **M8**, not Everest. |
-| H10 | Leftover-DRAM disk dies on **HV** reboot | MED | **M8.0** first gate ([m8_plan.md](m8_plan.md)): persist-first attach; nested File RAM harness `tools/m8-persist-nested.sh`; host `RAYNU-V-M8-DISK-PERSIST-HOST-OK`; nested Alpine two-boot + iron `RAYNU-V-M8-DISK-PERSIST-OK` still open. Guest F7 persist already closed (ADR-017). |
+| H10 | Leftover-DRAM disk dies on **HV** reboot | MED | **M8.0** first gate ([m8_plan.md](m8_plan.md)): persist-first attach; nested File RAM harness `tools/m8-persist-nested.sh` (`MODE=keep` planted `keep=1` on TCG is not nested-OK); host `RAYNU-V-M8-DISK-PERSIST-HOST-OK`; nested Alpine two-boot + iron `RAYNU-V-M8-DISK-PERSIST-OK` still open. Guest F7 persist already closed (ADR-017). |
 | H11 | Truncated `site/` on feature branches | LOW | **This commit:** restore Kimi updater chrome from `origin/main`; `./tools/check-site-chrome.sh` + CI `site-chrome`; always-on `.cursor/rules/site-chrome.mdc`. Do not replace `site/index.html` wholesale on HDA/Everest work. |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-11 | m8-disk-persist-nested-keep | 0.0 | 99 | **M8.0 MODE=keep:** plant GPT+ESP+ext4 into file-backed QEMU RAM, kill HV, second boot `keep=1` on TCG/VMXON-SKIP. Not Alpine. Does not print nested-OK. `MODE=full` still needs nested KVM. Iron COM2 still open. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |
 | 2026-09-11 | m8-disk-persist-nested-fileram | 0.0 | 99 | **M8.0 nested File RAM:** distro OVMF ignores nvdimm/pc-dimm hotplug. `M8_PERSIST_IMG` backs QEMU initial RAM (`QEMU_MEM=2560M`, share=on). Nested leftover above PRECISE promotes to persist. Harness TCG fallback after kvm_spurious_fault. Alpine two-boot + iron COM2 still open. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |
 | 2026-09-11 | m8-disk-persist-nested-pcdimm | 0.0 | 99 | **M8.0 nested File pc-dimm:** distro OVMF_CODE_4M has no NvdimmDxe. `M8_PERSIST_IMG` is a file-backed pc-dimm (`QEMU_MEM=512M`, ≥2 GiB). Nested leftover above PRECISE promotes to persist. Harness pgrep/wait/TCG fallback. `MODE=full` still needs nested KVM. Alpine two-boot + iron COM2 still open. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |
 | 2026-09-11 | m8-disk-persist-nested | 0.0 | 99 | **M8.0 nested two-boot harness:** `tools/m8-persist-nested.sh` (`MODE=smoke` persist reserve; `MODE=full` install → kill HV → second Linux without `setup-disk`). Minted `RAYNU-V-M8-DISK-PERSIST-NESTED-OK` (harness-only). Nested Alpine two-boot + iron COM2 still open. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |
@@ -912,7 +913,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     **M8.0** nested File RAM harness; Alpine kill/restart + iron COM2 open ([ADR-018](adr/ADR-018.md) / [m8_plan.md](m8_plan.md))
+Next move:     **M8.0** MODE=keep keep=1 (not nested-OK); Alpine MODE=full + iron COM2 open ([ADR-018](adr/ADR-018.md) / [m8_plan.md](m8_plan.md))
 Rollback:      GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351
                EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc
                COM2 build: sha=f72b4276d198. Do not flash a later M8 persist prototype as known-good.

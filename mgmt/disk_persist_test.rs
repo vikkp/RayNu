@@ -335,7 +335,9 @@ fn persist_media_accepts_real_uuid_host_fixture_requires_planted() {
         "Alpine root=UUID= is not the planted host fixture"
     );
     assert!(!restored_disk_is_installed(&image));
-    assert!(!persist_media_looks_installed(&[0u8; HOST_PERSIST_DISK_BYTES]));
+    assert!(!persist_media_looks_installed(
+        &[0u8; HOST_PERSIST_DISK_BYTES]
+    ));
 }
 
 #[test]
@@ -382,6 +384,10 @@ fn persist_reserve_is_one_shot_and_wins_policy() {
     reserve_persist_install_disk(0x1_0000_0000, 1024 * 1024 * 1024);
     assert!(persist_install_disk_reserved());
     assert_eq!(
+        persist_install_disk_region(),
+        Some((0x1_0000_0000, 1024 * 1024 * 1024))
+    );
+    assert_eq!(
         take_persist_install_disk(),
         Some((0x1_0000_0000, 1024 * 1024 * 1024))
     );
@@ -391,6 +397,46 @@ fn persist_reserve_is_one_shot_and_wins_policy() {
     set_install_disk_keep(true);
     assert!(take_install_disk_keep());
     assert!(!take_install_disk_keep());
+}
+
+/// Tiny GPT+ESP+ext4 fixture for host `MODE=keep` plant into `M8_PERSIST_IMG`.
+///
+/// Always asserts the fixture looks installed. When `M8_PLANT_PATH` is set,
+/// writes the 1 MiB image at `M8_PLANT_OFFSET` (hex `0x…` or decimal, default 0).
+/// Harness: `M8_PLANT_PATH=/tmp/m8-persist.img M8_PLANT_OFFSET=0x20000000 cargo test
+/// --no-default-features plant_m8_persist_fixture -- --exact`
+#[test]
+fn plant_m8_persist_fixture() {
+    let img = build_gpt_esp_ext4_image();
+    assert!(
+        persist_media_looks_installed(&img),
+        "plant fixture must look installed"
+    );
+    let path = match std::env::var("M8_PLANT_PATH") {
+        Ok(p) if !p.is_empty() => p,
+        _ => return,
+    };
+    let offset = std::env::var("M8_PLANT_OFFSET")
+        .ok()
+        .and_then(|s| {
+            let s = s.trim();
+            if let Some(h) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
+                u64::from_str_radix(h, 16).ok()
+            } else {
+                s.parse::<u64>().ok()
+            }
+        })
+        .unwrap_or(0);
+    use std::fs::OpenOptions;
+    use std::io::{Seek, SeekFrom, Write};
+    let mut f = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .open(&path)
+        .expect("open M8_PLANT_PATH");
+    f.seek(SeekFrom::Start(offset))
+        .expect("seek M8_PLANT_OFFSET");
+    f.write_all(&img).expect("write plant fixture");
 }
 
 #[test]

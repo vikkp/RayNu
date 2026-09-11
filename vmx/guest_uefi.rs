@@ -5136,6 +5136,37 @@ unsafe fn attach_product_iso_install_disk(alloc: &mut FrameAllocator, warn: bool
     serial::write_line(" (not ISO-INSTALL-OK)");
 }
 
+/// Nested TCG / VMXON-SKIP: attach persist only when it already looks installed.
+/// Empty persist stays unattached (Alpine install needs VMLAUNCH). Not nested-OK.
+#[cfg(target_os = "uefi")]
+pub unsafe fn attach_persist_keep_on_vmx_skip(alloc: &mut FrameAllocator) {
+    let Some((hpa, bytes)) = crate::mgmt::disk_persist::persist_install_disk_region() else {
+        return;
+    };
+    // SAFETY: persist HPA is identity-mapped leftover / file-RAM from handoff.
+    // KANI-TARGET: skip-path persist peek (outside Proven Core).
+    let keep = unsafe { crate::mgmt::disk_persist::persist_hpa_looks_installed(hpa, bytes) };
+    if !keep {
+        return;
+    }
+    // Guest-UEFI present happens on VMLAUNCH. Skip-path still needs the
+    // product ISO window armed so virtio-blk attach is allowed.
+    let _ = crate::mgmt::iso_install::present_product_iso_if_retained();
+    attach_product_iso_install_disk(alloc, true);
+    if crate::devices::guest_virtio_blk::disk_bytes() != 0 {
+        return;
+    }
+    let Some((hpa, bytes)) = crate::mgmt::disk_persist::take_persist_install_disk() else {
+        return;
+    };
+    // SAFETY: exclusive persist HPA; skip-path keep must not zero GPT.
+    // KANI-TARGET: skip-path persist keep-attach (outside Proven Core).
+    let _ = crate::devices::guest_virtio_blk::attach_disk_keep(hpa, bytes);
+    serial::write_str("boot: Stage 46 virtio-blk install disk bytes=");
+    write_dec(crate::devices::guest_virtio_blk::disk_bytes());
+    serial::write_line(" keep=1 (VMXON-SKIP; not ISO-INSTALL-OK)");
+}
+
 #[cfg(target_os = "uefi")]
 unsafe fn launch_uefi(
     alloc: &mut FrameAllocator,
