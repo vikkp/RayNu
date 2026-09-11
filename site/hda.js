@@ -38,7 +38,11 @@
     }
     if ($("hda-delta")) {
       if (closed) {
-        $("hda-delta").textContent = `0.0 months remaining · was ${fmtMonths(prev)}`;
+        const prevN = Number(prev);
+        $("hda-delta").textContent =
+          !Number.isNaN(prevN) && prevN === 0
+            ? "0.0 months remaining · summit 2026-09-11"
+            : `0.0 months remaining · was ${fmtMonths(prev)}`;
       } else {
         const delta = Number(months) - Number(prev);
         let label = `was ${fmtMonths(prev)}`;

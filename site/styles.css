@@ -670,6 +670,16 @@ code {
   color: var(--steel);
 }
 
+.page-hda--closed .hda-tracker__months {
+  font-size: clamp(3.1rem, 10vw, 7rem);
+}
+
+@media (max-width: 719px) {
+  .page-hda--closed .hda-tracker__months {
+    font-size: clamp(2.6rem, 16vw, 3.6rem);
+  }
+}
+
 .hda-tracker__delta {
   margin: 0.5rem 0 0;
   font-family: var(--font-mono);
