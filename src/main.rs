@@ -91,6 +91,7 @@ fn main() -> Status {
     r640_hypervisor::mgmt::probe_iso_reboot_lab_flag();
     r640_hypervisor::mgmt::probe_iso_persist_reboot();
     r640_hypervisor::mgmt::probe_product_linux_iso();
+    r640_hypervisor::mgmt::probe_durable_lun();
     r640_hypervisor::mgmt::probe_host_nic_lab_flag();
     let _ = r640_hypervisor::mgmt::run_pre_ebs_mgmt_listen();
 

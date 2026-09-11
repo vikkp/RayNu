@@ -14,13 +14,14 @@ use crate::mgmt::disk_persist::{
     M8_DISK_PERSIST_OK_MARKER, PERC_UBUNTU_UNTOUCHED_NOTE, PERSIST_EXCLUSIVE_OWNERSHIP_NOTE,
     UDISK_TOO_SMALL_NOTE,
 };
+use crate::mgmt::durable_lun::durable_lun_policy_holds;
 
 /// Host / CI marker when the M8.0 persist package passes.
 pub const M8_DISK_PERSIST_GATE_MARKER: &str = M8_DISK_PERSIST_HOST_OK_MARKER;
 
 /// Honesty: host round-trip ≠ nested Alpine kill/restart ≠ iron persist.
 pub const M8_DISK_PERSIST_RESIDUAL_NOTE: &str =
-    "residual: persist-first attach_disk_keep + host File round-trip is not nested Alpine kill/restart and not iron RAYNU-V-M8-DISK-PERSIST-OK; MODE=keep planted GPT keep=1 is not nested-OK; leftover DRAM remains the fallback; M8_PERSIST_IMG file-RAM default off; distro OVMF ignores nvdimm/pc-dimm hotplug; tools/m8-persist-nested.sh is the nested two-boot harness; do not print ISO-INSTALL-OK";
+    "residual: persist-first attach_disk_keep + host File round-trip is not nested Alpine kill/restart and not iron RAYNU-V-M8-DISK-PERSIST-OK; MODE=keep planted GPT keep=1 is not nested-OK; DurableLun PCI census is not post-EBS NVMe/USB I/O; leftover DRAM remains the fallback; M8_PERSIST_IMG file-RAM default off; distro OVMF ignores nvdimm/pc-dimm hotplug; tools/m8-persist-nested.sh is the nested two-boot harness; do not print ISO-INSTALL-OK";
 
 /// True when plan, markers, leftover fallback, persist-first attach, and exclusive-ownership notes exist.
 pub fn disk_persist_surface_present() -> bool {
@@ -32,6 +33,7 @@ pub fn disk_persist_surface_present() -> bool {
     let handoff = include_str!("../boot/handoff.rs");
     let qemu = include_str!("../tools/run-qemu.sh");
     let nested = include_str!("../tools/m8-persist-nested.sh");
+    let lun = include_str!("durable_lun.rs");
     persist.contains("enum PersistKind")
         && persist.contains("File")
         && persist.contains("DurableLun")
@@ -56,6 +58,7 @@ pub fn disk_persist_surface_present() -> bool {
         && plan.contains("RAYNU-V-M8-DISK-PERSIST-HOST-OK")
         && plan.contains("file-backed nested")
         && plan.contains("durable LUN")
+        && plan.contains("DurableLun mapper")
         && plan.contains("leftover DRAM")
         && plan.contains("Force Off")
         && plan.contains("attach_disk_keep")
@@ -77,6 +80,18 @@ pub fn disk_persist_surface_present() -> bool {
         && qemu.contains("+hypervisor")
         && !qemu.contains("-mem-path")
         && persist.contains("fn nested_promotes_leftover_to_file_persist(")
+        && lun.contains("fn pick_durable_lun(")
+        && lun.contains("fn classify_pci_storage(")
+        && lun.contains("fn pci_is_perc(")
+        && lun.contains("fn classify_usb_lun(")
+        && lun.contains("fn durable_lun_can_virtio_attach(")
+        && lun.contains("fn probe_durable_lun(")
+        && lun.contains("PCI_SUBCLASS_NVME")
+        && lun.contains("skip PERC")
+        && lun.contains("no post-EBS I/O")
+        && !lun.contains("println!(\"RAYNU-V-M8-DISK-PERSIST-OK\")")
+        && !lun.contains("println!(\"RAYNU-V-M7-ISO-INSTALL-OK\")")
+        && include_str!("../src/main.rs").contains("probe_durable_lun(")
         && nested.contains("MODE=smoke")
         && nested.contains("MODE=full")
         && nested.contains("MODE=keep")
@@ -108,6 +123,7 @@ pub fn run_m8_disk_persist_host_gate() -> bool {
         && PERC_UBUNTU_UNTOUCHED_NOTE.contains("PERC")
         && PERSIST_EXCLUSIVE_OWNERSHIP_NOTE.contains("ADR-004")
         && M8_DISK_PERSIST_RESIDUAL_NOTE.contains("ISO-INSTALL-OK")
+        && durable_lun_policy_holds()
         && disk_persist_surface_present()
 }
 
