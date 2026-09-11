@@ -355,9 +355,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | m8-disk-persist-nested-keep |
-| Summary | **M8.0 MODE=keep.** Plant GPT+ESP+ext4 into file-backed QEMU RAM, kill the HV process, second boot `attach_disk_keep` (`keep=1`) on TCG/VMXON-SKIP. Not Alpine. Does not print nested-OK or iron persist OK. `MODE=full` still needs nested KVM. Iron Force Off still open. Never `ISO-INSTALL-OK`. |
+| Summary | **M8.0 MODE=keep proven on TCG.** Plant GPT+ESP+ext4 into file-backed QEMU RAM, kill the HV process, second boot `keep=1` (`virtio-blk install disk bytes=1073741824 keep=1`). Not Alpine. Does not print nested-OK or iron persist OK. `MODE=full` still needs nested KVM. Iron Force Off still open. Never `ISO-INSTALL-OK`. |
 | Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. |
-| Gates touched | `tools/m8-persist-nested.sh MODE=keep` + skip-path persist keep-attach. `./tools/sync-hda-site.sh --check`. |
+| Gates touched | `MODE=keep ./tools/m8-persist-nested.sh` keep=1 after HV kill. `./tools/sync-hda-site.sh --check`. |
 | Months Δ | 0.0→0.0 (held) |
 
 
@@ -381,7 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
-| 2026-09-11 | m8-disk-persist-nested-keep | 0.0 | 99 | **M8.0 MODE=keep:** plant GPT+ESP+ext4 into file-backed QEMU RAM, kill HV, second boot `keep=1` on TCG/VMXON-SKIP. Not Alpine. Does not print nested-OK. `MODE=full` still needs nested KVM. Iron COM2 still open. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |
+| 2026-09-11 | m8-disk-persist-nested-keep | 0.0 | 99 | **M8.0 MODE=keep proven on TCG:** plant GPT+ESP+ext4 into file-backed QEMU RAM, kill HV, second boot `virtio-blk … keep=1`. Not Alpine. Does not print nested-OK. `MODE=full` still needs nested KVM. Iron COM2 still open. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |
 | 2026-09-11 | m8-disk-persist-nested-fileram | 0.0 | 99 | **M8.0 nested File RAM:** distro OVMF ignores nvdimm/pc-dimm hotplug. `M8_PERSIST_IMG` backs QEMU initial RAM (`QEMU_MEM=2560M`, share=on). Nested leftover above PRECISE promotes to persist. Harness TCG fallback after kvm_spurious_fault. Alpine two-boot + iron COM2 still open. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |
 | 2026-09-11 | m8-disk-persist-nested-pcdimm | 0.0 | 99 | **M8.0 nested File pc-dimm:** distro OVMF_CODE_4M has no NvdimmDxe. `M8_PERSIST_IMG` is a file-backed pc-dimm (`QEMU_MEM=512M`, ≥2 GiB). Nested leftover above PRECISE promotes to persist. Harness pgrep/wait/TCG fallback. `MODE=full` still needs nested KVM. Alpine two-boot + iron COM2 still open. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |
 | 2026-09-11 | m8-disk-persist-nested | 0.0 | 99 | **M8.0 nested two-boot harness:** `tools/m8-persist-nested.sh` (`MODE=smoke` persist reserve; `MODE=full` install → kill HV → second Linux without `setup-disk`). Minted `RAYNU-V-M8-DISK-PERSIST-NESTED-OK` (harness-only). Nested Alpine two-boot + iron COM2 still open. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |
