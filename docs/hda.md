@@ -26,7 +26,8 @@ summit_prod_pct: 100
 
 > **Living document.** Updated on every meaningful commit by Cursor (see `.cursor/rules/hda-update.mdc`).  
 > **North star product loop (“Mount Everest”):** **CLOSED on iron 2026-09-11.**  
-> Ship the EFI → boot on a **real PowerEdge R640** → **network-reachable** vSphere-like UI → **deploy a Linux ISO** (M7 / ADR-009). Production bar (M6.8–M6.9) is already closed on Latitude. **Next mountain: M8 operator hardening** ([ADR-018](adr/ADR-018.md)).
+> Ship the EFI → boot on a **real PowerEdge R640** → **network-reachable** vSphere-like UI → **deploy a Linux ISO** (M7 / ADR-009). Production bar (M6.8–M6.9) is already closed on Latitude. **Next mountain: M8 operator hardening** ([ADR-018](adr/ADR-018.md)).  
+> **Iron rollback:** GitHub Latest [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) (`f72b4276` / `34552377351` / EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc`).
 
 Pillars: **[V]** verified core · **[Z]** single binary · **[D]** iDRAC-native · **[A]** audit-first.  
 Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m7_plan.md) (closed) · M8: [`m8_plan.md`](m8_plan.md) · ADR: [`adr/ADR-009.md`](adr/ADR-009.md) · close: [`adr/ADR-018.md`](adr/ADR-018.md) · constitution: [`CLAUDE.md`](../CLAUDE.md).
@@ -353,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | site-chrome-lock |
-| Summary | **Restore public-site chrome** (nav, Status, CIO View fork, console, COM2) that Everest/HDA rewrites keep deleting. Overlay Everest-closed lived copy. Always-on Cursor rule + `./tools/check-site-chrome.sh` + CI job `site-chrome` so the next status update cannot strip it. |
-| Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Chrome restore, not a score change. |
-| Gates touched | `site/` chrome restore + `tools/check-site-chrome.sh`. `./tools/sync-hda-site.sh --check`. |
+| Commit | iron-rollback-kit |
+| Summary | **Document M8.0 iron rollback:** GitHub Latest `v0.1.0-everest-closed` (`f72b4276` / `34552377351`, EFI SHA256 `e74460ff…`). Always-on Cursor rule + CLAUDE / README / progress / m8_plan / ADR-018 / HDA / evidence / runbooks so a new agent flashes this kit, not a later persist prototype. |
+| Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Docs/rules only — not a score change. |
+| Gates touched | `.cursor/rules/iron-rollback.mdc`. `./tools/sync-hda-site.sh --check`. |
 | Months Δ | 0.0→0.0 (held) |
 
 
@@ -380,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-11 | iron-rollback-kit | 0.0 | 99 | **M8.0 iron rollback documented:** GitHub Latest `v0.1.0-everest-closed` → `f72b4276` / `34552377351` / EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc`. Always-on `.cursor/rules/iron-rollback.mdc` + CLAUDE/progress/m8_plan/HDA so agents flash this, not a later persist prototype or `34548550755`. `adr013-baseline` stays the pre-native-NIC preserve. months 0.0 held; overall 99 held |
 | 2026-09-11 | site-chrome-lock | 0.0 | 99 | **Restore CIO/Status chrome on the public front page** (nav, fork cards, console, COM2) after Everest celebration truncated `site/`. Always-on Cursor rule + `check-site-chrome.sh` + CI so the next HDA update cannot strip it. months 0.0 held; overall 99 held |
 | 2026-09-11 | everest-closed-m8-adr | 0.0 | 99 | **Public Everest close + ADR-018.** Site/HDA celebrate iron `f72b4276` / `34552377351` (COM2 snippets). M8 = operator hardening (persist→TLS→auth→console→upload→catalog→Windows later); cluster → M9. months 0.0 held; overall 99 held; not 100%. Host/CI never print `ISO-INSTALL-OK` |
 | 2026-09-11 | phase-b-skip-ovmf | 0.25 | 98 | **Iron `7f8dc0a9` / `34548550755`: listen then Mac `curl: (7)`.** SKIP-OVMF-OK + E4-CONTINUE-OK + coexist idle (no G0) + `HOST-NIC coexist listening on 10.99.99.146:8443`; eight LAN RX dumps, no `to=us`. Tight idle `MILLIS += 10` raced smoltcp Instant. Host TSC Instant; months 0.25 held; overall 98 held; `HOST-NIC-HTTP-OK` / iron Phase B / Everest / `ISO-INSTALL-OK` not claimed |
@@ -906,10 +908,13 @@ Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
 Next move:     **M8.0** leftover-disk persist across HV reboot ([ADR-018](adr/ADR-018.md) / [m8_plan.md](m8_plan.md))
+Rollback:      GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351
+               EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc
+               COM2 build: sha=f72b4276d198. Do not flash a later M8 persist prototype as known-good.
 Do not F11:    `34548550755` / `7f8dc0a9` or earlier Phase B fails
 Tcp4 residual: Floppy publishes PXE/HTTP, not Tcp4 SB (platform limit)
 SNP after EBS: dead — native BCM5720 is the durable mgmt path (E3b closed 2026-08-20)
-Preserve:      releases/v0.1.0-adr013-baseline
+Preserve NIC:  releases/v0.1.0-adr013-baseline (pre-native-NIC; not the Everest flash kit)
 Do not claim:  100% product / TLS / leftover persist across HV reboot / multi-distro / cluster. Host/CI never print ISO-INSTALL-OK. Cluster is M9.
 ```
 

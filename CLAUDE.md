@@ -300,7 +300,7 @@ All ADRs live in `docs/adr/`. Format: numbered, dated, context/decision/rational
 | 015   | Stage 46 close path is PR #229         | Park PR #231; Stage 46 closes on #229 only; COMMAND/CF8/ROM/hide-slot0/retaddr/ConIn/callsite/WFE-return closed; 9474ab6 state4 poke dest=0x7ff18340 then #PF cr2=0xffffffffffffffb8 rip=0x7ff0e018 still ataio=0; firmware WFE event #PF; do not claim ISO-INSTALL-OK |
 | 016   | RayNu-F — be the guest firmware for E5 | Be the guest UEFI boot env ourselves (own EFI system table + boot services over virtio-blk/CD) instead of puppeting OVMF; RayNu-F is a subsystem in the single binary, outside Proven Core; disable the 3k–3o OVMF forcing (self-inflicted the 9474ab6/4e16b59 NULL-event #PF + CpuDeadLoop); **No third-party firmware state mutation**; do not claim ISO-INSTALL-OK |
 | 017   | Guest reset under RayNu-F (F7)        | Disk-before-ISO; `reset_keep_disk`; CF9/KBC/TF; cap=1; HANDLE_DISK Vendor path; nested `fe4785a` reboot-to-disk (`DISK-BOOT-OK` + `root=UUID=`); do not claim ISO-INSTALL-OK |
-| 018   | Post-Everest M8 operator hardening    | Everest CLOSED on iron `f72b4276`; M8 = persist/TLS/auth/console/upload/catalog/Windows-later; cluster → **M9**; no Proven Core expansion |
+| 018   | Post-Everest M8 operator hardening    | Everest CLOSED on iron `f72b4276`; rollback kit `v0.1.0-everest-closed`; M8 = persist/TLS/auth/console/upload/catalog/Windows-later; cluster → **M9**; no Proven Core expansion |
 
 **Rule:** Any new ADR is added here AND to `docs/adr/ADR-NNN.md`.
 
@@ -354,7 +354,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 ### Current progress (lived, not aspirational)
 
 **M6 closed** (EXT → `RAYNU-V-M6-EXT-OK`; `80 verified, 0 errors`). Production-ready bar met on Latitude/QEMU.  
-**Mount Everest (M7) CLOSED on iron** (2026-09-11, EFI `f72b4276` / `--run 34552377351`): coexist `HOST-NIC-HTTP-OK` on `10.99.99.145:8443` → SPA Start of RayNu-F ISO → `RAYNU-V-M7-ISO-INSTALL-OK` → `RAYNU-V-RAYNU-F-DISK-BOOT-OK` → second Linux `root=UUID=` → `login:`. Through M7.4 closed on Latitude; M7.5–M7.8 + E4 + E5 Phase A (`56a3ffd`) + Phase B on iron. **Next is M8** operator hardening ([ADR-018](docs/adr/ADR-018.md), [docs/m8_plan.md](docs/m8_plan.md)) — leftover-disk persist across HV reboot, then TLS/auth/console. Cluster is **M9**. HDA overall stays 99% (not 100%). Plan: [docs/m7_plan.md](docs/m7_plan.md) (closed). HDA: [docs/hda.md](docs/hda.md). Lived: [docs/progress.md](docs/progress.md).
+**Mount Everest (M7) CLOSED on iron** (2026-09-11, EFI `f72b4276` / `--run 34552377351`): coexist `HOST-NIC-HTTP-OK` on `10.99.99.145:8443` → SPA Start of RayNu-F ISO → `RAYNU-V-M7-ISO-INSTALL-OK` → `RAYNU-V-RAYNU-F-DISK-BOOT-OK` → second Linux `root=UUID=` → `login:`. Through M7.4 closed on Latitude; M7.5–M7.8 + E4 + E5 Phase A (`56a3ffd`) + Phase B on iron. **Next is M8** operator hardening ([ADR-018](docs/adr/ADR-018.md), [docs/m8_plan.md](docs/m8_plan.md)) — leftover-disk persist across HV reboot, then TLS/auth/console. Cluster is **M9**. HDA overall stays 99% (not 100%). **Iron rollback for M8.0:** GitHub Latest [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) → git `f72b4276d198b5e90147e9be1037d0d0b7213a28` / CI `--run 34552377351` / EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc` (COM2 `build: sha=f72b4276d198`). Do not flash a later persist prototype as the known-good. Do not F11 `34548550755` / `7f8dc0a9`. Plan: [docs/m7_plan.md](docs/m7_plan.md) (closed). HDA: [docs/hda.md](docs/hda.md). Lived: [docs/progress.md](docs/progress.md). Rule: [`.cursor/rules/iron-rollback.mdc`](.cursor/rules/iron-rollback.mdc).
 
 ### Risk Hotspots
 
@@ -440,6 +440,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 - Create-VM / media attach in the Web UI
 - Cluster features (vMotion-like, DRS-like, hot-add) → **M9**, not M7/M8 ([ADR-018](docs/adr/ADR-018.md))
 - Operator polish (persist / TLS / auth / console / ISO upload / catalog) → **M8**, not a reopened Everest
+- **Iron rollback for M8.0:** GitHub Latest [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) (`f72b4276` / `--run 34552377351` / EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc`)
 
 ---
 
@@ -475,8 +476,18 @@ qemu-system-x86_64 \
 
 ### Deploy to R640
 
+**M8.0 known-good (rollback if a persist prototype misbehaves):** GitHub Latest
+[`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed)
+→ git `f72b4276d198b5e90147e9be1037d0d0b7213a28` / CI `--run 34552377351` /
+EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc`.
+COM2 must read `build: sha=f72b4276d198`. Do not flash a later M8 tip as the
+known-good. Do not F11 `34548550755` / `7f8dc0a9`. Checkpoint, not 1.0/GA.
+In-tree kit `releases/v0.1.0-everest-closed/` is PR #243 (open). See
+[`.cursor/rules/iron-rollback.mdc`](.cursor/rules/iron-rollback.mdc).
+
 ```bash
-# Copy .efi to USB stick formatted as FAT32 EFI System Partition
+# Preferred: download the Latest release EFI (verify SHA256 above), then
+# copy .efi to USB stick formatted as FAT32 EFI System Partition
 # Or: upload via iDRAC virtual media
 # Boot from USB / virtual media
 # RayNu-V boots. VMs run. That's it.

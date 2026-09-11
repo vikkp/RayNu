@@ -428,7 +428,13 @@ localhost:~# cat /proc/cmdline</pre>
         <p>
           Do not F11 <code>34548550755</code> / <code>7f8dc0a9</code>
           (<code>curl: (7)</code>) or earlier Phase B fails. This pin is
-          the Phase B reference.
+          the Phase B reference and the
+          <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed"
+            >M8.0 rollback kit <code>v0.1.0-everest-closed</code></a
+          >
+          (EFI SHA256
+          <code>e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc</code>).
+          Do not flash a later persist prototype as the known-good.
         </p>
 
         <p class="story__aside">
@@ -1236,7 +1242,12 @@ boot: CURL NOW (post-EBS) → http://10.99.99.133:8443/</pre>
             >ADR-013</a>
           (<strong>Accepted</strong>). HDA names it <strong>E3b</strong>.
           Preserve kit:
-          <code>releases/v0.1.0-adr013-baseline</code>.
+          <code>releases/v0.1.0-adr013-baseline</code>
+          (pre-native-NIC WARN-only idle — not the M8.0 flash;
+          that is
+          <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed"
+            ><code>v0.1.0-everest-closed</code></a
+          >).
           Mount Everest does not close on a 45-second window.
           Two days later the host-owned NIC listened — see
           <a href="#r640-2026-08-20-host-nic">2026-08-20</a>.

@@ -63,8 +63,9 @@ GRUB config written by `setup-disk` on the first boot — and `fsck` ran on both
 ## Residual after this close
 
 - Leftover-DRAM install disk does not survive a **host** reboot of RayNu-V.
-- TLS deferred (ADR-009 plaintext HTTP). Guest console UI thin. ISO blob upload / UEFI catalog persist / multi-distro are post-Everest polish.
+- TLS deferred (ADR-009 plaintext HTTP). Guest console UI thin. ISO blob upload / UEFI catalog persist / multi-distro are post-Everest polish (M8).
 - Host/CI never print `RAYNU-V-M7-ISO-INSTALL-OK`.
+- **M8.0 flash rollback:** GitHub Latest [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) (this pin). EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc`. Do not flash a later persist prototype as the known-good.
 
 ## Close claim
 
@@ -74,4 +75,5 @@ GRUB config written by `setup-disk` on the first boot — and `fsck` ran on both
 ext4 `vda2`, `login:`) are **proven on the real R640** with EFI `f72b4276`
 (run `34552377351`). Mount Everest product loop (EFI → R640 → network UI →
 Linux ISO via SPA) is closed on iron. Do not F11 `34548550755` / `7f8dc0a9`
-or earlier Phase B fails; this pin is the Phase B reference.
+or earlier Phase B fails; this pin is the Phase B reference and the
+**M8.0 rollback kit** (`v0.1.0-everest-closed`).

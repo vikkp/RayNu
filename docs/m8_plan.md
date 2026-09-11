@@ -8,6 +8,23 @@ M8 is the polish table that used to read as “Everest residual.” It is **not*
 
 ---
 
+## Iron rollback (M8.0 known-good)
+
+Flash this if an M8 persist prototype misbehaves. Do **not** treat a later tip as the Everest close.
+
+| Field | Value |
+|-------|-------|
+| GitHub | https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed (Latest) |
+| Tag | `v0.1.0-everest-closed` → `f72b4276d198b5e90147e9be1037d0d0b7213a28` |
+| CI | `--run 34552377351` · COM2 `build: sha=f72b4276d198` |
+| EFI SHA256 | `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc` |
+| In-tree kit | `releases/v0.1.0-everest-closed/` (PR #243, open) |
+| Not this | 1.0/GA · TLS · leftover persist across HV reboot · F11 `34548550755` / `7f8dc0a9` |
+
+Evidence: [`docs/evidence/r640/2026-09-11-f72b4276-phase-b-spa-iso-install-disk-boot-ok.md`](evidence/r640/2026-09-11-f72b4276-phase-b-spa-iso-install-disk-boot-ok.md). Cursor rule: [`.cursor/rules/iron-rollback.mdc`](../.cursor/rules/iron-rollback.mdc). Historical pre-native-NIC preserve (not this kit): `releases/v0.1.0-adr013-baseline`.
+
+---
+
 ## Strategy
 
 **Harden the single-host operator product before cluster features.**
@@ -52,7 +69,7 @@ HDA + `site/hda.html` stay fresh: update `docs/hda.md`, then `./tools/sync-hda-s
 
 **Acceptance (draft):** Named marker on real R640 (to be minted when the path exists). Host/CI still never print `ISO-INSTALL-OK`.
 
-**Not this gate:** TLS, VNC, Windows.
+**Not this gate:** TLS, VNC, Windows. If a persist prototype misbehaves, re-flash [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) (see [Iron rollback](#iron-rollback-m80-known-good)).
 
 ---
 
@@ -126,4 +143,4 @@ Do not pull M9 into M8 gate lists.
 
 ## First action
 
-**M8.0.** Design persist of the leftover-DRAM virtio disk across a host reboot of RayNu-V (NVMe or ESP-backed). Keep ADR-004 exclusive ownership. Do not claim persist from nested QEMU alone.
+**M8.0.** Design persist of the leftover-DRAM virtio disk across a host reboot of RayNu-V (NVMe or ESP-backed). Keep ADR-004 exclusive ownership. Do not claim persist from nested QEMU alone. Keep [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) as the flash rollback until a new named iron marker exists.

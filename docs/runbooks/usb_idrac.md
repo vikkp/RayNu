@@ -4,6 +4,12 @@
 **Smoke:** `./tools/m7-ship-smoke.sh`  
 **Package:** `./tools/package-release.sh`
 
+**M8.0 known-good flash:** GitHub Latest [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed)
+→ git `f72b4276d198b5e90147e9be1037d0d0b7213a28` / CI `--run 34552377351` /
+EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc`.
+COM2 `build: sha=f72b4276d198`. Do not flash a later persist prototype as the known-good.
+Do not F11 `34548550755` / `7f8dc0a9`. See [`.cursor/rules/iron-rollback.mdc`](../../.cursor/rules/iron-rollback.mdc).
+
 ## Story
 
 M7.0 produces an **ops-trustable EFI release kit**: versioned `r640-hypervisor.efi`,
