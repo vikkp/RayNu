@@ -15,7 +15,8 @@
 //! never sees them as RAM.
 //!
 //! Iron close marker [`M8_DISK_PERSIST_OK_MARKER`] is COM2-only. Host/CI
-//! print [`M8_DISK_PERSIST_HOST_OK_MARKER`]. Never `ISO-INSTALL-OK`.
+//! print [`M8_DISK_PERSIST_HOST_OK_MARKER`]. Nested harness may print
+//! [`M8_DISK_PERSIST_NESTED_OK_MARKER`]. Never `ISO-INSTALL-OK`.
 
 use crate::raynu_f::fat::{self, VolumeRead};
 use crate::raynu_f::gpt::{find_esp, ESP_TYPE_GUID};
@@ -28,6 +29,11 @@ pub const M8_DISK_PERSIST_OK_MARKER: &str = "RAYNU-V-M8-DISK-PERSIST-OK";
 /// Host/CI: file-backed GPT+ESP+ext4 round-trip after an in-process HV reboot.
 /// Not nested. Not iron.
 pub const M8_DISK_PERSIST_HOST_OK_MARKER: &str = "RAYNU-V-M8-DISK-PERSIST-HOST-OK";
+
+/// Nested QEMU: install → kill/restart HV process → second Linux without
+/// `setup-disk`. Printed only by `tools/m8-persist-nested.sh` on success.
+/// Host cargo tests and iron COM2 must **never** print this.
+pub const M8_DISK_PERSIST_NESTED_OK_MARKER: &str = "RAYNU-V-M8-DISK-PERSIST-NESTED-OK";
 
 /// Why we do not copy leftover DRAM onto the Cruzer ESP.
 pub const ESP_COPY_REJECT_NOTE: &str = "rejected: copy 1 GiB DRAM ↔ ESP on every HV stop (too slow; this ESP is too small for the Alpine GPT/ext4 disk; installdisk.bin is the 1 MiB LBA-stamp, not the guest disk)";
@@ -104,11 +110,15 @@ pub fn esp_copy_is_rejected() -> bool {
         && UDISK_TOO_SMALL_NOTE.contains("994 MiB")
 }
 
-/// Host/CI must never print the Everest iron install marker or the M8 iron persist marker.
+/// Host/CI must never print the Everest iron install marker, the M8 iron
+/// persist marker, or the nested persist marker.
 pub fn host_never_prints_iso_install_ok() -> bool {
     M8_DISK_PERSIST_OK_MARKER != "RAYNU-V-M7-ISO-INSTALL-OK"
         && M8_DISK_PERSIST_HOST_OK_MARKER != "RAYNU-V-M7-ISO-INSTALL-OK"
+        && M8_DISK_PERSIST_NESTED_OK_MARKER != "RAYNU-V-M7-ISO-INSTALL-OK"
         && M8_DISK_PERSIST_HOST_OK_MARKER != M8_DISK_PERSIST_OK_MARKER
+        && M8_DISK_PERSIST_NESTED_OK_MARKER != M8_DISK_PERSIST_OK_MARKER
+        && M8_DISK_PERSIST_NESTED_OK_MARKER != M8_DISK_PERSIST_HOST_OK_MARKER
         && crate::mgmt::iso_install::M7_ISO_INSTALL_OK_MARKER == "RAYNU-V-M7-ISO-INSTALL-OK"
 }
 
@@ -325,6 +335,17 @@ pub enum InstallDiskChoice {
     PoolZero,
 }
 
+/// Distro OVMF ignores nvdimm and pc-dimm hotplug (no EFI type 14). Nested
+/// QEMU file-backed initial RAM lands as conventional above PRECISE.
+/// Promote that leftover carve to File persist. Iron (no hypervisor CPUID)
+/// keeps leftover DRAM. Type 14, when present, already reserved persist.
+pub fn nested_promotes_leftover_to_file_persist(
+    host_hypervisor: bool,
+    persist_already: bool,
+) -> bool {
+    host_hypervisor && !persist_already
+}
+
 /// Persist wins; leftover DRAM is the fallback; pool last.
 pub fn choose_install_disk_attach(
     persist_reserved: bool,
@@ -350,8 +371,18 @@ static INSTALL_DISK_KEEP: AtomicBool = AtomicBool::new(false);
 
 /// True when handoff reserved a persist region that attach has not taken.
 pub fn persist_install_disk_reserved() -> bool {
-    PERSIST_DISK_HPA.load(Ordering::Acquire) != 0
-        && PERSIST_DISK_BYTES.load(Ordering::Acquire) != 0
+    persist_install_disk_region().is_some()
+}
+
+/// Persist HPA/size without taking. Nested TCG skip-path peeks before keep-attach.
+pub fn persist_install_disk_region() -> Option<(u64, u64)> {
+    let hpa = PERSIST_DISK_HPA.load(Ordering::Acquire);
+    let bytes = PERSIST_DISK_BYTES.load(Ordering::Acquire);
+    if hpa == 0 || bytes == 0 {
+        None
+    } else {
+        Some((hpa, bytes))
+    }
 }
 
 /// Record persist backing for [`take_persist_install_disk`]. `bytes == 0` clears.

@@ -62,7 +62,7 @@ HDA + `site/hda.html` stay fresh: update `docs/hda.md`, then `./tools/sync-hda-s
 
 ### M8.0 — Persist install disk across HV reboot
 
-**Status: open** — backend **chosen**; host round-trip **exists**; **attach is persist-first** (`attach_disk_keep` when GPT ESP + BOOTX64 + ext4); nested Alpine kill/restart and iron COM2 are **not** this slice. Prototype, not the known-good.
+**Status: open** — backend **chosen**; host round-trip **exists**; **attach is persist-first** (`attach_disk_keep` when GPT ESP + BOOTX64 + ext4); nested File is QEMU **file-backed RAM** (distro OVMF ignores nvdimm/pc-dimm hotplug); Alpine kill/restart and iron COM2 are **not** this slice. Prototype, not the known-good.
 
 **Goal:** The virtio install disk that `setup-disk` wrote still exists after the **hypervisor** reboots — not only after a **guest** F7 reset (ADR-017 `reset_keep_disk`). Leftover DRAM above PRECISE is the Everest attach; a RayNu-V reboot zeros that RAM.
 
@@ -84,12 +84,13 @@ HDA + `site/hda.html` stay fresh: update `docs/hda.md`, then `./tools/sync-hda-s
 |--------|---------------|---------|
 | `RAYNU-V-M8-DISK-PERSIST-OK` | Real R640 COM2 only | Iron close: Force Off / reboot **RayNu-V** (not guest `reboot`), then the installed disk is back (`root=UUID=` + `\EFI\BOOT\BOOTX64.EFI`), `build: sha=` of the prototype |
 | `RAYNU-V-M8-DISK-PERSIST-HOST-OK` | Host/CI | File-backed GPT+ESP+ext4 round-trip after an in-process “HV reboot.” Not nested. Not iron. |
+| `RAYNU-V-M8-DISK-PERSIST-NESTED-OK` | Nested harness only (`tools/m8-persist-nested.sh`) | Kill/restart QEMU HV → second Linux without `setup-disk`. Not iron. Host cargo tests must never print this. |
 | `RAYNU-V-M7-ISO-INSTALL-OK` | **Never** from host/CI/nested | Everest iron-only. Do not reuse. |
 
 **Acceptance:**
 
 1. **Host (closed):** round-trip a GPT+ESP+ext4 image through the `File` backend; after allocator reset / dropping the in-memory disk (and a real `std::fs` file surviving that drop), the restored virtio image still has `root=UUID=` and `\EFI\BOOT\BOOTX64.EFI`. Leftover-DRAM backend fails the same reboot. Print `RAYNU-V-M8-DISK-PERSIST-HOST-OK` only.
-2. **Nested (this slice — attach wired, Alpine still open):** virtio attach prefers persist (`take_persist_install_disk`) then leftover DRAM then the pool. Empty persist uses `attach_disk` (zeros so the ISO wins). Installed persist uses `attach_disk_keep`. Nested QEMU `M8_PERSIST_IMG` is an NVDIMM file (default **off**). Kill/restart the hypervisor process → second Linux **without** `setup-disk` again is still **open** (needs alpine-extended). Mechanism proof, not the iron close.
+2. **Nested (harness this slice; Alpine two-boot still the close):** virtio attach prefers persist (`take_persist_install_disk`) then leftover DRAM then the pool. Empty persist uses `attach_disk` (zeros so the ISO wins). Installed persist uses `attach_disk_keep`. Nested QEMU `M8_PERSIST_IMG` backs initial RAM (`QEMU_MEM=2560M`, share=on) because distro `OVMF_CODE_4M.fd` ignores nvdimm and pc-dimm hotplug. Nested leftover above PRECISE is promoted to File persist. Harness: `tools/m8-persist-nested.sh` (`MODE=smoke` persist reserve, TCG ok; `MODE=keep` plant GPT+ESP+ext4 → kill HV → `keep=1` on TCG, **not** nested-OK; `MODE=full` install → kill HV → second Linux without `setup-disk`, needs nested KVM). Nested marker `RAYNU-V-M8-DISK-PERSIST-NESTED-OK` is harness-only (never host cargo, never iron, never `MODE=keep`). Kill/restart second Linux is still **open** until that harness prints the nested marker. Mechanism proof, not the iron close.
 3. **Iron (last):** same Phase B loop as Everest (`HOST-NIC-HTTP-OK` → SPA Start → install → F7 `DISK-BOOT-OK`), then **Force Off / reboot RayNu-V**. COM2 shows the installed disk again, prototype `build: sha=`, and `RAYNU-V-M8-DISK-PERSIST-OK`. One-time F11 the UDisk; Ubuntu-on-PERC stays the standing boot order. Do not format the PERC.
 
 **Not this gate:** TLS, VNC, Windows, Proven Core, iron USB/NVMe LUN mapper. Nested Alpine kill/restart and iron Force Off remain. If a persist prototype misbehaves, re-flash [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) (see [Iron rollback](#iron-rollback-m80-known-good)). HDA overall stays **99%** until iron COM2 exists.
@@ -166,6 +167,6 @@ Do not pull M9 into M8 gate lists.
 
 ## First action
 
-**M8.0 persist-first attach (this slice).** Choice remains **file-backed nested / durable LUN on iron / leftover DRAM as fallback**. Attach now prefers persist (`attach_disk_keep` when the media looks installed). Nested `M8_PERSIST_IMG` is NVDIMM, default off. Iron marker is `RAYNU-V-M8-DISK-PERSIST-OK`. Host marker is `RAYNU-V-M8-DISK-PERSIST-HOST-OK`. Keep ADR-004 exclusive ownership. Do not claim persist from nested QEMU alone. Do not copy 1 GiB through the Cruzer ESP. Do not format the PERC. Keep [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) as the flash rollback until iron COM2 prints the persist marker.
+**M8.0 persist-first attach (this slice).** Choice remains **file-backed nested / durable LUN on iron / leftover DRAM as fallback**. Attach now prefers persist (`attach_disk_keep` when the media looks installed). Nested `M8_PERSIST_IMG` backs QEMU RAM (distro OVMF ignores nvdimm/pc-dimm), default off. Iron marker is `RAYNU-V-M8-DISK-PERSIST-OK`. Host marker is `RAYNU-V-M8-DISK-PERSIST-HOST-OK`. Keep ADR-004 exclusive ownership. Do not claim persist from nested QEMU alone. Do not copy 1 GiB through the Cruzer ESP. Do not format the PERC. Keep [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) as the flash rollback until iron COM2 prints the persist marker.
 
-**Next:** nested install → kill/restart hypervisor → second Linux without `setup-disk`. Then iron Force Off. Do not F11 this prototype. Do not start M8.1 TLS until that iron COM2 exists (design-only overlap is allowed).
+**Next:** `MODE=full` on `tools/m8-persist-nested.sh` (nested VT-x + alpine-extended). `MODE=keep` is planted GPT `keep=1` after HV kill (TCG; not nested-OK). Then iron durable LUN + Force Off. Do not F11 this prototype. Do not start M8.1 TLS until that iron COM2 exists (design-only overlap is allowed).
