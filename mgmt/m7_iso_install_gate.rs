@@ -32,6 +32,8 @@ pub fn iso_install_surface_present() -> bool {
         && s.contains("fn probe_product_linux_iso(")
         && s.contains("fn present_product_iso_if_retained(")
         && s.contains("fn stage46_hold_e4_shell(")
+        && s.contains("fn phase_b_continue_e4_for_spa(")
+        && s.contains("fn phase_b_e4_for_spa(")
         && s.contains("fn retain_product_iso_bytes(")
         && s.contains("fn persist_armed_install_to_esp(")
         && s.contains("fn fill_persist_image(")

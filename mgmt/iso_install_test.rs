@@ -179,6 +179,7 @@ fn persist_image_is_marker_only_for_iron_size() {
 fn product_iso_esp_retain_rejects_lab_size_and_hold_follows_window() {
     let _g = iso_install_host_test_lock();
     clear_product_iso_retain();
+    clear_phase_b_continue_e4_for_test();
     crate::devices::ide_cdrom::reset();
     let lab = vec![0u8; crate::devices::ide_cdrom::GUEST_CD_ISO_CAP];
     assert!(!retain_product_iso_bytes(&lab));
@@ -192,8 +193,22 @@ fn product_iso_esp_retain_rejects_lab_size_and_hold_follows_window() {
     assert!(present_product_iso_if_retained());
     assert!(crate::devices::ide_cdrom::product_iso_window_armed());
     assert!(stage46_hold_e4_shell());
+    clear_phase_b_continue_e4_for_test();
+    assert!(stage46_hold_e4_shell());
+    phase_b_continue_e4_for_spa();
+    assert!(
+        !stage46_hold_e4_shell(),
+        "iron 2a1c1ef1: Phase B skip must not spin in Stage 46 hold"
+    );
+    assert!(phase_b_e4_for_spa());
+    assert!(M7_PHASE_B_E4_CONTINUE_NOTE.contains("not ISO-INSTALL-OK"));
+    assert_eq!(
+        M7_PHASE_B_E4_CONTINUE_OK_MARKER,
+        "RAYNU-V-M7-PHASE-B-E4-CONTINUE-OK"
+    );
     crate::devices::ide_cdrom::reset();
     clear_product_iso_retain();
+    clear_phase_b_continue_e4_for_test();
     assert!(!stage46_hold_e4_shell());
 }
 

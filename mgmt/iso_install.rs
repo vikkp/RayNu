@@ -10,7 +10,7 @@
 //! [`M7_ISO_BOOTED_FROM_DISK_MARKER`] on COM2 (documented equivalent of
 //! [`M7_ISO_INSTALL_OK_MARKER`]; host/CI must **never** print the iron OK).
 
-use core::sync::atomic::{AtomicU64, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use super::api::{
     auth_allows, ApiReply, RestMethod, RestRequest, RestResponse, BRINGUP_AUTH_TOKEN,
@@ -65,11 +65,46 @@ pub fn product_iso_len_is_window(len: usize) -> bool {
 /// After guest-UEFI, stay there instead of packed-bzImage E4.
 ///
 /// INVARIANTS:
-/// - `true` only when the product ISO window is armed
+/// - `true` only when the product ISO window is armed **and** Phase B has
+///   not asked to continue to E4 for SPA Start
 /// - Lab 73728 stub / `iso=0` stays `false` (E4 `LINUX-EARLY` still runs)
+/// - Phase B skip-OVMF (`2a1c1ef1`): hold parked COM2 after
+///   `RAYNU-V-M7-PHASE-B-SKIP-OVMF-OK` (`resume_e4_shell` spin). Not
+///   `ISO-INSTALL-OK`.
 pub fn stage46_hold_e4_shell() -> bool {
     crate::devices::ide_cdrom::product_iso_window_armed()
+        && !PHASE_B_CONTINUE_E4.load(Ordering::Acquire)
 }
+
+/// Phase B skip-OVMF left the slab/VMCS armed; do not spin in the Stage 46
+/// hold. E4 coexist HTTP must come up so SPA Start can run RayNu-F.
+static PHASE_B_CONTINUE_E4: AtomicBool = AtomicBool::new(false);
+
+/// Arm [`stage46_hold_e4_shell`] off so `resume_e4_shell` continues the M4
+/// ladder. Iron `2a1c1ef1` / run `34544625780`: SKIP-OVMF-OK then
+/// `restore host xcr0 … reason=0x0 rip=0x0` then this hold. Not
+/// `ISO-INSTALL-OK`.
+pub fn phase_b_continue_e4_for_spa() {
+    PHASE_B_CONTINUE_E4.store(true, Ordering::Release);
+}
+
+/// True after [`phase_b_continue_e4_for_spa`]. Host tests + COM2 note.
+pub fn phase_b_e4_for_spa() -> bool {
+    PHASE_B_CONTINUE_E4.load(Ordering::Acquire)
+}
+
+/// Host tests only.
+#[cfg(test)]
+pub fn clear_phase_b_continue_e4_for_test() {
+    PHASE_B_CONTINUE_E4.store(false, Ordering::Release);
+}
+
+/// Serial when Phase B skips the Stage 46 hold. Not `ISO-INSTALL-OK`.
+pub const M7_PHASE_B_E4_CONTINUE_NOTE: &str =
+    "boot: Stage 46 hold skipped — Phase B E4 for SPA Start (not ISO-INSTALL-OK)";
+
+/// Host/COM2 marker. Not an iron Phase B close.
+pub const M7_PHASE_B_E4_CONTINUE_OK_MARKER: &str = "RAYNU-V-M7-PHASE-B-E4-CONTINUE-OK";
 
 /// ESP paths probed PRE-EBS for a distro ISO (not the 1 KiB persist stamp).
 pub const PRODUCT_ISO_ESP_PATHS: &[&str] = &[

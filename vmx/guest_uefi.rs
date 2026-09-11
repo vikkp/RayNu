@@ -5531,6 +5531,7 @@ unsafe fn launch_uefi(
     if phase_b_skip_ovmf_to_e4_now() {
         serial::write_line(M7_E5_PHASE_B_SKIP_OVMF_OK_MARKER);
         serial::write_line(M7_E5_PHASE_B_SKIP_OVMF_NOTE);
+        crate::mgmt::iso_install::phase_b_continue_e4_for_spa();
         leave_to_e4();
     }
 
@@ -7030,6 +7031,7 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     if phase_b_skip_ovmf_to_e4_now() {
         serial::write_line(M7_E5_PHASE_B_SKIP_OVMF_OK_MARKER);
         serial::write_line(M7_E5_PHASE_B_SKIP_OVMF_NOTE);
+        crate::mgmt::iso_install::phase_b_continue_e4_for_spa();
     }
     leave_to_e4();
 }

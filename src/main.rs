@@ -189,6 +189,10 @@ extern "C" fn resume_e4_shell() -> ! {
             core::hint::spin_loop();
         }
     }
+    if r640_hypervisor::mgmt::phase_b_e4_for_spa() {
+        boot::serial::write_line(r640_hypervisor::mgmt::M7_PHASE_B_E4_CONTINUE_OK_MARKER);
+        boot::serial::write_line(r640_hypervisor::mgmt::M7_PHASE_B_E4_CONTINUE_NOTE);
+    }
     let alloc = vmx::guest_uefi::e4_alloc();
     let life = vmx::guest_uefi::e4_life();
     if !alloc.is_null() && !life.is_null() {

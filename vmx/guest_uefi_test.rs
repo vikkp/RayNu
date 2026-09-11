@@ -2905,6 +2905,10 @@ fn phase_b_skip_ovmf_to_e4_on_iron_product_iso_without_raynuf() {
         "RAYNU-V-M7-PHASE-B-SKIP-OVMF-OK"
     );
     assert!(!M7_E5_PHASE_B_SKIP_OVMF_OK_MARKER.contains("ISO-INSTALL-OK"));
+    assert!(
+        include_str!("../mgmt/iso_install.rs").contains("fn phase_b_continue_e4_for_spa"),
+        "iron 2a1c1ef1: skip must latch E4 continue, not Stage 46 hold"
+    );
 }
 
 #[test]

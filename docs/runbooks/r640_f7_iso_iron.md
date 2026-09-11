@@ -751,9 +751,16 @@ Phase A closed on iron with `56a3ffd` (run `34480107961`, 2026-09-10).
      collapse cap stays 16_777_216, so iron parks in Bds CpuSleep
      `rip=0x7f0680d0` `reason=0xc` `insn=f4` and prints HLT ticks every 65536.
      That is the old OVMF stall, not a tick-printer regression. Force Off.
-     The skip-OVMF-to-E4 slice prints `RAYNU-V-M7-PHASE-B-SKIP-OVMF-OK` then
-     leaves to E4 so coexist HTTP can take SPA Start. Nested `PRODUCT_ISO=`
-     without `RAYNU_F` is unchanged. `--raynu-f` is still Phase A.
+   - **Do not wait on the Stage 46 hold on `2a1c1ef1` / `34544625780`.**
+     Skip-OVMF printed (`RAYNU-V-M7-PHASE-B-SKIP-OVMF-OK`) then
+     `leave_to_e4` jumped to `resume_e4_shell`, which spun because
+     `stage46_hold_e4_shell()` is `product_iso_window_armed()`. COM2:
+     `restore host xcr0=0x1 osxsave=0 reason=0x0 rip=0x0` then
+     `Stage 46 product ISO hold`. Force Off. The follow-up latches
+     `phase_b_continue_e4_for_spa()` so the hold is skipped and E4 coexist
+     HTTP can take SPA Start (`RAYNU-V-M7-PHASE-B-E4-CONTINUE-OK`). Nested
+     `PRODUCT_ISO=` without `RAYNU_F` is unchanged. `--raynu-f` is still
+     Phase A.
 3. Still no TLS requirement for M7 (deferred).
 
 ---
