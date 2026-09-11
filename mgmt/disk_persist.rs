@@ -1,0 +1,251 @@
+//! M8.0 install-disk persist across a **hypervisor** reboot (outside Proven Core).
+//!
+//! Pillar: [Z] [A]
+//! Proven Core: **outside** (ADR-002 / ADR-018). Do not touch VMX/EPT/allocator
+//! unless a new ADR says otherwise.
+//! VERIFICATION: L0/L1 host tests (GPT+ESP+ext4 byte round-trip).
+//!
+//! Guest F7 already keeps leftover DRAM (`reset_keep_disk`, ADR-017). A
+//! RayNu-V reboot zeros that RAM. ADR-018's first action: virtio-blk HPA *is*
+//! a durable device (nested: a QEMU file; iron: a USB partition or NVMe LUN
+//! that is not PERC Ubuntu). Leftover DRAM is the fallback when no persist
+//! media exists. Rejected: copy 1 GiB DRAM ↔ ESP on every HV stop.
+//!
+//! ADR-004: persist backing HPAs are virtio-blk / BlockIo only — the guest
+//! never sees them as RAM.
+//!
+//! Iron close marker [`M8_DISK_PERSIST_OK_MARKER`] is COM2-only. Host/CI
+//! print [`M8_DISK_PERSIST_HOST_OK_MARKER`]. Never `ISO-INSTALL-OK`.
+
+use crate::raynu_f::fat::{self, VolumeRead};
+use crate::raynu_f::gpt::{find_esp, ESP_TYPE_GUID};
+
+/// Iron COM2 close: Force Off / reboot RayNu-V, installed disk still there.
+/// Host/CI/nested must **never** print this.
+pub const M8_DISK_PERSIST_OK_MARKER: &str = "RAYNU-V-M8-DISK-PERSIST-OK";
+
+/// Host/CI: file-backed GPT+ESP+ext4 round-trip after an in-process HV reboot.
+/// Not nested. Not iron.
+pub const M8_DISK_PERSIST_HOST_OK_MARKER: &str = "RAYNU-V-M8-DISK-PERSIST-HOST-OK";
+
+/// Why we do not copy leftover DRAM onto the Cruzer ESP.
+pub const ESP_COPY_REJECT_NOTE: &str = "rejected: copy 1 GiB DRAM ↔ ESP on every HV stop (too slow; this ESP is too small for the Alpine GPT/ext4 disk; installdisk.bin is the 1 MiB LBA-stamp, not the guest disk)";
+
+/// 4 GB UDisk already holds alpine-extended; cannot also hold a 1 GiB image.
+pub const UDISK_TOO_SMALL_NOTE: &str = "the 4 GB UDisk already holds ~994 MiB alpine-extended; it cannot also hold a 1 GiB disk image next to the ISO";
+
+/// Iron durable media is not the standing Ubuntu install.
+pub const PERC_UBUNTU_UNTOUCHED_NOTE: &str = "Do not format the R640 PERC (Ubuntu). Iron durable LUN is a USB partition or NVMe that is not PERC Ubuntu.";
+
+/// ADR-004: persist HPAs are exclusive disk backing, not guest RAM.
+pub const PERSIST_EXCLUSIVE_OWNERSHIP_NOTE: &str = "ADR-004 exclusive ownership: persist backing HPAs (file / durable LUN / leftover carve) are virtio-blk / BlockIo only; the guest never sees those HPAs as RAM";
+
+/// Host-test GPT image size (not the iron 1 GiB leftover).
+pub const HOST_PERSIST_DISK_BYTES: usize = 1024 * 1024;
+/// First ESP LBA on the host-test image (after protective MBR + GPT header + entries).
+pub const HOST_PERSIST_ESP_START_LBA: u64 = 34;
+/// Last ESP LBA (128 sectors = 64 KiB FAT12).
+pub const HOST_PERSIST_ESP_END_LBA: u64 = 161;
+/// First Linux-filesystem LBA (ext4 superblock + `root=UUID=`).
+pub const HOST_PERSIST_DATA_START_LBA: u64 = 162;
+/// Last Linux-filesystem LBA on the 1 MiB host image.
+pub const HOST_PERSIST_DATA_END_LBA: u64 = 200;
+/// Planted root UUID (host fixture — not an iron COM2 UUID).
+pub const HOST_PERSIST_ROOT_UUID: &str = "c0ffee00-0d15-4c00-9e51-0000000008a0";
+/// GRUB-style cmdline that must survive HV reboot.
+pub const HOST_PERSIST_ROOT_CMDLINE: &str = "root=UUID=c0ffee00-0d15-4c00-9e51-0000000008a0";
+/// ext4 superblock magic (little-endian `0xEF53` at partition offset `0x438`).
+pub const EXT4_SUPER_MAGIC: u16 = 0xEF53;
+/// Offset of `s_magic` from the start of the Linux filesystem partition.
+pub const EXT4_MAGIC_OFF: usize = 0x438;
+
+/// Linux filesystem GUID `0FC63DAF-8483-4772-8E79-3D69D8477DE4` (mixed-endian).
+pub const LINUX_FS_GUID: [u8; 16] = [
+    0xAF, 0x3D, 0xC6, 0x0F, 0x83, 0x84, 0x72, 0x47, 0x8E, 0x79, 0x3D, 0x69, 0xD8, 0x47, 0x7D, 0xE4,
+];
+
+/// How virtio-blk is backed for M8.0.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PersistKind {
+    /// Nested: virtio-blk HPA is a QEMU file. Host tests use `std::fs`.
+    File,
+    /// Iron: USB partition or NVMe LUN that is not PERC Ubuntu.
+    DurableLun,
+    /// Leftover DRAM above PRECISE. Fallback when no persist media exists.
+    /// Survives guest F7; dies on HV reboot.
+    LeftoverDram,
+}
+
+/// Pick the backend. Durable media wins; leftover DRAM is the fallback.
+///
+/// Nested with a QEMU file → [`PersistKind::File`]. Iron with a USB/NVMe LUN
+/// → [`PersistKind::DurableLun`]. No persist media → leftover DRAM.
+pub fn select_persist_kind(nested: bool, has_durable_media: bool) -> PersistKind {
+    if !has_durable_media {
+        return PersistKind::LeftoverDram;
+    }
+    if nested {
+        PersistKind::File
+    } else {
+        PersistKind::DurableLun
+    }
+}
+
+/// File and durable LUN survive a hypervisor reboot. Leftover DRAM does not.
+pub fn kind_survives_hv_reboot(kind: PersistKind) -> bool {
+    matches!(kind, PersistKind::File | PersistKind::DurableLun)
+}
+
+/// Copying 1 GiB through the Cruzer ESP is not a backend.
+pub fn esp_copy_is_rejected() -> bool {
+    ESP_COPY_REJECT_NOTE.contains("rejected")
+        && ESP_COPY_REJECT_NOTE.contains("1 GiB")
+        && UDISK_TOO_SMALL_NOTE.contains("994 MiB")
+}
+
+/// Host/CI must never print the Everest iron install marker or the M8 iron persist marker.
+pub fn host_never_prints_iso_install_ok() -> bool {
+    M8_DISK_PERSIST_OK_MARKER != "RAYNU-V-M7-ISO-INSTALL-OK"
+        && M8_DISK_PERSIST_HOST_OK_MARKER != "RAYNU-V-M7-ISO-INSTALL-OK"
+        && M8_DISK_PERSIST_HOST_OK_MARKER != M8_DISK_PERSIST_OK_MARKER
+        && crate::mgmt::iso_install::M7_ISO_INSTALL_OK_MARKER == "RAYNU-V-M7-ISO-INSTALL-OK"
+}
+
+struct SliceDisk<'a>(&'a [u8]);
+
+impl VolumeRead for SliceDisk<'_> {
+    fn read_at(&self, off: u64, buf: &mut [u8]) -> bool {
+        let Ok(start) = usize::try_from(off) else {
+            return false;
+        };
+        let Some(end) = start.checked_add(buf.len()) else {
+            return false;
+        };
+        if end > self.0.len() {
+            return false;
+        }
+        buf.copy_from_slice(&self.0[start..end]);
+        true
+    }
+}
+
+struct Partition<'a> {
+    disk: &'a [u8],
+    base: usize,
+}
+
+impl VolumeRead for Partition<'_> {
+    fn read_at(&self, off: u64, buf: &mut [u8]) -> bool {
+        let Ok(rel) = usize::try_from(off) else {
+            return false;
+        };
+        let Some(start) = self.base.checked_add(rel) else {
+            return false;
+        };
+        let Some(end) = start.checked_add(buf.len()) else {
+            return false;
+        };
+        if end > self.disk.len() {
+            return false;
+        }
+        buf.copy_from_slice(&self.disk[start..end]);
+        true
+    }
+}
+
+fn u16_at(b: &[u8], off: usize) -> u16 {
+    u16::from_le_bytes([b[off], b[off + 1]])
+}
+
+fn u64_at(b: &[u8], off: usize) -> u64 {
+    u64::from_le_bytes([
+        b[off],
+        b[off + 1],
+        b[off + 2],
+        b[off + 3],
+        b[off + 4],
+        b[off + 5],
+        b[off + 6],
+        b[off + 7],
+    ])
+}
+
+/// First Linux-filesystem partition start LBA, if the GPT array names one.
+fn linux_fs_start_lba(disk: &[u8]) -> Option<u64> {
+    if disk.len() < 1024 + 128 {
+        return None;
+    }
+    let n = u32::from_le_bytes(disk[512 + 80..512 + 84].try_into().ok()?) as usize;
+    let es = u32::from_le_bytes(disk[512 + 84..512 + 88].try_into().ok()?) as usize;
+    let entry_lba = u64_at(&disk[512..1024], 72);
+    let array_off = usize::try_from(entry_lba.saturating_mul(512)).ok()?;
+    for i in 0..n.min(128) {
+        let off = array_off.checked_add(i.checked_mul(es)?)?;
+        if off + 40 > disk.len() {
+            return None;
+        }
+        if &disk[off..off + 16] == ESP_TYPE_GUID {
+            continue;
+        }
+        if &disk[off..off + 16] != LINUX_FS_GUID {
+            continue;
+        }
+        let start = u64_at(&disk[off..], 32);
+        if start == 0 {
+            continue;
+        }
+        return Some(start);
+    }
+    None
+}
+
+fn disk_has_bootx64(disk: &[u8]) -> bool {
+    let Ok(esp) = find_esp(&SliceDisk(disk)) else {
+        return false;
+    };
+    let Some(base) = usize::try_from(esp.start_lba.saturating_mul(512)).ok() else {
+        return false;
+    };
+    if base + 512 > disk.len() {
+        return false;
+    }
+    let Ok(vol) = fat::parse_bpb(&disk[base..base + 512]) else {
+        return false;
+    };
+    let part = Partition { disk, base };
+    match fat::resolve_path(&vol, &part, b"\\EFI\\BOOT\\BOOTX64.EFI") {
+        Ok(e) => e.name_bytes() == b"BOOTX64.EFI" && e.size > 0 && !e.is_dir(),
+        Err(_) => false,
+    }
+}
+
+fn disk_has_ext4_and_root_uuid(disk: &[u8]) -> bool {
+    let Some(start_lba) = linux_fs_start_lba(disk) else {
+        return false;
+    };
+    let Some(base) = usize::try_from(start_lba.saturating_mul(512)).ok() else {
+        return false;
+    };
+    let magic_at = base.saturating_add(EXT4_MAGIC_OFF);
+    if magic_at + 2 > disk.len() {
+        return false;
+    }
+    if u16_at(disk, magic_at) != EXT4_SUPER_MAGIC {
+        return false;
+    }
+    disk[base..]
+        .windows(HOST_PERSIST_ROOT_CMDLINE.len())
+        .any(|w| w == HOST_PERSIST_ROOT_CMDLINE.as_bytes())
+}
+
+/// True when `image` is still an installed disk after an HV reboot restore:
+/// GPT ESP, `\EFI\BOOT\BOOTX64.EFI`, ext4 magic, `root=UUID=`.
+pub fn restored_disk_is_installed(image: &[u8]) -> bool {
+    find_esp(&SliceDisk(image)).is_ok()
+        && disk_has_bootx64(image)
+        && disk_has_ext4_and_root_uuid(image)
+}
+
+#[cfg(test)]
+#[path = "disk_persist_test.rs"]
+mod disk_persist_test;

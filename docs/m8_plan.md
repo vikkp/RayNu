@@ -35,7 +35,8 @@ Evidence: [`docs/evidence/r640/2026-09-11-f72b4276-phase-b-spa-iso-install-disk-
 - Build **in order**. A later gate may be designed in parallel; it does not close before its predecessor without rewriting this plan.
 
 ```
-M8.0  Persist leftover-DRAM install disk across HV reboot
+M8.0  Persist install disk across HV reboot
+      (file-backed nested / durable LUN iron / leftover DRAM fallback)
 M8.1  TLS on coexist :8443
 M8.2  Real operator auth (not bring-up token as product default)
 M8.3  Guest console UI (web/VNC; serial already worked)
@@ -61,15 +62,37 @@ HDA + `site/hda.html` stay fresh: update `docs/hda.md`, then `./tools/sync-hda-s
 
 ### M8.0 — Persist install disk across HV reboot
 
-**Status: open** (next)
+**Status: open** — backend **chosen**; host round-trip **exists**; nested QEMU mechanism proof and iron COM2 are **not** this slice. Prototype, not the known-good.
 
-**Goal:** The virtio install disk that `setup-disk` wrote still exists after the **hypervisor** reboots — not only after a **guest** F7 reset (ADR-017 `reset_keep_disk`).
+**Goal:** The virtio install disk that `setup-disk` wrote still exists after the **hypervisor** reboots — not only after a **guest** F7 reset (ADR-017 `reset_keep_disk`). Leftover DRAM above PRECISE is the Everest attach; a RayNu-V reboot zeros that RAM.
 
 **Why first:** Every other polish is wasted if the guest filesystem dies when RayNu-V restarts. Everest E5 did not require this.
 
-**Acceptance (draft):** Named marker on real R640 (to be minted when the path exists). Host/CI still never print `ISO-INSTALL-OK`.
+**Backend choice (preferred — this is the real first commit):** virtio-blk HPA *is* a durable device. ADR-018 “NVMe/ESP-backed virtio,” not “hope DRAM is still there.” ADR-004 exclusive ownership: those HPAs are virtio-blk / BlockIo only — the guest never sees them as RAM.
 
-**Not this gate:** TLS, VNC, Windows. If a persist prototype misbehaves, re-flash [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) (see [Iron rollback](#iron-rollback-m80-known-good)).
+| Role | Kind | What the HPA is | Survives HV reboot? |
+|------|------|-----------------|---------------------|
+| Nested QEMU | `File` | A QEMU disk file the hypervisor process re-opens | Yes (mechanism proof, **not** the iron close) |
+| Iron | `DurableLun` | A USB partition or NVMe LUN that is **not** the R640 PERC (Ubuntu stays the standing boot order) | Yes — required for the iron marker |
+| Fallback | `LeftoverDram` | Carved leftover above PRECISE (`carve_leftover_install_disk` / `take_leftover_install_disk`) when no persist media exists | **No.** Same as Everest. Guest F7 still keeps it (`reset_keep_disk`). |
+
+**Rejected:** copy 1 GiB leftover DRAM ↔ ESP on every HV stop. Too slow, and this ESP is too small. ESP `installdisk.bin` is the 1 MiB LBA-stamp lab persist (M7.7), not the Alpine GPT/ESP/ext4 disk. The 4 GB UDisk already holds ~994 MiB alpine-extended; it cannot also hold a 1 GiB disk image next to the ISO.
+
+**Markers:**
+
+| Marker | Who prints it | Meaning |
+|--------|---------------|---------|
+| `RAYNU-V-M8-DISK-PERSIST-OK` | Real R640 COM2 only | Iron close: Force Off / reboot **RayNu-V** (not guest `reboot`), then the installed disk is back (`root=UUID=` + `\EFI\BOOT\BOOTX64.EFI`), `build: sha=` of the prototype |
+| `RAYNU-V-M8-DISK-PERSIST-HOST-OK` | Host/CI | File-backed GPT+ESP+ext4 round-trip after an in-process “HV reboot.” Not nested. Not iron. |
+| `RAYNU-V-M7-ISO-INSTALL-OK` | **Never** from host/CI/nested | Everest iron-only. Do not reuse. |
+
+**Acceptance:**
+
+1. **Host (this slice):** round-trip a GPT+ESP+ext4 image through the `File` backend; after allocator reset / dropping the in-memory disk (and a real `std::fs` file surviving that drop), the restored virtio image still has `root=UUID=` and `\EFI\BOOT\BOOTX64.EFI`. Leftover-DRAM backend fails the same reboot. Print `RAYNU-V-M8-DISK-PERSIST-HOST-OK` only.
+2. **Nested (next):** install → kill/restart the hypervisor process → second Linux **without** `setup-disk` again. Mechanism proof, not the iron close.
+3. **Iron (last):** same Phase B loop as Everest (`HOST-NIC-HTTP-OK` → SPA Start → install → F7 `DISK-BOOT-OK`), then **Force Off / reboot RayNu-V**. COM2 shows the installed disk again, prototype `build: sha=`, and `RAYNU-V-M8-DISK-PERSIST-OK`. One-time F11 the UDisk; Ubuntu-on-PERC stays the standing boot order. Do not format the PERC.
+
+**Not this gate:** TLS, VNC, Windows, virtio attach rewiring, Proven Core. If a persist prototype misbehaves, re-flash [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) (see [Iron rollback](#iron-rollback-m80-known-good)). HDA overall stays **99%** until iron COM2 exists.
 
 ---
 
@@ -143,4 +166,6 @@ Do not pull M9 into M8 gate lists.
 
 ## First action
 
-**M8.0.** Design persist of the leftover-DRAM virtio disk across a host reboot of RayNu-V (NVMe or ESP-backed). Keep ADR-004 exclusive ownership. Do not claim persist from nested QEMU alone. Keep [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) as the flash rollback until a new named iron marker exists.
+**M8.0 backend + host round-trip (this slice).** Choice is **file-backed nested / durable LUN on iron / leftover DRAM as fallback**. Iron marker is `RAYNU-V-M8-DISK-PERSIST-OK`. Host marker is `RAYNU-V-M8-DISK-PERSIST-HOST-OK`. Keep ADR-004 exclusive ownership. Do not claim persist from nested QEMU alone. Do not copy 1 GiB through the Cruzer ESP. Do not format the PERC. Keep [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) as the flash rollback until iron COM2 prints the persist marker.
+
+**Next:** nested install → kill/restart hypervisor → second Linux without `setup-disk`. Then iron Force Off. Do not start M8.1 TLS until that iron COM2 exists (design-only overlap is allowed).
