@@ -22,9 +22,9 @@ use crate::boot::serial;
 use crate::mgmt::bcm5720::Bcm5720Device;
 use crate::mgmt::e1000::E1000Device;
 use crate::mgmt::host_nic::{
-    host_nic_lab_armed, http_accept_should_idle_abort, HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS,
-    HOST_NIC_MAX_EXCHANGES, M7_HOST_NIC_QEMU_MARKER, QEMU_USERNET_GW, QEMU_USERNET_IPV4,
-    QEMU_USERNET_PREFIX,
+    coexist_millis_from_tsc, host_nic_lab_armed, http_accept_should_idle_abort,
+    HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS, HOST_NIC_MAX_EXCHANGES, M7_HOST_NIC_QEMU_MARKER,
+    QEMU_USERNET_GW, QEMU_USERNET_IPV4, QEMU_USERNET_PREFIX,
 };
 use crate::mgmt::host_nic_poll::{bounded_poll, HOST_NIC_POLL_BUDGET};
 use crate::mgmt::http::handle_http_request;
@@ -55,6 +55,7 @@ static mut COEXIST_TCP_TX: [u8; TCP_TX_N] = [0; TCP_TX_N];
 static mut COEXIST_RX_ACC: [u8; RX_ACC_N] = [0; RX_ACC_N];
 static mut COEXIST_HTTP_OUT: [u8; HTTP_OUT_N] = [0; HTTP_OUT_N];
 static mut COEXIST_MILLIS: i64 = 0;
+static mut COEXIST_TSC0: u64 = 0;
 static mut COEXIST_ANNOUNCED: bool = false;
 static mut COEXIST_ACCEPT_AT_MS: i64 = 0;
 static mut COEXIST_RX_LEN: usize = 0;
@@ -113,9 +114,7 @@ pub fn arm_bcm5720_coexist() -> bool {
         return false;
     }
     let Some(lease) = mgmt_lease::load().filter(mgmt_lease::lease_is_usable) else {
-        serial::write_line(
-            "boot: WARN — HOST-NIC coexist skip (no parked SNP lease)",
-        );
+        serial::write_line("boot: WARN — HOST-NIC coexist skip (no parked SNP lease)");
         return false;
     };
     let mut device = match Bcm5720Device::init(lease.mac) {
@@ -128,9 +127,7 @@ pub fn arm_bcm5720_coexist() -> bool {
     if crate::mgmt::bcm5720_mmio::skip_http_listen_without_lstatus()
         && !crate::mgmt::bcm5720_mmio::bcm5720_phy_link_up()
     {
-        serial::write_line(
-            "boot: WARN — HOST-NIC BCM5720 skip listen (no LSTATUS; do not curl)",
-        );
+        serial::write_line("boot: WARN — HOST-NIC BCM5720 skip listen (no LSTATUS; do not curl)");
         return false;
     }
     let mac = device.mac();
@@ -160,15 +157,12 @@ pub fn arm_bcm5720_coexist() -> bool {
     // SAFETY: BSP-only coexist session; buffers are .bss.
     // KANI-TARGET: host gate checks wiring; this arm is firmware-only.
     unsafe {
-        let tcp_rx = tcp::SocketBuffer::new(
-            (&mut *core::ptr::addr_of_mut!(COEXIST_TCP_RX)).as_mut_slice(),
-        );
-        let tcp_tx = tcp::SocketBuffer::new(
-            (&mut *core::ptr::addr_of_mut!(COEXIST_TCP_TX)).as_mut_slice(),
-        );
-        let sockets = SocketSet::new(
-            (&mut *core::ptr::addr_of_mut!(COEXIST_SOCK_STORAGE)).as_mut_slice(),
-        );
+        let tcp_rx =
+            tcp::SocketBuffer::new((&mut *core::ptr::addr_of_mut!(COEXIST_TCP_RX)).as_mut_slice());
+        let tcp_tx =
+            tcp::SocketBuffer::new((&mut *core::ptr::addr_of_mut!(COEXIST_TCP_TX)).as_mut_slice());
+        let sockets =
+            SocketSet::new((&mut *core::ptr::addr_of_mut!(COEXIST_SOCK_STORAGE)).as_mut_slice());
         let mut sockets = sockets;
         let tcp_handle = sockets.add(tcp::Socket::new(tcp_rx, tcp_tx));
         if sockets
@@ -184,6 +178,7 @@ pub fn arm_bcm5720_coexist() -> bool {
         COEXIST_SOCKETS.write(sockets);
         COEXIST_TCP_HANDLE.write(tcp_handle);
         COEXIST_MILLIS = 0;
+        COEXIST_TSC0 = crate::arch::cpu::rdtsc();
         COEXIST_ANNOUNCED = false;
         COEXIST_ACCEPT_AT_MS = 0;
         COEXIST_RX_LEN = 0;
@@ -203,8 +198,9 @@ pub fn arm_bcm5720_coexist() -> bool {
     write_ipv4(ip);
     serial::write_byte(b':');
     write_u16_dec(port);
-    serial::write_line("/  (native BCM5720; G0 still scheduled; SNP is dead)");
+    serial::write_line("/  (native BCM5720; SNP is dead)");
     serial::write_line("boot: HINT — COM2 idle after this snapshot (TCP accept / HTTP only)");
+    crate::mgmt::bcm5720_mmio::reset_host_nic_frame_dumps();
     print_bcm5720_poll_diag();
     true
 }
@@ -224,7 +220,11 @@ pub fn tick_bcm5720_coexist() {
         let tcp_handle = *COEXIST_TCP_HANDLE.assume_init_ref();
         let rx_acc = &mut *core::ptr::addr_of_mut!(COEXIST_RX_ACC);
         let out = &mut *core::ptr::addr_of_mut!(COEXIST_HTTP_OUT);
-        COEXIST_MILLIS = COEXIST_MILLIS.saturating_add(10);
+        COEXIST_MILLIS = coexist_millis_from_tsc(
+            COEXIST_TSC0,
+            crate::arch::cpu::rdtsc(),
+            crate::boot::raynu_f_flag::tsc_hz(),
+        );
         let millis = COEXIST_MILLIS;
         let ts = Instant::from_millis(millis);
         let _ = bounded_poll(HOST_NIC_POLL_BUDGET, || {

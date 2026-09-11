@@ -8,7 +8,7 @@
 //! SPA start relocates G1 into its 2 MiB slab (already punched out of G0 EPT)
 //! and builds a **single 2 MiB** private EPT. G0's VMCS is cloned with
 //! VMREAD/VMWRITE into a host-only punched slab (memcpy of a `VMCLEAR`'d
-//! region is not VMPTRLD-safe). Distro installer / TLS remain later.
+//! region is not VMPTRLD-safe). Distro installer closed on iron via SPA (`f72b4276`). TLS remains later.
 //!
 //! Phase B (P0-63): a product-ISO start (`linux_iso` / `windows_iso` /
 //! `generic_uefi`, iso ≠ 0) queues **RayNu-F**, not the SHELL CPUID stub.
@@ -20,7 +20,7 @@ use super::guest_image::{GuestBootSpec, GuestImageType};
 pub const M7_E4_SPA_LAUNCH_OK_MARKER: &str = "RAYNU-V-M7-E4-SPA-LAUNCH-OK";
 
 /// Host/CI marker when SPA/REST product-ISO start queues RayNu-F (P0-63).
-/// Not an iron close. Never `ISO-INSTALL-OK`.
+/// Iron close is COM2 `f72b4276` / `34552377351`. Never `ISO-INSTALL-OK`.
 pub const M7_PHASE_B_SPA_WIRE_OK_MARKER: &str = "RAYNU-V-M7-PHASE-B-SPA-WIRE-OK";
 
 /// Firmware serial when the coexist scheduler consumes a product-ISO start.

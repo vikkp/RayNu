@@ -174,8 +174,7 @@ pub const M1_VMEXIT_OK_MARKER: &str = "RAYNU-V-M1-VMEXIT-OK";
 /// `mov %rax,%cr4`, which clears VMXE (need host-own or #GP) and OSFXSR
 /// (nested Intel ATAPI-OK then `#DF` vec=8 `rip=0x9e036` `cr4=0x2060`).
 /// `0x1060` also keeps LA57; strip it (4-level EPT/PT only).
-pub const E4_LINUX_CR4_HOST_OWNED: u64 =
-    cpu::CR4_VMXE | cpu::CR4_OSFXSR | cpu::CR4_OSXMMEXCPT;
+pub const E4_LINUX_CR4_HOST_OWNED: u64 = cpu::CR4_VMXE | cpu::CR4_OSFXSR | cpu::CR4_OSXMMEXCPT;
 
 /// CR4 bits E4 Linux must not set. Nested Intel `957e0ad` trampoline `#DF`.
 pub const E4_LINUX_CR4_FORBIDDEN: u64 = cpu::CR4_LA57;
@@ -5515,6 +5514,40 @@ fn finish_boot(ok: bool) -> ! {
     }
 }
 
+/// Phase B skip-OVMF: arm coexist HTTP and wait for SPA Start.
+/// Do **not** launch packed-bzImage G0.
+///
+/// Iron `31f1ea0c`: `E4-CONTINUE-OK` then `no virtio-blk BAR hole above G0
+/// guest RAM` — Stage 46 pool is `[1MiB,512MiB)` (`v0.1.0-barfix` inverted:
+/// product ISO needs the window; E4 BAR/shell needs it free). Phase A
+/// (`--raynu-f`) never entered this path. Not `ISO-INSTALL-OK`.
+pub fn enter_phase_b_coexist_idle() -> ! {
+    serial::revive_ports();
+    crate::mgmt::run_post_ebs_http_snp_warn_only();
+    let armed = crate::mgmt::try_arm_native_coexist();
+    // SAFETY: BSP-only after skip-OVMF; no G0 VMCS. Lets [`try_spa_vmlaunch`]
+    // consume `POST /vms/{id}/start`.
+    unsafe {
+        M4_LADDER_DONE = true;
+    }
+    serial::write_line(crate::mgmt::M7_PHASE_B_COEXIST_IDLE_NOTE);
+    if !armed {
+        serial::write_line(
+            "boot: WARN — HOST-NIC coexist not armed; SPA Start needs HTTP (not ISO-INSTALL-OK)",
+        );
+    }
+    loop {
+        // Tight poll: smoltcp Instant is TSC-based (`coexist_millis_from_tsc`).
+        // Do not sleep 10 ms — SYN would be missed. Iron `7f8dc0a9` `curl: (7)`.
+        crate::mgmt::tick_native_coexist();
+        // SAFETY: BSP-only idle; `M4_LADDER_DONE`; no live G0 to save.
+        unsafe {
+            try_spa_vmlaunch();
+        }
+        core::hint::spin_loop();
+    }
+}
+
 /// Resume G0–G3 under the credit scheduler with native NIC ticks (Phase F).
 unsafe fn enter_sched_coexist() -> ! {
     SMP_PROBE_MODE = false;
@@ -5597,15 +5630,24 @@ mod launch_test {
         assert_eq!(E4_LINUX_CR4_FORBIDDEN, crate::arch::cpu::CR4_LA57);
         assert!(e4_linux_cr_access_is_cr4_mov(0x4));
         assert!(!e4_linux_cr_access_is_cr4_mov(0));
-        assert_eq!(linux_cr4 & crate::arch::cpu::CR4_OSFXSR, crate::arch::cpu::CR4_OSFXSR);
+        assert_eq!(
+            linux_cr4 & crate::arch::cpu::CR4_OSFXSR,
+            crate::arch::cpu::CR4_OSFXSR
+        );
         assert_eq!(
             linux_cr4 & crate::arch::cpu::CR4_OSXMMEXCPT,
             crate::arch::cpu::CR4_OSXMMEXCPT
         );
-        assert_eq!(linux_cr4 & crate::arch::cpu::CR4_VMXE, crate::arch::cpu::CR4_VMXE);
+        assert_eq!(
+            linux_cr4 & crate::arch::cpu::CR4_VMXE,
+            crate::arch::cpu::CR4_VMXE
+        );
         let shadow = e4_linux_cr4_read_shadow(dumped);
         assert_eq!(shadow & crate::arch::cpu::CR4_VMXE, 0);
-        assert_eq!(shadow & crate::arch::cpu::CR4_OSFXSR, crate::arch::cpu::CR4_OSFXSR);
+        assert_eq!(
+            shadow & crate::arch::cpu::CR4_OSFXSR,
+            crate::arch::cpu::CR4_OSFXSR
+        );
         assert_eq!(M2_EPT_OK_MARKER, "RAYNU-V-M2-EPT-OK");
         assert_eq!(M2_GUEST_OK_MARKER, "RAYNU-V-M2-GUEST-OK");
         assert_eq!(M2_OWN_OK_MARKER, "RAYNU-V-M2-OWN-OK");

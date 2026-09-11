@@ -63,7 +63,7 @@ use super::{
     GUEST_UEFI_CPUID_LEAF4_LAST_SUB, GUEST_UEFI_CPUID_LEAF0_MAX,
     GUEST_UEFI_PHYS_BITS_MAX, GUEST_UEFI_PHYS_BITS_MIN, GUEST_UEFI_PHYS_BITS_IRON_CAP,
     GUEST_UEFI_FLASH_WINDOW, GUEST_UEFI_KVM_CPUID_LEAF, GUEST_UEFI_MISC_ENABLE_DEFAULT,
-    GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_MTRRCAP, GUEST_UEFI_MTRR_DEF_DEFAULT, GUEST_UEFI_MTRR_WB_PACKED, GUEST_UEFI_POST_ATAPI_TAIL, GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP, GUEST_UEFI_NESTED_RESUME_CAP, GUEST_UEFI_PRODUCT_ISO_RESUME_CAP, GUEST_UEFI_RAYNU_F_DIRECT_CAP, M7_E5_RAYNU_F_DIRECT_NOTE, guest_uefi_resume_cap, guest_uefi_raynu_f_resume_cap, guest_uefi_raynu_f_collapse_ovmf_leg, report_ram_return_to_e4, eltorito_stops_guest_uefi,
+    GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_MTRRCAP, GUEST_UEFI_MTRR_DEF_DEFAULT, GUEST_UEFI_MTRR_WB_PACKED, GUEST_UEFI_POST_ATAPI_TAIL, GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP, GUEST_UEFI_NESTED_RESUME_CAP, GUEST_UEFI_PRODUCT_ISO_RESUME_CAP, GUEST_UEFI_RAYNU_F_DIRECT_CAP, M7_E5_RAYNU_F_DIRECT_NOTE, M7_E5_PHASE_B_SKIP_OVMF_NOTE, M7_E5_PHASE_B_SKIP_OVMF_OK_MARKER, guest_uefi_resume_cap, guest_uefi_raynu_f_resume_cap, guest_uefi_raynu_f_collapse_ovmf_leg, guest_uefi_phase_b_skip_ovmf_to_e4, report_ram_return_to_e4, eltorito_stops_guest_uefi,
     GUEST_UEFI_SEC_TAIL_GPA, M7_E5_OVMF_ALIVE_OK_MARKER, M7_E5_OVMF_ATAPI_OK_MARKER,
     M7_E5_OVMF_BOTH_OK_MARKER, M7_E5_OVMF_CDROM_OK_MARKER, M7_E5_OVMF_DXE_OK_MARKER,
     M7_E5_OVMF_ELTORITO_OK_MARKER, M7_E5_OVMF_PAST_SEC_OK_MARKER, M7_E5_OVMF_VIRTIO_OK_MARKER,
@@ -2865,6 +2865,52 @@ fn raynu_f_linux_handoff_restores_product_cap() {
     );
 }
 
+/// Iron `9061ffca` without `--raynu-f`: product ISO + no flag must skip
+/// OVMF to E4 (not park in CpuSleep ticks). Nested and `--raynu-f` stay
+/// on their existing paths. Not `ISO-INSTALL-OK`.
+#[test]
+fn phase_b_skip_ovmf_to_e4_on_iron_product_iso_without_raynuf() {
+    assert!(
+        guest_uefi_phase_b_skip_ovmf_to_e4(false, true, false, false),
+        "iron product ISO without raynuf.txt leaves OVMF for SPA Start"
+    );
+    assert!(
+        !guest_uefi_phase_b_skip_ovmf_to_e4(true, true, false, false),
+        "--raynu-f / Phase A still launches RayNu-F from the OVMF stop"
+    );
+    assert!(
+        !guest_uefi_phase_b_skip_ovmf_to_e4(false, true, false, true),
+        "nested PRODUCT_ISO= without RAYNU_F keeps the parked OVMF cap"
+    );
+    assert!(
+        !guest_uefi_phase_b_skip_ovmf_to_e4(false, false, false, false),
+        "iso=0 lab stub does not skip"
+    );
+    assert!(
+        !guest_uefi_phase_b_skip_ovmf_to_e4(false, true, true, false),
+        "after RayNu-F has run, do not skip"
+    );
+    assert_eq!(
+        guest_uefi_raynu_f_resume_cap(
+            guest_uefi_phase_b_skip_ovmf_to_e4(false, true, false, false),
+            GUEST_UEFI_PRODUCT_ISO_RESUME_CAP
+        ),
+        GUEST_UEFI_RAYNU_F_DIRECT_CAP,
+        "belt-and-suspenders: if OVMF still VMLAUNCHes, stop at n=1"
+    );
+    assert!(M7_E5_PHASE_B_SKIP_OVMF_NOTE.contains("wait for SPA Start"));
+    assert!(M7_E5_PHASE_B_SKIP_OVMF_NOTE.contains("not ISO-INSTALL-OK"));
+    assert_eq!(
+        M7_E5_PHASE_B_SKIP_OVMF_OK_MARKER,
+        "RAYNU-V-M7-PHASE-B-SKIP-OVMF-OK"
+    );
+    assert!(!M7_E5_PHASE_B_SKIP_OVMF_OK_MARKER.contains("ISO-INSTALL-OK"));
+    assert!(
+        include_str!("../mgmt/iso_install.rs").contains("fn phase_b_continue_e4_for_spa"),
+        "iron 2a1c1ef1: skip must latch E4 continue, not Stage 46 hold"
+    );
+}
+
 #[test]
 fn alias_window_covers_reset_for_real_sizes() {
     assert_eq!(
@@ -3389,7 +3435,7 @@ fn f7_relaunch_resets_firmware_state_without_a_stack_temporary() {
     // mode ends (iron `59ac070` lost it).
     assert!(src.contains("serial::flush_guest_tx()"));
     assert!(src.contains("iron reboot-to-disk CLOSED on 56a3ffd run 34480107961"));
-    assert!(src.contains("Phase B SPA start not claimed"));
+    assert!(src.contains("Phase B SPA start CLOSED on iron f72b4276 / 34552377351"));
 }
 
 #[test]

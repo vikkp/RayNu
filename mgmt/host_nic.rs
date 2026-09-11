@@ -33,8 +33,30 @@ pub const HOST_NIC_MAX_EXCHANGES: u32 = 8;
 /// Coexist has **one** TCP listen slot. Iron 2026-08-21: a SPA/browser
 /// half-open ESTABLISHED (COM2 `TCP accept` with no `HTTP exchange ok`)
 /// held the slot so `curl` SYN timed out. Abort and re-listen after this
-/// many coexist-tick milliseconds without complete HTTP headers.
+/// many **real** coexist milliseconds without complete HTTP headers.
 pub const HOST_NIC_HTTP_IDLE_MS: i64 = 3000;
+
+/// Fallback TSC rate when Stall calibration has not stored [`crate::boot::raynu_f_flag::tsc_hz`].
+pub const COEXIST_TSC_HZ_FALLBACK: u64 = 2_100_000_000;
+
+/// smoltcp Instant for coexist ticks from TSC.
+///
+/// Iron `7f8dc0a9`: Phase B idle called `tick` in a tight loop with
+/// `MILLIS += 10` each time, so TCP/ARP timers expired in ~1 s of wall
+/// time (`curl: (7)` to `10.99.99.146:8443`). Drive millis from TSC.
+/// Not `ISO-INSTALL-OK`.
+pub fn coexist_millis_from_tsc(start_tsc: u64, now_tsc: u64, tsc_hz: u64) -> i64 {
+    let hz = if tsc_hz < 1_000 {
+        COEXIST_TSC_HZ_FALLBACK
+    } else {
+        tsc_hz
+    };
+    let ms_hz = hz / 1000;
+    if ms_hz == 0 {
+        return 0;
+    }
+    (now_tsc.wrapping_sub(start_tsc) / ms_hz) as i64
+}
 
 /// Whether a single-socket HTTP accept should RST and re-listen.
 ///
@@ -54,10 +76,20 @@ pub fn http_accept_should_idle_abort(
 /// Host/CI: idle abort fires at the limit and never on complete headers.
 pub fn prop_http_accept_idle_abort() -> bool {
     !http_accept_should_idle_abort(true, false, 0, HOST_NIC_HTTP_IDLE_MS)
-        && !http_accept_should_idle_abort(true, false, HOST_NIC_HTTP_IDLE_MS - 1, HOST_NIC_HTTP_IDLE_MS)
+        && !http_accept_should_idle_abort(
+            true,
+            false,
+            HOST_NIC_HTTP_IDLE_MS - 1,
+            HOST_NIC_HTTP_IDLE_MS,
+        )
         && http_accept_should_idle_abort(true, false, HOST_NIC_HTTP_IDLE_MS, HOST_NIC_HTTP_IDLE_MS)
         && !http_accept_should_idle_abort(true, true, HOST_NIC_HTTP_IDLE_MS, HOST_NIC_HTTP_IDLE_MS)
-        && !http_accept_should_idle_abort(false, false, HOST_NIC_HTTP_IDLE_MS, HOST_NIC_HTTP_IDLE_MS)
+        && !http_accept_should_idle_abort(
+            false,
+            false,
+            HOST_NIC_HTTP_IDLE_MS,
+            HOST_NIC_HTTP_IDLE_MS,
+        )
         && !http_accept_should_idle_abort(true, false, 5000, 0)
 }
 
@@ -86,8 +118,7 @@ pub fn probe_host_nic_lab_flag() {
         return;
     };
     let mut fs = FileSystem::new(sfs);
-    if flag_present(&mut fs, "\\EFI\\RayNu\\hostnic.txt")
-        || flag_present(&mut fs, "\\hostnic.txt")
+    if flag_present(&mut fs, "\\EFI\\RayNu\\hostnic.txt") || flag_present(&mut fs, "\\hostnic.txt")
     {
         arm_host_nic_lab();
         serial::write_line(HOST_NIC_LAB_ARM_NOTE);

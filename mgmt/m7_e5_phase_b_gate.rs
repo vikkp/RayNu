@@ -6,23 +6,24 @@
 //!
 //! Host/CI: `POST /vms/{id}/start` of a typed product ISO queues RayNu-F
 //! instead of the E4 SHELL stub. `iso=0` stays SHELL. Never prints
-//! `RAYNU-V-M7-ISO-INSTALL-OK`. Iron Phase B (SPA start on COM2) is not claimed.
+//! `RAYNU-V-M7-ISO-INSTALL-OK`. Iron Phase B closed on COM2 `f72b4276` /
+//! `--run 34552377351` (SPA Start of RayNu-F ISO, no `raynuf.txt`).
 
 use super::api::{dispatch_rest, RestMethod, RestRequest, BRINGUP_AUTH_TOKEN};
+use super::guest_image::GuestImageType;
 use super::spa_launch::{
     kind_for_record, prop_spa_kind_for_record, prop_spa_start_queues, take_spa_start_kind,
     SpaStartKind, M7_PHASE_B_SPA_RAYNU_F_NOTE, M7_PHASE_B_SPA_WIRE_OK_MARKER,
 };
-use super::guest_image::GuestImageType;
 use super::VmTable;
 use crate::boot::raynu_f_flag;
 
-/// Host / CI marker. Not an iron close.
+/// Host / CI marker. Iron close is COM2 `f72b4276` / `34552377351`, not this string.
 pub const M7_PHASE_B_SPA_WIRE_GATE_MARKER: &str = "RAYNU-V-M7-PHASE-B-SPA-WIRE-OK";
 
-/// Honest residual: host wire ≠ iron SPA start of the installed disk.
+/// Honest residual after iron P0-63 close: polish, not “SPA still SHELL”.
 pub const PHASE_B_RESIDUAL_NOTE: &str =
-    "residual: host SPA/REST product-ISO start queues RayNu-F (P0-63 wire); iron Phase B is not claimed — COM2 must show SPA start launching RayNu-F without the ESP raynuf.txt auto-path; iso=0 stays E4 SHELL; ISO-INSTALL-OK is never printed from host/CI";
+    "residual: P0-63 iron CLOSED f72b4276 / 34552377351 — SPA Start of RayNu-F ISO without raynuf.txt; HOST-NIC-HTTP-OK on 10.99.99.145:8443; ISO-INSTALL-OK (iron-only) + DISK-BOOT-OK; iso=0 stays E4 SHELL; product ISO without raynuf.txt skips OVMF to coexist HTTP (not CpuSleep ticks, not Stage 46 hold, not G0 BAR/shell); TSC Instant not MILLIS+=10 (7f8dc0a9 curl: (7) fixed); leftover-DRAM disk does not survive HV reboot; TLS deferred; ISO-INSTALL-OK is never printed from host/CI";
 
 /// REST create+start of `linux_iso` queues RayNu-F and arms the flag.
 pub fn prop_rest_product_iso_start_queues_raynu_f() -> bool {
@@ -95,6 +96,9 @@ pub fn phase_b_surface_present() -> bool {
     let flag = include_str!("../boot/raynu_f_flag.rs");
     let spa = include_str!("spa_launch.rs");
     let html = include_str!("../assets/webui.html");
+    let iso = include_str!("iso_install.rs");
+    let listen = include_str!("host_nic_listen.rs");
+    let main = include_str!("../src/main.rs");
     api.contains("note_spa_start_kind")
         && api.contains("SpaStartKind::RayNuF")
         && api.contains("request_from_spa")
@@ -103,7 +107,17 @@ pub fn phase_b_surface_present() -> bool {
         && launch.contains("try_spa_product_iso_start")
         && launch.contains("M7_PHASE_B_SPA_RAYNU_F_NOTE")
         && guest.contains("fn try_spa_product_iso_start")
-        && guest.contains("Phase B")
+        && guest.contains("fn guest_uefi_phase_b_skip_ovmf_to_e4")
+        && guest.contains("M7_E5_PHASE_B_SKIP_OVMF_NOTE")
+        && guest.contains("phase_b_continue_e4_for_spa")
+        && iso.contains("fn phase_b_continue_e4_for_spa")
+        && iso.contains("fn phase_b_e4_for_spa")
+        && main.contains("M7_PHASE_B_E4_CONTINUE_OK_MARKER")
+        && main.contains("enter_phase_b_coexist_idle")
+        && launch.contains("fn enter_phase_b_coexist_idle")
+        && listen.contains("coexist_millis_from_tsc")
+        && !listen.contains("saturating_add(10)")
+        && iso.contains("M7_PHASE_B_COEXIST_IDLE_NOTE")
         && flag.contains("fn request_from_spa")
         && spa.contains("enum SpaStartKind")
         && spa.contains(M7_PHASE_B_SPA_RAYNU_F_NOTE)
@@ -115,8 +129,11 @@ pub fn phase_b_surface_present() -> bool {
 }
 
 pub fn run_m7_phase_b_spa_wire_gate() -> bool {
-    PHASE_B_RESIDUAL_NOTE.contains("not claimed")
+    PHASE_B_RESIDUAL_NOTE.contains("CLOSED")
+        && PHASE_B_RESIDUAL_NOTE.contains("f72b4276")
         && PHASE_B_RESIDUAL_NOTE.contains("iso=0")
+        && PHASE_B_RESIDUAL_NOTE.contains("curl: (7)")
+        && PHASE_B_RESIDUAL_NOTE.contains("TSC Instant")
         && M7_PHASE_B_SPA_WIRE_GATE_MARKER == M7_PHASE_B_SPA_WIRE_OK_MARKER
         && M7_PHASE_B_SPA_WIRE_OK_MARKER == "RAYNU-V-M7-PHASE-B-SPA-WIRE-OK"
         && prop_spa_start_queues()

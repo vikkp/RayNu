@@ -189,6 +189,14 @@ extern "C" fn resume_e4_shell() -> ! {
             core::hint::spin_loop();
         }
     }
+    if r640_hypervisor::mgmt::phase_b_e4_for_spa() {
+        boot::serial::write_line(r640_hypervisor::mgmt::M7_PHASE_B_E4_CONTINUE_OK_MARKER);
+        boot::serial::write_line(r640_hypervisor::mgmt::M7_PHASE_B_E4_CONTINUE_NOTE);
+        // Iron 31f1ea0c: continue then packed-bzImage G0 died on
+        // `no virtio-blk BAR hole` because the Stage 46 pool fills
+        // [1MiB,512MiB). Phase A (`--raynu-f`) never took E4 G0.
+        vmx::launch::enter_phase_b_coexist_idle();
+    }
     let alloc = vmx::guest_uefi::e4_alloc();
     let life = vmx::guest_uefi::e4_life();
     if !alloc.is_null() && !life.is_null() {

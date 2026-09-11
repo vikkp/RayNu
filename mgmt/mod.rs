@@ -473,8 +473,10 @@ pub use iso_install::{
     install_disk_preload_bytes, lab_reboot_armed, probe_iso_install_lab_flag,
     probe_iso_persist_reboot, probe_iso_reboot_lab_flag, probe_product_linux_iso,
     present_product_iso_if_retained, prop_iso_install_lab_package, prop_iso_install_package,
-    prop_iso_reboot_lab_package, stage46_hold_e4_shell, InstallToDiskPlan, ISO_INSTALL_GAP_NOTE,
-    M7_ISO_INSTALL_OK_MARKER, M7_ISO_INSTALL_SCAFFOLD_MARKER, M7_STAGE46_HOLD_E4_NOTE,
+    prop_iso_reboot_lab_package, phase_b_continue_e4_for_spa, phase_b_e4_for_spa,
+    stage46_hold_e4_shell, InstallToDiskPlan, ISO_INSTALL_GAP_NOTE, M7_ISO_INSTALL_OK_MARKER,
+    M7_ISO_INSTALL_SCAFFOLD_MARKER, M7_PHASE_B_COEXIST_IDLE_NOTE, M7_PHASE_B_E4_CONTINUE_NOTE,
+    M7_PHASE_B_E4_CONTINUE_OK_MARKER, M7_STAGE46_HOLD_E4_NOTE,
 };
 pub use m5_api_gate::run_m5_api_gate;
 pub use m5_life_gate::run_m5_life_gate;

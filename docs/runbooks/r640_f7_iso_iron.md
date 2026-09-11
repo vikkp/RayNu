@@ -729,23 +729,49 @@ again and claim ISO-INSTALL-OK.”
 
 ---
 
-## 5. After Phase A (Phase B — the remaining Everest work)
+## 5. After Phase A (Phase B — closed on iron `f72b4276`)
 
 Phase A closed on iron with `56a3ffd` (run `34480107961`, 2026-09-10).
+**Phase B closed on iron with `f72b4276` (run `34552377351`, 2026-09-11).**
+This pin is the Phase B / SPA-path reference. Do not F11 older Phase B fails.
 
 1. Keep the installed leftover disk across a **guest** F7 reset only (reset cap
    is 1). A host reboot of RayNu-V zeros leftover DRAM — the nested disk does
    not persist across HV reboot unless we later persist it.
 2. SPA/REST: create-VM + attach so E4 is “SPA starts that installed disk,” not
-   “list/start/stop a SHELL stub.”
-   - **Host wire (this slice, no iron flash):** `POST /vms/{id}/start` of a
-     typed product ISO queues `SpaStartKind::RayNuF` and arms the same latch
-     as `raynuf.txt`. Marker `RAYNU-V-M7-PHASE-B-SPA-WIRE-OK`. `iso=0` stays
-     E4 SHELL. Do not print `ISO-INSTALL-OK` from host/CI.
-   - **Iron Phase B still open:** flash only after host tests are green. COM2
-     must show the SPA start note launching RayNu-F (preferably **without**
-     ESP `\EFI\RayNu\raynuf.txt`, so boot is not the auto-path). Do not claim
-     Everest / E4 honesty until that COM2 exists.
+   “list/start/stop a SHELL stub.” **Done on COM2 `f72b4276`.**
+   - Host wire: `POST /vms/{id}/start` of a typed product ISO queues
+     `SpaStartKind::RayNuF`. Marker `RAYNU-V-M7-PHASE-B-SPA-WIRE-OK`. `iso=0`
+     stays E4 SHELL. Do not print `ISO-INSTALL-OK` from host/CI.
+   - **Iron Phase B CLOSED:** no `--raynu-f`. COM2
+     `build: sha=f72b4276d198`: SKIP-OVMF-OK → E4-CONTINUE-OK → coexist
+     `HOST-NIC-HTTP-OK` on `10.99.99.145:8443` (lease `.145` this boot) →
+     SPA Start of RayNu-F product ISO → `ISO-INSTALL-OK` → reboot →
+     `DISK-BOOT-OK` → second Linux `root=UUID=814a97a0-…` → `login:`.
+     Evidence: [`../evidence/r640/2026-09-11-f72b4276-phase-b-spa-iso-install-disk-boot-ok.md`](../evidence/r640/2026-09-11-f72b4276-phase-b-spa-iso-install-disk-boot-ok.md).
+     Bring-up token `raynu-v-bringup`. LOM `:38`, not iDRAC dedicated.
+     PRE-EBS SNP timeout is expected if you skip that window.
+   - **Do not wait on ticks on `9061ffca`.** That pin (Phase B host wire,
+     no `--raynu-f`) still VMLAUNCHes retained OVMF. Without `raynuf.txt` the
+     collapse cap stays 16_777_216, so iron parks in Bds CpuSleep
+     `rip=0x7f0680d0` `reason=0xc` `insn=f4` and prints HLT ticks every 65536.
+     That is the old OVMF stall, not a tick-printer regression. Force Off.
+   - **Do not wait on the Stage 46 hold on `2a1c1ef1` / `34544625780`.**
+     Skip-OVMF printed (`RAYNU-V-M7-PHASE-B-SKIP-OVMF-OK`) then
+     `leave_to_e4` jumped to `resume_e4_shell`, which spun because
+     `stage46_hold_e4_shell()` is `product_iso_window_armed()`. COM2:
+     `restore host xcr0=0x1 osxsave=0 reason=0x0 rip=0x0` then
+     `Stage 46 product ISO hold`. Force Off.
+   - **Do not wait on the G0 BAR hole on `31f1ea0c` / `34546680282`.**
+     CONTINUE-OK printed, then packed-bzImage G0 died on
+     `no virtio-blk BAR hole above G0 guest RAM`. Force Off. Do not flash
+     `34546680282` / `31f1ea0c` again.
+   - **Do not wait on listen without HTTP-OK on `7f8dc0a9` / `34548550755`.**
+     SKIP-OVMF-OK + E4-CONTINUE-OK + `Phase B coexist idle` +
+     `HOST-NIC coexist listening on 10.99.99.146:8443` all printed, then
+     Mac `curl: (7)` after ~1 s. Cause: `MILLIS += 10` in tight idle raced
+     smoltcp Instant. Fixed by TSC Instant on `f72b4276`. Do not flash
+     `34548550755` / `7f8dc0a9` again.
 3. Still no TLS requirement for M7 (deferred).
 
 ---
@@ -753,7 +779,7 @@ Phase A closed on iron with `56a3ffd` (run `34480107961`, 2026-09-10).
 ## Honesty
 
 - Do not print `RAYNU-V-M7-ISO-INSTALL-OK` from nested, host, or CI.
-- `RAYNU-V-RAYNU-F-DISK-BOOT-OK` is a guest-exit marker (nested prints it too). It counts as the iron reboot-to-disk close **only** on a COM2 log whose `build: sha=` matches a CI run, as on `56a3ffd` / `34480107961`.
+- `RAYNU-V-RAYNU-F-DISK-BOOT-OK` is a guest-exit marker (nested prints it too). It counts as the iron reboot-to-disk close **only** on a COM2 log whose `build: sha=` matches a CI run, as on `56a3ffd` / `34480107961` (Phase A) and `f72b4276` / `34552377351` (Phase B SPA).
 - Do not treat `RAYNU-V-M7-ISO-BOOTED-FROM-DISK` as this distro install.
-- Phase A closed ≠ Everest closed: the iron SPA still launches the SHELL stub (`2b795a0`). Do not claim E4 / Everest until the SPA starts the installed disk.
-- HDA months moved 0.5 → 0.25 on this evidence (install + reboot-to-disk both on COM2), not before.
+- Phase A `--raynu-f` and Phase B SPA are both closed on iron. Residual polish: leftover-DRAM persist across a **host** reboot, TLS, console UI.
+- HDA months moved 0.25 → 0.0 on `f72b4276` Phase B COM2 (Everest product loop).

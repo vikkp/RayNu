@@ -6,12 +6,12 @@
     <title>RayNu-V — Honest Distance Assessment · Mount Everest</title>
     <meta
       name="description"
-      content="Honest Distance Assessment for RayNu-V: E2+E3+E3b+E5 closed on R640 (ISO install + reboot-to-disk); residual Phase B SPA glue + TLS/console."
+      content="Honest Distance Assessment for RayNu-V: Mount Everest product loop closed on R640 (SPA Start of RayNu-F ISO → install → disk reboot). Residual polish: TLS/console/leftover persist."
     />
     <meta property="og:title" content="RayNu-V · Distance to Mount Everest" />
     <meta
       property="og:description"
-      content="Living tracker: E2+E3+E3b+E5 stamps closed on R640 (Alpine ISO installed to virtio disk, rebooted into it). Months 0.25 · overall 98% · ETA 2026-10. Residual: SPA starts the installed disk (Phase B) + TLS/console."
+      content="Living tracker: Mount Everest closed on R640 via SPA (Alpine ISO installed to virtio disk, rebooted into it). Months 0.0 · overall 99% · ETA 2026-09. Residual polish: TLS/console/leftover persist."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -110,9 +110,9 @@
             Core hypervisor work is advanced. E2 boot, E3/E3b network HTTP,
             Phase F coexist, E4 SPA VMLAUNCH, and the whole E5 loop — Alpine
             ISO installed to a virtio disk, then rebooted into that disk to a
-            login prompt — are closed on real R640. Residual: the SPA must
-            start that installed disk (Phase B), TLS/console — not “can it
-            virtualize.”
+            login prompt — are closed on real R640, including the SPA path
+            (Phase B). Residual polish: TLS/console and leftover-disk persist
+            across a host reboot — not “can it virtualize.”
           </p>
           <ol class="hda-summits" id="hda-summits">
             <li data-reveal>
@@ -128,7 +128,7 @@
             <li data-reveal>
               <span class="hda-summits__name">Network vSphere-like UI</span>
               <span class="hda-summits__pct" data-summit="ui">85%</span>
-              <span class="hda-summits__note">E3+E3b+Phase F+P0-14 closed; Phase B host wire IN PROGRESS (SPA/REST queues RayNu-F); iron still SHELL stub until COM2; TLS/console residual</span>
+              <span class="hda-summits__note">E3+E3b+Phase F+P0-14+Phase B closed on iron f72b4276 (SPA Start of RayNu-F ISO); TLS/console residual</span>
             </li>
             <li data-reveal>
               <span class="hda-summits__name">Deploy Linux ISO</span>
@@ -163,10 +163,10 @@
             virtio-blk <code>vda</code>; then <code>reboot</code> → F7 relaunch
             → installed GRUB → <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code> →
             second Linux <code>root=UUID=</code> → login (EFI
-            <code>56a3ffd</code>). Residual: Phase B — the SPA starts that
-            disk; TLS/console. E4 SPA VMLAUNCH
-            (`RAYNU-V-M7-E4-SPA-LAUNCH-OK`) closed on iron 2026-08-21 — SHELL
-            stub, not Everest.
+            <code>56a3ffd</code> Phase A; EFI <code>f72b4276</code> Phase B
+            SPA). Residual polish: leftover persist / TLS / console. E4 SPA
+            VMLAUNCH (`RAYNU-V-M7-E4-SPA-LAUNCH-OK`) closed on iron 2026-08-21
+            — SHELL stub then; Phase B now starts RayNu-F.
           </p>
           <div class="cta" data-reveal>
             <a
