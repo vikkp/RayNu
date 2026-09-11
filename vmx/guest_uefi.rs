@@ -155,6 +155,26 @@ pub fn guest_uefi_raynu_f_collapse_ovmf_leg(requested: bool, already_launched: b
     requested && !already_launched
 }
 
+/// Phase B iron: product ISO on the CD, no `raynuf.txt`, not nested KVM.
+///
+/// Iron `9061ffca` (flash without `--raynu-f`) VMLAUNCHed retained OVMF and
+/// parked in Bds CpuSleep `rip=0x7f0680d0` `reason=0xc` `insn=f4`
+/// `ataio=0` `pci_ide=1`, printing HLT ticks every 65536
+/// ([`guest_uefi_hlt_stall_quiet_tick`]) toward the 16_777_216 product cap.
+/// That never reaches E4 coexist HTTP, so SPA Start cannot consume
+/// [`try_spa_product_iso_start`]. Skip OVMF after VMCS/slab setup and
+/// leave to E4. Nested `PRODUCT_ISO=` without `RAYNU_F` still uses the
+/// parked OVMF cap. `--raynu-f` still collapses at first exit and launches
+/// RayNu-F (Phase A). Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_phase_b_skip_ovmf_to_e4(
+    requested: bool,
+    product_iso: bool,
+    already_launched: bool,
+    nested: bool,
+) -> bool {
+    product_iso && !requested && !already_launched && !nested
+}
+
 /// Resume cap actually applied: collapse to 1 only while
 /// [`guest_uefi_raynu_f_collapse_ovmf_leg`] is true; otherwise `cap`.
 pub fn guest_uefi_raynu_f_resume_cap(collapse_ovmf: bool, cap: u32) -> u32 {
@@ -5508,6 +5528,12 @@ unsafe fn launch_uefi(
         return Err(GuestUefiLaunchError::LaunchSetupFailed);
     }
 
+    if phase_b_skip_ovmf_to_e4_now() {
+        serial::write_line(M7_E5_PHASE_B_SKIP_OVMF_OK_MARKER);
+        serial::write_line(M7_E5_PHASE_B_SKIP_OVMF_NOTE);
+        leave_to_e4();
+    }
+
     serial::write_line("boot: guest-UEFI VMLAUNCH → reset vector 0xFFFF_FFF0");
     match ops::vmlaunch() {
         Ok(()) => {
@@ -6437,7 +6463,7 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
         guest_uefi_raynu_f_collapse_ovmf_leg(
             crate::boot::raynu_f_flag::requested(),
             RAYNU_F_RAN.load(Ordering::Acquire),
-        ),
+        ) || phase_b_skip_ovmf_to_e4_now(),
         guest_uefi_resume_cap(guest_uefi_host_hypervisor_present()),
     );
     if !entry_fail && !tf && !fetch_fail && n < resume_cap {
@@ -7001,6 +7027,10 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
         }
         raynu_f_launch_on_stopped_vmcs();
     }
+    if phase_b_skip_ovmf_to_e4_now() {
+        serial::write_line(M7_E5_PHASE_B_SKIP_OVMF_OK_MARKER);
+        serial::write_line(M7_E5_PHASE_B_SKIP_OVMF_NOTE);
+    }
     leave_to_e4();
 }
 
@@ -7008,6 +7038,26 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
 /// RayNu-F takes the VMCS without waiting for OVMF to fault or hit the cap.
 pub const M7_E5_RAYNU_F_DIRECT_NOTE: &str =
     "boot: RayNu-F direct — OVMF leg bypassed at first exit (ADR-016; not ISO-INSTALL-OK)";
+
+/// Printed when iron product ISO is present, `raynuf.txt` is absent, and
+/// the retained-OVMF leg is skipped so E4 can take SPA Start. Host/COM2
+/// evidence of the skip, **not** Phase B iron close. Not `ISO-INSTALL-OK`.
+pub const M7_E5_PHASE_B_SKIP_OVMF_NOTE: &str =
+    "boot: guest-UEFI skip OVMF — product ISO on CD; wait for SPA Start (Phase B; not ISO-INSTALL-OK)";
+
+/// Host/COM2 marker for the Phase B skip. Not an iron close.
+pub const M7_E5_PHASE_B_SKIP_OVMF_OK_MARKER: &str = "RAYNU-V-M7-PHASE-B-SKIP-OVMF-OK";
+
+/// Runtime form of [`guest_uefi_phase_b_skip_ovmf_to_e4`].
+#[cfg(target_os = "uefi")]
+fn phase_b_skip_ovmf_to_e4_now() -> bool {
+    guest_uefi_phase_b_skip_ovmf_to_e4(
+        crate::boot::raynu_f_flag::requested(),
+        crate::devices::ide_cdrom::product_iso_window_armed(),
+        RAYNU_F_RAN.load(Ordering::Acquire),
+        guest_uefi_host_hypervisor_present(),
+    )
+}
 
 /// Pure form of the host-stack guard check: every guard byte still reads
 /// [`GUEST_UEFI_HOST_STACK_GUARD_BYTE`]. guest-UEFI host stack guard.

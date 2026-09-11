@@ -11,6 +11,7 @@ fn m7_phase_b_spa_wire_gate_passes() {
     );
     assert!(PHASE_B_RESIDUAL_NOTE.contains("not claimed"));
     assert!(PHASE_B_RESIDUAL_NOTE.contains("iso=0"));
+    assert!(PHASE_B_RESIDUAL_NOTE.contains("skips OVMF"));
     assert!(PHASE_B_RESIDUAL_NOTE.contains("ISO-INSTALL-OK"));
     assert!(phase_b_surface_present());
     assert!(

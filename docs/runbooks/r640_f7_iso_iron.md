@@ -746,6 +746,14 @@ Phase A closed on iron with `56a3ffd` (run `34480107961`, 2026-09-10).
      must show the SPA start note launching RayNu-F (preferably **without**
      ESP `\EFI\RayNu\raynuf.txt`, so boot is not the auto-path). Do not claim
      Everest / E4 honesty until that COM2 exists.
+   - **Do not wait on ticks on `9061ffca`.** That pin (Phase B host wire,
+     no `--raynu-f`) still VMLAUNCHes retained OVMF. Without `raynuf.txt` the
+     collapse cap stays 16_777_216, so iron parks in Bds CpuSleep
+     `rip=0x7f0680d0` `reason=0xc` `insn=f4` and prints HLT ticks every 65536.
+     That is the old OVMF stall, not a tick-printer regression. Force Off.
+     The skip-OVMF-to-E4 slice prints `RAYNU-V-M7-PHASE-B-SKIP-OVMF-OK` then
+     leaves to E4 so coexist HTTP can take SPA Start. Nested `PRODUCT_ISO=`
+     without `RAYNU_F` is unchanged. `--raynu-f` is still Phase A.
 3. Still no TLS requirement for M7 (deferred).
 
 ---
