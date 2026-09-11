@@ -14,6 +14,50 @@
       content="PowerEdge R640: HOST-NIC-HTTP-OK → SPA Start of RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login. 11 September 2026. Next: M8 operator hardening."
     />
     <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://raynuv.com/" />
+    <meta property="og:site_name" content="RayNu-V" />
+    <meta
+      property="og:image"
+      content="https://raynuv.com/assets/hero.jpg"
+    />
+    <meta property="og:image:width" content="2400" />
+    <meta property="og:image:height" content="1347" />
+    <meta
+      property="og:image:alt"
+      content="A lone climber with a headlamp ascending a snow ridge at dusk — the RayNu-V Mount Everest"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="RayNu-V — Mount Everest closed on iron"
+    />
+    <meta
+      name="twitter:description"
+      content="PowerEdge R640: SPA Start of RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login. Everest closed. Next: M8."
+    />
+    <meta name="twitter:image" content="https://raynuv.com/assets/hero.jpg" />
+    <link rel="canonical" href="https://raynuv.com/" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "RayNu-V",
+        "applicationCategory": "SystemsApplication",
+        "operatingSystem": "UEFI bare-metal; Dell PowerEdge R640/R650/R660",
+        "description": "Single-binary Type-1 hypervisor designed for formal verification from day one. Boots on real PowerEdge R640, serves a network Web UI, and machine-checks EPT memory isolation with Verus and Kani.",
+        "url": "https://raynuv.com/",
+        "codeRepository": "https://github.com/vikkp/RayNu",
+        "license": "https://github.com/vikkp/RayNu/blob/main/LICENSE",
+        "author": {
+          "@type": "Person",
+          "name": "Vikash Pandey",
+          "identifier": "https://orcid.org/0009-0001-2160-6357"
+        }
+      }
+    </script>
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="assets/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -22,16 +66,45 @@
     />
     <link rel="stylesheet" href="styles.css" />
   </head>
-  <body>
+  <body class="page-home">
+    <!-- REQUIRED SITE CHROME: do not delete nav.site-nav, #status, #start-here / fork__card, #console, #buddies, or CIO View.
+         Patch lived strings in place. Never replace this file wholesale on an HDA/Everest branch.
+         Guard: ./tools/check-site-chrome.sh -->
+    <nav class="site-nav" aria-label="Site">
+      <a class="site-nav__brand" href="index.html">RayNu-V</a>
+      <div class="site-nav__links">
+        <a href="#status">Status</a>
+        <a href="#console" data-hide-sm>Console</a>
+        <a href="#journey">Journey</a>
+        <a href="stories.html">Stories</a>
+        <a href="hda.html">Everest</a>
+        <a href="paper.html">Paper</a>
+        <a href="ciospeak.html">CIO View</a>
+        <a href="https://github.com/vikkp/RayNu" data-hide-sm>GitHub</a>
+      </div>
+    </nav>
     <header class="hero">
       <div class="hero__media" aria-hidden="true">
-        <img
-          class="hero__image"
-          src="assets/hero.jpg"
-          alt=""
-          width="2400"
-          height="1347"
-        />
+        <picture>
+          <source
+            type="image/webp"
+            srcset="
+              assets/hero-800.webp   800w,
+              assets/hero-1200.webp 1200w,
+              assets/hero-1600.webp 1600w,
+              assets/hero-2400.webp 2400w
+            "
+            sizes="100vw"
+          />
+          <img
+            class="hero__image"
+            src="assets/hero.jpg"
+            alt=""
+            width="2400"
+            height="1347"
+            fetchpriority="high"
+          />
+        </picture>
       </div>
       <div class="hero__veil" aria-hidden="true"></div>
       <div class="hero__content">
@@ -54,6 +127,12 @@
             >Read the architecture</a
           >
         </div>
+        <p class="hero__proof reveal reveal--delay-3">
+          Everest closed on iron: <code>RAYNU-V-R640-BOOT-OK</code> ·
+          <code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code> ·
+          <code>RAYNU-V-M7-ISO-INSTALL-OK</code> ·
+          <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code>
+        </p>
       </div>
     </header>
 
@@ -77,13 +156,23 @@
             <strong>M8</strong> — not a reopened Everest.
           </p>
           <figure class="milestone-shot" data-reveal>
-            <img
-              src="assets/r640-boot-ok-com2.png"
-              alt="macOS Terminal: iDRAC SOL session ending in RAYNU-V-R640-BOOT-OK"
-              width="1600"
-              height="900"
-              loading="lazy"
-            />
+            <picture>
+              <source
+                type="image/webp"
+                srcset="
+                  assets/r640-boot-ok-com2-800.webp   800w,
+                  assets/r640-boot-ok-com2-1556.webp 1556w
+                "
+                sizes="(max-width: 700px) 100vw, 42rem"
+              />
+              <img
+                src="assets/r640-boot-ok-com2.png"
+                alt="macOS Terminal: iDRAC SOL session ending in RAYNU-V-R640-BOOT-OK"
+                width="1556"
+                height="926"
+                loading="lazy"
+              />
+            </picture>
             <figcaption>
               Operator Terminal.app · iDRAC SOL (<code>console com2</code>) —
               first iron close
@@ -108,6 +197,31 @@ localhost login:</code></pre>
         </div>
       </section>
 
+      <section class="section section--fork" id="start-here">
+        <div class="section__inner">
+          <div class="fork">
+            <a class="fork__card" href="ciospeak.html" data-reveal>
+              <span class="fork__kicker">For infrastructure leaders</span>
+              <span class="fork__title">Your PowerEdge fleet has years left.</span>
+              <span class="fork__text"
+                >License economics, isolation assurance, and what a reversible
+                design partnership looks like — the executive view.</span
+              >
+              <span class="fork__cta">CIO View →</span>
+            </a>
+            <a class="fork__card" href="#journey" data-reveal>
+              <span class="fork__kicker">For engineers</span>
+              <span class="fork__title">Every claim has a marker.</span>
+              <span class="fork__text"
+                >Dozens of closed gates, Verus proof transcripts, and serial
+                logs from real iron — the evidence, end to end.</span
+              >
+              <span class="fork__cta">The journey ↓</span>
+            </a>
+          </div>
+        </div>
+      </section>
+
       <section class="section section--journey" id="journey">
         <div class="section__inner">
           <h2 class="section__title">M1.0 → M6: how we got here</h2>
@@ -117,6 +231,21 @@ localhost login:</code></pre>
             artifacts (<code>cargo test</code> / Verus / Kani smokes) — not that
             the product is finished, and not that PowerEdge R640 is validated.
           </p>
+
+          <dl class="statband" data-reveal>
+            <div class="statband__item">
+              <dt>Gates closed · M1.0 → Everest</dt>
+              <dd>55+</dd>
+            </div>
+            <div class="statband__item">
+              <dt>Verus proofs · M6.9 external audit</dt>
+              <dd>80 <span class="statband__unit">verified · 0 errors</span></dd>
+            </div>
+            <div class="statband__item">
+              <dt>Mount Everest · real PowerEdge R640</dt>
+              <dd>closed</dd>
+            </div>
+          </dl>
 
           <div class="journey">
             <div class="journey__era" data-reveal>
@@ -539,9 +668,33 @@ localhost login:</code></pre>
                 <li>
                   <span class="journey__gate">E5</span>
                   <span class="journey__text"
-                    >Alpine ISO → virtio disk → reboot to installed GRUB
-                    (2026-09-10/11) →
-                    <code>RAYNU-V-M7-ISO-INSTALL-OK</code> /
+                    >Guest-UEFI OVMF past SEC + CD/virtio-blk on private VMCS
+                    (nested VT-x, 2026-08-23) →
+                    <code>RAYNU-V-M7-E5-OVMF-VIRTIO-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">E5 · 44</span>
+                  <span class="journey__text"
+                    >Guest firmware reads the CD — ATAPI READ(10),
+                    sectors=1, on iron (2026-08-27) →
+                    <code>RAYNU-V-M7-E5-OVMF-ATAPI-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">E5 · 45</span>
+                  <span class="journey__text"
+                    >El Torito CD EFI on iron — catalog + boot image
+                    (2026-08-27) →
+                    <code>RAYNU-V-M7-E5-OVMF-ELTORITO-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">E5 · 46</span>
+                  <span class="journey__text"
+                    >Nested RayNu-F alpine-extended sys-install complete
+                    (2026-09-05, Please reboot + F7). Nested ≠ iron.
+                    Iron close is the Everest row below →
                     <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code></span
                   >
                 </li>
@@ -549,7 +702,8 @@ localhost login:</code></pre>
                   <span class="journey__gate">Everest</span>
                   <span class="journey__text"
                     >SPA Start of RayNu-F on coexist HTTP
-                    (<code>f72b4276</code>, 2026-09-11) — M7 closed on iron</span
+                    (<code>f72b4276</code>, 2026-09-11) — M7 closed on iron →
+                    <code>RAYNU-V-M7-ISO-INSTALL-OK</code></span
                   >
                 </li>
               </ol>
@@ -597,8 +751,9 @@ localhost login:</code></pre>
                 <span class="pillars__why"
                   >Target: deploy and attest on PowerEdge you own, via Redfish —
                   not a mystery appliance. R640 iron closed BOOT-OK (E2),
-                  UEFI-HTTP-OK (E3), host-NIC HTTP (E3b), and E4 SPA VMLAUNCH
-                  (P0-14, SHELL stub) through 2026-08-21.</span
+                  UEFI-HTTP-OK (E3), host-NIC HTTP (E3b), E4 SPA VMLAUNCH,
+                  El Torito CD EFI, and Mount Everest (ISO-INSTALL-OK +
+                  DISK-BOOT-OK, 2026-09-11).</span
                 >
               </div>
               <span class="pillars__note">Near-term</span>
@@ -651,6 +806,45 @@ localhost login:</code></pre>
         </div>
       </section>
 
+      <section class="section section--console" id="console">
+        <div class="section__inner">
+          <p class="milestone-kicker" data-reveal>The product · management UI</p>
+          <h2 class="section__title">The console ships inside the binary.</h2>
+          <p class="section__lede">
+            The management SPA is embedded in the <code>.efi</code> as a
+            compressed PE asset (<code>.aswebui</code>) and served from the
+            host NIC — VM list, create-VM, ISO attach, and the audit tail.
+            Shown here with the bundled demo state; on R640 iron it answers
+            after <code>BOOT-OK</code> on the host-owned BCM5720 (E3b,
+            2026-08-20), even while guests run (Phase F).
+          </p>
+          <figure class="milestone-shot milestone-shot--wide" data-reveal>
+            <picture>
+              <source
+                type="image/webp"
+                srcset="
+                  assets/spa-800.webp   800w,
+                  assets/spa-1600.webp 1600w,
+                  assets/spa-2220.webp 2220w
+                "
+                sizes="(max-width: 700px) 100vw, 56rem"
+              />
+              <img
+                src="assets/spa.png"
+                alt="RayNu-V management Web UI: two shell-ready VMs in the list, Create Virtual Machine form, and the audit log tail"
+                width="2220"
+                height="1262"
+                loading="lazy"
+              />
+            </picture>
+            <figcaption>
+              Management SPA · demo-state bundle · served from the host-owned
+              NIC after BOOT-OK (E3b closed 2026-08-20)
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
       <section class="section section--ship" id="ship">
         <div class="section__inner">
           <h2 class="section__title">One binary. One server family.</h2>
@@ -659,7 +853,8 @@ localhost login:</code></pre>
             PowerEdge R640 / R650 / R660.
             <strong>Today’s closed gates are on Latitude + QEMU nested
             KVM</strong>
-            plus real R640 iron through Mount Everest: <code>RAYNU-V-R640-BOOT-OK</code> (E2),
+            plus real R640 iron through Mount Everest:
+            <code>RAYNU-V-R640-BOOT-OK</code> (E2),
             <code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code> (E3b),
             <code>RAYNU-V-M7-ISO-INSTALL-OK</code> +
             <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code> (E5 + Phase B, 2026-09-11).
@@ -695,6 +890,30 @@ cargo build --release --target x86_64-unknown-uefi --features uefi-bin
         </div>
       </section>
 
+      <section class="section section--buddies" id="buddies">
+        <div class="section__inner">
+          <p class="milestone-kicker" data-reveal>Field notes · friendship</p>
+          <h2 class="section__title">Making buddies along the way.</h2>
+          <p class="section__lede">
+            Our best bud is <strong>Mr. COM2 Serial Port</strong>. He works at
+            115,200 bits per second, never lies, never sleeps, and tells us
+            everything — every trap, every timer tick, every time the firmware
+            throws a chair. He was there for first light on the R640, he was
+            there for the red screen, and he prints the markers this site is
+            named after. We transcribed one full conversation with him on real
+            iron and annotated every beat.
+          </p>
+          <div class="cta" data-reveal>
+            <a class="cta__primary" href="com2.html">Have a chat with COM2</a>
+            <a
+              class="cta__secondary"
+              href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/2026-08-15-boot-ok-marker-com2.txt"
+              >The raw transcript</a
+            >
+          </div>
+        </div>
+      </section>
+
       <section class="section section--close" id="start">
         <div class="section__inner">
           <h2 class="section__title">Talk to us.</h2>
@@ -712,7 +931,10 @@ cargo build --release --target x86_64-unknown-uefi --features uefi-bin
             stamp persist <code>RAYNU-V-M7-ISO-BOOTED-FROM-DISK</code> and
             durable HTTP <code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code> (2026-08-20)
             and E4 SPA VMLAUNCH <code>RAYNU-V-M7-E4-SPA-LAUNCH-OK</code>
-            (2026-08-21) and the full ISO install loop
+            (2026-08-21, SHELL stub) and Stage 44/45
+            <code>OVMF-ATAPI-OK</code> / <code>OVMF-ELTORITO-OK</code>
+            (2026-08-27);
+            and the full ISO install loop
             <code>RAYNU-V-M7-ISO-INSTALL-OK</code> /
             <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code> (2026-09-11).
             Mount Everest is closed. Next is M8 operator hardening. See the

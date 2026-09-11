@@ -353,10 +353,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | everest-closed-m8-adr |
-| Summary | **Public close of Mount Everest + ADR-018.** Iron evidence already landed (`f72b4276` / `34552377351`). This slice records the win on HDA + `site/hda.html` (COM2 snippets), opens **M8 operator hardening** (persist → TLS → auth → console → upload → catalog → Windows later), and renumbers cluster to **M9**. Host/CI never print `ISO-INSTALL-OK`. Overall stays **99%** (not 100%). |
-| Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Summit copy, not a score change. Next move = M8.0. |
-| Gates touched | ADR-018 + `docs/m8_plan.md` + site celebration. `./tools/sync-hda-site.sh --check`. |
+| Commit | site-chrome-lock |
+| Summary | **Restore public-site chrome** (nav, Status, CIO View fork, console, COM2) that Everest/HDA rewrites keep deleting. Overlay Everest-closed lived copy. Always-on Cursor rule + `./tools/check-site-chrome.sh` + CI job `site-chrome` so the next status update cannot strip it. |
+| Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Chrome restore, not a score change. |
+| Gates touched | `site/` chrome restore + `tools/check-site-chrome.sh`. `./tools/sync-hda-site.sh --check`. |
 | Months Δ | 0.0→0.0 (held) |
 
 
@@ -370,6 +370,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
 | H5 | ~~Phase B — iron SPA still launches the SHELL stub~~ | — | **Resolved** 2026-09-11 (`f72b4276` / `34552377351`). Residual polish is **M8**, not Everest. |
 | H10 | Leftover-DRAM disk dies on **HV** reboot | MED | **M8.0** first gate ([m8_plan.md](m8_plan.md)). Guest F7 persist already closed (ADR-017). |
+| H11 | Truncated `site/` on feature branches | LOW | **This commit:** restore Kimi updater chrome from `origin/main`; `./tools/check-site-chrome.sh` + CI `site-chrome`; always-on `.cursor/rules/site-chrome.mdc`. Do not replace `site/index.html` wholesale on HDA/Everest work. |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
 | H8 | ~~Phase F coexist not closed on iron~~ | — | **Resolved** 2026-08-20 (`HOST-NIC coexist listening` + `HOST-NIC-HTTP-OK` while VMX on; G1–G3 parked) |
@@ -379,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-11 | site-chrome-lock | 0.0 | 99 | **Restore CIO/Status chrome on the public front page** (nav, fork cards, console, COM2) after Everest celebration truncated `site/`. Always-on Cursor rule + `check-site-chrome.sh` + CI so the next HDA update cannot strip it. months 0.0 held; overall 99 held |
 | 2026-09-11 | everest-closed-m8-adr | 0.0 | 99 | **Public Everest close + ADR-018.** Site/HDA celebrate iron `f72b4276` / `34552377351` (COM2 snippets). M8 = operator hardening (persist→TLS→auth→console→upload→catalog→Windows later); cluster → M9. months 0.0 held; overall 99 held; not 100%. Host/CI never print `ISO-INSTALL-OK` |
 | 2026-09-11 | phase-b-skip-ovmf | 0.25 | 98 | **Iron `7f8dc0a9` / `34548550755`: listen then Mac `curl: (7)`.** SKIP-OVMF-OK + E4-CONTINUE-OK + coexist idle (no G0) + `HOST-NIC coexist listening on 10.99.99.146:8443`; eight LAN RX dumps, no `to=us`. Tight idle `MILLIS += 10` raced smoltcp Instant. Host TSC Instant; months 0.25 held; overall 98 held; `HOST-NIC-HTTP-OK` / iron Phase B / Everest / `ISO-INSTALL-OK` not claimed |
 | 2026-09-11 | phase-b-skip-ovmf | 0.25 | 98 | **Iron `31f1ea0c` / `34546680282`: CONTINUE-OK then G0 BAR hole.** Packed-bzImage G0 cannot run on the Stage 46 `[1MiB,512MiB)` pool (`v0.1.0-barfix` inverted). Phase A `--raynu-f` never took E4 G0. Host `enter_phase_b_coexist_idle`; months 0.25 held; overall 98 held; iron Phase B / Everest / `ISO-INSTALL-OK` not claimed |

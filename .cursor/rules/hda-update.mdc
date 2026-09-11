@@ -53,7 +53,8 @@ Update HDA in the **same change** (or a tight follow-up commit) when **any** of:
    This regenerates `site/hda.json` from frontmatter. Stage **both** `docs/hda.md` and `site/hda.json`.
    If summit copy on `site/hda.html` is wrong (notes/labels), fix HTML in the same commit.
 8. **Keep** structure/headings stable (Cursor + humans parse them). Do not delete Mount Everest definition.
-9. **Commit message** should mention HDA when scores move, e.g.  
+9. **Do not strip public-site chrome** when touching `site/` from an HDA/Everest update. Patch lived strings in `site/index.html` **in place**. Never replace the homepage wholesale. Keep `nav.site-nav`, `#status`, `#start-here` / `fork__card`, `#console`, `#buddies`, `ciospeak.html`, and `com2.html`. Run `./tools/check-site-chrome.sh` after any `site/` edit (CI job `site-chrome` must stay green).
+10. **Commit message** should mention HDA when scores move, e.g.  
    `docs(hda): months 4.5→4.0 after R640 serial bring-up`  
    Footer line: `HDA: months X→Y · overall A%→B% · ETA YYYY-MM`
 
@@ -99,11 +100,12 @@ When user asks to commit:
 1. Stage code changes.
 2. Refresh `docs/hda.md` as above.
 3. Run `./tools/sync-hda-site.sh` (and `--check`).
-4. Stage `docs/hda.md` + `site/hda.json` (+ `site/hda.html` if copy changed).
-5. Commit once (preferred) or code commit + immediate `docs(hda):` commit.
-6. In the PR/summary, one line: `HDA: months_to_everest X→Y · overall A%→B% · ETA YYYY-MM`.
+4. Run `./tools/check-site-chrome.sh` if `site/` changed.
+5. Stage `docs/hda.md` + `site/hda.json` (+ `site/hda.html` if copy changed; never drop chrome files).
+6. Commit once (preferred) or code commit + immediate `docs(hda):` commit.
+7. In the PR/summary, one line: `HDA: months_to_everest X→Y · overall A%→B% · ETA YYYY-MM`.
 
-CI enforces freshness: `./tools/sync-hda-site.sh --check` must pass.
+CI enforces freshness: `./tools/sync-hda-site.sh --check` must pass. CI also runs `./tools/check-site-chrome.sh`.
 
 ## Optional one-shot user phrases
 
