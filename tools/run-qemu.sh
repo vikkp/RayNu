@@ -8,9 +8,11 @@
 # Stage 46: PRODUCT_ISO=/path/to/distro.iso stages EFI/RayNu/linux.iso (not default).
 # Product ISO defaults QEMU_MEM=2560M so leftover DRAM exists above PRECISE
 # (512MiB). iso=0 / boot gate stay 512M. Not ISO-INSTALL-OK.
-# M8.0 nested persist: M8_PERSIST_IMG=/path/to/persist.img adds a QEMU NVDIMM
-# (memory-backend-file + nvdimm; the virtio HPA *is* the file). Default off so
-# Everest leftover nested stays. Do not map all guest RAM through a host file.
+# M8.0 nested persist: M8_PERSIST_IMG=/path/to/persist.img adds a file-backed
+# pc-dimm (the virtio HPA *is* the file). Distro OVMF_CODE_4M has no NvdimmDxe,
+# so this is not EFI PersistentMemory. Use QEMU_MEM=512M and a ≥2G image so the
+# leftover window above PRECISE *is* the file (1GiB disk + 768MiB floor).
+# Default off. Do not map all guest RAM through a host file.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -270,8 +272,9 @@ if (( esp_bytes > 480 * 1024 * 1024 )); then
   echo "==> ESP ${esp_bytes} bytes exceeds vvfat; FAT32 image $ESP_IMG (${img_mib} MiB)"
 fi
 
-# M8.0: optional NVDIMM so persist HPAs survive kill/restart of this process.
-# Leftover DRAM remains the default (M8_PERSIST_IMG unset). Not ISO-INSTALL-OK.
+# M8.0: optional file-backed pc-dimm so persist HPAs survive kill/restart of
+# this process. Leftover DRAM remains the default (M8_PERSIST_IMG unset).
+# Distro OVMF has no NvdimmDxe — do not use -device nvdimm here. Not ISO-INSTALL-OK.
 qemu_to_bytes() {
   local s="${1%%,*}"
   case "$s" in
@@ -283,17 +286,23 @@ qemu_to_bytes() {
 }
 
 M8_PERSIST_IMG="${M8_PERSIST_IMG:-}"
-M8_PERSIST_SIZE="${M8_PERSIST_SIZE:-1G}"
-NVDIMM_ARGS=()
+M8_PERSIST_SIZE="${M8_PERSIST_SIZE:-2G}"
+PERSIST_MEM_ARGS=()
 QEMU_M_ARG="$QEMU_MEM"
 if [[ -n "$M8_PERSIST_IMG" ]]; then
+  # File-backed leftover window starts at PRECISE. Ignore PRODUCT_ISO's 2560M
+  # default unless M8_PERSIST_KEEP_RAM=1 (that would carve anonymous DRAM).
+  if [[ "${M8_PERSIST_KEEP_RAM:-0}" != "1" ]]; then
+    QEMU_MEM=512M
+  fi
   mkdir -p "$(dirname "$M8_PERSIST_IMG")"
   if [[ ! -f "$M8_PERSIST_IMG" ]]; then
     truncate -s "$M8_PERSIST_SIZE" "$M8_PERSIST_IMG"
   fi
   psize=$(stat -c%s "$M8_PERSIST_IMG")
-  if (( psize < 256 * 1024 * 1024 )); then
-    echo "error: M8_PERSIST_IMG too small ($psize); need ≥256MiB" >&2
+  # 1GiB virtio disk + 768MiB leftover guest floor (carve_leftover_install_disk).
+  if (( psize < 1792 * 1024 * 1024 )); then
+    echo "error: M8_PERSIST_IMG too small ($psize); need ≥1792MiB (1GiB disk + 768MiB floor)" >&2
     exit 1
   fi
   ram_b=$(qemu_to_bytes "$QEMU_MEM")
@@ -303,17 +312,23 @@ if [[ -n "$M8_PERSIST_IMG" ]]; then
   max_mib=$(( max_b / 1024 / 1024 ))
   ram_arg="${QEMU_MEM%%,*}"
   QEMU_M_ARG="${ram_arg},slots=2,maxmem=${max_mib}M"
+  if (( ram_b > 512 * 1024 * 1024 )); then
+    echo "==> note: QEMU_MEM=$QEMU_MEM >512M; leftover above PRECISE may be anonymous DRAM, not the persist file (want QEMU_MEM=512M)"
+  fi
   local_i=0
   for local_i in "${!ACCEL_ARGS[@]}"; do
-    if [[ "${ACCEL_ARGS[$local_i]}" == "-machine" ]]; then
-      ACCEL_ARGS[$((local_i + 1))]="${ACCEL_ARGS[$((local_i + 1))]},nvdimm=on"
+    if [[ "${ACCEL_ARGS[$local_i]}" == "-cpu" ]]; then
+      # TCG qemu64 lacks CPUID.hypervisor; nested leftover→File persist needs it.
+      if [[ "${ACCEL_ARGS[$((local_i + 1))]}" != *hypervisor* ]]; then
+        ACCEL_ARGS[$((local_i + 1))]="${ACCEL_ARGS[$((local_i + 1))]},+hypervisor"
+      fi
     fi
   done
-  NVDIMM_ARGS+=(
+  PERSIST_MEM_ARGS+=(
     -object "memory-backend-file,id=mem-m8-persist,share=on,mem-path=${M8_PERSIST_IMG},size=${psize}"
-    -device nvdimm,memdev=mem-m8-persist,id=nvdimm0,unarmed=off
+    -device pc-dimm,memdev=mem-m8-persist,id=dimm-m8-persist
   )
-  echo "==> M8 persist NVDIMM ${M8_PERSIST_IMG} (${psize} bytes) maxmem=${max_mib}M (not ISO-INSTALL-OK)"
+  echo "==> M8 persist pc-dimm ${M8_PERSIST_IMG} (${psize} bytes) maxmem=${max_mib}M (not ISO-INSTALL-OK)"
 fi
 
 echo "==> QEMU boot (COM1 → ${SERIAL_CHARDEV}); mem=${QEMU_M_ARG}; guest exits via isa-debug-exit"
@@ -327,5 +342,5 @@ exec qemu-system-x86_64 \
   "${FW_ARGS[@]}" \
   -drive format=raw,file="$ESP_DRIVE" \
   "${HOST_NIC_ARGS[@]}" \
-  "${NVDIMM_ARGS[@]}" \
+  "${PERSIST_MEM_ARGS[@]}" \
   "$@"

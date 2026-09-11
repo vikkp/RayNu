@@ -371,6 +371,9 @@ fn persist_hpa_peek_and_choice_prefer_persist() {
         choose_install_disk_attach(false, false, false),
         InstallDiskChoice::PoolZero
     );
+    assert!(nested_promotes_leftover_to_file_persist(true, false));
+    assert!(!nested_promotes_leftover_to_file_persist(true, true));
+    assert!(!nested_promotes_leftover_to_file_persist(false, false));
 }
 
 #[test]

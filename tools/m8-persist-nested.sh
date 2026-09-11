@@ -2,13 +2,15 @@
 # M8.0 nested persist: install → kill/restart the *hypervisor* process →
 # second Linux without setup-disk. Mechanism proof, not iron.
 #
-# The virtio HPA is a QEMU NVDIMM file (`M8_PERSIST_IMG`). Guest F7 is not
+# The virtio HPA is a QEMU file-backed pc-dimm (`M8_PERSIST_IMG`). Distro
+# OVMF_CODE_4M has no NvdimmDxe (no EFI PersistentMemory). Guest F7 is not
 # this test. Nested QEMU ≠ R640. Host/CI cargo tests must never print
 # RAYNU-V-M8-DISK-PERSIST-NESTED-OK or RAYNU-V-M7-ISO-INSTALL-OK.
 # Iron COM2 marker RAYNU-V-M8-DISK-PERSIST-OK is forbidden here.
 #
 # MODE=smoke  one short boot: require persist serial + leftover skip.
 # MODE=full   two boots (default). Boot 1 stops after Alpine install.
+#             Needs nested KVM (VMLAUNCH). TCG is smoke-only.
 #
 # Usage:
 #   MODE=smoke ./tools/m8-persist-nested.sh
@@ -21,20 +23,29 @@ cd "$ROOT"
 MODE="${MODE:-full}"
 TIMEOUT_BOOT1="${TIMEOUT_BOOT1:-1800}"
 TIMEOUT_BOOT2="${TIMEOUT_BOOT2:-900}"
-TIMEOUT_SMOKE="${TIMEOUT_SMOKE:-90}"
+TIMEOUT_SMOKE="${TIMEOUT_SMOKE:-180}"
+WAIT_QEMU_START="${WAIT_QEMU_START:-300}"
 SERIAL1="${SERIAL1:-$ROOT/target/m8-persist-boot1.log}"
 SERIAL2="${SERIAL2:-$ROOT/target/m8-persist-boot2.log}"
 ESP="${ESP:-$ROOT/target/m8-persist-esp}"
 ALPINE_FLAVOR="${ALPINE_FLAVOR:-extended}"
 ISO_URL="${ALPINE_ISO_URL:-https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/x86_64/alpine-${ALPINE_FLAVOR}-3.21.3-x86_64.iso}"
-ISO_PATH="${PRODUCT_ISO:-$ROOT/target/alpine-${ALPINE_FLAVOR}-3.21.3-x86_64.iso}"
+ALPINE_ISO="${ALPINE_ISO:-$ROOT/target/alpine-${ALPINE_FLAVOR}-3.21.3-x86_64.iso}"
+SMOKE_ISO="${SMOKE_ISO:-$ROOT/target/m8-smoke-window.iso}"
 M8_PERSIST_IMG="${M8_PERSIST_IMG:-$ROOT/target/m8-persist.img}"
-M8_PERSIST_SIZE="${M8_PERSIST_SIZE:-1G}"
-QEMU_MEM="${QEMU_MEM:-2560M}"
+M8_PERSIST_SIZE="${M8_PERSIST_SIZE:-2G}"
+# 512M initial RAM so leftover above PRECISE *is* the pc-dimm file.
+QEMU_MEM="${QEMU_MEM:-512M}"
 RAYNU_F="${RAYNU_F:-1}"
 NESTED_OK="RAYNU-V-M8-DISK-PERSIST-NESTED-OK"
 IRON_OK="RAYNU-V-M8-DISK-PERSIST-OK"
 ISO_OK="RAYNU-V-M7-ISO-INSTALL-OK"
+
+if [[ "$MODE" == "smoke" && -z "${PRODUCT_ISO:-}" ]]; then
+  ISO_PATH="$SMOKE_ISO"
+else
+  ISO_PATH="${PRODUCT_ISO:-$ALPINE_ISO}"
+fi
 
 mkdir -p "$(dirname "$SERIAL1")" "$ESP" "$(dirname "$ISO_PATH")" "$(dirname "$M8_PERSIST_IMG")"
 
@@ -53,8 +64,8 @@ forbid_markers() {
 require_persist_reserved() {
   local log="$1"
   if ! grep -qF 'persist install disk hpa=' "$log"; then
-    echo "error: no Stage 46 persist install disk (NVDIMM not PersistentMemory?)" >&2
-    grep -E 'leftover install disk|persist install disk|report-RAM extra|nvdimm|NVDIMM' "$log" | head -n 20 >&2 || true
+    echo "error: no Stage 46 persist install disk (pc-dimm not leftover?)" >&2
+    grep -E 'leftover install disk|persist install disk|report-RAM extra|pc-dimm|hypervisor' "$log" | head -n 20 >&2 || true
     exit 1
   fi
   if ! grep -qF 'leftover install disk skip persist' "$log"; then
@@ -70,8 +81,18 @@ scan() {
     "$log" | head -n 80 || true
 }
 
+ensure_smoke_iso() {
+  if [[ -f "$ISO_PATH" ]]; then
+    return 0
+  fi
+  echo "==> window-sized smoke ISO $ISO_PATH (not alpine; not ISO-INSTALL-OK)"
+  dd if=/dev/zero of="$ISO_PATH" bs=1024 count=80 status=none
+}
+
 fetch_iso() {
-  if [[ ! -f "$ISO_PATH" ]]; then
+  if [[ "$ISO_PATH" == "$SMOKE_ISO" ]]; then
+    ensure_smoke_iso
+  elif [[ ! -f "$ISO_PATH" ]]; then
     echo "==> fetching alpine-${ALPINE_FLAVOR} ISO to $ISO_PATH"
     curl -fsSL -o "${ISO_PATH}.part" "$ISO_URL"
     mv "${ISO_PATH}.part" "$ISO_PATH"
@@ -85,11 +106,44 @@ fetch_iso() {
   echo "==> ISO $ISO_PATH ($psz bytes) (not ISO-INSTALL-OK)"
 }
 
+kvm_wedged() {
+  dmesg 2>/dev/null | grep -q 'kvm_spurious_fault' || return 1
+}
+
+kvm_usable() {
+  [[ -e /dev/kvm && -r /dev/kvm && -w /dev/kvm ]]
+}
+
+pick_accel() {
+  if [[ -n "${QEMU_ACCEL:-}" && "${QEMU_ACCEL}" != "auto" ]]; then
+    echo "==> QEMU_ACCEL=$QEMU_ACCEL (user)"
+    return 0
+  fi
+  if [[ "$MODE" == "full" ]]; then
+    if ! kvm_usable; then
+      echo "error: MODE=full needs nested KVM (VMLAUNCH); /dev/kvm not usable" >&2
+      exit 1
+    fi
+    if kvm_wedged; then
+      echo "error: MODE=full needs nested KVM; host kvm_spurious_fault (builtin kvm_intel, cannot reload)" >&2
+      exit 1
+    fi
+    QEMU_ACCEL=kvm
+  elif kvm_usable && ! kvm_wedged; then
+    QEMU_ACCEL=kvm
+  else
+    QEMU_ACCEL=tcg
+    echo "==> accel tcg (kvm missing or kvm_spurious_fault; persist scan is PRE-VMLAUNCH)"
+  fi
+  echo "==> QEMU_ACCEL=$QEMU_ACCEL"
+}
+
 prepare_host() {
   if [[ -e /dev/kvm ]]; then
     sudo chmod a+rw /dev/kvm || true
   fi
-  if [[ -x "$ROOT/tools/enable-nested-kvm.sh" ]]; then
+  if [[ "${QEMU_ACCEL}" == "kvm" && -x "$ROOT/tools/enable-nested-kvm.sh" ]]; then
+    # Builtin kvm_intel cannot unload; do not treat as fatal for smoke.
     sudo "$ROOT/tools/enable-nested-kvm.sh" || true
   fi
   echo "==> host virt flags: $(grep -m1 '^flags' /proc/cpuinfo | grep -oE 'vmx|svm' | tr '\n' ' ' || true)"
@@ -113,8 +167,30 @@ reset_persist_img() {
   echo "==> persist img $M8_PERSIST_IMG ($M8_PERSIST_SIZE, empty) (not ISO-INSTALL-OK)"
 }
 
-# Run QEMU in the background. Writes timeout PID and qemu PID files.
+# Linux comm is 15 chars (`qemu-system-x86`). Walk timeout children.
 # Does not use pkill -f.
+find_qemu_pid() {
+  local tpid="$1"
+  local pid g comm
+  while read -r pid; do
+    [[ -z "$pid" ]] && continue
+    comm=$(ps -p "$pid" -o comm= 2>/dev/null || true)
+    if [[ "$comm" == qemu-system* ]]; then
+      echo "$pid"
+      return 0
+    fi
+    while read -r g; do
+      [[ -z "$g" ]] && continue
+      comm=$(ps -p "$g" -o comm= 2>/dev/null || true)
+      if [[ "$comm" == qemu-system* ]]; then
+        echo "$g"
+        return 0
+      fi
+    done < <(pgrep -P "$pid" || true)
+  done < <(pgrep -P "$tpid" || true)
+  pgrep -u "$(id -u)" qemu-system | head -n 1 || true
+}
+
 start_qemu() {
   local serial="$1"
   local timeout_secs="$2"
@@ -124,7 +200,7 @@ start_qemu() {
   : >"$serial"
   timeout --signal=KILL "$timeout_secs" \
     env PRODUCT_ISO="$ISO_PATH" ESP="$ESP" SERIAL_CHARDEV="file:$serial" \
-    QEMU_ACCEL="${QEMU_ACCEL:-kvm}" RAYNU_F="$RAYNU_F" QEMU_MEM="$QEMU_MEM" \
+    QEMU_ACCEL="${QEMU_ACCEL}" RAYNU_F="$RAYNU_F" QEMU_MEM="$QEMU_MEM" \
     M8_PERSIST_IMG="$M8_PERSIST_IMG" M8_PERSIST_SIZE="$M8_PERSIST_SIZE" \
     REBUILD_EFI=0 \
     "$ROOT/tools/run-qemu.sh" \
@@ -133,21 +209,21 @@ start_qemu() {
   echo "$tpid" >"$ROOT/target/m8-persist-timeout.pid"
   local qpid=""
   local i
-  for i in $(seq 1 40); do
+  for i in $(seq 1 "$WAIT_QEMU_START"); do
     sleep 1
-    qpid=$(pgrep -u "$(id -u)" qemu-system-x86_64 | head -n 1 || true)
+    qpid=$(find_qemu_pid "$tpid")
     if [[ -n "$qpid" ]]; then
       echo "$qpid" >"$ROOT/target/m8-persist-qemu.pid"
       echo "==> qemu pid=$qpid timeout pid=$tpid serial=$serial"
       return 0
     fi
     if ! kill -0 "$tpid" 2>/dev/null; then
-      echo "error: QEMU wrapper exited before qemu-system-x86_64" >&2
+      echo "error: QEMU wrapper exited before qemu-system" >&2
       cat "$stderr" >&2 || true
       exit 1
     fi
   done
-  echo "error: qemu-system-x86_64 did not start" >&2
+  echo "error: qemu-system did not start within ${WAIT_QEMU_START}s" >&2
   cat "$stderr" >&2 || true
   exit 1
 }
@@ -179,13 +255,32 @@ wait_qemu() {
   rm -f "$ROOT/target/m8-persist-qemu.pid" "$ROOT/target/m8-persist-timeout.pid"
 }
 
+wait_serial_needle() {
+  local serial="$1"
+  local needle="$2"
+  local tpid
+  tpid=$(cat "$ROOT/target/m8-persist-timeout.pid")
+  while kill -0 "$tpid" 2>/dev/null; do
+    if grep -qF "$needle" "$serial" 2>/dev/null; then
+      return 0
+    fi
+    sleep 2
+  done
+  return 1
+}
+
 run_smoke() {
   echo "==> MODE=smoke — one boot, persist reserve only (not NESTED-OK, not iron)"
   reset_persist_img
   start_qemu "$SERIAL1" "$TIMEOUT_SMOKE" \
     "$ROOT/target/m8-persist-smoke-stdout.log" \
     "$ROOT/target/m8-persist-smoke-stderr.log"
-  wait_qemu
+  if wait_serial_needle "$SERIAL1" "persist install disk hpa="; then
+    sleep 2
+    stop_qemu
+  else
+    wait_qemu || true
+  fi
   if [[ ! -s "$SERIAL1" ]]; then
     echo "error: smoke serial empty" >&2
     cat "$ROOT/target/m8-persist-smoke-stderr.log" >&2 || true
@@ -194,7 +289,7 @@ run_smoke() {
   scan "$SERIAL1"
   forbid_markers "$SERIAL1"
   require_persist_reserved "$SERIAL1"
-  echo "==> nested NVDIMM persist reserved (not $NESTED_OK; not iron $IRON_OK; not $ISO_OK)"
+  echo "==> nested File pc-dimm persist reserved (not $NESTED_OK; not iron $IRON_OK; not $ISO_OK)"
 }
 
 run_full() {
@@ -209,7 +304,7 @@ run_full() {
   while kill -0 "$tpid" 2>/dev/null; do
     if grep -qF 'Installation is complete. Please reboot.' "$SERIAL1" 2>/dev/null; then
       saw_install=1
-      echo "==> boot1 install complete; flushing NVDIMM then killing HV (not guest F7)"
+      echo "==> boot1 install complete; flushing persist file then killing HV (not guest F7)"
       sleep 8
       stop_qemu
       break
@@ -279,6 +374,7 @@ run_full() {
   echo "$NESTED_OK"
 }
 
+pick_accel
 prepare_host
 fetch_iso
 build_efi

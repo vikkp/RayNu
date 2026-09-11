@@ -335,6 +335,17 @@ pub enum InstallDiskChoice {
     PoolZero,
 }
 
+/// Distro `OVMF_CODE_4M.fd` has no NvdimmDxe (no EFI PersistentMemory type 14).
+/// Nested QEMU file-backed `pc-dimm` lands as conventional above PRECISE.
+/// Promote that leftover carve to File persist. Iron (no hypervisor CPUID)
+/// keeps leftover DRAM. Type 14, when present, already reserved persist.
+pub fn nested_promotes_leftover_to_file_persist(
+    host_hypervisor: bool,
+    persist_already: bool,
+) -> bool {
+    host_hypervisor && !persist_already
+}
+
 /// Persist wins; leftover DRAM is the fallback; pool last.
 pub fn choose_install_disk_attach(
     persist_reserved: bool,
