@@ -395,9 +395,20 @@ pub fn init_durable_lun_io() {
         }
         Err(_) => {
             #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
-            crate::boot::serial::write_line(
-                "boot: Stage 46 durable LUN nvme I/O fail (leftover DRAM; not ISO-INSTALL-OK)",
-            );
+            {
+                use crate::boot::serial;
+                serial::write_str("boot: Stage 46 durable LUN nvme I/O fail err=");
+                write_dec(u64::from(crate::mgmt::nvme::nvme_last_err()));
+                serial::write_str(" bar=0x");
+                write_hex64(crate::mgmt::nvme::nvme_last_bar());
+                serial::write_str(" cap=0x");
+                write_hex64(crate::mgmt::nvme::nvme_last_cap());
+                serial::write_str(" asq=0x");
+                write_hex64(crate::mgmt::nvme::nvme_last_asq());
+                serial::write_str(" cpl=0x");
+                write_hex64(crate::mgmt::nvme::nvme_last_cpl());
+                serial::write_line(" (leftover DRAM; not ISO-INSTALL-OK)");
+            }
         }
     }
 }
@@ -508,6 +519,7 @@ pub fn probe_durable_lun() {
                 _ => serial::write_str("? "),
             }
             write_bdf(p.bus, p.dev, p.func);
+            serial::write_line(" (not ISO-INSTALL-OK)");
             if p.transport == LunTransport::Nvme {
                 init_durable_lun_io();
             }
@@ -577,6 +589,18 @@ fn write_hex8(v: u8) {
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn write_hex16(v: u16) {
+    write_hex8((v >> 8) as u8);
+    write_hex8(v as u8);
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn write_hex64(v: u64) {
+    write_hex8((v >> 56) as u8);
+    write_hex8((v >> 48) as u8);
+    write_hex8((v >> 40) as u8);
+    write_hex8((v >> 32) as u8);
+    write_hex8((v >> 24) as u8);
+    write_hex8((v >> 16) as u8);
     write_hex8((v >> 8) as u8);
     write_hex8(v as u8);
 }

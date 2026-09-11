@@ -245,7 +245,7 @@ Ordered for critical path (parallelize B with D design):
 | P0-9 | M6.9 external audit + spec review | E6 | **DONE** | proofs green | `docs/`, `ept_model/`, `mgmt/ext` |
 | P0-10 | R640 soak / hardware confidence | E2 | 0.5 | P0-2 | `tools/`, `mgmt/soak` — post M7.5 |
 | P0-11 | **M9 sketch** vMotion-like / DRS-like / hot-add | — | — | M8 | deferred — was M8 in ADR-009; **M9** after operator hardening (ADR-018) |
-| P0-64 | **M8** operator product hardening | — | IN PROGRESS | Everest closed | [ADR-018](adr/ADR-018.md) / [m8_plan.md](m8_plan.md). **M8.0** persist-first attach + nested File RAM + `MODE=keep` + DurableLun NVMe I/O (`MODE=lun` Identify + virtio/BlockIo; USB I/O residual). Nested Alpine `RAYNU-V-M8-DISK-PERSIST-NESTED-OK` open. Iron `RAYNU-V-M8-DISK-PERSIST-OK` open. Then TLS, auth, console UI, ISO upload, UEFI catalog, Windows later. |
+| P0-64 | **M8** operator product hardening | — | IN PROGRESS | Everest closed | [ADR-018](adr/ADR-018.md) / [m8_plan.md](m8_plan.md). **M8.0** persist-first attach + nested File RAM + `MODE=keep` + DurableLun NVMe I/O (`MODE=lun` TCG Identify + virtio/BlockIo; USB I/O residual). Nested Alpine `RAYNU-V-M8-DISK-PERSIST-NESTED-OK` open. Iron `RAYNU-V-M8-DISK-PERSIST-OK` open. Then TLS, auth, console UI, ISO upload, UEFI catalog, Windows later. |
 
 ---
 
@@ -355,7 +355,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | m8-disk-persist-nvme-io |
-| Summary | **M8.0 DurableLun NVMe I/O (host + QEMU).** Identify + I/O qid 1 + Read/Write back virtio/BlockIo; leftover DRAM skipped when reserved. USB mass-storage I/O still residual. `MODE=lun` is not nested-OK and not iron persist OK. Never `ISO-INSTALL-OK`. Do not F11. |
+| Summary | **M8.0 DurableLun NVMe I/O (host + TCG).** Identify + I/O qid 1 + Read/Write back virtio/BlockIo; leftover DRAM skipped when reserved. `MODE=lun` TCG printed `nvme I/O ready`. USB mass-storage I/O still residual. Not nested-OK and not iron persist OK. Never `ISO-INSTALL-OK`. Do not F11. |
 | Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. |
 | Gates touched | `mgmt/nvme.rs` + virtio `attach_lun` + `MODE=lun`. `./tools/sync-hda-site.sh --check`. |
 | Months Δ | 0.0→0.0 (held) |
@@ -381,7 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
-| 2026-09-11 | m8-disk-persist-nvme-io | 0.0 | 99 | **M8.0 DurableLun NVMe I/O:** Identify + I/O qid 1 + Read/Write back virtio/BlockIo (`MODE=lun` QEMU). USB I/O residual. Not nested-OK. Not iron persist OK. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |
+| 2026-09-11 | m8-disk-persist-nvme-io | 0.0 | 99 | **M8.0 DurableLun NVMe I/O:** Identify + I/O qid 1 + Read/Write back virtio/BlockIo. `MODE=lun` TCG: `durable LUN nvme I/O ready`. USB I/O residual. Not nested-OK. Not iron persist OK. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |
 | 2026-09-11 | m8-disk-persist-durable-lun | 0.0 | 99 | **M8.0 DurableLun mapper (host):** PCI census picks NVMe/USB ≥ 1 GiB; refuses PERC and the ESP Cruzer. Post-EBS I/O residual (leftover DRAM). Not nested-OK. Not iron persist OK. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |
 | 2026-09-11 | m8-disk-persist-nested-keep | 0.0 | 99 | **M8.0 MODE=keep proven on TCG:** plant GPT+ESP+ext4 into file-backed QEMU RAM, kill HV, second boot `virtio-blk … keep=1`. Not Alpine. Does not print nested-OK. `MODE=full` still needs nested KVM. Iron COM2 still open. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |
 | 2026-09-11 | m8-disk-persist-nested-fileram | 0.0 | 99 | **M8.0 nested File RAM:** distro OVMF ignores nvdimm/pc-dimm hotplug. `M8_PERSIST_IMG` backs QEMU initial RAM (`QEMU_MEM=2560M`, share=on). Nested leftover above PRECISE promotes to persist. Harness TCG fallback after kvm_spurious_fault. Alpine two-boot + iron COM2 still open. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |

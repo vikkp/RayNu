@@ -47,15 +47,16 @@ pub const NVME_IO_RESIDUAL_NOTE: &str =
 
 /// Why NVMe bring-up failed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
 pub enum NvmeError {
-    Cap,
-    DisableTimeout,
-    EnableTimeout,
-    Admin,
-    Identify,
-    TooSmall,
-    IoQueue,
-    Xfer,
+    Cap = 1,
+    DisableTimeout = 2,
+    EnableTimeout = 3,
+    Admin = 4,
+    Identify = 5,
+    TooSmall = 6,
+    IoQueue = 7,
+    Xfer = 8,
 }
 
 /// One 64-byte SQ entry (NVMe 1.4 Figure 12).
@@ -276,10 +277,14 @@ fn submit_admin(
             break;
         }
         spins = spins.saturating_add(1);
-        if spins > 100_000 {
+        if spins > 5_000_000 {
+            let dw3 = u32::from_le_bytes(cpl[12..16].try_into().unwrap_or([0; 4]));
+            LAST_CPL.store(u64::from(dw3), Ordering::Release);
             return Err(NvmeError::Admin);
         }
     }
+    let dw3 = u32::from_le_bytes(cpl[12..16].try_into().unwrap_or([0; 4]));
+    LAST_CPL.store(u64::from(dw3), Ordering::Release);
     if !cpl_status_ok(&cpl) {
         return Err(NvmeError::Admin);
     }
@@ -335,12 +340,15 @@ pub fn nvme_bring_up(
     min_bytes: u64,
 ) -> Result<(NvmeDoorbells, u64, u32), NvmeError> {
     let cap = read64(hw, NVME_REG_CAP);
+    LAST_CAP.store(cap, Ordering::Release);
     if cap_mqes(cap) < NVME_QSIZE {
+        LAST_ERR.store(NvmeError::Cap as u8, Ordering::Release);
         return Err(NvmeError::Cap);
     }
     let stride = cap_doorbell_stride(cap);
     hw.write32(NVME_REG_CC, 0);
-    if !wait_csts(hw, false, 100_000) {
+    if !wait_csts(hw, false, 5_000_000) {
+        LAST_ERR.store(NvmeError::DisableTimeout as u8, Ordering::Release);
         return Err(NvmeError::DisableTimeout);
     }
     let aqa = u32::from(NVME_QSIZE - 1) | (u32::from(NVME_QSIZE - 1) << 16);
@@ -348,7 +356,8 @@ pub fn nvme_bring_up(
     write64(hw, NVME_REG_ASQ, q.asq);
     write64(hw, NVME_REG_ACQ, q.acq);
     hw.write32(NVME_REG_CC, NVME_CC_EN | NVME_CC_IOSQES | NVME_CC_IOCQES);
-    if !wait_csts(hw, true, 100_000) {
+    if !wait_csts(hw, true, 5_000_000) {
+        LAST_ERR.store(NvmeError::EnableTimeout as u8, Ordering::Release);
         return Err(NvmeError::EnableTimeout);
     }
     let mut db = NvmeDoorbells::new(stride);
@@ -356,7 +365,10 @@ pub fn nvme_bring_up(
     hw.dma_write(q.bounce, &ident);
     db.cid = 1;
     let cid = db.cid;
-    submit_admin(hw, q, &mut db, NvmeCmd::identify(cid, 1, q.bounce, 0))?;
+    submit_admin(hw, q, &mut db, NvmeCmd::identify(cid, 1, q.bounce, 0)).map_err(|e| {
+        LAST_ERR.store(e as u8, Ordering::Release);
+        e
+    })?;
     hw.dma_read(q.bounce, &mut ident);
     let ns_bytes = identify_ns_bytes(&ident).ok_or(NvmeError::Identify)?;
     if ns_bytes < min_bytes {
@@ -423,6 +435,32 @@ pub fn nvme_rw(
         hw.dma_read(q.bounce, buf);
     }
     Ok(())
+}
+
+static LAST_BAR: AtomicU64 = AtomicU64::new(0);
+static LAST_CAP: AtomicU64 = AtomicU64::new(0);
+static LAST_ERR: core::sync::atomic::AtomicU8 = core::sync::atomic::AtomicU8::new(0);
+static LAST_CPL: AtomicU64 = AtomicU64::new(0);
+static LAST_ASQ: AtomicU64 = AtomicU64::new(0);
+
+pub fn nvme_last_bar() -> u64 {
+    LAST_BAR.load(Ordering::Acquire)
+}
+
+pub fn nvme_last_cap() -> u64 {
+    LAST_CAP.load(Ordering::Acquire)
+}
+
+pub fn nvme_last_err() -> u8 {
+    LAST_ERR.load(Ordering::Acquire)
+}
+
+pub fn nvme_last_cpl() -> u64 {
+    LAST_CPL.load(Ordering::Acquire)
+}
+
+pub fn nvme_last_asq() -> u64 {
+    LAST_ASQ.load(Ordering::Acquire)
 }
 
 static IO_READY: AtomicBool = AtomicBool::new(false);
@@ -575,7 +613,9 @@ impl NvmeHw for MmioNvme {
         }
         // SAFETY: queue/bounce pages in this EFI image.
         unsafe {
-            core::ptr::copy_nonoverlapping(hpa as *const u8, buf.as_mut_ptr(), buf.len());
+            for (i, b) in buf.iter_mut().enumerate() {
+                *b = core::ptr::read_volatile((hpa as *const u8).add(i));
+            }
         }
     }
 
@@ -585,8 +625,11 @@ impl NvmeHw for MmioNvme {
         }
         // SAFETY: queue/bounce pages in this EFI image.
         unsafe {
-            core::ptr::copy_nonoverlapping(buf.as_ptr(), hpa as *mut u8, buf.len());
+            for (i, b) in buf.iter().enumerate() {
+                core::ptr::write_volatile((hpa as *mut u8).add(i), *b);
+            }
         }
+        core::sync::atomic::fence(Ordering::SeqCst);
     }
 }
 
@@ -614,8 +657,11 @@ pub fn nvme_init_pci(bus: u8, dev: u8, func: u8, min_bytes: u64) -> Result<u64, 
         return Err(NvmeError::Admin);
     }
     let bar = nvme_bar(bus, dev, func);
+    LAST_BAR.store(bar, Ordering::Release);
+    LAST_ERR.store(0, Ordering::Release);
     if bar == 0 {
         LIVE_LOCK.store(false, Ordering::Release);
+        LAST_ERR.store(NvmeError::Cap as u8, Ordering::Release);
         return Err(NvmeError::Cap);
     }
     // SAFETY: BSP-only; queues are .bss in this image.
@@ -633,6 +679,7 @@ pub fn nvme_init_pci(bus: u8, dev: u8, func: u8, min_bytes: u64) -> Result<u64, 
             bounce: core::ptr::addr_of_mut!(BOUNCE) as u64,
         }
     };
+    LAST_ASQ.store(q.asq, Ordering::Release);
     let mut hw = MmioNvme { base: bar };
     let result = nvme_bring_up(&mut hw, &q, min_bytes);
     match result {
@@ -651,6 +698,7 @@ pub fn nvme_init_pci(bus: u8, dev: u8, func: u8, min_bytes: u64) -> Result<u64, 
             Ok(bytes)
         }
         Err(e) => {
+            LAST_ERR.store(e as u8, Ordering::Release);
             LIVE_LOCK.store(false, Ordering::Release);
             Err(e)
         }
