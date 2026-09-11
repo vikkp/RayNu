@@ -395,6 +395,11 @@ fn host_never_prints_everest_iso_install_ok() {
     assert!(host_never_prints_iso_install_ok());
     assert_eq!(M8_DISK_PERSIST_OK_MARKER, "RAYNU-V-M8-DISK-PERSIST-OK");
     assert_eq!(
+        M8_DISK_PERSIST_NESTED_OK_MARKER,
+        "RAYNU-V-M8-DISK-PERSIST-NESTED-OK"
+    );
+    assert_ne!(M8_DISK_PERSIST_NESTED_OK_MARKER, M8_DISK_PERSIST_OK_MARKER);
+    assert_eq!(
         M8_DISK_PERSIST_HOST_OK_MARKER,
         "RAYNU-V-M8-DISK-PERSIST-HOST-OK"
     );

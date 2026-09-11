@@ -20,7 +20,7 @@ pub const M8_DISK_PERSIST_GATE_MARKER: &str = M8_DISK_PERSIST_HOST_OK_MARKER;
 
 /// Honesty: host round-trip ≠ nested Alpine kill/restart ≠ iron persist.
 pub const M8_DISK_PERSIST_RESIDUAL_NOTE: &str =
-    "residual: persist-first attach_disk_keep + host File round-trip of GPT+ESP+ext4 after HV reboot is not nested Alpine kill/restart and not iron RAYNU-V-M8-DISK-PERSIST-OK; leftover DRAM remains the fallback; M8_PERSIST_IMG NVDIMM default off; do not print ISO-INSTALL-OK";
+    "residual: persist-first attach_disk_keep + host File round-trip is not nested Alpine kill/restart and not iron RAYNU-V-M8-DISK-PERSIST-OK; leftover DRAM remains the fallback; M8_PERSIST_IMG NVDIMM default off; tools/m8-persist-nested.sh is the nested two-boot harness; do not print ISO-INSTALL-OK";
 
 /// True when plan, markers, leftover fallback, persist-first attach, and exclusive-ownership notes exist.
 pub fn disk_persist_surface_present() -> bool {
@@ -31,6 +31,7 @@ pub fn disk_persist_surface_present() -> bool {
     let virtio = include_str!("../devices/guest_virtio_blk.rs");
     let handoff = include_str!("../boot/handoff.rs");
     let qemu = include_str!("../tools/run-qemu.sh");
+    let nested = include_str!("../tools/m8-persist-nested.sh");
     persist.contains("enum PersistKind")
         && persist.contains("File")
         && persist.contains("DurableLun")
@@ -44,6 +45,7 @@ pub fn disk_persist_surface_present() -> bool {
         && persist.contains("fn host_never_prints_iso_install_ok(")
         && persist.contains(M8_DISK_PERSIST_OK_MARKER)
         && persist.contains(M8_DISK_PERSIST_HOST_OK_MARKER)
+        && persist.contains("RAYNU-V-M8-DISK-PERSIST-NESTED-OK")
         && persist.contains("ADR-004")
         && persist.contains("reset_keep_disk")
         && persist.contains("InstallDiskChoice::PersistKeep")
@@ -70,6 +72,15 @@ pub fn disk_persist_surface_present() -> bool {
         && qemu.contains("nvdimm=on")
         && qemu.contains("memory-backend-file")
         && !qemu.contains("-mem-path")
+        && nested.contains("MODE=smoke")
+        && nested.contains("MODE=full")
+        && nested.contains("M8_PERSIST_IMG")
+        && nested.contains("Installation is complete")
+        && nested.contains("keep=1")
+        && nested.contains("RAYNU-V-M8-DISK-PERSIST-NESTED-OK")
+        && nested.contains("kill HV")
+        && !nested.contains("println!(\"RAYNU-V-M7-ISO-INSTALL-OK\")")
+        && !nested.contains("echo \"RAYNU-V-M8-DISK-PERSIST-OK\"")
 }
 
 /// Host package: backend choice + leftover fallback + never ISO-INSTALL-OK.
