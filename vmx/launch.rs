@@ -5515,6 +5515,38 @@ fn finish_boot(ok: bool) -> ! {
     }
 }
 
+/// Phase B skip-OVMF: arm coexist HTTP and wait for SPA Start.
+/// Do **not** launch packed-bzImage G0.
+///
+/// Iron `31f1ea0c`: `E4-CONTINUE-OK` then `no virtio-blk BAR hole above G0
+/// guest RAM` — Stage 46 pool is `[1MiB,512MiB)` (`v0.1.0-barfix` inverted:
+/// product ISO needs the window; E4 BAR/shell needs it free). Phase A
+/// (`--raynu-f`) never entered this path. Not `ISO-INSTALL-OK`.
+pub fn enter_phase_b_coexist_idle() -> ! {
+    serial::revive_ports();
+    crate::mgmt::run_post_ebs_http_snp_warn_only();
+    let armed = crate::mgmt::try_arm_native_coexist();
+    // SAFETY: BSP-only after skip-OVMF; no G0 VMCS. Lets [`try_spa_vmlaunch`]
+    // consume `POST /vms/{id}/start`.
+    unsafe {
+        M4_LADDER_DONE = true;
+    }
+    serial::write_line(crate::mgmt::M7_PHASE_B_COEXIST_IDLE_NOTE);
+    if !armed {
+        serial::write_line(
+            "boot: WARN — HOST-NIC coexist not armed; SPA Start needs HTTP (not ISO-INSTALL-OK)",
+        );
+    }
+    loop {
+        crate::mgmt::tick_native_coexist();
+        // SAFETY: BSP-only idle; `M4_LADDER_DONE`; no live G0 to save.
+        unsafe {
+            try_spa_vmlaunch();
+        }
+        core::hint::spin_loop();
+    }
+}
+
 /// Resume G0–G3 under the credit scheduler with native NIC ticks (Phase F).
 unsafe fn enter_sched_coexist() -> ! {
     SMP_PROBE_MODE = false;

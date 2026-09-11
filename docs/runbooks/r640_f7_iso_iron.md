@@ -761,6 +761,13 @@ Phase A closed on iron with `56a3ffd` (run `34480107961`, 2026-09-10).
      HTTP can take SPA Start (`RAYNU-V-M7-PHASE-B-E4-CONTINUE-OK`). Nested
      `PRODUCT_ISO=` without `RAYNU_F` is unchanged. `--raynu-f` is still
      Phase A.
+   - **Do not wait on the G0 BAR hole on `31f1ea0c` / `34546680282`.**
+     CONTINUE-OK printed, then packed-bzImage G0 died on
+     `no virtio-blk BAR hole above G0 guest RAM`. That is the Stage 46
+     `[1MiB,512MiB)` pool filling the `v0.1.0-barfix` window — not a
+     regression of Phase A (`--raynu-f` never entered E4 G0). Force Off.
+     The follow-up idles in coexist HTTP (`enter_phase_b_coexist_idle`)
+     instead of G0. Do not flash `34546680282` / `31f1ea0c` again.
 3. Still no TLS requirement for M7 (deferred).
 
 ---

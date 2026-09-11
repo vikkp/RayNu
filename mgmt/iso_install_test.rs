@@ -202,9 +202,15 @@ fn product_iso_esp_retain_rejects_lab_size_and_hold_follows_window() {
     );
     assert!(phase_b_e4_for_spa());
     assert!(M7_PHASE_B_E4_CONTINUE_NOTE.contains("not ISO-INSTALL-OK"));
+    assert!(M7_PHASE_B_E4_CONTINUE_NOTE.contains("no G0 bzImage"));
+    assert!(M7_PHASE_B_COEXIST_IDLE_NOTE.contains("not E4 BAR/shell"));
     assert_eq!(
         M7_PHASE_B_E4_CONTINUE_OK_MARKER,
         "RAYNU-V-M7-PHASE-B-E4-CONTINUE-OK"
+    );
+    assert!(
+        include_str!("../src/main.rs").contains("enter_phase_b_coexist_idle"),
+        "iron 31f1ea0c: Phase B continue must not enter packed-bzImage G0"
     );
     crate::devices::ide_cdrom::reset();
     clear_product_iso_retain();

@@ -22,7 +22,7 @@ pub const M7_PHASE_B_SPA_WIRE_GATE_MARKER: &str = "RAYNU-V-M7-PHASE-B-SPA-WIRE-O
 
 /// Honest residual: host wire ≠ iron SPA start of the installed disk.
 pub const PHASE_B_RESIDUAL_NOTE: &str =
-    "residual: host SPA/REST product-ISO start queues RayNu-F (P0-63 wire); iron Phase B is not claimed — COM2 must show SPA start launching RayNu-F without the ESP raynuf.txt auto-path; iron product ISO without raynuf.txt skips OVMF to E4 (not CpuSleep ticks, not Stage 46 hold); iso=0 stays E4 SHELL; ISO-INSTALL-OK is never printed from host/CI";
+    "residual: host SPA/REST product-ISO start queues RayNu-F (P0-63 wire); iron Phase B is not claimed — COM2 must show SPA start launching RayNu-F without the ESP raynuf.txt auto-path; iron product ISO without raynuf.txt skips OVMF to coexist HTTP (not CpuSleep ticks, not Stage 46 hold, not G0 BAR/shell); iso=0 stays E4 SHELL; ISO-INSTALL-OK is never printed from host/CI";
 
 /// REST create+start of `linux_iso` queues RayNu-F and arms the flag.
 pub fn prop_rest_product_iso_start_queues_raynu_f() -> bool {
@@ -111,6 +111,9 @@ pub fn phase_b_surface_present() -> bool {
         && iso.contains("fn phase_b_continue_e4_for_spa")
         && iso.contains("fn phase_b_e4_for_spa")
         && main.contains("M7_PHASE_B_E4_CONTINUE_OK_MARKER")
+        && main.contains("enter_phase_b_coexist_idle")
+        && launch.contains("fn enter_phase_b_coexist_idle")
+        && iso.contains("M7_PHASE_B_COEXIST_IDLE_NOTE")
         && flag.contains("fn request_from_spa")
         && spa.contains("enum SpaStartKind")
         && spa.contains(M7_PHASE_B_SPA_RAYNU_F_NOTE)

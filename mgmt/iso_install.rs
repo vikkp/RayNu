@@ -101,10 +101,16 @@ pub fn clear_phase_b_continue_e4_for_test() {
 
 /// Serial when Phase B skips the Stage 46 hold. Not `ISO-INSTALL-OK`.
 pub const M7_PHASE_B_E4_CONTINUE_NOTE: &str =
-    "boot: Stage 46 hold skipped — Phase B E4 for SPA Start (not ISO-INSTALL-OK)";
+    "boot: Stage 46 hold skipped — Phase B coexist idle, no G0 bzImage (not ISO-INSTALL-OK)";
 
 /// Host/COM2 marker. Not an iron Phase B close.
 pub const M7_PHASE_B_E4_CONTINUE_OK_MARKER: &str = "RAYNU-V-M7-PHASE-B-E4-CONTINUE-OK";
+
+/// Serial after skip-OVMF: coexist HTTP, not packed-bzImage G0.
+/// Iron `31f1ea0c` died on `no virtio-blk BAR hole above G0 guest RAM`.
+/// Not `ISO-INSTALL-OK`.
+pub const M7_PHASE_B_COEXIST_IDLE_NOTE: &str =
+    "boot: Phase B coexist idle — no G0 bzImage (Stage 46 pool; not E4 BAR/shell; not ISO-INSTALL-OK)";
 
 /// ESP paths probed PRE-EBS for a distro ISO (not the 1 KiB persist stamp).
 pub const PRODUCT_ISO_ESP_PATHS: &[&str] = &[
@@ -744,8 +750,9 @@ pub fn take_leftover_install_disk() -> Option<(u64, usize)> {
 }
 
 /// HV frame-pool cap. `iso=0` / nested stay `[1MiB,256MiB)` so E4 BAR/shell
-/// stays free. Iron product-ISO **holds** (no E4 SHELL), so the pool can use
-/// the precise 512 MiB identity window and a 256 MiB virtio-blk fits.
+/// stays free. Iron product-ISO uses the precise 512 MiB identity window so
+/// a 256 MiB virtio-blk fits — that **fills** the E4 G0 BAR/shell window
+/// (`v0.1.0-barfix`). Phase B skip-OVMF must idle in coexist HTTP, not G0.
 pub fn product_iso_frame_pool_prefer_end(product_iso: bool, host_hypervisor: bool) -> u64 {
     if product_iso && !host_hypervisor {
         crate::memory::PRECISE_BYTES

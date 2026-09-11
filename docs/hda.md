@@ -37,14 +37,14 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 
 | Metric | Value | Δ vs previous HDA |
 |--------|------:|-------------------|
-| **Overall product readiness** | **98%** | **held** — **E5 closed on the real R640**. Phase B skip-OVMF printed on iron `2a1c1ef1` / `34544625780` then Stage 46 hold blocked E4 HTTP. Not +1: SPA Start of RayNu-F still not on COM2 |
-| **Months to Mount Everest** | **0.25** | **held** (skip ≠ SPA start; shrink to 0 only when COM2 shows SPA start of the RayNu-F ISO/installed-disk path) |
+| **Overall product readiness** | **98%** | **held** — **E5 closed on the real R640**. Iron `31f1ea0c` SKIP-OVMF-OK + E4-CONTINUE-OK then packed-bzImage G0 died on `no virtio-blk BAR hole`. Not +1: SPA Start of RayNu-F still not on COM2 |
+| **Months to Mount Everest** | **0.25** | **held** (G0 BAR fail ≠ SPA start; shrink to 0 only when COM2 shows SPA start of the RayNu-F ISO/installed-disk path) |
 | **ETA month** | **2026-10** | held (formula gives 2026-09; kept at 2026-10 until Phase B has one SPA-start COM2) |
-| **Confidence** | medium | E2+E3+E3b+Phase F+P0-14+**E5** stamps on COM2. Iron `2a1c1ef1` SKIP-OVMF-OK then Stage 46 hold (`reason=0x0 rip=0x0`). Next pin skips that hold |
+| **Confidence** | medium | E2+E3+E3b+Phase F+P0-14+**E5** stamps on COM2. Iron `31f1ea0c` CONTINUE-OK then G0 BAR hole (`v0.1.0-barfix` inverted). Next pin coexist idle, no G0 |
 | **Hypervisor core (VMX/EPT/Linux/multi-VM)** | ~88% | proved on real R640 through M4 |
 | **Ship EFI artifact** | ~95% | M7.0 + iron kits under `releases/` |
 | **Real R640 boot** | ~98% | E2 closed; Redfish/soak follow-ons only |
-| **vSphere-like UI (network)** | ~96% | E3 + E3b + Phase F + P0-14 closed; **Phase B IN PROGRESS**: iron skip-OVMF-OK then Stage 46 hold; next pin continues E4 for SPA; TLS/console residual |
+| **vSphere-like UI (network)** | ~96% | E3 + E3b + Phase F + P0-14 closed; **Phase B IN PROGRESS**: iron `31f1ea0c` CONTINUE-OK then G0 BAR hole; next pin coexist idle (no G0); TLS/console residual |
 | **Deploy Linux ISO** | ~99% | **DONE on iron end-to-end** (`59ac070` install-to-disk; `56a3ffd` reboot-to-disk: `DISK-BOOT-OK`, second Linux `root=UUID=`, `login:`). Remaining 1%: ISO blob upload / UEFI catalog persist / multi-distro matrix are post-Everest polish |
 | **Production bar (M6.8–M6.9)** | **100%** | soak + EXT closed on Latitude |
 
@@ -106,7 +106,7 @@ All must be true (no hand-waving):
 | Hardware CI on R640 | MISSING | optional in M6 plan |
 
 ### Summit C — vSphere-like UI
-**Status: NEAR · ~96% · ~0.25 months residual (Phase B: iron SKIP-OVMF-OK then Stage 46 hold; next pin continues E4; TLS/console polish)**
+**Status: NEAR · ~96% · ~0.25 months residual (Phase B: iron `31f1ea0c` CONTINUE-OK then G0 BAR hole; next pin coexist idle; TLS/console polish)**
 
 | Item | Status | Evidence / gap |
 |------|--------|----------------|
@@ -165,7 +165,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 | M+1 | 2026-08 | **R640 iron bring-up** → **E2 closed** | `RAYNU-V-R640-BOOT-OK` on COM2 | **DONE (M7.5 iron)** |
 | M+2 | 2026-09 | E3b native NIC lab (QEMU e1000) + ISO residual | ADR-013 Phase C | **Phase C DONE (QEMU)** |
 | M+3 | 2026-08 | E3b iron HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | **DONE (M7.8 iron)** |
-| M+4 | 2026-10 | Phase B (SPA → installed disk) + TLS/console | remaining Everest | **ETA** (**E5 DONE on iron**; skip-OVMF-OK on `2a1c1ef1`; Stage 46 hold blocked E4; next pin continues E4 for SPA) |
+| M+4 | 2026-10 | Phase B (SPA → installed disk) + TLS/console | remaining Everest | **ETA** (**E5 DONE on iron**; `31f1ea0c` CONTINUE-OK then G0 BAR hole; next pin coexist idle, no packed-bzImage G0) |
 | M+5 | 2026-10 | Buffer / M7 closed on all E1–E6 | **M7 Mount Everest** | BUFFER |
 
 ### Timeline burn-down
@@ -173,7 +173,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 ```
 2026-07 ████████  HDA + M6 closed (Latitude)
 2026-08 ████████  R640 boot (E2) + E3b HTTP-OK
-2026-09 ███████░  E5 DONE on iron; Phase B skip-OVMF then Stage 46 hold  ← months_to_everest ≈ 0.25
+2026-09 ███████░  E5 DONE on iron; Phase B CONTINUE-OK then G0 BAR hole  ← months_to_everest ≈ 0.25
 2026-10 ░░░░░░░░  buffer
 2026-11 ░░░░░░░░  buffer
 ```
@@ -240,7 +240,7 @@ Ordered for critical path (parallelize B with D design):
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | **DONE host extract-boot smoke**; El Torito/CD-ROM residual |
 | P0-7 | **M7.4** Create-VM API/UI (CPU/RAM/disk/ISO) | C+D | 0.25 | P0-5, P0-6 | **DONE host SPA smoke**; console/TLS/NIC residual |
 | P0-8 | Install-to-disk + reboot-to-disk path | D | **DONE (iron distro)** | P0-6, P0-7 | Iron `ISO-INSTALL-OK` `59ac070` + `DISK-BOOT-OK` / second Linux `root=UUID=` `56a3ffd` 2026-09-10; Phase B (SPA start) is P0-63 |
-| P0-63 | **Phase B** SPA/REST create-VM + attach-media → RayNu-F ISO / installed-disk launch on iron | C+D | 0.25 | P0-8, P0-14 | **IN PROGRESS (host + iron skip).** Iron `2a1c1ef1` / `34544625780`: `RAYNU-V-M7-PHASE-B-SKIP-OVMF-OK` then Stage 46 hold (`reason=0x0 rip=0x0`) — skip worked, E4 HTTP did not. Follow-up skips that hold (`phase_b_continue_e4_for_spa`). Not iron Phase B / not `ISO-INSTALL-OK` |
+| P0-63 | **Phase B** SPA/REST create-VM + attach-media → RayNu-F ISO / installed-disk launch on iron | C+D | 0.25 | P0-8, P0-14 | **IN PROGRESS (host + iron skip).** Iron `31f1ea0c` / `34546680282`: SKIP-OVMF-OK + E4-CONTINUE-OK then packed-bzImage G0 `no virtio-blk BAR hole` (Stage 46 pool fills `[1MiB,512MiB)`; Phase A `--raynu-f` never took E4 G0). Follow-up: coexist idle, no G0. Not iron Phase B / not `ISO-INSTALL-OK` |
 | P0-9 | M6.9 external audit + spec review | E6 | **DONE** | proofs green | `docs/`, `ept_model/`, `mgmt/ext` |
 | P0-10 | R640 soak / hardware confidence | E2 | 0.5 | P0-2 | `tools/`, `mgmt/soak` — post M7.5 |
 | P0-11 | **M8 sketch** vMotion-like / DRS-like / hot-add | — | — | M7 closed | deferred — not M7 critical path |
@@ -352,9 +352,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | phase-b-skip-ovmf |
-| Summary | **Phase B skip must not take Stage 46 hold.** Iron `2a1c1ef1` / `34544625780` COM2: `RAYNU-V-M7-PHASE-B-SKIP-OVMF-OK` then `restore host xcr0 … reason=0x0 rip=0x0` then `Stage 46 product ISO hold` — `resume_e4_shell` spun on `product_iso_window_armed()`. Latch `phase_b_continue_e4_for_spa()` so E4 coexist HTTP can take SPA Start (`RAYNU-V-M7-PHASE-B-E4-CONTINUE-OK`). `--raynu-f` / nested unchanged. Do not claim iron Phase B / Everest / `ISO-INSTALL-OK`. |
-| Everest impact | months **0.25 → 0.25**; overall **98 → 98**; ETA 2026-10 held. P0-63 still IN PROGRESS. Force Off `2a1c1ef1`; flash the hold-skip pin. |
-| Gates touched | Host: `RAYNU-V-M7-PHASE-B-E4-CONTINUE-OK` string + unit tests. Iron skip-OVMF observed, not Phase B close. `cargo test --no-default-features -- --test-threads=1`; `./tools/sync-hda-site.sh --check`. |
+| Summary | **Phase B must not enter packed-bzImage G0.** Iron `31f1ea0c` / `34546680282`: SKIP-OVMF-OK + E4-CONTINUE-OK then `report-RAM released` then `no virtio-blk BAR hole above G0 guest RAM`. Stage 46 pool fills `[1MiB,512MiB)` so E4 BAR/shell cannot run (`v0.1.0-barfix` inverted). Phase A (`--raynu-f`) never took this path. Follow-up: `enter_phase_b_coexist_idle` (HTTP + SPA Start, no G0). Do not claim iron Phase B / Everest / `ISO-INSTALL-OK`. |
+| Everest impact | months **0.25 → 0.25**; overall **98 → 98**; ETA 2026-10 held. P0-63 still IN PROGRESS. Force Off `31f1ea0c`; flash the coexist-idle pin. |
+| Gates touched | Host: `enter_phase_b_coexist_idle` + unit tests. Iron CONTINUE-OK observed, not Phase B close. `cargo test --no-default-features -- --test-threads=1`; `./tools/sync-hda-site.sh --check`. |
 | Months Δ | 0.25→0.25 |
 
 
@@ -366,7 +366,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | H2 | TLS / console polish | MED | Plaintext HTTP closed on iron (E3b); TLS deferred (ADR-009); guest VNC residual |
 | H3 | ~~Guest UEFI CD not bootable / no reboot-to-disk on iron~~ | — | **Resolved** 2026-09-10 (`56a3ffd` / run `34480107961`): `RAYNU-V-RAYNU-F-DISK-BOOT-OK` + second Linux `root=UUID=` from `vda` + `login:` on the real R640. Chain: `59ac070` install-to-disk (`ISO-INSTALL-OK`) → F7 VMCLEAR/VMPTRLD (81 KiB `FirmwareState::new()` stack temporary over the VMCS; template reset + 32-page stack guard) → `975f8fc` relaunch into the installed GRUB menu, 1 M exit-cap inside GRUB's 2 s menu poll loop (~2 exits/µs) → `56a3ffd` RayNu-F wall cap (time, not exits, bounds the loader phase). Earlier: `916af96` THRE chain telemetry → UART TX ring room + line-rate pace + COM2 FIFO burst fixed the `apk` console stall. Evidence: [2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md](evidence/r640/2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md). Do not F11 `34474850361` / `34425781629` for Phase A; `34480107961` is the Phase A reference pin. |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
-| H5 | Phase B — iron SPA still launches the SHELL stub | MED | Iron `2a1c1ef1` / `34544625780`: SKIP-OVMF-OK then Stage 46 hold (not ticks). Next pin skips the hold so E4 HTTP can take SPA Start of RayNu-F. `--raynu-f` remains Phase A. Everest / `ISO-INSTALL-OK` not claimed. TLS deferred (ADR-009); console UI thin |
+| H5 | Phase B — iron SPA still launches the SHELL stub | MED | Iron `31f1ea0c` / `34546680282`: CONTINUE-OK then G0 BAR hole (not hold, not ticks). Next pin coexist idle so HTTP can take SPA Start of RayNu-F. `--raynu-f` remains Phase A. Everest / `ISO-INSTALL-OK` not claimed. TLS deferred (ADR-009); console UI thin |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
 | H8 | ~~Phase F coexist not closed on iron~~ | — | **Resolved** 2026-08-20 (`HOST-NIC coexist listening` + `HOST-NIC-HTTP-OK` while VMX on; G1–G3 parked) |
@@ -376,6 +376,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-11 | phase-b-skip-ovmf | 0.25 | 98 | **Iron `31f1ea0c` / `34546680282`: CONTINUE-OK then G0 BAR hole.** Packed-bzImage G0 cannot run on the Stage 46 `[1MiB,512MiB)` pool (`v0.1.0-barfix` inverted). Phase A `--raynu-f` never took E4 G0. Host `enter_phase_b_coexist_idle`; months 0.25 held; overall 98 held; iron Phase B / Everest / `ISO-INSTALL-OK` not claimed |
 | 2026-09-11 | phase-b-skip-ovmf | 0.25 | 98 | **Iron `2a1c1ef1` / `34544625780`: SKIP-OVMF-OK then Stage 46 hold.** `leave_to_e4` → `resume_e4_shell` spun on `product_iso_window_armed()`. Host latch `phase_b_continue_e4_for_spa` so E4 HTTP can take SPA Start; months 0.25 held; overall 98 held; iron Phase B / Everest / `ISO-INSTALL-OK` not claimed |
 | 2026-09-10 | phase-b-skip-ovmf | 0.25 | 98 | **Iron `9061ffca` ticks = parked OVMF, not a printer break.** No `--raynu-f` → 16M cap → Bds CpuSleep `0x7f0680d0`. Host skip-OVMF-to-E4 when product ISO present and flag absent (`RAYNU-V-M7-PHASE-B-SKIP-OVMF-OK`) so SPA Start can run; `--raynu-f` / nested unchanged; months 0.25 held; overall 98 held; iron Phase B / Everest / `ISO-INSTALL-OK` not claimed |
 | 2026-09-10 | spa-raynu-f-start | 0.25 | 98 | **Phase B host wire (no iron flash).** SPA/REST product-ISO start queues RayNu-F (`RAYNU-V-M7-PHASE-B-SPA-WIRE-OK`); `iso=0` stays E4 SHELL; coexist scheduler calls `try_spa_product_iso_start` (no SHELL fall-through); months 0.25 held; overall 98 held; P0-63 IN PROGRESS (host); iron Phase B / Everest / `ISO-INSTALL-OK` not claimed |
@@ -896,7 +897,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
 Now:           E2+E3+E3b+Phase F+P0-14 CLOSED; E5 CLOSED on iron 2026-09-10 (56a3ffd: ISO-INSTALL-OK → reboot → DISK-BOOT-OK → second Linux root=UUID= → login:)
 Months left:   0.25  (ETA 2026-10 held)
-Next move:     Force Off `2a1c1ef1` Stage 46 hold; flash the hold-skip pin; COM2 should show SKIP-OVMF-OK then `RAYNU-V-M7-PHASE-B-E4-CONTINUE-OK` then coexist HTTP, then SPA Start launching RayNu-F. Not ISO-INSTALL-OK
+Next move:     Force Off `31f1ea0c` G0 BAR hole; flash the coexist-idle pin; COM2 should show SKIP-OVMF-OK then E4-CONTINUE-OK then `Phase B coexist idle` + HOST-NIC HTTP, then SPA Start launching RayNu-F. Not ISO-INSTALL-OK
 Tcp4 residual: Floppy publishes PXE/HTTP, not Tcp4 SB (platform limit)
 SNP after EBS: dead — native BCM5720 is the durable mgmt path (E3b closed 2026-08-20)
 Preserve:      releases/v0.1.0-adr013-baseline
