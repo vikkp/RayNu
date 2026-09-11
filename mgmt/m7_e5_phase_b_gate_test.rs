@@ -1,6 +1,6 @@
 use super::{
-    phase_b_surface_present, run_m7_phase_b_spa_wire_gate, PHASE_B_RESIDUAL_NOTE,
-    M7_PHASE_B_SPA_WIRE_GATE_MARKER,
+    phase_b_surface_present, run_m7_phase_b_spa_wire_gate, M7_PHASE_B_SPA_WIRE_GATE_MARKER,
+    PHASE_B_RESIDUAL_NOTE,
 };
 
 #[test]
@@ -14,6 +14,8 @@ fn m7_phase_b_spa_wire_gate_passes() {
     assert!(PHASE_B_RESIDUAL_NOTE.contains("skips OVMF"));
     assert!(PHASE_B_RESIDUAL_NOTE.contains("G0 BAR/shell"));
     assert!(PHASE_B_RESIDUAL_NOTE.contains("ISO-INSTALL-OK"));
+    assert!(PHASE_B_RESIDUAL_NOTE.contains("curl: (7)"));
+    assert!(PHASE_B_RESIDUAL_NOTE.contains("TSC Instant"));
     assert!(phase_b_surface_present());
     assert!(
         run_m7_phase_b_spa_wire_gate(),

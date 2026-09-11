@@ -768,6 +768,17 @@ Phase A closed on iron with `56a3ffd` (run `34480107961`, 2026-09-10).
      regression of Phase A (`--raynu-f` never entered E4 G0). Force Off.
      The follow-up idles in coexist HTTP (`enter_phase_b_coexist_idle`)
      instead of G0. Do not flash `34546680282` / `31f1ea0c` again.
+   - **Do not wait on listen without HTTP-OK on `7f8dc0a9` / `34548550755`.**
+     SKIP-OVMF-OK + E4-CONTINUE-OK + `Phase B coexist idle` +
+     `HOST-NIC coexist listening on 10.99.99.146:8443` all printed, then
+     eight LAN RX dumps (`to=bcast`/`to=other`, no `to=us`). Mac on the
+     HOST NIC LAN (`10.99.99.0/24`, not iDRAC):
+     `curl: (7)` after ~1 s (`Couldn't connect to server`). Cause: Phase B
+     idle called `tick_bcm5720_coexist` in a tight loop with `MILLIS += 10`
+     per call, so smoltcp ARP/TCP timers expired in ~1 s of wall time.
+     RX still worked; handshake did not. Force Off. The follow-up drives
+     Instant from TSC (`coexist_millis_from_tsc`). Do not flash
+     `34548550755` / `7f8dc0a9` again. Listen ≠ `HOST-NIC-HTTP-OK`.
 3. Still no TLS requirement for M7 (deferred).
 
 ---

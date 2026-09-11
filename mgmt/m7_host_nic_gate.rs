@@ -9,11 +9,11 @@
 
 use super::e1000_mmio::{pci_id_is_qemu_e1000, E1000_DEVICE, E1000_VENDOR};
 use super::host_nic::{
-    M7_HOST_NIC_HTTP_OK_MARKER, M7_HOST_NIC_QEMU_MARKER, M7_HOST_NIC_SCAFFOLD_MARKER,
-    prop_http_accept_idle_abort,
+    prop_http_accept_idle_abort, M7_HOST_NIC_HTTP_OK_MARKER, M7_HOST_NIC_QEMU_MARKER,
+    M7_HOST_NIC_SCAFFOLD_MARKER,
 };
-use super::host_nic_poll::prop_bounded_poll_respects_budget;
 use super::host_nic_coexist::prop_coexist_wired;
+use super::host_nic_poll::prop_bounded_poll_respects_budget;
 use super::mgmt_arena::prop_arena_reset_rewinds;
 use super::pci_census::{
     census_nic_has_iron_driver, census_nic_has_lab_driver, pci_id_is_iron_census,
@@ -27,6 +27,7 @@ pub fn host_nic_surface_present() -> bool {
     let phy = include_str!("e1000.rs");
     let bcm = include_str!("bcm5720_mmio.rs");
     let bcm_phy = include_str!("bcm5720.rs");
+    let nic = include_str!("host_nic.rs");
     let listen = include_str!("host_nic_listen.rs");
     let http = include_str!("http_listen.rs");
     let census = include_str!("pci_census.rs");
@@ -114,7 +115,11 @@ pub fn host_nic_surface_present() -> bool {
         && bcm.contains("grc=bswap+wswap")
         && bcm.contains("fn eth_header_view(")
         && bcm.contains("fn dump_first_rx(")
+        && bcm.contains("fn dump_first_tx(")
+        && bcm.contains("fn rx_dump_is_interesting(")
+        && bcm.contains("fn reset_host_nic_frame_dumps(")
         && bcm.contains("HOST-NIC BCM5720 rx to=")
+        && bcm.contains("HOST-NIC BCM5720 tx to=")
         && bcm_phy.contains("Checksum::Tx")
         && bcm_phy.contains("impl Device for Bcm5720Device")
         && bcm.contains("inherit SNP PHY")
@@ -164,6 +169,12 @@ pub fn host_nic_surface_present() -> bool {
         && listen.contains("rx_drop rose")
         && listen.contains("fn arm_bcm5720_coexist(")
         && listen.contains("fn tick_bcm5720_coexist(")
+        && nic.contains("fn coexist_millis_from_tsc(")
+        && nic.contains("COEXIST_TSC_HZ_FALLBACK")
+        && listen.contains("coexist_millis_from_tsc")
+        && listen.contains("COEXIST_TSC0")
+        && !listen.contains("saturating_add(10)")
+        && listen.contains("reset_host_nic_frame_dumps")
         && listen.contains("HOST-NIC coexist listening")
         && listen.contains("VMX on; ADR-013 Phase F")
         && listen.contains("TCP idle abort; re-listen")

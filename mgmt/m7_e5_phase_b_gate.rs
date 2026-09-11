@@ -9,11 +9,11 @@
 //! `RAYNU-V-M7-ISO-INSTALL-OK`. Iron Phase B (SPA start on COM2) is not claimed.
 
 use super::api::{dispatch_rest, RestMethod, RestRequest, BRINGUP_AUTH_TOKEN};
+use super::guest_image::GuestImageType;
 use super::spa_launch::{
     kind_for_record, prop_spa_kind_for_record, prop_spa_start_queues, take_spa_start_kind,
     SpaStartKind, M7_PHASE_B_SPA_RAYNU_F_NOTE, M7_PHASE_B_SPA_WIRE_OK_MARKER,
 };
-use super::guest_image::GuestImageType;
 use super::VmTable;
 use crate::boot::raynu_f_flag;
 
@@ -22,7 +22,7 @@ pub const M7_PHASE_B_SPA_WIRE_GATE_MARKER: &str = "RAYNU-V-M7-PHASE-B-SPA-WIRE-O
 
 /// Honest residual: host wire ≠ iron SPA start of the installed disk.
 pub const PHASE_B_RESIDUAL_NOTE: &str =
-    "residual: host SPA/REST product-ISO start queues RayNu-F (P0-63 wire); iron Phase B is not claimed — COM2 must show SPA start launching RayNu-F without the ESP raynuf.txt auto-path; iron product ISO without raynuf.txt skips OVMF to coexist HTTP (not CpuSleep ticks, not Stage 46 hold, not G0 BAR/shell); iso=0 stays E4 SHELL; ISO-INSTALL-OK is never printed from host/CI";
+    "residual: host SPA/REST product-ISO start queues RayNu-F (P0-63 wire); iron Phase B is not claimed — COM2 must show SPA start launching RayNu-F without the ESP raynuf.txt auto-path; iron product ISO without raynuf.txt skips OVMF to coexist HTTP (not CpuSleep ticks, not Stage 46 hold, not G0 BAR/shell); iron 7f8dc0a9 listen then Mac curl: (7) — TSC Instant not MILLIS+=10; iso=0 stays E4 SHELL; ISO-INSTALL-OK is never printed from host/CI";
 
 /// REST create+start of `linux_iso` queues RayNu-F and arms the flag.
 pub fn prop_rest_product_iso_start_queues_raynu_f() -> bool {
@@ -96,6 +96,7 @@ pub fn phase_b_surface_present() -> bool {
     let spa = include_str!("spa_launch.rs");
     let html = include_str!("../assets/webui.html");
     let iso = include_str!("iso_install.rs");
+    let listen = include_str!("host_nic_listen.rs");
     let main = include_str!("../src/main.rs");
     api.contains("note_spa_start_kind")
         && api.contains("SpaStartKind::RayNuF")
@@ -113,6 +114,8 @@ pub fn phase_b_surface_present() -> bool {
         && main.contains("M7_PHASE_B_E4_CONTINUE_OK_MARKER")
         && main.contains("enter_phase_b_coexist_idle")
         && launch.contains("fn enter_phase_b_coexist_idle")
+        && listen.contains("coexist_millis_from_tsc")
+        && !listen.contains("saturating_add(10)")
         && iso.contains("M7_PHASE_B_COEXIST_IDLE_NOTE")
         && flag.contains("fn request_from_spa")
         && spa.contains("enum SpaStartKind")
@@ -127,6 +130,8 @@ pub fn phase_b_surface_present() -> bool {
 pub fn run_m7_phase_b_spa_wire_gate() -> bool {
     PHASE_B_RESIDUAL_NOTE.contains("not claimed")
         && PHASE_B_RESIDUAL_NOTE.contains("iso=0")
+        && PHASE_B_RESIDUAL_NOTE.contains("curl: (7)")
+        && PHASE_B_RESIDUAL_NOTE.contains("TSC Instant")
         && M7_PHASE_B_SPA_WIRE_GATE_MARKER == M7_PHASE_B_SPA_WIRE_OK_MARKER
         && M7_PHASE_B_SPA_WIRE_OK_MARKER == "RAYNU-V-M7-PHASE-B-SPA-WIRE-OK"
         && prop_spa_start_queues()
