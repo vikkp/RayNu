@@ -227,6 +227,53 @@ pub fn pick_conventional_region_above_prefer(
     best_want.or(best_min)
 }
 
+/// 2 MiB align for persist virtio-blk HPAs (same as leftover carve).
+pub const PERSIST_DISK_ALIGN: u64 = 2 * 1024 * 1024;
+
+/// Pick a PersistentMemory span large enough for an install disk.
+///
+/// `regions` are `(phys_start, page_count)` from the UEFI map (type 14).
+/// `try_bytes` is largest-first (same ladder as leftover: 1 GiB / 512 MiB /
+/// 256 MiB). No leftover guest-RAM floor — persist is not carved from DRAM.
+/// Returns `(aligned_hpa, bytes)` or `None`. Never invents an HPA outside
+/// a reported region (ADR-004).
+pub fn pick_persist_disk_region(
+    regions: &[(u64, u64)],
+    try_bytes: &[u64],
+) -> Option<(u64, u64)> {
+    let mut best: Option<(u64, u64)> = None;
+    for &(start, pages) in regions {
+        let end = start.saturating_add(pages.saturating_mul(PAGE_SIZE));
+        let aligned = start
+            .saturating_add(PERSIST_DISK_ALIGN - 1)
+            & !(PERSIST_DISK_ALIGN - 1);
+        if aligned == 0 || aligned >= end {
+            continue;
+        }
+        let avail = end - aligned;
+        let mut fitted: Option<u64> = None;
+        for &want in try_bytes {
+            if want != 0 && avail >= want {
+                fitted = Some(want);
+                break;
+            }
+        }
+        let Some(want) = fitted else {
+            continue;
+        };
+        match best {
+            None => best = Some((aligned, want)),
+            Some((best_hpa, best_bytes))
+                if want > best_bytes || (want == best_bytes && aligned < best_hpa) =>
+            {
+                best = Some((aligned, want));
+            }
+            _ => {}
+        }
+    }
+    best
+}
+
 /// Sum of conventional pages whose usable start is at or above `above`.
 pub fn conventional_pages_above(regions: &[(u64, u64)], above: u64) -> u64 {
     const ONE_MIB: u64 = 1024 * 1024;

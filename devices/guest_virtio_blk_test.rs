@@ -6,7 +6,7 @@ use super::{
     pci_addr_selects_virtio_iso, pci_config_addr, pci_config_addr_iso, pci_config_addr_slot0,
     pci_enumerated, pci_read_data, pci_write_addr, pci_write_data, pei_host_bridge_did, present,
     process_blk_queue_in, process_iso_queue_in, queues_armed, reset, take_marker,
-    attach_disk, raynu_f_disk_read, raynu_f_disk_write, reset_keep_disk, disk_bytes,
+    attach_disk, attach_disk_keep, raynu_f_disk_read, raynu_f_disk_write, reset_keep_disk, disk_bytes,
     disk_bytes_written,
     virtio_disk_evidence, virtio_needs_pit_over_uart, GUEST_VIRTIO_BAR0_DEFAULT,
     GUEST_VIRTIO_BAR0_SIZE_MASK, GUEST_VIRTIO_ISO_BAR0_DEFAULT, GUEST_VIRTIO_PCI_DEVICE,
@@ -1356,5 +1356,22 @@ fn reset_keep_disk_preserves_written_gpt() {
     let mut buf = [0u8; 8];
     assert!(raynu_f_disk_read(512, &mut buf));
     assert_eq!(&buf, sig);
+    reset();
+}
+
+#[test]
+fn attach_disk_zeros_attach_disk_keep_preserves() {
+    reset();
+    let mut mem = vec![0xAAu8; 1024 * 1024];
+    // SAFETY: exclusive test allocation.
+    unsafe {
+        assert!(attach_disk_keep(mem.as_mut_ptr() as u64, mem.len()));
+    }
+    assert!(mem.iter().all(|&b| b == 0xAA), "keep must not wipe persist");
+    assert_eq!(disk_bytes(), 1024 * 1024);
+    unsafe {
+        assert!(attach_disk(mem.as_mut_ptr() as u64, mem.len()));
+    }
+    assert!(mem.iter().all(|&b| b == 0), "first attach zeros so ISO wins");
     reset();
 }

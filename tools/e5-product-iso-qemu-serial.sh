@@ -19,7 +19,8 @@
 #
 # Not ISO-INSTALL-OK. Nested product-ISO HOLDS and seeds leftover DRAM
 # above PRECISE (run-qemu.sh defaults QEMU_MEM=2560M). iso=0 stays 512M
-# and does not seed. Host/CI must never print RAYNU-V-M7-ISO-INSTALL-OK.
+# and does not seed. Optional M8_PERSIST_IMG=path.img adds a QEMU NVDIMM
+# (default off). Host/CI must never print RAYNU-V-M7-ISO-INSTALL-OK.
 # Iron close stays Cruzer flash of cursor/e5-stage46-iso-a623.
 #
 # GHA ubuntu-latest is mixed Intel/AMD. AMD cannot expose VMX (RayNu-V
@@ -89,6 +90,7 @@ set +e
 timeout --signal=KILL "$TIMEOUT_SECS" \
   env PRODUCT_ISO="$ISO_PATH" ESP="$ESP" SERIAL_CHARDEV="file:$SERIAL_LOG" \
   QEMU_ACCEL="${QEMU_ACCEL:-kvm}" RAYNU_F="$RAYNU_F" ${QEMU_MEM:+QEMU_MEM="$QEMU_MEM"} \
+  ${M8_PERSIST_IMG:+M8_PERSIST_IMG="$M8_PERSIST_IMG"} \
   "$ROOT/tools/run-qemu.sh" \
   >"$ROOT/target/e5-iso-qemu-stdout.log" 2>"$ROOT/target/e5-iso-qemu-stderr.log"
 QEMU_STATUS=$?
@@ -102,7 +104,7 @@ if [[ ! -s "$SERIAL_LOG" ]]; then
 fi
 
 echo "==> marker scan (not ISO-INSTALL-OK):"
-grep -E -n 'VMLAUNCH-OK|OVMF-ELTORITO-OK|RN-ELT|Loaded initrd|linux deliver|linux cpuid|linux skip-|invlpg miss|Linux version|Kernel command line|Freeing initrd|Welcome to Alpine|setup-disk|invalid opcode|Oops:|ISO-INSTALL-OK|report-RAM extra|leftover install disk|virtio-blk install disk|stop n=|#PF linux|preempt noskip|RAYNU-F|guest reset requested|relaunch after reset|GPT ESP|root=UUID|reset-cap' \
+grep -E -n 'VMLAUNCH-OK|OVMF-ELTORITO-OK|RN-ELT|Loaded initrd|linux deliver|linux cpuid|linux skip-|invlpg miss|Linux version|Kernel command line|Freeing initrd|Welcome to Alpine|setup-disk|invalid opcode|Oops:|ISO-INSTALL-OK|report-RAM extra|leftover install disk|persist install disk|virtio-blk install disk|stop n=|#PF linux|preempt noskip|RAYNU-F|guest reset requested|relaunch after reset|GPT ESP|root=UUID|reset-cap' \
   "$SERIAL_LOG" | grep -v -E 'RayNu-F svc=|RayNu-F CPUID|fw_cfg dest_ok fill' | head -n 200 || true
 echo "==> Linux tail (not ISO-INSTALL-OK):"
 grep -E -n 'Linux version|Kernel command line|Freeing initrd|Welcome to Alpine|localhost login|/ #|RN-SETUP|setup-disk|grub-efi|dosfstools|No space left|Installation is complete|Installing packages|ERROR:|panic|Oops:|BUG:' \

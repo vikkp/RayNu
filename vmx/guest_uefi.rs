@@ -3914,16 +3914,28 @@ pub fn product_iso_disk_leave_pages() -> u64 {
 ///
 /// Call **before** greedy 2 MiB report-RAM so Alpine sys-mode gets ≥64 MiB.
 ///
-/// Leftover DRAM above PRECISE is preferred (256 MiB–1 GiB, carved by
-/// `handoff` **before** the report-RAM seed; not an invented HPA, and never
-/// handed to the guest as RAM). Nested `c751fbe` alpine-extended: apk
-/// resolved grub-efi + dosfstools, `setup-disk` partitioned, then `No space
-/// left on device` on the 64 MiB pool disk (48 MiB of it ESP). Pool ladder
-/// stays as the fallback. leftover install disk.
+/// Persist (NVDIMM file / durable LUN) wins, then leftover DRAM above
+/// PRECISE (256 MiB–1 GiB, carved by `handoff` **before** the report-RAM
+/// seed; not an invented HPA, and never handed to the guest as RAM). Nested
+/// `c751fbe` alpine-extended: apk resolved grub-efi + dosfstools,
+/// `setup-disk` partitioned, then `No space left on device` on the 64 MiB
+/// pool disk (48 MiB of it ESP). Pool ladder stays as the last fallback.
+/// leftover install disk.
 pub fn try_alloc_product_iso_install_disk(
     alloc: &mut FrameAllocator,
     nested: bool,
 ) -> Option<(PhysFrame, usize)> {
+    crate::mgmt::disk_persist::set_install_disk_keep(false);
+    if let Some((hpa, bytes)) = crate::mgmt::disk_persist::take_persist_install_disk() {
+        // SAFETY: handoff reserved firmware PersistentMemory (or a live
+        // host-test allocation). Peek does not write.
+        // KANI-TARGET: persist peek at product ISO alloc (outside Proven Core).
+        let keep = unsafe {
+            crate::mgmt::disk_persist::persist_hpa_looks_installed(hpa, bytes as u64)
+        };
+        crate::mgmt::disk_persist::set_install_disk_keep(keep);
+        return Some((PhysFrame::from_phys(hpa), bytes));
+    }
     if let Some((hpa, bytes)) = crate::mgmt::iso_install::take_leftover_install_disk() {
         return Some((PhysFrame::from_phys(hpa), bytes));
     }
@@ -5108,11 +5120,19 @@ unsafe fn attach_product_iso_install_disk(alloc: &mut FrameAllocator, warn: bool
         }
         return;
     };
-    // SAFETY: exclusive FrameAllocator pages; guest-UEFI owns them until stop.
+    let keep = crate::mgmt::disk_persist::take_install_disk_keep();
+    // SAFETY: exclusive persist / leftover / FrameAllocator pages; guest-UEFI
+    // owns them until stop. keep=1 must not zero an installed GPT.
     // KANI-TARGET: product ISO virtio-blk attach (outside Proven Core).
-    let _ = crate::devices::guest_virtio_blk::attach_disk(frame.to_phys(), disk_bytes);
+    let _ = if keep {
+        crate::devices::guest_virtio_blk::attach_disk_keep(frame.to_phys(), disk_bytes)
+    } else {
+        crate::devices::guest_virtio_blk::attach_disk(frame.to_phys(), disk_bytes)
+    };
     serial::write_str("boot: Stage 46 virtio-blk install disk bytes=");
     write_dec(crate::devices::guest_virtio_blk::disk_bytes());
+    serial::write_str(" keep=");
+    write_dec(u64::from(keep));
     serial::write_line(" (not ISO-INSTALL-OK)");
 }
 

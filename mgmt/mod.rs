@@ -334,6 +334,8 @@ pub mod http;
 pub mod http_listen;
 pub mod iso;
 pub mod iso_install;
+pub mod disk_persist;
+pub mod m8_disk_persist_gate;
 pub mod m5_api_gate;
 pub mod m5_life_gate;
 pub mod m5_webui_gate;
