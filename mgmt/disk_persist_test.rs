@@ -323,6 +323,74 @@ fn file_backend_round_trips_gpt_esp_ext4_after_hv_reboot() {
 }
 
 #[test]
+fn persist_media_accepts_real_uuid_host_fixture_requires_planted() {
+    let mut image = build_gpt_esp_ext4_image();
+    assert!(persist_media_looks_installed(&image));
+    assert!(restored_disk_is_installed(&image));
+    let cmd = HOST_PERSIST_ROOT_CMDLINE.as_bytes();
+    let cmd_off = (HOST_PERSIST_DATA_START_LBA * 512) as usize + 0x600;
+    image[cmd_off..cmd_off + cmd.len()].fill(0);
+    assert!(
+        persist_media_looks_installed(&image),
+        "Alpine root=UUID= is not the planted host fixture"
+    );
+    assert!(!restored_disk_is_installed(&image));
+    assert!(!persist_media_looks_installed(&[0u8; HOST_PERSIST_DISK_BYTES]));
+}
+
+#[test]
+fn persist_hpa_peek_and_choice_prefer_persist() {
+    let image = build_gpt_esp_ext4_image();
+    // SAFETY: `image` is live for this test.
+    unsafe {
+        assert!(persist_hpa_looks_installed(
+            image.as_ptr() as u64,
+            image.len() as u64
+        ));
+    }
+    let zeros = vec![0u8; HOST_PERSIST_DISK_BYTES];
+    unsafe {
+        assert!(!persist_hpa_looks_installed(
+            zeros.as_ptr() as u64,
+            zeros.len() as u64
+        ));
+    }
+    assert_eq!(
+        choose_install_disk_attach(true, true, true),
+        InstallDiskChoice::PersistKeep
+    );
+    assert_eq!(
+        choose_install_disk_attach(true, false, true),
+        InstallDiskChoice::PersistZero
+    );
+    assert_eq!(
+        choose_install_disk_attach(false, true, true),
+        InstallDiskChoice::LeftoverZero
+    );
+    assert_eq!(
+        choose_install_disk_attach(false, false, false),
+        InstallDiskChoice::PoolZero
+    );
+}
+
+#[test]
+fn persist_reserve_is_one_shot_and_wins_policy() {
+    let _ = take_persist_install_disk();
+    reserve_persist_install_disk(0x1_0000_0000, 1024 * 1024 * 1024);
+    assert!(persist_install_disk_reserved());
+    assert_eq!(
+        take_persist_install_disk(),
+        Some((0x1_0000_0000, 1024 * 1024 * 1024))
+    );
+    assert_eq!(take_persist_install_disk(), None);
+    reserve_persist_install_disk(0, 0);
+    assert!(!persist_install_disk_reserved());
+    set_install_disk_keep(true);
+    assert!(take_install_disk_keep());
+    assert!(!take_install_disk_keep());
+}
+
+#[test]
 fn host_never_prints_everest_iso_install_ok() {
     assert!(host_never_prints_iso_install_ok());
     assert_eq!(M8_DISK_PERSIST_OK_MARKER, "RAYNU-V-M8-DISK-PERSIST-OK");

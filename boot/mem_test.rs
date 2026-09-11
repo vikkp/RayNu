@@ -114,6 +114,29 @@ fn pick_above_clips_spanning_region_at_precise() {
 }
 
 #[test]
+fn pick_persist_disk_region_largest_then_lowest() {
+    let try_bytes = &[
+        1024 * 1024 * 1024u64,
+        512 * 1024 * 1024,
+        256 * 1024 * 1024,
+    ];
+    // 400 MiB persist → 256 MiB. Unaligned start rounds up 2 MiB.
+    let small = [(0x1000u64, (400 * 1024 * 1024) / PAGE_SIZE)];
+    let (hpa, bytes) = pick_persist_disk_region(&small, try_bytes).expect("256MiB");
+    assert_eq!(hpa, PERSIST_DISK_ALIGN);
+    assert_eq!(bytes, 256 * 1024 * 1024);
+    // Two regions: 2 GiB high + 512 MiB low → 1 GiB from the high span.
+    let mixed = [
+        (0x2000_0000u64, (512 * 1024 * 1024) / PAGE_SIZE),
+        (0x1_0000_0000u64, (2 * 1024 * 1024 * 1024) / PAGE_SIZE),
+    ];
+    let (hpa, bytes) = pick_persist_disk_region(&mixed, try_bytes).expect("1GiB");
+    assert_eq!(hpa, 0x1_0000_0000);
+    assert_eq!(bytes, 1024 * 1024 * 1024);
+    assert!(pick_persist_disk_region(&[(0x2000_0000, 16)], try_bytes).is_none());
+}
+
+#[test]
 fn pick_above_prefer_lowest_span_that_fits_want() {
     let floor = 512 * 1024 * 1024u64;
     let low_pages = 600_000u64; // ~2.3 GiB leftover above PRECISE

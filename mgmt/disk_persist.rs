@@ -19,6 +19,7 @@
 
 use crate::raynu_f::fat::{self, VolumeRead};
 use crate::raynu_f::gpt::{find_esp, ESP_TYPE_GUID};
+use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 /// Iron COM2 close: Force Off / reboot RayNu-V, installed disk still there.
 /// Host/CI/nested must **never** print this.
@@ -129,30 +130,6 @@ impl VolumeRead for SliceDisk<'_> {
     }
 }
 
-struct Partition<'a> {
-    disk: &'a [u8],
-    base: usize,
-}
-
-impl VolumeRead for Partition<'_> {
-    fn read_at(&self, off: u64, buf: &mut [u8]) -> bool {
-        let Ok(rel) = usize::try_from(off) else {
-            return false;
-        };
-        let Some(start) = self.base.checked_add(rel) else {
-            return false;
-        };
-        let Some(end) = start.checked_add(buf.len()) else {
-            return false;
-        };
-        if end > self.disk.len() {
-            return false;
-        }
-        buf.copy_from_slice(&self.disk[start..end]);
-        true
-    }
-}
-
 fn u16_at(b: &[u8], off: usize) -> u16 {
     u16::from_le_bytes([b[off], b[off + 1]])
 }
@@ -170,27 +147,75 @@ fn u64_at(b: &[u8], off: usize) -> u64 {
     ])
 }
 
+struct OffsetVol<'a, R: VolumeRead> {
+    inner: &'a R,
+    base: u64,
+}
+
+impl<R: VolumeRead> VolumeRead for OffsetVol<'_, R> {
+    fn read_at(&self, off: u64, buf: &mut [u8]) -> bool {
+        self.inner.read_at(self.base.saturating_add(off), buf)
+    }
+}
+
+/// Firmware-reported persist HPA (NVDIMM / durable LUN), not leftover DRAM.
+struct PersistHpa {
+    hpa: u64,
+    len: u64,
+}
+
+impl VolumeRead for PersistHpa {
+    fn read_at(&self, off: u64, buf: &mut [u8]) -> bool {
+        if buf.is_empty() {
+            return true;
+        }
+        let n = buf.len() as u64;
+        let Some(end) = off.checked_add(n) else {
+            return false;
+        };
+        if self.hpa == 0 || end > self.len {
+            return false;
+        }
+        // SAFETY: caller of persist_hpa_looks_installed promised `hpa` is
+        // readable for `len` (reserved persist region or a host-test Vec).
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                (self.hpa + off) as *const u8,
+                buf.as_mut_ptr(),
+                buf.len(),
+            );
+        }
+        true
+    }
+}
+
 /// First Linux-filesystem partition start LBA, if the GPT array names one.
-fn linux_fs_start_lba(disk: &[u8]) -> Option<u64> {
-    if disk.len() < 1024 + 128 {
+fn linux_fs_start_lba_vol<R: VolumeRead>(disk: &R) -> Option<u64> {
+    let mut hdr = [0u8; 512];
+    if !disk.read_at(512, &mut hdr) {
         return None;
     }
-    let n = u32::from_le_bytes(disk[512 + 80..512 + 84].try_into().ok()?) as usize;
-    let es = u32::from_le_bytes(disk[512 + 84..512 + 88].try_into().ok()?) as usize;
-    let entry_lba = u64_at(&disk[512..1024], 72);
-    let array_off = usize::try_from(entry_lba.saturating_mul(512)).ok()?;
+    let n = u32::from_le_bytes(hdr[80..84].try_into().ok()?) as usize;
+    let es = u32::from_le_bytes(hdr[84..88].try_into().ok()?) as usize;
+    if es < 128 || es > 4096 {
+        return None;
+    }
+    let entry_lba = u64_at(&hdr, 72);
+    let array_off = entry_lba.saturating_mul(512);
     for i in 0..n.min(128) {
-        let off = array_off.checked_add(i.checked_mul(es)?)?;
-        if off + 40 > disk.len() {
+        let mut ent = [0u8; 128];
+        let take = es.min(ent.len());
+        let off = array_off.saturating_add((i.checked_mul(es)?) as u64);
+        if !disk.read_at(off, &mut ent[..take]) {
             return None;
         }
-        if &disk[off..off + 16] == ESP_TYPE_GUID {
+        if &ent[0..16] == ESP_TYPE_GUID {
             continue;
         }
-        if &disk[off..off + 16] != LINUX_FS_GUID {
+        if &ent[0..16] != LINUX_FS_GUID {
             continue;
         }
-        let start = u64_at(&disk[off..], 32);
+        let start = u64_at(&ent, 32);
         if start == 0 {
             continue;
         }
@@ -199,24 +224,45 @@ fn linux_fs_start_lba(disk: &[u8]) -> Option<u64> {
     None
 }
 
-fn disk_has_bootx64(disk: &[u8]) -> bool {
-    let Ok(esp) = find_esp(&SliceDisk(disk)) else {
+fn linux_fs_start_lba(disk: &[u8]) -> Option<u64> {
+    linux_fs_start_lba_vol(&SliceDisk(disk))
+}
+
+fn disk_has_bootx64_vol<R: VolumeRead>(disk: &R) -> bool {
+    let Ok(esp) = find_esp(disk) else {
         return false;
     };
-    let Some(base) = usize::try_from(esp.start_lba.saturating_mul(512)).ok() else {
+    let Some(base) = esp.start_lba.checked_mul(512) else {
         return false;
     };
-    if base + 512 > disk.len() {
+    let mut bpb = [0u8; 512];
+    if !disk.read_at(base, &mut bpb) {
         return false;
     }
-    let Ok(vol) = fat::parse_bpb(&disk[base..base + 512]) else {
+    let Ok(vol) = fat::parse_bpb(&bpb) else {
         return false;
     };
-    let part = Partition { disk, base };
+    let part = OffsetVol { inner: disk, base };
     match fat::resolve_path(&vol, &part, b"\\EFI\\BOOT\\BOOTX64.EFI") {
         Ok(e) => e.name_bytes() == b"BOOTX64.EFI" && e.size > 0 && !e.is_dir(),
         Err(_) => false,
     }
+}
+
+fn disk_has_bootx64(disk: &[u8]) -> bool {
+    disk_has_bootx64_vol(&SliceDisk(disk))
+}
+
+fn disk_has_ext4_vol<R: VolumeRead>(disk: &R) -> bool {
+    let Some(start_lba) = linux_fs_start_lba_vol(disk) else {
+        return false;
+    };
+    let base = start_lba.saturating_mul(512);
+    let mut magic = [0u8; 2];
+    if !disk.read_at(base.saturating_add(EXT4_MAGIC_OFF as u64), &mut magic) {
+        return false;
+    }
+    u16::from_le_bytes(magic) == EXT4_SUPER_MAGIC
 }
 
 fn disk_has_ext4_and_root_uuid(disk: &[u8]) -> bool {
@@ -238,12 +284,100 @@ fn disk_has_ext4_and_root_uuid(disk: &[u8]) -> bool {
         .any(|w| w == HOST_PERSIST_ROOT_CMDLINE.as_bytes())
 }
 
+fn persist_media_looks_installed_vol<R: VolumeRead>(disk: &R) -> bool {
+    find_esp(disk).is_ok() && disk_has_bootx64_vol(disk) && disk_has_ext4_vol(disk)
+}
+
+/// True when media has GPT ESP + `\EFI\BOOT\BOOTX64.EFI` + ext4 magic.
+///
+/// Alpine's real `root=UUID=` is **not** required (host fixture UUID is only
+/// for [`restored_disk_is_installed`]). Empty persist → false → first attach
+/// zeros so the ISO wins.
+pub fn persist_media_looks_installed(image: &[u8]) -> bool {
+    persist_media_looks_installed_vol(&SliceDisk(image))
+}
+
+/// Peek persist HPA bytes without copying the whole disk.
+///
+/// SAFETY: `hpa` is readable for `bytes` until the caller drops the region
+/// (UEFI PersistentMemory, or a live host-test allocation).
+/// KANI-TARGET: persist peek (outside Proven Core).
+pub unsafe fn persist_hpa_looks_installed(hpa: u64, bytes: u64) -> bool {
+    persist_media_looks_installed_vol(&PersistHpa { hpa, len: bytes })
+}
+
 /// True when `image` is still an installed disk after an HV reboot restore:
-/// GPT ESP, `\EFI\BOOT\BOOTX64.EFI`, ext4 magic, `root=UUID=`.
+/// GPT ESP, `\EFI\BOOT\BOOTX64.EFI`, ext4 magic, `root=UUID=` (host fixture).
 pub fn restored_disk_is_installed(image: &[u8]) -> bool {
-    find_esp(&SliceDisk(image)).is_ok()
-        && disk_has_bootx64(image)
-        && disk_has_ext4_and_root_uuid(image)
+    persist_media_looks_installed(image) && disk_has_ext4_and_root_uuid(image)
+}
+
+/// Who backs virtio-blk on this HV boot, and whether to keep existing bytes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InstallDiskChoice {
+    /// Persist media already looks installed — [`crate::devices::guest_virtio_blk::attach_disk_keep`].
+    PersistKeep,
+    /// Persist media is empty / not a GPT disk — zero so the ISO wins.
+    PersistZero,
+    /// Leftover DRAM fallback (dies on the next HV reboot).
+    LeftoverZero,
+    /// Precise-window pool ladder.
+    PoolZero,
+}
+
+/// Persist wins; leftover DRAM is the fallback; pool last.
+pub fn choose_install_disk_attach(
+    persist_reserved: bool,
+    persist_looks_installed: bool,
+    leftover_reserved: bool,
+) -> InstallDiskChoice {
+    if persist_reserved {
+        if persist_looks_installed {
+            InstallDiskChoice::PersistKeep
+        } else {
+            InstallDiskChoice::PersistZero
+        }
+    } else if leftover_reserved {
+        InstallDiskChoice::LeftoverZero
+    } else {
+        InstallDiskChoice::PoolZero
+    }
+}
+
+static PERSIST_DISK_HPA: AtomicU64 = AtomicU64::new(0);
+static PERSIST_DISK_BYTES: AtomicU64 = AtomicU64::new(0);
+static INSTALL_DISK_KEEP: AtomicBool = AtomicBool::new(false);
+
+/// True when handoff reserved a persist region that attach has not taken.
+pub fn persist_install_disk_reserved() -> bool {
+    PERSIST_DISK_HPA.load(Ordering::Acquire) != 0
+        && PERSIST_DISK_BYTES.load(Ordering::Acquire) != 0
+}
+
+/// Record persist backing for [`take_persist_install_disk`]. `bytes == 0` clears.
+pub fn reserve_persist_install_disk(hpa: u64, bytes: u64) {
+    PERSIST_DISK_HPA.store(hpa, Ordering::Release);
+    PERSIST_DISK_BYTES.store(bytes, Ordering::Release);
+}
+
+/// One-shot: hand persist HPA to virtio-blk attach, or `None`.
+pub fn take_persist_install_disk() -> Option<(u64, usize)> {
+    let bytes = PERSIST_DISK_BYTES.swap(0, Ordering::AcqRel);
+    let hpa = PERSIST_DISK_HPA.swap(0, Ordering::AcqRel);
+    if hpa == 0 || bytes == 0 {
+        return None;
+    }
+    Some((hpa, bytes as usize))
+}
+
+/// Stash whether [`crate::devices::guest_virtio_blk::attach_disk_keep`] should run.
+pub fn set_install_disk_keep(keep: bool) {
+    INSTALL_DISK_KEEP.store(keep, Ordering::Release);
+}
+
+/// One-shot keep flag for the product-ISO virtio attach.
+pub fn take_install_disk_keep() -> bool {
+    INSTALL_DISK_KEEP.swap(false, Ordering::AcqRel)
 }
 
 #[cfg(test)]

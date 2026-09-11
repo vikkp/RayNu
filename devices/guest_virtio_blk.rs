@@ -457,12 +457,35 @@ pub fn iso_visible() -> bool {
 
 /// Host-owned install disk for the guest-UEFI virtio-pci backend.
 ///
+/// First product-ISO boot **zeros** the backing so the ISO wins over a
+/// blank disk. Restoring an already-installed persist region must use
+/// [`attach_disk_keep`] instead — this path would wipe GPT/ESP/ext4.
+///
 /// SAFETY: `hpa` is writable for `bytes` (multiple of 512) until reset.
+/// KANI-TARGET: product ISO virtio-blk attach zero (outside Proven Core).
 pub unsafe fn attach_disk(hpa: u64, bytes: usize) -> bool {
+    attach_disk_inner(hpa, bytes, true)
+}
+
+/// Attach persist/leftover backing **without** zeroing.
+///
+/// M8.0 HV-reboot restore: GPT ESP + BOOTX64 + ext4 already live on the
+/// HPA (NVDIMM file / durable LUN). Guest F7 uses [`reset_keep_disk`]
+/// instead (same HPA, no re-attach). Not `ISO-INSTALL-OK`.
+///
+/// SAFETY: `hpa` is writable for `bytes` (multiple of 512) until reset.
+/// KANI-TARGET: product ISO virtio-blk attach keep (outside Proven Core).
+pub unsafe fn attach_disk_keep(hpa: u64, bytes: usize) -> bool {
+    attach_disk_inner(hpa, bytes, false)
+}
+
+unsafe fn attach_disk_inner(hpa: u64, bytes: usize, zero: bool) -> bool {
     if bytes == 0 || bytes % SECTOR != 0 || hpa == 0 {
         return false;
     }
-    core::ptr::write_bytes(hpa as *mut u8, 0, bytes);
+    if zero {
+        core::ptr::write_bytes(hpa as *mut u8, 0, bytes);
+    }
     DISK_HPA.store(hpa, Ordering::Release);
     DISK_LEN.store(bytes as u64, Ordering::Release);
     BYTES_WRITTEN.store(0, Ordering::Release);

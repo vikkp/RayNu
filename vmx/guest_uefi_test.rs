@@ -3085,8 +3085,23 @@ fn greedy_report_ram_leaves_only_1mib_for_disk() {
     assert!(alloc.allocate_contiguous((1024 * 1024) / 4096).is_some());
 }
 
+fn drain_m8_install_reservations() {
+    let _ = crate::mgmt::iso_install::take_leftover_install_disk();
+    let _ = crate::mgmt::disk_persist::take_persist_install_disk();
+    crate::mgmt::disk_persist::set_install_disk_keep(false);
+}
+
+fn aligned_zeroed(len: usize) -> (Vec<u8>, u64) {
+    let v = vec![0u8; len + 4096];
+    let p = v.as_ptr() as u64;
+    let a = (p + 4095) & !4095;
+    assert!(a.saturating_add(len as u64) <= p.saturating_add(v.len() as u64));
+    (v, a)
+}
+
 #[test]
 fn try_alloc_product_iso_install_disk_reserves_64mib() {
+    drain_m8_install_reservations();
     const PAGES: u64 = (151 * 1024 * 1024) / 4096;
     let mut words = [0u64; 1024];
     let mut alloc = unsafe {
@@ -3099,6 +3114,7 @@ fn try_alloc_product_iso_install_disk_reserves_64mib() {
 
 #[test]
 fn try_alloc_product_iso_install_disk_256mib_when_pool_allows() {
+    drain_m8_install_reservations();
     // 256 MiB disk + 64 MiB scratch leave (leftover DRAM fills report-RAM).
     const PAGES: u64 = (512 * 1024 * 1024) / 4096;
     let mut words = vec![0u64; 4096];
@@ -3111,6 +3127,7 @@ fn try_alloc_product_iso_install_disk_256mib_when_pool_allows() {
 
 #[test]
 fn try_alloc_256mib_when_leftover_backs_report_ram() {
+    drain_m8_install_reservations();
     // Iron after fw/sink/hole is ~480 MiB. Scratch-only leave (64 MiB)
     // lets 256 MiB land; leftover DRAM extra=846 fills report-RAM.
     const PAGES: u64 = (480 * 1024 * 1024) / 4096;
@@ -3126,6 +3143,7 @@ fn try_alloc_256mib_when_leftover_backs_report_ram() {
 
 #[test]
 fn try_alloc_skips_256mib_when_scratch_would_starve() {
+    drain_m8_install_reservations();
     // ~280 MiB precise pool: 256 MiB disk would leave ~24 MiB (< 64 MiB
     // scratch). 64 MiB still fits Alpine GPT. Do not steal leftover.
     const PAGES: u64 = (280 * 1024 * 1024) / 4096;
@@ -3139,6 +3157,7 @@ fn try_alloc_skips_256mib_when_scratch_would_starve() {
 
 #[test]
 fn try_alloc_nested_prefers_64mib_on_typical_pool() {
+    drain_m8_install_reservations();
     // Nested pool ~256 MiB: leave blocks 256 MiB disk, so 64 MiB lands.
     const PAGES: u64 = (256 * 1024 * 1024) / 4096;
     let mut words = vec![0u64; 4096];
@@ -3151,6 +3170,7 @@ fn try_alloc_nested_prefers_64mib_on_typical_pool() {
 
 #[test]
 fn try_alloc_nested_256mib_when_pool_and_leave_allow() {
+    drain_m8_install_reservations();
     // Nested with room for 256 MiB disk + 64 MiB leave.
     const PAGES: u64 = (512 * 1024 * 1024) / 4096;
     let mut words = vec![0u64; 4096];
@@ -3159,6 +3179,34 @@ fn try_alloc_nested_256mib_when_pool_and_leave_allow() {
     };
     let (_frame, bytes) = try_alloc_product_iso_install_disk(&mut alloc, true).unwrap();
     assert_eq!(bytes, 256 * 1024 * 1024);
+}
+
+#[test]
+fn try_alloc_prefers_persist_over_leftover_and_pool() {
+    drain_m8_install_reservations();
+    let (_persist, hpa) = aligned_zeroed(2 * 1024 * 1024);
+    crate::mgmt::iso_install::reserve_leftover_install_disk(
+        0x2000_0000,
+        512 * 1024 * 1024,
+    );
+    crate::mgmt::disk_persist::reserve_persist_install_disk(hpa, 2 * 1024 * 1024);
+    const PAGES: u64 = (151 * 1024 * 1024) / 4096;
+    let mut words = [0u64; 1024];
+    let mut alloc = unsafe {
+        FrameAllocator::new(0x10_0000, PAGES, words.as_mut_ptr() as u64).unwrap()
+    };
+    let (frame, bytes) = try_alloc_product_iso_install_disk(&mut alloc, false).unwrap();
+    assert_eq!(frame.to_phys(), hpa);
+    assert_eq!(bytes, 2 * 1024 * 1024);
+    assert!(
+        !crate::mgmt::disk_persist::take_install_disk_keep(),
+        "empty persist zeros on first attach"
+    );
+    assert_eq!(
+        crate::mgmt::iso_install::take_leftover_install_disk(),
+        Some((0x2000_0000, 512 * 1024 * 1024))
+    );
+    drain_m8_install_reservations();
 }
 
 #[test]

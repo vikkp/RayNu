@@ -104,8 +104,20 @@ pub unsafe fn leave_firmware() -> Handoff {
     let mut regions: [(u64, u64); 64] = [(0, 0); 64];
     let mut region_count = 0usize;
     let mut conventional_pages_1m = 0u64;
+    let mut persist_regions: [(u64, u64); 8] = [(0, 0); 8];
+    let mut persist_count = 0usize;
 
     for desc in mmap.entries() {
+        // Nested M8.0: QEMU NVDIMM (`M8_PERSIST_IMG`) is EfiPersistentMemory
+        // (UEFI type 14). Iron USB/NVMe is not this scan — leftover stays
+        // the fallback until a durable LUN mapper exists.
+        if desc.ty == MemoryType::PERSISTENT_MEMORY {
+            if persist_count < persist_regions.len() {
+                persist_regions[persist_count] = (desc.phys_start, desc.page_count);
+                persist_count += 1;
+            }
+            continue;
+        }
         if desc.ty != MemoryType::CONVENTIONAL {
             continue;
         }
@@ -197,11 +209,23 @@ pub unsafe fn leave_firmware() -> Handoff {
         serial::write_str("boot: conventional above PRECISE pages=");
         write_u64(above_pages);
         serial::write_byte(b'\n');
+        if let Some((phpa, pbytes)) = mem::pick_persist_disk_region(
+            &persist_regions[..persist_count],
+            crate::mgmt::iso_install::LEFTOVER_DISK_TRY_BYTES,
+        ) {
+            crate::mgmt::disk_persist::reserve_persist_install_disk(phpa, pbytes);
+            serial::write_str("boot: Stage 46 persist install disk hpa=0x");
+            write_u64_hex(phpa);
+            serial::write_str(" bytes=");
+            write_u64(pbytes);
+            serial::write_line(" (not ISO-INSTALL-OK)");
+        }
         // Nested product-ISO HOLDS (no E4 SHELL). Seed leftover DRAM the
         // same as iron so QEMU `PRODUCT_ISO=` can walk the 2 GiB CMOS lie.
         // `iso=0` never enters this block. Nested `-m 512M` has no
         // conventional above PRECISE (`skip none`); product-ISO QEMU uses
-        // 2560 MiB so leftover exists.
+        // 2560 MiB so leftover exists. Skip leftover **disk** carve when
+        // persist is reserved (report-RAM extra still uses the span).
         if let Some((hs, hp)) = mem::pick_conventional_region_above_prefer(
             &regions[..region_count],
             REPORT_RAM_EXTRA_WANT_PAGES,
@@ -210,10 +234,17 @@ pub unsafe fn leave_firmware() -> Handoff {
         )
         {
             let bytes = hp.saturating_mul(mem::PAGE_SIZE);
+            let persist = crate::mgmt::disk_persist::persist_install_disk_reserved();
             // Carve the install disk first so those HPAs never enter the
             // report-RAM bump (guest sees them only via virtio-blk).
-            let (disk_hpa, disk_bytes, rest_start, rest_bytes) =
-                crate::mgmt::iso_install::carve_leftover_install_disk(hs, bytes);
+            let (disk_hpa, disk_bytes, rest_start, rest_bytes) = if persist {
+                serial::write_line(
+                    "boot: Stage 46 leftover install disk skip persist (not ISO-INSTALL-OK)",
+                );
+                (0, 0, hs, bytes)
+            } else {
+                crate::mgmt::iso_install::carve_leftover_install_disk(hs, bytes)
+            };
             if disk_bytes != 0 {
                 crate::mgmt::iso_install::reserve_leftover_install_disk(disk_hpa, disk_bytes);
                 serial::write_str("boot: Stage 46 leftover install disk hpa=0x");
@@ -330,5 +361,9 @@ mod handoff_test {
         assert!(src.contains("report-RAM extra skip none"));
         assert!(src.contains("report-RAM extra skip align"));
         assert!(src.contains("2560"));
+        assert!(src.contains("PERSISTENT_MEMORY"));
+        assert!(src.contains("leftover install disk skip persist"));
+        assert!(src.contains("persist install disk hpa="));
+        assert!(!src.contains("println!(\"RAYNU-V-M7-ISO-INSTALL-OK\")"));
     }
 }
