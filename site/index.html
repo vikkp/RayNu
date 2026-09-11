@@ -6,14 +6,58 @@
     <title>RayNu-V — Single-binary hypervisor, designed for proof</title>
     <meta
       name="description"
-      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Real PowerEdge R640 closed BOOT-OK through E4 SPA VMLAUNCH (SHELL stub). Residual: TLS/console + distro installer."
+      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Mount Everest closed on a real PowerEdge R640: SPA Start of RayNu-F ISO → install → disk reboot → login."
     />
-    <meta property="og:title" content="RayNu-V — R640 BOOT-OK through E4 SPA VMLAUNCH" />
+    <meta property="og:title" content="RayNu-V — Mount Everest closed on iron" />
     <meta
       property="og:description"
-      content="PowerEdge R640: RAYNU-V-R640-BOOT-OK, HOST-NIC-HTTP-OK beside VMX, E4 SPA VMLAUNCH. Residual: TLS/console + distro. Not Everest."
+      content="PowerEdge R640: HOST-NIC-HTTP-OK → SPA Start of RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login. 11 September 2026. Next: M8 operator hardening."
     />
     <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://raynuv.com/" />
+    <meta property="og:site_name" content="RayNu-V" />
+    <meta
+      property="og:image"
+      content="https://raynuv.com/assets/hero.jpg"
+    />
+    <meta property="og:image:width" content="2400" />
+    <meta property="og:image:height" content="1347" />
+    <meta
+      property="og:image:alt"
+      content="A lone climber with a headlamp ascending a snow ridge at dusk — the RayNu-V Mount Everest"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="RayNu-V — Mount Everest closed on iron"
+    />
+    <meta
+      name="twitter:description"
+      content="PowerEdge R640: SPA Start of RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login. Everest closed. Next: M8."
+    />
+    <meta name="twitter:image" content="https://raynuv.com/assets/hero.jpg" />
+    <link rel="canonical" href="https://raynuv.com/" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "RayNu-V",
+        "applicationCategory": "SystemsApplication",
+        "operatingSystem": "UEFI bare-metal; Dell PowerEdge R640/R650/R660",
+        "description": "Single-binary Type-1 hypervisor designed for formal verification from day one. Boots on real PowerEdge R640, serves a network Web UI, and machine-checks EPT memory isolation with Verus and Kani.",
+        "url": "https://raynuv.com/",
+        "codeRepository": "https://github.com/vikkp/RayNu",
+        "license": "https://github.com/vikkp/RayNu/blob/main/LICENSE",
+        "author": {
+          "@type": "Person",
+          "name": "Vikash Pandey",
+          "identifier": "https://orcid.org/0009-0001-2160-6357"
+        }
+      }
+    </script>
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="assets/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -22,16 +66,45 @@
     />
     <link rel="stylesheet" href="styles.css" />
   </head>
-  <body>
+  <body class="page-home">
+    <!-- REQUIRED SITE CHROME: do not delete nav.site-nav, #status, #start-here / fork__card, #console, #buddies, or CIO View.
+         Patch lived strings in place. Never replace this file wholesale on an HDA/Everest branch.
+         Guard: ./tools/check-site-chrome.sh -->
+    <nav class="site-nav" aria-label="Site">
+      <a class="site-nav__brand" href="index.html">RayNu-V</a>
+      <div class="site-nav__links">
+        <a href="#status">Status</a>
+        <a href="#console" data-hide-sm>Console</a>
+        <a href="#journey">Journey</a>
+        <a href="stories.html">Stories</a>
+        <a href="hda.html">Everest</a>
+        <a href="paper.html">Paper</a>
+        <a href="ciospeak.html">CIO View</a>
+        <a href="https://github.com/vikkp/RayNu" data-hide-sm>GitHub</a>
+      </div>
+    </nav>
     <header class="hero">
       <div class="hero__media" aria-hidden="true">
-        <img
-          class="hero__image"
-          src="assets/hero.jpg"
-          alt=""
-          width="2400"
-          height="1347"
-        />
+        <picture>
+          <source
+            type="image/webp"
+            srcset="
+              assets/hero-800.webp   800w,
+              assets/hero-1200.webp 1200w,
+              assets/hero-1600.webp 1600w,
+              assets/hero-2400.webp 2400w
+            "
+            sizes="100vw"
+          />
+          <img
+            class="hero__image"
+            src="assets/hero.jpg"
+            alt=""
+            width="2400"
+            height="1347"
+            fetchpriority="high"
+          />
+        </picture>
       </div>
       <div class="hero__veil" aria-hidden="true"></div>
       <div class="hero__content">
@@ -40,9 +113,9 @@
           Memory isolation isn’t tested. It’s proved.
         </h1>
         <p class="lede reveal reveal--delay-2">
-          Single-binary Type-1 hypervisor — on real PowerEdge R640: COM2 printed
-          <code>RAYNU-V-R640-BOOT-OK</code>, then the operator LAN reached
-          <code>RAYNU-V-M7-UEFI-HTTP-OK</code>.
+          Single-binary Type-1 hypervisor — Mount Everest closed on a real
+          PowerEdge R640: network SPA installed Alpine to virtio disk and
+          rebooted into it.
         </p>
         <div class="cta reveal reveal--delay-3">
           <a class="cta__primary" href="https://github.com/vikkp/RayNu"
@@ -54,62 +127,105 @@
             >Read the architecture</a
           >
         </div>
+        <p class="hero__proof reveal reveal--delay-3">
+          Everest closed on iron: <code>RAYNU-V-R640-BOOT-OK</code> ·
+          <code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code> ·
+          <code>RAYNU-V-M7-ISO-INSTALL-OK</code> ·
+          <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code>
+        </p>
       </div>
     </header>
 
     <main>
       <section class="section section--status" id="status">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>Milestones · August 2026</p>
-          <h2 class="section__title">R640 iron: BOOT-OK through E4 SPA VMLAUNCH.</h2>
+          <p class="milestone-kicker" data-reveal>Milestones · September 2026</p>
+          <h2 class="section__title">Mount Everest closed on iron.</h2>
           <p class="section__lede">
             Real PowerEdge R640 (iDRAC9 SOL <code>console com2</code>) closed
-            HDA <strong>E2</strong> —
-            <code>RAYNU-V-R640-BOOT-OK</code> (M0→SHELL→M4, 2026-08-15) —
-            <strong>E3</strong> MVP
-            <code>RAYNU-V-M7-UEFI-HTTP-OK</code> (PRE-EBS SNP, 2026-08-16) —
-            <strong>E5</strong> stamps
-            <code>RAYNU-V-M7-ISO-BOOTED-FROM-DISK</code> (Cruzer, LBA not a
-            rootfs) —
-            <strong>E3b</strong> + Phase F
-            <code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code> beside VMX (BCM5720
-            <code>:38</code>, 2026-08-20) — and
-            <strong>P0-14</strong>
-            <code>RAYNU-V-M7-E4-SPA-LAUNCH-OK</code> (2026-08-21: private-EPT
-            SHELL guest from SPA start + shadow re-entry). Mount Everest
-            residual: TLS/console and a real distro installer. Not Everest.
+            the operator product loop on 11 September 2026. EFI
+            <code>f72b4276</code>: coexist
+            <code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code> on
+            <code>10.99.99.145:8443</code> → SPA Start of RayNu-F → Alpine
+            <code>setup-disk</code> →
+            <code>RAYNU-V-M7-ISO-INSTALL-OK</code> → F7 →
+            <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code> → second Linux
+            <code>root=UUID=814a97a0-…</code> → <code>login:</code>.
+            That is M7 / ADR-009. TLS, leftover-disk persist across a
+            hypervisor reboot, and a guest console UI are
+            <strong>M8</strong> — not a reopened Everest.
+            Iron rollback:
+            <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed"
+              ><code>v0.1.0-everest-closed</code></a
+            >
+            (EFI <code>f72b4276</code> / SHA256
+            <code>e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc</code>).
           </p>
           <figure class="milestone-shot" data-reveal>
-            <img
-              src="assets/r640-boot-ok-com2.png"
-              alt="macOS Terminal: iDRAC SOL session ending in RAYNU-V-R640-BOOT-OK"
-              width="1600"
-              height="900"
-              loading="lazy"
-            />
+            <picture>
+              <source
+                type="image/webp"
+                srcset="
+                  assets/r640-boot-ok-com2-800.webp   800w,
+                  assets/r640-boot-ok-com2-1556.webp 1556w
+                "
+                sizes="(max-width: 700px) 100vw, 42rem"
+              />
+              <img
+                src="assets/r640-boot-ok-com2.png"
+                alt="macOS Terminal: iDRAC SOL session ending in RAYNU-V-R640-BOOT-OK"
+                width="1556"
+                height="926"
+                loading="lazy"
+              />
+            </picture>
             <figcaption>
               Operator Terminal.app · iDRAC SOL (<code>console com2</code>) —
-              <a
-                href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/2026-08-15-boot-ok-marker-com2.txt"
-                >full archive</a
-              >
+              first iron close
+              <code>RAYNU-V-R640-BOOT-OK</code> (2026-08-15). Summit COM2:
+              <a href="hda.html#com2">ISO-INSTALL-OK → DISK-BOOT-OK → login</a>.
             </figcaption>
           </figure>
-          <pre class="ship-code milestone-log" data-reveal><code>boot: mgmt HTTP listening on 10.99.99.127:8443 (PRE-EBS SNP window)
-RAYNU-V-AUDIT: AuthAllowed method_tag=1
-RAYNU-V-M7-UEFI-HTTP-OK
-…
-RAYNU-V-R640-BOOT-OK</code></pre>
+          <pre class="ship-code milestone-log" data-reveal><code>HOST-NIC coexist listening on 10.99.99.145:8443
+RAYNU-V-M7-HOST-NIC-HTTP-OK
+boot: E4 SPA start — RayNu-F product ISO
+RAYNU-V-M7-ISO-INSTALL-OK
+RAYNU-V-RAYNU-F-DISK-BOOT-OK
+root=UUID=814a97a0-d3be-4a64-8611-b3dbd9859201
+localhost login:</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
             Evidence:
-            <code>docs/evidence/r640/2026-08-16-uefi-http-ok.md</code>
+            <code>docs/evidence/r640/2026-09-11-f72b4276-phase-b-spa-iso-install-disk-boot-ok.md</code>
+            · <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed">GitHub Latest rollback</a>
+            · <a href="stories.html#r640-2026-09-11-everest">2026-09-11 summit</a>
             · <a href="stories.html">Stories</a>
-            · <a href="stories.html#r640-2026-08-21-e4-spa">2026-08-21 E4 SPA</a>
-            · <a href="stories.html#r640-2026-08-20-host-nic">2026-08-20 host NIC</a>
-            · <a href="stories.html#r640-2026-08-17-snp-dead">2026-08-17 RSOD</a>
-            · <a href="stories.html#r640-2026-08-16-cruzer">Cruzer stamps</a>
-            · <a href="hda.html">Distance to Mount Everest</a>.
+            · <a href="hda.html">Mount Everest — closed</a>.
           </p>
+        </div>
+      </section>
+
+      <section class="section section--fork" id="start-here">
+        <div class="section__inner">
+          <div class="fork">
+            <a class="fork__card" href="ciospeak.html" data-reveal>
+              <span class="fork__kicker">For infrastructure leaders</span>
+              <span class="fork__title">Your PowerEdge fleet has years left.</span>
+              <span class="fork__text"
+                >License economics, isolation assurance, and what a reversible
+                design partnership looks like — the executive view.</span
+              >
+              <span class="fork__cta">CIO View →</span>
+            </a>
+            <a class="fork__card" href="#journey" data-reveal>
+              <span class="fork__kicker">For engineers</span>
+              <span class="fork__title">Every claim has a marker.</span>
+              <span class="fork__text"
+                >Dozens of closed gates, Verus proof transcripts, and serial
+                logs from real iron — the evidence, end to end.</span
+              >
+              <span class="fork__cta">The journey ↓</span>
+            </a>
+          </div>
         </div>
       </section>
 
@@ -122,6 +238,21 @@ RAYNU-V-R640-BOOT-OK</code></pre>
             artifacts (<code>cargo test</code> / Verus / Kani smokes) — not that
             the product is finished, and not that PowerEdge R640 is validated.
           </p>
+
+          <dl class="statband" data-reveal>
+            <div class="statband__item">
+              <dt>Gates closed · M1.0 → Everest</dt>
+              <dd>55+</dd>
+            </div>
+            <div class="statband__item">
+              <dt>Verus proofs · M6.9 external audit</dt>
+              <dd>80 <span class="statband__unit">verified · 0 errors</span></dd>
+            </div>
+            <div class="statband__item">
+              <dt>Mount Everest · real PowerEdge R640</dt>
+              <dd>closed</dd>
+            </div>
+          </dl>
 
           <div class="journey">
             <div class="journey__era" data-reveal>
@@ -474,13 +605,13 @@ RAYNU-V-R640-BOOT-OK</code></pre>
             <div class="journey__era" data-reveal>
               <h3 class="journey__era-title">M7 · Mount Everest</h3>
               <p class="journey__era-note">
-                Software path on Latitude/QEMU; real R640 boot
-                (<code>RAYNU-V-R640-BOOT-OK</code>) and UEFI HTTP
-                (<code>RAYNU-V-M7-UEFI-HTTP-OK</code>) closed 2026-08-15/16.
-                E5 stamp persist closed on Cruzer
-                (<code>RAYNU-V-M7-ISO-BOOTED-FROM-DISK</code>). Residual:
-                TLS/console + distro installer (E3b + Phase F closed 2026-08-20;
-                E4 SPA VMLAUNCH closed 2026-08-21, SHELL stub).
+                Closed on iron 2026-09-11. Real R640 boot
+                (<code>RAYNU-V-R640-BOOT-OK</code>), durable HTTP
+                (<code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code>), SPA Start of
+                RayNu-F, Alpine ISO install
+                (<code>RAYNU-V-M7-ISO-INSTALL-OK</code>), reboot to disk
+                (<code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code>). Next is M8
+                operator hardening (ADR-018), not a reopened Everest.
               </p>
               <ol class="journey__list">
                 <li>
@@ -541,6 +672,47 @@ RAYNU-V-R640-BOOT-OK</code></pre>
                     <code>RAYNU-V-M7-E4-SPA-LAUNCH-OK</code></span
                   >
                 </li>
+                <li>
+                  <span class="journey__gate">E5</span>
+                  <span class="journey__text"
+                    >Guest-UEFI OVMF past SEC + CD/virtio-blk on private VMCS
+                    (nested VT-x, 2026-08-23) →
+                    <code>RAYNU-V-M7-E5-OVMF-VIRTIO-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">E5 · 44</span>
+                  <span class="journey__text"
+                    >Guest firmware reads the CD — ATAPI READ(10),
+                    sectors=1, on iron (2026-08-27) →
+                    <code>RAYNU-V-M7-E5-OVMF-ATAPI-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">E5 · 45</span>
+                  <span class="journey__text"
+                    >El Torito CD EFI on iron — catalog + boot image
+                    (2026-08-27) →
+                    <code>RAYNU-V-M7-E5-OVMF-ELTORITO-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">E5 · 46</span>
+                  <span class="journey__text"
+                    >Nested RayNu-F alpine-extended sys-install complete
+                    (2026-09-05, Please reboot + F7). Nested ≠ iron.
+                    Iron close is the Everest row below →
+                    <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">Everest</span>
+                  <span class="journey__text"
+                    >SPA Start of RayNu-F on coexist HTTP
+                    (<code>f72b4276</code>, 2026-09-11) — M7 closed on iron →
+                    <code>RAYNU-V-M7-ISO-INSTALL-OK</code></span
+                  >
+                </li>
               </ol>
             </div>
           </div>
@@ -586,8 +758,9 @@ RAYNU-V-R640-BOOT-OK</code></pre>
                 <span class="pillars__why"
                   >Target: deploy and attest on PowerEdge you own, via Redfish —
                   not a mystery appliance. R640 iron closed BOOT-OK (E2),
-                  UEFI-HTTP-OK (E3), host-NIC HTTP (E3b), and E4 SPA VMLAUNCH
-                  (P0-14, SHELL stub) through 2026-08-21.</span
+                  UEFI-HTTP-OK (E3), host-NIC HTTP (E3b), E4 SPA VMLAUNCH,
+                  El Torito CD EFI, and Mount Everest (ISO-INSTALL-OK +
+                  DISK-BOOT-OK, 2026-09-11).</span
                 >
               </div>
               <span class="pillars__note">Near-term</span>
@@ -640,6 +813,45 @@ RAYNU-V-R640-BOOT-OK</code></pre>
         </div>
       </section>
 
+      <section class="section section--console" id="console">
+        <div class="section__inner">
+          <p class="milestone-kicker" data-reveal>The product · management UI</p>
+          <h2 class="section__title">The console ships inside the binary.</h2>
+          <p class="section__lede">
+            The management SPA is embedded in the <code>.efi</code> as a
+            compressed PE asset (<code>.aswebui</code>) and served from the
+            host NIC — VM list, create-VM, ISO attach, and the audit tail.
+            Shown here with the bundled demo state; on R640 iron it answers
+            after <code>BOOT-OK</code> on the host-owned BCM5720 (E3b,
+            2026-08-20), even while guests run (Phase F).
+          </p>
+          <figure class="milestone-shot milestone-shot--wide" data-reveal>
+            <picture>
+              <source
+                type="image/webp"
+                srcset="
+                  assets/spa-800.webp   800w,
+                  assets/spa-1600.webp 1600w,
+                  assets/spa-2220.webp 2220w
+                "
+                sizes="(max-width: 700px) 100vw, 56rem"
+              />
+              <img
+                src="assets/spa.png"
+                alt="RayNu-V management Web UI: two shell-ready VMs in the list, Create Virtual Machine form, and the audit log tail"
+                width="2220"
+                height="1262"
+                loading="lazy"
+              />
+            </picture>
+            <figcaption>
+              Management SPA · demo-state bundle · served from the host-owned
+              NIC after BOOT-OK (E3b closed 2026-08-20)
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
       <section class="section section--ship" id="ship">
         <div class="section__inner">
           <h2 class="section__title">One binary. One server family.</h2>
@@ -648,12 +860,12 @@ RAYNU-V-R640-BOOT-OK</code></pre>
             PowerEdge R640 / R650 / R660.
             <strong>Today’s closed gates are on Latitude + QEMU nested
             KVM</strong>
-            plus real R640 iron: <code>RAYNU-V-R640-BOOT-OK</code> (E2),
-            <code>RAYNU-V-M7-UEFI-HTTP-OK</code> (E3 MVP),
-            <code>RAYNU-V-M7-ISO-BOOTED-FROM-DISK</code> (E5 stamps), and
-            <code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code> (E3b + Phase F, 2026-08-20),
-            and <code>RAYNU-V-M7-E4-SPA-LAUNCH-OK</code> (P0-14, 2026-08-21,
-            SHELL stub). Mount Everest residual: TLS/console + distro installer. See
+            plus real R640 iron through Mount Everest:
+            <code>RAYNU-V-R640-BOOT-OK</code> (E2),
+            <code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code> (E3b),
+            <code>RAYNU-V-M7-ISO-INSTALL-OK</code> +
+            <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code> (E5 + Phase B, 2026-09-11).
+            Next is M8 operator hardening (TLS / persist / console). See
             <a href="hda.html">HDA</a>.
           </p>
           <pre class="ship-code" data-reveal><code># Lab: Latitude / QEMU · R640 iron: E2 BOOT-OK + E3 UEFI-HTTP-OK + E5 stamps
@@ -685,6 +897,30 @@ cargo build --release --target x86_64-unknown-uefi --features uefi-bin
         </div>
       </section>
 
+      <section class="section section--buddies" id="buddies">
+        <div class="section__inner">
+          <p class="milestone-kicker" data-reveal>Field notes · friendship</p>
+          <h2 class="section__title">Making buddies along the way.</h2>
+          <p class="section__lede">
+            Our best bud is <strong>Mr. COM2 Serial Port</strong>. He works at
+            115,200 bits per second, never lies, never sleeps, and tells us
+            everything — every trap, every timer tick, every time the firmware
+            throws a chair. He was there for first light on the R640, he was
+            there for the red screen, and he prints the markers this site is
+            named after. We transcribed one full conversation with him on real
+            iron and annotated every beat.
+          </p>
+          <div class="cta" data-reveal>
+            <a class="cta__primary" href="com2.html">Have a chat with COM2</a>
+            <a
+              class="cta__secondary"
+              href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/2026-08-15-boot-ok-marker-com2.txt"
+              >The raw transcript</a
+            >
+          </div>
+        </div>
+      </section>
+
       <section class="section section--close" id="start">
         <div class="section__inner">
           <h2 class="section__title">Talk to us.</h2>
@@ -702,9 +938,13 @@ cargo build --release --target x86_64-unknown-uefi --features uefi-bin
             stamp persist <code>RAYNU-V-M7-ISO-BOOTED-FROM-DISK</code> and
             durable HTTP <code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code> (2026-08-20)
             and E4 SPA VMLAUNCH <code>RAYNU-V-M7-E4-SPA-LAUNCH-OK</code>
-            (2026-08-21, SHELL stub);
-            Mount Everest residual is TLS/console and a
-            real distro installer. See the
+            (2026-08-21, SHELL stub) and Stage 44/45
+            <code>OVMF-ATAPI-OK</code> / <code>OVMF-ELTORITO-OK</code>
+            (2026-08-27);
+            and the full ISO install loop
+            <code>RAYNU-V-M7-ISO-INSTALL-OK</code> /
+            <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code> (2026-09-11).
+            Mount Everest is closed. Next is M8 operator hardening. See the
             <a href="paper.html">living verification paper</a>.
           </p>
 

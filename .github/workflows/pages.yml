@@ -23,6 +23,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: HDA tracker fresh
         run: ./tools/sync-hda-site.sh --check
+      - name: site chrome present
+        run: ./tools/check-site-chrome.sh
       - name: Add .nojekyll
         run: touch site/.nojekyll
       - name: Publish site/ to gh-pages

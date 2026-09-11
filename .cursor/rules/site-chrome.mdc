@@ -1,0 +1,50 @@
+---
+description: Public site chrome (raynuv.com) stays the Kimi site-updater look — CIO View, Status, nav, Stories
+globs:
+  - "site/**"
+  - "wrangler.jsonc"
+  - ".github/workflows/ci.yml"
+  - ".github/workflows/pages.yml"
+  - ".github/workflows/worker.yml"
+alwaysApply: true
+---
+
+# Public site chrome (raynuv.com)
+
+The look of `https://raynuv.com` is the **site-updater** design from PRs **#218–#226** (Syne + Source Serif, top nav, Status, CIO View fork cards, console screenshot, COM2 buddies, Stories mast, HDA tracker). That chrome lives on **`main`**.
+
+**This rule always applies.** HDA / Everest / ISO agents historically rewrote `site/index.html` wholesale and deleted the CIO/Status chrome. Do not do that.
+
+## Do
+
+- **Patch lived strings in place** (status lede, hero proof, HDA tracker copy, story dates). Keep the HTML skeleton.
+- Keep `site/hda.json` generated only by `./tools/sync-hda-site.sh` from `docs/hda.md` frontmatter.
+- If a feature branch truncated `site/`, restore chrome from `origin/main` **surgically**. Do not merge all of `origin/main` into a hypervisor branch.
+- After any `site/` edit, run `./tools/check-site-chrome.sh`.
+
+## Do not
+
+- Replace `site/index.html` wholesale while updating HDA, Everest, ISO, or SPA status.
+- Delete `nav.site-nav`, `#status`, `#start-here` / `fork__card`, `#console`, `#buddies`, `ciospeak.html`, `com2.html`, `404.html`, `robots.txt`, `sitemap.xml`, or responsive `site/assets/*.webp`.
+- Restyle `site/index.html` / `site/styles.css` as part of hypervisor work. HDA closed-summit CSS (`.page-hda--closed`, `.section--hda-com2`) may be added; chrome CSS must stay.
+- Point Cloudflare Git production at a feature branch.
+- Claim `RAYNU-V-M7-ISO-INSTALL-OK` from nested QEMU, host tests, or CI.
+
+## Required homepage landmarks
+
+`site/index.html` must contain all of:
+
+- `nav.site-nav` with links: Status, Console, Journey, Stories, Everest, Paper, **CIO View**
+- HTML comment `REQUIRED SITE CHROME`
+- `#status` (lived milestone copy — currently Everest closed on iron)
+- `#start-here` with `fork__card` (CIO View + engineers)
+- `#journey` with `.statband`
+- `#console` (SPA screenshot)
+- `#buddies` (Mr. COM2)
+
+## Check
+
+```bash
+./tools/check-site-chrome.sh
+./tools/sync-hda-site.sh --check
+```

@@ -1,15 +1,15 @@
 # M7 Plan — Mount Everest (shippable single-host)
 
-**Status:** **M7.5 + M7.6 + M7.7 stamp-persist + M7.8 / E3b + ADR-013 Stage 1 (Phases 0–G) + E4 SPA VMLAUNCH (P0-14) + E5 Stage 0–45 closed**. Stage 44 / P0-59 ATAPI closed on iron COM2 `bf696ca`. Stage 45 / P0-61 El Torito **CLOSED** on iron COM2 `0be7283` (`OVMF-ELTORITO-OK` `RN-ELT` n=197992). P0-60 G1 EPT **CLOSED** on iron COM2 after `5147222`. G0 VMCS relocate **CLOSED** (`E4 G0 VMCS relocated HPA=0x10a00000`; `M4-NVM-OK`). M4.3 virtio-blk host-slab **CLOSED** on iron COM2 after `22e28d0` (`M4-BLK-OK` `guest_code=0x10c00000`; then `M4-NET-OK` / `M4-SMP-OK` / `R640-BOOT-OK` / Phase F coexist). Phase G is the accepted-risk note (shared LOM). **P0-15**–**P0-61** are closed. Residual: Stage 46 `ISO-INSTALL-OK`, plus TLS/console. Optional: `VMRESUME` instead of VMLAUNCH-every-quantum.  
+**Status:** **CLOSED on iron 2026-09-11.** Mount Everest product loop (E1–E6) closed: Phase A reboot-to-disk `56a3ffd` + Phase B SPA path `f72b4276` / `34552377351` (`HOST-NIC-HTTP-OK` → SPA Start of RayNu-F → `ISO-INSTALL-OK` → `DISK-BOOT-OK` → `login:`). Historical ladder (M7.0–M7.8, E4, Stages 0–46) stays in this file as the close record. **Next mountain is M8** operator hardening — [adr/ADR-018.md](adr/ADR-018.md) · [m8_plan.md](m8_plan.md). Cluster is **M9**. **Iron rollback:** GitHub Latest [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) (EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc`). Do not flash a later M8 persist prototype as the known-good.  
 **Prior:** M7.4 closed on Latitude (`RAYNU-V-M7-UI-OK`); M7.3–M7.0 closed; M6 closed.  
-**Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · E3 listen: [adr/ADR-012.md](adr/ADR-012.md) · E3b: [adr/ADR-013.md](adr/ADR-013.md) · ISO types: [adr/ADR-014.md](adr/ADR-014.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
+**Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · close: [adr/ADR-018.md](adr/ADR-018.md) · E3 listen: [adr/ADR-012.md](adr/ADR-012.md) · E3b: [adr/ADR-013.md](adr/ADR-013.md) · ISO types: [adr/ADR-014.md](adr/ADR-014.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
 **Prior track:** [m6_plan.md](m6_plan.md)
 
 **Mount Everest (product loop):**  
 Ship EFI → boot via **iDRAC virtual media** on **real R640** → **network Web UI** → **deploy Linux ISO / install guest**.
 
 M6 closed the production-ready *bar* (proof + ops harden + soak + external audit) on Latitude/QEMU.  
-**M7** delivers the shippable **single-host** operator product. Cluster features (vMotion-like, DRS-like, hot-add) are **M8** — not M7 blockers.
+**M7** delivered the shippable **single-host** operator product (**CLOSED on iron**). Operator polish is **M8** ([ADR-018](adr/ADR-018.md)). Cluster features (vMotion-like, DRS-like, hot-add) are **M9** — not M7 blockers.
 
 ---
 
@@ -20,7 +20,7 @@ M6 closed the production-ready *bar* (proof + ops harden + soak + external audit
 - Do **not** claim M7 closed without `RAYNU-V-R640-BOOT-OK` (or equiv.) on real PowerEdge R640.
 - Do **not** block M7 on Dell Tier‑2 OEM Redfish (ADR-005) — slip-ok.
 - Do **not** pull HTTP/datastore/ISO into Proven Core without a new ADR (default **no**).
-- Do **not** start product vMotion / DRS / hot-add on the M7 critical path (→ M8).
+- Do **not** start product vMotion / DRS / hot-add on the M7 critical path (→ **M9**; operator polish is **M8** / ADR-018).
 - Pre-iron order: **Ship kit → TLS/HTTP → datastore/ISO** (R640 racked ~1 month after plan open).
 
 ```
@@ -34,7 +34,7 @@ Track Iron:   M7.5 real R640 boot (hard gate for M7 closed)
 → M7 closed when SHIP + HTTP + STORE + ISO + UI + R640-BOOT green
    (+ M7.6 UEFI listen required for honest E3 / network UI on iron)
          ║
-         ╚══ M8 sketch: vMotion-like · DRS-like · hot-add
+         ╚══ M8 operator hardening (ADR-018) then M9 cluster sketch
 ```
 
 ---
@@ -242,7 +242,11 @@ RAYNU-V-R640-BOOT-OK
 
 ---
 
-## M8 sketch (out of scope for this plan)
+## After M7 (ADR-018)
+
+Operator polish that used to read as “Everest residual” is **[M8](m8_plan.md)** (persist → TLS → auth → console → upload → catalog → Windows later).
+
+Cluster / elasticity is **M9** (was numbered M8 in the original ADR-009 sketch):
 
 | Theme | Intent |
 |-------|--------|
@@ -250,7 +254,7 @@ RAYNU-V-R640-BOOT-OK
 | DRS-like | Placement / load-aware scheduling across hosts |
 | Hot-add | CPU / RAM / disk add to running guest |
 
-Do not pull M8 into M7 gate lists.
+Do not pull M8 polish or M9 cluster into a reopened M7 gate list.
 
 ---
 

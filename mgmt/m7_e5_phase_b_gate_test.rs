@@ -17,6 +17,8 @@ fn m7_phase_b_spa_wire_gate_passes() {
     assert!(PHASE_B_RESIDUAL_NOTE.contains("ISO-INSTALL-OK"));
     assert!(PHASE_B_RESIDUAL_NOTE.contains("curl: (7)"));
     assert!(PHASE_B_RESIDUAL_NOTE.contains("TSC Instant"));
+    assert!(PHASE_B_RESIDUAL_NOTE.contains("ADR-018"));
+    assert!(PHASE_B_RESIDUAL_NOTE.contains("M8"));
     assert!(phase_b_surface_present());
     assert!(
         run_m7_phase_b_spa_wire_gate(),

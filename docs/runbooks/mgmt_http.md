@@ -270,7 +270,9 @@ Listen TCP/HTTP scratch comes from a 64 KiB `MgmtArena`, not
 `FrameAllocator`. On `MgmtFatal`: arena `reset`, `AuditEvent::MgmtRestarted`,
 retry. Host observable: `induced_fatals_do_not_touch_frame_allocator`.
 
-Preserve kit for iron rollback: `releases/v0.1.0-adr013-baseline`.
+Preserve kit for iron rollback (pre-native-NIC WARN-only idle): `releases/v0.1.0-adr013-baseline`.
+
+**M8.0 flash rollback (Everest closed):** GitHub Latest [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) → `f72b4276` / `--run 34552377351` / EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc`. Do not treat adr013-baseline as the Mount Everest known-good.
 
 ## Cruzer `auth.token`
 

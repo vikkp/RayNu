@@ -9,15 +9,15 @@
   "last_commit_short": "PENDING",
   "last_updated": "2026-09-11",
   "months_to_everest": 0.0,
-  "months_to_everest_prev": 0.25,
+  "months_to_everest_prev": 0.0,
   "mount_everest_path": [
     "Ship EFI",
     "boot real R640",
     "network vSphere-like UI",
     "deploy Linux ISO",
-    "M7 single-host ship"
+    "M7 closed on iron"
   ],
-  "mount_everest_target": "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)",
+  "mount_everest_target": "CLOSED on iron 2026-09-11: Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest). Next: M8 operator hardening (ADR-018).",
   "overall_pct": 99,
   "source": "docs/hda.md",
   "summits": {

@@ -3,15 +3,15 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>RayNu-V — Honest Distance Assessment · Mount Everest</title>
+    <title>RayNu-V — Mount Everest closed on iron</title>
     <meta
       name="description"
-      content="Honest Distance Assessment for RayNu-V: Mount Everest product loop closed on R640 (SPA Start of RayNu-F ISO → install → disk reboot). Residual polish: TLS/console/leftover persist."
+      content="Mount Everest is closed on a real Dell PowerEdge R640: SPA Start of RayNu-F ISO → ISO-INSTALL-OK → DISK-BOOT-OK → login. COM2 2026-09-11. Next: M8 operator hardening."
     />
-    <meta property="og:title" content="RayNu-V · Distance to Mount Everest" />
+    <meta property="og:title" content="RayNu-V · Mount Everest — closed on iron" />
     <meta
       property="og:description"
-      content="Living tracker: Mount Everest closed on R640 via SPA (Alpine ISO installed to virtio disk, rebooted into it). Months 0.0 · overall 99% · ETA 2026-09. Residual polish: TLS/console/leftover persist."
+      content="11 September 2026. Real R640 COM2: HOST-NIC-HTTP-OK on 10.99.99.145:8443 → SPA Start of RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login. Months 0.0 · overall 99%."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -20,9 +20,25 @@
       href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=IBM+Plex+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="assets/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="stylesheet" href="styles.css" />
   </head>
-  <body class="page-hda">
+  <body class="page-hda page-hda--closed">
+    <nav class="site-nav site-nav--solid" aria-label="Site">
+      <a class="site-nav__brand" href="index.html">RayNu-V</a>
+      <div class="site-nav__links">
+        <a href="index.html#status" data-hide-sm>Status</a>
+        <a href="index.html#console" data-hide-sm>Console</a>
+        <a href="index.html#journey" data-hide-sm>Journey</a>
+        <a href="stories.html">Stories</a>
+        <a href="hda.html" aria-current="page">Everest</a>
+        <a href="paper.html">Paper</a>
+        <a href="ciospeak.html">CIO View</a>
+        <a href="https://github.com/vikkp/RayNu" data-hide-sm>GitHub</a>
+      </div>
+    </nav>
     <header class="hda-mast">
       <div class="hda-mast__inner">
         <p class="hda-mast__nav">
@@ -31,12 +47,15 @@
           <span>Honest Distance Assessment</span>
         </p>
         <p class="brand reveal">RayNu-V</p>
+        <p class="hda-mast__kicker reveal">11 September 2026 · Dell PowerEdge R640 · COM2</p>
         <h1 class="hda-mast__title reveal reveal--delay-1">
-          Distance to Mount Everest
+          Mount Everest — closed on iron
         </h1>
         <p class="hda-mast__lede reveal reveal--delay-2">
-          Living tracker from today’s codebase to a shippable operator product
-          loop — not a claim that the product is finished.
+          The product loop is done. One EFI, a real R640, a browser on the
+          operator LAN, a Linux ISO installed to virtio disk, and a reboot into
+          that disk to a login prompt. COM2 printed the markers. This is the
+          win.
         </p>
         <p
           class="hda-path reveal reveal--delay-3"
@@ -44,7 +63,7 @@
           aria-label="Mount Everest path"
         >
           Ship EFI → boot real R640 → network vSphere-like UI → deploy Linux ISO
-          → M7 single-host ship
+          → M7 closed
         </p>
       </div>
     </header>
@@ -57,62 +76,114 @@
           </p>
           <div class="hda-tracker" data-reveal>
             <div class="hda-tracker__hero">
-              <p class="hda-tracker__label">Months to Mount Everest</p>
-              <p class="hda-tracker__months" id="hda-months">1.5</p>
-              <p class="hda-tracker__delta" id="hda-delta">was 0.75</p>
+              <p class="hda-tracker__label" id="hda-tracker-label">Mount Everest</p>
+              <p class="hda-tracker__months" id="hda-months">Closed</p>
+              <p class="hda-tracker__delta" id="hda-delta">0.0 months remaining · summit 2026-09-11</p>
             </div>
             <dl class="hda-tracker__meta">
               <div>
                 <dt>Overall readiness</dt>
-                <dd id="hda-overall">79%</dd>
+                <dd id="hda-overall">99%</dd>
               </div>
               <div>
                 <dt>ETA month</dt>
-                <dd id="hda-eta">2026-10</dd>
+                <dd id="hda-eta">2026-09</dd>
               </div>
               <div>
                 <dt>Confidence</dt>
-                <dd id="hda-confidence">medium</dd>
+                <dd id="hda-confidence">high</dd>
               </div>
               <div>
                 <dt>Updated</dt>
-                <dd id="hda-updated">2026-08-17</dd>
+                <dd id="hda-updated">2026-09-11</dd>
               </div>
             </dl>
           </div>
           <div class="hda-bars" data-reveal>
             <div class="hda-bar">
               <div class="hda-bar__head">
-                <span>Months to Everest</span>
-                <span id="hda-bar-months-label">1.5 mo</span>
+                <span id="hda-bar-months-name">Everest</span>
+                <span id="hda-bar-months-label">summit</span>
               </div>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill" id="hda-bar-months" style="width: 83%"></span>
+                <span class="hda-bar__fill hda-bar__fill--summit" id="hda-bar-months" style="width: 100%"></span>
               </div>
             </div>
             <div class="hda-bar">
               <div class="hda-bar__head">
                 <span>Overall product readiness</span>
-                <span id="hda-bar-overall-label">79%</span>
+                <span id="hda-bar-overall-label">99%</span>
               </div>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill" id="hda-bar-overall" style="width: 79%"></span>
+                <span class="hda-bar__fill" id="hda-bar-overall" style="width: 99%"></span>
               </div>
             </div>
           </div>
+          <p class="hda-aside" data-reveal>
+            99% on purpose. TLS, leftover-disk persist across a hypervisor
+            reboot, and a guest console UI are <strong>M8</strong>
+            (<a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-018.md">ADR-018</a>)
+            — not a reopened Everest.
+          </p>
+        </div>
+      </section>
+
+      <section class="section section--hda-com2" id="com2">
+        <div class="section__inner">
+          <p class="milestone-kicker" data-reveal>Iron · 2026-09-11 · EFI <code>f72b4276</code></p>
+          <h2 class="section__title">What COM2 printed</h2>
+          <p class="section__lede">
+            iDRAC SOL <code>console com2</code> on a real PowerEdge R640.
+            UDisk front USB 2. No <code>--raynu-f</code>. The operator SPA
+            started RayNu-F, Alpine installed to virtio <code>vda</code>, and
+            F7 booted the installed disk. Host and CI still never print
+            <code>RAYNU-V-M7-ISO-INSTALL-OK</code> — that marker is iron-only.
+          </p>
+          <pre class="ship-code" data-reveal><code>build: sha=f72b4276d198
+RAYNU-V-M7-PHASE-B-SKIP-OVMF-OK
+RAYNU-V-M7-PHASE-B-E4-CONTINUE-OK
+HOST-NIC coexist listening on 10.99.99.145:8443
+RAYNU-V-M7-HOST-NIC-HTTP-OK
+RAYNU-V-AUDIT: AuthAllowed method_tag=2
+VmCreated guest_id=4
+VmStarted guest_id=4
+boot: E4 SPA start — RayNu-F product ISO (Phase B; not SHELL; not ISO-INSTALL-OK)
+RAYNU-V-M7-ISO-INSTALL-OK
+RayNu-F relaunch after reset (F7)
+RAYNU-V-RAYNU-F-DISK-BOOT-OK
+Linux version 6.12.13-0-lts
+Command line: … root=UUID=814a97a0-d3be-4a64-8611-b3dbd9859201 … rootfstype=ext4
+EXT4-fs (vda2): mounted filesystem 814a97a0-d3be-4a64-8611-b3dbd9859201
+Welcome to Alpine Linux 3.21
+localhost login: root
+localhost:~# cat /proc/cmdline</code></pre>
+          <p class="section__lede section__lede--follow" data-reveal>
+            Full evidence:
+            <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-09-11-f72b4276-phase-b-spa-iso-install-disk-boot-ok.md"
+              ><code>2026-09-11-f72b4276-phase-b-spa-iso-install-disk-boot-ok.md</code></a
+            >
+            ·
+            <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed"
+              >GitHub Latest <code>v0.1.0-everest-closed</code></a
+            >
+            (EFI SHA256
+            <code>e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc</code>
+            — M8.0 flash rollback; do not treat a later persist prototype as
+            the known-good)
+            ·
+            <a href="stories.html#r640-2026-09-11-everest">Stories — the summit</a>.
+          </p>
         </div>
       </section>
 
       <section class="section section--hda-summits" id="summits">
         <div class="section__inner">
-          <h2 class="section__title">Four summits on the path</h2>
+          <h2 class="section__title">Four summits — reached</h2>
           <p class="section__lede">
-            Core hypervisor work is advanced. E2 boot, E3/E3b network HTTP,
-            Phase F coexist, E4 SPA VMLAUNCH, and the whole E5 loop — Alpine
-            ISO installed to a virtio disk, then rebooted into that disk to a
-            login prompt — are closed on real R640, including the SPA path
-            (Phase B). Residual polish: TLS/console and leftover-disk persist
-            across a host reboot — not “can it virtualize.”
+            Core hypervisor work was never the gap. The gap was the operator
+            loop on iron: real R640, durable HTTP beside VMX, SPA that starts
+            a guest firmware, a distro installer that writes a disk, and a
+            reboot into that disk. That loop closed.
           </p>
           <ol class="hda-summits" id="hda-summits">
             <li data-reveal>
@@ -127,19 +198,19 @@
             </li>
             <li data-reveal>
               <span class="hda-summits__name">Network vSphere-like UI</span>
-              <span class="hda-summits__pct" data-summit="ui">85%</span>
-              <span class="hda-summits__note">E3+E3b+Phase F+P0-14+Phase B closed on iron f72b4276 (SPA Start of RayNu-F ISO); TLS/console residual</span>
+              <span class="hda-summits__pct" data-summit="ui">98%</span>
+              <span class="hda-summits__note">E3+E3b+Phase F+P0-14+Phase B closed on iron f72b4276 (SPA Start of RayNu-F). TLS/console are M8.</span>
             </li>
             <li data-reveal>
               <span class="hda-summits__name">Deploy Linux ISO</span>
-              <span class="hda-summits__pct" data-summit="iso">84%</span>
-              <span class="hda-summits__note">Closed on real R640 2026-09-10: Alpine ISO installed to virtio disk (<code>RAYNU-V-M7-ISO-INSTALL-OK</code>), rebooted into it (<code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code>, second Linux <code>root=UUID=</code>, login)</span>
+              <span class="hda-summits__pct" data-summit="iso">99%</span>
+              <span class="hda-summits__note">Closed on real R640: Alpine ISO → virtio disk (<code>RAYNU-V-M7-ISO-INSTALL-OK</code>) → reboot (<code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code>) → second Linux <code>root=UUID=</code> → login</span>
             </li>
           </ol>
           <p class="hda-aside" data-reveal>
             Production bar (M6.8 soak + M6.9 external):
             <strong id="hda-prod">100%</strong> on Latitude —
-            <code>RAYNU-V-M6-EXT-OK</code>. Hypervisor core ~<span id="hda-core">78</span>%.
+            <code>RAYNU-V-M6-EXT-OK</code>. Hypervisor core ~<span id="hda-core">88</span>%.
           </p>
         </div>
       </section>
@@ -148,25 +219,24 @@
         <div class="section__inner">
           <h2 class="section__title">Bottom line</h2>
           <p class="section__lede">
-            M0→M7.7 gates — including real R640
-            <code>RAYNU-V-R640-BOOT-OK</code> (E2) and
-            <code>RAYNU-V-M7-UEFI-HTTP-OK</code> (E3 MVP, 2026-08-16). M7.7
-            Cruzer Micro two-boot closed stamp persist
-            (<code>RAYNU-V-M7-ISO-BOOTED-FROM-DISK</code>).
-            <strong>E3b</strong> closed 2026-08-20:
-            <code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code> after
-            <code>BOOT-OK</code> on native BCM5720
-            (<code>:38</code> / <code>10.99.99.144:8443</code>). Keep APE PHY.
-            <strong>E5</strong> closed on iron 2026-09-10:
-            <code>RAYNU-V-M7-ISO-INSTALL-OK</code> — RayNu-F boots the Alpine
-            3.21 ISO, <code>setup-disk</code> writes GPT + GRUB + initramfs to
-            virtio-blk <code>vda</code>; then <code>reboot</code> → F7 relaunch
-            → installed GRUB → <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code> →
-            second Linux <code>root=UUID=</code> → login (EFI
-            <code>56a3ffd</code> Phase A; EFI <code>f72b4276</code> Phase B
-            SPA). Residual polish: leftover persist / TLS / console. E4 SPA
-            VMLAUNCH (`RAYNU-V-M7-E4-SPA-LAUNCH-OK`) closed on iron 2026-08-21
-            — SHELL stub then; Phase B now starts RayNu-F.
+            <strong>Mount Everest is closed on iron.</strong>
+            M0→M7.8, E4 SPA VMLAUNCH, E5 Phase A (<code>56a3ffd</code>), and
+            Phase B SPA (<code>f72b4276</code> / <code>34552377351</code>)
+            printed the loop: EFI → real R640 → coexist
+            <code>HOST-NIC-HTTP-OK</code> on <code>10.99.99.145:8443</code> →
+            SPA Start of RayNu-F → Alpine <code>setup-disk</code> →
+            <code>RAYNU-V-M7-ISO-INSTALL-OK</code> → F7 →
+            <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code> →
+            <code>root=UUID=814a97a0-…</code> → <code>login:</code>.
+            Latitude/QEMU still ≠ R640. Host/CI still never print
+            <code>ISO-INSTALL-OK</code>. Overall stays 99% because
+            leftover-disk persist across a <em>hypervisor</em> reboot, TLS,
+            and a guest console UI are the next mountain —
+            <strong>M8</strong> operator hardening (ADR-018). Cluster /
+            vMotion-like is <strong>M9</strong>. Rollback kit:
+            <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed"
+              ><code>v0.1.0-everest-closed</code></a
+            >.
           </p>
           <div class="cta" data-reveal>
             <a
@@ -174,13 +244,13 @@
               href="https://github.com/vikkp/RayNu/blob/main/docs/hda.md"
               >Full living assessment</a
             >
-            <a class="cta__secondary" href="index.html">Back to RayNu-V</a>
+            <a class="cta__secondary" href="stories.html#r640-2026-09-11-everest">Read the summit story</a>
           </div>
           <p class="hda-sync-note" data-reveal>
             Numbers load from <code>site/hda.json</code>, regenerated from
             <code>docs/hda.md</code> by <code>./tools/sync-hda-site.sh</code> on
             every HDA update. Last commit:
-            <code id="hda-commit">8f091fd</code>.
+            <code id="hda-commit">PENDING</code>.
           </p>
         </div>
       </section>
@@ -189,7 +259,7 @@
     <footer class="footer">
       <p>
         <span class="brand brand--footer">RayNu-V</span>
-        · Distance to Mount Everest
+        · Mount Everest — closed on iron
       </p>
       <p class="footer__meta">
         <a href="index.html">Home</a>

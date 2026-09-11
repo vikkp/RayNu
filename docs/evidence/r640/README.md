@@ -1,5 +1,7 @@
 # R640 iron evidence
 
+**Iron rollback (M8.0 known-good):** GitHub Latest [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) → git `f72b4276d198b5e90147e9be1037d0d0b7213a28` / CI `--run 34552377351` / EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc`. COM2 `build: sha=f72b4276d198`. Do not flash a later M8 persist prototype as the known-good. Do not F11 `34548550755` / `7f8dc0a9`. In-tree kit: [`releases/v0.1.0-everest-closed/`](../../../releases/v0.1.0-everest-closed/) (PR #243, open). Rule: [`.cursor/rules/iron-rollback.mdc`](../../../.cursor/rules/iron-rollback.mdc).
+
 **Status file:** [`STATUS`](STATUS) — `STATUS=closed` after real PowerEdge R640
 first light (2026-08-15). See [`2026-08-15-r640-first-light.md`](2026-08-15-r640-first-light.md).
 
@@ -8,7 +10,7 @@ first light (2026-08-15). See [`2026-08-15-r640-first-light.md`](2026-08-15-r640
 **E4 SPA + install arm:** [`2026-08-16-e4-spa-install-arm.md`](2026-08-16-e4-spa-install-arm.md)  
 **E5 persist write + detect (BLK fail):** [`2026-08-16-e5-persist-detect-blk-fail.md`](2026-08-16-e5-persist-detect-blk-fail.md)  
 **E5 iron reboot-to-disk (close):** [`2026-08-16-e5-iso-install.md`](2026-08-16-e5-iso-install.md)  
-**Preserve kit:** [`releases/v0.1.0-adr013-baseline/`](../../../releases/v0.1.0-adr013-baseline/) — WARN-only idle + ADR-013 Accepted (before native NIC)  
+**Preserve kit (pre-native-NIC, not the Everest flash):** [`releases/v0.1.0-adr013-baseline/`](../../../releases/v0.1.0-adr013-baseline/) — WARN-only idle + ADR-013 Accepted (before native NIC). M8.0 flash rollback is `v0.1.0-everest-closed` (top of this file).  
 **Prior preserve:** [`releases/v0.1.0-e4-spa-arm/`](../../../releases/v0.1.0-e4-spa-arm/) — checkpoint before networking deep-dive  
 **E5 ISO install:** [`STATUS-iso-install`](STATUS-iso-install) — **closed** (2026-08-16 stamp persist; 2026-09-10 real Alpine install)  
 **E5 real distro install on iron (2026-09-10):** [`2026-09-10-59ac070-iso-install-ok.md`](2026-09-10-59ac070-iso-install-ok.md) — EFI `59ac070` / run `34425781629`; RayNu-F + Stage 46 product ISO; `setup-disk -m sys /dev/vda` → `Installation finished. No error reported.` → **`RAYNU-V-M7-ISO-INSTALL-OK`** on COM2; F7 relaunch then failed `VMCLEAR/VMPTRLD` (16 KiB host stack overflow into the VMCS) — iron `RAYNU-V-RAYNU-F-DISK-BOOT-OK` **not** claimed  

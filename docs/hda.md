@@ -4,9 +4,9 @@ last_updated: 2026-09-11
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
-mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
+mount_everest_target: "CLOSED on iron 2026-09-11: Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest). Next: M8 operator hardening (ADR-018)."
 months_to_everest: 0.0
-months_to_everest_prev: 0.25
+months_to_everest_prev: 0.0
 velocity_commits_30d: 612
 velocity_gates_30d: 64
 overall_pct: 99
@@ -25,11 +25,12 @@ summit_prod_pct: 100
 # Honest Distance Assessment (HDA)
 
 > **Living document.** Updated on every meaningful commit by Cursor (see `.cursor/rules/hda-update.mdc`).  
-> **North star product loop (“Mount Everest”):**  
-> Ship the EFI → boot on a **real PowerEdge R640** → **network-reachable** vSphere-like UI → **deploy a Linux ISO** (M7 / ADR-009). Production bar (M6.8–M6.9) is already closed on Latitude.
+> **North star product loop (“Mount Everest”):** **CLOSED on iron 2026-09-11.**  
+> Ship the EFI → boot on a **real PowerEdge R640** → **network-reachable** vSphere-like UI → **deploy a Linux ISO** (M7 / ADR-009). Production bar (M6.8–M6.9) is already closed on Latitude. **Next mountain: M8 operator hardening** ([ADR-018](adr/ADR-018.md)).  
+> **Iron rollback:** GitHub Latest [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) (`f72b4276` / `34552377351` / EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc`).
 
 Pillars: **[V]** verified core · **[Z]** single binary · **[D]** iDRAC-native · **[A]** audit-first.  
-Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m7_plan.md) · ADR: [`adr/ADR-009.md`](adr/ADR-009.md) · constitution: [`CLAUDE.md`](../CLAUDE.md).
+Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m7_plan.md) (closed) · M8: [`m8_plan.md`](m8_plan.md) · ADR: [`adr/ADR-009.md`](adr/ADR-009.md) · close: [`adr/ADR-018.md`](adr/ADR-018.md) · constitution: [`CLAUDE.md`](../CLAUDE.md).
 
 ---
 
@@ -37,20 +38,20 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 
 | Metric | Value | Δ vs previous HDA |
 |--------|------:|-------------------|
-| **Overall product readiness** | **99%** | **+1** — **Mount Everest product loop closed on iron.** Iron `f72b4276` / `34552377351`: SKIP-OVMF-OK + E4-CONTINUE-OK + coexist `HOST-NIC-HTTP-OK` on `10.99.99.145:8443` → SPA Start of RayNu-F ISO (no `raynuf.txt`) → `ISO-INSTALL-OK` → `DISK-BOOT-OK` → second Linux `root=UUID=814a97a0-…` → `login:`. Not 100%: TLS deferred, leftover-DRAM persist across HV reboot, console UI thin |
-| **Months to Mount Everest** | **0.0** | **0.25→0.0** (COM2 shows SPA start of the RayNu-F ISO/installed-disk path — the shrink-to-0 gate) |
-| **ETA month** | **2026-09** | closed this month on iron (`f72b4276`); polish is post-Everest |
-| **Confidence** | high | E1–E6 product loop on COM2. Residual named: TLS / leftover persist / console |
+| **Overall product readiness** | **99%** | **held** — Everest **CLOSED**. Public site records the win. Not 100%: M8 polish (ADR-018) — leftover persist / TLS / console |
+| **Months to Mount Everest** | **0.0** | **held** (summit reached 2026-09-11; `f72b4276` SPA ISO loop) |
+| **ETA month** | **2026-09** | **closed this month on iron**; next work is M8, not a slipped Everest |
+| **Confidence** | high | E1–E6 on COM2. M8 named separately so polish cannot reopen the summit |
 | **Hypervisor core (VMX/EPT/Linux/multi-VM)** | ~88% | proved on real R640 through M4 |
 | **Ship EFI artifact** | ~95% | M7.0 + iron kits under `releases/` |
 | **Real R640 boot** | ~98% | E2 closed; Redfish/soak follow-ons only |
-| **vSphere-like UI (network)** | ~98% | E3 + E3b + Phase F + P0-14 + **P0-63 Phase B CLOSED on iron** (`f72b4276` SPA Start of RayNu-F). Residual: TLS/console |
-| **Deploy Linux ISO** | ~99% | **DONE on iron end-to-end** via Phase A (`56a3ffd`) **and** Phase B SPA (`f72b4276`). Remaining 1%: ISO blob upload / UEFI catalog persist / multi-distro / leftover persist across HV reboot |
+| **vSphere-like UI (network)** | ~98% | E3 + E3b + Phase F + P0-14 + **P0-63 Phase B CLOSED on iron**. M8: TLS/console |
+| **Deploy Linux ISO** | ~99% | **DONE on iron end-to-end** (Phase A `56a3ffd` + Phase B SPA `f72b4276`). Remaining 1% is **M8** (upload / catalog persist / leftover persist / multi-distro) |
 | **Production bar (M6.8–M6.9)** | **100%** | soak + EXT closed on Latitude |
 
 ```
-Months to Everest  ░░░░░░░░░░░░░░░░░░░░  0.0 mo  (was 0.25)
-Overall %          ███████████████████░  99%
+Months to Everest  ░░░░░░░░░░░░░░░░░░░░  0.0 mo  SUMMIT (closed 2026-09-11)
+Overall %          ███████████████████░  99%     (M8 polish is the last 1%)
 ```
 
 **How the month number moves:** faster closed Everest-path work → `months_to_everest` shrinks and `everest_eta_month` pulls closer. Stalls / new scope → it slips. See [Velocity model](#velocity-model).
@@ -71,7 +72,7 @@ All must be true (no hand-waving):
 | E5 | **Linux ISO deploy** | Operator registers a distro ISO → VM boots **UEFI installer** (ADR-014) to virtio-blk → reboot to disk. Extract-boot/bzImage is lab MVP only. Windows ISO later, same model. | [Z] |
 | E6 | **Production bar** | M6.8 soak + M6.9 external audit/spec review closed per `progress.md` | [V][A] |
 
-**Out of Everest / M7 scope (→ M8 or later):** vMotion-like live migrate, DRS-like placement, hot-add, full vSphere parity, Dell Tier-2 PERC OEM, multi-site DR, Windows guest WHQL. Windows **install** is later under [ADR-014](adr/ADR-014.md); the image type exists now so E5 does not stay Linux-kernel-only.
+**Out of Everest / M7 scope:** operator polish is **M8** ([ADR-018](adr/ADR-018.md)): leftover-disk persist across HV reboot, TLS, real auth, console UI, ISO upload, UEFI catalog persist, Windows later. Cluster / elasticity is **M9** (vMotion-like, DRS-like, hot-add). Full vSphere parity, Dell Tier-2 PERC OEM, multi-site DR, Windows guest WHQL stay later still. Windows **install** is M8.6 under [ADR-014](adr/ADR-014.md).
 
 ---
 
@@ -106,7 +107,7 @@ All must be true (no hand-waving):
 | Hardware CI on R640 | MISSING | optional in M6 plan |
 
 ### Summit C — vSphere-like UI
-**Status: NEAR · ~98% · ~0.0 months residual on the product loop (Phase B CLOSED on iron `f72b4276`; TLS/console polish)**
+**Status: DONE ON THE PRODUCT LOOP · ~98% · M8 polish (TLS/console/auth) is not a reopened Everest**
 
 | Item | Status | Evidence / gap |
 |------|--------|----------------|
@@ -130,7 +131,7 @@ All must be true (no hand-waving):
 | Phase B SPA → RayNu-F | **DONE on iron** | `RAYNU-V-M7-PHASE-B-SPA-WIRE-OK` + COM2 `f72b4276` / `34552377351`: coexist `HOST-NIC-HTTP-OK` `10.99.99.145:8443` → SPA Start of RayNu-F ISO (no `raynuf.txt`) → `ISO-INSTALL-OK` → `DISK-BOOT-OK`. `iso=0` stays SHELL. [2026-09-11-f72b4276-phase-b-spa-iso-install-disk-boot-ok.md](evidence/r640/2026-09-11-f72b4276-phase-b-spa-iso-install-disk-boot-ok.md) |
 
 ### Summit D — Deploy Linux ISO
-**Status: DONE ON IRON · ~99% · ~0.0 months residual on the mechanism (install 2026-09-10 `59ac070`; reboot-to-disk 2026-09-10 `56a3ffd` — `DISK-BOOT-OK`, second Linux `root=UUID=`, `login:`); upload/persist/matrix are polish**
+**Status: DONE ON IRON · ~99% · Everest E5 closed; leftover persist / upload / catalog / multi-distro are M8**
 
 | Item | Status | Evidence / gap |
 |------|--------|----------------|
@@ -147,7 +148,7 @@ All must be true (no hand-waving):
 | ISO parse / El Torito / EFI boot img | DONE (guest CD EFI) | Iron COM2 `0be7283` `OVMF-ELTORITO-OK` `RN-ELT` n=197992; not distro installer |
 | CD-ROM attach | DONE (firmware StartImage) | GuestVisible PCI IDE/ATAPI + El Torito FAT ESP BOOTX64; not `ISO-INSTALL-OK` |
 | Guest UEFI firmware blob | **DONE on iron — install and reboot-to-disk (RayNu-F ADR-016)** | **Iron UDisk `56a3ffd` / run `34480107961` (2026-09-10): the whole loop.** Third iron `RAYNU-V-M7-ISO-INSTALL-OK` → `reboot` → `guest reset requested src=kbc n=1` → `relaunch after reset` → `GPT ESP lba=2048 sectors=98304 part=1` → `BOOTX64.EFI bytes=139264` → `image=DISK-BOOTX64` → installed GRUB 2.12 countdown `2s → 1s → 0s` (no `RayNu-F stop` line; the wall cap never fired) → `Booting 'Alpine Linux v3.21, with Linux lts'` → `START-IMAGE-OK` → **`RAYNU-V-RAYNU-F-DISK-BOOT-OK`** → `EBS-OK` → second `Linux version 6.12.13-0-lts` `root=UUID=9af18543-…` `modules=sd-mod,usb-storage,ext4` → `EXT4-fs (vda2): mounted filesystem` → `fsck` `vda2`+`vda1` → OpenRC → `login:` → `cat /proc/cmdline` from the installed system. History: `59ac070` (install closed; F7 relaunch VMCLEAR/VMPTRLD — 81 KiB stack temporary over the VMCS), `975f8fc` (relaunch + installed GRUB menu; fixed 1 M exit-cap fired inside GRUB's 2 s menu poll loop), `56a3ffd` (RayNu-F wall cap: time, not exits, bounds the loader phase). Evidence: [2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md](evidence/r640/2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md) |
-| Persistent install + reboot-to-disk | **DONE on iron (distro)** | `56a3ffd` 2026-09-10: `setup-disk` → `reboot` → installed GRUB → second Linux from `vda2` → `login:`. Leftover-DRAM disk survives a **guest** reset only; host-reboot persistence is post-Everest |
+| Persistent install + reboot-to-disk | **DONE on iron (distro)** | `56a3ffd` + Phase B `f72b4276`: `setup-disk` → `reboot` → installed GRUB → second Linux from `vda2` → `login:`. Leftover-DRAM disk survives a **guest** reset only; **host-reboot persistence is M8.0** |
 | Upload ISO via API/UI | PARTIAL | REST `/iso/{id}/deploy` + `/install`; blob upload residual |
 | Multi-OS image types | **WIRED (host)** | REST/SPA `linux_iso` \| `windows_iso` \| `generic_uefi` ([ADR-014](adr/ADR-014.md) Stage 0); Windows install later |
 | Multi-distro matrix | MISSING | — |
@@ -165,17 +166,17 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 | M+1 | 2026-08 | **R640 iron bring-up** → **E2 closed** | `RAYNU-V-R640-BOOT-OK` on COM2 | **DONE (M7.5 iron)** |
 | M+2 | 2026-09 | E3b native NIC lab (QEMU e1000) + ISO residual | ADR-013 Phase C | **Phase C DONE (QEMU)** |
 | M+3 | 2026-08 | E3b iron HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | **DONE (M7.8 iron)** |
-| M+4 | 2026-09 | Phase B (SPA → installed disk) | remaining Everest | **DONE on iron** (`f72b4276` / `34552377351`: HTTP-OK → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK) |
-| M+5 | 2026-10 | Buffer / polish (TLS/console/persist) | post-Everest | BUFFER |
+| M+4 | 2026-09 | Phase B (SPA → installed disk) | remaining Everest | **DONE — EVEREST CLOSED** (`f72b4276` / `34552377351`) |
+| M+5 | 2026-10 | **M8.0** leftover persist (ADR-018) | first M8 gate | **NEXT** |
 
 ### Timeline burn-down
 
 ```
 2026-07 ████████  HDA + M6 closed (Latitude)
 2026-08 ████████  R640 boot (E2) + E3b HTTP-OK
-2026-09 ████████  E5 + Phase B DONE on iron (`f72b4276` SPA ISO loop)  ← months_to_everest = 0.0
-2026-10 ░░░░░░░░  buffer (TLS/console/leftover persist)
-2026-11 ░░░░░░░░  buffer
+2026-09 ████████  E5 + Phase B — **Mount Everest CLOSED** (`f72b4276`)  ← months_to_everest = 0.0
+2026-10 ░░░░░░░░  M8.0 leftover persist (ADR-018)
+2026-11 ░░░░░░░░  M8.1+ TLS/auth/console
 ```
 
 **Pull-forward rule:** E2 closed 2026-08-15; E3 bring-up closed 2026-08-16; **E3b closed 2026-08-20**; **P0-14 closed 2026-08-21**; **E5 install-to-disk closed on iron 2026-09-10** (`59ac070`); **F7 relaunch + installed-disk GRUB reached on iron 2026-09-10** (`975f8fc`, exit-cap ended it); **E5 reboot-to-disk closed on iron 2026-09-10** (`56a3ffd`: `DISK-BOOT-OK`, second Linux `root=UUID=`, `login:`) → months 0.5→0.25; **Phase B closed on iron 2026-09-11** (`f72b4276` / `34552377351`: coexist HTTP-OK → SPA Start of RayNu-F ISO → install → disk reboot) → months 0.25→0.0. Document why in [Changelog](#hda-changelog).
@@ -243,7 +244,8 @@ Ordered for critical path (parallelize B with D design):
 | P0-63 | **Phase B** SPA/REST create-VM + attach-media → RayNu-F ISO / installed-disk launch on iron | C+D | **DONE (iron)** | P0-8, P0-14 | **CLOSED on iron `f72b4276` / `34552377351` (2026-09-11).** SKIP-OVMF-OK + E4-CONTINUE-OK + coexist `HOST-NIC-HTTP-OK` `10.99.99.145:8443` → SPA Start of RayNu-F ISO (no `raynuf.txt`) → `ISO-INSTALL-OK` → `DISK-BOOT-OK` → second Linux `root=UUID=814a97a0-…` → `login:`. Prior: `7f8dc0a9` listen then Mac `curl: (7)` (`MILLIS += 10`); TSC Instant fixed it. `iso=0` stays SHELL. Host/CI never print `ISO-INSTALL-OK`. Evidence: [2026-09-11-f72b4276-phase-b-spa-iso-install-disk-boot-ok.md](evidence/r640/2026-09-11-f72b4276-phase-b-spa-iso-install-disk-boot-ok.md) |
 | P0-9 | M6.9 external audit + spec review | E6 | **DONE** | proofs green | `docs/`, `ept_model/`, `mgmt/ext` |
 | P0-10 | R640 soak / hardware confidence | E2 | 0.5 | P0-2 | `tools/`, `mgmt/soak` — post M7.5 |
-| P0-11 | **M8 sketch** vMotion-like / DRS-like / hot-add | — | — | M7 closed | deferred — not M7 critical path |
+| P0-11 | **M9 sketch** vMotion-like / DRS-like / hot-add | — | — | M8 | deferred — was M8 in ADR-009; **M9** after operator hardening (ADR-018) |
+| P0-64 | **M8** operator product hardening | — | IN PROGRESS | Everest closed | [ADR-018](adr/ADR-018.md) / [m8_plan.md](m8_plan.md). First gate **M8.0** leftover-disk persist across HV reboot. Then TLS, auth, console UI, ISO upload, UEFI catalog, Windows later. |
 
 ---
 
@@ -352,11 +354,11 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | phase-b-skip-ovmf |
-| Summary | **Phase B CLOSED on the real R640.** Iron `f72b4276` / `34552377351`: SKIP-OVMF-OK + E4-CONTINUE-OK + `HOST-NIC coexist listening on 10.99.99.145:8443` → RX `to=us` + ARP → TCP accept → **`HOST-NIC-HTTP-OK`** (GET/spec/start) → SPA Start of RayNu-F product ISO (no `raynuf.txt`) → Alpine live → `setup-disk` → **`RAYNU-V-M7-ISO-INSTALL-OK`** → reboot → F7 → **`RAYNU-V-RAYNU-F-DISK-BOOT-OK`** → second Linux `root=UUID=814a97a0-…` → `login:`. TSC Instant (`coexist_millis_from_tsc`) fixed `7f8dc0a9` `curl: (7)`. Host/CI never print `ISO-INSTALL-OK`. Residual polish: TLS, leftover-DRAM persist across HV reboot, console UI. |
-| Everest impact | months **0.25 → 0.0**; overall **98 → 99**; ETA 2026-10 → 2026-09. P0-63 DONE. H5 resolved. Mount Everest product loop closed on iron. |
-| Gates touched | Honesty strings + evidence + HDA. Host tests still never print `ISO-INSTALL-OK`. `cargo test --no-default-features -- --test-threads=1`; `./tools/sync-hda-site.sh --check`. |
-| Months Δ | 0.25→0.0 |
+| Commit | iron-rollback-kit |
+| Summary | **Document M8.0 iron rollback:** GitHub Latest `v0.1.0-everest-closed` (`f72b4276` / `34552377351`, EFI SHA256 `e74460ff…`). Always-on Cursor rule + CLAUDE / README / progress / m8_plan / ADR-018 / HDA / evidence / runbooks so a new agent flashes this kit, not a later persist prototype. |
+| Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Docs/rules only — not a score change. |
+| Gates touched | `.cursor/rules/iron-rollback.mdc`. `./tools/sync-hda-site.sh --check`. |
+| Months Δ | 0.0→0.0 (held) |
 
 
 ## Blockers & risks (Everest-relevant)
@@ -364,10 +366,12 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | ID | Blocker / risk | Severity | Mitigations |
 |----|----------------|----------|-------------|
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
-| H2 | TLS / console polish | MED | Plaintext HTTP closed on iron (E3b); TLS deferred (ADR-009); guest VNC residual |
+| H2 | TLS / console polish | MED | **M8.1 / M8.3** ([ADR-018](adr/ADR-018.md)). Plaintext HTTP closed Everest (E3b). Guest VNC residual. Not a reopened Everest. |
 | H3 | ~~Guest UEFI CD not bootable / no reboot-to-disk on iron~~ | — | **Resolved** 2026-09-10 (`56a3ffd` / run `34480107961`): `RAYNU-V-RAYNU-F-DISK-BOOT-OK` + second Linux `root=UUID=` from `vda` + `login:` on the real R640. Chain: `59ac070` install-to-disk (`ISO-INSTALL-OK`) → F7 VMCLEAR/VMPTRLD (81 KiB `FirmwareState::new()` stack temporary over the VMCS; template reset + 32-page stack guard) → `975f8fc` relaunch into the installed GRUB menu, 1 M exit-cap inside GRUB's 2 s menu poll loop (~2 exits/µs) → `56a3ffd` RayNu-F wall cap (time, not exits, bounds the loader phase). Earlier: `916af96` THRE chain telemetry → UART TX ring room + line-rate pace + COM2 FIFO burst fixed the `apk` console stall. Evidence: [2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md](evidence/r640/2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md). Do not F11 `34474850361` / `34425781629` for Phase A; `34480107961` is the Phase A reference pin. |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
-| H5 | ~~Phase B — iron SPA still launches the SHELL stub~~ | — | **Resolved** 2026-09-11 (`f72b4276` / `34552377351`): coexist `HOST-NIC-HTTP-OK` on `10.99.99.145:8443` → SPA Start of RayNu-F ISO (no `raynuf.txt`) → `ISO-INSTALL-OK` → `DISK-BOOT-OK` → second Linux `root=UUID=` → `login:`. Prior `7f8dc0a9` listen then Mac `curl: (7)` (`MILLIS += 10`); TSC Instant fixed it. Evidence: [2026-09-11-f72b4276-phase-b-spa-iso-install-disk-boot-ok.md](evidence/r640/2026-09-11-f72b4276-phase-b-spa-iso-install-disk-boot-ok.md). Do not F11 `34548550755` / `7f8dc0a9` / `34546680282` / `31f1ea0c`. Residual polish: TLS (ADR-009); leftover-DRAM persist across HV reboot; console UI thin |
+| H5 | ~~Phase B — iron SPA still launches the SHELL stub~~ | — | **Resolved** 2026-09-11 (`f72b4276` / `34552377351`). Residual polish is **M8**, not Everest. |
+| H10 | Leftover-DRAM disk dies on **HV** reboot | MED | **M8.0** first gate ([m8_plan.md](m8_plan.md)). Guest F7 persist already closed (ADR-017). |
+| H11 | Truncated `site/` on feature branches | LOW | **This commit:** restore Kimi updater chrome from `origin/main`; `./tools/check-site-chrome.sh` + CI `site-chrome`; always-on `.cursor/rules/site-chrome.mdc`. Do not replace `site/index.html` wholesale on HDA/Everest work. |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
 | H8 | ~~Phase F coexist not closed on iron~~ | — | **Resolved** 2026-08-20 (`HOST-NIC coexist listening` + `HOST-NIC-HTTP-OK` while VMX on; G1–G3 parked) |
@@ -377,7 +381,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
-| 2026-09-11 | phase-b-skip-ovmf | 0.0 | 99 | **Iron `f72b4276` / `34552377351`: Phase B CLOSED on the real R640.** TSC Instant coexist `HOST-NIC-HTTP-OK` on `10.99.99.145:8443` → SPA Start of RayNu-F ISO (no `raynuf.txt`) → `ISO-INSTALL-OK` → reboot → `DISK-BOOT-OK` → second Linux `root=UUID=814a97a0-…` → `login:`. months 0.25→0.0; overall 98→99; ETA 2026-10→2026-09; P0-63 DONE; H5 resolved; Mount Everest product loop closed on iron. Residual: TLS / leftover persist / console. Host/CI never print `ISO-INSTALL-OK` |
+| 2026-09-11 | iron-rollback-kit | 0.0 | 99 | **M8.0 iron rollback documented:** GitHub Latest `v0.1.0-everest-closed` → `f72b4276` / `34552377351` / EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc`. Always-on `.cursor/rules/iron-rollback.mdc` + CLAUDE/progress/m8_plan/HDA so agents flash this, not a later persist prototype or `34548550755`. `adr013-baseline` stays the pre-native-NIC preserve. months 0.0 held; overall 99 held |
+| 2026-09-11 | site-chrome-lock | 0.0 | 99 | **Restore CIO/Status chrome on the public front page** (nav, fork cards, console, COM2) after Everest celebration truncated `site/`. Always-on Cursor rule + `check-site-chrome.sh` + CI so the next HDA update cannot strip it. months 0.0 held; overall 99 held |
+| 2026-09-11 | everest-closed-m8-adr | 0.0 | 99 | **Public Everest close + ADR-018.** Site/HDA celebrate iron `f72b4276` / `34552377351` (COM2 snippets). M8 = operator hardening (persist→TLS→auth→console→upload→catalog→Windows later); cluster → M9. months 0.0 held; overall 99 held; not 100%. Host/CI never print `ISO-INSTALL-OK` |
 | 2026-09-11 | phase-b-skip-ovmf | 0.25 | 98 | **Iron `7f8dc0a9` / `34548550755`: listen then Mac `curl: (7)`.** SKIP-OVMF-OK + E4-CONTINUE-OK + coexist idle (no G0) + `HOST-NIC coexist listening on 10.99.99.146:8443`; eight LAN RX dumps, no `to=us`. Tight idle `MILLIS += 10` raced smoltcp Instant. Host TSC Instant; months 0.25 held; overall 98 held; `HOST-NIC-HTTP-OK` / iron Phase B / Everest / `ISO-INSTALL-OK` not claimed |
 | 2026-09-11 | phase-b-skip-ovmf | 0.25 | 98 | **Iron `31f1ea0c` / `34546680282`: CONTINUE-OK then G0 BAR hole.** Packed-bzImage G0 cannot run on the Stage 46 `[1MiB,512MiB)` pool (`v0.1.0-barfix` inverted). Phase A `--raynu-f` never took E4 G0. Host `enter_phase_b_coexist_idle`; months 0.25 held; overall 98 held; iron Phase B / Everest / `ISO-INSTALL-OK` not claimed |
 | 2026-09-11 | phase-b-skip-ovmf | 0.25 | 98 | **Iron `2a1c1ef1` / `34544625780`: SKIP-OVMF-OK then Stage 46 hold.** `leave_to_e4` → `resume_e4_shell` spun on `product_iso_window_armed()`. Host latch `phase_b_continue_e4_for_spa` so E4 HTTP can take SPA Start; months 0.25 held; overall 98 held; iron Phase B / Everest / `ISO-INSTALL-OK` not claimed |
@@ -897,14 +903,19 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 ## Operator quick view
 
 ```
-Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
-Now:           E1–E6 product loop CLOSED on iron (`f72b4276` SPA path: HTTP-OK → RayNu-F ISO → ISO-INSTALL-OK → DISK-BOOT-OK → login:)
-Months left:   0.0  (ETA 2026-09; polish TLS/console/leftover persist)
-Next move:     Do not F11 `34548550755` / `7f8dc0a9` or earlier Phase B fails. `f72b4276` / `34552377351` is the Phase B reference. Polish: leftover-disk persist across HV reboot, TLS, console UI.
+Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
+Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
+COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
+Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
+Next move:     **M8.0** leftover-disk persist across HV reboot ([ADR-018](adr/ADR-018.md) / [m8_plan.md](m8_plan.md))
+Rollback:      GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351
+               EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc
+               COM2 build: sha=f72b4276d198. Do not flash a later M8 persist prototype as known-good.
+Do not F11:    `34548550755` / `7f8dc0a9` or earlier Phase B fails
 Tcp4 residual: Floppy publishes PXE/HTTP, not Tcp4 SB (platform limit)
 SNP after EBS: dead — native BCM5720 is the durable mgmt path (E3b closed 2026-08-20)
-Preserve:      releases/v0.1.0-adr013-baseline
-Do not claim:  100% product / TLS / leftover persist across HV reboot / multi-distro. Host/CI never print ISO-INSTALL-OK.
+Preserve NIC:  releases/v0.1.0-adr013-baseline (pre-native-NIC; not the Everest flash kit)
+Do not claim:  100% product / TLS / leftover persist across HV reboot / multi-distro / cluster. Host/CI never print ISO-INSTALL-OK. Cluster is M9.
 ```
 
 Public checklist: [`docs/runbooks/r640_iron_week.md`](runbooks/r640_iron_week.md) ·

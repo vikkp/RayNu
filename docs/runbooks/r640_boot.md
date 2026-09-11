@@ -5,7 +5,8 @@
 **Evidence:** [`docs/evidence/r640/`](../evidence/r640/)  
 **Operator checklist:** [`r640_iron_week.md`](r640_iron_week.md)  
 **Printable field guide:** [`r640_field_guide.md`](r640_field_guide.md)  
-**Prior ship kit:** [`usb_idrac.md`](usb_idrac.md) · `./tools/package-release.sh`
+**Prior ship kit:** [`usb_idrac.md`](usb_idrac.md) · `./tools/package-release.sh`  
+**M8.0 known-good:** GitHub Latest [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) (`f72b4276` / `34552377351` / EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc`). Do not flash a later persist prototype as the known-good.
 
 ## Story
 
