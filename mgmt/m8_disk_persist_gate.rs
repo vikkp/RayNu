@@ -21,7 +21,7 @@ pub const M8_DISK_PERSIST_GATE_MARKER: &str = M8_DISK_PERSIST_HOST_OK_MARKER;
 
 /// Honesty: host round-trip ≠ nested Alpine kill/restart ≠ iron persist.
 pub const M8_DISK_PERSIST_RESIDUAL_NOTE: &str =
-    "residual: persist-first attach_disk_keep + host File round-trip is not nested Alpine kill/restart and not iron RAYNU-V-M8-DISK-PERSIST-OK; MODE=keep planted GPT keep=1 is not nested-OK; DurableLun PCI census is not post-EBS NVMe/USB I/O; leftover DRAM remains the fallback; M8_PERSIST_IMG file-RAM default off; distro OVMF ignores nvdimm/pc-dimm hotplug; tools/m8-persist-nested.sh is the nested two-boot harness; do not print ISO-INSTALL-OK";
+    "residual: persist-first attach_disk_keep + host File round-trip is not nested Alpine kill/restart and not iron RAYNU-V-M8-DISK-PERSIST-OK; MODE=keep planted GPT keep=1 is not nested-OK; DurableLun NVMe I/O is not iron persist OK; USB I/O still residual; leftover DRAM remains the fallback; M8_PERSIST_IMG file-RAM default off; distro OVMF ignores nvdimm/pc-dimm hotplug; tools/m8-persist-nested.sh is the nested two-boot harness; do not print ISO-INSTALL-OK";
 
 /// True when plan, markers, leftover fallback, persist-first attach, and exclusive-ownership notes exist.
 pub fn disk_persist_surface_present() -> bool {
@@ -72,9 +72,13 @@ pub fn disk_persist_surface_present() -> bool {
         && include_str!("../src/main.rs").contains("attach_persist_keep_on_vmx_skip(")
         && virtio.contains("fn attach_disk_keep(")
         && virtio.contains("fn attach_disk(")
+        && virtio.contains("fn attach_lun(")
         && handoff.contains("PERSISTENT_MEMORY")
         && handoff.contains("leftover install disk skip persist")
+        && handoff.contains("skip durable LUN")
         && qemu.contains("M8_PERSIST_IMG")
+        && qemu.contains("M8_NVME_IMG")
+        && qemu.contains("-device nvme")
         && qemu.contains("memory-backend=mem-m8-persist")
         && qemu.contains("memory-backend-file")
         && qemu.contains("+hypervisor")
@@ -89,12 +93,19 @@ pub fn disk_persist_surface_present() -> bool {
         && lun.contains("PCI_SUBCLASS_NVME")
         && lun.contains("skip PERC")
         && lun.contains("no post-EBS I/O")
+        && lun.contains("nvme I/O ready")
+        && lun.contains("fn init_durable_lun_io(")
+        && lun.contains("fn durable_lun_rw(")
+        && lun.contains("fn durable_lun_read_any(")
+        && include_str!("nvme.rs").contains("fn nvme_bring_up(")
+        && include_str!("nvme.rs").contains("fn nvme_rw(")
         && !lun.contains("println!(\"RAYNU-V-M8-DISK-PERSIST-OK\")")
         && !lun.contains("println!(\"RAYNU-V-M7-ISO-INSTALL-OK\")")
         && include_str!("../src/main.rs").contains("probe_durable_lun(")
         && nested.contains("MODE=smoke")
         && nested.contains("MODE=full")
         && nested.contains("MODE=keep")
+        && nested.contains("MODE=lun")
         && nested.contains("plant_m8_persist_fixture")
         && nested.contains("M8_PERSIST_IMG")
         && nested.contains("file-RAM")

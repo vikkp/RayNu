@@ -213,6 +213,7 @@ static MARKER: AtomicBool = AtomicBool::new(false);
 static QUEUES: AtomicBool = AtomicBool::new(false);
 static DISK_HPA: AtomicU64 = AtomicU64::new(0);
 static DISK_LEN: AtomicU64 = AtomicU64::new(0);
+static LUN_ATTACHED: AtomicBool = AtomicBool::new(false);
 static BYTES_WRITTEN: AtomicU64 = AtomicU64::new(0);
 static ISO_PTR: AtomicU64 = AtomicU64::new(0);
 static ISO_LEN: AtomicU64 = AtomicU64::new(0);
@@ -386,6 +387,7 @@ pub fn reset() {
     QUEUES.store(false, Ordering::Release);
     DISK_HPA.store(0, Ordering::Release);
     DISK_LEN.store(0, Ordering::Release);
+    LUN_ATTACHED.store(false, Ordering::Release);
     BYTES_WRITTEN.store(0, Ordering::Release);
     ISO_PTR.store(0, Ordering::Release);
     ISO_LEN.store(0, Ordering::Release);
@@ -488,6 +490,25 @@ unsafe fn attach_disk_inner(hpa: u64, bytes: usize, zero: bool) -> bool {
     }
     DISK_HPA.store(hpa, Ordering::Release);
     DISK_LEN.store(bytes as u64, Ordering::Release);
+    LUN_ATTACHED.store(false, Ordering::Release);
+    BYTES_WRITTEN.store(0, Ordering::Release);
+    true
+}
+
+/// Attach DurableLun NVMe as virtio-blk backing. `hpa` is not RAM.
+///
+/// Empty persist skips a 1 GiB NVMe zero (ISO wins). Installed persist
+/// uses `zero = false`. Not `ISO-INSTALL-OK`.
+pub fn attach_lun(bytes: usize, _zero: bool) -> bool {
+    if bytes == 0 || bytes % SECTOR != 0 {
+        return false;
+    }
+    if !crate::mgmt::durable_lun::durable_lun_serving() {
+        return false;
+    }
+    DISK_HPA.store(0, Ordering::Release);
+    DISK_LEN.store(bytes as u64, Ordering::Release);
+    LUN_ATTACHED.store(true, Ordering::Release);
     BYTES_WRITTEN.store(0, Ordering::Release);
     true
 }
@@ -1153,6 +1174,20 @@ pub fn blk_sector_rw(disk: &mut [u8], ty: u32, sector: u64, buf: &mut [u8]) -> u
     if ty == VIRTIO_BLK_T_FLUSH {
         return VIRTIO_BLK_S_OK;
     }
+    if crate::mgmt::durable_lun::durable_lun_serving() && LUN_ATTACHED.load(Ordering::Acquire) {
+        let off = match sector.checked_mul(SECTOR as u64) {
+            Some(o) => o,
+            None => return VIRTIO_BLK_S_IOERR,
+        };
+        if buf.is_empty() {
+            return VIRTIO_BLK_S_IOERR;
+        }
+        let write = ty == VIRTIO_BLK_T_OUT;
+        if crate::mgmt::durable_lun::durable_lun_rw(off, buf, write) {
+            return VIRTIO_BLK_S_OK;
+        }
+        return VIRTIO_BLK_S_IOERR;
+    }
     let off = match (sector as usize).checked_mul(SECTOR) {
         Some(o) => o,
         None => return VIRTIO_BLK_S_IOERR,
@@ -1228,12 +1263,27 @@ pub fn take_iso_install_ok() -> bool {
     }
     let hpa = DISK_HPA.load(Ordering::Acquire);
     let dlen = DISK_LEN.load(Ordering::Acquire) as usize;
-    if hpa == 0 || dlen < 512 {
-        return false;
-    }
-    // SAFETY: attach_disk installed exclusive disk frames.
-    let disk = unsafe { core::slice::from_raw_parts(hpa as *const u8, dlen) };
-    if !install_disk_has_partition_table(disk) {
+    let has_table = if LUN_ATTACHED.load(Ordering::Acquire)
+        && crate::mgmt::durable_lun::durable_lun_serving()
+    {
+        if dlen < 512 {
+            false
+        } else {
+            let mut peek = [0u8; 2048];
+            let n = core::cmp::min(2048, dlen);
+            crate::mgmt::durable_lun::durable_lun_rw(0, &mut peek[..n], false)
+                && install_disk_has_partition_table(&peek[..n])
+        }
+    } else {
+        if hpa == 0 || dlen < 512 {
+            false
+        } else {
+            // SAFETY: attach_disk installed exclusive disk frames.
+            let disk = unsafe { core::slice::from_raw_parts(hpa as *const u8, dlen) };
+            install_disk_has_partition_table(disk)
+        }
+    };
+    if !has_table {
         return false;
     }
     !ISO_OK.swap(true, Ordering::AcqRel)
@@ -1243,6 +1293,16 @@ pub fn take_iso_install_ok() -> bool {
 /// Bounds-checked against the attached disk; the caller has already validated
 /// the request against media geometry.
 pub fn raynu_f_disk_read(off: u64, buf: &mut [u8]) -> bool {
+    if LUN_ATTACHED.load(Ordering::Acquire) && crate::mgmt::durable_lun::durable_lun_serving() {
+        let dlen = DISK_LEN.load(Ordering::Acquire);
+        let Some(end) = off.checked_add(buf.len() as u64) else {
+            return false;
+        };
+        if buf.is_empty() || end > dlen {
+            return false;
+        }
+        return crate::mgmt::durable_lun::durable_lun_rw(off, buf, false);
+    }
     let hpa = DISK_HPA.load(Ordering::Acquire);
     let dlen = DISK_LEN.load(Ordering::Acquire);
     if hpa == 0 || buf.is_empty() {
@@ -1265,6 +1325,43 @@ pub fn raynu_f_disk_read(off: u64, buf: &mut [u8]) -> bool {
 /// RayNu-F (ADR-016 F4) `BlockIo` write to the install disk at a byte offset.
 /// This is the path a real installer's GPT/ESP writes will take.
 pub fn raynu_f_disk_write(off: u64, buf: &[u8]) -> bool {
+    if LUN_ATTACHED.load(Ordering::Acquire) && crate::mgmt::durable_lun::durable_lun_serving() {
+        let dlen = DISK_LEN.load(Ordering::Acquire);
+        let Some(end) = off.checked_add(buf.len() as u64) else {
+            return false;
+        };
+        if buf.is_empty() || end > dlen {
+            return false;
+        }
+        let mut tmp = [0u8; 4096];
+        if buf.len() > tmp.len() {
+            let mut ok = true;
+            let mut done = 0usize;
+            while done < buf.len() {
+                let take = (buf.len() - done).min(4096);
+                tmp[..take].copy_from_slice(&buf[done..done + take]);
+                if !crate::mgmt::durable_lun::durable_lun_rw(
+                    off.saturating_add(done as u64),
+                    &mut tmp[..take],
+                    true,
+                ) {
+                    ok = false;
+                    break;
+                }
+                done = done.saturating_add(take);
+            }
+            if ok {
+                BYTES_WRITTEN.fetch_add(buf.len() as u64, Ordering::AcqRel);
+            }
+            return ok;
+        }
+        tmp[..buf.len()].copy_from_slice(buf);
+        let ok = crate::mgmt::durable_lun::durable_lun_rw(off, &mut tmp[..buf.len()], true);
+        if ok {
+            BYTES_WRITTEN.fetch_add(buf.len() as u64, Ordering::AcqRel);
+        }
+        return ok;
+    }
     let hpa = DISK_HPA.load(Ordering::Acquire);
     let dlen = DISK_LEN.load(Ordering::Acquire);
     if hpa == 0 || buf.is_empty() {
@@ -1675,16 +1772,24 @@ fn drain_disk(translate: &impl Fn(u64) -> Option<u64>) -> u32 {
         }
         return 0;
     }
+    let lun = LUN_ATTACHED.load(Ordering::Acquire)
+        && crate::mgmt::durable_lun::durable_lun_serving();
     let hpa = DISK_HPA.load(Ordering::Acquire);
     let dlen = DISK_LEN.load(Ordering::Acquire) as usize;
-    if hpa == 0 || dlen == 0 {
+    if !lun && (hpa == 0 || dlen == 0) {
         if notified {
             crate::devices::guest_irq::raise_virtio();
         }
         return 0;
     }
-    // SAFETY: attach_disk installed exclusive disk frames.
-    let disk = unsafe { core::slice::from_raw_parts_mut(hpa as *mut u8, dlen) };
+    let mut dummy = [0u8; 1];
+    // SAFETY: attach_disk installed exclusive disk frames, or DurableLun
+    // I/O is serving and `disk` is unused.
+    let disk: &mut [u8] = if lun {
+        &mut dummy
+    } else {
+        unsafe { core::slice::from_raw_parts_mut(hpa as *mut u8, dlen) }
+    };
     let mut last_avail = last;
     let mut used_idx = used_i;
     let mut last_req = LastReq::default();

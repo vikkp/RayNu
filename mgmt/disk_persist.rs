@@ -298,6 +298,19 @@ fn persist_media_looks_installed_vol<R: VolumeRead>(disk: &R) -> bool {
     find_esp(disk).is_ok() && disk_has_bootx64_vol(disk) && disk_has_ext4_vol(disk)
 }
 
+struct LunVol;
+
+impl VolumeRead for LunVol {
+    fn read_at(&self, off: u64, buf: &mut [u8]) -> bool {
+        crate::mgmt::durable_lun::durable_lun_read_any(off, buf)
+    }
+}
+
+/// Peek the NVMe (or host-test) DurableLun without treating it as RAM.
+pub fn persist_lun_looks_installed() -> bool {
+    persist_media_looks_installed_vol(&LunVol)
+}
+
 /// True when media has GPT ESP + `\EFI\BOOT\BOOTX64.EFI` + ext4 magic.
 ///
 /// Alpine's real `root=UUID=` is **not** required (host fixture UUID is only

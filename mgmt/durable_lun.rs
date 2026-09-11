@@ -8,8 +8,9 @@
 //! Nested File persist is QEMU RAM (`M8_PERSIST_IMG`). Iron needs a LUN
 //! that survives Force Off. This mapper **picks** that LUN and **refuses**
 //! the R640 PERC (Ubuntu) and the 4 GB ESP Cruzer that already holds the ISO.
-//! Post-EBS NVMe/USB I/O is still residual — leftover DRAM remains the
-//! attach until that I/O exists. Not `ISO-INSTALL-OK`. Not iron
+//! Post-EBS NVMe I/O (Identify + Read/Write) backs virtio when Identify
+//! succeeds. USB mass-storage is still residual. Leftover DRAM remains
+//! the fallback. Not `ISO-INSTALL-OK`. Not iron
 //! `RAYNU-V-M8-DISK-PERSIST-OK`.
 //!
 //! ADR-004: persist backing is virtio-blk / BlockIo only.
@@ -40,9 +41,9 @@ pub const PCI_SUBCLASS_RAID: u8 = 0x04;
 /// NVMe subclass.
 pub const PCI_SUBCLASS_NVME: u8 = 0x08;
 
-/// Honesty: census ≠ Force Off persist. Host/CI never print the iron marker.
+/// Honesty: census + NVMe I/O ≠ Force Off persist. Host/CI never print the iron marker.
 pub const DURABLE_LUN_IO_RESIDUAL_NOTE: &str =
-    "residual: DurableLun PCI/USB census is not post-EBS NVMe/USB I/O and not iron RAYNU-V-M8-DISK-PERSIST-OK; leftover DRAM remains the attach; do not format PERC; do not print ISO-INSTALL-OK";
+    "residual: DurableLun NVMe I/O is not iron RAYNU-V-M8-DISK-PERSIST-OK; USB I/O still residual; leftover DRAM remains the fallback; do not format PERC; do not print ISO-INSTALL-OK";
 
 /// How a candidate is attached to the platform.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -290,18 +291,135 @@ pub fn pick_durable_lun(cands: &[LunCandidate]) -> Result<LunCandidate, LunRejec
     Err(LunReject::None)
 }
 
-/// Virtio may use the LUN only when post-EBS I/O exists. Today: never on
-/// iron (residual). Host tests keep [`PersistKind::DurableLun`] as a Vec.
+/// Virtio may use the LUN only when NVMe I/O exists. USB stays residual.
 pub fn durable_lun_can_virtio_attach(pick: &LunCandidate, post_ebs_io: bool) -> bool {
     post_ebs_io
-        && matches!(pick.transport, LunTransport::Nvme | LunTransport::Usb)
+        && pick.transport == LunTransport::Nvme
         && !pick.is_esp_boot
         && (pick.size_bytes == 0 || pick.size_bytes >= DURABLE_LUN_MIN_BYTES)
 }
 
-/// Post-EBS NVMe/USB command path. Residual until a driver exists.
+/// NVMe Identify + I/O queues. USB is still residual.
 pub fn durable_lun_post_ebs_io_ready() -> bool {
-    false
+    crate::mgmt::nvme::nvme_io_ready()
+}
+
+/// True when virtio/BlockIo should read/write the LUN, not leftover DRAM.
+pub fn durable_lun_serving() -> bool {
+    durable_lun_post_ebs_io_ready()
+}
+
+/// Read or write the NVMe namespace (or host-test Vec). Splits at 4 KiB.
+pub fn durable_lun_rw(off: u64, buf: &mut [u8], write: bool) -> bool {
+    if buf.is_empty() {
+        return true;
+    }
+    if !durable_lun_post_ebs_io_ready() {
+        return false;
+    }
+    let lba = crate::mgmt::nvme::nvme_lba_bytes();
+    let lba = if lba == 0 { 512 } else { lba };
+    let mut done = 0usize;
+    while done < buf.len() {
+        let take = (buf.len() - done).min(4096);
+        let cur = off.saturating_add(done as u64);
+        if cur % u64::from(lba) != 0 || (take as u64) % u64::from(lba) != 0 {
+            return false;
+        }
+        let slice = &mut buf[done..done + take];
+        let ok = if cfg!(test) {
+            crate::mgmt::nvme::host_nvme_rw(cur, slice, write)
+        } else {
+            crate::mgmt::nvme::nvme_live_rw(cur, slice, write)
+        };
+        if !ok {
+            return false;
+        }
+        done = done.saturating_add(take);
+    }
+    true
+}
+
+/// Peek any byte range (GPT/FAT). Rounds to LBA and copies the overlap.
+pub fn durable_lun_read_any(off: u64, buf: &mut [u8]) -> bool {
+    if buf.is_empty() {
+        return true;
+    }
+    if !durable_lun_post_ebs_io_ready() {
+        return false;
+    }
+    let lba = crate::mgmt::nvme::nvme_lba_bytes();
+    let lba = if lba == 0 { 512u64 } else { u64::from(lba) };
+    if lba == 0 || lba > 4096 {
+        return false;
+    }
+    let mut tmp = [0u8; 4096];
+    let mut copied = 0usize;
+    let mut cur = (off / lba) * lba;
+    while copied < buf.len() {
+        if !durable_lun_rw(cur, &mut tmp[..lba as usize], false) {
+            return false;
+        }
+        let skip = if cur < off { (off - cur) as usize } else { 0 };
+        if skip >= lba as usize {
+            return false;
+        }
+        let n = (lba as usize - skip).min(buf.len() - copied);
+        buf[copied..copied + n].copy_from_slice(&tmp[skip..skip + n]);
+        copied = copied.saturating_add(n);
+        cur = cur.saturating_add(lba);
+    }
+    true
+}
+
+/// Bring up NVMe I/O on the census pick. USB stays residual.
+pub fn init_durable_lun_io() {
+    crate::mgmt::nvme::clear_nvme_ready();
+    let Some((bus, dev, func, _, transport)) = durable_lun_pick() else {
+        return;
+    };
+    if transport != LunTransport::Nvme {
+        return;
+    }
+    match crate::mgmt::nvme::nvme_init_pci(bus, dev, func, DURABLE_LUN_MIN_BYTES) {
+        Ok(bytes) => {
+            crate::mgmt::nvme::reserve_durable_lun_install_disk(bytes);
+            #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+            {
+                use crate::boot::serial;
+                serial::write_str("boot: Stage 46 durable LUN nvme I/O ready bytes=");
+                write_dec(bytes);
+                serial::write_line(" (not ISO-INSTALL-OK)");
+            }
+            let _ = (bus, dev, func);
+        }
+        Err(_) => {
+            #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+            crate::boot::serial::write_line(
+                "boot: Stage 46 durable LUN nvme I/O fail (leftover DRAM; not ISO-INSTALL-OK)",
+            );
+        }
+    }
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn write_dec(v: u64) {
+    use crate::boot::serial;
+    let mut n = v;
+    let mut buf = [0u8; 20];
+    let mut i = 20;
+    if n == 0 {
+        serial::write_byte(b'0');
+        return;
+    }
+    while n > 0 && i > 0 {
+        i -= 1;
+        buf[i] = b'0' + (n % 10) as u8;
+        n /= 10;
+    }
+    for &b in &buf[i..] {
+        serial::write_byte(b);
+    }
 }
 
 /// True when census picked USB/NVMe. Does **not** mean virtio is on the LUN.
@@ -347,6 +465,7 @@ pub fn durable_lun_pick() -> Option<(u8, u8, u8, u64, LunTransport)> {
 /// Host tests.
 pub fn durable_lun_clear() {
     store_durable_lun_pick(None, LunReject::None);
+    crate::mgmt::nvme::clear_nvme_ready();
 }
 
 /// Notes the mapper must keep: no PERC, Cruzer too small for ISO+disk, 1 GiB min.
@@ -389,8 +508,11 @@ pub fn probe_durable_lun() {
                 _ => serial::write_str("? "),
             }
             write_bdf(p.bus, p.dev, p.func);
+            if p.transport == LunTransport::Nvme {
+                init_durable_lun_io();
+            }
             if durable_lun_can_virtio_attach(&p, durable_lun_post_ebs_io_ready()) {
-                serial::write_line(" (not ISO-INSTALL-OK)");
+                serial::write_line(" (nvme I/O; not ISO-INSTALL-OK)");
             } else {
                 serial::write_line(" (no post-EBS I/O; leftover DRAM; not ISO-INSTALL-OK)");
             }

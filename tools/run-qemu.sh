@@ -321,6 +321,21 @@ if [[ -n "$M8_PERSIST_IMG" ]]; then
   echo "==> M8 persist file-RAM ${M8_PERSIST_IMG} (${psize} bytes) mem=${QEMU_MEM} (not ISO-INSTALL-OK)"
 fi
 
+# Optional QEMU NVMe for DurableLun I/O smoke (not nested File RAM, not iron).
+M8_NVME_IMG="${M8_NVME_IMG:-}"
+NVME_ARGS=()
+if [[ -n "$M8_NVME_IMG" ]]; then
+  mkdir -p "$(dirname "$M8_NVME_IMG")"
+  if [[ ! -f "$M8_NVME_IMG" ]]; then
+    truncate -s 1G "$M8_NVME_IMG"
+  fi
+  NVME_ARGS+=(
+    -drive "if=none,id=m8nvme,format=raw,file=${M8_NVME_IMG}"
+    -device nvme,drive=m8nvme,serial=m8lun
+  )
+  echo "==> M8 DurableLun NVMe ${M8_NVME_IMG} (not ISO-INSTALL-OK; not iron persist OK)"
+fi
+
 echo "==> QEMU boot (COM1 → ${SERIAL_CHARDEV}); mem=${QEMU_M_ARG}; guest exits via isa-debug-exit"
 
 exec qemu-system-x86_64 \
@@ -333,4 +348,5 @@ exec qemu-system-x86_64 \
   -drive format=raw,file="$ESP_DRIVE" \
   "${HOST_NIC_ARGS[@]}" \
   "${PERSIST_MEM_ARGS[@]}" \
+  "${NVME_ARGS[@]}" \
   "$@"
