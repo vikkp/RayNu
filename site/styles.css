@@ -546,6 +546,12 @@ code {
   overflow: hidden;
 }
 
+.page-hda--closed .hda-mast {
+  background:
+    linear-gradient(135deg, rgba(184, 107, 52, 0.16) 0%, transparent 50%),
+    linear-gradient(180deg, rgba(15, 110, 106, 0.14) 0%, transparent 72%);
+}
+
 .page-hda .hda-mast::before {
   content: "";
   position: absolute;
@@ -593,6 +599,19 @@ code {
   line-height: 1.05;
   letter-spacing: -0.02em;
   max-width: 18ch;
+}
+
+.hda-mast__kicker {
+  margin: 0 0 0.55rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--copper);
+}
+
+.page-hda--closed .hda-mast__title {
+  max-width: 22ch;
 }
 
 .hda-mast__lede {
@@ -709,6 +728,38 @@ code {
   height: 100%;
   background: linear-gradient(90deg, var(--teal), var(--steel));
   transition: width 900ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.hda-bar__fill--summit {
+  background: linear-gradient(90deg, var(--copper), var(--teal));
+}
+
+.section--hda-com2 {
+  background: var(--ink);
+  color: #d7e8e6;
+}
+
+.section--hda-com2 .section__title,
+.section--hda-com2 .section__lede {
+  color: #f3f6f8;
+}
+
+.section--hda-com2 .section__lede {
+  color: rgba(243, 246, 248, 0.82);
+}
+
+.section--hda-com2 .milestone-kicker {
+  color: var(--copper);
+}
+
+.section--hda-com2 a {
+  color: #9fd4cf;
+}
+
+.section--hda-com2 .ship-code {
+  margin-top: 1.5rem;
+  background: rgba(0, 0, 0, 0.35);
+  border-left-color: var(--copper);
 }
 
 .hda-summits {

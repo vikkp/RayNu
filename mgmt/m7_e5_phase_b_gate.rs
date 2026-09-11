@@ -23,7 +23,7 @@ pub const M7_PHASE_B_SPA_WIRE_GATE_MARKER: &str = "RAYNU-V-M7-PHASE-B-SPA-WIRE-O
 
 /// Honest residual after iron P0-63 close: polish, not “SPA still SHELL”.
 pub const PHASE_B_RESIDUAL_NOTE: &str =
-    "residual: P0-63 iron CLOSED f72b4276 / 34552377351 — SPA Start of RayNu-F ISO without raynuf.txt; HOST-NIC-HTTP-OK on 10.99.99.145:8443; ISO-INSTALL-OK (iron-only) + DISK-BOOT-OK; iso=0 stays E4 SHELL; product ISO without raynuf.txt skips OVMF to coexist HTTP (not CpuSleep ticks, not Stage 46 hold, not G0 BAR/shell); TSC Instant not MILLIS+=10 (7f8dc0a9 curl: (7) fixed); leftover-DRAM disk does not survive HV reboot; TLS deferred; ISO-INSTALL-OK is never printed from host/CI";
+    "residual: P0-63 iron CLOSED f72b4276 / 34552377351 — SPA Start of RayNu-F ISO without raynuf.txt; HOST-NIC-HTTP-OK on 10.99.99.145:8443; ISO-INSTALL-OK (iron-only) + DISK-BOOT-OK; iso=0 stays E4 SHELL; product ISO without raynuf.txt skips OVMF to coexist HTTP (not CpuSleep ticks, not Stage 46 hold, not G0 BAR/shell); TSC Instant not MILLIS+=10 (7f8dc0a9 curl: (7) fixed); leftover-DRAM disk does not survive HV reboot; TLS deferred; leftover/TLS/console are M8 (ADR-018) not Everest; ISO-INSTALL-OK is never printed from host/CI";
 
 /// REST create+start of `linux_iso` queues RayNu-F and arms the flag.
 pub fn prop_rest_product_iso_start_queues_raynu_f() -> bool {
