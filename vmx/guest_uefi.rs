@@ -5113,6 +5113,18 @@ unsafe fn attach_product_iso_install_disk(alloc: &mut FrameAllocator, warn: bool
     if crate::devices::guest_virtio_blk::disk_bytes() != 0 {
         return;
     }
+    if let Some(bytes) = crate::mgmt::nvme::take_durable_lun_install_disk() {
+        let keep = crate::mgmt::disk_persist::persist_lun_looks_installed();
+        crate::mgmt::disk_persist::set_install_disk_keep(keep);
+        if crate::devices::guest_virtio_blk::attach_lun(bytes as usize, !keep) {
+            serial::write_str("boot: Stage 46 virtio-blk install disk bytes=");
+            write_dec(crate::devices::guest_virtio_blk::disk_bytes());
+            serial::write_str(" keep=");
+            write_dec(u64::from(keep));
+            serial::write_line(" (durable LUN nvme; not ISO-INSTALL-OK)");
+            return;
+        }
+    }
     let nested = guest_uefi_host_hypervisor_present();
     let Some((frame, disk_bytes)) = try_alloc_product_iso_install_disk(alloc, nested) else {
         if warn {
@@ -5140,6 +5152,15 @@ unsafe fn attach_product_iso_install_disk(alloc: &mut FrameAllocator, warn: bool
 /// Empty persist stays unattached (Alpine install needs VMLAUNCH). Not nested-OK.
 #[cfg(target_os = "uefi")]
 pub unsafe fn attach_persist_keep_on_vmx_skip(alloc: &mut FrameAllocator) {
+    if crate::mgmt::nvme::durable_lun_install_reserved() {
+        let keep = crate::mgmt::disk_persist::persist_lun_looks_installed();
+        if !keep {
+            return;
+        }
+        let _ = crate::mgmt::iso_install::present_product_iso_if_retained();
+        attach_product_iso_install_disk(alloc, true);
+        return;
+    }
     let Some((hpa, bytes)) = crate::mgmt::disk_persist::persist_install_disk_region() else {
         return;
     };

@@ -204,12 +204,15 @@ pub unsafe fn leave_firmware() -> Handoff {
     };
 
     if crate::mgmt::iso_install::product_iso_retained_bytes().is_some() {
-        let above_pages =
-            mem::conventional_pages_above(&regions[..region_count], precise_end);
+        let above_pages = mem::conventional_pages_above(&regions[..region_count], precise_end);
         serial::write_str("boot: conventional above PRECISE pages=");
         write_u64(above_pages);
         serial::write_byte(b'\n');
-        if let Some((phpa, pbytes)) = mem::pick_persist_disk_region(
+        if crate::mgmt::nvme::durable_lun_install_reserved() {
+            serial::write_line(
+                "boot: Stage 46 leftover install disk skip durable LUN (not ISO-INSTALL-OK)",
+            );
+        } else if let Some((phpa, pbytes)) = mem::pick_persist_disk_region(
             &persist_regions[..persist_count],
             crate::mgmt::iso_install::LEFTOVER_DISK_TRY_BYTES,
         ) {
@@ -234,10 +237,10 @@ pub unsafe fn leave_firmware() -> Handoff {
             REPORT_RAM_EXTRA_WANT_PAGES,
             512,
             precise_end,
-        )
-        {
+        ) {
             let bytes = hp.saturating_mul(mem::PAGE_SIZE);
-            let persist = crate::mgmt::disk_persist::persist_install_disk_reserved();
+            let persist = crate::mgmt::disk_persist::persist_install_disk_reserved()
+                || crate::mgmt::nvme::durable_lun_install_reserved();
             let nested = crate::arch::cpu::host_hypervisor_present();
             // Carve the install disk first so those HPAs never enter the
             // report-RAM bump (guest sees them only via virtio-blk).
@@ -285,9 +288,7 @@ pub unsafe fn leave_firmware() -> Handoff {
                 );
             }
         } else {
-            serial::write_line(
-                "boot: report-RAM extra skip none (Stage 46; not ISO-INSTALL-OK)",
-            );
+            serial::write_line("boot: report-RAM extra skip none (Stage 46; not ISO-INSTALL-OK)");
         }
     }
 

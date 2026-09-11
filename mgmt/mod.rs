@@ -336,6 +336,7 @@ pub mod iso;
 pub mod iso_install;
 pub mod disk_persist;
 pub mod durable_lun;
+pub mod nvme;
 pub mod m8_disk_persist_gate;
 pub mod m5_api_gate;
 pub mod m5_life_gate;
@@ -481,7 +482,7 @@ pub use iso_install::{
     M7_ISO_INSTALL_SCAFFOLD_MARKER, M7_PHASE_B_COEXIST_IDLE_NOTE, M7_PHASE_B_E4_CONTINUE_NOTE,
     M7_PHASE_B_E4_CONTINUE_OK_MARKER, M7_STAGE46_HOLD_E4_NOTE,
 };
-pub use durable_lun::probe_durable_lun;
+pub use durable_lun::{init_durable_lun_io, probe_durable_lun};
 pub use m5_api_gate::run_m5_api_gate;
 pub use m5_life_gate::run_m5_life_gate;
 pub use m5_webui_gate::run_m5_webui_gate;
