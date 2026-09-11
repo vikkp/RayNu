@@ -2,13 +2,13 @@
 # M8.0 nested persist: install → kill/restart the *hypervisor* process →
 # second Linux without setup-disk. Mechanism proof, not iron.
 #
-# The virtio HPA is a QEMU file-backed pc-dimm (`M8_PERSIST_IMG`). Distro
-# OVMF_CODE_4M has no NvdimmDxe (no EFI PersistentMemory). Guest F7 is not
+# The virtio HPA is QEMU initial RAM backed by `M8_PERSIST_IMG` (share=on).
+# Distro OVMF_CODE_4M ignores nvdimm and pc-dimm hotplug. Guest F7 is not
 # this test. Nested QEMU ≠ R640. Host/CI cargo tests must never print
 # RAYNU-V-M8-DISK-PERSIST-NESTED-OK or RAYNU-V-M7-ISO-INSTALL-OK.
 # Iron COM2 marker RAYNU-V-M8-DISK-PERSIST-OK is forbidden here.
 #
-# MODE=smoke  one short boot: require persist serial + leftover skip.
+# file-RAM backend: QEMU initial RAM is M8_PERSIST_IMG (share=on).
 # MODE=full   two boots (default). Boot 1 stops after Alpine install.
 #             Needs nested KVM (VMLAUNCH). TCG is smoke-only.
 #
@@ -33,9 +33,9 @@ ISO_URL="${ALPINE_ISO_URL:-https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/
 ALPINE_ISO="${ALPINE_ISO:-$ROOT/target/alpine-${ALPINE_FLAVOR}-3.21.3-x86_64.iso}"
 SMOKE_ISO="${SMOKE_ISO:-$ROOT/target/m8-smoke-window.iso}"
 M8_PERSIST_IMG="${M8_PERSIST_IMG:-$ROOT/target/m8-persist.img}"
-M8_PERSIST_SIZE="${M8_PERSIST_SIZE:-2G}"
-# 512M initial RAM so leftover above PRECISE *is* the pc-dimm file.
-QEMU_MEM="${QEMU_MEM:-512M}"
+M8_PERSIST_SIZE="${M8_PERSIST_SIZE:-2560M}"
+# 2560M so leftover above PRECISE exists; the file *is* that RAM.
+QEMU_MEM="${QEMU_MEM:-2560M}"
 RAYNU_F="${RAYNU_F:-1}"
 NESTED_OK="RAYNU-V-M8-DISK-PERSIST-NESTED-OK"
 IRON_OK="RAYNU-V-M8-DISK-PERSIST-OK"
@@ -64,7 +64,7 @@ forbid_markers() {
 require_persist_reserved() {
   local log="$1"
   if ! grep -qF 'persist install disk hpa=' "$log"; then
-    echo "error: no Stage 46 persist install disk (pc-dimm not leftover?)" >&2
+    echo "error: no Stage 46 persist install disk (file-RAM not leftover?)" >&2
     grep -E 'leftover install disk|persist install disk|report-RAM extra|pc-dimm|hypervisor' "$log" | head -n 20 >&2 || true
     exit 1
   fi
@@ -107,7 +107,12 @@ fetch_iso() {
 }
 
 kvm_wedged() {
-  dmesg 2>/dev/null | grep -q 'kvm_spurious_fault' || return 1
+  local log
+  log="$(dmesg 2>/dev/null || true)"
+  if [[ -z "$log" ]]; then
+    log="$(sudo dmesg 2>/dev/null || true)"
+  fi
+  [[ "$log" == *kvm_spurious_fault* ]]
 }
 
 kvm_usable() {
@@ -275,6 +280,24 @@ run_smoke() {
   start_qemu "$SERIAL1" "$TIMEOUT_SMOKE" \
     "$ROOT/target/m8-persist-smoke-stdout.log" \
     "$ROOT/target/m8-persist-smoke-stderr.log"
+  # KVM_CREATE_VCPU can hang after kvm_spurious_fault with empty serial.
+  local waited=0
+  while (( waited < 25 )); do
+    if [[ -s "$SERIAL1" ]]; then
+      break
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  if [[ ! -s "$SERIAL1" && "$QEMU_ACCEL" == "kvm" ]]; then
+    echo "==> kvm serial empty after ${waited}s; retry tcg (persist scan is PRE-VMLAUNCH)"
+    stop_qemu
+    QEMU_ACCEL=tcg
+    reset_persist_img
+    start_qemu "$SERIAL1" "$TIMEOUT_SMOKE" \
+      "$ROOT/target/m8-persist-smoke-stdout.log" \
+      "$ROOT/target/m8-persist-smoke-stderr.log"
+  fi
   if wait_serial_needle "$SERIAL1" "persist install disk hpa="; then
     sleep 2
     stop_qemu
@@ -289,7 +312,7 @@ run_smoke() {
   scan "$SERIAL1"
   forbid_markers "$SERIAL1"
   require_persist_reserved "$SERIAL1"
-  echo "==> nested File pc-dimm persist reserved (not $NESTED_OK; not iron $IRON_OK; not $ISO_OK)"
+  echo "==> nested File RAM persist reserved (not $NESTED_OK; not iron $IRON_OK; not $ISO_OK)"
 }
 
 run_full() {

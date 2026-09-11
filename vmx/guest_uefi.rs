@@ -3914,7 +3914,7 @@ pub fn product_iso_disk_leave_pages() -> u64 {
 ///
 /// Call **before** greedy 2 MiB report-RAM so Alpine sys-mode gets ≥64 MiB.
 ///
-/// Persist (file-backed pc-dimm / durable LUN) wins, then leftover DRAM above
+/// Persist (file-backed RAM / durable LUN) wins, then leftover DRAM above
 /// PRECISE (256 MiB–1 GiB, carved by `handoff` **before** the report-RAM
 /// seed; not an invented HPA, and never handed to the guest as RAM). Nested
 /// `c751fbe` alpine-extended: apk resolved grub-efi + dosfstools,

@@ -108,10 +108,9 @@ pub unsafe fn leave_firmware() -> Handoff {
     let mut persist_count = 0usize;
 
     for desc in mmap.entries() {
-        // Nested M8.0: QEMU NVDIMM is EfiPersistentMemory (UEFI type 14)
-        // when firmware has NvdimmDxe. Distro OVMF_CODE_4M does not — the
-        // File backend is a `pc-dimm` that lands as conventional above
-        // PRECISE and is promoted below. Iron USB/NVMe is not this scan.
+        // Nested M8.0: distro OVMF ignores nvdimm/pc-dimm hotplug. File
+        // persist is QEMU initial RAM backed by M8_PERSIST_IMG (share=on).
+        // Type 14, when present, still wins. Iron USB/NVMe is not this scan.
         if desc.ty == MemoryType::PERSISTENT_MEMORY {
             if persist_count < persist_regions.len() {
                 persist_regions[persist_count] = (desc.phys_start, desc.page_count);
@@ -225,11 +224,11 @@ pub unsafe fn leave_firmware() -> Handoff {
         // same as iron so QEMU `PRODUCT_ISO=` can walk the 2 GiB CMOS lie.
         // `iso=0` never enters this block. Nested `-m 512M` has no
         // conventional above PRECISE (`skip none`); product-ISO QEMU uses
-        // 2560 MiB so leftover exists, or `-m 512M` + file-backed `pc-dimm`
-        // (≥1.75 GiB so 1 GiB disk + 768 MiB floor fit). Skip leftover
-        // **disk** carve when persist is reserved (report-RAM extra still
-        // uses the span). Nested without type 14 promotes the leftover
-        // carve to File persist (distro OVMF has no NvdimmDxe).
+        // 2560 MiB so leftover exists (file-backed when `M8_PERSIST_IMG` is
+        // set). Skip leftover **disk** carve when persist is reserved
+        // (report-RAM extra still uses the span). Nested without type 14
+        // promotes the leftover carve to File persist (distro OVMF ignores
+        // nvdimm/pc-dimm hotplug).
         if let Some((hs, hp)) = mem::pick_conventional_region_above_prefer(
             &regions[..region_count],
             REPORT_RAM_EXTRA_WANT_PAGES,
@@ -259,7 +258,7 @@ pub unsafe fn leave_firmware() -> Handoff {
                     write_u64_hex(disk_hpa);
                     serial::write_str(" bytes=");
                     write_u64(disk_bytes);
-                    serial::write_line(" (nested File pc-dimm; not ISO-INSTALL-OK)");
+                    serial::write_line(" (nested File RAM; not ISO-INSTALL-OK)");
                     serial::write_line(
                         "boot: Stage 46 leftover install disk skip persist (not ISO-INSTALL-OK)",
                     );
@@ -384,7 +383,7 @@ mod handoff_test {
         assert!(src.contains("leftover install disk skip persist"));
         assert!(src.contains("persist install disk hpa="));
         assert!(src.contains("nested_promotes_leftover_to_file_persist"));
-        assert!(src.contains("pc-dimm"));
+        assert!(src.contains("nested File RAM"));
         assert!(!src.contains("println!(\"RAYNU-V-M7-ISO-INSTALL-OK\")"));
     }
 }
