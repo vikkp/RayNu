@@ -295,8 +295,32 @@ plant_keep_fixture() {
     exit 1
   fi
   echo "==> plant GPT+ESP+ext4 at $hpa in $M8_PERSIST_IMG (not nested-OK; not iron; not ISO-INSTALL-OK)"
-  M8_PLANT_PATH="$M8_PERSIST_IMG" M8_PLANT_OFFSET="$hpa" \
-    cargo test --no-default-features plant_m8_persist_fixture -- --exact --nocapture
+  local plant_log="$ROOT/target/m8-persist-plant.log"
+  # Do not use --exact: the test lives under mgmt::disk_persist::disk_persist_test::
+  if ! M8_PLANT_PATH="$M8_PERSIST_IMG" M8_PLANT_OFFSET="$hpa" \
+    cargo test --no-default-features plant_m8_persist_fixture -- --nocapture \
+    >"$plant_log" 2>&1; then
+    echo "error: plant_m8_persist_fixture failed" >&2
+    tail -n 40 "$plant_log" >&2 || true
+    exit 1
+  fi
+  if ! grep -qE 'test result: ok\. 1 passed' "$plant_log"; then
+    echo "error: plant_m8_persist_fixture did not run (0 tests?)" >&2
+    tail -n 20 "$plant_log" >&2 || true
+    exit 1
+  fi
+  python3 - "$M8_PERSIST_IMG" "$hpa" <<'PY'
+import sys
+from pathlib import Path
+path, hpa_s = Path(sys.argv[1]), sys.argv[2]
+off = int(hpa_s, 16) if hpa_s.lower().startswith("0x") else int(hpa_s)
+with path.open("rb") as f:
+    f.seek(off + 512)
+    sig = f.read(8)
+if sig != b"EFI PART":
+    raise SystemExit(f"error: no EFI PART at {hpa_s}+512 (got {sig!r})")
+print(f"==> plant GPT EFI PART at {hpa_s} (not ISO-INSTALL-OK)")
+PY
 }
 
 run_smoke() {
