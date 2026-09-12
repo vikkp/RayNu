@@ -364,36 +364,53 @@ pub fn durable_lun_rw(off: u64, buf: &mut [u8], write: bool) -> bool {
     true
 }
 
-/// FAT keep-detect issues 32-byte dirent reads; each used to be a BOT command.
-/// One 4 KiB line covers GPT + ESP dirents and keeps the xHCI event ring
-/// from wrapping mid-walk. Not iron persist OK.
-const LUN_CACHE_BYTES: usize = 4096;
-static LUN_CACHE_OFF: AtomicU64 = AtomicU64::new(u64::MAX);
+/// FAT keep-detect issues 32-byte dirents; each used to be a BOT command.
+/// Sixteen 4 KiB lines cover GPT + ESP prefix + ext4 so a second `find_esp`
+/// does not evict the first and wrap the 256-TRB xHCI event ring.
+/// Not iron persist OK.
+const LUN_CACHE_LINE: usize = 4096;
+const LUN_CACHE_LINES: usize = 16;
+static LUN_CACHE_TAG: [AtomicU64; LUN_CACHE_LINES] =
+    [const { AtomicU64::new(u64::MAX) }; LUN_CACHE_LINES];
 static LUN_CACHE: spinlock_cache::Bytes = spinlock_cache::Bytes::new();
 
 mod spinlock_cache {
     use core::cell::UnsafeCell;
-    pub struct Bytes(UnsafeCell<[u8; super::LUN_CACHE_BYTES]>);
+    pub struct Bytes(UnsafeCell<[u8; super::LUN_CACHE_LINE * super::LUN_CACHE_LINES]>);
     impl Bytes {
         pub const fn new() -> Self {
-            Self(UnsafeCell::new([0; super::LUN_CACHE_BYTES]))
+            Self(UnsafeCell::new([0; super::LUN_CACHE_LINE * super::LUN_CACHE_LINES]))
         }
-        pub fn as_mut(&self) -> &mut [u8; super::LUN_CACHE_BYTES] {
+        pub fn line_mut(&self, slot: usize) -> &mut [u8] {
+            let off = slot * super::LUN_CACHE_LINE;
             // SAFETY: DurableLun I/O is single-threaded on BSP (LIVE_LOCK /
             // host --test-threads=1).
-            unsafe { &mut *self.0.get() }
+            unsafe {
+                core::slice::from_raw_parts_mut(
+                    (self.0.get() as *mut u8).add(off),
+                    super::LUN_CACHE_LINE,
+                )
+            }
         }
-        pub fn as_ref(&self) -> &[u8; super::LUN_CACHE_BYTES] {
-            // SAFETY: same as as_mut — BSP / test-threads=1.
-            unsafe { &*self.0.get() }
+        pub fn line(&self, slot: usize) -> &[u8] {
+            let off = slot * super::LUN_CACHE_LINE;
+            // SAFETY: same as line_mut — BSP / test-threads=1.
+            unsafe {
+                core::slice::from_raw_parts(
+                    (self.0.get() as *const u8).add(off),
+                    super::LUN_CACHE_LINE,
+                )
+            }
         }
     }
-    // SAFETY: same as as_mut — BSP / test-threads=1.
+    // SAFETY: same as line_mut — BSP / test-threads=1.
     unsafe impl Sync for Bytes {}
 }
 
 fn lun_cache_clear() {
-    LUN_CACHE_OFF.store(u64::MAX, Ordering::Release);
+    for t in &LUN_CACHE_TAG {
+        t.store(u64::MAX, Ordering::Release);
+    }
 }
 
 fn lun_ns_bytes() -> u64 {
@@ -404,8 +421,12 @@ fn lun_ns_bytes() -> u64 {
     }
 }
 
+fn lun_cache_slot(aligned: u64) -> usize {
+    ((aligned / LUN_CACHE_LINE as u64) as usize) % LUN_CACHE_LINES
+}
+
 fn lun_cache_fill(aligned: u64, lba: u64) -> bool {
-    let chunk = LUN_CACHE_BYTES as u64;
+    let chunk = LUN_CACHE_LINE as u64;
     if lba == 0 || chunk % lba != 0 || aligned % lba != 0 {
         return false;
     }
@@ -421,19 +442,20 @@ fn lun_cache_fill(aligned: u64, lba: u64) -> bool {
             return false;
         }
     }
-    let buf = LUN_CACHE.as_mut();
+    let slot = lun_cache_slot(aligned);
+    let buf = LUN_CACHE.line_mut(slot);
     buf.fill(0);
     let mut got = 0u64;
     while got < n {
         let take = (n - got).min(lba) as usize;
         let slice = &mut buf[got as usize..got as usize + take];
         if !durable_lun_rw(aligned.saturating_add(got), slice, false) {
-            lun_cache_clear();
+            LUN_CACHE_TAG[slot].store(u64::MAX, Ordering::Release);
             return false;
         }
         got = got.saturating_add(take as u64);
     }
-    LUN_CACHE_OFF.store(aligned, Ordering::Release);
+    LUN_CACHE_TAG[slot].store(aligned, Ordering::Release);
     true
 }
 
@@ -454,7 +476,7 @@ pub fn durable_lun_read_any(off: u64, buf: &mut [u8]) -> bool {
     if lba == 0 || lba > 4096 {
         return false;
     }
-    let chunk = LUN_CACHE_BYTES as u64;
+    let chunk = LUN_CACHE_LINE as u64;
     if chunk % lba != 0 {
         return false;
     }
@@ -462,16 +484,18 @@ pub fn durable_lun_read_any(off: u64, buf: &mut [u8]) -> bool {
     while copied < buf.len() {
         let cur = off.saturating_add(copied as u64);
         let aligned = (cur / chunk) * chunk;
-        let cached = LUN_CACHE_OFF.load(Ordering::Acquire);
-        if cached != aligned && !lun_cache_fill(aligned, lba) {
+        let slot = lun_cache_slot(aligned);
+        if LUN_CACHE_TAG[slot].load(Ordering::Acquire) != aligned
+            && !lun_cache_fill(aligned, lba)
+        {
             return false;
         }
         let skip = (cur - aligned) as usize;
-        if skip >= LUN_CACHE_BYTES {
+        if skip >= LUN_CACHE_LINE {
             return false;
         }
-        let n = (LUN_CACHE_BYTES - skip).min(buf.len() - copied);
-        buf[copied..copied + n].copy_from_slice(&LUN_CACHE.as_ref()[skip..skip + n]);
+        let n = (LUN_CACHE_LINE - skip).min(buf.len() - copied);
+        buf[copied..copied + n].copy_from_slice(&LUN_CACHE.line(slot)[skip..skip + n]);
         copied = copied.saturating_add(n);
     }
     true
