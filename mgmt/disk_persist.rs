@@ -238,10 +238,10 @@ fn linux_fs_start_lba(disk: &[u8]) -> Option<u64> {
     linux_fs_start_lba_vol(&SliceDisk(disk))
 }
 
-fn disk_has_bootx64_vol<R: VolumeRead>(disk: &R) -> bool {
-    let Ok(esp) = find_esp(disk) else {
-        return false;
-    };
+fn disk_has_bootx64_from_esp<R: VolumeRead>(
+    disk: &R,
+    esp: crate::raynu_f::gpt::EspPartition,
+) -> bool {
     let Some(base) = esp.start_lba.checked_mul(512) else {
         return false;
     };
@@ -257,6 +257,13 @@ fn disk_has_bootx64_vol<R: VolumeRead>(disk: &R) -> bool {
         Ok(e) => e.name_bytes() == b"BOOTX64.EFI" && e.size > 0 && !e.is_dir(),
         Err(_) => false,
     }
+}
+
+fn disk_has_bootx64_vol<R: VolumeRead>(disk: &R) -> bool {
+    let Ok(esp) = find_esp(disk) else {
+        return false;
+    };
+    disk_has_bootx64_from_esp(disk, esp)
 }
 
 fn disk_has_bootx64(disk: &[u8]) -> bool {
@@ -295,7 +302,10 @@ fn disk_has_ext4_and_root_uuid(disk: &[u8]) -> bool {
 }
 
 fn persist_media_looks_installed_vol<R: VolumeRead>(disk: &R) -> bool {
-    find_esp(disk).is_ok() && disk_has_bootx64_vol(disk) && disk_has_ext4_vol(disk)
+    let Ok(esp) = find_esp(disk) else {
+        return false;
+    };
+    disk_has_bootx64_from_esp(disk, esp) && disk_has_ext4_vol(disk)
 }
 
 struct LunVol;
@@ -327,11 +337,14 @@ pub fn persist_lun_clear_sticky() {
 
 /// GPT / BOOTX64 / ext4 on the LUN (each may issue I/O). Remembers keep.
 pub fn persist_lun_keep_parts() -> (bool, bool, bool) {
-    let gpt = find_esp(&LunVol).is_ok();
-    let boot = disk_has_bootx64_vol(&LunVol);
+    let gpt = find_esp(&LunVol);
+    let boot = match gpt {
+        Ok(esp) => disk_has_bootx64_from_esp(&LunVol, esp),
+        Err(_) => false,
+    };
     let ext4 = disk_has_ext4_vol(&LunVol);
-    persist_lun_remember_keep(gpt && boot && ext4);
-    (gpt, boot, ext4)
+    persist_lun_remember_keep(gpt.is_ok() && boot && ext4);
+    (gpt.is_ok(), boot, ext4)
 }
 
 /// Live probe, or a prior successful peek if the LUN path later fails.

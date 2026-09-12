@@ -370,42 +370,13 @@ pub fn durable_lun_rw(off: u64, buf: &mut [u8], write: bool) -> bool {
 /// Not iron persist OK.
 const LUN_CACHE_LINE: usize = 4096;
 const LUN_CACHE_LINES: usize = 16;
+
+#[repr(C, align(4096))]
+struct LunCacheBuf([u8; LUN_CACHE_LINE * LUN_CACHE_LINES]);
+
 static LUN_CACHE_TAG: [AtomicU64; LUN_CACHE_LINES] =
     [const { AtomicU64::new(u64::MAX) }; LUN_CACHE_LINES];
-static LUN_CACHE: spinlock_cache::Bytes = spinlock_cache::Bytes::new();
-
-mod spinlock_cache {
-    use core::cell::UnsafeCell;
-    pub struct Bytes(UnsafeCell<[u8; super::LUN_CACHE_LINE * super::LUN_CACHE_LINES]>);
-    impl Bytes {
-        pub const fn new() -> Self {
-            Self(UnsafeCell::new([0; super::LUN_CACHE_LINE * super::LUN_CACHE_LINES]))
-        }
-        pub fn line_mut(&self, slot: usize) -> &mut [u8] {
-            let off = slot * super::LUN_CACHE_LINE;
-            // SAFETY: DurableLun I/O is single-threaded on BSP (LIVE_LOCK /
-            // host --test-threads=1).
-            unsafe {
-                core::slice::from_raw_parts_mut(
-                    (self.0.get() as *mut u8).add(off),
-                    super::LUN_CACHE_LINE,
-                )
-            }
-        }
-        pub fn line(&self, slot: usize) -> &[u8] {
-            let off = slot * super::LUN_CACHE_LINE;
-            // SAFETY: same as line_mut — BSP / test-threads=1.
-            unsafe {
-                core::slice::from_raw_parts(
-                    (self.0.get() as *const u8).add(off),
-                    super::LUN_CACHE_LINE,
-                )
-            }
-        }
-    }
-    // SAFETY: same as line_mut — BSP / test-threads=1.
-    unsafe impl Sync for Bytes {}
-}
+static mut LUN_CACHE_DATA: LunCacheBuf = LunCacheBuf([0; LUN_CACHE_LINE * LUN_CACHE_LINES]);
 
 fn lun_cache_clear() {
     for t in &LUN_CACHE_TAG {
@@ -423,6 +394,14 @@ fn lun_ns_bytes() -> u64 {
 
 fn lun_cache_slot(aligned: u64) -> usize {
     ((aligned / LUN_CACHE_LINE as u64) as usize) % LUN_CACHE_LINES
+}
+
+fn lun_cache_line_ptr(slot: usize) -> *mut u8 {
+    // SAFETY: unique BSP / test-threads=1 owner; slot < LINES.
+    unsafe {
+        (core::ptr::addr_of_mut!(LUN_CACHE_DATA.0) as *mut u8)
+            .add(slot * LUN_CACHE_LINE)
+    }
 }
 
 fn lun_cache_fill(aligned: u64, lba: u64) -> bool {
@@ -443,7 +422,9 @@ fn lun_cache_fill(aligned: u64, lba: u64) -> bool {
         }
     }
     let slot = lun_cache_slot(aligned);
-    let buf = LUN_CACHE.line_mut(slot);
+    let ptr = lun_cache_line_ptr(slot);
+    // SAFETY: fill owns this slot until TAG is published.
+    let buf = unsafe { core::slice::from_raw_parts_mut(ptr, LUN_CACHE_LINE) };
     buf.fill(0);
     let mut got = 0u64;
     while got < n {
@@ -495,7 +476,9 @@ pub fn durable_lun_read_any(off: u64, buf: &mut [u8]) -> bool {
             return false;
         }
         let n = (LUN_CACHE_LINE - skip).min(buf.len() - copied);
-        buf[copied..copied + n].copy_from_slice(&LUN_CACHE.line(slot)[skip..skip + n]);
+        // SAFETY: TAG published this slot's fill.
+        let line = unsafe { core::slice::from_raw_parts(lun_cache_line_ptr(slot), LUN_CACHE_LINE) };
+        buf[copied..copied + n].copy_from_slice(&line[skip..skip + n]);
         copied = copied.saturating_add(n);
     }
     true
