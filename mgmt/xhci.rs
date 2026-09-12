@@ -526,6 +526,11 @@ fn xhci_start(
     Ok((caps, Ring::new(mem.cmd), EventRing::new(mem.evt)))
 }
 
+/// Slot Context DW1: spec Root Hub Port is 31:24; QEMU 8.2 looks at 23:16.
+pub fn slot_ctx_dw1_port(port: u8) -> u32 {
+    u32::from(port) << 24 | u32::from(port) << 16
+}
+
 fn speed_from_portsc(portsc: u32) -> u8 {
     ((portsc >> 10) & 0xF) as u8
 }
@@ -808,7 +813,7 @@ fn try_port(
     let mut inctx = [0u8; 4096];
     put_u32(&mut inctx, 4, 0x3);
     put_u32(&mut inctx, cs, (u32::from(speed) << 20) | (1u32 << 27));
-    put_u32(&mut inctx, cs + 4, u32::from(port) << 24);
+    put_u32(&mut inctx, cs + 4, slot_ctx_dw1_port(port));
     let mps0 = u32::from(ep0_max_packet(speed));
     put_u32(
         &mut inctx,
@@ -1186,6 +1191,12 @@ mod xhci_pack_test {
         assert_eq!(supported_protocol_matches(usb2, usb2_dw2, 5), Some(false));
         assert_eq!(supported_protocol_matches(usb2, usb2_dw2, 8), Some(false));
         assert_eq!(supported_protocol_matches(usb2, usb2_dw2, 1), None);
+    }
+
+    #[test]
+    fn slot_ctx_dw1_port_sets_spec_and_qemu_fields() {
+        assert_eq!(slot_ctx_dw1_port(1), 0x0101_0000);
+        assert_eq!(slot_ctx_dw1_port(5), 0x0505_0000);
     }
 
     #[test]
