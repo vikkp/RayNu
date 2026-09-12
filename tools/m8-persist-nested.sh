@@ -14,7 +14,9 @@
 #             into M8_PERSIST_IMG, kill HV, boot 2 keep=1. Not Alpine.
 #             Does not print nested-OK.
 # MODE=lun    one boot, QEMU NVMe Identify + I/O ready. TCG ok. Not nested-OK.
-#             Not iron. USB I/O still residual.
+#             Not iron.
+# MODE=usb    one boot, QEMU qemu-xhci + usb-storage BOT I/O ready. TCG ok.
+#             Not nested-OK. Not iron. Do not F11.
 # MODE=full   two boots (default). Boot 1 stops after Alpine install.
 #             Needs nested KVM (VMLAUNCH). TCG is smoke/keep only.
 #
@@ -22,6 +24,7 @@
 #   MODE=smoke ./tools/m8-persist-nested.sh
 #   MODE=keep ./tools/m8-persist-nested.sh
 #   MODE=lun ./tools/m8-persist-nested.sh
+#   MODE=usb ./tools/m8-persist-nested.sh
 #   ./tools/m8-persist-nested.sh
 set -euo pipefail
 
@@ -49,7 +52,7 @@ NESTED_OK="RAYNU-V-M8-DISK-PERSIST-NESTED-OK"
 IRON_OK="RAYNU-V-M8-DISK-PERSIST-OK"
 ISO_OK="RAYNU-V-M7-ISO-INSTALL-OK"
 
-if [[ "$MODE" == "smoke" || "$MODE" == "keep" || "$MODE" == "lun" ]] && [[ -z "${PRODUCT_ISO:-}" ]]; then
+if [[ "$MODE" == "smoke" || "$MODE" == "keep" || "$MODE" == "lun" || "$MODE" == "usb" ]] && [[ -z "${PRODUCT_ISO:-}" ]]; then
   ISO_PATH="$SMOKE_ISO"
 else
   ISO_PATH="${PRODUCT_ISO:-$ALPINE_ISO}"
@@ -215,7 +218,7 @@ start_qemu() {
     env PRODUCT_ISO="$ISO_PATH" ESP="$ESP" SERIAL_CHARDEV="file:$serial" \
     QEMU_ACCEL="${QEMU_ACCEL}" RAYNU_F="$RAYNU_F" QEMU_MEM="$QEMU_MEM" \
     M8_PERSIST_IMG="$M8_PERSIST_IMG" M8_PERSIST_SIZE="$M8_PERSIST_SIZE" \
-    M8_NVME_IMG="${M8_NVME_IMG:-}" \
+    M8_NVME_IMG="${M8_NVME_IMG:-}" M8_USB_IMG="${M8_USB_IMG:-}" \
     REBUILD_EFI=0 \
     "$ROOT/tools/run-qemu.sh" \
     >"$stdout" 2>"$stderr" &
@@ -580,6 +583,46 @@ run_lun() {
   echo "==> DurableLun NVMe I/O ready (not $NESTED_OK; not iron $IRON_OK; not $ISO_OK)"
 }
 
+run_usb() {
+  echo "==> MODE=usb — QEMU qemu-xhci + usb-storage BOT I/O ready (not $NESTED_OK, not iron, not $ISO_OK)"
+  M8_PERSIST_IMG=""
+  M8_NVME_IMG=""
+  M8_USB_IMG="${M8_USB_IMG:-$ROOT/target/m8-usb.img}"
+  rm -f "$M8_USB_IMG"
+  truncate -s 1G "$M8_USB_IMG"
+  start_qemu "$SERIAL1" "$TIMEOUT_SMOKE" \
+    "$ROOT/target/m8-persist-usb-stdout.log" \
+    "$ROOT/target/m8-persist-usb-stderr.log"
+  local waited=0
+  while (( waited < 25 )); do
+    if [[ -s "$SERIAL1" ]]; then
+      break
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  if wait_serial_needle "$SERIAL1" "durable LUN usb I/O ready"; then
+    sleep 2
+    stop_qemu
+  else
+    wait_qemu || true
+  fi
+  if [[ ! -s "$SERIAL1" ]]; then
+    echo "error: usb serial empty" >&2
+    cat "$ROOT/target/m8-persist-usb-stderr.log" >&2 || true
+    exit 1
+  fi
+  scan "$SERIAL1"
+  grep -n 'durable LUN' "$SERIAL1" | head -n 20 || true
+  forbid_markers "$SERIAL1"
+  if ! grep -qF 'durable LUN usb I/O ready' "$SERIAL1"; then
+    echo "error: no USB I/O ready (leftover still the attach?)" >&2
+    grep -E 'durable LUN|xhci|usb' "$SERIAL1" | head -n 30 >&2 || true
+    exit 1
+  fi
+  echo "==> DurableLun USB BOT I/O ready (not $NESTED_OK; not iron $IRON_OK; not $ISO_OK)"
+}
+
 pick_accel
 prepare_host
 fetch_iso
@@ -589,9 +632,10 @@ case "$MODE" in
   smoke) run_smoke ;;
   keep) run_keep ;;
   lun) run_lun ;;
+  usb) run_usb ;;
   full) run_full ;;
   *)
-    echo "error: MODE=$MODE (want smoke|keep|lun|full)" >&2
+    echo "error: MODE=$MODE (want smoke|keep|lun|usb|full)" >&2
     exit 1
     ;;
 esac
