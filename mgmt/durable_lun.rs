@@ -364,10 +364,10 @@ pub fn durable_lun_rw(off: u64, buf: &mut [u8], write: bool) -> bool {
     true
 }
 
-/// FAT keep-detect issues 32-byte dirents; each used to be a BOT command.
-/// One 4 KiB line plus a single GPT walk keeps BOT under the 256-TRB
-/// xHCI event ring. Not iron persist OK.
-const LUN_CACHE_LINE: usize = 4096;
+/// One 512-byte line: 4 KiB prefetch mixed later LBAs into a CRC fill and
+/// broke FAT BPB. Exact LBA BOT matches the NVMe keep path.
+/// Not iron persist OK.
+const LUN_CACHE_LINE: usize = 512;
 
 #[repr(C, align(4096))]
 struct LunCacheBuf([u8; LUN_CACHE_LINE]);
