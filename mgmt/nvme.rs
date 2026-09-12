@@ -318,7 +318,9 @@ fn submit_io(
             break;
         }
         spins = spins.saturating_add(1);
-        if spins > 100_000 {
+        if spins > 5_000_000 {
+            let dw3 = u32::from_le_bytes(cpl[12..16].try_into().unwrap_or([0; 4]));
+            LAST_CPL.store(u64::from(dw3), Ordering::Release);
             return Err(NvmeError::Xfer);
         }
     }
@@ -391,6 +393,16 @@ pub fn nvme_bring_up(
         &mut db,
         NvmeCmd::create_sq(cid, q.iosq, 1, NVME_QSIZE, 1),
     )?;
+    let n = lba as usize;
+    if n == 0 || n > 4096 {
+        LAST_ERR.store(NvmeError::Xfer as u8, Ordering::Release);
+        return Err(NvmeError::Xfer);
+    }
+    let mut probe = [0u8; 4096];
+    if let Err(e) = nvme_rw(hw, q, &mut db, lba, 0, &mut probe[..n], false) {
+        LAST_ERR.store(e as u8, Ordering::Release);
+        return Err(e);
+    }
     Ok((db, ns_bytes, lba))
 }
 

@@ -100,6 +100,9 @@ pub unsafe fn leave_firmware() -> Handoff {
     // Firmware page tables remain active (UEFI identity map). We do not rebuild
     // them in M1.0; documenting that choice keeps the gate focused on EBS+serial.
     serial::write_line("boot: ExitBootServices returned; scanning conventional memory");
+    // NVMe then USB: firmware has disconnected its drivers. PRE-EBS Identify
+    // is wiped by OVMF NVMe ExitBootServices (HCRST). Not ISO-INSTALL-OK.
+    crate::mgmt::init_durable_lun_io();
     crate::mgmt::init_durable_lun_usb_io();
 
     let mut regions: [(u64, u64); 64] = [(0, 0); 64];

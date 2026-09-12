@@ -21,7 +21,7 @@ pub const M8_DISK_PERSIST_GATE_MARKER: &str = M8_DISK_PERSIST_HOST_OK_MARKER;
 
 /// Honesty: host round-trip ≠ nested Alpine kill/restart ≠ iron persist.
 pub const M8_DISK_PERSIST_RESIDUAL_NOTE: &str =
-    "residual: persist-first attach_disk_keep + host File round-trip is not nested Alpine kill/restart and not iron RAYNU-V-M8-DISK-PERSIST-OK; MODE=keep planted GPT keep=1 is not nested-OK; DurableLun NVMe/USB I/O is not iron persist OK; leftover DRAM remains the fallback; M8_PERSIST_IMG file-RAM default off; distro OVMF ignores nvdimm/pc-dimm hotplug; tools/m8-persist-nested.sh is the nested two-boot harness; do not print ISO-INSTALL-OK";
+    "residual: persist-first attach_disk_keep + host File round-trip is not nested Alpine kill/restart and not iron RAYNU-V-M8-DISK-PERSIST-OK; MODE=keep planted GPT keep=1 is not nested-OK; MODE=lunkeep/usbkeep planted DurableLun keep=1 is not nested-OK and not iron persist OK; DurableLun NVMe/USB I/O is not iron persist OK; leftover DRAM remains the fallback; M8_PERSIST_IMG file-RAM default off; distro OVMF ignores nvdimm/pc-dimm hotplug; tools/m8-persist-nested.sh is the nested two-boot harness; do not print ISO-INSTALL-OK";
 
 /// True when plan, markers, leftover fallback, persist-first attach, and exclusive-ownership notes exist.
 pub fn disk_persist_surface_present() -> bool {
@@ -76,6 +76,7 @@ pub fn disk_persist_surface_present() -> bool {
         && handoff.contains("PERSISTENT_MEMORY")
         && handoff.contains("leftover install disk skip persist")
         && handoff.contains("skip durable LUN")
+        && handoff.contains("init_durable_lun_io")
         && qemu.contains("M8_PERSIST_IMG")
         && qemu.contains("M8_NVME_IMG")
         && qemu.contains("-device nvme")
@@ -115,7 +116,10 @@ pub fn disk_persist_surface_present() -> bool {
         && nested.contains("MODE=keep")
         && nested.contains("MODE=lun")
         && nested.contains("MODE=usb")
+        && nested.contains("MODE=lunkeep")
+        && nested.contains("MODE=usbkeep")
         && nested.contains("plant_m8_persist_fixture")
+        && nested.contains("plant_media_fixture")
         && nested.contains("M8_PERSIST_IMG")
         && nested.contains("file-RAM")
         && nested.contains("Installation is complete")

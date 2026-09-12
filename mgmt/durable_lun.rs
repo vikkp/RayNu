@@ -8,11 +8,10 @@
 //! Nested File persist is QEMU RAM (`M8_PERSIST_IMG`). Iron needs a LUN
 //! that survives Force Off. This mapper **picks** that LUN and **refuses**
 //! the R640 PERC (Ubuntu) and the 4 GB ESP Cruzer that already holds the ISO.
-//! Post-EBS NVMe I/O (Identify + Read/Write) backs virtio when Identify
-//! succeeds. USB BOT/xHCI I/O is the fallback when NVMe is absent (after
-//! ExitBootServices so firmware keeps the boot ESP). Leftover DRAM remains
-//! the last fallback. QEMU NVMe/USB ≠ Force Off persist. Not
-//! `ISO-INSTALL-OK`. Not iron `RAYNU-V-M8-DISK-PERSIST-OK`. Do not F11.
+//! NVMe Identify + Read/Write and USB BOT/xHCI I/O both run **after**
+//! ExitBootServices so firmware can disconnect its NVMe/xHCI drivers (HCRST).
+//! Leftover DRAM remains the last fallback. QEMU NVMe/USB ≠ Force Off persist.
+//! Not `ISO-INSTALL-OK`. Not iron `RAYNU-V-M8-DISK-PERSIST-OK`. Do not F11.
 //!
 //! ADR-004: persist backing is virtio-blk / BlockIo only.
 
@@ -416,6 +415,7 @@ pub fn init_durable_lun_io() {
                 serial::write_str("boot: Stage 46 durable LUN nvme I/O ready bytes=");
                 write_dec(bytes);
                 serial::write_line(" (not ISO-INSTALL-OK)");
+                serial_lun_peek("nvme");
             }
             let _ = (bus, dev, func);
         }
@@ -475,6 +475,7 @@ pub fn init_durable_lun_usb_io() {
                     serial::write_str("boot: Stage 46 durable LUN usb I/O ready bytes=");
                     write_dec(bytes);
                     serial::write_line(" (not ISO-INSTALL-OK)");
+                    serial_lun_peek("usb");
                 }
                 return;
             }
@@ -507,6 +508,40 @@ pub fn durable_lun_install_reserved() -> bool {
 pub fn take_durable_lun_install_disk() -> Option<u64> {
     crate::mgmt::nvme::take_durable_lun_install_disk()
         .or_else(crate::mgmt::usb_bot::take_durable_lun_usb)
+}
+
+/// GPT peek + `persist_lun_looks_installed` after I/O ready (and TCG skip).
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+pub fn durable_lun_serial_peek(tag: &str) {
+    serial_lun_peek(tag);
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_lun_peek(tag: &str) {
+    use crate::boot::serial;
+    let mut sig = [0u8; 8];
+    let peek = durable_lun_read_any(512, &mut sig);
+    let inst = crate::mgmt::disk_persist::persist_lun_looks_installed();
+    serial::write_str("boot: Stage 46 durable LUN peek ");
+    serial::write_str(tag);
+    serial::write_str(" efi=");
+    if peek {
+        for &b in &sig {
+            if b.is_ascii_graphic() || b == b' ' {
+                serial::write_byte(b);
+            } else {
+                serial::write_byte(b'?');
+            }
+        }
+    } else {
+        serial::write_str("read-fail err=");
+        write_dec(u64::from(crate::mgmt::nvme::nvme_last_err()));
+        serial::write_str(" cpl=0x");
+        write_hex64(crate::mgmt::nvme::nvme_last_cpl());
+    }
+    serial::write_str(" installed=");
+    write_dec(u64::from(inst));
+    serial::write_line(" (not ISO-INSTALL-OK)");
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
@@ -620,11 +655,10 @@ pub fn probe_durable_lun() {
             }
             write_bdf(p.bus, p.dev, p.func);
             serial::write_line(" (not ISO-INSTALL-OK)");
+            // NVMe/USB I/O wait until after ExitBootServices so firmware
+            // can disconnect its own NVMe/xHCI drivers (HCRST). Census only.
             if p.transport == LunTransport::Nvme {
-                init_durable_lun_io();
-            }
-            if durable_lun_can_virtio_attach(&p, durable_lun_post_ebs_io_ready()) {
-                serial::write_line(" (nvme I/O; not ISO-INSTALL-OK)");
+                serial::write_line(" (nvme I/O after EBS; not ISO-INSTALL-OK)");
             } else if XHCI_N.load(Ordering::Acquire) != 0 {
                 serial::write_line(" (usb I/O after EBS; not ISO-INSTALL-OK)");
             } else {

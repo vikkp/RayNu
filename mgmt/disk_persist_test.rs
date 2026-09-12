@@ -399,12 +399,14 @@ fn persist_reserve_is_one_shot_and_wins_policy() {
     assert!(!take_install_disk_keep());
 }
 
-/// Tiny GPT+ESP+ext4 fixture for host `MODE=keep` plant into `M8_PERSIST_IMG`.
+/// Tiny GPT+ESP+ext4 fixture for host `MODE=keep` plant into `M8_PERSIST_IMG`
+/// and DurableLun `MODE=lunkeep`/`usbkeep` plant at LUN offset 0.
 ///
 /// Always asserts the fixture looks installed. When `M8_PLANT_PATH` is set,
 /// writes the 1 MiB image at `M8_PLANT_OFFSET` (hex `0x…` or decimal, default 0).
 /// Harness: `M8_PLANT_PATH=/tmp/m8-persist.img M8_PLANT_OFFSET=0x20000000 cargo test
 /// --no-default-features plant_m8_persist_fixture -- --exact`
+/// Lun keep: `M8_PLANT_PATH=/tmp/m8-nvme.img M8_PLANT_OFFSET=0` (whole DurableLun).
 #[test]
 fn plant_m8_persist_fixture() {
     let img = build_gpt_esp_ext4_image();
@@ -437,6 +439,54 @@ fn plant_m8_persist_fixture() {
     f.seek(SeekFrom::Start(offset))
         .expect("seek M8_PLANT_OFFSET");
     f.write_all(&img).expect("write plant fixture");
+}
+
+#[test]
+fn planted_nvme_lun_looks_installed_keep() {
+    use crate::devices::guest_virtio_blk::{attach_lun, reset};
+    use crate::mgmt::durable_lun::durable_lun_clear;
+    durable_lun_clear();
+    reset();
+    let fixture = build_gpt_esp_ext4_image();
+    let mut ns = vec![0u8; 2 * 1024 * 1024];
+    ns[..fixture.len()].copy_from_slice(&fixture);
+    let ns = Box::leak(ns.into_boxed_slice());
+    let ns_len = ns.len();
+    crate::mgmt::nvme::host_nvme_attach(ns, 512);
+    assert!(
+        persist_lun_looks_installed(),
+        "planted NVMe GPT+ESP+ext4 must look installed (not ISO-INSTALL-OK)"
+    );
+    assert!(
+        attach_lun(ns_len, false),
+        "keep attach must not zero the LUN"
+    );
+    reset();
+    durable_lun_clear();
+}
+
+#[test]
+fn planted_usb_lun_looks_installed_keep() {
+    use crate::devices::guest_virtio_blk::{attach_lun, reset};
+    use crate::mgmt::durable_lun::durable_lun_clear;
+    durable_lun_clear();
+    reset();
+    let fixture = build_gpt_esp_ext4_image();
+    let mut ns = vec![0u8; 2 * 1024 * 1024];
+    ns[..fixture.len()].copy_from_slice(&fixture);
+    let ns = Box::leak(ns.into_boxed_slice());
+    let ns_len = ns.len();
+    crate::mgmt::usb_bot::host_usb_attach(ns, 512);
+    assert!(
+        persist_lun_looks_installed(),
+        "planted USB GPT+ESP+ext4 must look installed (not ISO-INSTALL-OK)"
+    );
+    assert!(
+        attach_lun(ns_len, false),
+        "keep attach must not zero the LUN"
+    );
+    reset();
+    durable_lun_clear();
 }
 
 #[test]
