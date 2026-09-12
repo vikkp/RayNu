@@ -423,9 +423,15 @@ fn lun_cache_fill(aligned: u64, lba: u64) -> bool {
     }
     let buf = LUN_CACHE.as_mut();
     buf.fill(0);
-    if !durable_lun_rw(aligned, &mut buf[..n as usize], false) {
-        lun_cache_clear();
-        return false;
+    let mut got = 0u64;
+    while got < n {
+        let take = (n - got).min(lba) as usize;
+        let slice = &mut buf[got as usize..got as usize + take];
+        if !durable_lun_rw(aligned.saturating_add(got), slice, false) {
+            lun_cache_clear();
+            return false;
+        }
+        got = got.saturating_add(take as u64);
     }
     LUN_CACHE_OFF.store(aligned, Ordering::Release);
     true

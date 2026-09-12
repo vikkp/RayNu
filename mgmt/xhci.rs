@@ -85,10 +85,6 @@ fn get_u32(b: &[u8], off: usize) -> u32 {
     u32::from_le_bytes(b[off..off + 4].try_into().unwrap_or([0; 4]))
 }
 
-fn get_u64(b: &[u8], off: usize) -> u64 {
-    u64::from_le_bytes(b[off..off + 8].try_into().unwrap_or([0; 8]))
-}
-
 /// MMIO + DMA. Host tests pack TRBs without this; UEFI uses BAR0.
 pub trait XhciHw {
     fn read32(&mut self, off: u32) -> u32;
@@ -377,28 +373,14 @@ fn consume_event(
     ev: &mut EventRing,
     want_type: u32,
 ) -> Result<[u8; 16], UsbBotError> {
-    consume_event_ptr(hw, caps, ev, want_type, 0)
-}
-
-fn consume_event_ptr(
-    hw: &mut impl XhciHw,
-    caps: &XhciCaps,
-    ev: &mut EventRing,
-    want_type: u32,
-    want_ptr: u64,
-) -> Result<[u8; 16], UsbBotError> {
     let mut spins = 0u32;
     loop {
         let t = read_trb(hw, ev.base, ev.deq);
         let ctrl = get_u32(&t, 12);
         if (ctrl & 1) == (ev.cycle & 1) {
             let ty = trb_type(ctrl);
-            let ptr = get_u64(&t, 0) & !0xF;
             advance_event(hw, caps, ev);
             if ty == want_type {
-                if want_ptr != 0 && ptr != 0 && ptr != want_ptr {
-                    continue;
-                }
                 let code = trb_cmpl_code(get_u32(&t, 8));
                 if code != CMPL_SUCCESS && code != CMPL_SHORT {
                     store_usb_bot_diag(UsbBotError::Enum, 0, 0, u64::from(code));
@@ -754,15 +736,8 @@ impl UsbBulk for LiveXhci {
             data.len() as u32,
             trb_ctrl(0, TRB_NORMAL, TRB_IOC),
         );
-        let trb = self.bulk_out.base + u64::from(self.bulk_out.enq.saturating_sub(1)) * 16;
         doorbell(&mut hw, self.caps.db, self.slot, self.dci_out);
-        consume_event_ptr(
-            &mut hw,
-            &self.caps,
-            &mut self.ev,
-            TRB_EVENT_TRANSFER,
-            trb,
-        )?;
+        consume_event(&mut hw, &self.caps, &mut self.ev, TRB_EVENT_TRANSFER)?;
         Ok(())
     }
 
@@ -780,15 +755,8 @@ impl UsbBulk for LiveXhci {
             data.len() as u32,
             trb_ctrl(0, TRB_NORMAL, TRB_IOC),
         );
-        let trb = self.bulk_in.base + u64::from(self.bulk_in.enq.saturating_sub(1)) * 16;
         doorbell(&mut hw, self.caps.db, self.slot, self.dci_in);
-        consume_event_ptr(
-            &mut hw,
-            &self.caps,
-            &mut self.ev,
-            TRB_EVENT_TRANSFER,
-            trb,
-        )?;
+        consume_event(&mut hw, &self.caps, &mut self.ev, TRB_EVENT_TRANSFER)?;
         hw.dma_read(self.bounce, data);
         Ok(data.len())
     }
