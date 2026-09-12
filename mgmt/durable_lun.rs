@@ -8,11 +8,10 @@
 //! Nested File persist is QEMU RAM (`M8_PERSIST_IMG`). Iron needs a LUN
 //! that survives Force Off. This mapper **picks** that LUN and **refuses**
 //! the R640 PERC (Ubuntu) and the 4 GB ESP Cruzer that already holds the ISO.
-//! Post-EBS NVMe I/O (Identify + Read/Write) backs virtio when Identify
-//! succeeds. USB BOT/xHCI I/O is the fallback when NVMe is absent (after
-//! ExitBootServices so firmware keeps the boot ESP). Leftover DRAM remains
-//! the last fallback. QEMU NVMe/USB ≠ Force Off persist. Not
-//! `ISO-INSTALL-OK`. Not iron `RAYNU-V-M8-DISK-PERSIST-OK`. Do not F11.
+//! NVMe Identify + Read/Write and USB BOT/xHCI I/O both run **after**
+//! ExitBootServices so firmware can disconnect its NVMe/xHCI drivers (HCRST).
+//! Leftover DRAM remains the last fallback. QEMU NVMe/USB ≠ Force Off persist.
+//! Not `ISO-INSTALL-OK`. Not iron `RAYNU-V-M8-DISK-PERSIST-OK`. Do not F11.
 //!
 //! ADR-004: persist backing is virtio-blk / BlockIo only.
 
@@ -656,11 +655,10 @@ pub fn probe_durable_lun() {
             }
             write_bdf(p.bus, p.dev, p.func);
             serial::write_line(" (not ISO-INSTALL-OK)");
+            // NVMe/USB I/O wait until after ExitBootServices so firmware
+            // can disconnect its own NVMe/xHCI drivers (HCRST). Census only.
             if p.transport == LunTransport::Nvme {
-                init_durable_lun_io();
-            }
-            if durable_lun_can_virtio_attach(&p, durable_lun_post_ebs_io_ready()) {
-                serial::write_line(" (nvme I/O; not ISO-INSTALL-OK)");
+                serial::write_line(" (nvme I/O after EBS; not ISO-INSTALL-OK)");
             } else if XHCI_N.load(Ordering::Acquire) != 0 {
                 serial::write_line(" (usb I/O after EBS; not ISO-INSTALL-OK)");
             } else {

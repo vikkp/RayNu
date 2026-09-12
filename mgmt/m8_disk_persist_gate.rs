@@ -76,6 +76,7 @@ pub fn disk_persist_surface_present() -> bool {
         && handoff.contains("PERSISTENT_MEMORY")
         && handoff.contains("leftover install disk skip persist")
         && handoff.contains("skip durable LUN")
+        && handoff.contains("init_durable_lun_io")
         && qemu.contains("M8_PERSIST_IMG")
         && qemu.contains("M8_NVME_IMG")
         && qemu.contains("-device nvme")
