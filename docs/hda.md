@@ -355,7 +355,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | m8-disk-persist-usb-ccs |
-| Summary | **M8.0 USB xHCI CCS/port map.** qemu-xhci `p3=0` so USB2 `usb-storage` sits on port 1 (default `p3=4` + `port=1` is USB3 RxDetect, CCS=0). Supported Protocol offset/count parse (xHCI §7.2). Scan every port; do not write PORTSC PED (RW1CS). QEMU USB ≠ R640. Not nested-OK. Not iron persist OK. Never `ISO-INSTALL-OK`. Do not F11. |
+| Summary | **M8.0 USB xHCI CCS/port map.** qemu-xhci `p3=0`; Supported Protocol §7.2; PP then wait CCS (no blast reset); PORTSC PED is RW1CS; serial caplen/slots/PORTSC. QEMU USB ≠ R640. Not nested-OK. Not iron persist OK. Never `ISO-INSTALL-OK`. Do not F11. |
 | Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. |
 | Gates touched | `mgmt/xhci.rs` + `tools/run-qemu.sh` `MODE=usb`. `./tools/sync-hda-site.sh --check`. |
 | Months Δ | 0.0→0.0 (held) |

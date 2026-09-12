@@ -132,8 +132,8 @@ pub fn parse_caps(hw: &mut impl XhciHw) -> Result<XhciCaps, UsbBotError> {
     let hcc1 = hw.read32(0x10);
     Ok(XhciCaps {
         op: u32::from(caplen),
-        rt: hw.read32(0x18),
-        db: hw.read32(0x14),
+        rt: hw.read32(0x18) & !0x1F,
+        db: hw.read32(0x14) & !0x3,
         max_slots: hcs1 as u8,
         max_ports: (hcs1 >> 24) as u8,
         csz: (hcc1 & (1 << 2)) != 0,
@@ -291,6 +291,55 @@ fn portsc_off(op: u32, port: u8) -> u32 {
     op + 0x400 + u32::from(port.saturating_sub(1)) * 0x10
 }
 
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_ports(hw: &mut impl XhciHw, op: u32, ports: u8, caps: &XhciCaps) {
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 xhci caplen=0x");
+    serial_hex32(caps.op);
+    serial::write_str(" slots=");
+    serial_dec_u8(caps.max_slots);
+    serial::write_str(" ports=");
+    serial_dec_u8(caps.max_ports);
+    let n = ports.min(4);
+    for p in 1..=n {
+        serial::write_str(" p");
+        serial_dec_u8(p);
+        serial::write_str("=0x");
+        serial_hex32(hw.read32(portsc_off(op, p)));
+    }
+    serial::write_line(" (not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_hex32(v: u32) {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut buf = [0u8; 8];
+    for i in 0..8 {
+        buf[i] = HEX[((v >> (28 - i * 4)) & 0xF) as usize];
+    }
+    crate::boot::serial::write_str(core::str::from_utf8(&buf).unwrap_or("????????"));
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_dec_u8(v: u8) {
+    if v >= 100 {
+        crate::boot::serial::write_str("100+");
+        return;
+    }
+    let mut buf = [0u8; 3];
+    let mut n = 0usize;
+    if v >= 10 {
+        buf[n] = b'0' + (v / 10);
+        n += 1;
+    }
+    buf[n] = b'0' + (v % 10);
+    n += 1;
+    crate::boot::serial::write_str(core::str::from_utf8(&buf[..n]).unwrap_or("?"));
+}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_ports(_hw: &mut impl XhciHw, _op: u32, _ports: u8, _caps: &XhciCaps) {}
+
 fn doorbell(hw: &mut impl XhciHw, db: u32, slot: u8, target: u8) {
     hw.write32(db + u32::from(slot) * 4, u32::from(target));
 }
@@ -438,19 +487,10 @@ fn xhci_start(
     }
     let ports = core::cmp::min(caps.max_ports, 16);
     // PED is RW1CS: never write the previous PORTSC word back (that clears PED).
+    // Do not blast-reset every port here — QEMU xhci_port_reset is a no-op when
+    // CCS=0, and a second reset in try_port is enough once CCS latches after PP.
     for port in 1..=ports {
         hw.write32(portsc_off(caps.op, port), PORTSC_PP | PORTSC_CSC);
-    }
-    for port in 1..=ports {
-        let rst = if port_is_usb3(hw, port) {
-            PORTSC_WPR
-        } else {
-            PORTSC_PR
-        };
-        hw.write32(
-            portsc_off(caps.op, port),
-            PORTSC_PP | rst | PORTSC_CSC | PORTSC_PRC | PORTSC_WRC,
-        );
     }
     let mut saw_ccs = false;
     let mut p1 = 0u32;
@@ -464,7 +504,7 @@ fn xhci_start(
             if port == ports {
                 p_last = sc;
             }
-            if sc & (PORTSC_CCS | PORTSC_PED) != 0 {
+            if sc & PORTSC_CCS != 0 {
                 saw_ccs = true;
                 break;
             }
@@ -473,14 +513,13 @@ fn xhci_start(
             break;
         }
     }
-    // last_cmpl: max_slots | max_ports<<8 | caplength<<16 so a fail names HCSPARAMS.
-    // last_portsc: port 1 (often USB3) | last implemented port (often USB2).
     store_usb_bot_diag(
         UsbBotError::Reset,
         0,
         u64::from(p1) | (u64::from(p_last) << 32),
         u64::from(caps.max_slots) | (u64::from(caps.max_ports) << 8) | (u64::from(caps.op) << 16),
     );
+    serial_xhci_ports(hw, caps.op, ports, caps);
     if !saw_ccs {
         return Err(UsbBotError::Reset);
     }
@@ -502,27 +541,31 @@ fn ep0_max_packet(speed: u8) -> u16 {
 fn reset_port(hw: &mut impl XhciHw, caps: &XhciCaps, port: u8) -> Result<u32, UsbBotError> {
     let off = portsc_off(caps.op, port);
     let mut sc = hw.read32(off);
-    store_usb_bot_diag(UsbBotError::Reset, 0, u64::from(sc), u64::from(port));
+    let cmpl = u64::from(caps.max_slots)
+        | (u64::from(caps.max_ports) << 8)
+        | (u64::from(caps.op) << 16)
+        | (u64::from(port) << 24);
+    store_usb_bot_diag(UsbBotError::Reset, 0, u64::from(sc), cmpl);
     if sc & PORTSC_CCS == 0 {
         return Err(UsbBotError::Reset);
     }
-    if sc & PORTSC_PP == 0 {
-        hw.write32(off, PORTSC_PP | PORTSC_CSC);
-        sc = hw.read32(off);
+    if sc & PORTSC_PED != 0 {
+        return Ok(sc);
     }
+    hw.write32(off, PORTSC_PP | PORTSC_CSC);
     let rst = if port_is_usb3(hw, port) {
         PORTSC_WPR
     } else {
         PORTSC_PR
     };
-    hw.write32(off, PORTSC_PP | rst | PORTSC_CSC | PORTSC_PRC | PORTSC_WRC);
+    hw.write32(off, PORTSC_PP | rst);
     if !wait_set(hw, off, PORTSC_PRC) && !wait_set(hw, off, PORTSC_WRC) {
         return Err(UsbBotError::Reset);
     }
     sc = hw.read32(off);
-    hw.write32(off, sc | PORTSC_PRC | PORTSC_WRC | PORTSC_CSC);
+    hw.write32(off, PORTSC_PP | PORTSC_PRC | PORTSC_WRC | PORTSC_CSC);
     sc = hw.read32(off);
-    store_usb_bot_diag(UsbBotError::Reset, 0, u64::from(sc), u64::from(port));
+    store_usb_bot_diag(UsbBotError::Reset, 0, u64::from(sc), cmpl);
     if sc & PORTSC_PED == 0 {
         return Err(UsbBotError::Reset);
     }
@@ -926,9 +969,15 @@ fn xhci_bring_up(
     mmio: u64,
 ) -> Result<LiveXhci, UsbBotError> {
     let (caps, mut cmd_ring, mut ev) = xhci_start(hw, mem)?;
-    let mut last = UsbBotError::Enum;
+    let mut last = UsbBotError::Reset;
+    let mut any_ccs = false;
     let ports = core::cmp::min(caps.max_ports, 16);
     for port in 1..=ports {
+        let sc = hw.read32(portsc_off(caps.op, port));
+        if sc & PORTSC_CCS == 0 {
+            continue;
+        }
+        any_ccs = true;
         match try_port(
             hw,
             &caps,
@@ -952,6 +1001,9 @@ fn xhci_bring_up(
                 }
             }
         }
+    }
+    if !any_ccs {
+        return Err(UsbBotError::Reset);
     }
     Err(last)
 }
