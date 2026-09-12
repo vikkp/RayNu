@@ -324,6 +324,9 @@ pub fn durable_lun_rw(off: u64, buf: &mut [u8], write: bool) -> bool {
     if buf.is_empty() {
         return true;
     }
+    if write {
+        lun_cache_clear();
+    }
     if !durable_lun_post_ebs_io_ready() {
         return false;
     }
@@ -361,6 +364,73 @@ pub fn durable_lun_rw(off: u64, buf: &mut [u8], write: bool) -> bool {
     true
 }
 
+/// FAT keep-detect issues 32-byte dirent reads; each used to be a BOT command.
+/// One 4 KiB line covers GPT + ESP dirents and keeps the xHCI event ring
+/// from wrapping mid-walk. Not iron persist OK.
+const LUN_CACHE_BYTES: usize = 4096;
+static LUN_CACHE_OFF: AtomicU64 = AtomicU64::new(u64::MAX);
+static LUN_CACHE: spinlock_cache::Bytes = spinlock_cache::Bytes::new();
+
+mod spinlock_cache {
+    use core::cell::UnsafeCell;
+    pub struct Bytes(UnsafeCell<[u8; super::LUN_CACHE_BYTES]>);
+    impl Bytes {
+        pub const fn new() -> Self {
+            Self(UnsafeCell::new([0; super::LUN_CACHE_BYTES]))
+        }
+        pub fn as_mut(&self) -> &mut [u8; super::LUN_CACHE_BYTES] {
+            // SAFETY: DurableLun I/O is single-threaded on BSP (LIVE_LOCK /
+            // host --test-threads=1).
+            unsafe { &mut *self.0.get() }
+        }
+        pub fn as_ref(&self) -> &[u8; super::LUN_CACHE_BYTES] {
+            // SAFETY: same as as_mut — BSP / test-threads=1.
+            unsafe { &*self.0.get() }
+        }
+    }
+    // SAFETY: same as as_mut — BSP / test-threads=1.
+    unsafe impl Sync for Bytes {}
+}
+
+fn lun_cache_clear() {
+    LUN_CACHE_OFF.store(u64::MAX, Ordering::Release);
+}
+
+fn lun_ns_bytes() -> u64 {
+    if crate::mgmt::nvme::nvme_io_ready() {
+        crate::mgmt::nvme::nvme_ns_bytes()
+    } else {
+        crate::mgmt::usb_bot::usb_bot_ns_bytes()
+    }
+}
+
+fn lun_cache_fill(aligned: u64, lba: u64) -> bool {
+    let chunk = LUN_CACHE_BYTES as u64;
+    if lba == 0 || chunk % lba != 0 || aligned % lba != 0 {
+        return false;
+    }
+    let ns = lun_ns_bytes();
+    let mut n = chunk;
+    if ns != 0 {
+        if aligned >= ns {
+            return false;
+        }
+        n = chunk.min(ns.saturating_sub(aligned));
+        n = (n / lba) * lba;
+        if n == 0 {
+            return false;
+        }
+    }
+    let buf = LUN_CACHE.as_mut();
+    buf.fill(0);
+    if !durable_lun_rw(aligned, &mut buf[..n as usize], false) {
+        lun_cache_clear();
+        return false;
+    }
+    LUN_CACHE_OFF.store(aligned, Ordering::Release);
+    true
+}
+
 /// Peek any byte range (GPT/FAT). Rounds to LBA and copies the overlap.
 pub fn durable_lun_read_any(off: u64, buf: &mut [u8]) -> bool {
     if buf.is_empty() {
@@ -378,21 +448,25 @@ pub fn durable_lun_read_any(off: u64, buf: &mut [u8]) -> bool {
     if lba == 0 || lba > 4096 {
         return false;
     }
-    let mut tmp = [0u8; 4096];
+    let chunk = LUN_CACHE_BYTES as u64;
+    if chunk % lba != 0 {
+        return false;
+    }
     let mut copied = 0usize;
-    let mut cur = (off / lba) * lba;
     while copied < buf.len() {
-        if !durable_lun_rw(cur, &mut tmp[..lba as usize], false) {
+        let cur = off.saturating_add(copied as u64);
+        let aligned = (cur / chunk) * chunk;
+        let cached = LUN_CACHE_OFF.load(Ordering::Acquire);
+        if cached != aligned && !lun_cache_fill(aligned, lba) {
             return false;
         }
-        let skip = if cur < off { (off - cur) as usize } else { 0 };
-        if skip >= lba as usize {
+        let skip = (cur - aligned) as usize;
+        if skip >= LUN_CACHE_BYTES {
             return false;
         }
-        let n = (lba as usize - skip).min(buf.len() - copied);
-        buf[copied..copied + n].copy_from_slice(&tmp[skip..skip + n]);
+        let n = (LUN_CACHE_BYTES - skip).min(buf.len() - copied);
+        buf[copied..copied + n].copy_from_slice(&LUN_CACHE.as_ref()[skip..skip + n]);
         copied = copied.saturating_add(n);
-        cur = cur.saturating_add(lba);
     }
     true
 }
@@ -510,7 +584,7 @@ pub fn take_durable_lun_install_disk() -> Option<u64> {
         .or_else(crate::mgmt::usb_bot::take_durable_lun_usb)
 }
 
-/// GPT peek + `persist_lun_looks_installed` after I/O ready (and TCG skip).
+/// GPT peek + keep-detect after I/O ready (and TCG skip).
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 pub fn durable_lun_serial_peek(tag: &str) {
     serial_lun_peek(tag);
@@ -521,7 +595,9 @@ fn serial_lun_peek(tag: &str) {
     use crate::boot::serial;
     let mut sig = [0u8; 8];
     let peek = durable_lun_read_any(512, &mut sig);
-    let inst = crate::mgmt::disk_persist::persist_lun_looks_installed();
+    let (gpt, boot, ext4) = crate::mgmt::disk_persist::persist_lun_keep_parts();
+    let inst = (gpt && boot && ext4)
+        || crate::mgmt::disk_persist::persist_lun_sticky_keep();
     serial::write_str("boot: Stage 46 durable LUN peek ");
     serial::write_str(tag);
     serial::write_str(" efi=");
@@ -539,6 +615,12 @@ fn serial_lun_peek(tag: &str) {
         serial::write_str(" cpl=0x");
         write_hex64(crate::mgmt::nvme::nvme_last_cpl());
     }
+    serial::write_str(" gpt=");
+    write_dec(u64::from(gpt));
+    serial::write_str(" bootx64=");
+    write_dec(u64::from(boot));
+    serial::write_str(" ext4=");
+    write_dec(u64::from(ext4));
     serial::write_str(" installed=");
     write_dec(u64::from(inst));
     serial::write_line(" (not ISO-INSTALL-OK)");
@@ -610,6 +692,8 @@ pub fn durable_lun_clear() {
     XHCI_BDF0.store(0, Ordering::Release);
     XHCI_BDF1.store(0, Ordering::Release);
     XHCI_N.store(0, Ordering::Release);
+    lun_cache_clear();
+    crate::mgmt::disk_persist::persist_lun_clear_sticky();
     crate::mgmt::nvme::clear_nvme_ready();
     crate::mgmt::usb_bot::clear_usb_bot_ready();
 }

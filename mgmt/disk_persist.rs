@@ -306,6 +306,40 @@ impl VolumeRead for LunVol {
     }
 }
 
+static LUN_KEEP_STICKY: AtomicBool = AtomicBool::new(false);
+
+/// Remember a live GPT+ESP+ext4 probe so TCG skip can keep after USB dies.
+pub fn persist_lun_remember_keep(keep: bool) {
+    if keep {
+        LUN_KEEP_STICKY.store(true, Ordering::Release);
+    }
+}
+
+/// Last successful DurableLun keep-detect (false until a live probe succeeds).
+pub fn persist_lun_sticky_keep() -> bool {
+    LUN_KEEP_STICKY.load(Ordering::Acquire)
+}
+
+/// Host tests / handoff reset.
+pub fn persist_lun_clear_sticky() {
+    LUN_KEEP_STICKY.store(false, Ordering::Release);
+}
+
+/// GPT / BOOTX64 / ext4 on the LUN (each may issue I/O). Remembers keep.
+pub fn persist_lun_keep_parts() -> (bool, bool, bool) {
+    let gpt = find_esp(&LunVol).is_ok();
+    let boot = disk_has_bootx64_vol(&LunVol);
+    let ext4 = disk_has_ext4_vol(&LunVol);
+    persist_lun_remember_keep(gpt && boot && ext4);
+    (gpt, boot, ext4)
+}
+
+/// Live probe, or a prior successful peek if the LUN path later fails.
+pub fn persist_lun_keep() -> bool {
+    let (gpt, boot, ext4) = persist_lun_keep_parts();
+    (gpt && boot && ext4) || persist_lun_sticky_keep()
+}
+
 /// Peek the NVMe (or host-test) DurableLun without treating it as RAM.
 pub fn persist_lun_looks_installed() -> bool {
     persist_media_looks_installed_vol(&LunVol)
