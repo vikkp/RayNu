@@ -365,23 +365,18 @@ pub fn durable_lun_rw(off: u64, buf: &mut [u8], write: bool) -> bool {
 }
 
 /// FAT keep-detect issues 32-byte dirents; each used to be a BOT command.
-/// Sixteen 4 KiB lines cover GPT + ESP prefix + ext4 so a second `find_esp`
-/// does not evict the first and wrap the 256-TRB xHCI event ring.
-/// Not iron persist OK.
+/// One 4 KiB line plus a single GPT walk keeps BOT under the 256-TRB
+/// xHCI event ring. Not iron persist OK.
 const LUN_CACHE_LINE: usize = 4096;
-const LUN_CACHE_LINES: usize = 16;
 
 #[repr(C, align(4096))]
-struct LunCacheBuf([u8; LUN_CACHE_LINE * LUN_CACHE_LINES]);
+struct LunCacheBuf([u8; LUN_CACHE_LINE]);
 
-static LUN_CACHE_TAG: [AtomicU64; LUN_CACHE_LINES] =
-    [const { AtomicU64::new(u64::MAX) }; LUN_CACHE_LINES];
-static mut LUN_CACHE_DATA: LunCacheBuf = LunCacheBuf([0; LUN_CACHE_LINE * LUN_CACHE_LINES]);
+static LUN_CACHE_TAG: AtomicU64 = AtomicU64::new(u64::MAX);
+static mut LUN_CACHE_DATA: LunCacheBuf = LunCacheBuf([0; LUN_CACHE_LINE]);
 
 fn lun_cache_clear() {
-    for t in &LUN_CACHE_TAG {
-        t.store(u64::MAX, Ordering::Release);
-    }
+    LUN_CACHE_TAG.store(u64::MAX, Ordering::Release);
 }
 
 fn lun_ns_bytes() -> u64 {
@@ -389,18 +384,6 @@ fn lun_ns_bytes() -> u64 {
         crate::mgmt::nvme::nvme_ns_bytes()
     } else {
         crate::mgmt::usb_bot::usb_bot_ns_bytes()
-    }
-}
-
-fn lun_cache_slot(aligned: u64) -> usize {
-    ((aligned / LUN_CACHE_LINE as u64) as usize) % LUN_CACHE_LINES
-}
-
-fn lun_cache_line_ptr(slot: usize) -> *mut u8 {
-    // SAFETY: unique BSP / test-threads=1 owner; slot < LINES.
-    unsafe {
-        (core::ptr::addr_of_mut!(LUN_CACHE_DATA.0) as *mut u8)
-            .add(slot * LUN_CACHE_LINE)
     }
 }
 
@@ -421,22 +404,25 @@ fn lun_cache_fill(aligned: u64, lba: u64) -> bool {
             return false;
         }
     }
-    let slot = lun_cache_slot(aligned);
-    let ptr = lun_cache_line_ptr(slot);
-    // SAFETY: fill owns this slot until TAG is published.
-    let buf = unsafe { core::slice::from_raw_parts_mut(ptr, LUN_CACHE_LINE) };
+    // SAFETY: BSP / test-threads=1; fill owns the line until TAG is published.
+    let buf = unsafe {
+        core::slice::from_raw_parts_mut(
+            core::ptr::addr_of_mut!(LUN_CACHE_DATA.0) as *mut u8,
+            LUN_CACHE_LINE,
+        )
+    };
     buf.fill(0);
     let mut got = 0u64;
     while got < n {
         let take = (n - got).min(lba) as usize;
         let slice = &mut buf[got as usize..got as usize + take];
         if !durable_lun_rw(aligned.saturating_add(got), slice, false) {
-            LUN_CACHE_TAG[slot].store(u64::MAX, Ordering::Release);
+            lun_cache_clear();
             return false;
         }
         got = got.saturating_add(take as u64);
     }
-    LUN_CACHE_TAG[slot].store(aligned, Ordering::Release);
+    LUN_CACHE_TAG.store(aligned, Ordering::Release);
     true
 }
 
@@ -465,10 +451,7 @@ pub fn durable_lun_read_any(off: u64, buf: &mut [u8]) -> bool {
     while copied < buf.len() {
         let cur = off.saturating_add(copied as u64);
         let aligned = (cur / chunk) * chunk;
-        let slot = lun_cache_slot(aligned);
-        if LUN_CACHE_TAG[slot].load(Ordering::Acquire) != aligned
-            && !lun_cache_fill(aligned, lba)
-        {
+        if LUN_CACHE_TAG.load(Ordering::Acquire) != aligned && !lun_cache_fill(aligned, lba) {
             return false;
         }
         let skip = (cur - aligned) as usize;
@@ -476,8 +459,13 @@ pub fn durable_lun_read_any(off: u64, buf: &mut [u8]) -> bool {
             return false;
         }
         let n = (LUN_CACHE_LINE - skip).min(buf.len() - copied);
-        // SAFETY: TAG published this slot's fill.
-        let line = unsafe { core::slice::from_raw_parts(lun_cache_line_ptr(slot), LUN_CACHE_LINE) };
+        // SAFETY: TAG published this fill.
+        let line = unsafe {
+            core::slice::from_raw_parts(
+                core::ptr::addr_of!(LUN_CACHE_DATA.0) as *const u8,
+                LUN_CACHE_LINE,
+            )
+        };
         buf[copied..copied + n].copy_from_slice(&line[skip..skip + n]);
         copied = copied.saturating_add(n);
     }

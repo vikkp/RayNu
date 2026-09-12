@@ -106,7 +106,7 @@ pub fn disk_persist_surface_present() -> bool {
         && lun.contains("fn init_durable_lun_usb_io(")
         && lun.contains("fn durable_lun_rw(")
         && lun.contains("fn durable_lun_read_any(")
-        && lun.contains("LUN_CACHE_LINES")
+        && lun.contains("LUN_CACHE_LINE")
         && include_str!("xhci.rs").contains("fn drain_events(")
         && include_str!("nvme.rs").contains("fn nvme_bring_up(")
         && include_str!("nvme.rs").contains("fn nvme_rw(")
