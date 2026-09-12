@@ -142,16 +142,12 @@ fn durable_kind_survives_hv_reboot_but_census_is_not_iron_ok() {
 }
 
 #[test]
-fn usb_io_stays_residual_nvme_host_vec_serves_virtio() {
+fn nvme_host_vec_serves_virtio() {
     use crate::devices::guest_virtio_blk::{
         attach_lun, blk_sector_rw, reset, VIRTIO_BLK_S_OK, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT,
     };
     durable_lun_clear();
     reset();
-    assert!(!durable_lun_can_virtio_attach(
-        &usb_data(16 * 1024 * 1024 * 1024),
-        true
-    ));
     let ns = Box::leak(vec![0u8; 2 * 1024 * 1024].into_boxed_slice());
     let ns_len = ns.len();
     crate::mgmt::nvme::host_nvme_attach(ns, 512);
@@ -169,10 +165,53 @@ fn usb_io_stays_residual_nvme_host_vec_serves_virtio() {
         VIRTIO_BLK_S_OK
     );
     assert_eq!(&back[..8], b"EFI PART");
+    assert!(!crate::mgmt::disk_persist::persist_lun_looks_installed());
+    reset();
+    durable_lun_clear();
+}
+
+#[test]
+fn usb_without_io_cannot_virtio_attach() {
+    durable_lun_clear();
+    assert!(!durable_lun_can_virtio_attach(
+        &usb_data(16 * 1024 * 1024 * 1024),
+        false
+    ));
+    assert!(durable_lun_can_virtio_attach(
+        &usb_data(16 * 1024 * 1024 * 1024),
+        true
+    ));
+    assert!(!durable_lun_can_virtio_attach(&cruzer_esp(), true));
+    durable_lun_clear();
+}
+
+#[test]
+fn usb_host_vec_serves_virtio() {
+    use crate::devices::guest_virtio_blk::{
+        attach_lun, blk_sector_rw, reset, VIRTIO_BLK_S_OK, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT,
+    };
+    durable_lun_clear();
+    reset();
+    let ns = Box::leak(vec![0u8; 2 * 1024 * 1024].into_boxed_slice());
+    let ns_len = ns.len();
+    crate::mgmt::usb_bot::host_usb_attach(ns, 512);
+    assert!(durable_lun_serving());
+    assert!(attach_lun(ns_len, false));
+    let mut buf = [0u8; 512];
+    buf[..8].copy_from_slice(b"EFI PART");
+    assert_eq!(
+        blk_sector_rw(&mut [], VIRTIO_BLK_T_OUT, 1, &mut buf),
+        VIRTIO_BLK_S_OK
+    );
+    let mut back = [0u8; 512];
+    assert_eq!(
+        blk_sector_rw(&mut [], VIRTIO_BLK_T_IN, 1, &mut back),
+        VIRTIO_BLK_S_OK
+    );
+    assert_eq!(&back[..8], b"EFI PART");
     let mut peek = [0u8; 8];
     assert!(durable_lun_read_any(512, &mut peek));
     assert_eq!(&peek, b"EFI PART");
-    assert!(!crate::mgmt::disk_persist::persist_lun_looks_installed());
     reset();
     durable_lun_clear();
 }

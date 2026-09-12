@@ -100,6 +100,7 @@ pub unsafe fn leave_firmware() -> Handoff {
     // Firmware page tables remain active (UEFI identity map). We do not rebuild
     // them in M1.0; documenting that choice keeps the gate focused on EBS+serial.
     serial::write_line("boot: ExitBootServices returned; scanning conventional memory");
+    crate::mgmt::init_durable_lun_usb_io();
 
     let mut regions: [(u64, u64); 64] = [(0, 0); 64];
     let mut region_count = 0usize;
@@ -208,7 +209,7 @@ pub unsafe fn leave_firmware() -> Handoff {
         serial::write_str("boot: conventional above PRECISE pages=");
         write_u64(above_pages);
         serial::write_byte(b'\n');
-        if crate::mgmt::nvme::durable_lun_install_reserved() {
+        if crate::mgmt::durable_lun::durable_lun_install_reserved() {
             serial::write_line(
                 "boot: Stage 46 leftover install disk skip durable LUN (not ISO-INSTALL-OK)",
             );
@@ -240,7 +241,7 @@ pub unsafe fn leave_firmware() -> Handoff {
         ) {
             let bytes = hp.saturating_mul(mem::PAGE_SIZE);
             let persist = crate::mgmt::disk_persist::persist_install_disk_reserved()
-                || crate::mgmt::nvme::durable_lun_install_reserved();
+                || crate::mgmt::durable_lun::durable_lun_install_reserved();
             let nested = crate::arch::cpu::host_hypervisor_present();
             // Carve the install disk first so those HPAs never enter the
             // report-RAM bump (guest sees them only via virtio-blk).

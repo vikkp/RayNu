@@ -9,9 +9,10 @@
 //! that survives Force Off. This mapper **picks** that LUN and **refuses**
 //! the R640 PERC (Ubuntu) and the 4 GB ESP Cruzer that already holds the ISO.
 //! Post-EBS NVMe I/O (Identify + Read/Write) backs virtio when Identify
-//! succeeds. USB mass-storage is still residual. Leftover DRAM remains
-//! the fallback. Not `ISO-INSTALL-OK`. Not iron
-//! `RAYNU-V-M8-DISK-PERSIST-OK`.
+//! succeeds. USB BOT/xHCI I/O is the fallback when NVMe is absent (after
+//! ExitBootServices so firmware keeps the boot ESP). Leftover DRAM remains
+//! the last fallback. QEMU NVMe/USB ≠ Force Off persist. Not
+//! `ISO-INSTALL-OK`. Not iron `RAYNU-V-M8-DISK-PERSIST-OK`. Do not F11.
 //!
 //! ADR-004: persist backing is virtio-blk / BlockIo only.
 
@@ -40,10 +41,16 @@ pub const PCI_CLASS_STORAGE: u8 = 0x01;
 pub const PCI_SUBCLASS_RAID: u8 = 0x04;
 /// NVMe subclass.
 pub const PCI_SUBCLASS_NVME: u8 = 0x08;
+/// Serial-bus class (xHCI lives here, not as a LUN).
+pub const PCI_CLASS_SERIAL: u8 = 0x0C;
+/// USB subclass.
+pub const PCI_SUBCLASS_USB: u8 = 0x03;
+/// xHCI programming interface.
+pub const PCI_PROG_XHCI: u8 = 0x30;
 
-/// Honesty: census + NVMe I/O ≠ Force Off persist. Host/CI never print the iron marker.
+/// Honesty: census + NVMe/USB I/O ≠ Force Off persist. Host/CI never print the iron marker.
 pub const DURABLE_LUN_IO_RESIDUAL_NOTE: &str =
-    "residual: DurableLun NVMe I/O is not iron RAYNU-V-M8-DISK-PERSIST-OK; USB I/O still residual; leftover DRAM remains the fallback; do not format PERC; do not print ISO-INSTALL-OK";
+    "residual: DurableLun NVMe/USB I/O is not iron RAYNU-V-M8-DISK-PERSIST-OK; leftover DRAM remains the fallback; do not format PERC; do not print ISO-INSTALL-OK; do not F11";
 
 /// How a candidate is attached to the platform.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -115,6 +122,9 @@ static PICK_BDF: AtomicU32 = AtomicU32::new(0);
 static PICK_BYTES: AtomicU64 = AtomicU64::new(0);
 static PICK_TRANSPORT: AtomicU8 = AtomicU8::new(0);
 static LAST_REJECT: AtomicU8 = AtomicU8::new(0);
+static XHCI_BDF0: AtomicU32 = AtomicU32::new(0);
+static XHCI_BDF1: AtomicU32 = AtomicU32::new(0);
+static XHCI_N: AtomicU8 = AtomicU8::new(0);
 
 fn bdf_pack(bus: u8, dev: u8, func: u8) -> u32 {
     (u32::from(bus) << 16) | (u32::from(dev) << 8) | u32::from(func)
@@ -291,17 +301,18 @@ pub fn pick_durable_lun(cands: &[LunCandidate]) -> Result<LunCandidate, LunRejec
     Err(LunReject::None)
 }
 
-/// Virtio may use the LUN only when NVMe I/O exists. USB stays residual.
+/// Virtio may use the LUN when NVMe or USB BOT I/O exists.
 pub fn durable_lun_can_virtio_attach(pick: &LunCandidate, post_ebs_io: bool) -> bool {
     post_ebs_io
-        && pick.transport == LunTransport::Nvme
+        && matches!(pick.transport, LunTransport::Nvme | LunTransport::Usb)
         && !pick.is_esp_boot
         && (pick.size_bytes == 0 || pick.size_bytes >= DURABLE_LUN_MIN_BYTES)
+        && !(pick.transport == LunTransport::Usb && usb_is_esp_cruzer_window(pick.size_bytes))
 }
 
-/// NVMe Identify + I/O queues. USB is still residual.
+/// NVMe Identify + I/O queues, or USB BOT after EBS.
 pub fn durable_lun_post_ebs_io_ready() -> bool {
-    crate::mgmt::nvme::nvme_io_ready()
+    crate::mgmt::nvme::nvme_io_ready() || crate::mgmt::usb_bot::usb_bot_io_ready()
 }
 
 /// True when virtio/BlockIo should read/write the LUN, not leftover DRAM.
@@ -309,7 +320,7 @@ pub fn durable_lun_serving() -> bool {
     durable_lun_post_ebs_io_ready()
 }
 
-/// Read or write the NVMe namespace (or host-test Vec). Splits at 4 KiB.
+/// Read or write the NVMe namespace, USB BOT LUN, or host-test Vec. Splits at 4 KiB.
 pub fn durable_lun_rw(off: u64, buf: &mut [u8], write: bool) -> bool {
     if buf.is_empty() {
         return true;
@@ -317,7 +328,12 @@ pub fn durable_lun_rw(off: u64, buf: &mut [u8], write: bool) -> bool {
     if !durable_lun_post_ebs_io_ready() {
         return false;
     }
-    let lba = crate::mgmt::nvme::nvme_lba_bytes();
+    let nvme = crate::mgmt::nvme::nvme_io_ready();
+    let lba = if nvme {
+        crate::mgmt::nvme::nvme_lba_bytes()
+    } else {
+        crate::mgmt::usb_bot::usb_bot_lba_bytes()
+    };
     let lba = if lba == 0 { 512 } else { lba };
     let mut done = 0usize;
     while done < buf.len() {
@@ -328,9 +344,15 @@ pub fn durable_lun_rw(off: u64, buf: &mut [u8], write: bool) -> bool {
         }
         let slice = &mut buf[done..done + take];
         let ok = if cfg!(test) {
-            crate::mgmt::nvme::host_nvme_rw(cur, slice, write)
-        } else {
+            if nvme {
+                crate::mgmt::nvme::host_nvme_rw(cur, slice, write)
+            } else {
+                crate::mgmt::usb_bot::host_usb_rw(cur, slice, write)
+            }
+        } else if nvme {
             crate::mgmt::nvme::nvme_live_rw(cur, slice, write)
+        } else {
+            crate::mgmt::xhci::xhci_live_rw(cur, slice, write)
         };
         if !ok {
             return false;
@@ -348,7 +370,11 @@ pub fn durable_lun_read_any(off: u64, buf: &mut [u8]) -> bool {
     if !durable_lun_post_ebs_io_ready() {
         return false;
     }
-    let lba = crate::mgmt::nvme::nvme_lba_bytes();
+    let lba = if crate::mgmt::nvme::nvme_io_ready() {
+        crate::mgmt::nvme::nvme_lba_bytes()
+    } else {
+        crate::mgmt::usb_bot::usb_bot_lba_bytes()
+    };
     let lba = if lba == 0 { 512u64 } else { u64::from(lba) };
     if lba == 0 || lba > 4096 {
         return false;
@@ -372,7 +398,7 @@ pub fn durable_lun_read_any(off: u64, buf: &mut [u8]) -> bool {
     true
 }
 
-/// Bring up NVMe I/O on the census pick. USB stays residual.
+/// Bring up NVMe I/O on the census pick. USB waits until after EBS.
 pub fn init_durable_lun_io() {
     crate::mgmt::nvme::clear_nvme_ready();
     let Some((bus, dev, func, _, transport)) = durable_lun_pick() else {
@@ -411,6 +437,76 @@ pub fn init_durable_lun_io() {
             }
         }
     }
+}
+
+/// Post-EBS USB BOT on a named xHCI. Skipped when NVMe I/O already serves.
+pub fn init_durable_lun_usb_io() {
+    if crate::mgmt::nvme::nvme_io_ready() {
+        return;
+    }
+    crate::mgmt::usb_bot::clear_usb_bot_ready();
+    let n = XHCI_N.load(Ordering::Acquire);
+    if n == 0 {
+        return;
+    }
+    let bdfs = [
+        XHCI_BDF0.load(Ordering::Acquire),
+        XHCI_BDF1.load(Ordering::Acquire),
+    ];
+    for packed in bdfs.iter().take(n as usize) {
+        if *packed == 0 {
+            continue;
+        }
+        let bus = (*packed >> 16) as u8;
+        let dev = (*packed >> 8) as u8;
+        let func = *packed as u8;
+        match crate::mgmt::xhci::xhci_init_pci(bus, dev, func, DURABLE_LUN_MIN_BYTES) {
+            Ok(bytes) => {
+                if usb_is_esp_cruzer_window(bytes) {
+                    crate::mgmt::usb_bot::clear_usb_bot_ready();
+                    continue;
+                }
+                let pick = LunCandidate::pci(LunTransport::Usb, 0, 0, bus, dev, func, bytes);
+                store_durable_lun_pick(Some(pick), LunReject::None);
+                crate::mgmt::usb_bot::reserve_durable_lun_usb(bytes);
+                #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+                {
+                    use crate::boot::serial;
+                    serial::write_str("boot: Stage 46 durable LUN usb I/O ready bytes=");
+                    write_dec(bytes);
+                    serial::write_line(" (not ISO-INSTALL-OK)");
+                }
+                return;
+            }
+            Err(_) => {
+                #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+                {
+                    use crate::boot::serial;
+                    serial::write_str("boot: Stage 46 durable LUN usb I/O fail err=");
+                    write_dec(u64::from(crate::mgmt::usb_bot::usb_bot_last_err()));
+                    serial::write_str(" bar=0x");
+                    write_hex64(crate::mgmt::usb_bot::usb_bot_last_bar());
+                    serial::write_str(" portsc=0x");
+                    write_hex64(crate::mgmt::usb_bot::usb_bot_last_portsc());
+                    serial::write_str(" cmpl=0x");
+                    write_hex64(crate::mgmt::usb_bot::usb_bot_last_cmpl());
+                    serial::write_line(" (leftover DRAM; not ISO-INSTALL-OK)");
+                }
+            }
+        }
+    }
+}
+
+/// True when NVMe or USB I/O reserved the install disk (skip leftover DRAM).
+pub fn durable_lun_install_reserved() -> bool {
+    crate::mgmt::nvme::durable_lun_install_reserved()
+        || crate::mgmt::usb_bot::durable_lun_usb_reserved()
+}
+
+/// Take the reserved LUN size for virtio attach (NVMe first).
+pub fn take_durable_lun_install_disk() -> Option<u64> {
+    crate::mgmt::nvme::take_durable_lun_install_disk()
+        .or_else(crate::mgmt::usb_bot::take_durable_lun_usb)
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
@@ -476,7 +572,11 @@ pub fn durable_lun_pick() -> Option<(u8, u8, u8, u64, LunTransport)> {
 /// Host tests.
 pub fn durable_lun_clear() {
     store_durable_lun_pick(None, LunReject::None);
+    XHCI_BDF0.store(0, Ordering::Release);
+    XHCI_BDF1.store(0, Ordering::Release);
+    XHCI_N.store(0, Ordering::Release);
     crate::mgmt::nvme::clear_nvme_ready();
+    crate::mgmt::usb_bot::clear_usb_bot_ready();
 }
 
 /// Notes the mapper must keep: no PERC, Cruzer too small for ISO+disk, 1 GiB min.
@@ -525,6 +625,8 @@ pub fn probe_durable_lun() {
             }
             if durable_lun_can_virtio_attach(&p, durable_lun_post_ebs_io_ready()) {
                 serial::write_line(" (nvme I/O; not ISO-INSTALL-OK)");
+            } else if XHCI_N.load(Ordering::Acquire) != 0 {
+                serial::write_line(" (usb I/O after EBS; not ISO-INSTALL-OK)");
             } else {
                 serial::write_line(" (no post-EBS I/O; leftover DRAM; not ISO-INSTALL-OK)");
             }
@@ -548,9 +650,15 @@ pub fn probe_durable_lun() {
                     );
                 }
                 LunReject::None => {
-                    serial::write_line(
-                        "boot: Stage 46 durable LUN none (leftover DRAM; not ISO-INSTALL-OK)",
-                    );
+                    if XHCI_N.load(Ordering::Acquire) != 0 {
+                        serial::write_line(
+                            "boot: Stage 46 durable LUN xhci named (usb I/O after EBS; not ISO-INSTALL-OK)",
+                        );
+                    } else {
+                        serial::write_line(
+                            "boot: Stage 46 durable LUN none (leftover DRAM; not ISO-INSTALL-OK)",
+                        );
+                    }
                 }
             }
         }
@@ -605,7 +713,18 @@ fn write_hex64(v: u64) {
     write_hex8(v as u8);
 }
 
-/// Scan PCI config for mass-storage functions. Host tests do not call this.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn store_xhci_bdf(bus: u8, dev: u8, func: u8) {
+    let packed = bdf_pack(bus, dev, func);
+    let n = XHCI_N.load(Ordering::Acquire);
+    if n == 0 {
+        XHCI_BDF0.store(packed, Ordering::Release);
+        XHCI_N.store(1, Ordering::Release);
+    } else if n == 1 && XHCI_BDF0.load(Ordering::Acquire) != packed {
+        XHCI_BDF1.store(packed, Ordering::Release);
+        XHCI_N.store(2, Ordering::Release);
+    }
+}
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn pci_storage_census(out: &mut [LunCandidate]) -> usize {
     let mut n = 0usize;
@@ -625,6 +744,21 @@ fn pci_storage_census(out: &mut [LunCandidate]) -> usize {
                 let cc = pci_read32(bus, dev, func, 0x08);
                 let class = (cc >> 24) as u8;
                 let subclass = (cc >> 16) as u8;
+                let prog = (cc >> 8) as u8;
+                if class == PCI_CLASS_SERIAL
+                    && subclass == PCI_SUBCLASS_USB
+                    && prog == PCI_PROG_XHCI
+                {
+                    store_xhci_bdf(bus, dev, func);
+                    {
+                        use crate::boot::serial;
+                        serial::write_str("boot: Stage 46 durable LUN xhci ");
+                        write_bdf(bus, dev, func);
+                        serial::write_str(" ");
+                        write_id(vendor, device);
+                        serial::write_line(" (usb I/O after EBS; not ISO-INSTALL-OK)");
+                    }
+                }
                 if class != PCI_CLASS_STORAGE {
                     if func == 0 {
                         let ht = (pci_read32(bus, dev, func, 0x0C) >> 16) as u8;

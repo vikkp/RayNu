@@ -336,6 +336,23 @@ if [[ -n "$M8_NVME_IMG" ]]; then
   echo "==> M8 DurableLun NVMe ${M8_NVME_IMG} (not ISO-INSTALL-OK; not iron persist OK)"
 fi
 
+# Optional QEMU USB mass-storage on qemu-xhci (not the ESP, not iron).
+# 1 GiB is below the 2–8 GiB ESP Cruzer refuse window.
+M8_USB_IMG="${M8_USB_IMG:-}"
+USB_ARGS=()
+if [[ -n "$M8_USB_IMG" ]]; then
+  mkdir -p "$(dirname "$M8_USB_IMG")"
+  if [[ ! -f "$M8_USB_IMG" ]]; then
+    truncate -s 1G "$M8_USB_IMG"
+  fi
+  USB_ARGS+=(
+    -drive "if=none,id=m8usb,format=raw,file=${M8_USB_IMG}"
+    -device qemu-xhci,id=m8xhci
+    -device usb-storage,bus=m8xhci.0,drive=m8usb,serial=m8lun
+  )
+  echo "==> M8 DurableLun USB ${M8_USB_IMG} (qemu-xhci; not ISO-INSTALL-OK; not iron persist OK)"
+fi
+
 echo "==> QEMU boot (COM1 → ${SERIAL_CHARDEV}); mem=${QEMU_M_ARG}; guest exits via isa-debug-exit"
 
 exec qemu-system-x86_64 \
@@ -349,4 +366,5 @@ exec qemu-system-x86_64 \
   "${HOST_NIC_ARGS[@]}" \
   "${PERSIST_MEM_ARGS[@]}" \
   "${NVME_ARGS[@]}" \
+  "${USB_ARGS[@]}" \
   "$@"

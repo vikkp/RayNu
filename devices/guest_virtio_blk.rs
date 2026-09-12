@@ -495,9 +495,9 @@ unsafe fn attach_disk_inner(hpa: u64, bytes: usize, zero: bool) -> bool {
     true
 }
 
-/// Attach DurableLun NVMe as virtio-blk backing. `hpa` is not RAM.
+/// Attach DurableLun NVMe or USB BOT as virtio-blk backing. `hpa` is not RAM.
 ///
-/// Empty persist skips a 1 GiB NVMe zero (ISO wins). Installed persist
+/// Empty persist skips a 1 GiB zero (ISO wins). Installed persist
 /// uses `zero = false`. Not `ISO-INSTALL-OK`.
 pub fn attach_lun(bytes: usize, _zero: bool) -> bool {
     if bytes == 0 || bytes % SECTOR != 0 {
