@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-09-11
-last_commit: PENDING
-last_commit_short: PENDING
+last_commit: de25242133856b582a5717c4b99bef66783cd359
+last_commit_short: de252421
 updated_by: cursor
 mount_everest_target: "CLOSED on iron 2026-09-11: Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest). Next: M8 operator hardening (ADR-018)."
 months_to_everest: 0.0
