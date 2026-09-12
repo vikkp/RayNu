@@ -47,7 +47,7 @@ abstract; that is still Thursday 17 Sep AoE.
   correspondence). Iron ISO install via Isolon-F is closed on the R640 and
   is outside the Proven Core; host/CI still must not print the iron-only
   install-complete marker. Nested rehearsal ≠ iron column.
-- **PDF version:** v10 (Everest iron install loop reflected; ladder cells unchanged).
+- **PDF version:** v11 (feedback pass: §7.5 predictive gap, Table 6 rehearsal vs iron, artifact ISO-loop log).
 - This is **not** ADR-010 `v1.0-preprint`. It is a conference rewrite.
 - Spring 2026 cycle already closed; this is not a spring reject, so the
   “no immediate resubmit” rule does not apply.

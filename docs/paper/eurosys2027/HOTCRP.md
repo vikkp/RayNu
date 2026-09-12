@@ -42,7 +42,7 @@ Per-author limit: ≤3 papers this cycle. This is the one.
 ## Abstract (same as `paper/main.tex`)
 
 ```
-Isolon is a clean-slate Type-1 hypervisor that boots as one UEFI binary on a Dell PowerEdge R640, where it runs unmodified Linux 6.12 with virtio-blk, virtio-net, dual-vCPU SMP, and three stub guests on the same boot, serves HTTP from a host-owned NIC, and—from the operator SPA—installs a typed Linux ISO through guest firmware we author (Isolon-F), then reboots that guest from disk to a login prompt.
+Isolon is a clean-slate Type-1 hypervisor that boots as one UEFI binary on a Dell PowerEdge R640, where it runs unmodified Linux 6.12 with virtio-blk, virtio-net, dual-vCPU SMP, and three stub guests on the same boot, then serves HTTP from a host-owned NIC. From the operator SPA it installs a typed Linux ISO through guest firmware we author (Isolon-F) and reboots that guest from disk to a login prompt.
 
 Attaching a machine-checked isolation theorem to that binary is a labelling problem before it is a proof problem: the artifact that is proved and the mapping path the guests actually use need not be the same object. Isolon's proved artifact is guest-exclusivity in a host-only Verus ghost model. Its production guest-physical coverage at Linux boot is a 16-slot range registry the ghost model never sees. The two are disjoint, not approximate, and no one-axis "verified" label makes that visible. Closing the iron install loop does not move either cell.
 
