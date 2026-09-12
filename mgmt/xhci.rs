@@ -519,7 +519,7 @@ fn xhci_start(
         u64::from(p1) | (u64::from(p_last) << 32),
         u64::from(caps.max_slots) | (u64::from(caps.max_ports) << 8) | (u64::from(caps.op) << 16),
     );
-    serial_xhci_ports(hw, caps.op, ports, caps);
+    serial_xhci_ports(hw, caps.op, ports, &caps);
     if !saw_ccs {
         return Err(UsbBotError::Reset);
     }
@@ -562,7 +562,6 @@ fn reset_port(hw: &mut impl XhciHw, caps: &XhciCaps, port: u8) -> Result<u32, Us
     if !wait_set(hw, off, PORTSC_PRC) && !wait_set(hw, off, PORTSC_WRC) {
         return Err(UsbBotError::Reset);
     }
-    sc = hw.read32(off);
     hw.write32(off, PORTSC_PP | PORTSC_PRC | PORTSC_WRC | PORTSC_CSC);
     sc = hw.read32(off);
     store_usb_bot_diag(UsbBotError::Reset, 0, u64::from(sc), cmpl);
