@@ -9,6 +9,8 @@
 # Iron COM2 marker RAYNU-V-M8-DISK-PERSIST-OK is forbidden here.
 #
 # file-RAM backend: QEMU initial RAM is M8_PERSIST_IMG (share=on).
+# Persist img size must equal QEMU_MEM (3584M). A 2560M img aborts the
+# wrapper (size != QEMU_MEM) before qemu-system.
 # MODE=smoke  one boot, persist reserve only. TCG ok. Not nested-OK.
 # MODE=keep   two boots, TCG ok. Boot 1 persist reserve, plant GPT+ESP+ext4
 #             into M8_PERSIST_IMG, kill HV, boot 2 keep=1. Not Alpine.
@@ -54,10 +56,13 @@ ISO_URL="${ALPINE_ISO_URL:-https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/
 ALPINE_ISO="${ALPINE_ISO:-$ROOT/target/alpine-${ALPINE_FLAVOR}-3.21.3-x86_64.iso}"
 SMOKE_ISO="${SMOKE_ISO:-$ROOT/target/m8-smoke-window.iso}"
 M8_PERSIST_IMG="${M8_PERSIST_IMG:-$ROOT/target/m8-persist.img}"
-M8_PERSIST_SIZE="${M8_PERSIST_SIZE:-2560M}"
 # Distro OVMF ignores nvdimm/pc-dimm (Type 14 empty). Leftover/File persist
 # is leftover DRAM. 3584M so leftover above PRECISE holds 1 GiB + ISO extra.
+# File-RAM: M8_PERSIST_IMG IS QEMU initial RAM (share=on). Size must equal
+# QEMU_MEM. 2560M leftover was ~1020 MiB (carve skip). A 2560M persist img
+# with QEMU_MEM=3584M aborts the wrapper (`size != QEMU_MEM`) before qemu-system.
 QEMU_MEM="${QEMU_MEM:-3584M}"
+M8_PERSIST_SIZE="${M8_PERSIST_SIZE:-$QEMU_MEM}"
 RAYNU_F="${RAYNU_F:-1}"
 NESTED_OK="RAYNU-V-M8-DISK-PERSIST-NESTED-OK"
 IRON_OK="RAYNU-V-M8-DISK-PERSIST-OK"
@@ -200,8 +205,10 @@ build_efi() {
 
 reset_persist_img() {
   rm -f "$M8_PERSIST_IMG"
-  truncate -s "$M8_PERSIST_SIZE" "$M8_PERSIST_IMG"
-  echo "==> persist img $M8_PERSIST_IMG ($M8_PERSIST_SIZE, empty) (not ISO-INSTALL-OK)"
+  # File-RAM is -m, not a leftover-disk-sized sidecar. Stale M8_PERSIST_SIZE=2560M
+  # must not win over QEMU_MEM=3584M.
+  truncate -s "$QEMU_MEM" "$M8_PERSIST_IMG"
+  echo "==> persist img $M8_PERSIST_IMG ($QEMU_MEM file-RAM, empty) (not ISO-INSTALL-OK)"
 }
 
 # Linux comm is 15 chars (`qemu-system-x86`). Walk timeout children.

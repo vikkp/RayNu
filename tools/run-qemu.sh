@@ -296,8 +296,16 @@ if [[ -n "$M8_PERSIST_IMG" ]]; then
     truncate -s "$ram_b" "$M8_PERSIST_IMG"
   fi
   psize=$(stat -c%s "$M8_PERSIST_IMG")
+  # File-RAM share=on is QEMU initial RAM: object size must equal -m.
+  # Grow a stale 2560M img (leftover ~1020 MiB carve skip) up to 3584M.
+  # Do not shrink (would clip leftover HPA).
+  if (( psize < ram_b )); then
+    echo "==> growing M8_PERSIST_IMG $psize → $ram_b (file-RAM must match QEMU_MEM)"
+    truncate -s "$ram_b" "$M8_PERSIST_IMG"
+    psize=$(stat -c%s "$M8_PERSIST_IMG")
+  fi
   if (( psize != ram_b )); then
-    echo "error: M8_PERSIST_IMG size $psize != QEMU_MEM $QEMU_MEM ($ram_b bytes)" >&2
+    echo "error: M8_PERSIST_IMG size $psize != QEMU_MEM $QEMU_MEM ($ram_b bytes); file-RAM must match QEMU_MEM" >&2
     exit 1
   fi
   persist_min_mib=1792

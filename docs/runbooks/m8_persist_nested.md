@@ -10,13 +10,13 @@
 
 `MODE=keep` / `lunkeep` / `usbkeep` plant a GPT fixture and prove `keep=1` after an HV kill. That is **not** nested-OK.
 
-`MODE=full` is the nested close: real alpine-extended `setup-disk` → kill the **hypervisor** QEMU process (not guest F7) → second Linux without `setup-disk`. Virtio HPAs are leftover DRAM promoted to File persist; QEMU initial RAM is `M8_PERSIST_IMG` (`share=on`) because distro `OVMF_CODE_4M.fd` ignores nvdimm/pc-dimm. Nested leftover/File persist needs `QEMU_MEM=3584M` plus `max-ram-below-4g` (`2560M leftover was ~1020 MiB` and skipped the 768 MiB guest floor, so `setup-disk` hit `No space left on device` on the 64 MiB pool). Nested-OK is QEMU, not flashcruzer. Do not F11.
+`MODE=full` is the nested close: real alpine-extended `setup-disk` → kill the **hypervisor** QEMU process (not guest F7) → second Linux without `setup-disk`. Virtio HPAs are leftover DRAM promoted to File persist; QEMU initial RAM is `M8_PERSIST_IMG` (`share=on`) because distro `OVMF_CODE_4M.fd` ignores nvdimm/pc-dimm. Nested leftover/File persist needs `QEMU_MEM=3584M` plus `max-ram-below-4g` (`2560M leftover was ~1020 MiB` and skipped the 768 MiB guest floor, so `setup-disk` hit `No space left on device` on the 64 MiB pool). Persist img size must equal `QEMU_MEM` (file-RAM is `-m`; a `2560M` img with `3584M` RAM aborts the wrapper before qemu-system). Nested-OK is QEMU, not flashcruzer. Do not F11.
 
 Needs **nested KVM (VMLAUNCH)**. Cloud Agent VMs that log `kvm_spurious_fault` cannot close this gate. Run on **`raynuvsrv1`**. Nested QEMU ≠ R640.
 
 ## Prerequisites
 
-1. `raynuvsrv1` (Ubuntu on the R640 PERC). Intel VT-x, `/dev/kvm` writable. Nested leftover/File persist needs `QEMU_MEM=3584M` plus `max-ram-below-4g` (`2560M leftover was ~1020 MiB` and skipped the 768 MiB guest floor). Nested-OK is QEMU on `raynuvsrv1`, not flashcruzer.  
+1. `raynuvsrv1` (Ubuntu on the R640 PERC). Intel VT-x, `/dev/kvm` writable. Nested leftover/File persist needs `QEMU_MEM=3584M` plus `max-ram-below-4g` (`2560M leftover was ~1020 MiB` and skipped the 768 MiB guest floor). Persist img size must equal `QEMU_MEM` (file-RAM). Nested-OK is QEMU on `raynuvsrv1`, not flashcruzer.  
 2. `sudo ./tools/enable-nested-kvm.sh` → `nested=Y` and `enable_shadow_vmcs=0` (otherwise VMWRITE error 12).  
 3. alpine-extended ISO (the harness fetches it). alpine-virt/standard lack `grub-efi`.  
 4. Quit every other QEMU using KVM before the run.
