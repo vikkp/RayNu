@@ -1,0 +1,74 @@
+COM2 serial captures -- index against the split evaluation table
+(PowerEdge R640 column, Table 6), plus the archived negative results
+(Table 8).
+
+All captures are iDRAC SOL, console com2, operator-pasted, from one
+PowerEdge R640: Intel Xeon Silver 4110 @ 2.10 GHz, BIOS 2.2.11,
+iDRAC virtual media. One machine, not a fleet.
+
+FILE 01  01-vmxon-linux-shell-virtio-smp-fourvm.txt
+  Single boot. Supports, in order, on that one boot:
+    VMXON + VMEXIT ................. X-M1-VMXON-OK / X-M1-VMEXIT-OK
+    EPT identity + Linux 6.12 shell  X-M3-EPT3-OK / X-M3-LINUX-EARLY-OK
+                                     / X-M3-SHELL-OK
+    LAPIC timer re-entry, IRQ inject X-M2-IRQ-OK / X-M2-TIMER-OK
+                                     / X-M3-GTIMER2-OK / X-M3-APIC-OK
+    Four VMs: Linux + three stubs .. X-M4-2VM-OK, then SLICE-G1/G2/G3
+                                     under the credit scheduler
+    virtio-blk probe ............... M4.3 MMIO handshake + write/readback
+    virtio-net + vSwitch probe ..... M4.4 dual-port exchange
+    Dual-vCPU BSP+AP, shared EPT ... X-M4-SMP-OK
+  This is the capture behind the "same boot" wording in the paper.
+
+FILE 04  04-host-nic-http-post-ebs.txt
+  Durable host-NIC HTTP after ExitBootServices. Onboard Broadcom LOM
+  driven by our own driver; the pre-EBS firmware listen times out in
+  this same capture, which is the point of the firmware-TCP lesson.
+
+FILE 09  09-coexist-http-with-vmx-on.txt
+  HTTP still serving with VMX on and a guest scheduled. Included
+  because "serves HTTP" and "runs a guest" are otherwise two runs.
+
+FILE 08  08-spa-shell-guest-launch-reentry.txt
+  Management UI launches a private-EPT stub guest and re-enters.
+  The guest is a CPUID stub, not a distribution.
+
+FILE 10  10-iso-loop-install-disk-boot-login.txt
+  Dedicated ISO-loop transcript (2026-09-11). Operator SPA starts a
+  typed Alpine ISO under Isolon-F; coexist HTTP accepts; Alpine
+  setup-disk -m sys completes onto virtio; COM2 records
+  ISOLON-M7-ISO-INSTALL-OK, then Isolon-F reboot-to-disk
+  (ISOLON-F-DISK-BOOT-OK), a second Linux with root=UUID=, and a
+  login prompt. Host and CI builds never print the install-complete
+  marker; only iron serial may. This is the R640 row behind
+  SPA→disk→login in Table 6. It is not a proof claim and does not
+  move the L3 exclusivity cell.
+
+FILE 11  11-eltorito-cd-efi.txt
+  Guest firmware El Torito CD EFI on the R640
+  (ISOLON-M7-E5-OVMF-ELTORITO-OK; catalog=1 bootimg=1 magic=1
+  elt=1 sectors=183 packet=533 scsi=0x28 port=0x3f8). Short excerpt
+  of the marker line; not a distribution installer.
+
+FILE 07  07-persist-lba-stamps.txt
+  Persist-detect stamps on a USB stick. These are LBA writes and
+  readbacks. They are not a guest root filesystem, and the paper does
+  not claim one.
+
+NEGATIVE RESULTS (Table 8)
+  02-negative-no-xsaves-init-stack-guard.txt
+      Guest /init hits a stack guard without secondary Enable-XSAVES.
+  03-xsaves-enabled-shell-to-smp.txt
+      Same kit with the control bit set: shell through SMP.
+      Read 02 and 03 as a pair; this is the most transferable bug
+      in the paper.
+  05-negative-firmware-tcp4-absent.txt
+      No Tcp4 service binding on the virtual-floppy boot path.
+  06-negative-snp-listen-after-ebs.txt
+      Firmware SNP listen does not survive ExitBootServices.
+
+NOT CLAIMED ANYWHERE IN THIS KIT
+  TLS on the management listener; leftover-DRAM install disk surviving
+  a host reboot of the hypervisor; guest VNC console UI; multi-distro
+  installers. Nested VT-x completed the Isolon-F path earlier; nested
+  is still not the R640 column.

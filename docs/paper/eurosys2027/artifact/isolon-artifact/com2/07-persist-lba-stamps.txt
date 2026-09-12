@@ -1,0 +1,35 @@
+Booting from Disk connected to front USB 2: Cruzer Micro
+Isolon hypervisor — formally verified bare-metal hypervisor
+serial: COM1+COM2 mirror (iDRAC SOL = console com2)
+ISOLON-M0-BOOT-OK
+boot: E4 auth: bring-up token (lab; no auth.token)
+boot: uefi-net extra-after nii=4 pxe=8 http=4 ip4cfg=4 drv=75
+boot: HINT — PXE/HTTP/Ip4Config2 published, Tcp4ServiceBinding still 0 (vendor stack)
+boot: falling back to SNP residual ([ADR])
+boot: SNP residual MAC=<mac-redacted>
+boot: SNP lease 192.0.2.133/24 router=192.0.2.1
+boot: mgmt HTTP listening on 192.0.2.133:8443 (PRE-EBS SNP window)
+boot: CURL NOW → http://192.0.2.133:8443/
+boot: SNP TCP accept — client connected
+boot: SNP HTTP exchange ok
+ISOLON-AUDIT: AuthAllowed method_tag=1
+boot: SNP HTTP exchange ok
+ISOLON-AUDIT: AuthAllowed method_tag=2
+ISOLON-AUDIT: VmCreated guest_id=1
+boot: SNP HTTP exchange ok
+boot: E5 persist wrote installdisk.bin bytes=1024
+boot: SNP HTTP exchange ok
+ISOLON-M7-UEFI-HTTP-OK
+boot: calling ExitBootServices — ConOut/video ends after this line
+ISOLON-M1-EBS-OK
+ISOLON-M1-VMXON-OK
+boot: M4.3 virtio-blk BAR=0x10000000 disk=0x1bc3000 bytes=67108864
+boot: E5 install-sized virtio-blk armed (PRE-EBS contract)
+ISOLON-M3-SHELL-OK
+ISOLON-M4-BLK-OK
+ISOLON-M7-ISO-DISK-WRITTEN
+ISOLON-M7-ISO-INSTALL-LAB-OK
+ISOLON-M7-ISO-REBOOT-PENDING
+ISOLON-M4-NET-OK
+ISOLON-M4-SMP-OK
+ISOLON-R640-BOOT-OK

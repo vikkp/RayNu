@@ -1,0 +1,73 @@
+# R640 COM2 — ISO-loop close (2026-09-11)
+# EFI <commit-redacted>. Phase B: coexist HTTP → SPA Start of Isolon-F ISO
+# → Alpine setup-disk to virtio → install-complete → guest reboot → disk boot
+# → second Linux with root=UUID= → login.
+# Media: Alpine 3.21 extended product ISO (~994 MiB); leftover-DRAM virtio
+# install disk 1 GiB (vda). Guest firmware Isolon-F (outside Proven Core).
+# Host and CI builds never print ISOLON-M7-ISO-INSTALL-OK; iron COM2 only.
+# Excerpt curated from the operator iDRAC SOL paste (console com2).
+# Identity strings, MACs, and lab IPv4 redacted; marker sequence preserved.
+
+build: sha=<commit-redacted>
+boot: WARN — mgmt HTTP accept timeout (continuing to EBS)
+ISOLON-M7-PHASE-B-SKIP-OVMF-OK
+boot: skip OVMF — product ISO on CD; wait for SPA Start
+ISOLON-M7-PHASE-B-E4-CONTINUE-OK
+boot: Stage 46 hold skipped — Phase B coexist idle, no G0 bzImage
+boot: HOST-NIC BCM5720 reuse
+boot: HOST-NIC coexist listening on 192.0.2.145:8443
+boot: HOST-NIC BCM5720 rx to=us etype=0800 …
+boot: HOST-NIC BCM5720 rx to=us etype=0806 …
+boot: HOST-NIC TCP accept — client connected
+boot: HOST-NIC HTTP exchange ok
+ISOLON-M7-HOST-NIC-HTTP-OK
+ISOLON-AUDIT: AuthAllowed method_tag=2
+boot: HOST-NIC HTTP exchange ok
+ISOLON-M7-HOST-NIC-HTTP-OK
+ISOLON-AUDIT: VmCreated guest_id=4
+boot: HOST-NIC HTTP exchange ok
+ISOLON-M7-HOST-NIC-HTTP-OK
+ISOLON-AUDIT: VmStarted guest_id=4
+boot: E4 SPA start — Isolon-F product ISO (Phase B; not SHELL; not ISO-INSTALL-OK)
+boot: Isolon-F image=ISO-BOOTX64
+ISOLON-F-START-IMAGE-OK
+ISOLON-F-EBS-OK
+Booting 'Linux lts'
+[    0.000000] Linux version 6.12.13-0-lts …
+[    0.000000] Command line: … modules=loop,squashfs,virtio_pci,virtio_blk …
+Welcome to Alpine Linux 3.21
+localhost login: root
+# auto-answer: setup-disk -m sys -s 0 /dev/vda
+Installing packages to root filesystem...
+(1/25) Installing alpine-baselayout-data …
+(25/25) Installing …
+OK: 25 packages
+setup-disk -m sys -s 0 /dev/vda
+… GPT … grub-install --target=x86_64-efi … initramfs …
+Installation finished. No error reported.
+ISOLON-M7-ISO-INSTALL-OK
+Generating grub configuration file … done
+Installation is complete. Please reboot.
+reboot
+[   66.55] reboot: Restarting system
+boot: Isolon-F guest reset requested src=kbc n=1
+boot: Isolon-F relaunch after reset (F7)
+boot: Isolon-F GPT ESP lba=2048 sectors=98304 part=1
+boot: Isolon-F image=DISK-BOOTX64
+… GRUB 2.12 countdown 2s → 1s → 0s …
+Booting 'Alpine Linux v3.21, with Linux lts'
+ISOLON-F-START-IMAGE-OK
+ISOLON-F-DISK-BOOT-OK
+ISOLON-F-EBS-OK
+[    0.000000] Linux version 6.12.13-0-lts (buildozer@build-3-21-x86_64) …
+[    0.000000] Command line: BOOT_IMAGE=/boot/vmlinuz-lts root=UUID=814a97a0-d3be-4a64-8611-b3dbd9859201 ro modules=sd-mod,usb-storage,ext4 console=ttyS0 … rootfstype=ext4
+[    0.000000] efi: EFI v2.10 by Isolon-F
+[    1.603872] virtio_blk virtio0: [vda] 2097152 512-byte logical blocks (1.07 GB/1.00 GiB)
+[    1.606999]  vda: vda1 vda2
+[    3.118674] EXT4-fs (vda2): mounted filesystem 814a97a0-d3be-4a64-8611-b3dbd9859201 ro with ordered data mode.
+[    3.120997] Mounting root: ok.
+Welcome to Alpine Linux 3.21
+Kernel 6.12.13-0-lts on an x86_64 (/dev/ttyS0)
+localhost login: root
+localhost:~# cat /proc/cmdline; mount | head -3
+BOOT_IMAGE=/boot/vmlinuz-lts root=UUID=814a97a0-d3be-4a64-8611-b3dbd9859201 ro modules=sd-mod,usb-storage,ext4 … rootfstype=ext4

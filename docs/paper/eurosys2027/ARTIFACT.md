@@ -47,7 +47,13 @@ Hypervisor access to virtio rings is not a second EPT owner.
 If included: strip product markers, hostnames, iDRAC addresses, and
 operator names. Keep enough to support each R640 row of the split table
 (VMXON, Linux shell, virtio-blk, virtio-net, SMP, four-VM probes (one Linux, three stubs), HTTP,
-El Torito). Prefer excerpts over full SOL pastes.
+El Torito, ISO-loop SPA→disk→login). Prefer excerpts over full SOL pastes.
+
+Kit path: [`artifact/isolon-artifact-latest.zip`](artifact/isolon-artifact-latest.zip)
+(unpacked mirror under `artifact/isolon-artifact/`). The dedicated ISO-loop
+file is `com2/10-iso-loop-install-disk-boot-login.txt` (install-complete,
+disk-boot, `root=UUID=`, login). Host/CI never print the install-complete
+marker.
 
 ## Do not include
 

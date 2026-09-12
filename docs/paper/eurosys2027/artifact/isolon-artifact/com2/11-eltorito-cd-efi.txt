@@ -1,0 +1,11 @@
+# R640 COM2 — guest firmware El Torito CD EFI (Stage 45), excerpt
+# EFI <commit-redacted>. Same PowerEdge R640, iDRAC SOL console com2.
+# Guest firmware issued ATAPI READ(10) and booted El Torito CD EFI.
+# This is NOT a distribution installer and is NOT the ISO-loop close
+# (see 10-iso-loop-install-disk-boot-login.txt for SPA→disk→login).
+# Marker line reconstructed from the iron close record; full SOL paste
+# was logged against a build id and is not archived byte-for-byte here.
+
+boot: firmware-serial begin
+boot: RN-ELT n=197992 catalog=1 bootimg=1 magic=1 sectors=183 elt=1 packet=533 scsi=0x28 port=0x3f8 com=6
+ISOLON-M7-E5-OVMF-ELTORITO-OK

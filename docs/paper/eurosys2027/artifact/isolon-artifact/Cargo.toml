@@ -1,0 +1,6 @@
+# Standalone workspace so `cargo verus verify -p ept_model` builds without
+# the hypervisor crate. In the source tree ept_model is a workspace member
+# of the UEFI package; nothing here depends on that package.
+[workspace]
+members = ["ept_model"]
+resolver = "2"

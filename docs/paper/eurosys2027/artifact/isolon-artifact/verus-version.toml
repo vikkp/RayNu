@@ -1,0 +1,25 @@
+# Verus pin per [ADR] (M3.15).
+#
+# FROZEN TOOLCHAIN — do not use GitHub "latest", rolling pre-releases, or an
+# unpinned channel. Proofs must reproduce against this exact release tag +
+# commit + asset digest. Bump only via a dedicated upgrade PR; re-run
+# ./tools/verus-smoke.sh and re-verify Proven Core after any change.
+
+[verus]
+version = "0.2026.07.12.0b42f4c"
+tag = "release/0.2026.07.12.0b42f4c"
+commit = "0b42f4cee92a178937608cf55e512371d2fd8cd4"
+# Rust toolchain required by this Verus binary (from its version.json).
+toolchain = "1.96.0-x86_64-unknown-linux-gnu"
+git = "https://github.com/verus-lang/verus"
+# Content-addressed Linux CI asset (sha256 of the release zip).
+asset_linux = "verus-0.2026.07.12.0b42f4c-x86-linux.zip"
+sha256_linux = "f6f4f5d08e07d3e1ad721d775bda5ba96b9dd0c73b48fc17f2e071866fbd01c0"
+
+[notes]
+status = "M3.15 frozen weekly Verus pin; M6.9 auditor path → ISOLON-M6-EXT-OK (ept_model under this pin)"
+host_marker = "ISOLON-M3-VERUS-OK"
+m6_ext_marker = "ISOLON-M6-EXT-OK"
+l3_attempt_marker = "ISOLON-M3-L3-OK"
+l3_verify_marker = "ISOLON-M3-L3-VERIFY-OK"
+policy = "CI installs only this tag+sha256; never releases/latest"
