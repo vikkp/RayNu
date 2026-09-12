@@ -416,6 +416,7 @@ pub fn init_durable_lun_io() {
                 serial::write_str("boot: Stage 46 durable LUN nvme I/O ready bytes=");
                 write_dec(bytes);
                 serial::write_line(" (not ISO-INSTALL-OK)");
+                serial_lun_peek("nvme");
             }
             let _ = (bus, dev, func);
         }
@@ -475,6 +476,7 @@ pub fn init_durable_lun_usb_io() {
                     serial::write_str("boot: Stage 46 durable LUN usb I/O ready bytes=");
                     write_dec(bytes);
                     serial::write_line(" (not ISO-INSTALL-OK)");
+                    serial_lun_peek("usb");
                 }
                 return;
             }
@@ -507,6 +509,40 @@ pub fn durable_lun_install_reserved() -> bool {
 pub fn take_durable_lun_install_disk() -> Option<u64> {
     crate::mgmt::nvme::take_durable_lun_install_disk()
         .or_else(crate::mgmt::usb_bot::take_durable_lun_usb)
+}
+
+/// GPT peek + `persist_lun_looks_installed` after I/O ready (and TCG skip).
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+pub fn durable_lun_serial_peek(tag: &str) {
+    serial_lun_peek(tag);
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_lun_peek(tag: &str) {
+    use crate::boot::serial;
+    let mut sig = [0u8; 8];
+    let peek = durable_lun_read_any(512, &mut sig);
+    let inst = crate::mgmt::disk_persist::persist_lun_looks_installed();
+    serial::write_str("boot: Stage 46 durable LUN peek ");
+    serial::write_str(tag);
+    serial::write_str(" efi=");
+    if peek {
+        for &b in &sig {
+            if b.is_ascii_graphic() || b == b' ' {
+                serial::write_byte(b);
+            } else {
+                serial::write_byte(b'?');
+            }
+        }
+    } else {
+        serial::write_str("read-fail err=");
+        write_dec(u64::from(crate::mgmt::nvme::nvme_last_err()));
+        serial::write_str(" cpl=0x");
+        write_hex64(crate::mgmt::nvme::nvme_last_cpl());
+    }
+    serial::write_str(" installed=");
+    write_dec(u64::from(inst));
+    serial::write_line(" (not ISO-INSTALL-OK)");
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]

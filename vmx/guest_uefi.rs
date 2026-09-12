@@ -5159,12 +5159,24 @@ unsafe fn attach_product_iso_install_disk(alloc: &mut FrameAllocator, warn: bool
 #[cfg(target_os = "uefi")]
 pub unsafe fn attach_persist_keep_on_vmx_skip(alloc: &mut FrameAllocator) {
     if crate::mgmt::durable_lun::durable_lun_install_reserved() {
+        #[cfg(feature = "uefi-bin")]
+        crate::mgmt::durable_lun::durable_lun_serial_peek("skip");
         let keep = crate::mgmt::disk_persist::persist_lun_looks_installed();
         if !keep {
             return;
         }
         let _ = crate::mgmt::iso_install::present_product_iso_if_retained();
         attach_product_iso_install_disk(alloc, true);
+        if crate::devices::guest_virtio_blk::disk_bytes() != 0 {
+            return;
+        }
+        let Some(bytes) = crate::mgmt::durable_lun::take_durable_lun_install_disk() else {
+            return;
+        };
+        let _ = crate::devices::guest_virtio_blk::attach_lun(bytes as usize, false);
+        serial::write_str("boot: Stage 46 virtio-blk install disk bytes=");
+        write_dec(crate::devices::guest_virtio_blk::disk_bytes());
+        serial::write_line(" keep=1 (durable LUN skip; not ISO-INSTALL-OK)");
         return;
     }
     let Some((hpa, bytes)) = crate::mgmt::disk_persist::persist_install_disk_region() else {
