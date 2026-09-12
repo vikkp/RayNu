@@ -91,6 +91,8 @@ pub fn disk_persist_surface_present() -> bool {
         && persist.contains("fn nested_promotes_leftover_to_file_persist(")
         && persist.contains("fn persist_lun_keep(")
         && persist.contains("fn persist_lun_keep_parts(")
+        && persist.contains("fn persist_lun_last_gpt_err(")
+        && include_str!("../raynu_f/gpt.rs").contains("fn find_esp_skip_array_crc<")
         && lun.contains("fn pick_durable_lun(")
         && lun.contains("fn classify_pci_storage(")
         && lun.contains("fn pci_is_perc(")

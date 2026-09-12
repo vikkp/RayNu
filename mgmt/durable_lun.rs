@@ -624,6 +624,10 @@ fn serial_lun_peek(tag: &str) {
     }
     serial::write_str(" gpt=");
     write_dec(u64::from(gpt));
+    serial::write_str(" gpt_err=");
+    write_dec(u64::from(crate::mgmt::disk_persist::persist_lun_last_gpt_err()));
+    serial::write_str(" usb_err=");
+    write_dec(u64::from(crate::mgmt::usb_bot::usb_bot_last_err()));
     serial::write_str(" bootx64=");
     write_dec(u64::from(boot));
     serial::write_str(" ext4=");

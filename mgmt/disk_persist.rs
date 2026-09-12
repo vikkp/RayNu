@@ -19,8 +19,8 @@
 //! [`M8_DISK_PERSIST_NESTED_OK_MARKER`]. Never `ISO-INSTALL-OK`.
 
 use crate::raynu_f::fat::{self, VolumeRead};
-use crate::raynu_f::gpt::{find_esp, ESP_TYPE_GUID};
-use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use crate::raynu_f::gpt::{find_esp, find_esp_skip_array_crc, ESP_TYPE_GUID};
+use core::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering};
 
 /// Iron COM2 close: Force Off / reboot RayNu-V, installed disk still there.
 /// Host/CI/nested must **never** print this.
@@ -331,6 +331,12 @@ impl VolumeRead for LunVol {
 }
 
 static LUN_KEEP_STICKY: AtomicBool = AtomicBool::new(false);
+static LAST_LUN_GPT_ERR: AtomicU8 = AtomicU8::new(0);
+
+/// Last [`find_esp_skip_array_crc`] error on the LUN (0 = ESP found).
+pub fn persist_lun_last_gpt_err() -> u8 {
+    LAST_LUN_GPT_ERR.load(Ordering::Acquire)
+}
 
 /// Remember a live GPT+ESP+ext4 probe so TCG skip can keep after USB dies.
 pub fn persist_lun_remember_keep(keep: bool) {
@@ -347,13 +353,22 @@ pub fn persist_lun_sticky_keep() -> bool {
 /// Host tests / handoff reset.
 pub fn persist_lun_clear_sticky() {
     LUN_KEEP_STICKY.store(false, Ordering::Release);
+    LAST_LUN_GPT_ERR.store(0, Ordering::Release);
 }
 
 /// GPT / FAT BPB / ext4 on the LUN. FAT dirent walks stay off BOT.
+/// Array CRC is skipped so keep-detect is not 32 USB BOT fills.
 /// Remembers keep. SliceDisk/HPA still require BOOTX64 via
 /// [`persist_media_looks_installed`].
 pub fn persist_lun_keep_parts() -> (bool, bool, bool) {
-    let gpt = find_esp(&LunVol);
+    let gpt = find_esp_skip_array_crc(&LunVol);
+    LAST_LUN_GPT_ERR.store(
+        match gpt {
+            Ok(_) => 0,
+            Err(e) => e.code(),
+        },
+        Ordering::Release,
+    );
     let boot = match gpt {
         Ok(esp) => disk_has_fat_bpb_from_esp(&LunVol, esp),
         Err(_) => false,
