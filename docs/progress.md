@@ -185,6 +185,8 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next (numbered)
 
+**M7 Mount Everest CLOSED on iron** (2026-09-11, EFI `f72b4276` / `--run 34552377351`). Next numbered work is **M8 operator product hardening** ([ADR-018](adr/ADR-018.md), [m8_plan.md](m8_plan.md)): leftover-disk persist across HV reboot, then TLS, real auth, console UI, ISO upload, UEFI catalog persist, Windows later. Cluster / vMotion-like is **M9**. Host/CI never print `ISO-INSTALL-OK`. HDA overall stays 99% (`months_to_everest: 0.0`). **Iron rollback:** GitHub Latest [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) → `f72b4276d198b5e90147e9be1037d0d0b7213a28` / EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc`. Do not flash a later M8 persist prototype as the known-good. Do not F11 `34548550755` / `7f8dc0a9`.
+
 **M7.4 closed** on Latitude (`RAYNU-V-M7-UI-OK` — host package smoke; console/TLS residual).  
 **M7.5 closed on iron:** `RAYNU-V-R640-BOOT-OK` — real R640 COM2 through SHELL + M4 (`v0.1.0-xsavesfix`, 2026-08-15).  
 **M7.6 closed on iron:** `RAYNU-V-M7-UEFI-HTTP-OK` — SNP residual PRE-EBS HTTP on R640 (`10.99.99.127:8443`, 2026-08-16).  
@@ -192,6 +194,8 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 **M7.8 closed on iron:** `RAYNU-V-M7-HOST-NIC-HTTP-OK` — native BCM5720 after `BOOT-OK` on R640 (`10.99.99.144:8443`, 2026-08-20). SPA + Bearer `AuthAllowed`.  
 **ADR-013 Phase F closed on iron:** coexist HTTP while VMX on (`10.99.99.149:8443`, EFI `0d06297b`, 2026-08-20). G0 scheduled; G1–G3 parked. Hold COM2: 25× `HOST-NIC-HTTP-OK`.  
 **E4 SPA VMLAUNCH closed on iron:** `RAYNU-V-M7-E4-SPA-LAUNCH-OK` — spec **201** + start **200** on `10.99.99.126:8443` (EFI `2b795a0`, 2026-08-21). First SPA `VMLAUNCH` + G0↔SPA clear-state re-entry via 98-field VMCS shadow. No error 7/11. Guest is SHELL CPUID, not a distro installer.  
+**E5 closed on iron (Phase A whole loop):** `RAYNU-V-M7-ISO-INSTALL-OK` (`59ac070` / `975f8fc` / `56a3ffd`) + **`RAYNU-V-RAYNU-F-DISK-BOOT-OK`** + second `Linux version` `root=UUID=` from `vda` + `login:` (`56a3ffd`, run `34480107961`, 2026-09-10). RayNu-F (ADR-016) boots the Alpine 3.21 ISO, `setup-disk` writes GPT + GRUB + initramfs to virtio-blk, F7 relaunch boots the installed GRUB, the installed kernel reaches a shell.  
+**P0-63 Phase B CLOSED on iron:** `RAYNU-V-M7-PHASE-B-SPA-WIRE-OK` plus COM2 `f72b4276` / `--run 34552377351` (2026-09-11). No `--raynu-f`. SKIP-OVMF-OK + E4-CONTINUE-OK + coexist `HOST-NIC-HTTP-OK` on `10.99.99.145:8443` → SPA create/start → RayNu-F product ISO → `ISO-INSTALL-OK` → reboot → F7 → `DISK-BOOT-OK` → second Linux `root=UUID=814a97a0-…` → `login:`. Host/CI never print `ISO-INSTALL-OK`. Evidence: [`docs/evidence/r640/2026-09-11-f72b4276-phase-b-spa-iso-install-disk-boot-ok.md`](evidence/r640/2026-09-11-f72b4276-phase-b-spa-iso-install-disk-boot-ok.md).  
 **ADR-013 Phase G closed** 2026-08-21 as accepted-risk (shared LOM `:38` with virtio-net; Appendix B). Not VLAN / second NIC. Stage 1 is 0–G.  
 **P0-15 / E5 Stage 0 closed (host):** typed boot spec on REST/SPA + El Torito catalog parse (`RAYNU-V-M7-E5-BOOT-SPEC-OK`, #172).  
 **P0-16 / E5 Stage 1 closed (host):** host El Torito CD-ROM attach (`RAYNU-V-M7-E5-CDROM-ATTACH-OK`, #173).  

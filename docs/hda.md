@@ -1,15 +1,15 @@
 ---
 hda_version: 1
-last_updated: 2026-09-06
-last_commit: 2b795a0bef4ae5a5c356a0131205f9de439ffe57
-last_commit_short: 2b795a0
+last_updated: 2026-09-11
+last_commit: PENDING
+last_commit_short: PENDING
 updated_by: cursor
-mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
-months_to_everest: 0.5
-months_to_everest_prev: 0.5
-velocity_commits_30d: 368
-velocity_gates_30d: 59
-overall_pct: 95
+mount_everest_target: "CLOSED on iron 2026-09-11: Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest). Next: M8 operator hardening (ADR-018)."
+months_to_everest: 0.0
+months_to_everest_prev: 0.0
+velocity_commits_30d: 612
+velocity_gates_30d: 64
+overall_pct: 99
 confidence: high
 baseline_date: 2026-07-20
 baseline_months: 4.5
@@ -17,7 +17,7 @@ everest_eta_month: "2026-09"
 summit_core_pct: 88
 summit_efi_pct: 95
 summit_r640_pct: 98
-summit_ui_pct: 96
+summit_ui_pct: 98
 summit_iso_pct: 99
 summit_prod_pct: 100
 ---
@@ -25,11 +25,12 @@ summit_prod_pct: 100
 # Honest Distance Assessment (HDA)
 
 > **Living document.** Updated on every meaningful commit by Cursor (see `.cursor/rules/hda-update.mdc`).  
-> **North star product loop (“Mount Everest”):**  
-> Ship the EFI → boot on a **real PowerEdge R640** → **network-reachable** vSphere-like UI → **deploy a Linux ISO** (M7 / ADR-009). Production bar (M6.8–M6.9) is already closed on Latitude.
+> **North star product loop (“Mount Everest”):** **CLOSED on iron 2026-09-11.**  
+> Ship the EFI → boot on a **real PowerEdge R640** → **network-reachable** vSphere-like UI → **deploy a Linux ISO** (M7 / ADR-009). Production bar (M6.8–M6.9) is already closed on Latitude. **Next mountain: M8 operator hardening** ([ADR-018](adr/ADR-018.md)).  
+> **Iron rollback:** GitHub Latest [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) (`f72b4276` / `34552377351` / EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc`).
 
 Pillars: **[V]** verified core · **[Z]** single binary · **[D]** iDRAC-native · **[A]** audit-first.  
-Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m7_plan.md) · ADR: [`adr/ADR-009.md`](adr/ADR-009.md) · constitution: [`CLAUDE.md`](../CLAUDE.md).
+Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m7_plan.md) (closed) · M8: [`m8_plan.md`](m8_plan.md) · ADR: [`adr/ADR-009.md`](adr/ADR-009.md) · close: [`adr/ADR-018.md`](adr/ADR-018.md) · constitution: [`CLAUDE.md`](../CLAUDE.md).
 
 ---
 
@@ -37,20 +38,20 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 
 | Metric | Value | Δ vs previous HDA |
 |--------|------:|-------------------|
-| **Overall product readiness** | **95%** | +1 (P0-14 E4 SPA VMLAUNCH + re-entry on iron) |
-| **Months to Mount Everest** | **0.5** | held (TLS/console + distro remain) |
-| **ETA month** | **2026-09** | held |
-| **Confidence** | high | E2+E3+E3b+E5+Phase F+P0-14 stamps on COM2; SPA guest is SHELL stub; TLS/console + distro residual |
+| **Overall product readiness** | **99%** | **held** — Everest **CLOSED**. Public site records the win. Not 100%: M8 polish (ADR-018) — leftover persist / TLS / console |
+| **Months to Mount Everest** | **0.0** | **held** (summit reached 2026-09-11; `f72b4276` SPA ISO loop) |
+| **ETA month** | **2026-09** | **closed this month on iron**; next work is M8, not a slipped Everest |
+| **Confidence** | high | E1–E6 on COM2. M8 named separately so polish cannot reopen the summit |
 | **Hypervisor core (VMX/EPT/Linux/multi-VM)** | ~88% | proved on real R640 through M4 |
 | **Ship EFI artifact** | ~95% | M7.0 + iron kits under `releases/` |
 | **Real R640 boot** | ~98% | E2 closed; Redfish/soak follow-ons only |
-| **vSphere-like UI (network)** | ~96% | E3 + E3b + Phase F + P0-14 closed; SHELL stub not distro; TLS/console residual |
-| **Deploy Linux ISO** | ~99% | OVMF past SEC on private VMCS (QEMU/VMX); not installer; distro later |
+| **vSphere-like UI (network)** | ~98% | E3 + E3b + Phase F + P0-14 + **P0-63 Phase B CLOSED on iron**. M8: TLS/console |
+| **Deploy Linux ISO** | ~99% | **DONE on iron end-to-end** (Phase A `56a3ffd` + Phase B SPA `f72b4276`). Remaining 1% is **M8** (upload / catalog persist / leftover persist / multi-distro) |
 | **Production bar (M6.8–M6.9)** | **100%** | soak + EXT closed on Latitude |
 
 ```
-Months to Everest  █░░░░░░░░░░░░░░░░░░░  0.5 mo  (was 1.5)
-Overall %          ███████████████████░  95%
+Months to Everest  ░░░░░░░░░░░░░░░░░░░░  0.0 mo  SUMMIT (closed 2026-09-11)
+Overall %          ███████████████████░  99%     (M8 polish is the last 1%)
 ```
 
 **How the month number moves:** faster closed Everest-path work → `months_to_everest` shrinks and `everest_eta_month` pulls closer. Stalls / new scope → it slips. See [Velocity model](#velocity-model).
@@ -71,7 +72,7 @@ All must be true (no hand-waving):
 | E5 | **Linux ISO deploy** | Operator registers a distro ISO → VM boots **UEFI installer** (ADR-014) to virtio-blk → reboot to disk. Extract-boot/bzImage is lab MVP only. Windows ISO later, same model. | [Z] |
 | E6 | **Production bar** | M6.8 soak + M6.9 external audit/spec review closed per `progress.md` | [V][A] |
 
-**Out of Everest / M7 scope (→ M8 or later):** vMotion-like live migrate, DRS-like placement, hot-add, full vSphere parity, Dell Tier-2 PERC OEM, multi-site DR, Windows guest WHQL. Windows **install** is later under [ADR-014](adr/ADR-014.md); the image type exists now so E5 does not stay Linux-kernel-only.
+**Out of Everest / M7 scope:** operator polish is **M8** ([ADR-018](adr/ADR-018.md)): leftover-disk persist across HV reboot, TLS, real auth, console UI, ISO upload, UEFI catalog persist, Windows later. Cluster / elasticity is **M9** (vMotion-like, DRS-like, hot-add). Full vSphere parity, Dell Tier-2 PERC OEM, multi-site DR, Windows guest WHQL stay later still. Windows **install** is M8.6 under [ADR-014](adr/ADR-014.md).
 
 ---
 
@@ -106,7 +107,7 @@ All must be true (no hand-waving):
 | Hardware CI on R640 | MISSING | optional in M6 plan |
 
 ### Summit C — vSphere-like UI
-**Status: NEAR · ~96% · ~0.5 months residual (TLS/console polish + distro waits on Summit D)**
+**Status: DONE ON THE PRODUCT LOOP · ~98% · M8 polish (TLS/console/auth) is not a reopened Everest**
 
 | Item | Status | Evidence / gap |
 |------|--------|----------------|
@@ -127,9 +128,10 @@ All must be true (no hand-waving):
 | **Post-EBS durable HTTP (E3b)** | **DONE** | `RAYNU-V-M7-HOST-NIC-HTTP-OK` after `BOOT-OK` on BCM5720 `:38`; [2026-08-20-e3b-host-nic-http-ok.md](evidence/r640/2026-08-20-e3b-host-nic-http-ok.md) |
 | **Phase F coexist (VMX on)** | **DONE** | `HOST-NIC-HTTP-OK` while VMX on; G0 scheduled; G1–G3 parked; [2026-08-20-phase-f-coexist-ok.md](evidence/r640/2026-08-20-phase-f-coexist-ok.md) |
 | E4 SPA VMLAUNCH (private EPT) | **DONE** | `RAYNU-V-M7-E4-SPA-LAUNCH-OK` + shadow re-entry; SHELL stub; [2026-08-21-e4-spa-shadow-reentry-ok.md](evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md) |
+| Phase B SPA → RayNu-F | **DONE on iron** | `RAYNU-V-M7-PHASE-B-SPA-WIRE-OK` + COM2 `f72b4276` / `34552377351`: coexist `HOST-NIC-HTTP-OK` `10.99.99.145:8443` → SPA Start of RayNu-F ISO (no `raynuf.txt`) → `ISO-INSTALL-OK` → `DISK-BOOT-OK`. `iso=0` stays SHELL. [2026-09-11-f72b4276-phase-b-spa-iso-install-disk-boot-ok.md](evidence/r640/2026-09-11-f72b4276-phase-b-spa-iso-install-disk-boot-ok.md) |
 
 ### Summit D — Deploy Linux ISO
-**Status: NEAR · ~90% · ~0.25–0.5 months residual (real distro installer)**
+**Status: DONE ON IRON · ~99% · Everest E5 closed; leftover persist / upload / catalog / multi-distro are M8**
 
 | Item | Status | Evidence / gap |
 |------|--------|----------------|
@@ -143,10 +145,10 @@ All must be true (no hand-waving):
 | Wire contract → guest launch | PARTIAL | PRE-EBS arm → post-EBS sized `virtio_blk::init`; guest FS installer open |
 | QEMU lab (1 MiB ESP flag) | DONE (host/TCG arm) | boot1 `isoinstall.txt` → `ISO-INSTALL-LAB-OK`; soft-pass arm-only on TCG |
 | QEMU lab reboot-to-disk | DONE (host/TCG arm) | boot2 `isoreboot.txt` + synth img → `BOOTED-FROM-DISK`; soft-pass arm-only on TCG |
-| ISO parse / El Torito / EFI boot img | PARTIAL (guest-visible CD) | Catalog parse + host attach + FirmwareArmed + GuestVisible PCI IDE/ATAPI; not DXE boot / not installer |
-| CD-ROM attach | PARTIAL (guest-visible) | `attach_cdrom_uefi` → GuestVisible + PCI IDE/ATAPI; firmware does not yet boot the CD |
-| Guest UEFI firmware blob | PARTIAL (ESP retained + past SEC) | Real ESP OVMF.fd retained; private VMCS past SEC on QEMU/VMX; not full DXE / not installer / not Everest E5 |
-| Persistent install + reboot-to-disk | **DONE (stamps)** | Iron Cruzer `BOOTED-FROM-DISK` 2026-08-16; guest FS residual |
+| ISO parse / El Torito / EFI boot img | DONE (guest CD EFI) | Iron COM2 `0be7283` `OVMF-ELTORITO-OK` `RN-ELT` n=197992; not distro installer |
+| CD-ROM attach | DONE (firmware StartImage) | GuestVisible PCI IDE/ATAPI + El Torito FAT ESP BOOTX64; not `ISO-INSTALL-OK` |
+| Guest UEFI firmware blob | **DONE on iron — install and reboot-to-disk (RayNu-F ADR-016)** | **Iron UDisk `56a3ffd` / run `34480107961` (2026-09-10): the whole loop.** Third iron `RAYNU-V-M7-ISO-INSTALL-OK` → `reboot` → `guest reset requested src=kbc n=1` → `relaunch after reset` → `GPT ESP lba=2048 sectors=98304 part=1` → `BOOTX64.EFI bytes=139264` → `image=DISK-BOOTX64` → installed GRUB 2.12 countdown `2s → 1s → 0s` (no `RayNu-F stop` line; the wall cap never fired) → `Booting 'Alpine Linux v3.21, with Linux lts'` → `START-IMAGE-OK` → **`RAYNU-V-RAYNU-F-DISK-BOOT-OK`** → `EBS-OK` → second `Linux version 6.12.13-0-lts` `root=UUID=9af18543-…` `modules=sd-mod,usb-storage,ext4` → `EXT4-fs (vda2): mounted filesystem` → `fsck` `vda2`+`vda1` → OpenRC → `login:` → `cat /proc/cmdline` from the installed system. History: `59ac070` (install closed; F7 relaunch VMCLEAR/VMPTRLD — 81 KiB stack temporary over the VMCS), `975f8fc` (relaunch + installed GRUB menu; fixed 1 M exit-cap fired inside GRUB's 2 s menu poll loop), `56a3ffd` (RayNu-F wall cap: time, not exits, bounds the loader phase). Evidence: [2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md](evidence/r640/2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md) |
+| Persistent install + reboot-to-disk | **DONE on iron (distro)** | `56a3ffd` + Phase B `f72b4276`: `setup-disk` → `reboot` → installed GRUB → second Linux from `vda2` → `login:`. Leftover-DRAM disk survives a **guest** reset only; **host-reboot persistence is M8.0** |
 | Upload ISO via API/UI | PARTIAL | REST `/iso/{id}/deploy` + `/install`; blob upload residual |
 | Multi-OS image types | **WIRED (host)** | REST/SPA `linux_iso` \| `windows_iso` \| `generic_uefi` ([ADR-014](adr/ADR-014.md) Stage 0); Windows install later |
 | Multi-distro matrix | MISSING | — |
@@ -164,20 +166,20 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 | M+1 | 2026-08 | **R640 iron bring-up** → **E2 closed** | `RAYNU-V-R640-BOOT-OK` on COM2 | **DONE (M7.5 iron)** |
 | M+2 | 2026-09 | E3b native NIC lab (QEMU e1000) + ISO residual | ADR-013 Phase C | **Phase C DONE (QEMU)** |
 | M+3 | 2026-08 | E3b iron HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | **DONE (M7.8 iron)** |
-| M+4 | 2026-09 | TLS/console + distro installer | remaining Everest | **ETA** |
-| M+5 | 2026-10 | Buffer / M7 closed on all E1–E6 | **M7 Mount Everest** | BUFFER |
+| M+4 | 2026-09 | Phase B (SPA → installed disk) | remaining Everest | **DONE — EVEREST CLOSED** (`f72b4276` / `34552377351`) |
+| M+5 | 2026-10 | **M8.0** leftover persist (ADR-018) | first M8 gate | **NEXT** |
 
 ### Timeline burn-down
 
 ```
 2026-07 ████████  HDA + M6 closed (Latitude)
 2026-08 ████████  R640 boot (E2) + E3b HTTP-OK
-2026-09 ████░░░░  TLS/console + distro installer  ← months_to_everest ≈ 0.5
-2026-10 ░░░░░░░░  buffer
-2026-11 ░░░░░░░░  buffer
+2026-09 ████████  E5 + Phase B — **Mount Everest CLOSED** (`f72b4276`)  ← months_to_everest = 0.0
+2026-10 ░░░░░░░░  M8.0 leftover persist (ADR-018)
+2026-11 ░░░░░░░░  M8.1+ TLS/auth/console
 ```
 
-**Pull-forward rule:** E2 closed 2026-08-15; E3 bring-up closed 2026-08-16; **E3b closed 2026-08-20**; **P0-14 closed 2026-08-21**. Shrink further when a real distro installer lands. Document why in [Changelog](#hda-changelog).
+**Pull-forward rule:** E2 closed 2026-08-15; E3 bring-up closed 2026-08-16; **E3b closed 2026-08-20**; **P0-14 closed 2026-08-21**; **E5 install-to-disk closed on iron 2026-09-10** (`59ac070`); **F7 relaunch + installed-disk GRUB reached on iron 2026-09-10** (`975f8fc`, exit-cap ended it); **E5 reboot-to-disk closed on iron 2026-09-10** (`56a3ffd`: `DISK-BOOT-OK`, second Linux `root=UUID=`, `login:`) → months 0.5→0.25; **Phase B closed on iron 2026-09-11** (`f72b4276` / `34552377351`: coexist HTTP-OK → SPA Start of RayNu-F ISO → install → disk reboot) → months 0.25→0.0. Document why in [Changelog](#hda-changelog).
 
 ---
 
@@ -238,10 +240,12 @@ Ordered for critical path (parallelize B with D design):
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | `mgmt/iso` wired; El Torito/CD-ROM residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | **DONE host extract-boot smoke**; El Torito/CD-ROM residual |
 | P0-7 | **M7.4** Create-VM API/UI (CPU/RAM/disk/ISO) | C+D | 0.25 | P0-5, P0-6 | **DONE host SPA smoke**; console/TLS/NIC residual |
-| P0-8 | Install-to-disk + reboot-to-disk path | D | **DONE (stamps)** | P0-6, P0-7 | Iron `BOOTED-FROM-DISK` 2026-08-16; guest FS residual |
+| P0-8 | Install-to-disk + reboot-to-disk path | D | **DONE (iron distro)** | P0-6, P0-7 | Iron `ISO-INSTALL-OK` `59ac070` + `DISK-BOOT-OK` / second Linux `root=UUID=` `56a3ffd` 2026-09-10; Phase B SPA path `f72b4276` 2026-09-11 |
+| P0-63 | **Phase B** SPA/REST create-VM + attach-media → RayNu-F ISO / installed-disk launch on iron | C+D | **DONE (iron)** | P0-8, P0-14 | **CLOSED on iron `f72b4276` / `34552377351` (2026-09-11).** SKIP-OVMF-OK + E4-CONTINUE-OK + coexist `HOST-NIC-HTTP-OK` `10.99.99.145:8443` → SPA Start of RayNu-F ISO (no `raynuf.txt`) → `ISO-INSTALL-OK` → `DISK-BOOT-OK` → second Linux `root=UUID=814a97a0-…` → `login:`. Prior: `7f8dc0a9` listen then Mac `curl: (7)` (`MILLIS += 10`); TSC Instant fixed it. `iso=0` stays SHELL. Host/CI never print `ISO-INSTALL-OK`. Evidence: [2026-09-11-f72b4276-phase-b-spa-iso-install-disk-boot-ok.md](evidence/r640/2026-09-11-f72b4276-phase-b-spa-iso-install-disk-boot-ok.md) |
 | P0-9 | M6.9 external audit + spec review | E6 | **DONE** | proofs green | `docs/`, `ept_model/`, `mgmt/ext` |
 | P0-10 | R640 soak / hardware confidence | E2 | 0.5 | P0-2 | `tools/`, `mgmt/soak` — post M7.5 |
-| P0-11 | **M8 sketch** vMotion-like / DRS-like / hot-add | — | — | M7 closed | deferred — not M7 critical path |
+| P0-11 | **M9 sketch** vMotion-like / DRS-like / hot-add | — | — | M8 | deferred — was M8 in ADR-009; **M9** after operator hardening (ADR-018) |
+| P0-64 | **M8** operator product hardening | — | IN PROGRESS | Everest closed | [ADR-018](adr/ADR-018.md) / [m8_plan.md](m8_plan.md). First gate **M8.0** leftover-disk persist across HV reboot. Then TLS, auth, console UI, ISO upload, UEFI catalog, Windows later. |
 
 ---
 
@@ -298,7 +302,10 @@ Ordered for critical path (parallelize B with D design):
 - **P0-52 / E5 Stage 37 closed (host + QEMU):** `RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK`. Private guest-UEFI VMCS + EPT + VMLAUNCH of retained ESP `OVMF.fd`. Not E4 SHELL. Not installer. Iron P0-14 remains `2b795a0`.
 - **P0-53 / E5 Stage 38 closed (host + QEMU):** `RAYNU-V-M7-E5-OVMF-ALIVE-OK`. OVMF SEC `mov cr4, 0x640` no longer triple-faults (CR4.VMXE host-owned). Not full OVMF boot. Not installer. Iron P0-14 remains `2b795a0`.
 - **P0-54 / E5 Stage 39 closed (host + QEMU):** `RAYNU-V-M7-E5-OVMF-PAST-SEC-OK`. Left SEC tail + PEI PCI / firmware COM / HLT. COM1/COM2 forwarded. Not full DXE. Not installer. Iron P0-14 remains `2b795a0`.
+- **P0-59 / E5 Stage 44 closed (iron COM2 `bf696ca`):** `RAYNU-V-M7-E5-OVMF-ATAPI-OK`. `sectors=1` `packet=9` `scsi=0x28`. Not El Torito. Iron P0-14 remains `2b795a0`.
+- **P0-61 / E5 Stage 45 closed (iron COM2 `0be7283`):** `RAYNU-V-M7-E5-OVMF-ELTORITO-OK`. `RN-ELT` n=197992 catalog=1 bootimg=1 magic=1 sectors=183 elt=1. Not installer. Iron P0-14 remains `2b795a0`.
 - **Checkpoint release:** `v0.1.0-e4-spa-launch` — #169 on `main` (`b6578f5`); CI EFI `832ea32` / SHA `00443957…`. Iron P0-14 remains `2b795a0`.
+- **P0-63 / Phase B closed on iron:** `f72b4276` / `34552377351` (2026-09-11). Coexist `HOST-NIC-HTTP-OK` on `10.99.99.145:8443` → SPA Start of RayNu-F ISO (no `raynuf.txt`) → `ISO-INSTALL-OK` → `DISK-BOOT-OK` → second Linux `root=UUID=` → `login:`.
 
 ---
 
@@ -347,32 +354,415 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | please-reboot-story |
-| Summary | Public Stories: Please reboot / we became the firmware (Stage 46 nested). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
-| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Nested sys-install is not iron E5. |
-| Gates touched | none closed on iron. |
-| Months Δ | 0.5→0.5 |
+| Commit | iron-rollback-kit |
+| Summary | **Document M8.0 iron rollback:** GitHub Latest `v0.1.0-everest-closed` (`f72b4276` / `34552377351`, EFI SHA256 `e74460ff…`). Always-on Cursor rule + CLAUDE / README / progress / m8_plan / ADR-018 / HDA / evidence / runbooks so a new agent flashes this kit, not a later persist prototype. |
+| Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Docs/rules only — not a score change. |
+| Gates touched | `.cursor/rules/iron-rollback.mdc`. `./tools/sync-hda-site.sh --check`. |
+| Months Δ | 0.0→0.0 (held) |
 
----
 
 ## Blockers & risks (Everest-relevant)
 
 | ID | Blocker / risk | Severity | Mitigations |
 |----|----------------|----------|-------------|
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
-| H2 | TLS / console polish | MED | Plaintext HTTP closed on iron (E3b); TLS deferred (ADR-009); guest VNC residual |
-| H3 | Guest UEFI CD not bootable | MED | Virtio-blk + CD→disk order presented (P0-57); firmware CD boot not completed; extract-boot is lab MVP only |
+| H2 | TLS / console polish | MED | **M8.1 / M8.3** ([ADR-018](adr/ADR-018.md)). Plaintext HTTP closed Everest (E3b). Guest VNC residual. Not a reopened Everest. |
+| H3 | ~~Guest UEFI CD not bootable / no reboot-to-disk on iron~~ | — | **Resolved** 2026-09-10 (`56a3ffd` / run `34480107961`): `RAYNU-V-RAYNU-F-DISK-BOOT-OK` + second Linux `root=UUID=` from `vda` + `login:` on the real R640. Chain: `59ac070` install-to-disk (`ISO-INSTALL-OK`) → F7 VMCLEAR/VMPTRLD (81 KiB `FirmwareState::new()` stack temporary over the VMCS; template reset + 32-page stack guard) → `975f8fc` relaunch into the installed GRUB menu, 1 M exit-cap inside GRUB's 2 s menu poll loop (~2 exits/µs) → `56a3ffd` RayNu-F wall cap (time, not exits, bounds the loader phase). Earlier: `916af96` THRE chain telemetry → UART TX ring room + line-rate pace + COM2 FIFO burst fixed the `apk` console stall. Evidence: [2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md](evidence/r640/2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md). Do not F11 `34474850361` / `34425781629` for Phase A; `34480107961` is the Phase A reference pin. |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
-| H5 | Latitude ≠ full product loop | MED | E2+E3+E3b+E5+Phase F+P0-14 stamps closed; SPA guest is SHELL CPUID stub; TLS/console + distro remain |
+| H5 | ~~Phase B — iron SPA still launches the SHELL stub~~ | — | **Resolved** 2026-09-11 (`f72b4276` / `34552377351`). Residual polish is **M8**, not Everest. |
+| H10 | Leftover-DRAM disk dies on **HV** reboot | MED | **M8.0** first gate ([m8_plan.md](m8_plan.md)). Guest F7 persist already closed (ADR-017). |
+| H11 | Truncated `site/` on feature branches | LOW | **This commit:** restore Kimi updater chrome from `origin/main`; `./tools/check-site-chrome.sh` + CI `site-chrome`; always-on `.cursor/rules/site-chrome.mdc`. Do not replace `site/index.html` wholesale on HDA/Everest work. |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
 | H8 | ~~Phase F coexist not closed on iron~~ | — | **Resolved** 2026-08-20 (`HOST-NIC coexist listening` + `HOST-NIC-HTTP-OK` while VMX on; G1–G3 parked) |
+| H9 | PR #231 IdeBus/SCI fork | LOW | **Parked** 2026-09-01 (ADR-015). Tip `8024439` stays parked. COMMAND/CF8/ROM/hide-slot0/retaddr/ConIn/callsite/WFE-return/ZeroMem-EPT/WFE-RIP-skip/state4-poke/event-#PF closed. **Pivot ADR-016: be the guest firmware ourselves (RayNu-F); whole OVMF forcing family closed after `4e16b59` inject fired OVMF own #PF + CpuDeadLoop; forcing disabled (RAYNU_F_NO_FW_STATE_MUTATION).** Do not resume #231 for `COMMAND.IO`. Do not F11 `33820727776` / `33817483733` / `33815993163` / `33757018875` / `33753069821` / `33701350767` / `33699177232` / `33697154185` / `33695570769` / `33630723649` / `33627470674` / `33575888121` / `33573126367` / `33571164257` / `33569757025` / `33567464001` / `33562028442` / `33559849096` / `33558261624` / `33555104832` / `33440050729`. Do not flash `8024439`. |
 
 ---
 
 ## HDA changelog
 
-| 2026-09-06 | please-reboot-story | 0.5 | 95 | Public Stories: Please reboot we became the firmware; nested ≠ iron; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-11 | iron-rollback-kit | 0.0 | 99 | **M8.0 iron rollback documented:** GitHub Latest `v0.1.0-everest-closed` → `f72b4276` / `34552377351` / EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc`. Always-on `.cursor/rules/iron-rollback.mdc` + CLAUDE/progress/m8_plan/HDA so agents flash this, not a later persist prototype or `34548550755`. `adr013-baseline` stays the pre-native-NIC preserve. months 0.0 held; overall 99 held |
+| 2026-09-11 | site-chrome-lock | 0.0 | 99 | **Restore CIO/Status chrome on the public front page** (nav, fork cards, console, COM2) after Everest celebration truncated `site/`. Always-on Cursor rule + `check-site-chrome.sh` + CI so the next HDA update cannot strip it. months 0.0 held; overall 99 held |
+| 2026-09-11 | everest-closed-m8-adr | 0.0 | 99 | **Public Everest close + ADR-018.** Site/HDA celebrate iron `f72b4276` / `34552377351` (COM2 snippets). M8 = operator hardening (persist→TLS→auth→console→upload→catalog→Windows later); cluster → M9. months 0.0 held; overall 99 held; not 100%. Host/CI never print `ISO-INSTALL-OK` |
+| 2026-09-11 | phase-b-skip-ovmf | 0.25 | 98 | **Iron `7f8dc0a9` / `34548550755`: listen then Mac `curl: (7)`.** SKIP-OVMF-OK + E4-CONTINUE-OK + coexist idle (no G0) + `HOST-NIC coexist listening on 10.99.99.146:8443`; eight LAN RX dumps, no `to=us`. Tight idle `MILLIS += 10` raced smoltcp Instant. Host TSC Instant; months 0.25 held; overall 98 held; `HOST-NIC-HTTP-OK` / iron Phase B / Everest / `ISO-INSTALL-OK` not claimed |
+| 2026-09-11 | phase-b-skip-ovmf | 0.25 | 98 | **Iron `31f1ea0c` / `34546680282`: CONTINUE-OK then G0 BAR hole.** Packed-bzImage G0 cannot run on the Stage 46 `[1MiB,512MiB)` pool (`v0.1.0-barfix` inverted). Phase A `--raynu-f` never took E4 G0. Host `enter_phase_b_coexist_idle`; months 0.25 held; overall 98 held; iron Phase B / Everest / `ISO-INSTALL-OK` not claimed |
+| 2026-09-11 | phase-b-skip-ovmf | 0.25 | 98 | **Iron `2a1c1ef1` / `34544625780`: SKIP-OVMF-OK then Stage 46 hold.** `leave_to_e4` → `resume_e4_shell` spun on `product_iso_window_armed()`. Host latch `phase_b_continue_e4_for_spa` so E4 HTTP can take SPA Start; months 0.25 held; overall 98 held; iron Phase B / Everest / `ISO-INSTALL-OK` not claimed |
+| 2026-09-10 | phase-b-skip-ovmf | 0.25 | 98 | **Iron `9061ffca` ticks = parked OVMF, not a printer break.** No `--raynu-f` → 16M cap → Bds CpuSleep `0x7f0680d0`. Host skip-OVMF-to-E4 when product ISO present and flag absent (`RAYNU-V-M7-PHASE-B-SKIP-OVMF-OK`) so SPA Start can run; `--raynu-f` / nested unchanged; months 0.25 held; overall 98 held; iron Phase B / Everest / `ISO-INSTALL-OK` not claimed |
+| 2026-09-10 | spa-raynu-f-start | 0.25 | 98 | **Phase B host wire (no iron flash).** SPA/REST product-ISO start queues RayNu-F (`RAYNU-V-M7-PHASE-B-SPA-WIRE-OK`); `iso=0` stays E4 SHELL; coexist scheduler calls `try_spa_product_iso_start` (no SHELL fall-through); months 0.25 held; overall 98 held; P0-63 IN PROGRESS (host); iron Phase B / Everest / `ISO-INSTALL-OK` not claimed |
+| 2026-09-10 | pit-during-apk | 0.25 | 98 | **Iron UDisk `56a3ffd` / run `34480107961`: E5 CLOSED on the real R640 — reboot-to-disk.** Third iron `RAYNU-V-M7-ISO-INSTALL-OK` → `reboot` → F7 relaunch → `GPT ESP lba=2048` → installed GRUB 2.12 countdown `2s→1s→0s` (wall cap never fired) → `Booting 'Alpine Linux v3.21, with Linux lts'` → **`RAYNU-V-RAYNU-F-DISK-BOOT-OK`** → `EBS-OK` → second `Linux version 6.12.13-0-lts` `root=UUID=9af18543-…` → `EXT4-fs (vda2): mounted` → OpenRC → `login:` → `/proc/cmdline` from the installed system; months 0.5→0.25; overall 96→98; summit ISO 98→99; H3 resolved; new P0-63 Phase B (SPA start → RayNu-F path; iron SPA is still the SHELL stub `2b795a0`); Everest not claimed; docs/honesty-strings-only commit |
+| 2026-09-10 | pit-during-apk | 0.5 | 96 | **Iron UDisk `975f8fc` / run `34474850361`: F7 relaunch worked on the R640** — `src=kbc n=1` → `relaunch after reset` → `GPT ESP lba=2048 sectors=98304 part=1` → `image=DISK-BOOTX64` → installed GRUB 2.12 menu (`executed automatically in 2s`) → `stop exit-cap exits=1048577 svc=492778`: GRUB `run_menu` polls ReadKeyStroke + serial LSR with no idle (~2 exits/µs on iron), the fixed 1 M exit-count cap fired inside GRUB's own timeout; fix: RayNu-F wall cap (180 s wall from launch/relaunch, checked every 4096 exits; exit count `1<<30` u32-wrap guard only; `wall_ms=` on stop lines); months 0.5 held; overall 96 held; iron `DISK-BOOT-OK` not claimed; iron P0-14 stays 2b795a0 |
+| 2026-09-10 | pit-during-apk | 0.5 | 96 | **Iron UDisk `59ac070` / run `34425781629`: `RAYNU-V-M7-ISO-INSTALL-OK` on the real R640** — `916af96` console fix landed (apk 25 pkgs in 0.5 s; heartbeat `room=3177..4096 pace=3360→5811 fifo=1 drained→97346 win→17488`), `setup-disk -m sys /dev/vda` GPT+grub+initramfs `Installation finished. No error reported.`; `reboot` → F7 relaunch failed `VMCLEAR/VMPTRLD`: release asm shows `raynu_f_reset_relaunch` 81,024-byte frame (`FirmwareState::new()` PagePool on stack) on a 16 KiB host stack with the private VMCS as the next frame down; fix: `.rdata` `RAYNU_F_STATE_TEMPLATE` memcpy (frame 40 B), host stack 4→32 pages + guard page checked before F7 VMCLEAR, split VMCLEAR/VMPTRLD lines `rev=/want=/guard=`, `flush_guest_tx()` before share-off; months 0.75→0.5; overall 94→96; iron `DISK-BOOT-OK` not claimed; iron P0-14 stays 2b795a0 |
+| 2026-09-10 | pit-during-apk | 0.75 | 94 | Iron UDisk `916af96` / run `34420783162`: THRE chain telemetry named the link (`pend=0` with `ring=0` `com2_lsr=0x0`; take4≈iir THRE≈lsr ON; ~15 exits/s × 1 byte; own MMIO lines filled the 2 KiB ring) — guest THRE was gated on host COM2 LSR + empty ring at exit time. Fix pin: guest UART TX ring room (THRE = room ≥ 1024+16, 4 KiB ring) + guest UART line-rate pace (preemption timer 250 µs while ring non-empty; paced ticks no HPET/PIT/exit-count) + COM2 FIFO burst (16/window on 16550A) + virtio MMIO kick throttle; heartbeat `room= pace= fifo= drained= win=`; months 0.75 held; do not F11 34420783162; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-09 | pit-during-apk | 0.75 | 94 | Iron UDisk `8b6ed1a` / run `34415711199`: THRE level lived, COM2 identical to f229d14 probe (apk in n_tty_write, text only around SysRq IRQ4, n=1373, PIT paced n=1375); not regression, not fix; telemetry pin: `virtio stall dump thre` every heartbeat (IER/latch/pend/ring/COM2 LSR/IIR+LSR classes/THR+ETBEI/raise+lower/8259 IRR IMR ISR/take0 take4) + `build: sha=` banner; months 0.75 held; do not F11 34415711199; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-09 | pit-during-apk | 0.75 | 94 | Iron UDisk `f229d14` / run `34354322953` probe answered: SysRq t shows apk in n_tty_write→wait_woken (stdout ttyS0), 16 bytes flushed per IRQ4; root cause lost 16550 THRE interrupt (IIR clear then LSR THRE=0 under SOL back-pressure); fix UART THRE level until stop_tx; not virtio, not timer; do not F11 34354322953; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-09 | pit-during-apk | 0.75 | 94 | Iron UDisk `09b5842` / run `34302053558`: PIT paced lived, apk still asleep (rings empty, CPU idle); ten-flash review: stimulus pins refuted their own hypotheses; probe pin (virtio stall dump ring + SysRq w/m/t/l over COM1 BREAK + RIP samples + sysrq_always_enabled); heuristic PIT/INTx pins frozen; months 0.5→0.75, ETA 2026-10; do not F11 34302053558; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-09 | pit-during-apk | 0.5 | 95 | Iron UDisk `2b3cc1e` / run `34300317331`: PIT hold lived then unpaced IRQ0 soft lockup / reason=0x1e; virtio stall dump PIT paced; do not F11 34300317331; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-09 | pit-during-apk | 0.5 | 95 | Iron UDisk `b8ac361` / run `34297632324`: notify-reset lived (no flood) then apk n=1370 INTx no 0x300; virtio stall dump PIT hold; do not F11 34297632324; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-09 | pit-during-apk | 0.5 | 95 | Iron UDisk `6d0c58a` / run `34292570282`: stall dump INTx lived then dump/ISR flood; virtio stall dump notify reset; do not F11 34292570282; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-08 | pit-during-apk | 0.5 | 95 | Iron UDisk `ba5bf8f` / run `34290078274`: stall dump PIT lived (live==last) then apk n=1373; virtio stall dump INTx; do not F11 34290078274; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-08 | pit-during-apk | 0.5 | 95 | Iron COM2 confirmed `a580299` / 34227607779 empty-ring dump n=1373; flash ba5bf8f / 34290078274 (UEFI-release green); do not F11 34227607779; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-08 | pit-during-apk | 0.5 | 95 | Iron UDisk `a580299` / run `34227607779`: INTx hold lived past n=1345 then empty-ring dump n=1373; virtio stall dump PIT; do not F11 34227607779; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-08 | pit-during-apk | 0.5 | 95 | Iron UDisk `34968f7` / run `34224368343`: used.idx + stall dump lived (usbdelay n=1118) then apk n=1345; virtio shared INTx hold; do not F11 34224368343; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-08 | pit-during-apk | 0.5 | 95 | Iron UDisk `e717fb4` / run `34220740109`: DATA_SEGS=128 still apk n=1345; do not wait; virtio used idx + drain on ISR + stall dump + GET_ID; do not F11 34220740109; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-08 | pit-during-apk | 0.5 | 95 | Iron UDisk `6cfabee` / run `34218742196`: yield until mount lived then apk n=1345; 3:1 not the stall; virtio chain all segs (DATA_SEGS was 16); do not F11 34218742196; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-08 | pit-during-apk | 0.5 | 95 | Iron UDisk `c2cd099` / run `34172103709`: Mounting boot media ok then apk n=1345; stop-yield after media:ok did not move apk; 1:1 then 3:1 PIC 11:PIT; do not F11 34172103709; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-07 | pit-during-apk | 0.5 | 95 | Iron UDisk `6692898` / run `34170268004`: Mounting boot media ok then apk n=1345; FLUSH drain did not help; PIC 11 yield until mount; do not F11 34170268004; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-07 | pit-during-apk | 0.5 | 95 | Iron UDisk `9652262` / run `34149809660`: Mounting boot media ok then apk n=1345 after disk ISR ACK; virtio drain FLUSH raises INTx on 0-byte used-idx; do not F11 34149809660; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-07 | pit-during-apk | 0.5 | 95 | Iron UDisk `fc3053a` / run `34148045050`: linux PIC IRQ0 + linux virtio PIC 11 then freeze at mount n=1089 (usbdelay=30); PIC 11 yields PIT; do not F11 34148045050; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-07 | pit-during-apk | 0.5 | 95 | Iron UDisk `fcac0cd` / run `34145652767`: INTx reassert then n=1345; vec=0x30 is Linux PIC IRQ0; level virtio PIC INTx + IRQ11 unmask + 0x30/0x3b log match; do not F11 34145652767; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-07 | pit-during-apk | 0.5 | 95 | Iron UDisk `0a9b552` / run `34141401594`: leftover GSI 2 no-op on RayNu-F; same apk n=1345; shared virtio INTx reassert + drain without notify + MMIO PIT until DRIVER_OK; do not F11 34141401594; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-07 | pit-during-apk | 0.5 | 95 | Iron UDisk `c61942b` / run `34135448354`: paced PIT lived (DRIVER_OK, no soft lockup) then apk n=1345 with no linux PIC IRQ0 (leftover GSI 2 stole PIC virtio); linux PIC before leftover GSI 2; do not F11 34135448354; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-07 | pit-during-apk | 0.5 | 95 | Iron UDisk `69102aa` / run `34080595540`: MADT passed; virtio_pci_probe `vp_set_status`/`iowrite8` IRQ0 storm (`soft lockup`) then I/O `reason=0x1e` hold; raise PIT on resume only after both DRIVER_OK; do not F11 34080595540; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-07 | pit-during-apk | 0.5 | 95 | Iron UDisk `c815ccc` / run `34078335291`: APIC MADT then I/O `reason=0x1e` `restore host xcr0` (PIT hold from firmware queue-arm + PHASE_LOGIN); arm PIT only after Linux DEVICE_STATUS / both DRIVER_OK; do not F11 34078335291; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-07 | pit-during-apk | 0.5 | 95 | Iron UDisk `20e8b70` / run `34076175624`: same `n=1345` freeze (`idle=poll` never HLT; PIT-once consumed so UART wins); hold PIT until login: + raise PIT on overlay resume; do not F11 34076175624; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-07 | pit-during-apk | 0.5 | 95 | Iron UDisk `46fd345` / run `34069352671`: Linux 6.12.13-lts on RayNu-F stalled at Alpine `Installing packages` (last virtio MMIO n=1281) because UART beat PIT after DRIVER_OK; PIT-once on virtio MMIO + preempt after DRIVER_OK (HLT keeps UART); DRIVER_OK nowait; virtio heartbeat 64; do not F11 34069352671; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-07 | raynu-f-direct-iron | 0.5 | 95 | Iron UDisk `55a3602` / run `34067879816`: RayNu-F direct + EBS-OK then Linux WRMSR `reason=0x20 rip=0xb00013f` stopped (`n=2 < cap=1`); collapse OVMF cap only while `requested && !RAYNU_F_RAN`; stop nowait carries `cap=`; do not F11 34067879816; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-06 | raynu-f-direct-iron | 0.5 | 95 | Iron UDisk F7 `088ab25` COM2 diagnosed: RayNu-F only launches from the OVMF stop path; nested stopped at SEC (`788930c` n=1043 reason=0x30) but iron OVMF parked in CpuSleep 0x7f0680d0 toward the 16_777_216 cap (`ea30da1`); `raynuf.txt` now collapses the OVMF leg to 1 exit (`guest_uefi_raynu_f_resume_cap`, note `RayNu-F direct — OVMF leg bypassed`); runbook Phase A fixed; host-tested; do not F11 088ab25 for F7 again; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-06 | iron-f7-4g-cruzer | 0.5 | 95 | Iron detect: front USB2 is LogiLink UDisk 4026531840 serial General_UDisk-0:0 lsusb abcd:1234 (not Cruzer Micro); flash identity accepts UDisk; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-06 | iron-f7-4g-cruzer | 0.5 | 95 | 4 GB front-USB2 Cruzer unblocks alpine-extended iron attempt; `--init-new-cruzer` / `--allow-new-serial` / `--any-cruzer-usb`; runbook r640_f7_iso_iron.md; pin 088ab25 run 33978770315; do not flash 2b795a0; nested F7 ≠ ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-05 | e5-stage46-iso | 0.5 | 95 | Nested `088ab25` F7 re-run on raynuvsrv1: `guest reset requested src=kbc n=1` + `relaunch after reset` now visible; Alpine `reboot` used i8042 `0x64<-0xFE` (not CF9/FADT; `efi=noruntime`); GPT ESP lba=2048 → `DISK-BOOT-OK` → second Linux `root=UUID=ddf8714c-…` → second `localhost:~#`; evidence file added; nested QEMU ≠ R640; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-05 | e5-stage46-iso | 0.5 | 95 | F7 review: nested `fe4785a` log lacked `guest reset requested src=` and `relaunch after reset` — both printed with blocking `write_str` while Linux earlycon share was still on (dropped); now `*_nowait` + share off before the banner, so the next run shows whether Linux reset via CF9 (ACPI), KBC or triple fault; no behaviour change; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-05 | e5-stage46-iso | 0.5 | 95 | Nested `fe4785a` F7 reboot-to-disk on raynuvsrv1: `DISK-BOOT-OK` + second Linux `root=UUID=698a922a-…` (ext4 /dev/vda2, ESP /dev/vda1, second localhost:~#); harness nested reboot-to-disk line; nested QEMU ≠ R640; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-05 | e5-stage46-iso | 0.5 | 95 | Nested `3492ebc` F7 relaunch reached disk GRUB then rescue `disk `,gpt2' not found` (HD node on HANDLE_DISK; GRUB skipped the only BlockIo); HANDLE_DISK now Hardware/Vendor whole-disk path so GRUB names hd0; nested second Linux boot unclaimed; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-05 | e5-stage46-iso | 0.5 | 95 | F7 guest reset→RayNu-F relaunch **wired host-only**: CF9/KBC/TF, FADT RESET_REG 0xCF9, serial reboot after Please reboot, reset_keep_disk, disk-before-ISO GPT ESP, VMCS overlay+TSS, cap=1; nested second Linux boot not run; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-05 | e5-stage46-iso | 0.5 | 95 | Nested `499492c` alpine-extended on RayNu-F: 512 MiB leftover disk, `setup-disk -m sys` → 25 pkgs → initramfs → grub-mkconfig → **`Installation is complete. Please reboot.`** (first complete Linux install to disk under our firmware; GPT+ESP+ext4+grub-install on /dev/vda); F7 reset→boot-from-disk opened (no guest reset path yet); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-05 | e5-stage46-iso | 0.5 | 95 | Nested `c751fbe` alpine-extended: `setup-disk` past apk (grub-efi + dosfstools resolved), partitioned + installed, then `No space left on device` on the 64 MiB pool disk (48 MiB ESP); install disk now carved from leftover DRAM above PRECISE before the report-RAM seed (512 MiB nested at `-m 4096M`, 1 GiB iron; 768 MiB guest floor), pool ladder fallback; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-05 | e5-stage46-iso | 0.5 | 95 | Disable UEFI BDS 5-min watchdog before the PRE-EBS ISO read (sandbox TCG `5043864` reset twice after `M3-ASSETS-OK` with the 994 MiB extended ISO); with it off, TCG retained + patched extended from the FAT32 ESP image and reached leftover seed / VMXON-SKIP (no VT-x in sandbox); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-05 | e5-stage46-iso | 0.5 | 95 | Nested `a0a824d`: lts grow live, kernel→login→SETUP→setup-disk, apk still lacks dosfstools/grub-efi — alpine-standard does not ship them (ISO listed); pivot to alpine-extended (994 MiB): ucode grub.cfg grow 182→299, FAT32 ESP image (vvfat 516 MB cap), QEMU_MEM 4096M; Cruzer too small for extended; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-05 | e5-stage46-iso | 0.5 | 95 | Nested `788930c` run booted the parked retained-OVMF leg (`stop n=1043 reason=0x30 rip=0xfffd4739`; no kernel) because the E5 script never staged `raynuf.txt`; script now defaults `RAYNU_F=1` and rebuilds the EFI; lts grow still unproven nested; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Nested alpine-standard stalled after `Freeing initrd` (grow 0 hits on `Linux lts`); add lts linux-line grow + Data Length 140→299; size copy 245 MiB / 64 MiB refat FAT; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Revert `4536b72` apks/main→bare `…/apks`; guard repo write; nested path alpine-standard for grub-efi/dosfstools; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Nested `1b48e26` setup-disk: apk missing dosfstools/grub-efi on bare `…/apks`; SETUP now uses `/media/*/apks/main`; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Nested `50ed61c` Alpine root shell; SETUP ash `unexpected "}"` on `{mkdir`; spaces `{ mkdir`/`apks; }` so `/media/*/apks` discovery + setup-disk can run; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Nested `528af19` had 64 MiB disk but apk Resource-busy on remount; SETUP now finds `/media/*/apks` before mount fallback; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Nested Alpine shell already on `ac57efa` (NXE hold); this cut grows nested product-ISO virtio-blk try-ladder past 1 MiB (256/64/32/16/1 + leave) and skips remount when `/media/cdrom` already busy so apk/`setup-disk` can see ISO apks; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Nested 2bebea7 (CI 33913170225): trampoline+LSTAR closed; CEA present both PGDs (pte=0x800000000708f121 NX GPA 0x708f000); userspace VM-exit stripped NXE (high-half-only allow; RayNu-F never intercepts #PF); sticky NXE after RayNu-F EBS / once held; dump efer= on fatal-class; do not clone CEA; do not nopti; F6a ACPI still open; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Nested 659bb41 (CI 33909234183): trampoline+LSTAR closed (cs=0x33 lstar live) then #DF CPL3 IDT[#PF] cr2=0xfffffe00000000e0 under PTI user CR3 0x2e1f804; host 4-level PT walk dump user-idtr vs kern-idtr + nowait syscall WRMSR; do not clone CEA; do not nopti; F6a ACPI still open; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Nested 8f62fea (run 33905004811): trampoline closed then #DF at X.509 (rip=0 user RSP LSTAR=0 — first usermode helper syscall); guest-UEFI handle_wrmsr now HostPassthrough cpu::wrmsr for STAR/LSTAR/CSTAR/SFMASK/KERNEL_GS_BASE/TSC_AUX (mirror G0 launch.rs); #DF/#TS/#NP/#SS stop+dump not re-inject; F6a ACPI still open; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Nested 033bc0d (run 33901852277): efi=noruntime skipped virtual mode; Linux 6.12.13-virt on RayNu-F reached start_kernel then paniced Real mode trampoline was not allocated (e820 usable from 0x803000 — map reserved [0, 8MiB)); host fix: conventional [0x1000, 0x9F000) 158 pages AllocateAddress-honest, AnyPages does not consume it; F6a ACPI still open; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Nested 5a9e8e4: NX panic gone (e820 reserves firmware image); kernel triple-faults inside efi_enter_virtual_mode before our SetVirtualAddressMap trampoline (no svc line; root cause open); GRUB linux line adds efi=noruntime (RayNu-F has no runtime services; grub.cfg Data Length 143→302); fatal-class exception inject logging + triple-fault CR/IDTR dump; F6a ACPI still open; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | **Nested 0ab0f9d: Linux 6.12.13-virt boots on RayNu-F** ("efi: EFI v2.10 by RayNu-F", e820 from our memory map, RAMDISK via GRUB LoadFile2, console ttyS0 on our UART, PIT inject vec=0x30); panic in efi_set_virtual_address_map: trampoline at 0x8003b0 executed from NX page because the firmware image was EfiBootServicesData; F6c types it EfiRuntimeServicesCode + EFI_MEMORY_RUNTIME (host-proven); SetVirtualAddressMap stays UNSUPPORTED (Linux continues without RT); F6a ACPI still open (no MADT/HPET/PM timer → PIC, 1 CPU); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Nested 449f638: RAYNU-V-RAYNU-F-EBS-OK — Linux kernel called ExitBootServices on RayNu-F (GRUB→kernel→initrd→EBS all on our firmware); stopped on WRMSR at rip=0x300013f (kernel entry) = F6b boundary; F6b wired: at EBS-OK install Linux exception bitmap (no OVMF #PF identity repair on our kernel), earlycon share, retire fast path → Stage-46 Linux exit path owns the VMCS; F6a ACPI config table still open; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Nested d7e755d: initrd config table installed, Exit unwound kernel→GRUB (GRUB printed start_image() error itself); Linux stub failed exit_boot(): GetMemoryMap sizing call did not report DescriptorSize → AllocatePool size=0x1793e758e70f3100 INVALID_PARAMETER; F6-prep d: DescriptorSize/Version on sizing path (EDK2 order), GetVariable/GetNextVariableName NOT_FOUND, UnloadImage frees image (host-proven); next expected EBS-OK then F6b; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Nested 166377a: GRUB LoadImage+StartImage of the Linux kernel on RayNu-F (START-IMAGE-OK entry=0x2b12d4d; our PE loader relocated the kernel to high RAM); Linux EFI stub ran on our tables, loaded initrd via LocateDevicePath + GRUB LoadFile2 ("EFI stub: Loaded initrd from LINUX_EFI_INITRD_MEDIA_GUID device path"); stopped on InstallConfigurationTable UNSUPPORTED then Exit UNSUPPORTED → #GP (exits=178 blk_rd=38 svc_err=9); F6-prep c: EFI_CONFIGURATION_TABLE array + header re-CRC, Exit unwinds to StartImage caller (host-proven); next EBS-OK then F6a/F6b; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | CI 1d1f2d7 nested runner: WAITPKG fix confirmed (M3 SHELL/NOIRQ + M4 2VM/SCHED/NVM/BLK/NET/SMP OK 7/7) but gate still required OVMF-ATAPI-OK, which the OVMF leg cannot produce since ADR-016 disabled the forcing family (ataio=0 HLT ret=0x7ff16f4b); today's green runs were VMXON-SKIP runners; qemu-boot-test.sh now: OVMF ATAPI informational when the RayNu-F leg ran, and RAYNU-F-CONOUT-OK required when RAYNU_F=1 after VMXON; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | CI 9511d4c QEMU gate 7/7 Oops `66 0F AE F1` kill-init on a nested runner while RayNu-F passed 7/7: bytes are register-form `tpause ecx` (`delay_halt_tpause`), not CLWB as `34b5767` assumed; WAITPKG (CPUID.7.0:ECX bit 5) now hidden in both CPUID filters (TPAUSE/UMWAIT #UD in VMX non-root without the user-wait control); affects any WAITPKG host, not just CI; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Nested 2d34fff: CPUID handled → RAYNU-F-BLOCKIO-OK (GRUB ISO9660 over our ReadBlocks) → GOP/UGA/ConsoleControl honest NOT_FOUND → GRUB ran Alpine entry, loaded kernel+initrd; last call InstallMultipleProtocolInterfaces (initrd LoadFile2+DevicePath) was EFI_UNSUPPORTED → "Press any key"; F6-prep b implements InstallMultiple/UninstallMultiple/LocateDevicePath (host-proven), key-poll not an error, stop line blk/alloc counters; next: kernel EFI stub → EBS-OK, then F6a ACPI ConfigurationTable + F6b post-EBS Linux exit hand-off; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | F6-prep NESTED-PROVEN (dd32bda run 33872241367): high RAM 256 MiB from pre-mapped report-RAM, LoadedImage found, GRUB mm_init completes (alloc/map/free all 0x0), GetVariable honest UNSUPPORTED, LocateHandle(BlockIo) + per-handle OpenProtocol; stopped on unhandled CPUID exit at rip=0xbb8ef7 (grub_tsc_init) exits=16 svc_err=0 → CPUID now handled on RayNu-F path (firmware filter); next expected BLOCKIO-OK (GRUB reads grub.cfg via BlockIo); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | **GRUB ran on RayNu-F** (nested raynuvsrv1 7ee3a3b: FAT ESP lba=77 → BOOTX64.EFI 724992 B staged 0xbb1000 → VMLAUNCH image=ISO-BOOTX64 → GRUB's own "Could not malloc"/"Aborted" via our ConOut, ReadKeyStroke poll to exit cap); F6-prep fixes what it named: LoadedImage published on direct-stage path; PagePool spans slab pool + pre-mapped report-RAM from 32 MiB (cap 256 MiB); map advertises conventional only what AllocateAddress serves; svc failure lines carry a1..a4 + GUID; host-proven, nested rerun next; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | RayNu-F F3 CLOSED on nested raynuvsrv1 (TIMER-OK/MEM-OK/CONOUT-OK, exits=7 svc_err=0); F5c first nested run picked the BIOS El Torito default (lba=56 isolinux, not FAT) — parse_catalog now prefers the 0xEF section (lba=77 FAT12 ESP); real Alpine ISO path proven on host (GRUB 724992 B, 1851 relocs); rerun nested then iron; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | RayNu-F F5 host-proven (RAYNU-F-FS-GATE-OK + RAYNU-F-IMAGE-GATE-OK): FAT12/16/32 reader, SimpleFileSystem/EFI_FILE_PROTOCOL exposed to guests, LoadImage over GuestMem with DIR64 relocs + LoadedImage published, StartImage guest redirect; launcher now stages and boots the ISO's real \EFI\BOOT\BOOTX64.EFI (test app fallback); awaits nested run for START-IMAGE-OK; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | RayNu-F F4 host-proven (RAYNU-V-RAYNU-F-BLOCKIO-GATE-OK): handle/protocol database with real UEFI GUIDs + two EFI_BLOCK_IO_PROTOCOL instances (CD 2048B read-only from retained ISO; install disk 512B rw on virtio-blk), spec 13.9 validation, ISO9660 PVD read + EFI PART disk write round-trip; awaits nested run for BLOCKIO-OK; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | RayNu-F F3 host-proven (RAYNU-V-RAYNU-F-SERVICES-OK): memory services (pages/pool/GetMemoryMap/ExitBootServices map-key) + owned timer on a TSC-calibrated host-side firmware clock (no guest IDT/PIT/LAPIC in the firmware phase) + TPL/Stall/CopyMem/SetMem/CalculateCrc32 + real ConIn.WaitForKey; test app v2 with OK/FAIL hlt paths; awaits nested run for TIMER-OK/MEM-OK; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | RayNu-F F2b CLOSED on nested VT-x raynuvsrv1 (c975ade / run 33826787787 EFI): VMLAUNCH entry=0x901000 relocs=1 → RN-F ConOut via RayNu-F tables → RAYNU-V-RAYNU-F-CONOUT-OK → HLT 0x901019, exits=2 — first guest execution of our own tables; GitHub runners lacked nested VT-x; flashcruzer --raynu-f added for optional iron confirm; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | RayNu-F F2b wired (unproven): long-mode launch of the test app on the stopped private VMCS (no new allocs), raynu_f_vmexit fast path, ESP raynuf.txt opt-in staged by CI QEMU (observational); closes only on serial RAYNU-V-RAYNU-F-CONOUT-OK; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | RayNu-F F2a closed (host): PE32+ loader with DIR64 relocs + RayNu-F test app as genuine PE32+ (relocated at 0x900000) + F2 launch plan (RAYNU-V-RAYNU-F-LOADER-OK); nothing launched; F2b opt-in launch next; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | RayNu-F F1 closed (host): byte-exact UEFI 2.10 tables + CRC32 + 0x5246 trampolines + ConOut.OutputString dispatcher wired into emulate_io_port (RAYNU-V-RAYNU-F-TABLES-OK); no guest has run them (F2 loader+launch next); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Iron COM2 4e16b59 event #PF inject fired OVMF own #PF + CpuDeadLoop still ataio=0; pivot ADR-016 be the guest firmware (RayNu-F scaffold); 3k–3o OVMF forcing disabled (RAYNU_F_NO_FW_STATE_MUTATION); No third-party firmware state mutation; do not F11 33820727776; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-03 | e5-stage46-iso | 0.5 | 95 | Iron COM2 9474ab6 WFE state4 poke dest=0x7ff18340 then #PF cr2=0xffffffffffffffb8 rip=0x7ff0e018 still ataio=0; #229 firmware WFE event #PF; do not F11 33817483733; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-03 | e5-stage46-iso | 0.5 | 95 | Iron COM2 d0e44d4 WFE skip len=12 rip=0x7ff0e7e8 still ataio=0 (mov rax,3); #229 firmware WFE state4 poke; do not F11 33815993163; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-03 | e5-stage46-iso | 0.5 | 95 | Iron COM2 c8d504d ZeroMem ept fill never printed (0x34 is preempt not EPT) still ataio=0; #229 firmware WFE preempt skip; do not F11 33757018875; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-03 | e5-stage46-iso | 0.5 | 95 | Iron COM2 e0d5c55 WFE return caller=0x7feffe28 then EPT 0x34 rip=0x7ec8f6ff still ataio=0; #229 firmware ZeroMem ept fill; do not F11 33753069821; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-03 | e5-stage46-iso | 0.5 | 95 | Iron COM2 0b770cd rethx=0xe056ff41b84d8b48 (call [r14-0x20]) still ataio=0; #229 force WaitForEvent return; do not F11 33701350767; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-03 | e5-stage46-iso | 0.5 | 95 | Iron COM2 6c4bfde ConIn CR still ataio=0 (timer Wait, not serial); #229 prints HLT callsite; do not F11 33699177232; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-03 | e5-stage46-iso | 0.5 | 95 | Iron COM2 2d4ab51 HLT ret=0x7ff0e055 (DxeCore Wait) still ataio=0; #229 firmware ConIn CR; do not F11 33697154185; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-02 | e5-stage46-iso | 0.5 | 95 | Iron COM2 27eda8c hide-slot0 (CDROM-OK via PIIX) still ataio=0; #229 prints HLT retaddr; do not F11 33695570769; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-02 | e5-stage46-iso | 0.5 | 95 | Iron COM2 118edcf HLT romwr=0xfffffffe (ROM size probe) still ataio=0; #229 hides product-ISO slot-0 IDE (keep PIIX); do not F11 33630723649; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-02 | e5-stage46-iso | 0.5 | 95 | Iron COM2 7ba1ccf HLT cf8ide=0x80000930 (00:01.1+30 ROM) still ataio=0; #229 prints last IDE ROM write; do not F11 33627470674; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-02 | e5-stage46-iso | 0.5 | 95 | Iron COM2 5de9e1c HLT cf8en=0x80004008 (00:08.0+08 host) still ataio=0; #229 prints last IDE CF8; do not F11 33575888121; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-02 | e5-stage46-iso | 0.5 | 95 | Retrigger b0a3356 after nested ATAPI miss (33575225212 7/7 ataio=0); cf8en= unchanged; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-02 | e5-stage46-iso | 0.5 | 95 | Retrigger 21f3407 after nested-KVM QEMU clwb #UD kill-init (33574327641); cf8en= unchanged; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-02 | e5-stage46-iso | 0.5 | 95 | Iron COM2 61991be HLT cf8=0x0 still ataio=0; #229 prints last enabled CF8; do not F11 33573126367; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-02 | e5-stage46-iso | 0.5 | 95 | Option 2 plan catch-up: 2d6b109 refused; 3a dest_ok+MADT DONE; COMMAND closed on c144001; 3c pin 61991be / 33573126367; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Iron COM2 c144001 EnableAttributes pcicmd=0x5 still ataio=0; #229 prints last CF8 on HLT; do not F11 33571164257; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Iron COM2 060c504 seq=0,0,0,0,0,0; #229 EnableAttributes 0x0005 after write-0; do not F11 33569757025; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Iron COM2 abba969 honor pcicmd=0 wr=0 still ataio=0; #229 prints cmdwr seq; do not F11 33567464001; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Iron COM2 184ee61 cmdwr=6 wr=0x0 pcicmd=0x1 (OR hid disable); #229 honors COMMAND; do not F11 33562028442; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Iron COM2 21dc562 skip-HLT after one-shot then same CpuSleep; #229 prints IDE cmdwr/pcicmd; do not F11 33559849096; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Iron COM2 e3cbfa5 hit 16M exit cap (ataio=0 catalog=0); flash 21dc562 / 33559849096 skip-HLT; do not F11 33558261624; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Iron COM2 e3cbfa5 PIT one-shot then HLT hang; #229 skip HLT after first wake; do not F11 33558261624; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Iron COM2 24c5fa6 HLT wait-for-irq then PIT livelock; #229 one-shot PIT after first wake; do not F11 33555104832; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Retrigger ee82483 after nested-KVM QEMU clwb #UD kill-init (33554248661 UEFI+host green); wait-for-PIT unchanged; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Iron COM2 b5c3a9c dest_ok + ACPI MADT then HLT ataio=0; #229 wait-for-PIT before ATA; do not F11 33440050729; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-thirty-sixth slice: firmware HLT insn_len 0 skip (nested CpuSleep f4c3 ataio=0; PIC ATA vector follows ICW2 unchanged; F11 pin stays 33436232227); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-thirty-fifth slice: retrigger 0d36b53 CI after nested ATAPI miss (33437881901 ataio=0 packet=0; PIC ATA vector follows ICW2 unchanged; F11 pin stays 33436232227); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-thirty-fourth slice: PIC ATA vector follows ICW2 (leftover 0x2E rewrite on ICW2 cycle, not ICW4 ready; F11 pin stays 33436232227 until this CI); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-thirty-third slice: flash a14223f pin 33436232227 (do not clobber PIC ICW2 CI green; EFI 9774506155; do not F11 3b7bbac / --run 33433126839); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-thirty-second slice: residual do not clobber PIC ICW2 (E5_OVMF_VMLAUNCH_RESIDUAL_NOTE; F11 pin stays 33433126839 until this CI); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-thirty-first slice: do not clobber PIC ICW2 (arm during ICW4-pending overwrote 0x70→0x20; F11 pin stays 33433126839 until this CI); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-thirtieth slice: flash 3b7bbac pin 33433126839 (leftover IOAPIC 0x2E CI green; do not F11 e4faceb / --run 33429494930); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-twenty-ninth slice: do not inject leftover IOAPIC 0x2E after PIC remap to 0x76 (F11 pin stays 33429494930 until this CI); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-twenty-eighth slice: retrigger 5a69de2 CI after nested-KVM kill-init (33430294210 iso=0 after GTIMER2; firmware OVMF ATA vector unchanged; F11 pin stays 33429494930); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-twenty-seventh slice: flash e4faceb pin 33429494930 (firmware OVMF ATA vector CI green; do not F11 d7d63ca / --run 33426291731); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-twenty-sixth slice: firmware OVMF ATA vector (do not clobber IOAPIC ATA to 0x2E; EDK2 8259 0x70→0x76; F11 pin stays 33426291731 until this CI); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-twenty-fifth slice: flash d7d63ca pin 33426291731 (firmware PIC ATA CI green; do not F11 8e581c7 / --run 33424573770); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-twenty-fourth slice: firmware PIC ATA (take PIC 0x2E when the 8259 can deliver it; F11 pin stays 33424573770 until this CI); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-twenty-third slice: flash 8e581c7 pin 33424573770 (IOAPIC edge no remote IRR CI green; do not F11 30b78a0 / --run 33422323257); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-twenty-second slice: IOAPIC edge no remote IRR (PACKET after IDENTIFY without IOAPIC EOI; F11 pin stays 33422323257 until this CI); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-twenty-first slice: flash 30b78a0 pin 33422323257 (firmware take IOAPIC ATA CI green; do not F11 0bb06a2 / --run 33418246409); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-twentieth slice: firmware take IOAPIC ATA (pin 14 only; do not latch virtio into IRR that ata_irr_only will not inject; F11 pin stays 33418246409 until this CI); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-nineteenth slice: flash 0bb06a2 pin 33418246409 (firmware ATA IRR only CI green; do not F11 12926eb / --run 33415083012); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-eighteenth slice: retrigger cdbee39 CI after nested-KVM kill-init (33417361559 iso=0 after GTIMER2; firmware ATA IRR only unchanged; F11 pin stays 33415083012); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-seventeenth slice: firmware ATA IRR only (do not take_highest_irr LVT 0xEF before PACKET; F11 pin stays 33415083012 until this CI); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-sixteenth slice: flash 12926eb pin 33415083012 (firmware ATA over PIC keeps latched 0x2E CI green; do not F11 eaa580d / --run 33413425759); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-fifteenth slice: firmware ATA over PIC keeps latched 0x2E (next HLT raise_pit must not steal PIC 0x20 after take_ioapic; F11 pin stays 33413425759 until this CI); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-fourteenth slice: flash eaa580d pin 33413425759 (firmware ATA over PIC CI green; do not F11 bce5bbb / --run 33411580450); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-thirteenth slice: firmware ATA over PIC (HLT raise_pit PIC IRQ 0 must not skip latching 0x2E; F11 pin stays 33411580450 until this CI); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-twelfth slice: flash bce5bbb pin 33411580450 (firmware prefer ATA IRR CI green; do not F11 489d938 / --run 33408594472); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-eleventh slice: firmware prefer ATA IRR (PACKET 0x2E ignores TPR; not take_highest_irr; F11 pin stays 33408594472 until this CI); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-tenth slice: flash 489d938 pin 33408594472 (firmware arm ATA GSI 14 CI green; do not F11 5227ad9 / --run 33404368817); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-ninth slice: firmware arm ATA GSI 14 (wait_for_irq false never unmasked pin 14; F11 pin stays 33404368817 until this CI); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-eighth slice: flash 5227ad9 pin 33404368817 (firmware force IF for inject CI green; do not F11 77f5866 / --run 33402411199); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-seventh slice: retrigger 9df52c5 CI after nested-KVM SHELL flake (33402411199 iso=0 5/5 after GTIMER2; force-IF firmware unchanged; do not F11 77f5866); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-sixth slice: firmware force IF for inject (PACKET nIEN=0 after ataio>0 still needs IF; do not F11 77f5866); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-fifth slice: flash 77f5866 pin 33399209557 (firmware skip PIT inject CI green; do not F11 e70a295); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-fourth slice: firmware skip PIT inject (ATA 14 / virtio INTx still inject; do not F11 e70a295); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-third slice: flash e70a295 pin 33397104645 (firmware HLT skip after ataio CI green; do not F11 90da03d); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-second slice: firmware HLT skip after ataio (PACKET HLT after ataio>0 still skips + Active; do not F11 90da03d); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-first slice: flash 90da03d pin 33394776080 (product ISO fw_cfg bootorder El Torito ide@ first CI green; do not F11 56f31d3); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundredth slice: product ISO fw_cfg bootorder El Torito ide@ first (scsi@3 first was not a BDS CD option; do not F11 56f31d3); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-ninety-ninth slice: flash 56f31d3 pin 33392055961 (firmware HLT skip without inject CI green; do not F11 ea30da1 / a2acfc8); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-ninety-eighth slice: firmware HLT skip without inject + un-hide PIIX IDE (iron COM2 ea30da1 inject vec=0x20 timer ISR to n=16777216; do not F11 ea30da1 / a2acfc8 / d61dc7e); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-ninety-seventh slice: product ISO HLT stall before n=16384 (hide-IDE virtio-iso CpuSleep; do not F11 ea30da1 / d61dc7e); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-ninety-sixth slice: flash ea30da1 pin 33389381409 (skip-after-inject uses pci_ready CI green; do not F11 b824789); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-ninety-fifth slice: skip-after-inject uses pci_ready (hide-IDE virtio enum; do not flash b824789 until this CI); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-ninety-fourth slice: flash b824789 pin 33387614559 (product ISO hides PIIX IDE CI green; do not F11 d61dc7e); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-ninety-third slice: retrigger hide-IDE CI after nested-KVM kill-init flake (8336a06 run 33387083800; iso=0 CDROM-OK BOTH-OK; pin stays 33349142609); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-ninety-second slice: product ISO hides PIIX IDE (iron COM2 d61dc7e scsi@3 first then ConnectAll CpuSleep pci_ide=1 ataio=0; iso=0 keeps IDE); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-ninety-first slice: flash d61dc7e pin 33349142609 (virtio-iso scsi@3 first CI green; iron COM2 ticks printing; do not F11 5c0f7a2); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-ninetieth slice: product ISO fw_cfg bootorder virtio-iso scsi@3 first (ConnectDevicesFromQemu skips IdeBus CpuSleep; iso=0 CD then disk); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-eighty-ninth slice: flash 5c0f7a2 pin 33347766697 (IOAPIC I/O over PIT CI green; do not F11 2ae4544); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-eighty-eighth slice: IOAPIC I/O over PIT + firmware virtual-wire GSI 14 (virtual-wire pin 2 would starve ATA 14; F11 pin stays 2ae4544 until this CI); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-eighty-seventh slice: flash 2ae4544 pin 33345731636 (firmware LAPIC timer expiry CI 49/49; do not F11 b26c86a); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-eighty-sixth slice: firmware LAPIC timer expiry (HLT-exiting never lets CUR_COUNT hit 0; do not F11 b26c86a); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-eighty-fifth slice: firmware HLT activity active (skip RIP while activity HLT parks RET; do not F11 daf3195); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-eighty-fourth slice: firmware HLT skip after inject (iron eac424b IRET-to-HLT); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-eighty-third slice: firmware virtual-wire GSI 2 + HLT force IF (iron eac424b pic=1 sparse inject CR8 ataio=0); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-eighty-second slice: firmware virtual-wire AEOI (OVMF IDT[0x20] EOIs LAPIC not PIC; do not F11 eac424b); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-eighty-first slice: firmware virtual-wire PIC (iron beb1576 pic=0 gsi2=0 IF=1 TPR=0); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-eightieth slice: firmware HLT stall waits for IRQ (do not skip_hlt after BOTH-OK ataio=0); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-seventy-ninth slice: firmware HLT ignores TPR (iron 084430f inject vec=0x20 only after CR8; PIC-first still needs pic_ready); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-seventy-eighth slice: HLT stall quiet tick print-only (nested 9ce65ae ATAPI-OK missing after quiet skipped cpu_flush; do not F11 9ce65ae / c08a13d); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-seventy-seventh slice: firmware PIC before GSI 2 + HLT stall quiet tick (iron 084430f Delay via 0xB008 then HLT 0x7f0680d0 ataio=0; do not F11 c08a13d); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-seventy-sixth slice: 0xB000 dword timer (iron 8663f56 unh=4 then handled Delay not 0xB008; F11 pin stays 084430f); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-seventy-fifth slice: flash 084430f pin 33337287432 (0xAF00 PM timer CI 49/49; do not F11 8663f56 / run 33333506987 dest_ok then Delay); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-seventy-fourth slice: 0xAF00 PM timer (iron COM2 8663f56 dest_ok pde0=0x40b027 then unhandled 0xAF00/0xAF05 + IN EAX,DX Delay stop n=33297 sectors=0) + tick port=; do not F11 8663f56 again; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-seventy-third slice: linux-line usbdelay (alpine-virt 3.21 mkinitfs myopts has no alpine_dev; same-length usbdelay=30 so nlplug waits 30s not 5s) + io string (rep insb); F11 pin stays 8663f56; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-seventy-second slice: product ISO POST_DXE_TAIL skip (armed Stage 46 does not stop at n=33297 sectors=0; lab iso=0 still uses the tail) + emergency mount+exit (3.21 /init has no setup-disk; F11 pin stays 8663f56); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-seventy-first slice: iron COM2 2d6b109 pde0=0x20b027 (identity 0x200000; no dest_ok fill; DXE n=529 stop n=33297 sectors=0 catalog=0 ataio=0 POST_DXE_TAIL; not 8663f56); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-seventieth slice: auto-answer / # without login (alpine-virt 3.21 /init emergency shell is already root; no getty login:; F11 pin stays 8663f56 run 33333506987); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-sixty-ninth slice: flashcruzer reject 2d6b109 dest skip (EFI prefix 6fc742b0 / run 33321642509 FLASHCRUZER-OK is not F11; pin 8663f56 run 33333506987); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-sixty-eighth slice: flash 8663f56 (CI 49/49; 2d6b109 IoReadFifo8 still skips dest 0x205f18 inside identity 0x200000 so ACPI cannot install; identity 0x400000 + FSEG + FACS); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-sixty-seventh slice: flashcruzer --branch checkout -B origin (git fetch origin NAME only writes FETCH_HEAD; checkout -B origin/NAME then --no-git flashes 2d6b109); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-sixty-sixth slice: FADT FACS (FIRMWARE_CTRL at FACP+36; 64-byte FACS 64-aligned after DSDT; ADD_POINTER before FACP CKSUM; not an SDT checksum); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-sixty-fifth slice: PM1 SCI_EN at reset (FADT SMI_CMD is 0 so Linux acpi_hw_get_mode never writes SCI_EN; PM1_CNT starts with bit 0 so ACPI-on matches); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-sixty-fourth slice: linux-line piix_init blacklist (initcall_blacklist=piix_init; Linux 6.12 ata_piix.c is module_init(piix_init), not ata_piix_init; grub.cfg Data Length stays 143→294); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-sixty-third slice: linux-line ata_piix blacklist (initcall_blacklist=ata_piix_init so built-in ata_piix does not ata_msleep after Freeing initrd; grub.cfg Data Length 143→294); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-sixty-second slice: FSEG dest holds ACPI tables (ZONE_FSEG ALLOC dest in conventional 640KiB identity, not PEI stack 0x205f18 and not ZONE_HIGH leftover); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-sixty-first slice: ACPI tables ZONE_FSEG (etc/acpi/tables ALLOC dest in FSEG below 1MiB identity slab, not ZONE_HIGH ~2GiB leftover); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-sixtieth slice: dest_ok fill log cap 8 (COM2 after successful store so ZONE_HIGH ACPI dest is visible, not only file dir); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-fifty-ninth slice: fw_cfg dest_ok fill dest= (COM2 dest n= when IoReadFifo8 n>16 lands in ordinary RAM; file dir/table-loader/ACPI); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-fifty-eighth slice: PEI dest holds ACPI tables (overlay n<=16 cannot; dest_ok 0x205f18 fills etc/acpi/tables RSDT); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-fifty-seventh slice: HV identity PML4 0x400000 (off PEI stack dest 0x205f18 so fw_cfg file-dir/ACPI fill ordinary RAM); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-fifty-sixth slice: fw_cfg identity overlay (n<=16 QEMU signature into HV identity dest; restore PTEs on next VM-exit); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-fifty-fifth slice: fw_cfg skip dest n= (COM2 dest= n= if QemuFwCfgInitialize overlaps HV identity PML4); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-fifty-fourth slice: linux ATA floating bus (compat ISA 0x1F0/0x170 stays decoded after PCI hide; 0xFF after high-half so leftover ata_piix SRST skips without ata_msleep); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-fifty-third slice: linux-line virtio_pci (initramfs modules= loads PCI transport before nlplug -b vdb); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-fifty-second slice: linux-line alpine_dev=vdb (iron COM2 cmdline had no alpine_dev; alpine-virt grub.cfg alpine_dev=cdrom swap is 0 hits; after high-half hides PIIX nlplug needs -b vdb); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-fifty-first slice: linux high-half hides PIIX (bootimg earlycon share is too early; GRUB still needs PIIX ATAPI); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-fiftieth slice: linux hides PIIX IDE (00:01.1 gone after earlycon so built-in ata_piix does not SRST-msleep past Freeing initrd; firmware still sees PIIX; media virtio-iso); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-forty-ninth slice: DSDT PCI0 _CRS (ACPI-on BAR window 0xC0000000..0xFEBFFFFF, not 0x80000000 scratch); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-forty-eighth slice: linux hides duplicate slot0 IDE (00:00.1 gone after earlycon; PIIX 00:01.1 stays); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-forty-seventh slice: DSDT PCI0 _PRT (virtio slot 2/3 INTA GSI 17/18 after ACPI tables); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-forty-sixth slice: PIIX4 PM1 SCI_EN (Linux acpi_enable reads SCI_EN back; FADT 0xB004 was RAZ/WI); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-forty-fifth slice: fw_cfg IoReadFifo8 fills RAM (OVMF QemuFwCfgInitialize rep insb; skip HV identity PML4 dest); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-forty-fourth slice: linux GSI 2 before PIC (ACPI pin 2 RTE beats leftover PIC IRQ 0); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-forty-third slice: PIT skips IOAPIC pin 0 (ACPI GSI 2 not stolen by leftover pin 0 after PIC mask); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-forty-second slice: MADT IRQ0 ISO GSI 2 + linux PIC IRQ0 nowait (ACPI timer on pin 2; COM2 sees IRQ0 through earlycon hush); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-forty-first slice: linux PIC before LAPIC (iron a525340 Freeing initrd then silent; OVMF leftover IOAPIC stole PIT from virtual-wire); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-fortieth slice: product ISO fw_cfg ACPI MADT (iso=0 named files stay 3; OVMF InstallQemuFwCfgTables so Linux EFI ST has ACPI=/MADT); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-thirty-ninth slice: linux I/O does not raise PIT (iron MADT stop) + linux xAPIC EPT insn_len 0 (bc6fb70 APIC MADT then restore host xcr0; 4b0d96a reached Freeing initrd); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-thirty-eighth slice: virtio drain every resume + COM2 `linux virtio DRIVER_OK`; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-thirty-seventh slice: UART reassert RX not THRE (THRE reassert every resume kept IRQ 4 ahead of PIT); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-thirty-sixth slice: linux PIT prefer until DRIVER_OK (keep raising PIT; UART beats PIT after both virtio functions DRIVER_OK); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-thirty-fifth slice: PIT on every Linux non-UART exit + COM2 `linux I/O raises PIT` log; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-thirty-fourth slice: linux I/O raises PIT + linux preempt deadloop noskip + linux PIT prefer once (iron 8x virtio MMIO off=0x14 then ATA/PCI I/O then Freeing initrd); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-thirty-third slice: packed virtio common cfg write + LAPIC timer poll on Linux MMIO; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-thirty-second slice: virtio MMIO eax fallback size (status 0x14 is a byte); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-thirty-first slice: packed virtio common cfg + PIT on Linux MMIO (iron deefa7c BAR trap ok=1, MMIO 0x14 x8, Freeing initrd then silent); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-thirtieth slice: virtio BAR trap over scratch + PIIX3 ISA BAR RAZ (iron df0c118 Freeing initrd then silent; Linux BAR 0x80000000 on UC scratch); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-twenty-ninth slice: linux MMIO decode retry + EAX skip 3 + IOAPIC decode fail nowait + linux MOV DR skip; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-twenty-eighth slice: iso=0 virtio decode fail still stops (nested 1a4b687 /init SIGSEGV); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-twenty-seventh slice: virtio MMIO eax fallback + linux NMI inject (iron 1a2544d Freeing initrd then xcr0); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-twenty-sixth slice: linux unhandled nowait stop (iron 1a2544d past PAT/initrd then restore host xcr0); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-twenty-fifth slice: cpu_flush leftover per walk (iron abfb008 skip n=944 then tick n=256 hung); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-twenty-fourth slice: cpu_flush skip leftover pre-map (iron f0eb84e tick n=256 ram=1008 hung); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-twenty-third slice: report-RAM EPT pre-map (iron 113a08a complete PAT then no more COM2); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-29 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-twenty-second slice: linux earlycon pace LSR THRE (iron 029ac8f/3dc7d11 hush-on-bootimg still cut mid-e820; guest LSR always THRE); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-29 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-twenty-first slice: guest UART TX drain COM2 independent (iron b983ef8 COM2 froze after e820; drain waited on COM1 THRE); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-29 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-twentieth slice: linux earlycon share first bootimg (iron b983ef8 256MiB Loaded initrd then readable Linux version 6.12.13-0-virt + e820 0x7eb3efff; identity RIP not bit 63); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-29 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-nineteenth slice: 256MiB disk leftover report-RAM (iron 9a3cbfa extra=846); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-29 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-eighteenth slice: ISO-INSTALL-OK on GPT not 16KiB + setup-disk before apk update; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-29 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-seventeenth slice: linux earlycon share first high-half (iron 202312f e820 before CPUID); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-29 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-sixteenth slice: poll ISO-INSTALL-OK every resume + skip linux exc deliver; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-29 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-fifteenth slice: linux earlycon skip #PF dump (iron 9a3cbfa); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-29 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-fourteenth slice: linux earlycon share first CPUID (iron 9a3cbfa n=1 before #PF); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-29 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-thirteenth slice: linux earlycon share product ISO + cpu_flush on tick cadence even when share (nested e0019a3/4f875d6 /init SIGSEGV); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-29 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-twelfth slice: linux earlycon hush HV (iron 9a3cbfa linux cpuid shredded Linux version); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-29 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-eleventh slice: linux earlycon quiet ticks + drain CHUNK (iron 202312f tick interleaved e820; 9a3cbfa still printed ticks into shared FIFO); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-29 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-tenth slice: linux earlycon share TX ring (iron 202312f readable Linux version then e820 cut); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-29 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-ninth slice: guest UART TX ring drain 4/exit (nested QEMU be0f1cd /init SIGSEGV 3/3); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-29 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-eighth slice: guest UART TX ring drain so nowait does not drop Linux printk (iron f423d03 PAT shredded); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-29 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-seventh slice: Linux CPUID GenuineIntel + NX and EFER NXE after high-half (iron 45aec97 GenuineIntEl / NX missing then PAT); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-29 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-sixth slice: guest UART nowait (do not clear COM2_LIVE on THR timeout; iron 115e5ee PAT freeze); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-29 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-fifth slice: Linux printk ticks every 4096 after #PF deliver (iron 115e5ee every-256 UART split PAT); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-29 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-fourth slice: HPET TSC-delta on UART COM I/O cap 4us (not 1ms/byte); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-29 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-third slice: HPET 1ms on UART COM I/O so Linux earlycon udelay advances; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-29 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundredth slice: alpine-virt native_cpuid push %rbx RSP slot (base in EBX); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-29 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN ninety-ninth slice: Linux hypervisor_cpuid_base callee-saved GPR bump to 0x4000FF00; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-29 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN ninety-eighth slice: ISO9660 grub.cfg Data Length 143→208 so NUL-pad grow is visible to GRUB; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-29 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN ninety-seventh slice: HPET 1ms on non-HPET EPT so leftover-DRAM storms do not freeze the counter; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-29 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN ninety-sixth slice: HPET 1ms on CPUID/MSR so identify_cpu does not freeze the counter; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-29 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN ninety-fifth slice: alpine-virt GRUB tsc=reliable clocksource=tsc idle=poll via NUL-pad grow; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-29 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN ninety-fourth slice: alpine-virt GRUB lpj=4194304 no_timer_check via NUL-pad grow; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-29 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN ninety-third slice: Linux CPUID hides hypervisor bit + 0x4000 scan after iron n=128/256 0x4000 walk; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-29 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN ninety-second slice: delay_loop skip-10 to ret + RAX=1 after nested f1afc27 preempt noskip; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN ninety-first slice: always skip Linux CPUID by 2; terminate leaf-4 cache probes after a8b3547 native_cpuid livelock; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN ninetieth slice: nested product-ISO leftover DRAM + QEMU_MEM=2560M; iso=0 stays 512M; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN eighty-ninth slice: force high-half CPUID skip if GUEST_RIP stuck after leftover+#PF err=0x0; heartbeat leaf logs; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN eighty-seventh slice: INVLPG 0F 01 /7 skip-decode after Linux #PF; empty fetch does not guess; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN eighty-sixth slice: hide CLFLUSHOPT/CLWB in guest CPUID after nested G0 clwb #UD; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN eighty-fifth slice: high-half HLT skip-1 after CPUID/RDTSC; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN eighty-fourth slice: high-half RDTSC/INVD/WBINVD/PAUSE skip-2 after iron d0735bd CPUID; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN eighty-third slice: high-half insn CR3 walk + CPUID/MSR skip-2 after iron d0735bd #PF linux deliver then CPUID; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN eighty-second slice: Linux exception bitmap on high-half #PF (no #UD/#GP intercept; M3.10); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN eighty-first slice: VM-entry inject Linux high-half #PF so PIC/LAPIC cannot steal CR2; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN eightieth slice: deliver Linux high-half #PF after extra DRAM pool=1008 Loaded initrd; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN seventy-ninth slice: prefer leftover DRAM just above PRECISE + extra no-zero; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN seventy-eighth slice: extra-DRAM skip logs after iron 4a62e06 pool=162 Loaded initrd; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN seventy-seventh slice: leftover DRAM above PRECISE backs 2GiB CMOS lie after iron Loaded initrd; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN seventy-sixth slice: lazy-map report-RAM on string/PUSH/virtqueue + denser post-CD ticks after iron Loaded initrd; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN seventy-fifth slice: lazy-map report-RAM on string INS (EFI stub gzip); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN seventy-fourth slice: ATAPI multi-DRQ so READ(10) >31 sectors is not short; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN seventy-third slice: alpine-virt grub.cfg NUL-prefix timeout + flashcruzer detached HEAD; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN seventy-second slice: ISO patches ASCII-only after iron EFI stub uncompression error; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN seventy-first slice: skip 256MiB disk when leftover starves OVMF report-RAM; 64MiB GPT; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN seventieth slice: port 0x61 TMR2_OUT + arm ISO before disk attach (iron 1MiB); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN sixty-ninth slice: MMIO peek RIP when CS.base+RIP misses flash window; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN sixty-eighth slice: xAPIC EAX fallback when skip-len is 1-15 even if peek got bytes; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN sixty-seventh slice: Alpine BOOT_SIZE=48 so ESP fits 256MiB/64MiB virtio-blk; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN sixty-sixth slice: MMIO skip-len from fetched bytes when VMCS insn_len is 0; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN sixty-fifth slice: iron product-ISO pool 512MiB (256MiB disk) + disk before scratch + insn linear fetch; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN sixty-fourth slice: xAPIC fetch-miss EAX fallback when insn_len valid; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN: CI green on 2f662c9 (disk reserve + flash-RIP fetch); flash this EFI; stick still e3f56aa; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN sixty-third slice: reserve virtio-blk before greedy report-RAM so Alpine gets ≥64MiB; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN sixty-second slice: copy OVMF flash HPA for MMIO insn fetch (iron xAPIC SVR insn= empty); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN sixty-first slice: SSE MOVUPS/MOVDQU MMIO + XMM trampoline save; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN sixtieth slice: iron fsck proved 64MiB FAT healthy; skip remount/fsck when FAT size < need; mkfs.vfat -I; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN fifty-ninth slice: --refat-cruzer mkfs.vfat 64MiB FAT on 977.5MiB Cruzer so alpine-virt fits; keep installdisk.bin; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN fifty-eighth slice: remount + fsck.vfat -a reclaim stale FAT32 FSInfo after ENOSPC (not format); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN fifty-seventh slice: prune Cruzer ESP leftover/partial ISOs then df-check before alpine-virt linux.iso; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN fifty-sixth slice: wait for /dev/vda then mdev so setup-disk opens a node; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN fifty-fifth slice: modprobe isofs + mount -t iso9660 so apk sees virtio-iso; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN fifty-fourth slice: modprobe sr_mod so ATAPI sr0 fallback exists; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN fifty-third slice: mount /dev/sr0 if virtio-iso vdb fails; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN fifty-second slice: MMIO CMPS/SCAS (A6/A7/AE/AF, F3 REPE / F2 REPNE); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN fifty-first slice: sleep 1 after mdev so virtio probe wins find_disks; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN fiftieth slice: virtio_pci + mdev -s before setup-disk so find_disks sees vda; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN forty-ninth slice: apk repos overwrite (not append) + How would you like → sys (not Which disk like to use); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN forty-eighth slice: apk local repo + like to use sys + MMIO CALL/JMP r/m (FF /2 /4); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN forty-seventh slice: setup-disk -s 0 + Which disk + No disks available answers n; lazy report-RAM virtqueue GPA; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN forty-sixth slice: MMIO MOVS/STOS/LODS (A4/A5/AA/AB/AC/AD, F3 REP); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN forty-fifth slice: MMIO PUSH/POP r/m (FF /6, 8F /0); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN forty-fourth slice: MMIO TZCNT/LZCNT/POPCNT (F3 0F BC/BD/B8); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN forty-third slice: MMIO CMPXCHG8B (0F C7 /1) EDX:EAX vs 8-byte BAR; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN forty-second slice: MMIO SHLD/SHRD (0F A4/A5/AC/AD) into the BAR; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN forty-first slice: armed product ISO uses 16_777_216 resume cap on nested QEMU too (lab stub nested stays 65536); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN fortieth slice: MMIO F6/F7 DIV/IDIV into AX or DX:AX (#DE on 0/overflow, RIP not skipped) + MOVNTI 0F C3; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN thirty-ninth slice: MMIO F6/F7 MUL/IMUL into AX or DX:AX; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN thirty-eighth slice: MMIO IMUL (0F AF dest-reg, 69/6B imm); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN thirty-seventh slice: auto-answer mkdir -p /media/cdrom before mount (nlplug may skip virtio-iso); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN thirty-sixth slice: MMIO PREFETCH/NOP/CLFLUSH skip (no BAR access) + BSF/BSR (0F BC/BD); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN thirty-fifth slice: MMIO CMOVcc/SETcc (0F 40-4F / 0F 90-9F); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN thirty-fourth slice: MMIO group-2 SHL/SHR/SAR/ROL/ROR/RCL/RCR (C0/C1/D0/D1/D2/D3); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN thirty-third slice: MMIO ADC/SBB (10/11/12/13, 18/19/1A/1B, group-1 /2 /3) with RFLAGS.CF; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN thirty-second slice: guest-UEFI CR8-load/store exiting syncs Linux TPR to lapic_virt (E4 VMCS does not request CR8); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN thirty-first slice: MMIO CMPXCHG/XADD so lock cmpxchg on virtio/IOAPIC does not spin; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN thirtieth slice: MMIO BT/BTS/BTR/BTC (0F BA /4-7 + 0F A3/AB/B3/BB) so lock bts on virtio/IOAPIC does not spin; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN twenty-ninth slice: IOAPIC vectors latch LAPIC IRR (M3.12 EOI) + remote IRR/level retry; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN twenty-eighth slice: MMIO dest-reg ALU (02/03 ADD r,r/m … 32/33 XOR) + ALU RFLAGS + INC/DEC/NOT/NEG; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN twenty-seventh slice: auto-answer mounts /dev/vdb + MMIO CMP 3A/3B (reg-mem) + SUB; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN twenty-sixth slice: MMIO TEST/CMP RFLAGS + auto-answer CONFIRM after yes still answers bootloader?; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN twenty-fifth slice: product ISO xAPIC 4K trap + lapic_virt CUR_COUNT/EOI + ISO patch virtio_blk in modules= (drop nolapic); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN twenty-fourth slice: PIT unlatched lo/hi after 0x34 + MMIO AH/CH/DH/BH (no REX); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN twenty-third slice: MMIO group-1 AND/OR/XOR (virtio RMW); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN twenty-second slice: MMIO XCHG/MOVSX/moffs + GRUB insmod all_video serial; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN twenty-first slice: auto-answer [y/N] erase prompt (alpine-conf confirm_erase); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN twentieth slice: Alpine USE_EFI=1 + GRUB set timeout=1 / efi_gop serial; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN nineteenth slice: i8253 channel 0 16-bit lo/hi + latch (Linux nolapic inb 0x40); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN eighteenth slice: ISO patch keeps squashfs in modules= + MMIO insn fetch across 4KiB pages + MOVZX/r32 zero-extend; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN seventeenth slice: Alpine auto-answer BOOTLOADER=grub + bootloader? prompt; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN sixteenth slice: ISO patch nolapic so Linux uses PIT not static xAPIC; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN fifteenth slice: PIT IRQ 0 on HLT/preempt (UART/virtio beat timer); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN fourteenth slice: ISO patch console=ttyS0 noapic + alpine_dev=vdb (virtio-iso media, PIC IRQ 11); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN thirteenth slice: virtio INTx raises IOAPIC pin 11 (PCI interrupt line) so Linux without _PRT can complete I/O; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN twelfth slice: virtio GPA copies stop at 4KiB so report-RAM 2MiB slots do not bleed; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN eleventh slice: read-only virtio-blk ISO at 00:03.0 (/dev/vdb) for alpine-virt media; packed num_queues; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN tenth slice: virtio-blk OUT walks every data descriptor in the chain; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN ninth slice: 31-sector ATAPI PIO DRQ, IDENTIFY PIO-only, nIEN masks IRQ 14; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN eighth slice: ata_piix+sr-mod ISO patch, GRUB gfxterm→serial, BusyBox / # auto-answer, 64-bit virtqueue GPA writes; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN seventh slice: chunked virtio-blk OUT, sr-mod+ttyS0 ISO patch, virtio PCI INTA line 11; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN sixth slice: Alpine serial auto-answer login+setup-disk /dev/vda; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN fifth slice: host SOL/COM RX into guest COM1 RBR + 16550 loopback; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN fourth slice: product ISO 16550 + ttyS0 cmdline (Alpine modules= kept valid); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN third slice: product ISO PIC+IOAPIC inject (ATA GSI 14, virtio GSI 17); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN second slice: ESP linux.iso retain + virtio-pci queues gated on product window + hold (not E4) when armed; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN first slice: product ISO window + continue past lab El Torito; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | p0-60-g1-ept | 0.5 | 95 | M4.3 host-slab CLOSED iron after 22e28d0 M4-BLK-OK 0x10c00000 NET-OK SMP-OK BOOT-OK; ISO-BOOTED-FROM-DISK is persist-detect not installer; Stage 46 next; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | p0-60-g1-ept | 0.5 | 95 | G0 VMCS relocate CLOSED iron after b7259c1/10e7984 M4-NVM-OK SLICE-G0 HPA=0x10a00000; M4.3 blk triple-fault 0x02 at 0xfc0f000 residual; Stage 45+P0-60 held; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | p0-60-g1-ept | 0.5 | 95 | P0-60 CLOSED iron after 5147222 M4-SHELL-G1 M4-2VM-OK no GPA=0x10403000; G0 VMCS sched error 11 residual; Stage 45 held; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-27 | e5-ovmf-eltorito | 0.5 | 95 | Stage 45 OPEN: 2048-byte FAT BPB + ISO9660 EFI/BOOT/BOOTX64 after iron df7d158 512-byte BPB catalog=1 bootimg=1 elt=0 (not ELTORITO-OK; not installer); iron P0-14 stays 2b795a0 |
+| 2026-08-27 | e5-ovmf-eltorito | 0.5 | 95 | Stage 45 OPEN: 262144-exit cap after iron df7d158 catalog=1 bootimg=1 elt=0 stop n=131072 (131072-exit cap; BDS ATA PIO; not ELTORITO-OK; not installer); iron P0-14 stays 2b795a0 |
+| 2026-08-27 | e5-ovmf-eltorito | 0.5 | 95 | Stage 45 OPEN: do not apply 32768 post-ATAPI tail after PACKET (first sector often LBA 0 dummy); EDK2 FatDxe+LoadImage host walk; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-27 | e5-ovmf-eltorito | 0.5 | 95 | Stage 45 OPEN: GenFw PE 0x2022 + COM1 LCR DLAB clear before RN-ELT; no short tail after catalog+load; 131072-exit cap; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-27 | e5-ovmf-eltorito | 0.5 | 95 | Stage 45 OPEN: no short tail after catalog+load READ; 131072-exit cap; BAR ATA data-port rep insw fills RAM; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-27 | e5-ovmf-eltorito | 0.5 | 95 | Stage 45 OPEN PE .reloc + ISO terminator; FAT12 ESP BOOTX64 + catalog checksum; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-27 | e5-ovmf-eltorito | 0.5 | 95 | Stage 45 OPEN host package: keep VMCS after first ATAPI sector; PE32+ CD EFI; catalog+load READ + RN-ELT; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-27 | e5-ovmf-atapi | 0.5 | 95 | After Stage 44 named: Stage 45 El Torito then P0-60 G1 EPT (not an E5 stage) then Stage 46 ISO-INSTALL-OK; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-27 | e5-ovmf-atapi | 0.5 | 95 | P0-59 CLOSED iron COM2 bf696ca ATAPI-OK sectors=1 packet=9 scsi=0x28 stop n=30769 pci_ide=1 virtio=1; BOTH-OK n=12411 virtio 00:02.0 + IDE 00:00.1; no AcpiTimerLib ASSERT; not El Torito; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron 10cb881 VCNT=8 power-on still ASSERT callerrip=0x1d25193 mtrrdef=0xc06 mtrr0=0x80000000; VCNT=32 power-on no hole; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron aee545f DXE assert skip then #UD 0x109d stop n=5364; revert skip; MTRR power-on E=0 VCNT=8 no UC hole; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron c40f4a8 pcdsig=1 after 32-pair MTRR still ASSERT callerrip=0x1d25193; guarded DXE ebec skip when RIP/caller in [1MiB,32MiB); not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron b4b4847 EFER.LMA efer=0xd00 pg=1 csl=1 still ASSERT callerrip=0x1d25193; r8 is gPcdDataBaseSignatureGuid; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron 0b7d647 VCNT=32 still ASSERT callerrip=0x1d25193 lastmsr=EFER; QEMU BOTH skipped ebf3; EFER.LMA=LME&&CR0.PG + IA-32e entry + debugcon 0x402; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron 8700cbb hypervisor CPUID still ASSERT callerrip=0x1d25193; MTRR VCNT=32 + PCI UC hole + bootorder NUL; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron 408788c MTRR walk done still ASSERT after CPUID 0x1cf11b5; guest-UEFI hypervisor CPUID + KVMKVMKVM; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron 3f417ca xAPIC 4K mapped still ASSERT after MTRR 0xFE/0x2FF/0x250; guest MTRR shadow; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron 891eb5b skipped ebecc9c3 leave;ret then #UD 0x109D; do not skip ASSERT epilogue; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron e2af81e insn=ebec jmp -20; fw_cfg CD master drive@0 (not slave); not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron d5f9431 n=8192 rip=0x6e81ca; e2af81e missed GCC eb fc / 0F 84; preempt eb/jcc32 skip; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron d5f9431 n=8192 reason=0x34 rip=0x6e81ca pause CpuDeadLoop; preempt pause/jcc skip; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron d5f9431 #UD gone; DXE then tick n=1280 reason=0x34 rip=0x6e81ca (no stop n=); not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN fw_cfg etc/boot-menu-wait 0ms skip BdsWait; guest-UEFI XSETBV executes XCR0; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron COM2 #UD RIP 0x109D pci_ide=0 com=15515; guest-UEFI INVPCID/RDTSCP/XSAVES; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN nested VT-x 2674629 n=32768 ataio=0 acpi=16612 port=0; ACPI PM 1s step; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN nested VT-x 5d9e346 n=8192 ataio=0 port=0xcf8; HPET 1s on preemption only; 8042; 32768 cap; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron COM2 skipped guest-UEFI (Cruzer lacked EFI/RayNu/OVMF.fd); flash stages host OVMF; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN PIIX3 ISA PIRQ after nested VT-x 8e55abf cf8=0x80000838 ISA 00:01.0:0x38; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 CLOSED nested VT-x 1b07692 OVMF-BOTH-OK pci select 00:00.01 val=0x70108086 pci_ide=1 virtio=1 sectors=0 spin=1; E4 #DF fail-soft; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN 3dbafb7 spin-jmp skip SKIP-only on push+PR; nested VT-x 707a849 insn=ebf3 still required; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN nested VT-x 707a849 n=2048 rip=0x6e812d insn=ebf3 pci_ide=0 (CpuDeadLoop); spin-jmp skip; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN stop RIP insn dump after fd88785 SKIP-only; nested VT-x 105ffbe n=2048 rip=0x6e812d pci_ide=0; 1s HPET step; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN nested VT-x 105ffbe n=2048 reason=0x34 rip=0x6e812d pci_ide=0 (10ms HPET); 1s step; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN nested VT-x 20763e4 VARS mapped alias_gpa=0xffc00000 then 300s kill no 00:00.1; live HPET; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN empty VARS _FVH in 4MiB flash pad after 1991a27 EPT 0xffc00000; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN nested VT-x 1991a27 dxe=1 acpi=13 then EPT gpa=0xffc00000 VARS gap; 4MiB flash window; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN host BOTH-OK cmp bx i440FX DID remap (not LZMA 37 12) + RAM remap after decompress; virtio 00:00.0 + IDE 00:00.1; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN host BOTH-OK PIIX4 PM 00:01.3 + guest-private i440FX DID remap; virtio 00:00.0 + IDE 00:00.1; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN host BOTH-OK ACPI PM timer after 699c9a6 n=2048 pci_ide=0; virtio 00:00.0 + IDE 00:00.1; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN host BOTH-OK virtio 00:00.0 + PIIX IDE 00:01.1; HLT skip so DXE can walk PCI; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN host BOTH-OK virtio 00:00.0 + PIIX IDE 00:01.1 (ISA multifunction walk); virtio-alone no longer stops DXE; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN host BOTH-OK simultaneous virtio 00:00.0 + IDE 00:00.1; virtio-alone no longer stops DXE; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-virtio | 0.5 | 95 | P0-57 CLOSED nested VT-x VIRTIO-OK val=0x1042 pci=1 virtio=1; pci_ide=0 sectors=0; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-virtio | 0.5 | 95 | P0-57 virtio at 00:01.2; i440FX back at 00:00.0 after nested VT-x n=499 virtio=0; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-virtio | 0.5 | 95 | P0-57 empty virtio-blk 00:00.1 + bootorder CD then disk; not installer; iron P0-14 stays 2b795a0 |
@@ -513,14 +903,19 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 ## Operator quick view
 
 ```
-Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
-Now:           E2+E3+E3b+E5+Phase F stamps CLOSED; native BCM5720 HTTP after BOOT-OK with VMX on (`:38` / 10.99.99.126:8443)
-Months left:   0.5  (ETA ~ 2026-09)
-Next move:     On raynuvsrv1 run ~/projects/raynuv/flashcruzer.sh; F11 Cruzer; spec/start (WANT shadow restore, no error 7)
+Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
+Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
+COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
+Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
+Next move:     **M8.0** leftover-disk persist across HV reboot ([ADR-018](adr/ADR-018.md) / [m8_plan.md](m8_plan.md))
+Rollback:      GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351
+               EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc
+               COM2 build: sha=f72b4276d198. Do not flash a later M8 persist prototype as known-good.
+Do not F11:    `34548550755` / `7f8dc0a9` or earlier Phase B fails
 Tcp4 residual: Floppy publishes PXE/HTTP, not Tcp4 SB (platform limit)
 SNP after EBS: dead — native BCM5720 is the durable mgmt path (E3b closed 2026-08-20)
-Preserve:      releases/v0.1.0-adr013-baseline
-Do not claim:  Mount Everest / E4 closed (first SPA VMLAUNCH OK; slot 1 re-entry zeros/error 7 is not a close)
+Preserve NIC:  releases/v0.1.0-adr013-baseline (pre-native-NIC; not the Everest flash kit)
+Do not claim:  100% product / TLS / leftover persist across HV reboot / multi-distro / cluster. Host/CI never print ISO-INSTALL-OK. Cluster is M9.
 ```
 
 Public checklist: [`docs/runbooks/r640_iron_week.md`](runbooks/r640_iron_week.md) ·
