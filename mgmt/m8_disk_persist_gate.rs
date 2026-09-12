@@ -125,6 +125,8 @@ pub fn disk_persist_surface_present() -> bool {
         && nested.contains("MODE=usb")
         && nested.contains("MODE=lunkeep")
         && nested.contains("MODE=usbkeep")
+        && nested.contains("require_persist_gpt_in_file")
+        && nested.contains("enable_shadow_vmcs=0")
         && nested.contains("plant_m8_persist_fixture")
         && nested.contains("plant_media_fixture")
         && nested.contains("M8_PERSIST_IMG")
@@ -133,6 +135,7 @@ pub fn disk_persist_surface_present() -> bool {
         && nested.contains("keep=1")
         && nested.contains("RAYNU-V-M8-DISK-PERSIST-NESTED-OK")
         && nested.contains("kill HV")
+        && include_str!("../docs/runbooks/m8_persist_nested.md").contains("MODE=full")
         && !nested.contains("println!(\"RAYNU-V-M7-ISO-INSTALL-OK\")")
         && !nested.contains("echo \"RAYNU-V-M8-DISK-PERSIST-OK\"")
 }
