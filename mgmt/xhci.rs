@@ -247,6 +247,25 @@ fn handshake_legacy(hw: &mut impl XhciHw) {
     }
 }
 
+/// xHCI §7.2 USB Supported Protocol: DWORD0 = ID/next/minor/major,
+/// DWORD2 = Compatible Port Offset (7:0) + Count (15:8).
+pub fn supported_protocol_matches(cap_dw0: u32, dw2: u32, port: u8) -> Option<bool> {
+    if cap_dw0 as u8 != 2 {
+        return None;
+    }
+    let major = (cap_dw0 >> 24) as u8;
+    let off = dw2 as u8;
+    let count = (dw2 >> 8) as u8;
+    if off == 0 || count == 0 {
+        return None;
+    }
+    if port >= off && port < off.saturating_add(count) {
+        Some(major >= 3)
+    } else {
+        None
+    }
+}
+
 fn port_is_usb3(hw: &mut impl XhciHw, port: u8) -> bool {
     let hcc1 = hw.read32(0x10);
     let mut xecp = ((hcc1 >> 16) & 0xFFFF) * 4;
@@ -255,14 +274,9 @@ fn port_is_usb3(hw: &mut impl XhciHw, port: u8) -> bool {
             break;
         }
         let cap = hw.read32(xecp);
-        if cap as u8 == 2 {
-            let dw2 = hw.read32(xecp + 8);
-            let major = (dw2 >> 24) as u8;
-            let off = (dw2 >> 8) as u8;
-            let count = (dw2 >> 16) as u8;
-            if port >= off && port < off.saturating_add(count) {
-                return major >= 3;
-            }
+        let dw2 = hw.read32(xecp + 8);
+        if let Some(usb3) = supported_protocol_matches(cap, dw2, port) {
+            return usb3;
         }
         let next = ((cap >> 8) & 0xFF) * 4;
         if next == 0 {
@@ -422,6 +436,54 @@ fn xhci_start(
     if !wait_clear(hw, usbsts, USBSTS_HCH) {
         return Err(UsbBotError::Reset);
     }
+    let ports = core::cmp::min(caps.max_ports, 16);
+    // PED is RW1CS: never write the previous PORTSC word back (that clears PED).
+    for port in 1..=ports {
+        hw.write32(portsc_off(caps.op, port), PORTSC_PP | PORTSC_CSC);
+    }
+    for port in 1..=ports {
+        let rst = if port_is_usb3(hw, port) {
+            PORTSC_WPR
+        } else {
+            PORTSC_PR
+        };
+        hw.write32(
+            portsc_off(caps.op, port),
+            PORTSC_PP | rst | PORTSC_CSC | PORTSC_PRC | PORTSC_WRC,
+        );
+    }
+    let mut saw_ccs = false;
+    let mut p1 = 0u32;
+    let mut p_last = 0u32;
+    for _ in 0..SPINS {
+        for port in 1..=ports {
+            let sc = hw.read32(portsc_off(caps.op, port));
+            if port == 1 {
+                p1 = sc;
+            }
+            if port == ports {
+                p_last = sc;
+            }
+            if sc & (PORTSC_CCS | PORTSC_PED) != 0 {
+                saw_ccs = true;
+                break;
+            }
+        }
+        if saw_ccs {
+            break;
+        }
+    }
+    // last_cmpl: max_slots | max_ports<<8 | caplength<<16 so a fail names HCSPARAMS.
+    // last_portsc: port 1 (often USB3) | last implemented port (often USB2).
+    store_usb_bot_diag(
+        UsbBotError::Reset,
+        0,
+        u64::from(p1) | (u64::from(p_last) << 32),
+        u64::from(caps.max_slots) | (u64::from(caps.max_ports) << 8) | (u64::from(caps.op) << 16),
+    );
+    if !saw_ccs {
+        return Err(UsbBotError::Reset);
+    }
     Ok((caps, Ring::new(mem.cmd), EventRing::new(mem.evt)))
 }
 
@@ -445,7 +507,7 @@ fn reset_port(hw: &mut impl XhciHw, caps: &XhciCaps, port: u8) -> Result<u32, Us
         return Err(UsbBotError::Reset);
     }
     if sc & PORTSC_PP == 0 {
-        hw.write32(off, sc | PORTSC_PP | PORTSC_CSC);
+        hw.write32(off, PORTSC_PP | PORTSC_CSC);
         sc = hw.read32(off);
     }
     let rst = if port_is_usb3(hw, port) {
@@ -453,10 +515,7 @@ fn reset_port(hw: &mut impl XhciHw, caps: &XhciCaps, port: u8) -> Result<u32, Us
     } else {
         PORTSC_PR
     };
-    hw.write32(
-        off,
-        (sc & PORTSC_PP) | PORTSC_PP | rst | PORTSC_CSC | PORTSC_PRC | PORTSC_WRC,
-    );
+    hw.write32(off, PORTSC_PP | rst | PORTSC_CSC | PORTSC_PRC | PORTSC_WRC);
     if !wait_set(hw, off, PORTSC_PRC) && !wait_set(hw, off, PORTSC_WRC) {
         return Err(UsbBotError::Reset);
     }
@@ -988,7 +1047,12 @@ pub fn xhci_init_pci(bus: u8, dev: u8, func: u8, min_bytes: u64) -> Result<u64, 
             Ok(bytes)
         }
         Err(e) => {
-            store_usb_bot_diag(e, bar, super::usb_bot::usb_bot_last_portsc(), 0);
+            store_usb_bot_diag(
+                e,
+                bar,
+                super::usb_bot::usb_bot_last_portsc(),
+                super::usb_bot::usb_bot_last_cmpl(),
+            );
             LIVE_LOCK.store(false, core::sync::atomic::Ordering::Release);
             Err(e)
         }
@@ -1011,14 +1075,17 @@ pub fn xhci_live_rw(off: u64, buf: &mut [u8], write: bool) -> bool {
                     if write {
                         slice[..buf.len()].copy_from_slice(buf);
                     }
+                    let mut tag = live.tag;
+                    let lba = live.lba;
                     let r = super::usb_bot::usb_bot_rw(
                         live,
-                        &mut live.tag,
-                        live.lba,
+                        &mut tag,
+                        lba,
                         off,
                         &mut slice[..buf.len()],
                         write,
                     );
+                    live.tag = tag;
                     if r.is_ok() && !write {
                         buf.copy_from_slice(&slice[..buf.len()]);
                     }
@@ -1053,6 +1120,21 @@ mod xhci_pack_test {
         assert_eq!(c & 1, 1);
         assert_ne!(c & TRB_IDT, 0);
         assert_eq!(trb_cmpl_code(1u32 << 24), CMPL_SUCCESS);
+    }
+
+    #[test]
+    fn qemu_xhci_protocol_caps_split_usb2_usb3() {
+        // qemu-xhci p3=4,p2=4: USB3 ports 1–4 (major 3), USB2 ports 5–8 (major 2).
+        let usb3 = (3u32 << 24) | 2;
+        let usb3_dw2 = 4u32 << 8 | 1;
+        let usb2 = (2u32 << 24) | 2;
+        let usb2_dw2 = 4u32 << 8 | 5;
+        assert_eq!(supported_protocol_matches(usb3, usb3_dw2, 1), Some(true));
+        assert_eq!(supported_protocol_matches(usb3, usb3_dw2, 4), Some(true));
+        assert_eq!(supported_protocol_matches(usb3, usb3_dw2, 5), None);
+        assert_eq!(supported_protocol_matches(usb2, usb2_dw2, 5), Some(false));
+        assert_eq!(supported_protocol_matches(usb2, usb2_dw2, 8), Some(false));
+        assert_eq!(supported_protocol_matches(usb2, usb2_dw2, 1), None);
     }
 
     #[test]

@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-disk-persist-usb-io |
-| Summary | **M8.0 DurableLun USB BOT/xHCI I/O (host).** Post-EBS xHCI + SCSI BOT backs virtio/BlockIo when NVMe is absent; 2–8 GiB ESP Cruzer still refused. `MODE=usb` qemu-xhci harness. QEMU USB ≠ R640. Not nested-OK and not iron persist OK. Never `ISO-INSTALL-OK`. Do not F11. |
+| Commit | m8-disk-persist-usb-ccs |
+| Summary | **M8.0 USB xHCI CCS/port map.** qemu-xhci `p3=0` so USB2 `usb-storage` sits on port 1 (default `p3=4` + `port=1` is USB3 RxDetect, CCS=0). Supported Protocol offset/count parse (xHCI §7.2). Scan every port; do not write PORTSC PED (RW1CS). QEMU USB ≠ R640. Not nested-OK. Not iron persist OK. Never `ISO-INSTALL-OK`. Do not F11. |
 | Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. |
-| Gates touched | `mgmt/usb_bot.rs` + `mgmt/xhci.rs` + virtio `attach_lun` + `MODE=usb`. `./tools/sync-hda-site.sh --check`. |
+| Gates touched | `mgmt/xhci.rs` + `tools/run-qemu.sh` `MODE=usb`. `./tools/sync-hda-site.sh --check`. |
 | Months Δ | 0.0→0.0 (held) |
 
 
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-11 | m8-disk-persist-usb-ccs | 0.0 | 99 | **M8.0 USB xHCI CCS/port map:** qemu-xhci `p3=0` so USB2 storage is on port 1; Supported Protocol §7.2 parse; scan every port; PORTSC PED is RW1CS. QEMU USB ≠ R640. Not nested-OK. Not iron persist OK. Never `ISO-INSTALL-OK`. Do not F11. months 0.0 held; overall 99 held |
 | 2026-09-11 | m8-disk-persist-usb-io | 0.0 | 99 | **M8.0 DurableLun USB BOT/xHCI I/O:** post-EBS xHCI + SCSI BOT backs virtio/BlockIo when NVMe is absent; ESP Cruzer window still refused. `MODE=usb` qemu-xhci harness. QEMU USB ≠ R640. Not nested-OK. Not iron persist OK. Never `ISO-INSTALL-OK`. Do not F11. months 0.0 held; overall 99 held |
 | 2026-09-11 | m8-disk-persist-nvme-io | 0.0 | 99 | **M8.0 DurableLun NVMe I/O:** Identify + I/O qid 1 + Read/Write back virtio/BlockIo. `MODE=lun` TCG: `durable LUN nvme I/O ready`. USB I/O residual. Not nested-OK. Not iron persist OK. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |
 | 2026-09-11 | m8-disk-persist-durable-lun | 0.0 | 99 | **M8.0 DurableLun mapper (host):** PCI census picks NVMe/USB ≥ 1 GiB; refuses PERC and the ESP Cruzer. Post-EBS I/O residual (leftover DRAM). Not nested-OK. Not iron persist OK. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |
