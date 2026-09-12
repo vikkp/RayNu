@@ -31,6 +31,7 @@ abstract; that is still Thursday 17 Sep AoE.
 | [`paper/Makefile`](paper/Makefile) | `make` → `main.pdf` + anonymity grep |
 | [`ANONYMIZATION.md`](ANONYMIZATION.md) | What must not appear in the PDF |
 | [`ARTIFACT.md`](ARTIFACT.md) | Optional anonymized `ept_model` zip |
+| [`artifact/isolon-artifact-latest.zip`](artifact/isolon-artifact-latest.zip) | HotCRP supplementary zip (80/0 + COM2, includes ISO-loop) |
 | [`CHECKLIST.md`](CHECKLIST.md) | 17 Sep vs 24 Sep vs camera-ready |
 | [`REBUTTAL.md`](REBUTTAL.md) | Operator notes for 6–8 Jan; do not paste into the PDF |
 | [`supplement/README.md`](supplement/README.md) | Optional proofs file (reviewers may ignore) |
