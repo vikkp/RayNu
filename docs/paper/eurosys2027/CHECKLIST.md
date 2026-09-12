@@ -41,7 +41,7 @@ PDF is **not** required on the 17th.
 
 ## Do not
 
-- [ ] Claim `ISO-INSTALL-OK` or “the hypervisor is proved”
+- [ ] Claim host/CI printed the iron-only install-complete marker, or that “the hypervisor is proved” / that Isolon-F raises L3
 - [ ] Submit the living `paper.html` / markdown as the PDF
 - [ ] Use the public title or the name RayNu-V in the review PDF
 - [ ] Concurrent-submit this archival PDF elsewhere

@@ -56,7 +56,9 @@
 Isolon is a clean-slate Type-1 hypervisor that boots as one UEFI binary
 on a Dell PowerEdge R640, where it runs unmodified Linux~6.12 with
 virtio-blk, virtio-net, dual-vCPU SMP, and three stub guests on the same
-boot, then serves HTTP from a host-owned NIC.
+boot, serves HTTP from a host-owned NIC, and---from the operator
+SPA---installs a typed Linux ISO through guest firmware we author
+(Isolon-F), then reboots that guest from disk to a login prompt.
 
 Attaching a machine-checked isolation theorem to that binary is a
 labelling problem before it is a proof problem: the artifact that is
@@ -65,7 +67,7 @@ object. Isolon's proved artifact is guest-exclusivity in a host-only
 Verus ghost model. Its production guest-physical coverage at Linux boot
 is a 16-slot range registry the ghost model never sees. The two are
 disjoint, not approximate, and no one-axis ``verified'' label makes that
-visible.
+visible. Closing the iron install loop does not move either cell.
 
 We propose a two-axis ladder: proof maturity (L0--L3) against artifact
 (ghost model, executable module, binary on the target). Applied to seven
@@ -159,9 +161,12 @@ This paper makes three contributions:
 
 \item \textbf{An iron Type-1 with a named isolation gap.}
   On one R640: Linux~6.12 plus three stub guests, virtio-blk, virtio-net,
-  dual-vCPU SMP, host-NIC HTTP, and El Torito CD EFI. The L3 theorem is a
-  4K ghost model; production GPA coverage is an L1 range registry
-  (Section~\ref{sec:honest}).
+  dual-vCPU SMP, host-NIC HTTP, El Torito CD EFI, and---via Isolon-F and
+  the operator SPA---a typed Linux ISO install with reboot-to-disk and
+  login (Section~\ref{sec:runtime}). The L3 theorem remains a 4K ghost
+  model; production GPA coverage remains an L1 range registry
+  (Section~\ref{sec:honest}). Isolon-F and the ISO path are outside the
+  Proven Core.
 \end{enumerate}
 
 Isolon is not seL4 for hypervisors and is not a verified KVM. It is a
@@ -766,6 +771,7 @@ COM2 slot-counter dump and no VM-exit cycle comparison
 \end{table}
 
 \subsection{Runtime: lab host versus R640}
+\label{sec:runtime}
 
 Table~\ref{tab:split} is the split. Cells are contemporaneous serial or
 host-test evidence, not a wish list. Nested VT-x is a third column because
@@ -790,9 +796,10 @@ operators (and reviewers) otherwise collapse it into iron.
     Dual-vCPU BSP+AP (shared EPT) & yes & --- & yes (same boot) \\
     Four VMs: Linux + three SHELL stubs & yes & --- & yes (same boot) \\
     Durable host-NIC HTTP after EBS & lab NIC & --- & onboard LOM \\
-    SPA launches a SHELL guest & host smoke & --- & stub, not a distro \\
+    SPA launches a SHELL guest & host smoke & --- & stub path \\
+    SPA starts typed ISO (Isolon-F) & --- & yes & yes \\
     Guest firmware CD EFI (El Torito) & --- & CD+virtio & yes \\
-    Distro sysinstall + reboot-to-disk & --- & yes & open \\
+    Distro sysinstall + reboot-to-disk & --- & yes & yes \\
     Persist-detect LBA stamps on USB & --- & --- & stamps, not a rootfs \\
     \bottomrule
   \end{tabularx}
@@ -810,12 +817,20 @@ guest and re-enter; that guest is a CPUID stub, not a distro. Guest firmware
 issued ATAPI \texttt{READ(10)} and booted El Torito CD EFI. Persist-detect
 stamps on a USB stick are LBAs, not a guest root filesystem.
 
-On nested VT-x we authored guest firmware after third-party WaitForEvent
-forcing faulted. That firmware completed an alpine-extended \texttt{setup-disk
--m sys} (installer printed ``Please reboot'') and reboot-to-disk. Nested
-virtualization is not the R640. The USB stick used on iron is too small for
-that distro image. Host CI and nested runs do not print an install-complete
-marker.
+Separately, the operator SPA starts a typed Alpine ISO under Isolon-F
+(guest boot firmware Isolon authors; same UEFI binary; outside the Proven
+Core). On iron, Alpine \texttt{setup-disk -m sys} completed onto virtio,
+the guest reset, Isolon-F relaunched from the install disk, and COM2
+recorded an install-complete marker, a disk-boot marker, a second Linux
+with \texttt{root=UUID=}, and a login prompt. Host and CI builds still
+refuse to print that install-complete marker. The SHELL stub path and the
+ISO install path are different SPA actions; closing the latter does not
+raise the L3 cell.
+
+On nested VT-x the same Isolon-F path completed earlier and taught the
+firmware lesson (Section~\ref{sec:nofirmwarepoke}). Nested virtualization
+is still not the R640; Table~\ref{tab:split} keeps the columns apart so a
+nested rehearsal cannot be mistaken for the iron close.
 
 \subsection{Labelling the literature}
 \label{sec:ladder-eval}
@@ -918,6 +933,7 @@ not build on the target you ship will still be described as verified by
 someone; make the packaging match the claim first.
 
 \subsection{Do not poke third-party firmware}
+\label{sec:nofirmwarepoke}
 
 When guest firmware blocked in WaitForEvent, a tempting fix is to poke
 its wait object, skip a check, or inject a fault. We did that on a
@@ -930,6 +946,12 @@ emulation remains outside the Proven Core, so a firmware bug is still
 not an EPT exclusivity theorem---but it is no longer a self-inflicted
 one. This lesson is independent of Isolon: if you do not own the blob,
 do not rewrite its control state.
+
+The end of that path is Isolon-F: guest boot firmware Isolon authors and
+ships inside the same UEFI binary, presenting typed ISOs with EFI tables
+Isolon owns. There is then no third-party firmware control state to
+corrupt. Isolon-F remains outside the Proven Core; closing the ISO loop
+with it does not raise the L3 cell.
 
 \subsection{Firmware TCP is not a management plane}
 
@@ -944,13 +966,14 @@ In-process REST on a lab executable is a third, still weaker, claim.
 
 \subsection{Nested VT-x is not the production server}
 
-Nested alpine-extended sysinstall completed: installer printed ``Please
-reboot,'' then reboot-to-disk succeeded. That is a real product-path
-result on nested VT-x. The USB stick used on iron is too
-small for that distro image; El Torito CD EFI is not \texttt{setup-disk}.
-A lab hypervisor that installs Linux under nested VT-x has not
-demonstrated ISO install on the machine in the rack.
-Table~\ref{tab:split} keeps those columns apart.
+Nested alpine-extended sysinstall completed first and taught Isolon-F
+the product path: the installer printed ``Please reboot,'' then
+reboot-to-disk succeeded. That rehearsal is real evidence on nested
+VT-x, and it is still not the R640. The iron close needed media large
+enough for alpine-extended and Isolon-F driven from the operator SPA
+(Table~\ref{tab:split}). Nested VT-x remains a useful column; it is not
+a substitute for the iron column. El Torito CD EFI is still not
+\texttt{setup-disk}.
 
 \subsection{Derive ghost state from the threat model's domain}
 \label{sec:model-after}
@@ -994,7 +1017,7 @@ Table~\ref{tab:neg} lists failures we kept. None of them are L3.
     USB persist LBA stamps
       & calling stamps a root filesystem \\
     USB stick capacity $<$ alpine-extended
-      & iron sysinstall on that stick \\
+      & iron sysinstall on that stick (larger media later) \\
     \bottomrule
   \end{tabularx}
 \end{table}
@@ -1071,11 +1094,15 @@ Hyperkernel.
   product.
 \item DMA confinement and IOMMU are future work. Exclusive ownership is
   conditional on no passthrough and emulation-mediated DMA.
-\item Nested distro sysinstall is complete and is not iron.
+\item Nested distro sysinstall was the Isolon-F rehearsal; the iron close
+  is Table~\ref{tab:split}'s R640 column
+  (SPA$\rightarrow$Isolon-F$\rightarrow$install$\rightarrow$disk
+  boot$\rightarrow$login). Nested is still not iron.
 \item Lab soak, audit-report templates, and a bring-up spec review are
-  L0/L1 process gates, not L3. Iron distro install is a product gate, not
-  a requirement of the ghost theorem.
-\item Iron installer, TLS, and guest console remain product residuals.
+  L0/L1 process gates, not L3. The iron ISO loop is a product gate, not a
+  requirement of the ghost theorem.
+\item Host-reboot disk persist, TLS, and guest console remain product
+  residuals. They are the next milestone; they are not isolation maturity.
 \item Verus upgrades can break proofs; pin maintenance forbids
   \texttt{latest}.
 \item SMT found no executable aliasing bug (Section~\ref{sec:model-after}).
@@ -1100,8 +1127,10 @@ blob,'' not from Isolon-specific APIs.
 \section{Conclusion}
 
 Isolon is a UEFI Type-1 hypervisor that boots unmodified Linux~6.12 with
-virtio and SMP on a PowerEdge R640, and an experience report about the gap
-between that binary and a machine-checked isolation claim. The two-axis
+virtio and SMP on a PowerEdge R640, closes a typed ISO install to disk
+login through Isolon-F and the operator SPA, and is an experience report
+about the gap between that binary and a machine-checked isolation claim.
+Closing the iron install loop does not move the L3 cell. The two-axis
 ladder is the instrument: it names the axis seL4 already walked from C to
 binary, and it splits a SeKVM abstract that otherwise reads as a proved
 hypervisor. The 512~MiB Linux window is a range registry with no ghost

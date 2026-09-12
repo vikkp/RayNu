@@ -22,7 +22,7 @@ and system name** than the public living paper.
 - Verus pin `0.2026.07.12.0b42f4c` and Kani `0.67.0`
 - Crate name `ept_model` (generic)
 - Counts: 80 verified / 0 errors, LOC tables
-- Honest gaps: live EPT L2, nested ≠ iron, installer open
+- Honest gaps: live EPT L2, nested ≠ iron column, Isolon-F/ISO outside Proven Core; host/CI never print iron install-complete marker; TLS/console/host-reboot persist still open
 
 ## Title rule
 
