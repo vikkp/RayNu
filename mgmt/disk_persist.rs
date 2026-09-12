@@ -19,8 +19,8 @@
 //! [`M8_DISK_PERSIST_NESTED_OK_MARKER`]. Never `ISO-INSTALL-OK`.
 
 use crate::raynu_f::fat::{self, VolumeRead};
-use crate::raynu_f::gpt::{find_esp, ESP_TYPE_GUID};
-use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use crate::raynu_f::gpt::{find_esp, find_esp_skip_array_crc, ESP_TYPE_GUID};
+use core::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering};
 
 /// Iron COM2 close: Force Off / reboot RayNu-V, installed disk still there.
 /// Host/CI/nested must **never** print this.
@@ -238,10 +238,24 @@ fn linux_fs_start_lba(disk: &[u8]) -> Option<u64> {
     linux_fs_start_lba_vol(&SliceDisk(disk))
 }
 
-fn disk_has_bootx64_vol<R: VolumeRead>(disk: &R) -> bool {
-    let Ok(esp) = find_esp(disk) else {
+fn disk_has_fat_bpb_from_esp<R: VolumeRead>(
+    disk: &R,
+    esp: crate::raynu_f::gpt::EspPartition,
+) -> bool {
+    let Some(base) = esp.start_lba.checked_mul(512) else {
         return false;
     };
+    let mut bpb = [0u8; 512];
+    if !disk.read_at(base, &mut bpb) {
+        return false;
+    }
+    fat::parse_bpb(&bpb).is_ok()
+}
+
+fn disk_has_bootx64_from_esp<R: VolumeRead>(
+    disk: &R,
+    esp: crate::raynu_f::gpt::EspPartition,
+) -> bool {
     let Some(base) = esp.start_lba.checked_mul(512) else {
         return false;
     };
@@ -257,6 +271,13 @@ fn disk_has_bootx64_vol<R: VolumeRead>(disk: &R) -> bool {
         Ok(e) => e.name_bytes() == b"BOOTX64.EFI" && e.size > 0 && !e.is_dir(),
         Err(_) => false,
     }
+}
+
+fn disk_has_bootx64_vol<R: VolumeRead>(disk: &R) -> bool {
+    let Ok(esp) = find_esp(disk) else {
+        return false;
+    };
+    disk_has_bootx64_from_esp(disk, esp)
 }
 
 fn disk_has_bootx64(disk: &[u8]) -> bool {
@@ -295,7 +316,10 @@ fn disk_has_ext4_and_root_uuid(disk: &[u8]) -> bool {
 }
 
 fn persist_media_looks_installed_vol<R: VolumeRead>(disk: &R) -> bool {
-    find_esp(disk).is_ok() && disk_has_bootx64_vol(disk) && disk_has_ext4_vol(disk)
+    let Ok(esp) = find_esp(disk) else {
+        return false;
+    };
+    disk_has_bootx64_from_esp(disk, esp) && disk_has_ext4_vol(disk)
 }
 
 struct LunVol;
@@ -306,9 +330,64 @@ impl VolumeRead for LunVol {
     }
 }
 
+static LUN_KEEP_STICKY: AtomicBool = AtomicBool::new(false);
+static LAST_LUN_GPT_ERR: AtomicU8 = AtomicU8::new(0);
+
+/// Last [`find_esp_skip_array_crc`] error on the LUN (0 = ESP found).
+pub fn persist_lun_last_gpt_err() -> u8 {
+    LAST_LUN_GPT_ERR.load(Ordering::Acquire)
+}
+
+/// Remember a live GPT+ESP+ext4 probe so TCG skip can keep after USB dies.
+pub fn persist_lun_remember_keep(keep: bool) {
+    if keep {
+        LUN_KEEP_STICKY.store(true, Ordering::Release);
+    }
+}
+
+/// Last successful DurableLun keep-detect (false until a live probe succeeds).
+pub fn persist_lun_sticky_keep() -> bool {
+    LUN_KEEP_STICKY.load(Ordering::Acquire)
+}
+
+/// Host tests / handoff reset.
+pub fn persist_lun_clear_sticky() {
+    LUN_KEEP_STICKY.store(false, Ordering::Release);
+    LAST_LUN_GPT_ERR.store(0, Ordering::Release);
+}
+
+/// GPT / FAT BPB / ext4 on the LUN. FAT dirent walks stay off BOT.
+/// Array CRC is skipped so keep-detect is not 32 USB BOT fills.
+/// Remembers keep. SliceDisk/HPA still require BOOTX64 via
+/// [`persist_media_looks_installed`].
+pub fn persist_lun_keep_parts() -> (bool, bool, bool) {
+    let gpt = find_esp_skip_array_crc(&LunVol);
+    LAST_LUN_GPT_ERR.store(
+        match gpt {
+            Ok(_) => 0,
+            Err(e) => e.code(),
+        },
+        Ordering::Release,
+    );
+    let boot = match gpt {
+        Ok(esp) => disk_has_fat_bpb_from_esp(&LunVol, esp),
+        Err(_) => false,
+    };
+    let ext4 = disk_has_ext4_vol(&LunVol);
+    persist_lun_remember_keep(gpt.is_ok() && boot && ext4);
+    (gpt.is_ok(), boot, ext4)
+}
+
+/// Live probe, or a prior successful peek if the LUN path later fails.
+pub fn persist_lun_keep() -> bool {
+    let (gpt, boot, ext4) = persist_lun_keep_parts();
+    (gpt && boot && ext4) || persist_lun_sticky_keep()
+}
+
 /// Peek the NVMe (or host-test) DurableLun without treating it as RAM.
 pub fn persist_lun_looks_installed() -> bool {
-    persist_media_looks_installed_vol(&LunVol)
+    let (gpt, boot, ext4) = persist_lun_keep_parts();
+    gpt && boot && ext4
 }
 
 /// True when media has GPT ESP + `\EFI\BOOT\BOOTX64.EFI` + ext4 magic.

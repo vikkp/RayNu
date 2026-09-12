@@ -344,25 +344,42 @@ fn doorbell(hw: &mut impl XhciHw, db: u32, slot: u8, target: u8) {
     hw.write32(db + u32::from(slot) * 4, u32::from(target));
 }
 
+fn advance_event(hw: &mut impl XhciHw, caps: &XhciCaps, ev: &mut EventRing) {
+    let erdp_off = caps.rt + 0x38;
+    ev.deq = ev.deq.saturating_add(1);
+    if ev.deq == RING_TRBS {
+        ev.deq = 0;
+        ev.cycle ^= 1;
+    }
+    write64(hw, erdp_off, ev.base + u64::from(ev.deq) * 16 | (1 << 3));
+}
+
+/// Drop already-posted events (port-status, extra short-packet) so the next
+/// BOT round-trip does not retire a stale Transfer Event as success.
+fn drain_events(hw: &mut impl XhciHw, caps: &XhciCaps, ev: &mut EventRing) {
+    for _ in 0..RING_TRBS {
+        let t = read_trb(hw, ev.base, ev.deq);
+        let ctrl = get_u32(&t, 12);
+        if (ctrl & 1) != (ev.cycle & 1) {
+            break;
+        }
+        advance_event(hw, caps, ev);
+    }
+}
+
 fn consume_event(
     hw: &mut impl XhciHw,
     caps: &XhciCaps,
     ev: &mut EventRing,
     want_type: u32,
 ) -> Result<[u8; 16], UsbBotError> {
-    let erdp_off = caps.rt + 0x38;
     let mut spins = 0u32;
     loop {
         let t = read_trb(hw, ev.base, ev.deq);
         let ctrl = get_u32(&t, 12);
         if (ctrl & 1) == (ev.cycle & 1) {
             let ty = trb_type(ctrl);
-            ev.deq = ev.deq.saturating_add(1);
-            if ev.deq == RING_TRBS {
-                ev.deq = 0;
-                ev.cycle ^= 1;
-            }
-            write64(hw, erdp_off, ev.base + u64::from(ev.deq) * 16 | (1 << 3));
+            advance_event(hw, caps, ev);
             if ty == want_type {
                 let code = trb_cmpl_code(get_u32(&t, 8));
                 if code != CMPL_SUCCESS && code != CMPL_SHORT {
@@ -480,8 +497,10 @@ fn xhci_start(
     hw.write32(caps.rt + 0x28, 1);
     write64(hw, caps.rt + 0x30, mem.erst);
     write64(hw, caps.rt + 0x38, mem.evt | (1 << 3));
-    hw.write32(caps.rt + 0x20, 1 << 1);
-    hw.write32(usbcmd, USBCMD_RS | USBCMD_INTE);
+    // Poll the event ring. INTE + leftover firmware ISRs can move ERDP
+    // after EBS (allocator / STI) and wedge BOT keep-detect.
+    hw.write32(caps.rt + 0x20, 0);
+    hw.write32(usbcmd, USBCMD_RS);
     if !wait_clear(hw, usbsts, USBSTS_HCH) {
         return Err(UsbBotError::Reset);
     }
@@ -709,6 +728,7 @@ impl UsbBulk for LiveXhci {
             return Err(UsbBotError::Xfer);
         }
         let mut hw = MmioXhci { base: self.mmio };
+        drain_events(&mut hw, &self.caps, &mut self.ev);
         hw.dma_write(self.bounce, data);
         self.bulk_out.place(
             &mut hw,
@@ -726,6 +746,7 @@ impl UsbBulk for LiveXhci {
             return Err(UsbBotError::Xfer);
         }
         let mut hw = MmioXhci { base: self.mmio };
+        drain_events(&mut hw, &self.caps, &mut self.ev);
         let z = [0u8; 4096];
         hw.dma_write(self.bounce, &z[..data.len()]);
         self.bulk_in.place(
@@ -1232,5 +1253,44 @@ mod xhci_pack_test {
         assert_eq!(mps_o, 512);
         assert_eq!(mps_i, 512);
         assert_eq!(cfgv, 1);
+    }
+
+    struct FakeMem {
+        mem: [u8; 4096],
+    }
+
+    impl XhciHw for FakeMem {
+        fn read32(&mut self, _off: u32) -> u32 {
+            0
+        }
+        fn write32(&mut self, _off: u32, _val: u32) {}
+        fn dma_read(&mut self, hpa: u64, buf: &mut [u8]) {
+            let o = hpa as usize;
+            buf.copy_from_slice(&self.mem[o..o + buf.len()]);
+        }
+        fn dma_write(&mut self, hpa: u64, buf: &[u8]) {
+            let o = hpa as usize;
+            self.mem[o..o + buf.len()].copy_from_slice(buf);
+        }
+    }
+
+    #[test]
+    fn transfer_ring_places_link_before_wrap() {
+        let mut hw = FakeMem { mem: [0; 4096] };
+        let mut ring = Ring::new(0);
+        for i in 0..RING_TRBS {
+            ring.place(
+                &mut hw,
+                0x1000 + u64::from(i),
+                8,
+                trb_ctrl(0, TRB_NORMAL, TRB_IOC),
+            );
+        }
+        let link = read_trb(&mut hw, 0, RING_TRBS - 1);
+        assert_eq!(trb_type(get_u32(&link, 12)), TRB_LINK);
+        assert_ne!(get_u32(&link, 12) & TRB_TC, 0);
+        assert_eq!(ring.enq, 1);
+        assert_eq!(ring.cycle, 0);
+        assert_eq!(USBCMD_INTE, 1 << 2);
     }
 }

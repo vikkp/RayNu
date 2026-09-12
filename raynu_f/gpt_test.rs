@@ -149,6 +149,17 @@ fn bad_entry_array_crc_is_rejected() {
 }
 
 #[test]
+fn skip_array_crc_finds_esp_when_unused_entry_is_stale() {
+    let mut disk = synthetic_gpt();
+    // Unused entry 2 (not the ESP). Array CRC fails; keep-detect still finds ESP.
+    disk[(ENTRY_LBA * 512) as usize + 256] ^= 0xFF;
+    assert_eq!(find_esp(&SliceDisk(&disk)), Err(GptError::BadEntryArrayCrc));
+    let esp = find_esp_skip_array_crc(&SliceDisk(&disk)).expect("keep-detect ESP");
+    assert_eq!(esp.start_lba, ESP_START);
+    assert_eq!(GptError::BadEntryArrayCrc.code(), 7);
+}
+
+#[test]
 fn missing_mbr_signature_is_rejected() {
     let mut disk = synthetic_gpt();
     disk[510] = 0;

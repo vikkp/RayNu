@@ -490,6 +490,34 @@ fn planted_usb_lun_looks_installed_keep() {
 }
 
 #[test]
+fn persist_lun_keep_is_sticky_after_usb_io_drops() {
+    use crate::devices::guest_virtio_blk::reset;
+    use crate::mgmt::durable_lun::durable_lun_clear;
+    durable_lun_clear();
+    reset();
+    let fixture = build_gpt_esp_ext4_image();
+    let mut ns = vec![0u8; 2 * 1024 * 1024];
+    ns[..fixture.len()].copy_from_slice(&fixture);
+    let ns = Box::leak(ns.into_boxed_slice());
+    crate::mgmt::usb_bot::host_usb_attach(ns, 512);
+    assert!(
+        persist_lun_keep(),
+        "planted USB must keep (not ISO-INSTALL-OK)"
+    );
+    crate::mgmt::usb_bot::clear_usb_bot_ready();
+    assert!(
+        persist_lun_keep(),
+        "sticky keep must survive USB I/O drop (TCG skip)"
+    );
+    assert!(
+        !persist_lun_looks_installed(),
+        "live probe must fail after USB I/O drop"
+    );
+    reset();
+    durable_lun_clear();
+}
+
+#[test]
 fn host_never_prints_everest_iso_install_ok() {
     assert!(host_never_prints_iso_install_ok());
     assert_eq!(M8_DISK_PERSIST_OK_MARKER, "RAYNU-V-M8-DISK-PERSIST-OK");

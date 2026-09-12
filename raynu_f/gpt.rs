@@ -193,8 +193,37 @@ pub fn partition_array_crc<R: VolumeRead>(
     Ok(super::tables::crc32_finish(crc_state))
 }
 
+impl GptError {
+    /// Serial `gpt_err=` for DurableLun keep-detect (0 = ESP found).
+    pub const fn code(self) -> u8 {
+        match self {
+            Self::ShortRead => 1,
+            Self::NoProtectiveMbr => 2,
+            Self::BadSignature => 3,
+            Self::BadRevision => 4,
+            Self::BadHeaderSize => 5,
+            Self::BadHeaderCrc => 6,
+            Self::BadEntryArrayCrc => 7,
+            Self::BadEntrySize => 8,
+            Self::NoEsp => 9,
+        }
+    }
+}
+
 /// First ESP on `r`, or `GptError` if the disk is not a GPT with an ESP.
 pub fn find_esp<R: VolumeRead>(r: &R) -> Result<EspPartition, GptError> {
+    find_esp_opts(r, true)
+}
+
+/// DurableLun keep-detect: header CRC + first ESP, no 16 KiB array CRC.
+///
+/// 128 GPT entries × 512-byte BOT wraps qemu-xhci. SliceDisk/HPA still
+/// use [`find_esp`] (CRC on). Not iron persist OK.
+pub fn find_esp_skip_array_crc<R: VolumeRead>(r: &R) -> Result<EspPartition, GptError> {
+    find_esp_opts(r, false)
+}
+
+fn find_esp_opts<R: VolumeRead>(r: &R, verify_array_crc: bool) -> Result<EspPartition, GptError> {
     let mut lba0 = [0u8; 512];
     if !read_lba(r, 0, &mut lba0) {
         return Err(GptError::ShortRead);
@@ -205,7 +234,7 @@ pub fn find_esp<R: VolumeRead>(r: &R) -> Result<EspPartition, GptError> {
         return Err(GptError::ShortRead);
     }
     let hdr = parse_gpt_header(&lba1)?;
-    if partition_array_crc(r, &hdr)? != gpt_entry_array_crc(&lba1) {
+    if verify_array_crc && partition_array_crc(r, &hdr)? != gpt_entry_array_crc(&lba1) {
         return Err(GptError::BadEntryArrayCrc);
     }
     let n = hdr.number_of_entries.min(GPT_MAX_ENTRIES);
