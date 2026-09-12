@@ -17,14 +17,21 @@
 #             Not iron.
 # MODE=usb    one boot, QEMU qemu-xhci + usb-storage BOT I/O ready. TCG ok.
 #             Not nested-OK. Not iron. Do not F11.
+# MODE=lunkeep two boots, TCG ok. Boot 1 empty NVMe I/O ready, plant GPT+ESP+ext4
+#             at LUN offset 0, kill HV, boot 2 keep=1 from DurableLun NVMe.
+#             Not Alpine. Not nested-OK. Not iron. Do not F11.
+# MODE=usbkeep two boots, TCG ok. Same as lunkeep on qemu-xhci + usb-storage.
+#             Not Alpine. Not nested-OK. Not iron. Do not F11.
 # MODE=full   two boots (default). Boot 1 stops after Alpine install.
-#             Needs nested KVM (VMLAUNCH). TCG is smoke/keep only.
+#             Needs nested KVM (VMLAUNCH). TCG is smoke/keep/lunkeep/usbkeep only.
 #
 # Usage:
 #   MODE=smoke ./tools/m8-persist-nested.sh
 #   MODE=keep ./tools/m8-persist-nested.sh
 #   MODE=lun ./tools/m8-persist-nested.sh
 #   MODE=usb ./tools/m8-persist-nested.sh
+#   MODE=lunkeep ./tools/m8-persist-nested.sh
+#   MODE=usbkeep ./tools/m8-persist-nested.sh
 #   ./tools/m8-persist-nested.sh
 set -euo pipefail
 
@@ -52,7 +59,7 @@ NESTED_OK="RAYNU-V-M8-DISK-PERSIST-NESTED-OK"
 IRON_OK="RAYNU-V-M8-DISK-PERSIST-OK"
 ISO_OK="RAYNU-V-M7-ISO-INSTALL-OK"
 
-if [[ "$MODE" == "smoke" || "$MODE" == "keep" || "$MODE" == "lun" || "$MODE" == "usb" ]] && [[ -z "${PRODUCT_ISO:-}" ]]; then
+if [[ "$MODE" == "smoke" || "$MODE" == "keep" || "$MODE" == "lun" || "$MODE" == "usb" || "$MODE" == "lunkeep" || "$MODE" == "usbkeep" ]] && [[ -z "${PRODUCT_ISO:-}" ]]; then
   ISO_PATH="$SMOKE_ISO"
 else
   ISO_PATH="${PRODUCT_ISO:-$ALPINE_ISO}"
@@ -88,7 +95,7 @@ require_persist_reserved() {
 scan() {
   local log="$1"
   echo "==> marker scan $log (not ISO-INSTALL-OK):"
-  grep -E -n 'persist install disk|leftover install disk|virtio-blk install disk|VMLAUNCH-OK|VMXON-SKIP|Linux version|setup-disk|Installation is complete|GPT ESP|root=UUID|DISK-BOOT-OK|ISO-INSTALL-OK|report-RAM extra' \
+  grep -E -n 'persist install disk|leftover install disk|virtio-blk install disk|durable LUN|VMLAUNCH-OK|VMXON-SKIP|Linux version|setup-disk|Installation is complete|GPT ESP|root=UUID|DISK-BOOT-OK|ISO-INSTALL-OK|report-RAM extra' \
     "$log" | head -n 80 || true
 }
 
@@ -293,18 +300,13 @@ parse_persist_hpa() {
     | grep -oE '0x[0-9a-fA-F]+'
 }
 
-plant_keep_fixture() {
-  local log="$1"
-  local hpa
-  hpa=$(parse_persist_hpa "$log")
-  if [[ -z "$hpa" ]]; then
-    echo "error: no persist hpa in $log (not ISO-INSTALL-OK)" >&2
-    exit 1
-  fi
-  echo "==> plant GPT+ESP+ext4 at $hpa in $M8_PERSIST_IMG (not nested-OK; not iron; not ISO-INSTALL-OK)"
+plant_media_fixture() {
+  local img="$1"
+  local offset="${2:-0}"
+  echo "==> plant GPT+ESP+ext4 at $offset in $img (not nested-OK; not iron; not ISO-INSTALL-OK)"
   local plant_log="$ROOT/target/m8-persist-plant.log"
   # Do not use --exact: the test lives under mgmt::disk_persist::disk_persist_test::
-  if ! M8_PLANT_PATH="$M8_PERSIST_IMG" M8_PLANT_OFFSET="$hpa" \
+  if ! M8_PLANT_PATH="$img" M8_PLANT_OFFSET="$offset" \
     cargo test --no-default-features plant_m8_persist_fixture -- --nocapture \
     >"$plant_log" 2>&1; then
     echo "error: plant_m8_persist_fixture failed" >&2
@@ -316,18 +318,29 @@ plant_keep_fixture() {
     tail -n 20 "$plant_log" >&2 || true
     exit 1
   fi
-  python3 - "$M8_PERSIST_IMG" "$hpa" <<'PY'
+  python3 - "$img" "$offset" <<'PY'
 import sys
 from pathlib import Path
-path, hpa_s = Path(sys.argv[1]), sys.argv[2]
-off = int(hpa_s, 16) if hpa_s.lower().startswith("0x") else int(hpa_s)
+path, off_s = Path(sys.argv[1]), sys.argv[2]
+off = int(off_s, 16) if off_s.lower().startswith("0x") else int(off_s)
 with path.open("rb") as f:
     f.seek(off + 512)
     sig = f.read(8)
 if sig != b"EFI PART":
-    raise SystemExit(f"error: no EFI PART at {hpa_s}+512 (got {sig!r})")
-print(f"==> plant GPT EFI PART at {hpa_s} (not ISO-INSTALL-OK)")
+    raise SystemExit(f"error: no EFI PART at {off_s}+512 (got {sig!r})")
+print(f"==> plant GPT EFI PART at {off_s} (not ISO-INSTALL-OK)")
 PY
+}
+
+plant_keep_fixture() {
+  local log="$1"
+  local hpa
+  hpa=$(parse_persist_hpa "$log")
+  if [[ -z "$hpa" ]]; then
+    echo "error: no persist hpa in $log (not ISO-INSTALL-OK)" >&2
+    exit 1
+  fi
+  plant_media_fixture "$M8_PERSIST_IMG" "$hpa"
 }
 
 run_smoke() {
@@ -623,6 +636,132 @@ run_usb() {
   echo "==> DurableLun USB BOT I/O ready (not $NESTED_OK; not iron $IRON_OK; not $ISO_OK)"
 }
 
+# DurableLun keep=1 after HV kill. kind=nvme|usb. Not nested-OK. Not iron.
+run_durable_keep() {
+  local kind="$1"
+  local ready_needle="durable LUN ${kind} I/O ready"
+  local img
+  echo "==> MODE=${MODE} — plant GPT on DurableLun ${kind}, kill HV, boot2 keep=1 (not $NESTED_OK, not iron, not $ISO_OK)"
+  M8_PERSIST_IMG=""
+  if [[ "$kind" == "nvme" ]]; then
+    M8_NVME_IMG="${M8_NVME_IMG:-$ROOT/target/m8-nvme.img}"
+    M8_USB_IMG=""
+    img="$M8_NVME_IMG"
+  else
+    M8_NVME_IMG=""
+    M8_USB_IMG="${M8_USB_IMG:-$ROOT/target/m8-usb.img}"
+    img="$M8_USB_IMG"
+  fi
+  rm -f "$img"
+  truncate -s 1G "$img"
+  start_qemu "$SERIAL1" "$TIMEOUT_SMOKE" \
+    "$ROOT/target/m8-persist-${MODE}1-stdout.log" \
+    "$ROOT/target/m8-persist-${MODE}1-stderr.log"
+  local waited=0
+  while (( waited < 25 )); do
+    if [[ -s "$SERIAL1" ]]; then
+      break
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  if [[ ! -s "$SERIAL1" && "$QEMU_ACCEL" == "kvm" ]]; then
+    echo "==> kvm serial empty after ${waited}s; retry tcg (persist scan is PRE-VMLAUNCH)"
+    stop_qemu
+    QEMU_ACCEL=tcg
+    rm -f "$img"
+    truncate -s 1G "$img"
+    start_qemu "$SERIAL1" "$TIMEOUT_SMOKE" \
+      "$ROOT/target/m8-persist-${MODE}1-stdout.log" \
+      "$ROOT/target/m8-persist-${MODE}1-stderr.log"
+  fi
+  if wait_serial_needle "$SERIAL1" "$ready_needle"; then
+    sleep 2
+    stop_qemu
+  else
+    wait_qemu || true
+  fi
+  if [[ ! -s "$SERIAL1" ]]; then
+    echo "error: ${MODE} boot1 serial empty" >&2
+    cat "$ROOT/target/m8-persist-${MODE}1-stderr.log" >&2 || true
+    exit 1
+  fi
+  scan "$SERIAL1"
+  grep -n 'durable LUN' "$SERIAL1" | head -n 20 || true
+  forbid_markers "$SERIAL1"
+  if ! grep -qF "$ready_needle" "$SERIAL1"; then
+    echo "error: ${MODE} boot1 missing $ready_needle" >&2
+    grep -E 'durable LUN|xhci|nvme|usb' "$SERIAL1" | head -n 30 >&2 || true
+    exit 1
+  fi
+  if grep -qE 'virtio-blk install disk bytes=.* keep=1' "$SERIAL1"; then
+    echo "error: ${MODE} boot1 attached keep=1 on empty LUN" >&2
+    exit 1
+  fi
+
+  plant_media_fixture "$img" 0
+
+  echo "==> boot2: same $img ($(stat -c%s "$img") bytes) after plant (not nested-OK)"
+  start_qemu "$SERIAL2" "$TIMEOUT_SMOKE" \
+    "$ROOT/target/m8-persist-${MODE}2-stdout.log" \
+    "$ROOT/target/m8-persist-${MODE}2-stderr.log"
+  waited=0
+  while (( waited < 25 )); do
+    if [[ -s "$SERIAL2" ]]; then
+      break
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  if [[ ! -s "$SERIAL2" && "$QEMU_ACCEL" == "kvm" ]]; then
+    echo "==> kvm serial empty after ${waited}s; retry tcg without wiping LUN"
+    stop_qemu
+    QEMU_ACCEL=tcg
+    start_qemu "$SERIAL2" "$TIMEOUT_SMOKE" \
+      "$ROOT/target/m8-persist-${MODE}2-stdout.log" \
+      "$ROOT/target/m8-persist-${MODE}2-stderr.log"
+  fi
+  if wait_serial_needle "$SERIAL2" "keep=1"; then
+    sleep 2
+    stop_qemu
+  else
+    wait_qemu || true
+  fi
+  if [[ ! -s "$SERIAL2" ]]; then
+    echo "error: ${MODE} boot2 serial empty" >&2
+    cat "$ROOT/target/m8-persist-${MODE}2-stderr.log" >&2 || true
+    exit 1
+  fi
+  scan "$SERIAL2"
+  grep -n 'durable LUN' "$SERIAL2" | head -n 20 || true
+  grep -n 'virtio-blk install disk' "$SERIAL2" | head -n 10 || true
+  forbid_markers "$SERIAL2"
+  if ! grep -qF "$ready_needle" "$SERIAL2"; then
+    echo "error: ${MODE} boot2 missing $ready_needle" >&2
+    grep -E 'durable LUN|xhci|nvme|usb' "$SERIAL2" | head -n 30 >&2 || true
+    exit 1
+  fi
+  if ! grep -qE 'virtio-blk install disk bytes=.* keep=1' "$SERIAL2"; then
+    echo "error: ${MODE} boot2 did not attach_lun keep=1" >&2
+    grep -n 'virtio-blk install disk' "$SERIAL2" >&2 || true
+    grep -n 'VMXON-SKIP' "$SERIAL2" >&2 || true
+    exit 1
+  fi
+  if grep -qF "$NESTED_OK" "$SERIAL2"; then
+    echo "error: ${MODE} boot2 serial printed $NESTED_OK" >&2
+    exit 1
+  fi
+  echo "==> DurableLun ${kind} keep=1 after HV kill + plant (not $NESTED_OK; not iron $IRON_OK; not $ISO_OK)"
+}
+
+run_lunkeep() {
+  run_durable_keep nvme
+}
+
+run_usbkeep() {
+  run_durable_keep usb
+}
+
 pick_accel
 prepare_host
 fetch_iso
@@ -633,9 +772,11 @@ case "$MODE" in
   keep) run_keep ;;
   lun) run_lun ;;
   usb) run_usb ;;
+  lunkeep) run_lunkeep ;;
+  usbkeep) run_usbkeep ;;
   full) run_full ;;
   *)
-    echo "error: MODE=$MODE (want smoke|keep|lun|usb|full)" >&2
+    echo "error: MODE=$MODE (want smoke|keep|lun|usb|lunkeep|usbkeep|full)" >&2
     exit 1
     ;;
 esac

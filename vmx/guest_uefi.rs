@@ -5153,7 +5153,9 @@ unsafe fn attach_product_iso_install_disk(alloc: &mut FrameAllocator, warn: bool
 }
 
 /// Nested TCG / VMXON-SKIP: attach persist only when it already looks installed.
-/// Empty persist stays unattached (Alpine install needs VMLAUNCH). Not nested-OK.
+/// Empty persist/LUN stays unattached (Alpine install needs VMLAUNCH).
+/// File RAM (`MODE=keep`) and DurableLun (`MODE=lunkeep`/`usbkeep`) share this
+/// path. Not nested-OK. Not iron persist OK.
 #[cfg(target_os = "uefi")]
 pub unsafe fn attach_persist_keep_on_vmx_skip(alloc: &mut FrameAllocator) {
     if crate::mgmt::durable_lun::durable_lun_install_reserved() {
