@@ -364,19 +364,23 @@ pub fn durable_lun_rw(off: u64, buf: &mut [u8], write: bool) -> bool {
     true
 }
 
-/// One 512-byte line: 4 KiB prefetch mixed later LBAs into a CRC fill and
-/// broke FAT BPB. Exact LBA BOT matches the NVMe keep path.
+/// 64×512-byte lines cover GPT + ESP BPB without mixing LBAs in one BOT.
 /// Not iron persist OK.
 const LUN_CACHE_LINE: usize = 512;
+const LUN_CACHE_LINES: usize = 64;
 
 #[repr(C, align(4096))]
-struct LunCacheBuf([u8; LUN_CACHE_LINE]);
+struct LunCacheBuf([u8; LUN_CACHE_LINE * LUN_CACHE_LINES]);
 
-static LUN_CACHE_TAG: AtomicU64 = AtomicU64::new(u64::MAX);
-static mut LUN_CACHE_DATA: LunCacheBuf = LunCacheBuf([0; LUN_CACHE_LINE]);
+static LUN_CACHE_TAG: [AtomicU64; LUN_CACHE_LINES] =
+    [const { AtomicU64::new(u64::MAX) }; LUN_CACHE_LINES];
+static mut LUN_CACHE_DATA: LunCacheBuf =
+    LunCacheBuf([0; LUN_CACHE_LINE * LUN_CACHE_LINES]);
 
 fn lun_cache_clear() {
-    LUN_CACHE_TAG.store(u64::MAX, Ordering::Release);
+    for t in &LUN_CACHE_TAG {
+        t.store(u64::MAX, Ordering::Release);
+    }
 }
 
 fn lun_ns_bytes() -> u64 {
@@ -385,6 +389,18 @@ fn lun_ns_bytes() -> u64 {
     } else {
         crate::mgmt::usb_bot::usb_bot_ns_bytes()
     }
+}
+
+fn lun_cache_slot(aligned: u64) -> usize {
+    ((aligned / LUN_CACHE_LINE as u64) as usize) % LUN_CACHE_LINES
+}
+
+fn lun_cache_line_ptr(slot: usize) -> *mut u8 {
+    debug_assert!(slot < LUN_CACHE_LINES);
+    // SAFETY: `slot` is in 0..LUN_CACHE_LINES; the static lives for the HV
+    // lifetime. BSP / `cargo test --test-threads=1` owns the line. `addr_of_mut`
+    // avoids `dangerous_implicit_autorefs` on `static mut`.
+    unsafe { (core::ptr::addr_of_mut!(LUN_CACHE_DATA.0) as *mut u8).add(slot * LUN_CACHE_LINE) }
 }
 
 fn lun_cache_fill(aligned: u64, lba: u64) -> bool {
@@ -404,25 +420,16 @@ fn lun_cache_fill(aligned: u64, lba: u64) -> bool {
             return false;
         }
     }
-    // SAFETY: BSP / test-threads=1; fill owns the line until TAG is published.
-    let buf = unsafe {
-        core::slice::from_raw_parts_mut(
-            core::ptr::addr_of_mut!(LUN_CACHE_DATA.0) as *mut u8,
-            LUN_CACHE_LINE,
-        )
-    };
+    let slot = lun_cache_slot(aligned);
+    // SAFETY: fill owns this slot until TAG is published; DMA bounce in
+    // `xhci_live_rw` copies into `buf` after BOT completes.
+    let buf = unsafe { core::slice::from_raw_parts_mut(lun_cache_line_ptr(slot), LUN_CACHE_LINE) };
     buf.fill(0);
-    let mut got = 0u64;
-    while got < n {
-        let take = (n - got).min(lba) as usize;
-        let slice = &mut buf[got as usize..got as usize + take];
-        if !durable_lun_rw(aligned.saturating_add(got), slice, false) {
-            lun_cache_clear();
-            return false;
-        }
-        got = got.saturating_add(take as u64);
+    if !durable_lun_rw(aligned, &mut buf[..n as usize], false) {
+        LUN_CACHE_TAG[slot].store(u64::MAX, Ordering::Release);
+        return false;
     }
-    LUN_CACHE_TAG.store(aligned, Ordering::Release);
+    LUN_CACHE_TAG[slot].store(aligned, Ordering::Release);
     true
 }
 
@@ -451,7 +458,10 @@ pub fn durable_lun_read_any(off: u64, buf: &mut [u8]) -> bool {
     while copied < buf.len() {
         let cur = off.saturating_add(copied as u64);
         let aligned = (cur / chunk) * chunk;
-        if LUN_CACHE_TAG.load(Ordering::Acquire) != aligned && !lun_cache_fill(aligned, lba) {
+        let slot = lun_cache_slot(aligned);
+        if LUN_CACHE_TAG[slot].load(Ordering::Acquire) != aligned
+            && !lun_cache_fill(aligned, lba)
+        {
             return false;
         }
         let skip = (cur - aligned) as usize;
@@ -459,13 +469,9 @@ pub fn durable_lun_read_any(off: u64, buf: &mut [u8]) -> bool {
             return false;
         }
         let n = (LUN_CACHE_LINE - skip).min(buf.len() - copied);
-        // SAFETY: TAG published this fill.
-        let line = unsafe {
-            core::slice::from_raw_parts(
-                core::ptr::addr_of!(LUN_CACHE_DATA.0) as *const u8,
-                LUN_CACHE_LINE,
-            )
-        };
+        // SAFETY: TAG published this slot's fill; `lun_cache_line_ptr` is the
+        // same byte range written in `lun_cache_fill`.
+        let line = unsafe { core::slice::from_raw_parts(lun_cache_line_ptr(slot), LUN_CACHE_LINE) };
         buf[copied..copied + n].copy_from_slice(&line[skip..skip + n]);
         copied = copied.saturating_add(n);
     }
