@@ -642,6 +642,36 @@ fn carve_leftover_install_disk_nested_4g_gets_512mib() {
 }
 
 #[test]
+fn carve_leftover_install_disk_nested_3584m_gets_1gib_and_iso_extra() {
+    // 3584 MiB QEMU + leftover start 0x5DE00000 (1500 MiB). Disk 1 GiB;
+    // rest 1_111_490_560 ≥ 994 MiB Alpine ISO extra.
+    const START: u64 = 0x5DE0_0000;
+    const MIB: u64 = 1024 * 1024;
+    const LEFTOVER: u64 = 3584 * MIB - START;
+    let (hpa, bytes, rest, rest_bytes) = carve_leftover_install_disk(START, LEFTOVER);
+    assert_eq!(hpa, START);
+    assert_eq!(bytes, 1024 * MIB);
+    assert_eq!(rest, START + 1024 * MIB);
+    // rest = leftover − 1GiB; start 0x5DE00000 is already 2MiB-aligned.
+    assert_eq!(rest_bytes, 1_109_393_408);
+    assert!(rest_bytes >= 1_042_284_544);
+    assert!(rest_bytes >= LEFTOVER_DISK_GUEST_FLOOR_BYTES);
+}
+
+#[test]
+fn carve_leftover_install_disk_nested_2560m_live_1020mib_skips() {
+    // Live 2560M leftover: conventional above PRECISE pages=261269.
+    // 256 MiB + 768 MiB floor needs 1024 MiB; 1020.6 MiB skips.
+    const START: u64 = 0x5DE0_0000;
+    const LEFTOVER: u64 = 261_269 * 4096;
+    let (hpa, bytes, rest, rest_bytes) = carve_leftover_install_disk(START, LEFTOVER);
+    assert_eq!(hpa, 0);
+    assert_eq!(bytes, 0);
+    assert_eq!(rest, START);
+    assert_eq!(rest_bytes, LEFTOVER);
+}
+
+#[test]
 fn carve_leftover_install_disk_iron_gets_1gib_and_aligns() {
     const MIB: u64 = 1024 * 1024;
     // Unaligned start rounds up to 2 MiB; iron ~2.5 GiB leftover → 1 GiB disk.

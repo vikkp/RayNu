@@ -700,8 +700,12 @@ pub const LEFTOVER_DISK_TRY_BYTES: &[u64] = &[
 ];
 /// Leftover that must remain for guest report-RAM after the carve. Alpine
 /// live root + modloop + apk cache sit in RAM alongside the 256 MiB high
-/// RAM; q35 below-4G conventional above PRECISE is ~1.44 GiB at `-m 4096M`,
-/// which yields a 512 MiB disk (1 GiB + 768 MiB does not fit).
+/// RAM. Nested persist + PRODUCT_ISO needs `-m 3584M` so leftover from
+/// `0x5DE00000` is ~2084 MiB: 1 GiB leftover disk + leftover rest for ISO extra
+/// (`1042284544` bytes). Nested 2560M leftover was ~1020 MiB — 4 MiB short of
+/// 256 MiB+768 floor — so File persist never attached (64 MiB pool). Do not
+/// lower this floor. q35 `-m 4096M` leftover is ~1.44 GiB (512 MiB leftover
+/// disk; 1 GiB + 768 MiB does not fit).
 pub const LEFTOVER_DISK_GUEST_FLOOR_BYTES: u64 = 768 * 1024 * 1024;
 const LEFTOVER_DISK_ALIGN: u64 = 2 * 1024 * 1024;
 

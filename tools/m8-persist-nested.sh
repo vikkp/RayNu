@@ -23,7 +23,10 @@
 # MODE=usbkeep two boots, TCG ok. Same as lunkeep on qemu-xhci + usb-storage.
 #             Not Alpine. Not nested-OK. Not iron. Do not F11.
 # MODE=full   two boots (default). Boot 1 stops after Alpine install.
-#             Needs nested KVM (VMLAUNCH). TCG is smoke/keep/lunkeep/usbkeep only.
+#             Needs nested KVM (VMLAUNCH). Cloud VMs with kvm_spurious_fault
+#             cannot close nested-OK. Run on raynuvsrv1. After boot1, the
+#             persist file must show EFI PART at the leftover HPA (share=on
+#             flush). TCG is smoke/keep/lunkeep/usbkeep only.
 #
 # Usage:
 #   MODE=smoke ./tools/m8-persist-nested.sh
@@ -52,8 +55,9 @@ ALPINE_ISO="${ALPINE_ISO:-$ROOT/target/alpine-${ALPINE_FLAVOR}-3.21.3-x86_64.iso
 SMOKE_ISO="${SMOKE_ISO:-$ROOT/target/m8-smoke-window.iso}"
 M8_PERSIST_IMG="${M8_PERSIST_IMG:-$ROOT/target/m8-persist.img}"
 M8_PERSIST_SIZE="${M8_PERSIST_SIZE:-2560M}"
-# 2560M so leftover above PRECISE exists; the file *is* that RAM.
-QEMU_MEM="${QEMU_MEM:-2560M}"
+# Distro OVMF ignores nvdimm/pc-dimm (Type 14 empty). Leftover/File persist
+# is leftover DRAM. 3584M so leftover above PRECISE holds 1 GiB + ISO extra.
+QEMU_MEM="${QEMU_MEM:-3584M}"
 RAYNU_F="${RAYNU_F:-1}"
 NESTED_OK="RAYNU-V-M8-DISK-PERSIST-NESTED-OK"
 IRON_OK="RAYNU-V-M8-DISK-PERSIST-OK"
@@ -148,7 +152,7 @@ pick_accel() {
       exit 1
     fi
     if kvm_wedged; then
-      echo "error: MODE=full needs nested KVM; host kvm_spurious_fault (builtin kvm_intel, cannot reload)" >&2
+      echo "error: MODE=full needs nested KVM (VMLAUNCH); host kvm_spurious_fault (this Cloud VM cannot close nested-OK; run on raynuvsrv1)" >&2
       exit 1
     fi
     QEMU_ACCEL=kvm
@@ -166,8 +170,18 @@ prepare_host() {
     sudo chmod a+rw /dev/kvm || true
   fi
   if [[ "${QEMU_ACCEL}" == "kvm" && -x "$ROOT/tools/enable-nested-kvm.sh" ]]; then
-    # Builtin kvm_intel cannot unload; do not treat as fatal for smoke.
-    sudo "$ROOT/tools/enable-nested-kvm.sh" || true
+    if [[ "$MODE" == "full" ]]; then
+      sudo "$ROOT/tools/enable-nested-kvm.sh"
+      local shadow
+      shadow="$(cat /sys/module/kvm_intel/parameters/enable_shadow_vmcs 2>/dev/null || true)"
+      if [[ "$shadow" != "0" && "$shadow" != "N" && "$shadow" != "n" ]]; then
+        echo "error: MODE=full needs enable_shadow_vmcs=0 (now ${shadow:-missing}); nested VT-x VMWRITE error 12 otherwise" >&2
+        exit 1
+      fi
+    else
+      # Builtin kvm_intel cannot unload; do not treat as fatal for smoke.
+      sudo "$ROOT/tools/enable-nested-kvm.sh" || true
+    fi
   fi
   echo "==> host virt flags: $(grep -m1 '^flags' /proc/cpuinfo | grep -oE 'vmx|svm' | tr '\n' ' ' || true)"
 }
@@ -253,12 +267,18 @@ start_qemu() {
 }
 
 stop_qemu() {
-  local qpid tpid
+  local qpid tpid i
   qpid=$(cat "$ROOT/target/m8-persist-qemu.pid" 2>/dev/null || true)
   tpid=$(cat "$ROOT/target/m8-persist-timeout.pid" 2>/dev/null || true)
   if [[ -n "$qpid" ]] && kill -0 "$qpid" 2>/dev/null; then
+    # SIGTERM so memory-backend-file munmap flushes share=on persist RAM.
     kill "$qpid" 2>/dev/null || true
-    sleep 2
+    for i in $(seq 1 8); do
+      if ! kill -0 "$qpid" 2>/dev/null; then
+        break
+      fi
+      sleep 1
+    done
     if kill -0 "$qpid" 2>/dev/null; then
       kill -KILL "$qpid" 2>/dev/null || true
     fi
@@ -268,6 +288,9 @@ stop_qemu() {
     wait "$tpid" 2>/dev/null || true
   fi
   rm -f "$ROOT/target/m8-persist-qemu.pid" "$ROOT/target/m8-persist-timeout.pid"
+  if [[ -n "${M8_PERSIST_IMG:-}" && -f "$M8_PERSIST_IMG" ]]; then
+    sync "$M8_PERSIST_IMG" || true
+  fi
 }
 
 wait_qemu() {
@@ -298,6 +321,60 @@ parse_persist_hpa() {
   grep -oE 'persist install disk hpa=0x[0-9a-fA-F]+' "$log" \
     | tail -n1 \
     | grep -oE '0x[0-9a-fA-F]+'
+}
+
+# After Alpine writes virtio into leftover File RAM, the QEMU persist file
+# must show EFI PART at that HPA. SIGKILL without munmap would fail this.
+require_persist_gpt_in_file() {
+  local log="$1"
+  local hpa
+  hpa=$(parse_persist_hpa "$log")
+  if [[ -z "$hpa" ]]; then
+    echo "error: no persist hpa in $log (not ISO-INSTALL-OK)" >&2
+    exit 1
+  fi
+  if [[ -z "${M8_PERSIST_IMG:-}" || ! -f "$M8_PERSIST_IMG" ]]; then
+    echo "error: M8_PERSIST_IMG missing after HV kill (not ISO-INSTALL-OK)" >&2
+    exit 1
+  fi
+  echo "==> flush-check GPT EFI PART at $hpa in $M8_PERSIST_IMG (not nested-OK; not iron; not ISO-INSTALL-OK)"
+  python3 - "$M8_PERSIST_IMG" "$hpa" <<'PY'
+import sys
+from pathlib import Path
+path, off_s = Path(sys.argv[1]), sys.argv[2]
+off = int(off_s, 16) if off_s.lower().startswith("0x") else int(off_s)
+with path.open("rb") as f:
+    f.seek(off + 512)
+    sig = f.read(8)
+if sig != b"EFI PART":
+    raise SystemExit(f"error: no EFI PART at persist hpa {off_s}+512 (got {sig!r}); File RAM did not flush")
+print(f"==> persist file GPT EFI PART at {off_s} (not ISO-INSTALL-OK)")
+PY
+}
+
+require_leftover_persist_disk() {
+    local serial="${1:-$SERIAL1}"
+    # leftover/File persist at QEMU_MEM=3584M + max-ram-below-4g must
+    # attach instead of the 64 MiB pool (virtio-blk install disk bytes=67108864).
+    if grep -qF 'virtio-blk install disk bytes=67108864' "$serial"; then
+        echo "error: leftover/File persist disk is 64 MiB pool" >&2
+        echo "error: leftover/File persist skipped (need QEMU_MEM=3584M + max-ram-below-4g; 2560M leftover was ~1020 MiB)" >&2
+        stop_qemu
+        return 1
+    fi
+    if grep -qF 'leftover install disk skip persist' "$serial"; then
+        echo "error: leftover/File persist skipped (need QEMU_MEM=3584M + max-ram-below-4g; 2560M leftover was ~1020 MiB)" >&2
+        echo "error: leftover/File persist disk is 64 MiB pool" >&2
+        stop_qemu
+        return 1
+    fi
+    if ! grep -qE 'persist install disk hpa=0x[0-9a-f]+ \(nested File RAM' "$serial"; then
+        echo "error: leftover/File persist disk missing persist install disk hpa= (nested File RAM)" >&2
+        echo "error: leftover/File persist disk is 64 MiB pool" >&2
+        stop_qemu
+        return 1
+    fi
+    return 0
 }
 
 plant_media_fixture() {
@@ -390,6 +467,8 @@ run_full() {
   start_qemu "$SERIAL1" "$TIMEOUT_BOOT1" \
     "$ROOT/target/m8-persist-boot1-stdout.log" \
     "$ROOT/target/m8-persist-boot1-stderr.log"
+  wait_serial_needle "$SERIAL1" "virtio-blk install disk bytes="
+  require_leftover_persist_disk
   local tpid
   tpid=$(cat "$ROOT/target/m8-persist-timeout.pid")
   local saw_install=0
@@ -413,6 +492,7 @@ run_full() {
   scan "$SERIAL1"
   forbid_markers "$SERIAL1"
   require_persist_reserved "$SERIAL1"
+  require_persist_gpt_in_file "$SERIAL1"
   if grep -qF 'RAYNU-V-M1-VMXON-SKIP' "$SERIAL1"; then
     echo "error: VMXON-SKIP on boot1; nested VT-x did not run" >&2
     exit 1

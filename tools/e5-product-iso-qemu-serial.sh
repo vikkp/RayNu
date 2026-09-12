@@ -18,9 +18,11 @@
 # Not ISO-INSTALL-OK. Nested QEMU is not R640.
 #
 # Not ISO-INSTALL-OK. Nested product-ISO HOLDS and seeds leftover DRAM
-# above PRECISE (run-qemu.sh defaults QEMU_MEM=2560M). iso=0 stays 512M
-# and does not seed. Optional M8_PERSIST_IMG=path.img adds a QEMU NVDIMM
-# (default off). Host/CI must never print RAYNU-V-M7-ISO-INSTALL-OK.
+# above PRECISE (run-qemu.sh defaults QEMU_MEM=3584M so leftover/File
+# persist can pass the 768 MiB guest floor; 2560M leftover was ~1020 MiB
+# and skipped). iso=0 stays 512M and does not seed. Optional
+# M8_PERSIST_IMG=path.img adds a QEMU NVDIMM (default off). Host/CI must
+# never print RAYNU-V-M7-ISO-INSTALL-OK.
 # Iron close stays Cruzer flash of cursor/e5-stage46-iso-a623.
 #
 # GHA ubuntu-latest is mixed Intel/AMD. AMD cannot expose VMX (RayNu-V
