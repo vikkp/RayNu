@@ -238,6 +238,9 @@ fn linux_fs_start_lba(disk: &[u8]) -> Option<u64> {
     linux_fs_start_lba_vol(&SliceDisk(disk))
 }
 
+const ESP_KEEP_PREFIX: usize = 16384;
+static mut ESP_KEEP_PREFIX_BUF: [u8; ESP_KEEP_PREFIX] = [0; ESP_KEEP_PREFIX];
+
 fn disk_has_bootx64_from_esp<R: VolumeRead>(
     disk: &R,
     esp: crate::raynu_f::gpt::EspPartition,
@@ -245,14 +248,22 @@ fn disk_has_bootx64_from_esp<R: VolumeRead>(
     let Some(base) = esp.start_lba.checked_mul(512) else {
         return false;
     };
-    let mut bpb = [0u8; 512];
-    if !disk.read_at(base, &mut bpb) {
+    // Snapshot the FAT12 fixture prefix (BPB + FAT + root + BOOTX64
+    // clusters). 32-byte dirent reads must not each be a BOT command.
+    // SAFETY: BSP / test-threads=1; keep-detect is not re-entrant.
+    let prefix = unsafe {
+        core::slice::from_raw_parts_mut(
+            core::ptr::addr_of_mut!(ESP_KEEP_PREFIX_BUF) as *mut u8,
+            ESP_KEEP_PREFIX,
+        )
+    };
+    if !disk.read_at(base, prefix) {
         return false;
     }
-    let Ok(vol) = fat::parse_bpb(&bpb) else {
+    let Ok(vol) = fat::parse_bpb(&prefix[..512]) else {
         return false;
     };
-    let part = OffsetVol { inner: disk, base };
+    let part = SliceDisk(prefix);
     match fat::resolve_path(&vol, &part, b"\\EFI\\BOOT\\BOOTX64.EFI") {
         Ok(e) => e.name_bytes() == b"BOOTX64.EFI" && e.size > 0 && !e.is_dir(),
         Err(_) => false,
