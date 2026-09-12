@@ -55,8 +55,9 @@ ALPINE_ISO="${ALPINE_ISO:-$ROOT/target/alpine-${ALPINE_FLAVOR}-3.21.3-x86_64.iso
 SMOKE_ISO="${SMOKE_ISO:-$ROOT/target/m8-smoke-window.iso}"
 M8_PERSIST_IMG="${M8_PERSIST_IMG:-$ROOT/target/m8-persist.img}"
 M8_PERSIST_SIZE="${M8_PERSIST_SIZE:-2560M}"
-# 2560M so leftover above PRECISE exists; the file *is* that RAM.
-QEMU_MEM="${QEMU_MEM:-2560M}"
+# Distro OVMF ignores nvdimm/pc-dimm (Type 14 empty). Leftover/File persist
+# is leftover DRAM. 3584M so leftover above PRECISE holds 1 GiB + ISO extra.
+QEMU_MEM="${QEMU_MEM:-3584M}"
 RAYNU_F="${RAYNU_F:-1}"
 NESTED_OK="RAYNU-V-M8-DISK-PERSIST-NESTED-OK"
 IRON_OK="RAYNU-V-M8-DISK-PERSIST-OK"
@@ -351,6 +352,31 @@ print(f"==> persist file GPT EFI PART at {off_s} (not ISO-INSTALL-OK)")
 PY
 }
 
+require_leftover_persist_disk() {
+    local serial="${1:-$SERIAL1}"
+    # leftover/File persist at QEMU_MEM=3584M + max-ram-below-4g must
+    # attach instead of the 64 MiB pool (virtio-blk install disk bytes=67108864).
+    if grep -qF 'virtio-blk install disk bytes=67108864' "$serial"; then
+        echo "error: leftover/File persist disk is 64 MiB pool" >&2
+        echo "error: leftover/File persist skipped (need QEMU_MEM=3584M + max-ram-below-4g; 2560M leftover was ~1020 MiB)" >&2
+        stop_qemu
+        return 1
+    fi
+    if grep -qF 'leftover install disk skip persist' "$serial"; then
+        echo "error: leftover/File persist skipped (need QEMU_MEM=3584M + max-ram-below-4g; 2560M leftover was ~1020 MiB)" >&2
+        echo "error: leftover/File persist disk is 64 MiB pool" >&2
+        stop_qemu
+        return 1
+    fi
+    if ! grep -qE 'persist install disk hpa=0x[0-9a-f]+ \(nested File RAM' "$serial"; then
+        echo "error: leftover/File persist disk missing persist install disk hpa= (nested File RAM)" >&2
+        echo "error: leftover/File persist disk is 64 MiB pool" >&2
+        stop_qemu
+        return 1
+    fi
+    return 0
+}
+
 plant_media_fixture() {
   local img="$1"
   local offset="${2:-0}"
@@ -441,6 +467,8 @@ run_full() {
   start_qemu "$SERIAL1" "$TIMEOUT_BOOT1" \
     "$ROOT/target/m8-persist-boot1-stdout.log" \
     "$ROOT/target/m8-persist-boot1-stderr.log"
+  wait_serial_needle "$SERIAL1" "virtio-blk install disk bytes="
+  require_leftover_persist_disk
   local tpid
   tpid=$(cat "$ROOT/target/m8-persist-timeout.pid")
   local saw_install=0

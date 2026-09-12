@@ -10,13 +10,13 @@
 
 `MODE=keep` / `lunkeep` / `usbkeep` plant a GPT fixture and prove `keep=1` after an HV kill. That is **not** nested-OK.
 
-`MODE=full` is the nested close: real alpine-extended `setup-disk` → kill the **hypervisor** QEMU process (not guest F7) → second Linux without `setup-disk`. Virtio HPAs are leftover DRAM promoted to File persist; QEMU initial RAM is `M8_PERSIST_IMG` (`share=on`) because distro `OVMF_CODE_4M.fd` ignores nvdimm/pc-dimm.
+`MODE=full` is the nested close: real alpine-extended `setup-disk` → kill the **hypervisor** QEMU process (not guest F7) → second Linux without `setup-disk`. Virtio HPAs are leftover DRAM promoted to File persist; QEMU initial RAM is `M8_PERSIST_IMG` (`share=on`) because distro `OVMF_CODE_4M.fd` ignores nvdimm/pc-dimm. Nested leftover/File persist needs `QEMU_MEM=3584M` plus `max-ram-below-4g` (`2560M leftover was ~1020 MiB` and skipped the 768 MiB guest floor, so `setup-disk` hit `No space left on device` on the 64 MiB pool). Nested-OK is QEMU, not flashcruzer. Do not F11.
 
 Needs **nested KVM (VMLAUNCH)**. Cloud Agent VMs that log `kvm_spurious_fault` cannot close this gate. Run on **`raynuvsrv1`**. Nested QEMU ≠ R640.
 
 ## Prerequisites
 
-1. `raynuvsrv1` (Ubuntu on the R640 PERC). Intel VT-x, `/dev/kvm` writable.  
+1. `raynuvsrv1` (Ubuntu on the R640 PERC). Intel VT-x, `/dev/kvm` writable. Nested leftover/File persist needs `QEMU_MEM=3584M` plus `max-ram-below-4g` (`2560M leftover was ~1020 MiB` and skipped the 768 MiB guest floor). Nested-OK is QEMU on `raynuvsrv1`, not flashcruzer.  
 2. `sudo ./tools/enable-nested-kvm.sh` → `nested=Y` and `enable_shadow_vmcs=0` (otherwise VMWRITE error 12).  
 3. alpine-extended ISO (the harness fetches it). alpine-virt/standard lack `grub-efi`.  
 4. Quit every other QEMU using KVM before the run.
@@ -31,7 +31,7 @@ MODE=full ./tools/m8-persist-nested.sh
 
 Expect:
 
-1. Boot 1: leftover File persist reserve, VMLAUNCH (not `VMXON-SKIP`), Alpine `Installation is complete. Please reboot.`  
+1. Boot 1: leftover/File persist at `QEMU_MEM=3584M` (not the 64 MiB pool `virtio-blk install disk bytes=67108864`; harness aborts on that), VMLAUNCH (not `VMXON-SKIP`), Alpine `Installation is complete. Please reboot.`  
 2. Harness SIGTERM + `sync` of `target/m8-persist.img`, then `EFI PART` at the persist HPA.  
 3. Boot 2: `virtio-blk install disk bytes=… keep=1`, **no** `setup-disk`, `RAYNU-V-RAYNU-F-DISK-BOOT-OK` and/or `root=UUID=`.  
 4. Harness prints `RAYNU-V-M8-DISK-PERSIST-NESTED-OK`. Serial must **not** print `RAYNU-V-M7-ISO-INSTALL-OK` or `RAYNU-V-M8-DISK-PERSIST-OK`.

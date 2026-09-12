@@ -6,7 +6,7 @@
 # ADR-011 evidence mode: EVIDENCE_MODE=1 stages paperverbose.txt on the ESP.
 # E5 ISO install lab: ISO_INSTALL_LAB=1 stages isoinstall.txt (1MiB virtio disk).
 # Stage 46: PRODUCT_ISO=/path/to/distro.iso stages EFI/RayNu/linux.iso (not default).
-# Product ISO defaults QEMU_MEM=2560M so leftover DRAM exists above PRECISE
+# Product ISO defaults QEMU_MEM=3584M so leftover DRAM exists above PRECISE
 # (512MiB). iso=0 / boot gate stay 512M. Not ISO-INSTALL-OK.
 # M8.0 nested persist: M8_PERSIST_IMG=/path/to/persist.img backs QEMU initial
 # RAM with a share=on file (the virtio leftover HPA *is* that file). Distro
@@ -155,8 +155,9 @@ fi
 
 # Leftover DRAM for report-RAM extras lives above PRECISE (512MiB). Product
 # ISO HOLDS nested guest-UEFI, so seed those HPAs; -m 512M has none.
+# 2560M leftover was ~1020 MiB (4 MiB short of 256+768); use 3584M.
 if [[ -n "$PRODUCT_ISO" ]]; then
-  QEMU_MEM="${QEMU_MEM:-2560M}"
+  QEMU_MEM="${QEMU_MEM:-3584M}"
 else
   QEMU_MEM="${QEMU_MEM:-512M}"
 fi
@@ -299,8 +300,12 @@ if [[ -n "$M8_PERSIST_IMG" ]]; then
     echo "error: M8_PERSIST_IMG size $psize != QEMU_MEM $QEMU_MEM ($ram_b bytes)" >&2
     exit 1
   fi
-  if (( ram_b < 1792 * 1024 * 1024 )); then
-    echo "error: QEMU_MEM=$QEMU_MEM too small for 1GiB disk + 768MiB leftover floor" >&2
+  persist_min_mib=1792
+  if [[ -n "${PRODUCT_ISO:-}" ]]; then
+    persist_min_mib=3584
+  fi
+  if (( ram_b < persist_min_mib * 1024 * 1024 )); then
+    echo "error: QEMU_MEM=$QEMU_MEM too small for leftover/File persist (${persist_min_mib}MiB; 2560M leftover was ~1020 MiB)" >&2
     exit 1
   fi
   local_i=0
@@ -319,6 +324,25 @@ if [[ -n "$M8_PERSIST_IMG" ]]; then
     -object "memory-backend-file,id=mem-m8-persist,share=on,mem-path=${M8_PERSIST_IMG},size=${psize}"
   )
   echo "==> M8 persist file-RAM ${M8_PERSIST_IMG} (${psize} bytes) mem=${QEMU_MEM} (not ISO-INSTALL-OK)"
+fi
+
+# Force conventional RAM below 4G so leftover can hold File persist + ISO extra.
+# Nested 2560M leftover was ~1020 MiB — 4 MiB short of 256 MiB+768 floor, so
+# leftover/File persist never attached and product ISO fell to the 64 MiB pool.
+# 3584M + max-ram-below-4g=3584M: leftover ~2084 MiB → 1 GiB disk + ~1060 MiB extra
+# (live steal ~40 MiB still leaves rest ≥ 994 MiB ISO extra).
+if [[ -n "${PRODUCT_ISO:-}" || -n "${M8_PERSIST_IMG:-}" ]]; then
+    below4g="$QEMU_MEM"
+    ram_b="$(qemu_to_bytes "$QEMU_MEM")"
+    cap_b=$((3584 * 1024 * 1024))
+    if [[ "$ram_b" -gt "$cap_b" ]]; then
+        below4g="3584M"
+    fi
+    for i in "${!ACCEL_ARGS[@]}"; do
+        if [[ "${ACCEL_ARGS[$i]}" == "-machine" ]]; then
+            ACCEL_ARGS[$((i + 1))]="${ACCEL_ARGS[$((i + 1))]},max-ram-below-4g=${below4g}"
+        fi
+    done
 fi
 
 # Optional QEMU NVMe for DurableLun I/O smoke (not nested File RAM, not iron).

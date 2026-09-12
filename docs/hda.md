@@ -38,7 +38,7 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 
 | Metric | Value | Δ vs previous HDA |
 |--------|------:|-------------------|
-| **Overall product readiness** | **99%** | **held** — Everest **CLOSED**. M8.0 persist-first attach + nested File RAM + `MODE=keep` + DurableLun NVMe/USB I/O + **`MODE=lunkeep`/`usbkeep` TCG `keep=1`**. `MODE=full` harness ready (`raynuvsrv1`); this Cloud VM `kvm_spurious_fault` cannot close nested-OK. Not 100%: nested Alpine kill/restart / iron Force Off / TLS / console |
+| **Overall product readiness** | **99%** | **held** — Everest **CLOSED**. M8.0 persist-first attach + nested File RAM + `MODE=keep` + DurableLun NVMe/USB I/O + **`MODE=lunkeep`/`usbkeep` TCG `keep=1`**. Nested leftover/File persist RAM **3584M** (`2560M leftover was ~1020 MiB` → 64 MiB pool ENOSPC). `MODE=full` still needs `raynuvsrv1`. This Cloud VM `kvm_spurious_fault` cannot close nested-OK. Not 100%: nested Alpine kill/restart / iron Force Off / TLS / console |
 | **Months to Mount Everest** | **0.0** | **held** (summit reached 2026-09-11; `f72b4276` SPA ISO loop) |
 | **ETA month** | **2026-09** | **closed this month on iron**; next work is M8, not a slipped Everest |
 | **Confidence** | high | E1–E6 on COM2. M8 named separately so polish cannot reopen the summit |
@@ -167,7 +167,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 | M+2 | 2026-09 | E3b native NIC lab (QEMU e1000) + ISO residual | ADR-013 Phase C | **Phase C DONE (QEMU)** |
 | M+3 | 2026-08 | E3b iron HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | **DONE (M7.8 iron)** |
 | M+4 | 2026-09 | Phase B (SPA → installed disk) | remaining Everest | **DONE — EVEREST CLOSED** (`f72b4276` / `34552377351`) |
-| M+5 | 2026-10 | **M8.0** persist (file nested / LUN iron / leftover fallback) | `RAYNU-V-M8-DISK-PERSIST-OK` on COM2 | **NEXT** (`MODE=full` on `raynuvsrv1`; Alpine two-boot + iron Force Off open) |
+| M+5 | 2026-10 | **M8.0** persist (file nested / LUN iron / leftover fallback) | `RAYNU-V-M8-DISK-PERSIST-OK` on COM2 | **NEXT** (leftover/File persist RAM **3584M** + `MODE=full` on `raynuvsrv1`; Alpine two-boot + iron Force Off open) |
 
 ### Timeline burn-down
 
@@ -175,7 +175,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 2026-07 ████████  HDA + M6 closed (Latitude)
 2026-08 ████████  R640 boot (E2) + E3b HTTP-OK
 2026-09 ████████  E5 + Phase B — **Mount Everest CLOSED** (`f72b4276`)  ← months_to_everest = 0.0
-2026-10 ░░░░░░░░  M8.0 persist (lunkeep+usbkeep TCG; MODE=full → raynuvsrv1; iron Force Off open)
+2026-10 ░░░░░░░░  M8.0 persist (leftover/File RAM 3584M; MODE=full → raynuvsrv1; iron Force Off open)
 2026-11 ░░░░░░░░  M8.1+ TLS/auth/console
 ```
 
@@ -245,7 +245,7 @@ Ordered for critical path (parallelize B with D design):
 | P0-9 | M6.9 external audit + spec review | E6 | **DONE** | proofs green | `docs/`, `ept_model/`, `mgmt/ext` |
 | P0-10 | R640 soak / hardware confidence | E2 | 0.5 | P0-2 | `tools/`, `mgmt/soak` — post M7.5 |
 | P0-11 | **M9 sketch** vMotion-like / DRS-like / hot-add | — | — | M8 | deferred — was M8 in ADR-009; **M9** after operator hardening (ADR-018) |
-| P0-64 | **M8** operator product hardening | — | IN PROGRESS | Everest closed | [ADR-018](adr/ADR-018.md) / [m8_plan.md](m8_plan.md) / [m8_persist_nested.md](runbooks/m8_persist_nested.md). **M8.0** persist-first attach + nested File RAM + `MODE=keep` + DurableLun NVMe/USB I/O + **`MODE=lunkeep`/`usbkeep` TCG `virtio-blk … keep=1` after HV kill**. `MODE=full` harness ready (`raynuvsrv1`; this Cloud VM `kvm_spurious_fault` cannot close nested-OK). Nested Alpine `RAYNU-V-M8-DISK-PERSIST-NESTED-OK` open. Iron `RAYNU-V-M8-DISK-PERSIST-OK` open. Then TLS, auth, console UI, ISO upload, UEFI catalog, Windows later. |
+| P0-64 | **M8** operator product hardening | — | IN PROGRESS | Everest closed | [ADR-018](adr/ADR-018.md) / [m8_plan.md](m8_plan.md) / [m8_persist_nested.md](runbooks/m8_persist_nested.md). **M8.0** leftover/File persist RAM **3584M** (`2560M leftover was ~1020 MiB` → 64 MiB pool ENOSPC) + persist-first attach + nested File RAM + `MODE=keep` + DurableLun NVMe/USB I/O + **`MODE=lunkeep`/`usbkeep` TCG `virtio-blk … keep=1` after HV kill**. `MODE=full` still needs `raynuvsrv1` (this Cloud VM `kvm_spurious_fault` cannot close nested-OK). Nested Alpine `RAYNU-V-M8-DISK-PERSIST-NESTED-OK` open. Iron `RAYNU-V-M8-DISK-PERSIST-OK` open. Then TLS, auth, console UI, ISO upload, UEFI catalog, Windows later. |
 
 ---
 
@@ -354,11 +354,11 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-disk-persist-full-harness |
-| Summary | **M8.0 MODE=full harness.** SIGTERM + `sync` of File RAM; boot1 `EFI PART` at persist HPA; `enable_shadow_vmcs=0` fatal; runbook `docs/runbooks/m8_persist_nested.md`. Nested-OK still needs `raynuvsrv1` VMLAUNCH. This Cloud VM `kvm_spurious_fault` cannot close it. Not iron persist OK. Never `ISO-INSTALL-OK`. Do not F11. |
+| Commit | m8-disk-persist-leftover-3584m |
+| Summary | **Nested leftover/File persist RAM 3584M.** Live `2560M leftover was ~1020 MiB` skipped the 768 MiB guest floor → 64 MiB pool ENOSPC. `max-ram-below-4g` + `require_leftover_persist_disk`. Nested Alpine two-boot still open. Nested-OK is QEMU, not flashcruzer. This Cloud VM `kvm_spurious_fault` cannot close nested-OK. Not iron persist OK. Never `ISO-INSTALL-OK`. Do not F11. |
 | Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. |
-| Gates touched | `MODE=full` harness + host gate. `./tools/sync-hda-site.sh --check`. |
-| Months Δ | 0.0→0.0 (held) |
+| Gates touched | leftover/File persist RAM 3584M + host gate. `./tools/sync-hda-site.sh --check`. |
+| Months Δ | 0.0 held (Everest closed; nested Alpine two-boot still open) |
 
 
 ## Blockers & risks (Everest-relevant)
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-12 | m8-disk-persist-leftover-3584m | 0.0 | 99 | **Nested leftover/File persist RAM 3584M:** live `2560M leftover was ~1020 MiB` skipped the 768 MiB guest floor → 64 MiB pool ENOSPC. `max-ram-below-4g` + `require_leftover_persist_disk`. Nested Alpine two-boot still open. Not iron persist OK. Never `ISO-INSTALL-OK`. Do not F11. months 0.0 held; overall 99 held |
 | 2026-09-12 | m8-disk-persist-full-harness | 0.0 | 99 | **M8.0 MODE=full harness:** SIGTERM + persist-file `sync`; boot1 `EFI PART` at leftover HPA; `enable_shadow_vmcs=0` fatal on full; [m8_persist_nested.md](runbooks/m8_persist_nested.md). Nested-OK needs `raynuvsrv1` VMLAUNCH. Cloud `kvm_spurious_fault` cannot close it. Not iron persist OK. Never `ISO-INSTALL-OK`. Do not F11. months 0.0 held; overall 99 held |
 | 2026-09-12 | m8-disk-persist-usb-keep | 0.0 | 99 | **M8.0 DurableLun USB keep=1 after HV kill:** `MODE=usbkeep` TCG plant GPT at USB LUN offset 0, kill HV, second boot `virtio-blk … keep=1 (durable LUN usb)`. Keep-detect is GPT header CRC + first ESP + FAT BPB + ext4 (not 32 BOT array CRC). 64×512 cache. QEMU USB ≠ R640. Not nested-OK. Not iron persist OK. Never `ISO-INSTALL-OK`. Do not F11. months 0.0 held; overall 99 held |
 | 2026-09-12 | m8-disk-persist-lun-keep | 0.0 | 99 | **M8.0 DurableLun keep=1 after HV kill:** `MODE=lunkeep` TCG plant GPT at NVMe LUN offset 0, kill HV, second boot `virtio-blk … keep=1 (durable LUN nvme)`. NVMe I/O post-EBS (OVMF HCRST). `MODE=usbkeep` harness+host, TCG residual. QEMU NVMe ≠ R640. Not nested-OK. Not iron persist OK. Never `ISO-INSTALL-OK`. Do not F11. months 0.0 held; overall 99 held |
@@ -920,7 +921,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     **M8.0** `MODE=full` on `raynuvsrv1` (not this Cloud VM) + iron Force Off ([ADR-018](adr/ADR-018.md) / [m8_plan.md](m8_plan.md) / [m8_persist_nested.md](runbooks/m8_persist_nested.md))
+Next move:     **M8.0** leftover/File persist RAM **3584M** then `MODE=full` on `raynuvsrv1` (not this Cloud VM) + iron Force Off ([ADR-018](adr/ADR-018.md) / [m8_plan.md](m8_plan.md) / [m8_persist_nested.md](runbooks/m8_persist_nested.md))
 Rollback:      GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351
                EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc
                COM2 build: sha=f72b4276d198. Do not flash a later M8 persist prototype as known-good.
