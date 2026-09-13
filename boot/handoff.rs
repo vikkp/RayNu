@@ -229,13 +229,13 @@ pub unsafe fn leave_firmware() -> Handoff {
         }
         // Nested product-ISO HOLDS (no E4 SHELL). Seed leftover DRAM the
         // same as iron so QEMU `PRODUCT_ISO=` can walk the 2 GiB CMOS lie.
-        // `iso=0` never enters this block. Nested `-m 512M` has no
-        // conventional above PRECISE (`skip none`); product-ISO QEMU uses
-        // 2560 MiB so leftover exists (file-backed when `M8_PERSIST_IMG` is
-        // set). Skip leftover **disk** carve when persist is reserved
-        // (report-RAM extra still uses the span). Nested without type 14
-        // promotes the leftover carve to File persist (distro OVMF ignores
-        // nvdimm/pc-dimm hotplug).
+        // Distro OVMF ignores nvdimm/pc-dimm, so Type 14 is empty. Leftover
+        // RAM is File persist for nested (3584 MiB). Iron uses a USB LUN.
+        // Nested 2560M leftover was ~1020 MiB — 4 MiB short of 256 MiB+768
+        // floor — so File persist never attached. Skip leftover **disk**
+        // carve when persist is reserved (report-RAM extra still uses the
+        // span). Nested without type 14 promotes the leftover carve to File
+        // persist (distro OVMF ignores nvdimm/pc-dimm hotplug).
         if let Some((hs, hp)) = mem::pick_conventional_region_above_prefer(
             &regions[..region_count],
             REPORT_RAM_EXTRA_WANT_PAGES,
@@ -277,6 +277,14 @@ pub unsafe fn leave_firmware() -> Handoff {
                     write_u64(disk_bytes);
                     serial::write_line(" (not ISO-INSTALL-OK)");
                 }
+            } else if bytes != 0 {
+                // Nested 2560M leftover was ~1020 MiB — 4 MiB short of
+                // 256 MiB+768 floor — so File persist never attached.
+                serial::write_str("boot: leftover install disk skip persist avail=");
+                write_u64(bytes);
+                serial::write_line(
+                    " (need disk+768MiB guest floor; not ISO-INSTALL-OK)",
+                );
             }
             let (hs, bytes) = (rest_start, rest_bytes);
             let extra_hpa = seed_report_ram_extra(hs, bytes);
@@ -383,7 +391,7 @@ mod handoff_test {
         assert!(src.contains("nested product-ISO HOLDS"));
         assert!(src.contains("report-RAM extra skip none"));
         assert!(src.contains("report-RAM extra skip align"));
-        assert!(src.contains("2560"));
+        assert!(src.contains("3584"));
         assert!(src.contains("PERSISTENT_MEMORY"));
         assert!(src.contains("leftover install disk skip persist"));
         assert!(src.contains("persist install disk hpa="));
