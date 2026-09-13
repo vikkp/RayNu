@@ -38,6 +38,8 @@ Expect:
 
 Copy boot1/boot2 serial to `docs/evidence/` if you keep a nested evidence file. Do not treat this as iron persist.
 
+**Closed on `raynuvsrv1` `ce3d8a09`:** `RAYNU-V-M8-DISK-PERSIST-NESTED-OK` ([evidence](../evidence/nested/2026-09-13-ce3d8a09-m8-disk-persist-nested-ok.md)). Nested QEMU ≠ R640. Iron Force Off remains.
+
 ## Not this
 
 - TCG `MODE=smoke|keep|lun|usb|lunkeep|usbkeep`  

@@ -150,6 +150,12 @@ pub fn disk_persist_surface_present() -> bool {
         && nested.contains("kill HV")
         && include_str!("../docs/runbooks/m8_persist_nested.md").contains("MODE=full")
         && include_str!("../docs/runbooks/m8_persist_nested.md").contains("3584M")
+        && include_str!("../docs/evidence/nested/2026-09-13-ce3d8a09-m8-disk-persist-nested-ok.md")
+            .contains("RAYNU-V-M8-DISK-PERSIST-NESTED-OK")
+        && include_str!("../docs/evidence/nested/2026-09-13-ce3d8a09-m8-disk-persist-nested-ok.md")
+            .contains("keep=1")
+        && include_str!("../docs/evidence/nested/2026-09-13-ce3d8a09-m8-disk-persist-nested-ok.md")
+            .contains("not ISO-INSTALL-OK")
         && !nested.contains("println!(\"RAYNU-V-M7-ISO-INSTALL-OK\")")
         && !nested.contains("echo \"RAYNU-V-M8-DISK-PERSIST-OK\"")
 }
