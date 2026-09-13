@@ -1,0 +1,15 @@
+RayNu-V EFI release kit — v0.1.0-everest-closed
+Version: 0.1.0-everest-closed (git f72b4276)
+CI: 34552377351
+Marker: Mount Everest iron checkpoint (HDA 99%)
+Contents:
+  r640-hypervisor.efi
+  r640-hypervisor.efi.sha256
+  VERSION
+  SHA256SUMS
+  MANIFEST.txt
+  README.md
+  raynu-v-0.1.0.tar.gz
+  raynu-v-0.1.0.tar.gz.sha256
+Deploy: see docs/runbooks/usb_idrac.md / make-boot-media.sh --kit
+Honesty: not 1.0/GA; host/CI never print ISO-INSTALL-OK; no TLS / HV-reboot persist / VNC / 100%
