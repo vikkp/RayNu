@@ -5149,7 +5149,11 @@ unsafe fn attach_product_iso_install_disk(alloc: &mut FrameAllocator, warn: bool
     write_dec(crate::devices::guest_virtio_blk::disk_bytes());
     serial::write_str(" keep=");
     write_dec(u64::from(keep));
-    serial::write_line(" (not ISO-INSTALL-OK)");
+    if nested {
+        serial::write_line(" (not ISO-INSTALL-OK)");
+    } else {
+        serial::write_line(" (leftover DRAM; durable LUN not ready; not ISO-INSTALL-OK)");
+    }
 }
 
 /// Nested TCG / VMXON-SKIP: attach persist only when it already looks installed.

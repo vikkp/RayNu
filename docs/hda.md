@@ -38,7 +38,7 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 
 | Metric | Value | Δ vs previous HDA |
 |--------|------:|-------------------|
-| **Overall product readiness** | **99%** | **held** — Everest **CLOSED**. M8.0 persist-first attach + nested File RAM + `MODE=keep` + DurableLun NVMe/USB I/O + **`MODE=lunkeep`/`usbkeep` TCG `keep=1`**. **Nested Alpine `MODE=full` CLOSED** on `raynuvsrv1` (`ce3d8a09` `RAYNU-V-M8-DISK-PERSIST-NESTED-OK`; File persist 512 MiB). Nested QEMU ≠ R640. Not 100%: iron Force Off / TLS / console |
+| **Overall product readiness** | **99%** | **held** — Everest **CLOSED**. M8.0 persist-first attach + nested File RAM + `MODE=keep` + DurableLun NVMe/USB I/O + **`MODE=lunkeep`/`usbkeep` TCG `keep=1`**. **Nested Alpine `MODE=full` CLOSED** on `raynuvsrv1` (`ce3d8a09`). **Iron 1–3 host-ready** (R640 census / Intel PCH scratchpad / leftover named). Nested QEMU ≠ R640. Not 100%: iron Force Off / TLS / console |
 | **Months to Mount Everest** | **0.0** | **held** (summit reached 2026-09-11; `f72b4276` SPA ISO loop) |
 | **ETA month** | **2026-09** | **closed this month on iron**; next work is M8, not a slipped Everest |
 | **Confidence** | high | E1–E6 on COM2. M8 named separately so polish cannot reopen the summit |
@@ -167,7 +167,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 | M+2 | 2026-09 | E3b native NIC lab (QEMU e1000) + ISO residual | ADR-013 Phase C | **Phase C DONE (QEMU)** |
 | M+3 | 2026-08 | E3b iron HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | **DONE (M7.8 iron)** |
 | M+4 | 2026-09 | Phase B (SPA → installed disk) | remaining Everest | **DONE — EVEREST CLOSED** (`f72b4276` / `34552377351`) |
-| M+5 | 2026-10 | **M8.0** persist (file nested / LUN iron / leftover fallback) | `RAYNU-V-M8-DISK-PERSIST-OK` on COM2 | **NEXT** (nested `RAYNU-V-M8-DISK-PERSIST-NESTED-OK` closed on `raynuvsrv1` `ce3d8a09`; iron Force Off open) |
+| M+5 | 2026-10 | **M8.0** persist (file nested / LUN iron / leftover fallback) | `RAYNU-V-M8-DISK-PERSIST-OK` on COM2 | **NEXT** (nested-OK closed; iron 1–3 host-ready; iron Force Off open) |
 
 ### Timeline burn-down
 
@@ -175,7 +175,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 2026-07 ████████  HDA + M6 closed (Latitude)
 2026-08 ████████  R640 boot (E2) + E3b HTTP-OK
 2026-09 ████████  E5 + Phase B — **Mount Everest CLOSED** (`f72b4276`)  ← months_to_everest = 0.0
-2026-10 ░░░░░░░░  M8.0 persist (nested-OK closed on raynuvsrv1; iron Force Off open)
+2026-10 ░░░░░░░░  M8.0 persist (nested-OK closed; iron 1–3 host-ready; Force Off open)
 2026-11 ░░░░░░░░  M8.1+ TLS/auth/console
 ```
 
@@ -245,7 +245,7 @@ Ordered for critical path (parallelize B with D design):
 | P0-9 | M6.9 external audit + spec review | E6 | **DONE** | proofs green | `docs/`, `ept_model/`, `mgmt/ext` |
 | P0-10 | R640 soak / hardware confidence | E2 | 0.5 | P0-2 | `tools/`, `mgmt/soak` — post M7.5 |
 | P0-11 | **M9 sketch** vMotion-like / DRS-like / hot-add | — | — | M8 | deferred — was M8 in ADR-009; **M9** after operator hardening (ADR-018) |
-| P0-64 | **M8** operator product hardening | — | IN PROGRESS | Everest closed | [ADR-018](adr/ADR-018.md) / [m8_plan.md](m8_plan.md) / [m8_persist_nested.md](runbooks/m8_persist_nested.md). **M8.0 nested Alpine `MODE=full` CLOSED** on `raynuvsrv1` (`ce3d8a09` `RAYNU-V-M8-DISK-PERSIST-NESTED-OK`; File persist 512 MiB `hpa=0x20000000`; boot1 `keep=0`; boot2 `keep=1`). Nested QEMU ≠ R640. Iron `RAYNU-V-M8-DISK-PERSIST-OK` open. Then TLS, auth, console UI, ISO upload, UEFI catalog, Windows later. |
+| P0-64 | **M8** operator product hardening | — | IN PROGRESS | Everest closed | [ADR-018](adr/ADR-018.md) / [m8_plan.md](m8_plan.md) / [m8_persist_nested.md](runbooks/m8_persist_nested.md) / [m8_persist_iron.md](runbooks/m8_persist_iron.md). **M8.0 nested Alpine `MODE=full` CLOSED** on `raynuvsrv1` (`ce3d8a09`). Iron 1–3 host-ready (census / PCH scratchpad / leftover named). Nested QEMU ≠ R640. Iron COM2 `I/O ready` + `RAYNU-V-M8-DISK-PERSIST-OK` open. Then TLS, auth, console UI, ISO upload, UEFI catalog, Windows later. |
 
 ---
 
@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-disk-persist-nested-ok |
-| Summary | **Nested Alpine `MODE=full` CLOSED on `raynuvsrv1`.** `ce3d8a09` File persist 512 MiB `hpa=0x20000000`; boot1 `keep=0` + install complete; HV kill; persist `EFI PART`; boot2 `keep=1` + `DISK-BOOT-OK`; harness `RAYNU-V-M8-DISK-PERSIST-NESTED-OK`. Nested QEMU ≠ R640. Iron persist still open. Never `ISO-INSTALL-OK`. Do not F11. |
+| Commit | m8-disk-persist-iron-lun |
+| Summary | **Iron DurableLun 1–3 host-ready.** R640 census fixture (PERC/AHCI skip, NVMe then USB, Cruzer refused); Intel PCH xHCI scratchpad ≤16 + USBLEGSUP OS owned + never `USBCMD.INTE`; leftover COM2 named when LUN is not ready. [m8_persist_iron.md](runbooks/m8_persist_iron.md). Nested QEMU ≠ R640. Iron persist still open. Never `ISO-INSTALL-OK`. Do not F11 until `I/O ready` + virtio on the LUN. |
 | Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. |
-| Gates touched | nested-OK evidence + host gate. `./tools/sync-hda-site.sh --check`. |
+| Gates touched | host DurableLun/xHCI + iron runbook. `./tools/sync-hda-site.sh --check`. |
 | Months Δ | 0.0 held (Everest closed; iron Force Off still open) |
 
 
@@ -370,7 +370,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | H3 | ~~Guest UEFI CD not bootable / no reboot-to-disk on iron~~ | — | **Resolved** 2026-09-10 (`56a3ffd` / run `34480107961`): `RAYNU-V-RAYNU-F-DISK-BOOT-OK` + second Linux `root=UUID=` from `vda` + `login:` on the real R640. Chain: `59ac070` install-to-disk (`ISO-INSTALL-OK`) → F7 VMCLEAR/VMPTRLD (81 KiB `FirmwareState::new()` stack temporary over the VMCS; template reset + 32-page stack guard) → `975f8fc` relaunch into the installed GRUB menu, 1 M exit-cap inside GRUB's 2 s menu poll loop (~2 exits/µs) → `56a3ffd` RayNu-F wall cap (time, not exits, bounds the loader phase). Earlier: `916af96` THRE chain telemetry → UART TX ring room + line-rate pace + COM2 FIFO burst fixed the `apk` console stall. Evidence: [2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md](evidence/r640/2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md). Do not F11 `34474850361` / `34425781629` for Phase A; `34480107961` is the Phase A reference pin. |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
 | H5 | ~~Phase B — iron SPA still launches the SHELL stub~~ | — | **Resolved** 2026-09-11 (`f72b4276` / `34552377351`). Residual polish is **M8**, not Everest. |
-| H10 | Leftover-DRAM disk dies on **HV** reboot | MED | **M8.0** first gate ([m8_plan.md](m8_plan.md)): persist-first attach; nested File RAM + `MODE=keep`; DurableLun NVMe/USB I/O; **`MODE=lunkeep`/`usbkeep` TCG keep=1**; leftover/File persist RAM **3584M**; **`MODE=full` nested-OK CLOSED on `raynuvsrv1` `ce3d8a09`**. Nested QEMU ≠ R640. Iron `RAYNU-V-M8-DISK-PERSIST-OK` still open. Guest F7 persist already closed (ADR-017). |
+| H10 | Leftover-DRAM disk dies on **HV** reboot | MED | **M8.0** first gate ([m8_plan.md](m8_plan.md)): persist-first attach; nested File RAM + `MODE=keep`; DurableLun NVMe/USB I/O; **`MODE=lunkeep`/`usbkeep` TCG keep=1**; leftover/File persist RAM **3584M**; **`MODE=full` nested-OK CLOSED on `raynuvsrv1` `ce3d8a09`**. **Iron 1–3 host-ready** ([m8_persist_iron.md](runbooks/m8_persist_iron.md)). Nested QEMU ≠ R640. Iron `RAYNU-V-M8-DISK-PERSIST-OK` still open. Guest F7 persist already closed (ADR-017). |
 | H11 | Truncated `site/` on feature branches | LOW | **This commit:** restore Kimi updater chrome from `origin/main`; `./tools/check-site-chrome.sh` + CI `site-chrome`; always-on `.cursor/rules/site-chrome.mdc`. Do not replace `site/index.html` wholesale on HDA/Everest work. |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-13 | m8-disk-persist-iron-lun | 0.0 | 99 | **Iron DurableLun 1–3 host-ready:** R640 census fixture (PERC/AHCI skip, NVMe then USB); Intel PCH scratchpad ≤16 + USBLEGSUP; leftover named when LUN not ready; [m8_persist_iron.md](runbooks/m8_persist_iron.md). Nested QEMU ≠ R640. Iron persist open. Never `ISO-INSTALL-OK`. Do not F11 until I/O ready + virtio on the LUN. months 0.0 held; overall 99 held |
 | 2026-09-13 | m8-disk-persist-nested-ok | 0.0 | 99 | **Nested Alpine `MODE=full` CLOSED on `raynuvsrv1`:** `ce3d8a09` File persist 512 MiB `hpa=0x20000000`; boot1 `keep=0` + install complete; HV kill; boot2 `keep=1` + `DISK-BOOT-OK`; `RAYNU-V-M8-DISK-PERSIST-NESTED-OK`. Nested QEMU ≠ R640. Iron persist open. Never `ISO-INSTALL-OK`. Do not F11. months 0.0 held; overall 99 held |
 | 2026-09-13 | m8-disk-persist-skip-avail | 0.0 | 99 | **Harness skip-avail:** `raynuvsrv1` `8cd94e6` File-RAM 3584M started QEMU then aborted on success `leftover install disk skip persist` (File persist won). Carve-fail is `avail=`. Nested Alpine two-boot still open. Not iron persist OK. Never `ISO-INSTALL-OK`. Do not F11. months 0.0 held; overall 99 held |
 | 2026-09-12 | m8-disk-persist-fileram-size | 0.0 | 99 | **File-RAM size = `QEMU_MEM=3584M`:** `raynuvsrv1` `807b963` aborted persist img `2560M` ≠ `-m 3584M` before qemu-system. Distro OVMF ignores nvdimm — persist img is QEMU RAM. Nested Alpine two-boot still open. Not iron persist OK. Never `ISO-INSTALL-OK`. Do not F11. months 0.0 held; overall 99 held |

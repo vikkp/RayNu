@@ -43,6 +43,6 @@ Copy boot1/boot2 serial to `docs/evidence/` if you keep a nested evidence file. 
 ## Not this
 
 - TCG `MODE=smoke|keep|lun|usb|lunkeep|usbkeep`  
-- Iron Force Off / `RAYNU-V-M8-DISK-PERSIST-OK`  
+- Iron Force Off / `RAYNU-V-M8-DISK-PERSIST-OK` — [m8_persist_iron.md](m8_persist_iron.md)  
 - M8.1 TLS  
 - Formatting the PERC Ubuntu disk  

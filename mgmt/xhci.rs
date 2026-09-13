@@ -48,6 +48,30 @@ pub const USBCMD_INTE: u32 = 1 << 2;
 pub const USBSTS_HCH: u32 = 1;
 pub const USBSTS_CNR: u32 = 1 << 11;
 
+/// Intel PCH (C620) often needs several scratchpad pages. QEMU qemu-xhci
+/// usually wants 0. Cap at 16×4 KiB `.bss`. Not iron persist OK.
+pub const XHCI_SCRATCH_MAX: u32 = 16;
+
+/// xHCI USBLEGSUP (extended cap ID 1).
+pub const USBLEGSUP_ID: u8 = 1;
+pub const USBLEGSUP_BIOS_OWNED: u32 = 1 << 16;
+pub const USBLEGSUP_OS_OWNED: u32 = 1 << 24;
+
+/// HCSPARAMS2 Max Scratchpad Bufs = Hi[25:21] << 5 | Lo[31:27].
+pub fn xhci_scratchpad_bufs(hcs2: u32) -> u32 {
+    ((hcs2 >> 21) & 0x1F) << 5 | ((hcs2 >> 27) & 0x1F)
+}
+
+/// True when this controller's scratchpad fits our `.bss` pages.
+pub fn xhci_scratchpad_supported(hcs2: u32) -> bool {
+    xhci_scratchpad_bufs(hcs2) <= XHCI_SCRATCH_MAX
+}
+
+/// Run bit only. Never OR [`USBCMD_INTE`] (firmware ISRs move ERDP).
+pub fn xhci_run_usbcmd() -> u32 {
+    USBCMD_RS
+}
+
 pub const PORTSC_CCS: u32 = 1;
 pub const PORTSC_PED: u32 = 1 << 1;
 pub const PORTSC_PR: u32 = 1 << 4;
@@ -230,10 +254,10 @@ fn handshake_legacy(hw: &mut impl XhciHw) {
             break;
         }
         let cap = hw.read32(xecp);
-        if cap as u8 == 1 {
-            hw.write32(xecp, cap | (1 << 24));
+        if cap as u8 == USBLEGSUP_ID {
+            hw.write32(xecp, cap | USBLEGSUP_OS_OWNED);
             for _ in 0..SPINS {
-                if hw.read32(xecp) & (1 << 16) == 0 {
+                if hw.read32(xecp) & USBLEGSUP_BIOS_OWNED == 0 {
                     break;
                 }
             }
@@ -300,7 +324,7 @@ fn serial_xhci_ports(hw: &mut impl XhciHw, op: u32, ports: u8, caps: &XhciCaps) 
     serial_dec_u8(caps.max_slots);
     serial::write_str(" ports=");
     serial_dec_u8(caps.max_ports);
-    let n = ports.min(4);
+    let n = ports.min(16);
     for p in 1..=n {
         serial::write_str(" p");
         serial_dec_u8(p);
@@ -461,6 +485,7 @@ fn xhci_start(
     if !wait_clear(hw, usbsts, USBSTS_CNR) {
         return Err(UsbBotError::Reset);
     }
+    handshake_legacy(hw);
     let slots = core::cmp::min(caps.max_slots, 16);
     hw.write32(caps.op + 0x38, u32::from(slots));
     zero_page(hw, mem.dcbaa);
@@ -474,16 +499,19 @@ fn xhci_start(
     zero_page(hw, mem.bulk_in);
     zero_page(hw, mem.bounce);
     let hcs2 = hw.read32(0x08);
-    let scratch = ((hcs2 >> 21) & 0x1F) << 5 | ((hcs2 >> 27) & 0x1F);
-    if scratch > 1 {
+    let scratch = xhci_scratchpad_bufs(hcs2);
+    if scratch > XHCI_SCRATCH_MAX {
         return Err(UsbBotError::Cap);
     }
     if scratch != 0 {
         zero_page(hw, mem.scratch_array);
-        zero_page(hw, mem.scratch0);
-        let mut ptr = [0u8; 8];
-        put_u64(&mut ptr, 0, mem.scratch0);
-        hw.dma_write(mem.scratch_array, &ptr);
+        for i in 0..scratch {
+            let page = mem.scratch0.saturating_add(u64::from(i) * 4096);
+            zero_page(hw, page);
+            let mut ptr = [0u8; 8];
+            put_u64(&mut ptr, 0, page);
+            hw.dma_write(mem.scratch_array.saturating_add(u64::from(i) * 8), &ptr);
+        }
         let mut dc0 = [0u8; 8];
         put_u64(&mut dc0, 0, mem.scratch_array);
         hw.dma_write(mem.dcbaa, &dc0);
@@ -500,7 +528,7 @@ fn xhci_start(
     // Poll the event ring. INTE + leftover firmware ISRs can move ERDP
     // after EBS (allocator / STI) and wedge BOT keep-detect.
     hw.write32(caps.rt + 0x20, 0);
-    hw.write32(usbcmd, USBCMD_RS);
+    hw.write32(usbcmd, xhci_run_usbcmd());
     if !wait_clear(hw, usbsts, USBSTS_HCH) {
         return Err(UsbBotError::Reset);
     }
@@ -1034,6 +1062,7 @@ fn xhci_bring_up(
 }
 
 #[repr(C, align(4096))]
+#[derive(Clone, Copy)]
 struct Page([u8; 4096]);
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
@@ -1059,7 +1088,8 @@ static mut BULKIN: Page = Page([0; 4096]);
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 static mut BOUNCE: Page = Page([0; 4096]);
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
-static mut SCRATCH0: Page = Page([0; 4096]);
+static mut SCRATCH0: [Page; XHCI_SCRATCH_MAX as usize] =
+    [Page([0; 4096]); XHCI_SCRATCH_MAX as usize];
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 static mut LIVE: Option<LiveXhci> = None;
@@ -1218,6 +1248,50 @@ mod xhci_pack_test {
     fn slot_ctx_dw1_port_sets_spec_and_qemu_fields() {
         assert_eq!(slot_ctx_dw1_port(1), 0x0101_0000);
         assert_eq!(slot_ctx_dw1_port(5), 0x0505_0000);
+    }
+
+    #[test]
+    fn intel_pch_scratchpad_and_usblegsup_run_without_inte() {
+        assert_eq!(xhci_scratchpad_bufs(0), 0);
+        assert_eq!(xhci_scratchpad_bufs(4u32 << 27), 4);
+        assert!(xhci_scratchpad_supported(4u32 << 27));
+        assert!(xhci_scratchpad_supported(XHCI_SCRATCH_MAX << 27));
+        assert!(!xhci_scratchpad_supported(17u32 << 27));
+        assert_eq!(xhci_run_usbcmd(), USBCMD_RS);
+        assert_eq!(xhci_run_usbcmd() & USBCMD_INTE, 0);
+        assert_eq!(USBLEGSUP_ID, 1);
+        let cap = u32::from(USBLEGSUP_ID) | USBLEGSUP_BIOS_OWNED;
+        assert_eq!(cap | USBLEGSUP_OS_OWNED, cap | (1 << 24));
+        struct Leg {
+            hcc1: u32,
+            leg: u32,
+        }
+        impl XhciHw for Leg {
+            fn read32(&mut self, off: u32) -> u32 {
+                if off == 0x10 {
+                    self.hcc1
+                } else if off == 0x20 {
+                    self.leg
+                } else {
+                    0
+                }
+            }
+            fn write32(&mut self, off: u32, val: u32) {
+                if off == 0x20 {
+                    self.leg = val & !USBLEGSUP_BIOS_OWNED;
+                }
+            }
+            fn dma_read(&mut self, _hpa: u64, buf: &mut [u8]) {
+                buf.fill(0);
+            }
+            fn dma_write(&mut self, _hpa: u64, _buf: &[u8]) {}
+        }
+        let mut hw = Leg {
+            hcc1: (0x20 / 4) << 16,
+            leg: u32::from(USBLEGSUP_ID) | USBLEGSUP_BIOS_OWNED,
+        };
+        handshake_legacy(&mut hw);
+        assert_ne!(hw.leg & USBLEGSUP_OS_OWNED, 0);
     }
 
     #[test]

@@ -40,6 +40,10 @@ pub const PCI_CLASS_STORAGE: u8 = 0x01;
 pub const PCI_SUBCLASS_RAID: u8 = 0x04;
 /// NVMe subclass.
 pub const PCI_SUBCLASS_NVME: u8 = 0x08;
+/// IDE subclass (QEMU ICH9 `8086:2922`).
+pub const PCI_SUBCLASS_IDE: u8 = 0x01;
+/// AHCI / SATA subclass (Intel PCH; not a LUN).
+pub const PCI_SUBCLASS_AHCI: u8 = 0x06;
 /// Serial-bus class (xHCI lives here, not as a LUN).
 pub const PCI_CLASS_SERIAL: u8 = 0x0C;
 /// USB subclass.
@@ -47,9 +51,26 @@ pub const PCI_SUBCLASS_USB: u8 = 0x03;
 /// xHCI programming interface.
 pub const PCI_PROG_XHCI: u8 = 0x30;
 
+/// Intel.
+pub const PCI_VENDOR_INTEL: u16 = 0x8086;
+/// QEMU ICH9 SATA (`0x00:1f.02` nested skip).
+pub const PCI_ICH9_SATA: u16 = 0x2922;
+/// Lewisburg (C620) AHCI — R640 PCH, not a LUN.
+pub const PCI_LEWISBURG_AHCI: u16 = 0xA182;
+/// Lewisburg USB 3.0 xHCI — R640 PCH (USB I/O after EBS).
+pub const PCI_XHCI_LEWISBURG: u16 = 0xA1AF;
+/// MegaRAID SAS-3 3108 (PERC H740P Mini).
+pub const PCI_PERC_H740P: u16 = 0x005D;
+
 /// Honesty: census + NVMe/USB I/O ≠ Force Off persist. Host/CI never print the iron marker.
 pub const DURABLE_LUN_IO_RESIDUAL_NOTE: &str =
     "residual: DurableLun NVMe/USB I/O is not iron RAYNU-V-M8-DISK-PERSIST-OK; leftover DRAM remains the fallback; do not format PERC; do not print ISO-INSTALL-OK; do not F11";
+
+/// COM2 when census finds no eligible LUN. Second USB ≥ 1 GiB outside the
+/// Cruzer window, or NVMe class `01:08`. Never the PERC. Do not F11 until
+/// `durable LUN nvme|usb I/O ready` then `virtio-blk … (durable LUN …)`.
+pub const DURABLE_LUN_NEED_MEDIA_NOTE: &str =
+    "need NVMe class 01:08 or USB ≥1GiB outside Cruzer 2-8GiB; never PERC; leftover DRAM remains";
 
 /// How a candidate is attached to the platform.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -88,6 +109,10 @@ pub struct LunCandidate {
     pub bus: u8,
     pub dev: u8,
     pub func: u8,
+    /// PCI class (0 when unknown / USB BOT candidate).
+    pub class: u8,
+    /// PCI subclass.
+    pub subclass: u8,
     /// 0 = unknown (PCI census without Identify / BlockIo).
     pub size_bytes: u64,
     /// True when this is the volume that loaded `BOOTX64.EFI`.
@@ -111,6 +136,8 @@ impl LunCandidate {
             bus,
             dev,
             func,
+            class: 0,
+            subclass: 0,
             size_bytes,
             is_esp_boot: false,
         }
@@ -206,6 +233,108 @@ pub fn classify_pci_storage(vendor: u16, device: u16, class: u8, subclass: u8) -
         return LunTransport::Nvme;
     }
     LunTransport::Other
+}
+
+/// COM2 skip label for storage-class functions that are not a LUN.
+pub fn pci_storage_skip_note(vendor: u16, device: u16, class: u8, subclass: u8) -> &'static str {
+    if classify_pci_storage(vendor, device, class, subclass) != LunTransport::Other {
+        return "skip";
+    }
+    if vendor == PCI_VENDOR_INTEL && device == PCI_ICH9_SATA {
+        return "skip ICH9 SATA";
+    }
+    if class == PCI_CLASS_STORAGE && subclass == PCI_SUBCLASS_AHCI {
+        return "skip AHCI";
+    }
+    if class == PCI_CLASS_STORAGE && subclass == PCI_SUBCLASS_IDE {
+        return "skip IDE";
+    }
+    "skip"
+}
+
+/// True when iron still needs a second stick or NVMe (leftover DRAM).
+pub fn durable_lun_need_media(reject: LunReject) -> bool {
+    matches!(
+        reject,
+        LunReject::None | LunReject::EspCruzer | LunReject::TooSmall | LunReject::Perc
+    )
+}
+
+/// R640-shaped census for host tests: PERC H740P Mini + Lewisburg AHCI,
+/// then optional NVMe and/or a data USB. Cruzer is the ESP stick.
+///
+/// xHCI (`8086:a1af`) is not a LUN candidate — USB BOT is post-EBS.
+pub fn r640_iron_lun_candidates(
+    nvme_bytes: u64,
+    usb_data_bytes: u64,
+    cruzer_esp: bool,
+) -> ([LunCandidate; 6], usize) {
+    let mut out = [LunCandidate::pci(LunTransport::Other, 0, 0, 0, 0, 0, 0); 6];
+    let mut n = 0usize;
+    let mut perc = LunCandidate::pci(
+        LunTransport::Perc,
+        PCI_VENDOR_LSI,
+        PCI_PERC_H740P,
+        1,
+        0,
+        0,
+        200 * 1024 * 1024 * 1024,
+    );
+    perc.class = PCI_CLASS_STORAGE;
+    perc.subclass = PCI_SUBCLASS_RAID;
+    out[n] = perc;
+    n += 1;
+    let mut ahci = LunCandidate::pci(
+        LunTransport::Other,
+        PCI_VENDOR_INTEL,
+        PCI_LEWISBURG_AHCI,
+        0,
+        0x17,
+        0,
+        0,
+    );
+    ahci.class = PCI_CLASS_STORAGE;
+    ahci.subclass = PCI_SUBCLASS_AHCI;
+    out[n] = ahci;
+    n += 1;
+    if nvme_bytes > 0 {
+        let mut nvme = LunCandidate::pci(LunTransport::Nvme, 0x144D, 0xA80A, 3, 0, 0, nvme_bytes);
+        nvme.class = PCI_CLASS_STORAGE;
+        nvme.subclass = PCI_SUBCLASS_NVME;
+        out[n] = nvme;
+        n += 1;
+    }
+    if cruzer_esp {
+        out[n] = LunCandidate {
+            transport: LunTransport::Usb,
+            vendor: 0,
+            device: 0,
+            bus: 0,
+            dev: 0,
+            func: 0,
+            class: 0,
+            subclass: 0,
+            size_bytes: 4 * 1024 * 1024 * 1024,
+            is_esp_boot: true,
+        };
+        n += 1;
+    }
+    if usb_data_bytes > 0 {
+        out[n] = LunCandidate {
+            transport: LunTransport::Usb,
+            vendor: 0,
+            device: 0,
+            bus: 2,
+            dev: 0,
+            func: 0,
+            class: 0,
+            subclass: 0,
+            size_bytes: usb_data_bytes,
+            is_esp_boot: false,
+        };
+        n += 1;
+    }
+    (out, n)
 }
 
 /// USB LUN: ESP Cruzer vs a data stick. xHCI itself is [`LunTransport::Other`].
@@ -374,8 +503,7 @@ struct LunCacheBuf([u8; LUN_CACHE_LINE * LUN_CACHE_LINES]);
 
 static LUN_CACHE_TAG: [AtomicU64; LUN_CACHE_LINES] =
     [const { AtomicU64::new(u64::MAX) }; LUN_CACHE_LINES];
-static mut LUN_CACHE_DATA: LunCacheBuf =
-    LunCacheBuf([0; LUN_CACHE_LINE * LUN_CACHE_LINES]);
+static mut LUN_CACHE_DATA: LunCacheBuf = LunCacheBuf([0; LUN_CACHE_LINE * LUN_CACHE_LINES]);
 
 fn lun_cache_clear() {
     for t in &LUN_CACHE_TAG {
@@ -459,9 +587,7 @@ pub fn durable_lun_read_any(off: u64, buf: &mut [u8]) -> bool {
         let cur = off.saturating_add(copied as u64);
         let aligned = (cur / chunk) * chunk;
         let slot = lun_cache_slot(aligned);
-        if LUN_CACHE_TAG[slot].load(Ordering::Acquire) != aligned
-            && !lun_cache_fill(aligned, lba)
-        {
+        if LUN_CACHE_TAG[slot].load(Ordering::Acquire) != aligned && !lun_cache_fill(aligned, lba) {
             return false;
         }
         let skip = (cur - aligned) as usize;
@@ -545,6 +671,16 @@ pub fn init_durable_lun_usb_io() {
             Ok(bytes) => {
                 if usb_is_esp_cruzer_window(bytes) {
                     crate::mgmt::usb_bot::clear_usb_bot_ready();
+                    #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+                    {
+                        use crate::boot::serial;
+                        serial::write_line(
+                            "boot: Stage 46 durable LUN usb skip ESP Cruzer (not ISO-INSTALL-OK)",
+                        );
+                        serial::write_str("boot: Stage 46 durable LUN ");
+                        serial::write_str(DURABLE_LUN_NEED_MEDIA_NOTE);
+                        serial::write_line(" (not ISO-INSTALL-OK)");
+                    }
                     continue;
                 }
                 let pick = LunCandidate::pci(LunTransport::Usb, 0, 0, bus, dev, func, bytes);
@@ -573,6 +709,9 @@ pub fn init_durable_lun_usb_io() {
                     serial::write_str(" cmpl=0x");
                     write_hex64(crate::mgmt::usb_bot::usb_bot_last_cmpl());
                     serial::write_line(" (leftover DRAM; not ISO-INSTALL-OK)");
+                    serial::write_str("boot: Stage 46 durable LUN ");
+                    serial::write_str(DURABLE_LUN_NEED_MEDIA_NOTE);
+                    serial::write_line(" (not ISO-INSTALL-OK)");
                 }
             }
         }
@@ -603,8 +742,7 @@ fn serial_lun_peek(tag: &str) {
     let mut sig = [0u8; 8];
     let peek = durable_lun_read_any(512, &mut sig);
     let (gpt, boot, ext4) = crate::mgmt::disk_persist::persist_lun_keep_parts();
-    let inst = (gpt && boot && ext4)
-        || crate::mgmt::disk_persist::persist_lun_sticky_keep();
+    let inst = (gpt && boot && ext4) || crate::mgmt::disk_persist::persist_lun_sticky_keep();
     serial::write_str("boot: Stage 46 durable LUN peek ");
     serial::write_str(tag);
     serial::write_str(" efi=");
@@ -625,7 +763,9 @@ fn serial_lun_peek(tag: &str) {
     serial::write_str(" gpt=");
     write_dec(u64::from(gpt));
     serial::write_str(" gpt_err=");
-    write_dec(u64::from(crate::mgmt::disk_persist::persist_lun_last_gpt_err()));
+    write_dec(u64::from(
+        crate::mgmt::disk_persist::persist_lun_last_gpt_err(),
+    ));
     serial::write_str(" usb_err=");
     write_dec(u64::from(crate::mgmt::usb_bot::usb_bot_last_err()));
     serial::write_str(" bootx64=");
@@ -715,6 +855,8 @@ pub fn durable_lun_policy_holds() -> bool {
         && PERC_UBUNTU_UNTOUCHED_NOTE.contains("PERC")
         && UDISK_TOO_SMALL_NOTE.contains("994 MiB")
         && DURABLE_LUN_IO_RESIDUAL_NOTE.contains("ISO-INSTALL-OK")
+        && DURABLE_LUN_NEED_MEDIA_NOTE.contains("NVMe class 01:08")
+        && DURABLE_LUN_NEED_MEDIA_NOTE.contains("Cruzer 2-8GiB")
         && M8_DISK_PERSIST_OK_MARKER == "RAYNU-V-M8-DISK-PERSIST-OK"
         && !DURABLE_LUN_IO_RESIDUAL_NOTE.contains("println!")
 }
@@ -736,7 +878,13 @@ pub fn probe_durable_lun() {
             LunTransport::Perc => serial::write_line(" skip PERC (not ISO-INSTALL-OK)"),
             LunTransport::Usb => serial::write_line(" usb (not ISO-INSTALL-OK)"),
             LunTransport::EspCruzer => serial::write_line(" skip ESP Cruzer (not ISO-INSTALL-OK)"),
-            LunTransport::Other => serial::write_line(" skip (not ISO-INSTALL-OK)"),
+            LunTransport::Other => {
+                serial::write_str(" ");
+                serial::write_str(pci_storage_skip_note(
+                    c.vendor, c.device, c.class, c.subclass,
+                ));
+                serial::write_line(" (not ISO-INSTALL-OK)");
+            }
         }
     }
     match pick_durable_lun(&cands[..n]) {
@@ -767,16 +915,25 @@ pub fn probe_durable_lun() {
                     serial::write_line(
                         "boot: Stage 46 durable LUN skip PERC Ubuntu (not ISO-INSTALL-OK)",
                     );
+                    serial::write_str("boot: Stage 46 durable LUN ");
+                    serial::write_str(DURABLE_LUN_NEED_MEDIA_NOTE);
+                    serial::write_line(" (not ISO-INSTALL-OK)");
                 }
                 LunReject::EspCruzer => {
                     serial::write_line(
                         "boot: Stage 46 durable LUN skip ESP Cruzer (not ISO-INSTALL-OK)",
                     );
+                    serial::write_str("boot: Stage 46 durable LUN ");
+                    serial::write_str(DURABLE_LUN_NEED_MEDIA_NOTE);
+                    serial::write_line(" (not ISO-INSTALL-OK)");
                 }
                 LunReject::TooSmall => {
                     serial::write_line(
                         "boot: Stage 46 durable LUN skip too small (not ISO-INSTALL-OK)",
                     );
+                    serial::write_str("boot: Stage 46 durable LUN ");
+                    serial::write_str(DURABLE_LUN_NEED_MEDIA_NOTE);
+                    serial::write_line(" (not ISO-INSTALL-OK)");
                 }
                 LunReject::None => {
                     if XHCI_N.load(Ordering::Acquire) != 0 {
@@ -788,6 +945,9 @@ pub fn probe_durable_lun() {
                             "boot: Stage 46 durable LUN none (leftover DRAM; not ISO-INSTALL-OK)",
                         );
                     }
+                    serial::write_str("boot: Stage 46 durable LUN ");
+                    serial::write_str(DURABLE_LUN_NEED_MEDIA_NOTE);
+                    serial::write_line(" (not ISO-INSTALL-OK)");
                 }
             }
         }
@@ -898,7 +1058,7 @@ fn pci_storage_census(out: &mut [LunCandidate]) -> usize {
                     continue;
                 }
                 if n < out.len() {
-                    out[n] = LunCandidate::pci(
+                    let mut cand = LunCandidate::pci(
                         classify_pci_storage(vendor, device, class, subclass),
                         vendor,
                         device,
@@ -907,6 +1067,9 @@ fn pci_storage_census(out: &mut [LunCandidate]) -> usize {
                         func,
                         0,
                     );
+                    cand.class = class;
+                    cand.subclass = subclass;
+                    out[n] = cand;
                     n += 1;
                 }
                 if func == 0 {
