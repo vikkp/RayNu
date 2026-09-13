@@ -1,13 +1,16 @@
-//! Iron DurableLun mapper: USB partition or NVMe, never PERC Ubuntu.
+//! Iron DurableLun mapper: USB/NVMe is the lab Force Off mechanism.
+//! PERC RAID virtual disks are the fleet datastore (ADR-019).
 //!
 //! Pillar: [Z] [A] [D]
-//! Proven Core: **outside** (ADR-002 / ADR-018)
+//! Proven Core: **outside** (ADR-002 / ADR-018 / ADR-019)
 //! VERIFICATION: L0/L1 host tests (classify + pick). No PCI port I/O in
 //! `cargo test`.
 //!
-//! Nested File persist is QEMU RAM (`M8_PERSIST_IMG`). Iron needs a LUN
-//! that survives Force Off. This mapper **picks** that LUN and **refuses**
-//! the R640 PERC (Ubuntu) and the 4 GB ESP Cruzer that already holds the ISO.
+//! Nested File persist is QEMU RAM (`M8_PERSIST_IMG`). Iron M8.0-mech needs
+//! a LUN that survives Force Off. This mapper **picks** NVMe/USB and
+//! **refuses** the R640 PERC **Ubuntu standing VD** and the 4 GB ESP Cruzer.
+//! That skip is lab safety, not product policy. Fleet close is
+//! `RAYNU-V-M8-PERC-LUN-OK` on a **spare** MegaRAID VD (not Ubuntu).
 //! NVMe Identify + Read/Write and USB BOT/xHCI I/O both run **after**
 //! ExitBootServices so firmware can disconnect its NVMe/xHCI drivers (HCRST).
 //! Leftover DRAM remains the last fallback. QEMU NVMe/USB ≠ Force Off persist.
