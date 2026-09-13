@@ -273,7 +273,9 @@ Everything compiles to one `r640-hypervisor.efi`. No OS, no packages, no config 
 - Predictive failure alerts (Dell-specific OEM Redfish schemas)
 - Auto-throttle VMs on hardware degradation signals
 
-**Rule:** Never block a milestone on Tier 2. Tier 1 is always sufficient to ship.
+**Rule:** Never block a milestone on Tier 2 **health**. Tier 1 is always sufficient to ship **Everest**.
+
+**Fleet datastore (ADR-019):** existing R640s keep disks on PERC RAID virtual disks. USB DurableLun is lab/mechanism only. Product persist close is `RAYNU-V-M8-PERC-LUN-OK` on a VD that is **not** the lab Ubuntu standing boot. Do not format the Ubuntu PERC.
 
 ---
 
@@ -301,6 +303,7 @@ All ADRs live in `docs/adr/`. Format: numbered, dated, context/decision/rational
 | 016   | RayNu-F — be the guest firmware for E5 | Be the guest UEFI boot env ourselves (own EFI system table + boot services over virtio-blk/CD) instead of puppeting OVMF; RayNu-F is a subsystem in the single binary, outside Proven Core; disable the 3k–3o OVMF forcing (self-inflicted the 9474ab6/4e16b59 NULL-event #PF + CpuDeadLoop); **No third-party firmware state mutation**; do not claim ISO-INSTALL-OK |
 | 017   | Guest reset under RayNu-F (F7)        | Disk-before-ISO; `reset_keep_disk`; CF9/KBC/TF; cap=1; HANDLE_DISK Vendor path; nested `fe4785a` reboot-to-disk (`DISK-BOOT-OK` + `root=UUID=`); do not claim ISO-INSTALL-OK |
 | 018   | Post-Everest M8 operator hardening    | Everest CLOSED on iron `f72b4276`; rollback kit `v0.1.0-everest-closed`; M8 = persist/TLS/auth/console/upload/catalog/Windows-later; cluster → **M9**; no Proven Core expansion |
+| 019   | PERC RAID VDs are the fleet datastore | USB/NVMe = M8.0-mech; fleet SKU = MegaRAID VD persist (`RAYNU-V-M8-PERC-LUN-OK`); not ADR-005 health; do not format lab Ubuntu PERC |
 
 **Rule:** Any new ADR is added here AND to `docs/adr/ADR-NNN.md`.
 
@@ -354,7 +357,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 ### Current progress (lived, not aspirational)
 
 **M6 closed** (EXT → `RAYNU-V-M6-EXT-OK`; `80 verified, 0 errors`). Production-ready bar met on Latitude/QEMU.  
-**Mount Everest (M7) CLOSED on iron** (2026-09-11, EFI `f72b4276` / `--run 34552377351`): coexist `HOST-NIC-HTTP-OK` on `10.99.99.145:8443` → SPA Start of RayNu-F ISO → `RAYNU-V-M7-ISO-INSTALL-OK` → `RAYNU-V-RAYNU-F-DISK-BOOT-OK` → second Linux `root=UUID=` → `login:`. Through M7.4 closed on Latitude; M7.5–M7.8 + E4 + E5 Phase A (`56a3ffd`) + Phase B on iron. **Next is M8** operator hardening ([ADR-018](docs/adr/ADR-018.md), [docs/m8_plan.md](docs/m8_plan.md)) — leftover-disk persist across HV reboot, then TLS/auth/console. Cluster is **M9**. HDA overall stays 99% (not 100%). **Iron rollback for M8.0:** GitHub Latest [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) → git `f72b4276d198b5e90147e9be1037d0d0b7213a28` / CI `--run 34552377351` / EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc` (COM2 `build: sha=f72b4276d198`). Do not flash a later persist prototype as the known-good. Do not F11 `34548550755` / `7f8dc0a9`. Plan: [docs/m7_plan.md](docs/m7_plan.md) (closed). HDA: [docs/hda.md](docs/hda.md). Lived: [docs/progress.md](docs/progress.md). Rule: [`.cursor/rules/iron-rollback.mdc`](.cursor/rules/iron-rollback.mdc).
+**Mount Everest (M7) CLOSED on iron** (2026-09-11, EFI `f72b4276` / `--run 34552377351`): coexist `HOST-NIC-HTTP-OK` on `10.99.99.145:8443` → SPA Start of RayNu-F ISO → `RAYNU-V-M7-ISO-INSTALL-OK` → `RAYNU-V-RAYNU-F-DISK-BOOT-OK` → second Linux `root=UUID=` → `login:`. Through M7.4 closed on Latitude; M7.5–M7.8 + E4 + E5 Phase A (`56a3ffd`) + Phase B on iron. **Next is M8** operator hardening ([ADR-018](docs/adr/ADR-018.md), [docs/m8_plan.md](docs/m8_plan.md), [ADR-019](docs/adr/ADR-019.md)) — leftover-disk persist across HV reboot (**M8.0-mech** USB/NVMe, then **M8.0-perc** PERC RAID VDs for the fleet SKU), then TLS/auth/console. Cluster is **M9**. HDA overall stays 99% (not 100%). **Iron rollback for M8.0:** GitHub Latest [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) → git `f72b4276d198b5e90147e9be1037d0d0b7213a28` / CI `--run 34552377351` / EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc` (COM2 `build: sha=f72b4276d198`). Do not flash a later persist prototype as the known-good. Do not F11 `34548550755` / `7f8dc0a9`. Plan: [docs/m7_plan.md](docs/m7_plan.md) (closed). HDA: [docs/hda.md](docs/hda.md). Lived: [docs/progress.md](docs/progress.md). Rule: [`.cursor/rules/iron-rollback.mdc`](.cursor/rules/iron-rollback.mdc).
 
 ### Risk Hotspots
 
