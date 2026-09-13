@@ -5,6 +5,13 @@
 # Force TCG: QEMU_ACCEL=tcg ./tools/run-qemu.sh
 # ADR-011 evidence mode: EVIDENCE_MODE=1 stages paperverbose.txt on the ESP.
 # E5 ISO install lab: ISO_INSTALL_LAB=1 stages isoinstall.txt (1MiB virtio disk).
+# Stage 46: PRODUCT_ISO=/path/to/distro.iso stages EFI/RayNu/linux.iso (not default).
+# Product ISO defaults QEMU_MEM=3584M so leftover DRAM exists above PRECISE
+# (512MiB). iso=0 / boot gate stay 512M. Not ISO-INSTALL-OK.
+# M8.0 nested persist: M8_PERSIST_IMG=/path/to/persist.img backs QEMU initial
+# RAM with a share=on file (the virtio leftover HPA *is* that file). Distro
+# OVMF_CODE_4M ignores nvdimm and pc-dimm hotplug. Default off. Do not use
+# the machine mem-path flag.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -118,6 +125,43 @@ if [[ "$EVIDENCE_MODE" == "1" ]]; then
   echo "==> ADR-011 evidence mode: staged $ESP/EFI/RayNu/paperverbose.txt"
 fi
 
+# ADR-016 F2b: RAYNU_F=1 stages EFI/RayNu/raynuf.txt so the EFI launches the
+# RayNu-F test app on the private VMCS after the OVMF leg stops. Default clean.
+rm -f "$ESP/EFI/RayNu/raynuf.txt" 2>/dev/null || true
+if [[ "${RAYNU_F:-0}" == "1" ]]; then
+  mkdir -p "$ESP/EFI/RayNu"
+  : >"$ESP/EFI/RayNu/raynuf.txt"
+  echo "==> ADR-016 RayNu-F: staged $ESP/EFI/RayNu/raynuf.txt"
+fi
+
+# Stage 46: leftover product ISO would HOLD guest-UEFI instead of E4 LINUX-EARLY.
+rm -f "$ESP/linux.iso" "$ESP/install.iso" \
+  "$ESP/EFI/RayNu/linux.iso" "$ESP/EFI/RayNu/install.iso" 2>/dev/null || true
+PRODUCT_ISO="${PRODUCT_ISO:-}"
+if [[ -n "$PRODUCT_ISO" ]]; then
+  if [[ ! -f "$PRODUCT_ISO" ]]; then
+    echo "error: PRODUCT_ISO not found: $PRODUCT_ISO" >&2
+    exit 1
+  fi
+  psz=$(wc -c <"$PRODUCT_ISO" | tr -d ' ')
+  if (( psz <= 73728 )); then
+    echo "error: PRODUCT_ISO is lab-stub sized ($psz); need >73728" >&2
+    exit 1
+  fi
+  mkdir -p "$ESP/EFI/RayNu"
+  cp "$PRODUCT_ISO" "$ESP/EFI/RayNu/linux.iso"
+  echo "==> Stage 46 product ISO: $ESP/EFI/RayNu/linux.iso ($psz bytes) (not ISO-INSTALL-OK)"
+fi
+
+# Leftover DRAM for report-RAM extras lives above PRECISE (512MiB). Product
+# ISO HOLDS nested guest-UEFI, so seed those HPAs; -m 512M has none.
+# 2560M leftover was ~1020 MiB (4 MiB short of 256+768); use 3584M.
+if [[ -n "$PRODUCT_ISO" ]]; then
+  QEMU_MEM="${QEMU_MEM:-3584M}"
+else
+  QEMU_MEM="${QEMU_MEM:-512M}"
+fi
+
 # E5 lab: stage isoinstall.txt → arm 1MiB install-sized virtio-blk (no curl).
 ISO_INSTALL_LAB="${ISO_INSTALL_LAB:-0}"
 ISO_REBOOT_LAB="${ISO_REBOOT_LAB:-0}"
@@ -201,15 +245,160 @@ else
   ACCEL_ARGS+=(-machine q35,accel=tcg -cpu qemu64)
 fi
 
-echo "==> QEMU boot (COM1 → ${SERIAL_CHARDEV}); guest exits via isa-debug-exit"
+# QEMU vvfat (`fat:rw:`) is capped at ~516 MB ("Directory does not fit in
+# FAT16/FAT32 (capacity 516.06 MB)"), so a product ISO above that
+# (alpine-extended 994 MiB, the only official x86_64 ISO with on-media
+# grub-efi + dosfstools) must ride a real FAT32 image. Built fresh per run;
+# mtools when present, else sudo loop mount (the harness already sudo's kvm).
+ESP_DRIVE="fat:rw:$ESP"
+esp_bytes=$(du -sb "$ESP" | cut -f1)
+if (( esp_bytes > 480 * 1024 * 1024 )); then
+  ESP_IMG="${ESP_IMG:-$ROOT/target/esp-fat32.img}"
+  img_mib=$(( esp_bytes / 1048576 + 128 ))
+  rm -f "$ESP_IMG"
+  truncate -s "${img_mib}M" "$ESP_IMG"
+  mkfs.vfat -F 32 -n RAYNUV "$ESP_IMG" >/dev/null
+  if command -v mcopy >/dev/null 2>&1; then
+    MTOOLS_SKIP_CHECK=1 mcopy -i "$ESP_IMG" -s "$ESP"/* ::/
+  else
+    mnt=$(mktemp -d)
+    sudo mount -o loop,uid="$(id -u)",gid="$(id -g)" "$ESP_IMG" "$mnt"
+    cp -r "$ESP"/. "$mnt"/
+    sync
+    sudo umount "$mnt"
+    rmdir "$mnt"
+  fi
+  ESP_DRIVE="$ESP_IMG"
+  echo "==> ESP ${esp_bytes} bytes exceeds vvfat; FAT32 image $ESP_IMG (${img_mib} MiB)"
+fi
+
+# M8.0: optional file-backed initial RAM so leftover persist HPAs survive
+# kill/restart of this process. Leftover DRAM remains the default
+# (M8_PERSIST_IMG unset). Distro OVMF ignores nvdimm and pc-dimm hotplug.
+# Not ISO-INSTALL-OK.
+qemu_to_bytes() {
+  local s="${1%%,*}"
+  case "$s" in
+    *[Gg]) echo $(( ${s%[Gg]} * 1024 * 1024 * 1024 )) ;;
+    *[Mm]) echo $(( ${s%[Mm]} * 1024 * 1024 )) ;;
+    *[Kk]) echo $(( ${s%[Kk]} * 1024 )) ;;
+    *) echo "$s" ;;
+  esac
+}
+
+M8_PERSIST_IMG="${M8_PERSIST_IMG:-}"
+PERSIST_MEM_ARGS=()
+QEMU_M_ARG="$QEMU_MEM"
+if [[ -n "$M8_PERSIST_IMG" ]]; then
+  ram_b=$(qemu_to_bytes "$QEMU_MEM")
+  mkdir -p "$(dirname "$M8_PERSIST_IMG")"
+  if [[ ! -f "$M8_PERSIST_IMG" ]]; then
+    truncate -s "$ram_b" "$M8_PERSIST_IMG"
+  fi
+  psize=$(stat -c%s "$M8_PERSIST_IMG")
+  # File-RAM share=on is QEMU initial RAM: object size must equal -m.
+  # Grow a stale 2560M img (leftover ~1020 MiB carve skip) up to 3584M.
+  # Do not shrink (would clip leftover HPA).
+  if (( psize < ram_b )); then
+    echo "==> growing M8_PERSIST_IMG $psize → $ram_b (file-RAM must match QEMU_MEM)"
+    truncate -s "$ram_b" "$M8_PERSIST_IMG"
+    psize=$(stat -c%s "$M8_PERSIST_IMG")
+  fi
+  if (( psize != ram_b )); then
+    echo "error: M8_PERSIST_IMG size $psize != QEMU_MEM $QEMU_MEM ($ram_b bytes); file-RAM must match QEMU_MEM" >&2
+    exit 1
+  fi
+  persist_min_mib=1792
+  if [[ -n "${PRODUCT_ISO:-}" ]]; then
+    persist_min_mib=3584
+  fi
+  if (( ram_b < persist_min_mib * 1024 * 1024 )); then
+    echo "error: QEMU_MEM=$QEMU_MEM too small for leftover/File persist (${persist_min_mib}MiB; 2560M leftover was ~1020 MiB)" >&2
+    exit 1
+  fi
+  local_i=0
+  for local_i in "${!ACCEL_ARGS[@]}"; do
+    if [[ "${ACCEL_ARGS[$local_i]}" == "-machine" ]]; then
+      ACCEL_ARGS[$((local_i + 1))]="${ACCEL_ARGS[$((local_i + 1))]},memory-backend=mem-m8-persist"
+    fi
+    if [[ "${ACCEL_ARGS[$local_i]}" == "-cpu" ]]; then
+      # TCG qemu64 lacks CPUID.hypervisor; nested leftover→File persist needs it.
+      if [[ "${ACCEL_ARGS[$((local_i + 1))]}" != *hypervisor* ]]; then
+        ACCEL_ARGS[$((local_i + 1))]="${ACCEL_ARGS[$((local_i + 1))]},+hypervisor"
+      fi
+    fi
+  done
+  PERSIST_MEM_ARGS+=(
+    -object "memory-backend-file,id=mem-m8-persist,share=on,mem-path=${M8_PERSIST_IMG},size=${psize}"
+  )
+  echo "==> M8 persist file-RAM ${M8_PERSIST_IMG} (${psize} bytes) mem=${QEMU_MEM} (not ISO-INSTALL-OK)"
+fi
+
+# Force conventional RAM below 4G so leftover can hold File persist + ISO extra.
+# Nested 2560M leftover was ~1020 MiB — 4 MiB short of 256 MiB+768 floor, so
+# leftover/File persist never attached and product ISO fell to the 64 MiB pool.
+# 3584M + max-ram-below-4g=3584M: leftover ~2084 MiB → 1 GiB disk + ~1060 MiB extra
+# (live steal ~40 MiB still leaves rest ≥ 994 MiB ISO extra).
+if [[ -n "${PRODUCT_ISO:-}" || -n "${M8_PERSIST_IMG:-}" ]]; then
+    below4g="$QEMU_MEM"
+    ram_b="$(qemu_to_bytes "$QEMU_MEM")"
+    cap_b=$((3584 * 1024 * 1024))
+    if [[ "$ram_b" -gt "$cap_b" ]]; then
+        below4g="3584M"
+    fi
+    for i in "${!ACCEL_ARGS[@]}"; do
+        if [[ "${ACCEL_ARGS[$i]}" == "-machine" ]]; then
+            ACCEL_ARGS[$((i + 1))]="${ACCEL_ARGS[$((i + 1))]},max-ram-below-4g=${below4g}"
+        fi
+    done
+fi
+
+# Optional QEMU NVMe for DurableLun I/O smoke (not nested File RAM, not iron).
+M8_NVME_IMG="${M8_NVME_IMG:-}"
+NVME_ARGS=()
+if [[ -n "$M8_NVME_IMG" ]]; then
+  mkdir -p "$(dirname "$M8_NVME_IMG")"
+  if [[ ! -f "$M8_NVME_IMG" ]]; then
+    truncate -s 1G "$M8_NVME_IMG"
+  fi
+  NVME_ARGS+=(
+    -drive "if=none,id=m8nvme,format=raw,file=${M8_NVME_IMG}"
+    -device nvme,drive=m8nvme,serial=m8lun
+  )
+  echo "==> M8 DurableLun NVMe ${M8_NVME_IMG} (not ISO-INSTALL-OK; not iron persist OK)"
+fi
+
+# Optional QEMU USB mass-storage on qemu-xhci (not the ESP, not iron).
+# 1 GiB is below the 2–8 GiB ESP Cruzer refuse window.
+# usb-storage is USB2. qemu-xhci default p3=4 puts USB3 ports first; pinning
+# port=1 then leaves CCS=0 (PLS=RxDetect). p3=0 makes every port USB2.
+M8_USB_IMG="${M8_USB_IMG:-}"
+USB_ARGS=()
+if [[ -n "$M8_USB_IMG" ]]; then
+  mkdir -p "$(dirname "$M8_USB_IMG")"
+  if [[ ! -f "$M8_USB_IMG" ]]; then
+    truncate -s 1G "$M8_USB_IMG"
+  fi
+  USB_ARGS+=(
+    -drive "if=none,id=m8usb,format=raw,file=${M8_USB_IMG}"
+    -device qemu-xhci,id=m8xhci,p2=4,p3=0
+    -device usb-storage,bus=m8xhci.0,port=1,drive=m8usb,serial=m8lun
+  )
+  echo "==> M8 DurableLun USB ${M8_USB_IMG} (qemu-xhci; not ISO-INSTALL-OK; not iron persist OK)"
+fi
+
+echo "==> QEMU boot (COM1 → ${SERIAL_CHARDEV}); mem=${QEMU_M_ARG}; guest exits via isa-debug-exit"
 
 exec qemu-system-x86_64 \
   "${ACCEL_ARGS[@]}" \
-  -m 512M \
+  -m "$QEMU_M_ARG" \
   -display none \
   -serial "$SERIAL_CHARDEV" \
   -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
   "${FW_ARGS[@]}" \
-  -drive format=raw,file=fat:rw:"$ESP" \
+  -drive format=raw,file="$ESP_DRIVE" \
   "${HOST_NIC_ARGS[@]}" \
+  "${PERSIST_MEM_ARGS[@]}" \
+  "${NVME_ARGS[@]}" \
+  "${USB_ARGS[@]}" \
   "$@"

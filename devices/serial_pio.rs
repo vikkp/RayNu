@@ -76,7 +76,7 @@ static mut SHADOW_DLL: u8 = 1;
 static mut SHADOW_DLM: u8 = 0;
 /// THR-empty IRQ pending (Linux ttyS0 TX is interrupt-driven).
 static mut TX_IRQ_PENDING: bool = false;
-/// Port 0x61 (NMI status / speaker): toggle bit 4 so Linux delay loops advance.
+/// Port 0x61 (NMI status / speaker): toggle bits 4+5 (refresh + TMR2_OUT).
 static mut PORT61_SHADOW: u8 = 0;
 /// PIT channel-0 latch counter (decrements on data-port reads).
 static mut PIT0_COUNT: u16 = 0xFFFF;
@@ -208,8 +208,9 @@ fn handle_misc_pio(info: &IoExitInfo, rax: u64) -> Option<u64> {
             0x61 => {
                 // SAFETY: single-threaded VMEXIT path.
                 unsafe {
-                    // DRAM refresh toggle (bit 4) — Linux `io_delay` / speaker polls this.
-                    PORT61_SHADOW ^= 0x10;
+                    // DRAM refresh (bit 4) + TMR2_OUT (bit 5) — Linux io_delay
+                    // and OVMF MicroSecondDelay `in al,0x61; test al,0x20`.
+                    PORT61_SHADOW ^= 0x30;
                     PORT61_SHADOW as u64
                 }
             }
@@ -233,8 +234,8 @@ fn handle_misc_pio(info: &IoExitInfo, rax: u64) -> Option<u64> {
         // SAFETY: single-threaded VMEXIT path.
         unsafe {
             if info.port == 0x61 {
-                // Keep toggle bit from reads; accept speaker enable bits from guest.
-                PORT61_SHADOW = (rax as u8 & !0x10) | (PORT61_SHADOW & 0x10);
+                // Keep refresh/TMR2 toggle bits from reads; accept speaker gate.
+                PORT61_SHADOW = (rax as u8 & !0x30) | (PORT61_SHADOW & 0x30);
             } else if info.port == 0x40 {
                 PIT0_COUNT = (rax as u16) | 0x00FF;
             } else if info.port == 0x43 {

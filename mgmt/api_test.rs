@@ -33,6 +33,12 @@ fn rest_create_start_via_routes() {
     );
     assert_eq!(started.status, 200);
     assert_eq!(t.get(9).map(|r| r.state), Some(VmLifecycle::Running));
+    // iso=0 create stays E4 SHELL; drain so later tests do not see guest 9.
+    assert_eq!(
+        crate::mgmt::spa_launch::take_spa_start_kind(),
+        Some((9, crate::mgmt::spa_launch::SpaStartKind::Shell))
+    );
+    crate::boot::raynu_f_flag::clear_request();
 }
 
 #[test]

@@ -12,9 +12,31 @@ pub const CPUID_EDX_APIC: u32 = 1 << 9;
 pub const CPUID_ECX_X2APIC: u32 = 1 << 21;
 /// CPUID.1:ECX bit 24 — TSC deadline mode (cleared; classic APIC timer only).
 pub const CPUID_ECX_TSC_DEADLINE: u32 = 1 << 24;
+/// CPUID.1:ECX bit 31 — hypervisor present (KVM sets this; bare metal does not).
+pub const CPUID_ECX_HYPERVISOR: u32 = 1 << 31;
 
+/// CR4 bit 9 — OSFXSR (FXSAVE/FXRSTOR / SSE).
+pub const CR4_OSFXSR: u64 = 1 << 9;
+/// CR4 bit 10 — OSXMMEXCPT (unmasked SIMD FP exceptions).
+pub const CR4_OSXMMEXCPT: u64 = 1 << 10;
+/// CR4 bit 12 — LA57 (5-level paging). E4 guest PT/EPT are 4-level.
+pub const CR4_LA57: u64 = 1 << 12;
 /// CR4 bit 13 — VMXE (VMX enable).
 pub const CR4_VMXE: u64 = 1 << 13;
+/// CPUID.7.0:ECX bit 16 — LA57. Nested Intel `957e0ad` ATAPI-OK then
+/// `#DF` `rip=0x9e036` (compressed `paging_prepare` trampoline).
+pub const CPUID_LEAF7_ECX_LA57: u32 = 1 << 16;
+/// CPUID.7.0:EBX bit 23 — CLFLUSHOPT. Nested KVM may #UD while host CPUID
+/// still sets it (CI `34b5767` Oops `66 0F AE F1`).
+pub const CPUID_LEAF7_EBX_CLFLUSHOPT: u32 = 1 << 23;
+/// CPUID.7.0:EBX bit 24 — CLWB. Same nested #UD; Linux then kill-init.
+pub const CPUID_LEAF7_EBX_CLWB: u32 = 1 << 24;
+/// CPUID.7.0:ECX bit 5 — WAITPKG (`UMONITOR`/`UMWAIT`/`TPAUSE`). Those #UD in
+/// VMX non-root unless the "enable user wait and pause" control is set (SDM
+/// 26.1.3), which we do not do. CI `34b5767` / `9511d4c` Oops `66 0F AE F1`
+/// is register-form `tpause ecx` in `delay_halt_tpause`, not CLWB; Linux
+/// takes that path only when this bit is visible. Hide it.
+pub const CPUID_LEAF7_ECX_WAITPKG: u32 = 1 << 5;
 /// CR4 bit 18 — OSXSAVE (required before host `xsetbv`).
 pub const CR4_OSXSAVE: u64 = 1 << 18;
 
@@ -86,6 +108,13 @@ pub fn vmx_supported() -> bool {
     // SAFETY: CPUID leaf 1 is architecturally defined.
     let r = unsafe { cpuid(1, 0) };
     (r.ecx & CPUID_ECX_VMX) != 0
+}
+
+/// True if CPUID.1:ECX.hypervisor is set (KVM nested). Bare-metal iron is clear.
+pub fn host_hypervisor_present() -> bool {
+    // SAFETY: CPUID leaf 1 is architecturally defined.
+    let r = unsafe { cpuid(1, 0) };
+    (r.ecx & CPUID_ECX_HYPERVISOR) != 0
 }
 
 #[inline]
@@ -233,6 +262,17 @@ pub unsafe fn read_cr2() -> u64 {
     let v: u64;
     core::arch::asm!("mov {}, cr2", out(reg) v, options(nostack, nomem, preserves_flags));
     v
+}
+
+/// Restore guest CR2 before VM-entry. VMCS does not save CR2; a `#PF`
+/// exit keeps the linear in `EXIT_QUALIFICATION` (CR2 may be stale after
+/// a host walk). Linux `early_make_pgtable` reads CR2.
+///
+/// SAFETY: VMX-root; `v` is a canonical linear when the guest has paging.
+/// KANI-TARGET: guest-UEFI write CR2 (outside Proven Core).
+#[inline]
+pub unsafe fn write_cr2(v: u64) {
+    core::arch::asm!("mov cr2, {}", in(reg) v, options(nostack, preserves_flags));
 }
 
 pub unsafe fn read_cr3() -> u64 {
@@ -460,7 +500,15 @@ mod cpu_test {
         assert_eq!(IA32_FEATURE_CONTROL, 0x3A);
         assert_eq!(IA32_VMX_BASIC, 0x480);
         assert_eq!(IA32_VMX_EPT_VPID_CAP, 0x48C);
+        assert_eq!(CR4_OSFXSR, 1 << 9);
+        assert_eq!(CR4_OSXMMEXCPT, 1 << 10);
+        assert_eq!(CR4_LA57, 1 << 12);
         assert_eq!(CR4_VMXE, 1 << 13);
+        assert_eq!(CPUID_LEAF7_ECX_LA57, 1 << 16);
+        assert_eq!(CPUID_LEAF7_EBX_CLFLUSHOPT, 1 << 23);
+        assert_eq!(CPUID_LEAF7_EBX_CLWB, 1 << 24);
+        assert_eq!(CPUID_LEAF7_ECX_WAITPKG, 1 << 5);
+        assert_eq!(CR4_OSXSAVE, 1 << 18);
         assert_eq!(IA32_EFER, 0xC000_0080);
     }
 }

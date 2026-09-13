@@ -115,10 +115,53 @@ pub fn clear_retained() {
     OVMF_LEN.store(0, Ordering::Release);
 }
 
+/// Patch OVMF host-bridge switch immediates: i440FX DID `0x1237` → virtio `0x1042`.
+///
+/// Debian/QEMU 4M `OVMF.fd` compiles the switch as `cmp bx, imm16`
+/// (`66 81 fb 37 12` then `66 81 fb c0 29` for Q35). Blind `37 12`
+/// replace also hits LZMA payload in FV1 (~20 coincidences) and would
+/// corrupt PEIM decompress. Only the `cmp r16, imm16` encoding is
+/// rewritten. Remap is not applied while PEI captures HostBridgeDevId
+/// from i440FX `0x1237` at `00:00.0` (stock QEMU MemMap VGA HOB). DXE
+/// latches virtio `0x1042` at `00:02.0` on the first other-BDF CF8.
+/// `00:00.0` stays i440FX so `AcpiTimerLibConstructor` matches.
+/// Does **not** rewrite the retain buffer.
+///
+/// INVARIANTS:
+/// - Function still rewrites `cmp r16, 0x1237` when called
+/// - Guest-UEFI launch does not call it (PEI DID is i440FX `0x1237`)
+/// - Retain buffer is not this slice
+/// - Lone `37 12` in compressed FVs is left alone
+/// - Returns the number of `cmp r16, 0x1237` sites replaced
+pub fn remap_i440fx_did_imm(buf: &mut [u8]) -> u32 {
+    // `66 81 /7 iw` with ModRM 11_111_r/m: cmp r16, imm16.
+    const I440FX: [u8; 2] = [0x37, 0x12];
+    const VIRTIO: [u8; 2] = [0x42, 0x10];
+    let mut n = 0u32;
+    let mut i = 0usize;
+    while i + 5 <= buf.len() {
+        let modrm = buf[i + 2];
+        if buf[i] == 0x66
+            && buf[i + 1] == 0x81
+            && (modrm & 0xF8) == 0xF8
+            && buf[i + 3] == I440FX[0]
+            && buf[i + 4] == I440FX[1]
+        {
+            buf[i + 3] = VIRTIO[0];
+            buf[i + 4] = VIRTIO[1];
+            n = n.saturating_add(1);
+            i += 5;
+        } else {
+            i += 1;
+        }
+    }
+    n
+}
+
 /// Probe ESP `\\EFI\\RayNu\\OVMF.fd` before ExitBootServices.
 ///
-/// Missing file is silent (iron Cruzer may not have one). Accepted
-/// bytes print [`M7_E5_LIVE_BYTES_PRESENT_OK_MARKER`].
+/// Missing file prints one COM2 line (iron Cruzer used to skip silently).
+/// Accepted bytes print [`M7_E5_LIVE_BYTES_PRESENT_OK_MARKER`].
 #[cfg(target_os = "uefi")]
 pub fn probe_ovmf_esp() {
     use crate::boot::serial;
@@ -128,6 +171,7 @@ pub fn probe_ovmf_esp() {
 
     let image = boot::image_handle();
     let Ok(sfs) = boot::get_image_file_system(image) else {
+        serial::write_line("boot: ESP OVMF.fd probe skipped (no SimpleFileSystem)");
         return;
     };
     let mut fs = FileSystem::new(sfs);
@@ -135,6 +179,9 @@ pub fn probe_ovmf_esp() {
         return;
     };
     let Ok(data) = fs.read(path.as_ref()) else {
+        serial::write_line(
+            "boot: ESP OVMF.fd missing — guest-UEFI skipped (need EFI/RayNu/OVMF.fd)",
+        );
         return;
     };
     match retain_ovmf_bytes(&data) {

@@ -64,6 +64,10 @@ pub const EXIT_REASON: u64 = 0x0000_4402;
 pub const VM_EXIT_INTR_INFO: u64 = 0x0000_4404;
 /// VM-exit interruption error code (when bit 11 of intr info is set).
 pub const VM_EXIT_INTR_ERROR_CODE: u64 = 0x0000_4406;
+/// IDT-vectoring information (which exception was being delivered when this exit occurred).
+pub const IDT_VECTORING_INFO: u64 = 0x0000_4408;
+/// IDT-vectoring error code (when bit 11 of IDT-vectoring info is set).
+pub const IDT_VECTORING_ERROR_CODE: u64 = 0x0000_440A;
 pub const VM_EXIT_INSTRUCTION_LEN: u64 = 0x0000_440C;
 pub const EXIT_QUALIFICATION: u64 = 0x0000_6400;
 
@@ -143,6 +147,15 @@ pub const PIN_BASED_EXTERNAL_INTERRUPT_EXITING: u32 = 1 << 0;
 /// Interrupt-window exiting (inject when guest IF becomes 1).
 pub const CPU_BASED_INTERRUPT_WINDOW_EXITING: u32 = 1 << 2;
 pub const CPU_BASED_HLT_EXITING: u32 = 1 << 7;
+/// INVLPG exiting (primary bit 9). Often allowed0=1 (cannot clear). Linux
+/// INVLPG is then skip-decoded; do not use stale MMIO `insn_len`.
+pub const CPU_BASED_INVLPG_EXITING: u32 = 1 << 9;
+/// CR8-load exiting (MOV from CR8). Guest-UEFI only; reads lapic_virt TPR class.
+/// Do not OR into the E4 SHELL VMCS in `launch.rs`.
+pub const CPU_BASED_CR8_LOAD_EXITING: u32 = 1 << 19;
+/// CR8-store exiting (MOV to CR8). Guest-UEFI only; writes lapic_virt TPR.
+/// Do not OR into the E4 SHELL VMCS in `launch.rs`.
+pub const CPU_BASED_CR8_STORE_EXITING: u32 = 1 << 20;
 /// Use TPR shadow (primary bit 21). Not CPUID — CPUID always exits in VMX.
 /// Kept named for the bit position only; do not set unless Virtual-APIC is armed.
 pub const CPU_BASED_USE_TPR_SHADOW: u32 = 1 << 21;
@@ -170,8 +183,14 @@ pub const VM_EXIT_HOST_ADDR_SPACE_SIZE: u32 = 1 << 9;
 pub const VM_EXIT_ACK_INTERRUPT_ON_EXIT: u32 = 1 << 15;
 pub const VM_EXIT_SAVE_IA32_EFER: u32 = 1 << 20;
 pub const VM_EXIT_LOAD_IA32_EFER: u32 = 1 << 21;
+/// Exit-control: save IA32_PAT (often forced in allowed1 on Xeon).
+pub const VM_EXIT_SAVE_IA32_PAT: u32 = 1 << 18;
+/// Exit-control: load IA32_PAT into host (must pair with HOST_IA32_PAT).
+pub const VM_EXIT_LOAD_IA32_PAT: u32 = 1 << 19;
 pub const VM_ENTRY_IA32E_MODE: u32 = 1 << 9;
 pub const VM_ENTRY_LOAD_IA32_EFER: u32 = 1 << 15;
+/// Entry-control: load IA32_PAT from GUEST_IA32_PAT (often forced in allowed1).
+pub const VM_ENTRY_LOAD_IA32_PAT: u32 = 1 << 14;
 
 /// Basic exit reason: exception or NMI.
 pub const EXIT_REASON_EXCEPTION_NMI: u32 = 0;
@@ -334,6 +353,9 @@ mod fields_test {
         assert_eq!(HOST_RIP, 0x6C16);
         assert_eq!(EPT_POINTER, 0x201A);
         assert_eq!(EXIT_REASON, 0x4402);
+        assert_eq!(VM_EXIT_INTR_ERROR_CODE, 0x4406);
+        assert_eq!(IDT_VECTORING_INFO, 0x4408);
+        assert_eq!(IDT_VECTORING_ERROR_CODE, 0x440A);
         assert_eq!(PIN_BASED_VM_EXEC_CONTROL, 0x4000);
         assert_eq!(EXIT_REASON_HLT, 12);
         assert_eq!(SECONDARY_ENABLE_EPT, 1 << 1);
@@ -342,6 +364,7 @@ mod fields_test {
         assert_eq!(SECONDARY_ENABLE_XSAVES, 1 << 20);
         assert_eq!(SECONDARY_ENABLE_UNRESTRICTED_GUEST, 1 << 7);
         assert_eq!(CPU_BASED_INTERRUPT_WINDOW_EXITING, 1 << 2);
+        assert_eq!(CPU_BASED_INVLPG_EXITING, 1 << 9);
         assert_eq!(EXIT_REASON_INTERRUPT_WINDOW, 7);
     }
 
@@ -355,6 +378,9 @@ mod fields_test {
         assert!(VMCS_CLONE_FIELDS.contains(&HOST_RIP));
         assert!(VMCS_CLONE_FIELDS.contains(&CR4_GUEST_HOST_MASK));
         assert!(VMCS_CLONE_FIELDS.contains(&EXCEPTION_BITMAP));
+        // Read-only exit info: cloning would be a VMWRITE of a RO field.
+        assert!(!VMCS_CLONE_FIELDS.contains(&IDT_VECTORING_INFO));
+        assert!(!VMCS_CLONE_FIELDS.contains(&IDT_VECTORING_ERROR_CODE));
         for (i, &a) in VMCS_CLONE_FIELDS.iter().enumerate() {
             for (j, &b) in VMCS_CLONE_FIELDS.iter().enumerate() {
                 if i != j {

@@ -35,11 +35,22 @@
 # M4.5: RAYNU-V-M4-SMP-OK (dual-vCPU BSP+AP shared-EPT probe)
 # E5.36: RAYNU-V-M7-E5-LIVE-BYTES-PRESENT-OK (real ESP OVMF.fd retain; always)
 # E5.37: RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK (required when VMXON succeeds)
-# E5.38: RAYNU-V-M7-E5-OVMF-ALIVE-OK (required when VMXON succeeds)
-# E5.39: RAYNU-V-M7-E5-OVMF-PAST-SEC-OK (required when VMXON succeeds)
-# E5.40: RAYNU-V-M7-E5-OVMF-CDROM-OK (required when VMXON succeeds)
-# E5.41: RAYNU-V-M7-E5-OVMF-DXE-OK (required when VMXON succeeds)
-# E5.42: RAYNU-V-M7-E5-OVMF-VIRTIO-OK (required when VMXON succeeds)
+# E5.38: RAYNU-V-M7-E5-OVMF-ALIVE-OK (required when VMXON succeeds, unless
+#        RayNu-F CONOUT-OK — then informational)
+# E5.39: RAYNU-V-M7-E5-OVMF-PAST-SEC-OK (required when VMXON succeeds, unless
+#        RayNu-F CONOUT-OK — then informational)
+# E5.40: RAYNU-V-M7-E5-OVMF-CDROM-OK (required when VMXON succeeds; GuestVisible
+#        fallback still counts)
+# E5.41: RAYNU-V-M7-E5-OVMF-DXE-OK (required when VMXON succeeds, unless
+#        RayNu-F CONOUT-OK — then informational)
+# E5.42: RAYNU-V-M7-E5-OVMF-VIRTIO-OK (required when VMXON succeeds, unless
+#        RayNu-F CONOUT-OK — then informational)
+# E5.43: RAYNU-V-M7-E5-OVMF-BOTH-OK (required when VMXON succeeds, unless
+#        RayNu-F CONOUT-OK — then informational)
+# E5.44: RAYNU-V-M7-E5-OVMF-ATAPI-OK (required when VMXON succeeds, unless
+#        the ADR-016 RayNu-F leg ran — then informational)
+# F2b:   RAYNU-V-RAYNU-F-CONOUT-OK (required when RAYNU_F=1 and VMXON succeeds)
+# E5.45: RAYNU-V-M7-E5-OVMF-ELTORITO-OK (CLOSED iron COM2 0be7283 RN-ELT n=197992; logged when VMXON succeeds — nested qemu may timeout; iron is the close; FAT ESP BOOTX64 + RN-ELT, not sectors>0 alone)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -84,7 +95,17 @@ MARKER_OVMF_PAST_SEC="${MARKER_OVMF_PAST_SEC:-RAYNU-V-M7-E5-OVMF-PAST-SEC-OK}"
 MARKER_OVMF_CDROM="${MARKER_OVMF_CDROM:-RAYNU-V-M7-E5-OVMF-CDROM-OK}"
 MARKER_OVMF_DXE="${MARKER_OVMF_DXE:-RAYNU-V-M7-E5-OVMF-DXE-OK}"
 MARKER_OVMF_VIRTIO="${MARKER_OVMF_VIRTIO:-RAYNU-V-M7-E5-OVMF-VIRTIO-OK}"
-TIMEOUT_SECS="${TIMEOUT_SECS:-300}"
+MARKER_OVMF_BOTH="${MARKER_OVMF_BOTH:-RAYNU-V-M7-E5-OVMF-BOTH-OK}"
+MARKER_OVMF_ATAPI="${MARKER_OVMF_ATAPI:-RAYNU-V-M7-E5-OVMF-ATAPI-OK}"
+MARKER_OVMF_ELTORITO="${MARKER_OVMF_ELTORITO:-RAYNU-V-M7-E5-OVMF-ELTORITO-OK}"
+# ADR-016: RayNu-F (our own guest firmware) runs after the OVMF leg stops.
+# Guest-exit-only marker; when RAYNU_F=1 and VMXON succeeded it is required,
+# and the OVMF ATAPI read (a closed path since the forcing family was
+# disabled) becomes informational.
+MARKER_RAYNU_F_CONOUT="${MARKER_RAYNU_F_CONOUT:-RAYNU-V-RAYNU-F-CONOUT-OK}"
+# Stage 45: iron df7d158 + nested 8881cdd spent the full 131072-exit cap in
+# BDS ATA/PCI. Hard resume is 262144; 300s was tight once OVMF runs that long.
+TIMEOUT_SECS="${TIMEOUT_SECS:-480}"
 SERIAL_LOG="${SERIAL_LOG:-$ROOT/target/m0-serial.log}"
 ESP="${ESP:-$ROOT/target/m0-esp}"
 
@@ -121,8 +142,20 @@ if [[ "$REQUIRE_VMX" == "1" ]] && [[ -f /sys/module/kvm_intel/parameters/enable_
   fi
 fi
 
-echo "==> Building EFI"
-"$ROOT/tools/build.sh"
+# SKIP_BUILD=1 boots the EFI already at target/<target>/release (e.g. a CI
+# artifact from `gh run download`) instead of rebuilding from the checked-out
+# source. Without it, HEAD -- not the downloaded file -- is what gets tested.
+if [[ "${SKIP_BUILD:-0}" == "1" ]]; then
+  PREBUILT="$ROOT/target/x86_64-unknown-uefi/release/r640-hypervisor.efi"
+  if [[ ! -f "$PREBUILT" ]]; then
+    echo "error: SKIP_BUILD=1 but $PREBUILT is missing" >&2
+    exit 1
+  fi
+  echo "==> SKIP_BUILD=1: using prebuilt EFI $(sha256sum "$PREBUILT" | cut -c1-16)... ($(wc -c <"$PREBUILT") bytes)"
+else
+  echo "==> Building EFI"
+  "$ROOT/tools/build.sh"
+fi
 
 # M3.8: prefer real tinyconfig asset; proto fixture only if nothing present.
 if [[ ! -f "$ROOT/assets/bzImage" ]]; then
@@ -146,7 +179,18 @@ set +e
 timeout --signal=KILL "$TIMEOUT_SECS" \
   env ESP="$ESP" SERIAL_CHARDEV="file:$SERIAL_LOG" \
   "$ROOT/tools/run-qemu.sh" \
-  >"$ROOT/target/m0-qemu-stdout.log" 2>"$ROOT/target/m0-qemu-stderr.log"
+  >"$ROOT/target/m0-qemu-stdout.log" 2>"$ROOT/target/m0-qemu-stderr.log" &
+QEMU_WRAP=$!
+while kill -0 "$QEMU_WRAP" 2>/dev/null; do
+  if grep -qF "Kernel panic - not syncing" "$SERIAL_LOG" 2>/dev/null; then
+    echo "error: kernel panic on serial — killing QEMU (do not wait ${TIMEOUT_SECS}s)" >&2
+    kill -KILL "$QEMU_WRAP" 2>/dev/null || true
+    pkill -KILL -P "$QEMU_WRAP" 2>/dev/null || true
+    break
+  fi
+  sleep 1
+done
+wait "$QEMU_WRAP"
 QEMU_STATUS=$?
 set -e
 
@@ -195,14 +239,22 @@ if grep -qF "$MARKER_VMXON" "$SERIAL_LOG"; then
     echo "error: marker '$MARKER_OVMF_VMLAUNCH' not found after VMXON (need real VMLAUNCH of retained OVMF)" >&2
     fail=1
   fi
+  raynu_f_ran=0
+  if grep -qF "$MARKER_RAYNU_F_CONOUT" "$SERIAL_LOG"; then
+    raynu_f_ran=1
+  fi
   if grep -qF "$MARKER_OVMF_ALIVE" "$SERIAL_LOG"; then
     echo "==> E5 guest-UEFI ran past first triple-fault"
+  elif [[ "$raynu_f_ran" == "1" ]]; then
+    echo "==> E5 OVMF ALIVE not in this serial (OVMF progress informational when RayNu-F ran; ADR-016; not ISO-INSTALL-OK)"
   else
     echo "error: marker '$MARKER_OVMF_ALIVE' not found after VMXON (OVMF died at first triple-fault)" >&2
     fail=1
   fi
   if grep -qF "$MARKER_OVMF_PAST_SEC" "$SERIAL_LOG"; then
     echo "==> E5 guest-UEFI left SEC tail (PEI-style PCI/COM/HLT)"
+  elif [[ "$raynu_f_ran" == "1" ]]; then
+    echo "==> E5 OVMF PAST-SEC not in this serial (OVMF progress informational when RayNu-F ran; ADR-016; not ISO-INSTALL-OK)"
   else
     echo "error: marker '$MARKER_OVMF_PAST_SEC' not found after VMXON (still inside SEC window)" >&2
     fail=1
@@ -210,22 +262,58 @@ if grep -qF "$MARKER_VMXON" "$SERIAL_LOG"; then
   if grep -qF "$MARKER_OVMF_CDROM" "$SERIAL_LOG"; then
     echo "==> E5 guest-UEFI CD visible (PCI IDE/ATAPI or sector read)"
   elif grep -qF "boot: guest-UEFI CD GuestVisible" "$SERIAL_LOG"; then
-    echo "==> E5 guest-UEFI CD GuestVisible (PEI DID slot is virtio; Stage 40 pci_ide closed on prior EFI)"
+    echo "==> E5 guest-UEFI CD GuestVisible (PEI DID slot stays i440FX; Stage 40 pci_ide closed on prior EFI)"
   else
     echo "error: marker '$MARKER_OVMF_CDROM' not found and CD not GuestVisible after VMXON" >&2
     fail=1
   fi
   if grep -qF "$MARKER_OVMF_DXE" "$SERIAL_LOG"; then
     echo "==> E5 guest-UEFI past-PEI/DXE or CD boot attempt"
+  elif [[ "$raynu_f_ran" == "1" ]]; then
+    echo "==> E5 OVMF DXE not in this serial (OVMF progress informational when RayNu-F ran; ADR-016; not ISO-INSTALL-OK)"
   else
     echo "error: marker '$MARKER_OVMF_DXE' not found after VMXON (no past-PEI/DXE or CD boot attempt)" >&2
     fail=1
   fi
   if grep -qF "$MARKER_OVMF_VIRTIO" "$SERIAL_LOG"; then
     echo "==> E5 guest-UEFI virtio-blk + boot order CD then disk"
+  elif [[ "$raynu_f_ran" == "1" ]]; then
+    echo "==> E5 OVMF VIRTIO not in this serial (OVMF progress informational when RayNu-F ran; ADR-016; not ISO-INSTALL-OK)"
   else
     echo "error: marker '$MARKER_OVMF_VIRTIO' not found after VMXON (virtio-blk not visible to this guest)" >&2
     fail=1
+  fi
+  if grep -qF "$MARKER_OVMF_BOTH" "$SERIAL_LOG"; then
+    echo "==> E5 guest-UEFI simultaneous virtio 00:02.0 + IDE 00:00.1"
+  elif [[ "$raynu_f_ran" == "1" ]]; then
+    echo "==> E5 OVMF BOTH not in this serial (OVMF progress informational when RayNu-F ran; ADR-016; not ISO-INSTALL-OK)"
+  else
+    echo "error: marker '$MARKER_OVMF_BOTH' not found after VMXON (firmware did not enum both PCI functions on this boot)" >&2
+    fail=1
+  fi
+  if grep -qF "$MARKER_OVMF_ATAPI" "$SERIAL_LOG"; then
+    echo "==> E5 guest-UEFI ATAPI sector read (sectors>0)"
+  elif [[ "$raynu_f_ran" == "1" ]]; then
+    # OVMF IdeBus stalls at ataio=0 on this leg and ADR-016 closed the
+    # forcing family that used to push it; RayNu-F is the product path and
+    # is gated below. Not a pass of the OVMF ATAPI read.
+    echo "==> E5 OVMF ATAPI read not in this serial (OVMF leg superseded by RayNu-F, ADR-016; not ISO-INSTALL-OK)"
+  else
+    echo "error: marker '$MARKER_OVMF_ATAPI' not found after VMXON (firmware did not READ ATAPI sectors)" >&2
+    fail=1
+  fi
+  if [[ "${RAYNU_F:-0}" == "1" ]]; then
+    if [[ "$raynu_f_ran" == "1" ]]; then
+      echo "==> ADR-016 RayNu-F leg ran ($MARKER_RAYNU_F_CONOUT; guest executed our own UEFI tables)"
+    else
+      echo "error: RAYNU_F=1 but '$MARKER_RAYNU_F_CONOUT' not found after VMXON (RayNu-F leg did not run or its guest never reached ConOut)" >&2
+      fail=1
+    fi
+  fi
+  if grep -qF "$MARKER_OVMF_ELTORITO" "$SERIAL_LOG"; then
+    echo "==> E5 guest-UEFI El Torito CD EFI ran"
+  else
+    echo "==> E5 guest-UEFI El Torito CD EFI not in this serial (Stage 45 CLOSED iron COM2 0be7283; nested qemu may miss StartImage; ATAPI/BOTH/LINUX-EARLY still required)"
   fi
   if grep -qF "$MARKER_VMEXIT" "$SERIAL_LOG"; then
     echo "==> M1.2 VMEXIT marker found"

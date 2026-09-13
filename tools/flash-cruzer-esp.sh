@@ -1,70 +1,333 @@
 #!/usr/bin/env bash
-# Replace-only flash of EFI/BOOT/BOOTX64.EFI onto the lab Cruzer Micro.
+# Replace-only flash of EFI/BOOT/BOOTX64.EFI onto the lab Cruzer Micro,
+# plus EFI/RayNu/OVMF.fd (ADR-014 guest-UEFI retain). Leaves
+# installdisk.bin and auth.token alone.
 #
 # Pillar: [Z] [D]
 # Proven Core: outside
 #
 # Run on raynuvsrv1 (Ubuntu on the R640 PERC), with the Cruzer left in
 # front USB 2. Identifies the stick by FAT label RAYNUV + USB + Cruzer
-# model. Never uses a hardcoded /dev/sdc. Never dd, never format, never
-# touches PERC volumes (sda/sdb).
+# model. Never uses a hardcoded /dev/sdc. Never dd. Never format PERC.
+# Cruzer --refat-cruzer is opt-in after RAYNUV+serial+Cruzer identity:
+# copy installdisk.bin/auth.token off, mkfs.vfat -I -F 32 -n RAYNUV, restore.
+# Never touches PERC volumes (sda/sdb).
 #
 # Usage:
 #   ./tools/flash-cruzer-esp.sh --self-test
 #   sudo ./tools/flash-cruzer-esp.sh --efi /path/to/r640-hypervisor.efi
 #   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --sha256 <hex>
+#   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --ovmf /path/to/OVMF.fd
+#   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --no-ovmf
+#   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --linux-iso /path/alpine.iso
+#   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --linux-iso /path/alpine.iso --refat-cruzer
+#   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --no-linux-iso
+#   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --no-linux-iso --raynu-f   # ADR-016 F2b
+#   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --linux-iso /path/alpine-extended.iso --raynu-f --init-new-cruzer --allow-new-serial
+#
+# Stage 46: alpine-virt linux.iso is ~63 MiB. The Cruzer media is 977.5 MiB
+# but the FAT may be a 64 MiB image (131072 sectors) that cannot hold ISO+
+# EFI+OVMF. Pass --refat-cruzer to mkfs.vfat -I -F 32 -n RAYNUV on that
+# identified whole-disk stick after copying installdisk.bin/auth.token off.
+# Never PERC. fsck.vfat cannot grow a 64 MiB volume.
+#
+# F7 iron: alpine-extended is ~994 MiB. Front USB 2 may be a SanDisk Cruzer
+# or a LogiLink UDisk (lsusb abcd:1234, model UDisk, 4026531840 bytes,
+# serial General_UDisk-0:0). Both are USB 2–8 GiB lab sticks. Pass
+# --init-new-cruzer (exactly one matching USB disk; mkfs.vfat
+# -I -F 32 -n RAYNUV + EFI layout + 1 MiB installdisk.bin identity) and
+# --allow-new-serial. Never PERC. Never guess /dev/sdc.
 #
 # Optional: CRUZER_SERIAL (default 200524441218e7503e33) must match lsblk
-# SERIAL when the device reports one.
+# SERIAL when the device reports one unless --allow-new-serial.
+# GUEST_OVMF overrides the host search.
 set -euo pipefail
 
 LABEL="${CRUZER_LABEL:-RAYNUV}"
 EXPECT_SERIAL="${CRUZER_SERIAL:-200524441218e7503e33}"
 MIN_BYTES=$((256 * 1024 * 1024))
-MAX_BYTES=$((4 * 1024 * 1024 * 1024))
+# 8 GiB so a marketed 4 GB Cruzer still classifies; PERC volumes stay out.
+MAX_BYTES=$((8 * 1024 * 1024 * 1024))
+FOURG_MIN=$((2 * 1024 * 1024 * 1024))
+FOURG_MAX="$MAX_BYTES"
 MNT_DEFAULT="/mnt/usb"
 EFI_PATH=""
 EXPECT_SHA=""
+OVMF_SRC=""
+NO_OVMF=0
+LINUX_ISO=""
+NO_LINUX_ISO=0
+# ADR-016 F2b: --raynu-f stages EFI/RayNu/raynuf.txt (RayNu-F test-app launch
+# after the OVMF leg stops). Default removes a stale flag so it never rides along.
+RAYNU_F_FLAG=0
+REFAT=0
+INIT_NEW=0
+ALLOW_NEW_SERIAL=0
 SELFTEST=0
 DRY=0
 
 usage() {
-  sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,48p' "$0" | sed 's/^# \{0,1\}//'
   exit "${1:-0}"
+}
+
+# EFI_FIRMWARE_VOLUME_HEADER.Signature at 0x28 is "_FVH".
+# Same accept rule as tools/run-qemu.sh / boot::ovmf_esp::accept_real_ovmf_bytes.
+ovmf_has_fvh() {
+  local sig
+  sig=$(od -An -tx1 -N 4 -j 40 "$1" 2>/dev/null | tr -d ' \n')
+  [[ "$sig" == "5f465648" ]]
+}
+
+# Prefer 4M CODE then combined OVMF.fd. Size 1-4 MiB + _FVH (not a fixture).
+pick_host_ovmf() {
+  local f sz
+  for f in ${OVMF_SRC:-} ${GUEST_OVMF:-} \
+    /usr/share/OVMF/OVMF_CODE_4M.fd \
+    /usr/share/OVMF/OVMF.fd \
+    /usr/share/ovmf/OVMF.fd \
+    /usr/share/OVMF/OVMF_CODE.fd \
+    /usr/share/edk2/ovmf/OVMF.fd \
+    /usr/share/edk2/ovmf/OVMF_CODE.fd \
+    /usr/share/edk2-ovmf/x64/OVMF_CODE.fd
+  do
+    [[ -n "$f" && -f "$f" ]] || continue
+    sz=$(wc -c <"$f" | tr -d ' ')
+    if (( sz >= 1048576 && sz <= 4194304 )) && ovmf_has_fvh "$f"; then
+      printf '%s\n' "$f"
+      return 0
+    fi
+  done
+  return 1
 }
 
 # Host-testable: lab Cruzer vs PERC / vMedia / random USB.
 # INVARIANTS:
 # - Label must be RAYNUV
 # - Transport must be usb
-# - Model must contain Cruzer (case-insensitive)
+# - Model must contain Cruzer or UDisk (LogiLink 4 GB lab stick)
 # - Model must not contain PERC / H740 / Virtual
-# - Size in [256 MiB, 4 GiB]
+# - Size in [256 MiB, 8 GiB]
 # - Never panics
 target_is_lab_cruzer() {
   local model="$1" tran="$2" size_bytes="$3" label="$4"
-  local lc
   [[ "$label" == "$LABEL" ]] || return 1
   [[ "$tran" == "usb" ]] || return 1
   [[ "$size_bytes" =~ ^[0-9]+$ ]] || return 1
   if (( size_bytes < MIN_BYTES || size_bytes > MAX_BYTES )); then
     return 1
   fi
-  lc=$(printf '%s' "$model" | tr '[:upper:]' '[:lower:]')
-  [[ "$lc" == *cruzer* ]] || return 1
+  model_is_cruzer_not_perc "$model"
+}
+
+# Host-testable: unlabeled 4 GB Cruzer window (alpine-extended ~994 MiB).
+# INVARIANTS:
+# - Size in [2 GiB, 8 GiB]
+# - 977.5 MiB Micro is too small (fails)
+# - PERC / 200 GiB fails
+size_is_4g_cruzer_window() {
+  local size_bytes="$1"
+  [[ "$size_bytes" =~ ^[0-9]+$ ]] || return 1
+  (( size_bytes >= FOURG_MIN && size_bytes <= FOURG_MAX ))
+}
+
+model_is_cruzer_not_perc() {
+  local lc
+  lc=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+  [[ "$lc" == *cruzer* || "$lc" == *udisk* ]] || return 1
   [[ "$lc" != *perc* && "$lc" != *h740* && "$lc" != *virtual* ]] || return 1
   return 0
 }
 
 self_test() {
+  local tmp
   target_is_lab_cruzer "Cruzer Micro" usb 1024966656 RAYNUV
+  target_is_lab_cruzer "Cruzer" usb 4000000000 RAYNUV
+  target_is_lab_cruzer "UDisk" usb 4026531840 RAYNUV
   target_is_lab_cruzer "Cruzer Micro" usb 1024966656 WRONG && return 1
   target_is_lab_cruzer "PERC H740P Mini" usb 1024966656 RAYNUV && return 1
   target_is_lab_cruzer "Cruzer Micro" sas 1024966656 RAYNUV && return 1
   target_is_lab_cruzer "Cruzer Micro" usb $((200 * 1024 * 1024 * 1024)) RAYNUV && return 1
   target_is_lab_cruzer "Virtual Floppy" usb 0 RAYNUV && return 1
   target_is_lab_cruzer "Virtual CD" usb $((1024 * 1024 * 1024)) RAYNUV && return 1
+  size_is_4g_cruzer_window 4000000000
+  size_is_4g_cruzer_window 1024966656 && return 1
+  size_is_4g_cruzer_window $((200 * 1024 * 1024 * 1024)) && return 1
+  model_is_cruzer_not_perc "Cruzer Blade 4GB"
+  model_is_cruzer_not_perc "UDisk"
+  model_is_cruzer_not_perc "PERC H740P Mini" && return 1
+  size_is_4g_cruzer_window 4026531840
+  tmp="$(mktemp)"
+  dd if=/dev/zero of="$tmp" bs=64 count=1 status=none
+  printf '\x5f\x46\x56\x48' | dd of="$tmp" bs=1 seek=40 conv=notrunc status=none
+  ovmf_has_fvh "$tmp" || { rm -f "$tmp"; return 1; }
+  printf '\x00\x00\x00\x00' | dd of="$tmp" bs=1 seek=40 conv=notrunc status=none
+  if ovmf_has_fvh "$tmp"; then
+    rm -f "$tmp"
+    return 1
+  fi
+  rm -f "$tmp"
+  fat_bytes_too_small 66059264 67108864 || return 1
+  fat_bytes_too_small 1024966656 67108864 && return 1
   echo "RAYNU-V-CRUZER-FLASH-SELFTEST-OK"
+}
+
+esp_avail_bytes() {
+  df -B1 --output=avail "$MNT" | tail -n1 | tr -d ' '
+}
+
+esp_size_bytes() {
+  df -B1 --output=size "$MNT" | tail -n1 | tr -d ' '
+}
+
+# Host-testable: 64MiB FAT (66059264) cannot hold alpine-virt need (67108864).
+fat_bytes_too_small() {
+  local fs_size="$1" need="$2"
+  [[ "$fs_size" =~ ^[0-9]+$ && "$need" =~ ^[0-9]+$ ]] && (( fs_size < need ))
+}
+
+remount_cruzer_vfat() {
+  sudo umount "$MNT" || true
+  DID_MOUNT=0
+  sudo mkdir -p "$MNT"
+  sudo mount -t vfat -o rw,flush "$RAW" "$MNT"
+  DID_MOUNT=1
+}
+
+# Reclaim leaked FAT clusters / stale FSInfo after ENOSPC. Never mkfs.
+# If the FAT volume itself is smaller than need (64MiB image on 977.5MiB
+# media), skip remount/fsck — those cannot grow the volume.
+reclaim_fat_free_if_needed() {
+  local need="$1"
+  local avail fs_size
+  avail="$(esp_avail_bytes)"
+  if [[ "$avail" =~ ^[0-9]+$ ]] && (( avail >= need )); then
+    echo "==> ESP free=$avail need=$need"
+    return 0
+  fi
+  fs_size="$(esp_size_bytes)"
+  if fat_bytes_too_small "$fs_size" "$need"; then
+    echo "==> ESP FAT size=$fs_size free=${avail:-?} need=$need disk=${SIZE_BYTES:-?} — volume too small (not FSInfo)"
+    echo "error: 64MiB FAT cannot hold alpine-virt linux.iso; re-run with --refat-cruzer" >&2
+    return 1
+  fi
+  echo "==> ESP free=${avail:-?} need=$need — remount to flush FAT32 FSInfo (not format)"
+  remount_cruzer_vfat
+  avail="$(esp_avail_bytes)"
+  if [[ "$avail" =~ ^[0-9]+$ ]] && (( avail >= need )); then
+    echo "==> ESP free=$avail need=$need (after remount)"
+    return 0
+  fi
+  if ! command -v fsck.vfat >/dev/null; then
+    echo "error: fsck.vfat missing (apt install dosfstools); not formatting" >&2
+    return 1
+  fi
+  echo "==> fsck.vfat -a $RAW to reclaim orphaned clusters (not format)"
+  sudo umount "$MNT" || true
+  DID_MOUNT=0
+  set +e
+  sudo fsck.vfat -a "$RAW"
+  fsck_rc=$?
+  set -e
+  if (( fsck_rc > 1 )); then
+    echo "error: fsck.vfat rc=$fsck_rc (not format)" >&2
+    return 1
+  fi
+  remount_cruzer_vfat
+  avail="$(esp_avail_bytes)"
+  echo "==> ESP free=${avail:-?} need=$need (after fsck.vfat)"
+  if [[ ! "$avail" =~ ^[0-9]+$ ]] || (( avail < need )); then
+    local fs_size
+    fs_size="$(df -B1 --output=size "$MNT" | tail -n1 | tr -d ' ')"
+    echo "error: Cruzer FAT size=${fs_size:-?} free=${avail:-?} need=$need disk=$SIZE_BYTES" >&2
+    echo "       64MiB FAT on 977.5MiB Cruzer cannot hold alpine-virt linux.iso" >&2
+    echo "       re-run with --refat-cruzer (mkfs.vfat -I -F 32 -n RAYNUV on this identified stick)" >&2
+    return 1
+  fi
+  return 0
+}
+
+# Opt-in: identified RAYNUV Cruzer only. 64MiB FAT on 977.5MiB media cannot
+# hold alpine-virt (~63MiB) plus EFI+OVMF. Copy keep files, mkfs.vfat the
+# whole stick, restore installdisk.bin/auth.token. Never PERC.
+refat_identified_cruzer() {
+  local keep token
+  keep="$(mktemp -d /tmp/raynuv-refat.XXXXXX)"
+  sudo cp "$MNT/EFI/RayNu/installdisk.bin" "$keep/installdisk.bin"
+  token=0
+  if [[ -f "$MNT/EFI/RayNu/auth.token" ]]; then
+    sudo cp "$MNT/EFI/RayNu/auth.token" "$keep/auth.token"
+    token=1
+  fi
+  echo "==> --refat-cruzer: keep installdisk.bin bytes=$(wc -c <"$keep/installdisk.bin" | tr -d ' ') auth.token=$token"
+  sudo umount "$MNT" || true
+  DID_MOUNT=0
+  echo "==> --refat-cruzer: mkfs.vfat -I -F 32 -n $LABEL $RAW (identified whole-disk Cruzer; not PERC)"
+  sudo mkfs.vfat -I -F 32 -n "$LABEL" "$RAW"
+  sudo mkdir -p "$MNT"
+  sudo mount -t vfat -o rw,flush "$RAW" "$MNT"
+  DID_MOUNT=1
+  sudo mkdir -p "$MNT/EFI/BOOT" "$MNT/EFI/RayNu"
+  sudo cp "$keep/installdisk.bin" "$MNT/EFI/RayNu/installdisk.bin"
+  if [[ "$token" -eq 1 ]]; then
+    sudo cp "$keep/auth.token" "$MNT/EFI/RayNu/auth.token"
+  fi
+  rm -rf "$keep"
+  echo "==> --refat-cruzer: FAT now fills the Cruzer (not ISO-INSTALL-OK)"
+}
+
+# Opt-in first flash of an unlabeled ~4 GB USB Cruzer. Exactly one USB Cruzer
+# in [2 GiB, 8 GiB]. mkfs.vfat the whole disk. Never PERC. Never /dev/sdc guess.
+find_one_4g_usb_cruzer() {
+  local name type tran size model hits=()
+  while read -r name type tran size; do
+    [[ -n "$name" ]] || continue
+    [[ "$type" == "disk" ]] || continue
+    [[ "$tran" == "usb" ]] || continue
+    model="$(lsblk -bdno MODEL "$name" | sed 's/[[:space:]]*$//')"
+    model_is_cruzer_not_perc "$model" || continue
+    size_is_4g_cruzer_window "$size" || continue
+    hits+=("$name")
+  done < <(lsblk -bdnpo NAME,TYPE,TRAN,SIZE 2>/dev/null)
+  if (( ${#hits[@]} != 1 )); then
+    echo "error: --init-new-cruzer needs exactly one USB Cruzer/UDisk in [2 GiB, 8 GiB] (found ${#hits[@]})" >&2
+    lsblk -o NAME,MODEL,TRAN,SIZE,LABEL,SERIAL,FSTYPE,TYPE >&2 || true
+    echo "       unplug other USB sticks; never PERC; never guess /dev/sdc" >&2
+    return 1
+  fi
+  printf '%s\n' "${hits[0]}"
+}
+
+umount_tree_if_mounted() {
+  local dev="$1" tgt
+  tgt="$(findmnt -n -o TARGET "$dev" 2>/dev/null || true)"
+  if [[ -n "$tgt" ]]; then
+    case "$tgt" in
+      /|/boot|/boot/efi|/home)
+        echo "error: refusing to unmount OS mount $tgt" >&2
+        return 1
+        ;;
+    esac
+    sudo umount "$tgt" || true
+  fi
+}
+
+init_new_4g_cruzer() {
+  local part
+  echo "==> --init-new-cruzer: mkfs.vfat -I -F 32 -n $LABEL $RAW (exactly one 2–8 GiB USB Cruzer; not PERC)"
+  while read -r part; do
+    [[ -n "$part" ]] || continue
+    umount_tree_if_mounted "$part"
+  done < <(lsblk -lnpo NAME "$RAW")
+  DID_MOUNT=0
+  sudo mkfs.vfat -I -F 32 -n "$LABEL" "$RAW"
+  sudo mkdir -p "$MNT"
+  sudo mount -t vfat -o rw,flush "$RAW" "$MNT"
+  DID_MOUNT=1
+  sudo mkdir -p "$MNT/EFI/BOOT" "$MNT/EFI/RayNu"
+  sudo dd if=/dev/zero of="$MNT/EFI/RayNu/installdisk.bin" bs=1M count=1 status=none
+  sudo sync -f "$MNT/EFI/RayNu/installdisk.bin" 2>/dev/null || sudo sync
+  echo "==> --init-new-cruzer: RAYNUV + EFI/BOOT + 1MiB installdisk.bin (identity only; not ISO-INSTALL-OK)"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -74,6 +337,14 @@ while [[ $# -gt 0 ]]; do
     --dry-run) DRY=1; shift ;;
     --efi) EFI_PATH="${2:-}"; shift 2 ;;
     --sha256) EXPECT_SHA="${2:-}"; shift 2 ;;
+    --ovmf) OVMF_SRC="${2:-}"; shift 2 ;;
+    --no-ovmf) NO_OVMF=1; shift ;;
+    --linux-iso) LINUX_ISO="${2:-}"; shift 2 ;;
+    --no-linux-iso) NO_LINUX_ISO=1; shift ;;
+    --raynu-f) RAYNU_F_FLAG=1; shift ;;
+    --refat-cruzer) REFAT=1; shift ;;
+    --init-new-cruzer) INIT_NEW=1; shift ;;
+    --allow-new-serial) ALLOW_NEW_SERIAL=1; shift ;;
     --label) LABEL="${2:-}"; shift 2 ;;
     *)
       echo "error: unknown arg: $1" >&2
@@ -85,6 +356,22 @@ done
 if [[ "$SELFTEST" == "1" ]]; then
   self_test
   exit 0
+fi
+
+if [[ "$NO_OVMF" == "1" && -n "$OVMF_SRC" ]]; then
+  echo "error: --ovmf and --no-ovmf are mutually exclusive" >&2
+  exit 1
+fi
+if [[ "$NO_LINUX_ISO" == "1" && -n "$LINUX_ISO" ]]; then
+  echo "error: --linux-iso and --no-linux-iso are mutually exclusive" >&2
+  exit 1
+fi
+if [[ "$INIT_NEW" -eq 1 && "$REFAT" -eq 1 ]]; then
+  echo "error: --init-new-cruzer and --refat-cruzer are mutually exclusive" >&2
+  exit 1
+fi
+if [[ "$INIT_NEW" -eq 1 ]]; then
+  ALLOW_NEW_SERIAL=1
 fi
 
 if [[ -z "$EFI_PATH" ]]; then
@@ -114,14 +401,17 @@ if [[ -n "$EXPECT_SHA" && "$GOT_SHA" != "$EXPECT_SHA" ]]; then
   exit 1
 fi
 
-LABEL_DEV="/dev/disk/by-label/${LABEL}"
-if [[ ! -e "$LABEL_DEV" ]]; then
-  echo "error: no block device for label ${LABEL} ($LABEL_DEV)" >&2
-  echo "       expect Cruzer Micro in front USB 2; lsusb 0781:5151" >&2
-  exit 1
+if [[ "$INIT_NEW" -eq 1 ]]; then
+  RAW="$(find_one_4g_usb_cruzer)"
+else
+  LABEL_DEV="/dev/disk/by-label/${LABEL}"
+  if [[ ! -e "$LABEL_DEV" ]]; then
+    echo "error: no block device for label ${LABEL} ($LABEL_DEV)" >&2
+    echo "       expect Cruzer in front USB 2; unlabeled 4 GB stick needs --init-new-cruzer" >&2
+    exit 1
+  fi
+  RAW="$(readlink -f "$LABEL_DEV")"
 fi
-
-RAW="$(readlink -f "$LABEL_DEV")"
 if [[ ! -b "$RAW" ]]; then
   echo "error: not a block device: $RAW" >&2
   exit 1
@@ -141,23 +431,40 @@ FSTYPE="$(lsblk -bdno FSTYPE "$RAW" | tr -d ' ')"
 TYPE="$(lsblk -bdno TYPE "$RAW" | tr -d ' ')"
 LS_LABEL="$(lsblk -bdno LABEL "$RAW" | tr -d ' ')"
 
-echo "==> resolved $LABEL_DEV -> $RAW"
+echo "==> resolved ${LABEL_DEV:-init-new} -> $RAW"
 echo "==> model=${MODEL:-?} tran=${TRAN:-?} type=${TYPE:-?} fstype=${FSTYPE:-?} size=${SIZE_BYTES} serial=${SERIAL:-?}"
 
-if [[ "$LS_LABEL" != "$LABEL" ]]; then
-  echo "error: lsblk LABEL is '${LS_LABEL}', expected $LABEL" >&2
-  exit 1
-fi
-if ! target_is_lab_cruzer "$MODEL" "$TRAN" "$SIZE_BYTES" "$LS_LABEL"; then
-  echo "error: $RAW is not the lab Cruzer (refusing PERC / vMedia / random USB)" >&2
-  exit 1
+if [[ "$INIT_NEW" -eq 1 ]]; then
+  if [[ "$TYPE" != "disk" ]]; then
+    echo "error: --init-new-cruzer requires a whole-disk USB Cruzer (TYPE=$TYPE)" >&2
+    exit 1
+  fi
+  if ! model_is_cruzer_not_perc "$MODEL"; then
+    echo "error: $RAW is not a USB Cruzer (refusing PERC / vMedia / random USB)" >&2
+    exit 1
+  fi
+  [[ "$TRAN" == "usb" ]] || { echo "error: $RAW tran=$TRAN is not usb" >&2; exit 1; }
+  size_is_4g_cruzer_window "$SIZE_BYTES" || {
+    echo "error: $RAW size=$SIZE_BYTES is outside 2–8 GiB (alpine-extended needs >994 MiB)" >&2
+    exit 1
+  }
+else
+  if [[ "$LS_LABEL" != "$LABEL" ]]; then
+    echo "error: lsblk LABEL is '${LS_LABEL}', expected $LABEL" >&2
+    exit 1
+  fi
+  if ! target_is_lab_cruzer "$MODEL" "$TRAN" "$SIZE_BYTES" "$LS_LABEL"; then
+    echo "error: $RAW is not the lab Cruzer (refusing PERC / vMedia / random USB)" >&2
+    exit 1
+  fi
 fi
 if [[ "$TYPE" != "disk" && "$TYPE" != "part" ]]; then
   echo "error: unexpected lsblk TYPE=$TYPE" >&2
   exit 1
 fi
-if [[ -n "$SERIAL" && -n "$EXPECT_SERIAL" && "$SERIAL" != "$EXPECT_SERIAL" ]]; then
+if [[ "$ALLOW_NEW_SERIAL" -eq 0 && -n "$SERIAL" && -n "$EXPECT_SERIAL" && "$SERIAL" != "$EXPECT_SERIAL" ]]; then
   echo "error: serial $SERIAL != expected $EXPECT_SERIAL" >&2
+  echo "       4 GB Cruzer: pass --allow-new-serial (or CRUZER_SERIAL=)" >&2
   exit 1
 fi
 if [[ "$MODEL" == *PERC* ]]; then
@@ -172,6 +479,14 @@ fi
 
 if [[ "$DRY" == "1" ]]; then
   echo "==> dry-run: would copy $EFI_ABS -> ${RAW} EFI/BOOT/BOOTX64.EFI"
+  if [[ "$INIT_NEW" -eq 1 ]]; then
+    echo "==> dry-run: would mkfs.vfat -I -F 32 -n $LABEL $RAW then stage EFI layout"
+  fi
+  if [[ "$NO_OVMF" == "1" ]]; then
+    echo "==> dry-run: would skip EFI/RayNu/OVMF.fd"
+  else
+    echo "==> dry-run: would stage EFI/RayNu/OVMF.fd (1-4 MiB _FVH)"
+  fi
   echo "RAYNU-V-CRUZER-FLASH-DRY-OK"
   exit 0
 fi
@@ -179,7 +494,9 @@ fi
 MNT="$MNT_DEFAULT"
 EXISTING_MNT="$(findmnt -n -o TARGET "$RAW" 2>/dev/null || true)"
 DID_MOUNT=0
-if [[ -n "$EXISTING_MNT" ]]; then
+if [[ "$INIT_NEW" -eq 1 ]]; then
+  init_new_4g_cruzer
+elif [[ -n "$EXISTING_MNT" ]]; then
   MNT="$EXISTING_MNT"
   echo "==> already mounted at $MNT"
   case "$MNT" in
@@ -201,15 +518,23 @@ cleanup() {
 }
 trap cleanup EXIT
 
-if [[ ! -d "$MNT/EFI/BOOT" ]]; then
-  echo "error: $MNT/EFI/BOOT missing — not the RayNu-V Cruzer layout" >&2
-  exit 1
-fi
-if [[ ! -f "$MNT/EFI/RayNu/installdisk.bin" ]]; then
-  echo "error: $MNT/EFI/RayNu/installdisk.bin missing — refusing (wrong volume)" >&2
-  exit 1
+if [[ "$INIT_NEW" -ne 1 ]]; then
+  if [[ ! -d "$MNT/EFI/BOOT" ]]; then
+    echo "error: $MNT/EFI/BOOT missing — not the RayNu-V Cruzer layout" >&2
+    exit 1
+  fi
+  if [[ ! -f "$MNT/EFI/RayNu/installdisk.bin" ]]; then
+    echo "error: $MNT/EFI/RayNu/installdisk.bin missing — refusing (wrong volume)" >&2
+    echo "       unlabeled 4 GB Cruzer: re-run with --init-new-cruzer --allow-new-serial" >&2
+    exit 1
+  fi
 fi
 INSTALL_BEFORE="$(wc -c <"$MNT/EFI/RayNu/installdisk.bin" | tr -d ' ')"
+
+if [[ "$REFAT" -eq 1 ]]; then
+  refat_identified_cruzer
+  INSTALL_BEFORE="$(wc -c <"$MNT/EFI/RayNu/installdisk.bin" | tr -d ' ')"
+fi
 
 echo "==> installdisk.bin bytes=$INSTALL_BEFORE (unchanged)"
 echo "==> copying $EFI_ABS ($EFI_BYTES bytes, sha256=$GOT_SHA)"
@@ -218,11 +543,91 @@ sudo sync -f "$MNT/EFI/BOOT/BOOTX64.EFI" 2>/dev/null || sudo sync
 
 DEST_SHA="$(sha256sum "$MNT/EFI/BOOT/BOOTX64.EFI" | awk '{print $1}')"
 DEST_BYTES="$(wc -c <"$MNT/EFI/BOOT/BOOTX64.EFI" | tr -d ' ')"
-INSTALL_AFTER="$(wc -c <"$MNT/EFI/RayNu/installdisk.bin" | tr -d ' ')"
 if [[ "$DEST_SHA" != "$GOT_SHA" ]]; then
   echo "error: destination SHA256 $DEST_SHA != $GOT_SHA" >&2
   exit 1
 fi
+
+if [[ "$NO_OVMF" == "1" ]]; then
+  echo "==> --no-ovmf: leaving EFI/RayNu/OVMF.fd alone (guest-UEFI skips if missing)"
+else
+  OVMF_PICK="$(pick_host_ovmf || true)"
+  if [[ -z "$OVMF_PICK" ]]; then
+    echo "error: no real 1-4 MiB _FVH OVMF.fd to stage at EFI/RayNu/OVMF.fd" >&2
+    echo "       apt install ovmf  (or pass --ovmf PATH / --no-ovmf)" >&2
+    exit 1
+  fi
+  OVMF_BYTES="$(wc -c <"$OVMF_PICK" | tr -d ' ')"
+  echo "==> staging EFI/RayNu/OVMF.fd ($OVMF_BYTES bytes) from $OVMF_PICK"
+  sudo mkdir -p "$MNT/EFI/RayNu"
+  sudo cp --remove-destination "$OVMF_PICK" "$MNT/EFI/RayNu/OVMF.fd"
+  sudo sync -f "$MNT/EFI/RayNu/OVMF.fd" 2>/dev/null || sudo sync
+  DEST_OVMF_BYTES="$(wc -c <"$MNT/EFI/RayNu/OVMF.fd" | tr -d ' ')"
+  if (( DEST_OVMF_BYTES < 1048576 || DEST_OVMF_BYTES > 4194304 )); then
+    echo "error: staged OVMF.fd size $DEST_OVMF_BYTES is outside 1-4 MiB" >&2
+    exit 1
+  fi
+  if ! ovmf_has_fvh "$MNT/EFI/RayNu/OVMF.fd"; then
+    echo "error: staged EFI/RayNu/OVMF.fd missing _FVH at 0x28" >&2
+    exit 1
+  fi
+  echo "==> OVMF.fd bytes=$DEST_OVMF_BYTES _FVH=ok"
+fi
+
+if [[ "$NO_LINUX_ISO" == "1" ]]; then
+  sudo rm -f "$MNT/linux.iso" "$MNT/EFI/RayNu/linux.iso" "$MNT/EFI/RayNu/install.iso"
+  echo "==> --no-linux-iso: removed product ISO (E4 LINUX-EARLY)"
+elif [[ -n "$LINUX_ISO" ]]; then
+  if [[ ! -f "$LINUX_ISO" ]]; then
+    echo "error: --linux-iso not found: $LINUX_ISO" >&2
+    exit 1
+  fi
+  LINUX_ABS="$(readlink -f "$LINUX_ISO")"
+  LINUX_BYTES="$(wc -c <"$LINUX_ABS" | tr -d ' ')"
+  if (( LINUX_BYTES <= 73728 )); then
+    echo "error: --linux-iso is lab-stub sized ($LINUX_BYTES); need >73728" >&2
+    exit 1
+  fi
+  if [[ "$LINUX_ABS" == /mnt/usb/* || "$LINUX_ABS" == "$RAW"* || "$LINUX_ABS" == "$MNT"* ]]; then
+    echo "error: --linux-iso must not live on the Cruzer itself" >&2
+    exit 1
+  fi
+  # Failed cp leaves a partial linux.iso that consumes the last free clusters.
+  echo "==> pruning leftover ESP ISOs (partial ENOSPC + extras) before linux.iso"
+  sudo find "$MNT" -iname '*.iso' -print -delete || true
+  sudo sync -f "$MNT" 2>/dev/null || sudo sync
+  NEED=$((LINUX_BYTES + 1048576))
+  if ! reclaim_fat_free_if_needed "$NEED"; then
+    echo "error: Cruzer ESP has $(esp_avail_bytes) bytes free; need $NEED for linux.iso" >&2
+    echo "       keep EFI/BOOT/BOOTX64.EFI EFI/RayNu/OVMF.fd EFI/RayNu/installdisk.bin EFI/RayNu/auth.token" >&2
+    echo "       64MiB FAT cannot grow via fsck; re-run with --refat-cruzer" >&2
+    sudo du -ah "$MNT" | sort -h | tail -20 >&2 || true
+    exit 1
+  fi
+  echo "==> staging EFI/RayNu/linux.iso ($LINUX_BYTES bytes) from $LINUX_ABS"
+  sudo mkdir -p "$MNT/EFI/RayNu"
+  sudo cp --remove-destination "$LINUX_ABS" "$MNT/EFI/RayNu/linux.iso"
+  sudo sync -f "$MNT/EFI/RayNu/linux.iso" 2>/dev/null || sudo sync
+  DEST_LINUX_BYTES="$(wc -c <"$MNT/EFI/RayNu/linux.iso" | tr -d ' ')"
+  if [[ "$DEST_LINUX_BYTES" != "$LINUX_BYTES" ]]; then
+    echo "error: staged linux.iso size $DEST_LINUX_BYTES != $LINUX_BYTES" >&2
+    exit 1
+  fi
+  echo "==> linux.iso bytes=$DEST_LINUX_BYTES (Stage 46; not ISO-INSTALL-OK)"
+fi
+
+# ADR-016 F2b: RayNu-F launch opt-in. Presence is the signal; content empty.
+sudo rm -f "$MNT/EFI/RayNu/raynuf.txt" 2>/dev/null || true
+if [[ "$RAYNU_F_FLAG" == "1" ]]; then
+  sudo mkdir -p "$MNT/EFI/RayNu"
+  sudo touch "$MNT/EFI/RayNu/raynuf.txt"
+  sudo sync -f "$MNT/EFI/RayNu/raynuf.txt" 2>/dev/null || sudo sync
+  echo "==> --raynu-f: staged EFI/RayNu/raynuf.txt (RayNu-F F2b; not ISO-INSTALL-OK)"
+else
+  echo "==> RayNu-F flag not staged (pass --raynu-f to run the F2b test app)"
+fi
+
+INSTALL_AFTER="$(wc -c <"$MNT/EFI/RayNu/installdisk.bin" | tr -d ' ')"
 if [[ "$INSTALL_AFTER" != "$INSTALL_BEFORE" ]]; then
   echo "error: installdisk.bin size changed ($INSTALL_BEFORE -> $INSTALL_AFTER)" >&2
   exit 1
@@ -231,4 +636,5 @@ fi
 echo "==> BOOTX64.EFI bytes=$DEST_BYTES sha256=$DEST_SHA"
 echo "==> leave $MNT/EFI/RayNu/installdisk.bin and auth.token alone — done"
 echo "Next: BIOS boot order stays Ubuntu on PERC; one-time F11 boot the Cruzer."
+echo "Confirm EFI/RayNu/OVMF.fd (1-4 MiB, _FVH) before F11 if Stage 44."
 echo "RAYNU-V-CRUZER-FLASH-OK"

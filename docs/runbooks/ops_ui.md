@@ -48,13 +48,15 @@ During the M7.6 listen window (`RAYNU-V-M7-UEFI-HTTP-OK` path):
 
 After ADR-013 Phase F, `POST /vms/{id}/start` is no longer table-only:
 
-1. REST start (200) queues a flag (`note_spa_start`). It does **not** VMLAUNCH inside the HTTP tick.
+1. REST start (200) classifies the VM (`kind_for_record`) and queues `note_spa_start_kind`. It does **not** VMLAUNCH inside the HTTP tick.
+   - **Product ISO** (`linux_iso` / `windows_iso` / `generic_uefi`, iso ≠ 0) → `SpaStartKind::RayNuF` and `raynu_f_flag::request_from_spa()`. Host/CI marker: `RAYNU-V-M7-PHASE-B-SPA-WIRE-OK`.
+   - **`iso=0` / no type** → `SpaStartKind::Shell` (E4 SHELL CPUID stub).
 2. The next credit-scheduler quantum (`schedule_preempt`, after `tick_native_coexist`) consumes the flag **once `M4_LADDER_DONE`**.
-3. Slot 1 is relocated into the G1 2 MiB slab already punched out of G0 EPT: private **single 2 MiB** EPT, VMCS + host state in the slab (not the G0 identity pool Linux can scribble).
-4. Before leaving G0, G0's VMCS is `VMCLEAR`'d and cloned to a host-only 2 MiB slab punched from G0 identity. A 98-field software shadow is restored after `VMPTRLD` before clear-state `VMLAUNCH`.
-5. Iron close (COM2, EFI `2b795a0`, 2026-08-21): `RAYNU-V-M7-E4-SPA-LAUNCH-OK` plus G0↔SPA shadow restore re-entry. Evidence: [`docs/evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md`](../evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md).
+3. RayNu-F kind calls `try_spa_product_iso_start` (never falls through to SHELL). SHELL kind relocates slot 1 into the G1 2 MiB slab already punched out of G0 EPT: private **single 2 MiB** EPT, VMCS + host state in the slab (not the G0 identity pool Linux can scribble).
+4. Before leaving G0 on the SHELL path, G0's VMCS is `VMCLEAR`'d and cloned to a host-only 2 MiB slab punched from G0 identity. A 98-field software shadow is restored after `VMPTRLD` before clear-state `VMLAUNCH`.
+5. Iron close for SHELL (COM2, EFI `2b795a0`, 2026-08-21): `RAYNU-V-M7-E4-SPA-LAUNCH-OK` plus G0↔SPA shadow restore re-entry. Evidence: [`docs/evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md`](../evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md). **Phase B iron is not closed:** host tests prove the queue; COM2 must show SPA start launching RayNu-F (preferably without ESP `raynuf.txt`). Do not flash until that host gate is green.
 
-This is a **SHELL CPUID** guest in the G1 slab, not a Linux distro installer and not TLS/`auth.token`. Switches are `VMLAUNCH` after `VMCLEAR`, not `VMRESUME`. Stop parks slot 1 (`SPA_RUNNABLE = false`); G0 stays scheduled. Fail-soft resumes G0.
+`iso=0` is a **SHELL CPUID** guest in the G1 slab, not a Linux distro installer and not TLS/`auth.token`. Switches are `VMLAUNCH` after `VMCLEAR`, not `VMRESUME`. Stop parks slot 1 (`SPA_RUNNABLE = false`); G0 stays scheduled. Fail-soft resumes G0. Host/CI never prints `RAYNU-V-M7-ISO-INSTALL-OK`.
 
 ## Relocate EFI on Cruzer (P0-14 closed)
 

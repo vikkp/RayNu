@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Stories of RayNu — Stage 46 RayNu-F, El Torito, ATAPI</title>
+    <title>Stories of RayNu — Mount Everest closed on iron — Stage 46 RayNu-F, El Torito, ATAPI</title>
     <meta
       name="description"
       content="Field stories from RayNu-V: Stage 44 ATAPI-OK, Stage 45 El Torito on iron, and Stage 46 — the WaitForEvent wall, the pivot to RayNu-F, nested alpine-extended reboot-to-disk."
@@ -273,13 +273,9 @@
         <h1 class="stories-mast__title">Stories of RayNu</h1>
         <p class="stories-mast__lede">
           What actually happened on iron — not a roadmap slide. Each story is
-          dated, marker-backed, and honest about residuals. Latest: Stage 46
-          nested RayNu-F — Alpine printed <em>Please reboot</em>, then
-          <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code>. Nested sys-install is
-          complete. Iron <code>ISO-INSTALL-OK</code> is still open. Residual:
-          iron installer + TLS/console. Stage 44 and 45 closed on real
-          R640 the same August afternoon: the CD answered, then El Torito
-          booted.
+          dated, marker-backed, and honest about residuals. Latest close:
+          2026-09-11 Mount Everest on a real R640 — SPA Start of RayNu-F,
+          Alpine installed to virtio disk, rebooted into it.
         </p>
       </div>
     </header>
@@ -287,18 +283,23 @@
     <main class="stories-body">
       <div class="stories-index">
         <div class="stories-index__featured">
-          <p class="stories-index__label">Stage 46 · featured</p>
+          <p class="stories-index__label">Everest · featured</p>
           <p>
-            <a href="#raynu-f-2026-09-05-stage46"
-              >2026-09-05 — Please reboot: we became the firmware</a
+            <a href="#r640-2026-09-11-everest"
+              >2026-09-11 — Mount Everest: the SPA that installed Linux</a
             >
           </p>
           <p>
-            WaitForEvent would not yield. We stopped forcing OVMF, wrote
-            RayNu-F, and nested Alpine installed to disk. Nested is not iron.
+            Coexist HTTP on the operator LAN, SPA Start of RayNu-F, Alpine to
+            virtio disk, reboot to <code>login:</code>. Closed on iron.
           </p>
         </div>
         <p class="stories-index__label">In this volume</p>
+        <p>
+          <a href="#raynu-f-2026-09-05-stage46"
+            >2026-09-05 — Please reboot: we became the firmware</a
+          >
+        </p>
         <p>
           <a href="#ovmf-2026-08-27-eltorito-ok"
             >2026-08-27 — The catalog, then the boot image</a
@@ -360,6 +361,92 @@
           >
         </p>
       </div>
+
+      <article class="story" id="r640-2026-09-11-everest">
+        <p class="story__date">2026-09-11 · Dell PowerEdge R640 · UDisk front USB 2 · EFI f72b4276</p>
+        <h2 class="story__title">The SPA that installed Linux</h2>
+
+        <p>
+          Mount Everest was never “does it virtualize.” It was one operator
+          loop on a machine we own: ship the EFI, boot the R640, reach a
+          network UI, install a Linux ISO, reboot into that disk. On
+          11 September 2026, COM2 printed every marker in that sentence.
+        </p>
+        <p>
+          Phase A had already installed Alpine from <code>--raynu-f</code>
+          (<code>56a3ffd</code>, 10 September). Phase B is the product path:
+          no flag file, no auto-launch. The operator SPA starts RayNu-F.
+        </p>
+
+        <h3>Coexist, then the Mac could talk</h3>
+        <p>
+          The pin before this one listened and then the Mac got
+          <code>curl: (7)</code>. Tight idle was advancing smoltcp Instant
+          ten milliseconds per CPU-speed tick. <code>f72b4276</code> drives
+          coexist time from TSC. Lease this boot:
+          <code>10.99.99.145:8443</code>, LOM <code>:38</code>, not iDRAC.
+        </p>
+        <pre>RAYNU-V-M7-PHASE-B-SKIP-OVMF-OK
+RAYNU-V-M7-PHASE-B-E4-CONTINUE-OK
+HOST-NIC coexist listening on 10.99.99.145:8443
+RAYNU-V-M7-HOST-NIC-HTTP-OK
+VmCreated guest_id=4
+VmStarted guest_id=4
+boot: E4 SPA start — RayNu-F product ISO (Phase B; not SHELL; not ISO-INSTALL-OK)</pre>
+
+        <h3>Install, then the disk that came back</h3>
+        <p>
+          Alpine 3.21 live, <code>setup-disk -m sys</code> onto virtio
+          <code>vda</code>, then the iron-only line — the one host and CI
+          are forbidden to print:
+        </p>
+        <pre>RAYNU-V-M7-ISO-INSTALL-OK
+Installation finished. No error reported.
+reboot: Restarting system
+RayNu-F relaunch after reset (F7)
+GPT ESP lba=2048
+RAYNU-V-RAYNU-F-DISK-BOOT-OK
+Command line: BOOT_IMAGE=/boot/vmlinuz-lts root=UUID=814a97a0-d3be-4a64-8611-b3dbd9859201 …
+Welcome to Alpine Linux 3.21
+localhost login: root
+localhost:~# cat /proc/cmdline</pre>
+        <p>
+          The installed system’s cmdline still carries the UUID GRUB wrote
+          on the first boot. <code>fsck</code> ran on ext4 <code>vda2</code>
+          and the FAT ESP. That is E5, started from the SPA, on real iron.
+        </p>
+
+        <h3>What we claim — and what we don’t</h3>
+        <p>
+          We <strong>claim Mount Everest closed on iron</strong>. EFI
+          <code>f72b4276</code> / CI <code>--run 34552377351</code>. We do
+          <strong>not</strong> claim TLS, leftover-DRAM persist across a
+          <em>hypervisor</em> reboot, a guest VNC console, or cluster
+          features. Those are <strong>M8</strong> (ADR-018). vMotion-like
+          work is <strong>M9</strong>. Overall HDA stays 99% on purpose.
+        </p>
+        <p>
+          Do not F11 <code>34548550755</code> / <code>7f8dc0a9</code>
+          (<code>curl: (7)</code>) or earlier Phase B fails. This pin is
+          the Phase B reference and the
+          <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed"
+            >M8.0 rollback kit <code>v0.1.0-everest-closed</code></a
+          >
+          (EFI SHA256
+          <code>e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc</code>).
+          Do not flash a later persist prototype as the known-good.
+        </p>
+
+        <p class="story__aside">
+          Evidence:
+          <a
+            href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-09-11-f72b4276-phase-b-spa-iso-install-disk-boot-ok.md"
+            >2026-09-11-f72b4276-phase-b-spa-iso-install-disk-boot-ok.md</a
+          >
+          · Tracker: <a href="hda.html">Mount Everest — closed</a>
+          · Plan: <a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-018.md">ADR-018</a>
+        </p>
+      </article>
 
       <article class="story story--featured" id="raynu-f-2026-09-05-stage46">
         <p class="story__kicker">Stage 46 · special listing</p>
@@ -1155,7 +1242,12 @@ boot: CURL NOW (post-EBS) → http://10.99.99.133:8443/</pre>
             >ADR-013</a>
           (<strong>Accepted</strong>). HDA names it <strong>E3b</strong>.
           Preserve kit:
-          <code>releases/v0.1.0-adr013-baseline</code>.
+          <code>releases/v0.1.0-adr013-baseline</code>
+          (pre-native-NIC WARN-only idle — not the M8.0 flash;
+          that is
+          <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed"
+            ><code>v0.1.0-everest-closed</code></a
+          >).
           Mount Everest does not close on a 45-second window.
           Two days later the host-owned NIC listened — see
           <a href="#r640-2026-08-20-host-nic">2026-08-20</a>.

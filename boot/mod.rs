@@ -11,6 +11,7 @@ pub mod handoff;
 pub mod mem;
 pub mod ovmf_esp;
 pub mod pe_assets;
+pub mod raynu_f_flag;
 pub mod serial;
 
 pub use assets_gate::run_assets_gate;

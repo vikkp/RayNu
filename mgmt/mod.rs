@@ -334,6 +334,12 @@ pub mod http;
 pub mod http_listen;
 pub mod iso;
 pub mod iso_install;
+pub mod disk_persist;
+pub mod durable_lun;
+pub mod nvme;
+pub mod usb_bot;
+pub mod xhci;
+pub mod m8_disk_persist_gate;
 pub mod m5_api_gate;
 pub mod m5_life_gate;
 pub mod m5_webui_gate;
@@ -343,6 +349,7 @@ pub mod m6_fault_gate;
 pub mod m6_ha_gate;
 pub mod m6_soak_gate;
 pub mod m7_e4_spa_gate;
+pub mod m7_e5_phase_b_gate;
 pub mod m7_e5_alias_ept_gate;
 pub mod m7_e5_boot_spec_gate;
 pub mod m7_e5_cdrom_attach_gate;
@@ -376,6 +383,9 @@ pub mod m7_e5_ovmf_past_sec_gate;
 pub mod m7_e5_ovmf_cdrom_gate;
 pub mod m7_e5_ovmf_dxe_gate;
 pub mod m7_e5_ovmf_virtio_gate;
+pub mod m7_e5_ovmf_both_gate;
+pub mod m7_e5_ovmf_atapi_gate;
+pub mod m7_e5_ovmf_eltorito_gate;
 pub mod m7_e5_fw_bind_gate;
 pub mod m7_e5_fw_edk2_gate;
 pub mod m7_e5_fw_floor_gate;
@@ -386,6 +396,7 @@ pub mod m7_e5_ovmf_esp_gate;
 pub mod m7_e5_ovmf_probe_gate;
 pub mod m7_e5_ovmf_slot_gate;
 pub mod m7_e5_reset_vec_gate;
+pub mod m7_e5_raynu_f_f7_gate;
 pub mod m7_host_nic_gate;
 pub mod m7_http_gate;
 pub mod m7_iso_gate;
@@ -466,10 +477,14 @@ pub use iso::{
 pub use iso_install::{
     disk_bytes_for_virtio_launch, dispatch_iso_install_rest, install_disk_armed_for_launch,
     install_disk_preload_bytes, lab_reboot_armed, probe_iso_install_lab_flag,
-    probe_iso_persist_reboot, probe_iso_reboot_lab_flag, prop_iso_install_lab_package,
-    prop_iso_install_package, prop_iso_reboot_lab_package, InstallToDiskPlan, ISO_INSTALL_GAP_NOTE,
-    M7_ISO_INSTALL_OK_MARKER, M7_ISO_INSTALL_SCAFFOLD_MARKER,
+    probe_iso_persist_reboot, probe_iso_reboot_lab_flag, probe_product_linux_iso,
+    present_product_iso_if_retained, prop_iso_install_lab_package, prop_iso_install_package,
+    prop_iso_reboot_lab_package, phase_b_continue_e4_for_spa, phase_b_e4_for_spa,
+    stage46_hold_e4_shell, InstallToDiskPlan, ISO_INSTALL_GAP_NOTE, M7_ISO_INSTALL_OK_MARKER,
+    M7_ISO_INSTALL_SCAFFOLD_MARKER, M7_PHASE_B_COEXIST_IDLE_NOTE, M7_PHASE_B_E4_CONTINUE_NOTE,
+    M7_PHASE_B_E4_CONTINUE_OK_MARKER, M7_STAGE46_HOLD_E4_NOTE,
 };
+pub use durable_lun::{init_durable_lun_io, init_durable_lun_usb_io, probe_durable_lun};
 pub use m5_api_gate::run_m5_api_gate;
 pub use m5_life_gate::run_m5_life_gate;
 pub use m5_webui_gate::run_m5_webui_gate;
@@ -479,6 +494,7 @@ pub use m6_fault_gate::{run_m6_fault_gate, M6_FAULT_GATE_MARKER};
 pub use m6_ha_gate::{run_m6_ha_gate, M6_HA_GATE_MARKER};
 pub use m6_soak_gate::{run_m6_soak_gate, M6_SOAK_GATE_MARKER};
 pub use m7_e4_spa_gate::run_m7_e4_spa_gate;
+pub use m7_e5_phase_b_gate::{run_m7_phase_b_spa_wire_gate, M7_PHASE_B_SPA_WIRE_GATE_MARKER};
 pub use m7_e5_alias_ept_gate::{run_m7_e5_alias_ept_gate, M7_E5_ALIAS_EPT_OK_MARKER};
 pub use m7_e5_boot_spec_gate::{run_m7_e5_boot_spec_gate, M7_E5_BOOT_SPEC_OK_MARKER};
 pub use m7_e5_cdrom_attach_gate::{run_m7_e5_cdrom_attach_gate, M7_E5_CDROM_ATTACH_OK_MARKER};
@@ -514,6 +530,9 @@ pub use m7_e5_ovmf_past_sec_gate::{run_m7_e5_ovmf_past_sec_gate, M7_E5_OVMF_PAST
 pub use m7_e5_ovmf_cdrom_gate::{run_m7_e5_ovmf_cdrom_gate, M7_E5_OVMF_CDROM_GATE_MARKER};
 pub use m7_e5_ovmf_dxe_gate::{run_m7_e5_ovmf_dxe_gate, M7_E5_OVMF_DXE_GATE_MARKER};
 pub use m7_e5_ovmf_virtio_gate::{run_m7_e5_ovmf_virtio_gate, M7_E5_OVMF_VIRTIO_GATE_MARKER};
+pub use m7_e5_ovmf_both_gate::{run_m7_e5_ovmf_both_gate, M7_E5_OVMF_BOTH_GATE_MARKER};
+pub use m7_e5_ovmf_atapi_gate::{run_m7_e5_ovmf_atapi_gate, M7_E5_OVMF_ATAPI_GATE_MARKER};
+pub use m7_e5_ovmf_eltorito_gate::{run_m7_e5_ovmf_eltorito_gate, M7_E5_OVMF_ELTORITO_GATE_MARKER};
 pub use m7_e5_fw_bind_gate::{run_m7_e5_fw_bind_gate, M7_E5_FW_BIND_OK_MARKER};
 pub use m7_e5_fw_edk2_gate::{run_m7_e5_fw_edk2_gate, M7_E5_FW_EDK2_OK_MARKER};
 pub use m7_e5_fw_floor_gate::{run_m7_e5_fw_floor_gate, M7_E5_FW_FLOOR_OK_MARKER};
@@ -524,6 +543,7 @@ pub use m7_e5_ovmf_esp_gate::{run_m7_e5_ovmf_esp_gate, M7_E5_OVMF_ESP_OK_MARKER}
 pub use m7_e5_ovmf_probe_gate::{run_m7_e5_ovmf_probe_gate, M7_E5_OVMF_PROBE_OK_MARKER};
 pub use m7_e5_ovmf_slot_gate::{run_m7_e5_ovmf_slot_gate, M7_E5_OVMF_SLOT_OK_MARKER};
 pub use m7_e5_reset_vec_gate::{run_m7_e5_reset_vec_gate, M7_E5_RESET_VEC_OK_MARKER};
+pub use m7_e5_raynu_f_f7_gate::{run_m7_e5_raynu_f_f7_gate, M7_E5_RAYNU_F_F7_OK_MARKER};
 pub use m7_host_nic_gate::{run_m7_host_nic_scaffold_gate, M7_HOST_NIC_GATE_MARKER};
 pub use m7_http_gate::{run_m7_http_gate, M7_HTTP_GATE_MARKER};
 pub use m7_iso_gate::{run_m7_iso_gate, M7_ISO_GATE_MARKER};
@@ -547,7 +567,10 @@ pub use soak::{
     prop_soak_72h_thresholds, run_soak_simulation, thresholds_met, SoakMetrics, M6_SOAK_OK_MARKER,
     SOAK_GAP_NOTE, SOAK_TARGET_HOURS,
 };
-pub use spa_launch::{note_spa_start, note_spa_stop, take_spa_start, M7_E4_SPA_LAUNCH_OK_MARKER};
+pub use spa_launch::{
+    kind_for_record, note_spa_start, note_spa_start_kind, note_spa_stop, take_spa_start,
+    take_spa_start_kind, SpaStartKind, M7_E4_SPA_LAUNCH_OK_MARKER, M7_PHASE_B_SPA_WIRE_OK_MARKER,
+};
 pub use webui::{dispatch_webui_action, load_webui, prop_webui_list_start_stop, WebUiAction};
 
 #[cfg(test)]

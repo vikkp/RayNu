@@ -1,0 +1,23 @@
+use super::{
+    raynu_f_f7_surface_present, run_m7_e5_raynu_f_f7_gate, E5_RAYNU_F_F7_RESIDUAL_NOTE,
+    M7_E5_RAYNU_F_F7_OK_MARKER,
+};
+
+#[test]
+fn m7_e5_raynu_f_f7_gate_passes() {
+    assert_eq!(M7_E5_RAYNU_F_F7_OK_MARKER, "RAYNU-V-M7-E5-RAYNU-F-F7-OK");
+    assert!(E5_RAYNU_F_F7_RESIDUAL_NOTE.contains("ISO-INSTALL-OK"));
+    assert!(E5_RAYNU_F_F7_RESIDUAL_NOTE.contains("fe4785a"));
+    assert!(E5_RAYNU_F_F7_RESIDUAL_NOTE.contains("Phase B CLOSED on iron f72b4276"));
+    assert!(E5_RAYNU_F_F7_RESIDUAL_NOTE.contains("59ac070"));
+    assert!(E5_RAYNU_F_F7_RESIDUAL_NOTE.contains("VMCLEAR/VMPTRLD"));
+    assert!(E5_RAYNU_F_F7_RESIDUAL_NOTE.contains("975f8fc"));
+    assert!(E5_RAYNU_F_F7_RESIDUAL_NOTE.contains("RayNu-F wall cap"));
+    assert!(E5_RAYNU_F_F7_RESIDUAL_NOTE.contains("iron 56a3ffd"));
+    assert!(E5_RAYNU_F_F7_RESIDUAL_NOTE.contains("Phase B"));
+    assert!(raynu_f_f7_surface_present());
+    assert!(
+        run_m7_e5_raynu_f_f7_gate(),
+        "F7 reset/disk-ESP surfaces must hold (not ISO-INSTALL-OK)"
+    );
+}

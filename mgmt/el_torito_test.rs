@@ -6,8 +6,18 @@ fn parses_mock_efi_catalog() {
     let img = parse_el_torito(&iso).expect("catalog");
     assert_eq!(img.catalog_lba, 20);
     assert_eq!(img.load_lba, 22);
-    assert_eq!(img.sector_count, 4);
+    assert_eq!(img.sector_count, 8);
     assert!(img.efi);
+    let load = 22 * ISO_SECTOR;
+    assert_eq!(iso[load + 510], 0x55);
+    assert_eq!(iso[load + 511], 0xAA);
+    let cat = 20 * ISO_SECTOR;
+    assert!(crate::devices::ide_cdrom::eltorito_validation_checksum_ok(
+        &iso[cat..cat + 32]
+    ));
+    let pe = load + crate::devices::ide_cdrom::ELTORITO_BOOTX64_OFF;
+    assert_eq!(&iso[pe..pe + 2], b"MZ");
+    assert_eq!(&iso[pe + 0x80..pe + 0x84], b"PE\0\0");
 }
 
 #[test]
@@ -27,6 +37,6 @@ fn rejects_missing_55aa() {
 #[test]
 fn rejects_not_bootable() {
     let mut iso = mock_efi_iso();
-    iso[20 * ISO_SECTOR + 64] = 0x00;
+    iso[20 * ISO_SECTOR + 32] = 0x00;
     assert_eq!(parse_el_torito(&iso), Err(ElToritoError::NotBootable));
 }
