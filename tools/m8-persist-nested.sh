@@ -363,24 +363,29 @@ require_leftover_persist_disk() {
     local serial="${1:-$SERIAL1}"
     # leftover/File persist at QEMU_MEM=3584M + max-ram-below-4g must
     # attach instead of the 64 MiB pool (virtio-blk install disk bytes=67108864).
+    # Success also prints `leftover install disk skip persist` (leftover DRAM
+    # disk skipped because File persist won). That is not a carve fail.
+    # Carve fail is `leftover install disk skip persist avail=` (2560M leftover
+    # was ~1020 MiB). raynuvsrv1 8cd94e6 aborted on the success skip line.
     if grep -qF 'virtio-blk install disk bytes=67108864' "$serial"; then
         echo "error: leftover/File persist disk is 64 MiB pool" >&2
         echo "error: leftover/File persist skipped (need QEMU_MEM=3584M + max-ram-below-4g; 2560M leftover was ~1020 MiB)" >&2
         stop_qemu
         return 1
     fi
-    if grep -qF 'leftover install disk skip persist' "$serial"; then
+    if grep -qF 'leftover install disk skip persist avail=' "$serial"; then
         echo "error: leftover/File persist skipped (need QEMU_MEM=3584M + max-ram-below-4g; 2560M leftover was ~1020 MiB)" >&2
         echo "error: leftover/File persist disk is 64 MiB pool" >&2
         stop_qemu
         return 1
     fi
-    if ! grep -qE 'persist install disk hpa=0x[0-9a-f]+ \(nested File RAM' "$serial"; then
+    if ! grep -qE 'persist install disk hpa=0x[0-9a-f]+ bytes=[0-9]+ \(nested File RAM' "$serial"; then
         echo "error: leftover/File persist disk missing persist install disk hpa= (nested File RAM)" >&2
         echo "error: leftover/File persist disk is 64 MiB pool" >&2
         stop_qemu
         return 1
     fi
+    echo "==> leftover/File persist attached (not 64 MiB pool) (not ISO-INSTALL-OK)"
     return 0
 }
 

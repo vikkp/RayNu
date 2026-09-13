@@ -31,7 +31,7 @@ MODE=full ./tools/m8-persist-nested.sh
 
 Expect:
 
-1. Boot 1: leftover/File persist at `QEMU_MEM=3584M` (not the 64 MiB pool `virtio-blk install disk bytes=67108864`; harness aborts on that), VMLAUNCH (not `VMXON-SKIP`), Alpine `Installation is complete. Please reboot.`  
+1. Boot 1: leftover/File persist at `QEMU_MEM=3584M` (not the 64 MiB pool `virtio-blk install disk bytes=67108864`; harness aborts on that, or on carve-fail `leftover install disk skip persist avail=`). Success also prints `leftover install disk skip persist` (File persist won) — that is not an abort. Then VMLAUNCH (not `VMXON-SKIP`), Alpine `Installation is complete. Please reboot.`  
 2. Harness SIGTERM + `sync` of `target/m8-persist.img`, then `EFI PART` at the persist HPA.  
 3. Boot 2: `virtio-blk install disk bytes=… keep=1`, **no** `setup-disk`, `RAYNU-V-RAYNU-F-DISK-BOOT-OK` and/or `root=UUID=`.  
 4. Harness prints `RAYNU-V-M8-DISK-PERSIST-NESTED-OK`. Serial must **not** print `RAYNU-V-M7-ISO-INSTALL-OK` or `RAYNU-V-M8-DISK-PERSIST-OK`.

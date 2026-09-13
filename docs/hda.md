@@ -1,6 +1,6 @@
 ---
 hda_version: 1
-last_updated: 2026-09-12
+last_updated: 2026-09-13
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-disk-persist-fileram-size |
-| Summary | **File-RAM size must equal `QEMU_MEM=3584M`.** `raynuvsrv1` `807b963` aborted: persist img `2560M` ≠ `-m 3584M` before qemu-system. Distro OVMF ignores nvdimm — persist img is QEMU RAM, not a leftover-disk sidecar. Nested Alpine two-boot still open. Nested-OK is QEMU, not flashcruzer. This Cloud VM `kvm_spurious_fault` cannot close nested-OK. Not iron persist OK. Never `ISO-INSTALL-OK`. Do not F11. |
+| Commit | m8-disk-persist-skip-avail |
+| Summary | **Harness must not abort on success `leftover install disk skip persist`.** `raynuvsrv1` `8cd94e6` File-RAM `3584M` started QEMU; error order was skip-persist then 64 MiB (not the 64 MiB pool check). Success nested File persist prints that skip line; carve-fail is `skip persist avail=`. Nested Alpine two-boot still open. Nested-OK is QEMU, not flashcruzer. This Cloud VM `kvm_spurious_fault` cannot close nested-OK. Not iron persist OK. Never `ISO-INSTALL-OK`. Do not F11. |
 | Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. |
-| Gates touched | file-RAM size = `QEMU_MEM` + host gate. `./tools/sync-hda-site.sh --check`. |
+| Gates touched | leftover/File persist skip-avail needle + host gate. `./tools/sync-hda-site.sh --check`. |
 | Months Δ | 0.0 held (Everest closed; nested Alpine two-boot still open) |
 
 
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-13 | m8-disk-persist-skip-avail | 0.0 | 99 | **Harness skip-avail:** `raynuvsrv1` `8cd94e6` File-RAM 3584M started QEMU then aborted on success `leftover install disk skip persist` (File persist won). Carve-fail is `avail=`. Nested Alpine two-boot still open. Not iron persist OK. Never `ISO-INSTALL-OK`. Do not F11. months 0.0 held; overall 99 held |
 | 2026-09-12 | m8-disk-persist-fileram-size | 0.0 | 99 | **File-RAM size = `QEMU_MEM=3584M`:** `raynuvsrv1` `807b963` aborted persist img `2560M` ≠ `-m 3584M` before qemu-system. Distro OVMF ignores nvdimm — persist img is QEMU RAM. Nested Alpine two-boot still open. Not iron persist OK. Never `ISO-INSTALL-OK`. Do not F11. months 0.0 held; overall 99 held |
 | 2026-09-12 | m8-disk-persist-leftover-3584m | 0.0 | 99 | **Nested leftover/File persist RAM 3584M:** live `2560M leftover was ~1020 MiB` skipped the 768 MiB guest floor → 64 MiB pool ENOSPC. `max-ram-below-4g` + `require_leftover_persist_disk`. Nested Alpine two-boot still open. Not iron persist OK. Never `ISO-INSTALL-OK`. Do not F11. months 0.0 held; overall 99 held |
 | 2026-09-12 | m8-disk-persist-full-harness | 0.0 | 99 | **M8.0 MODE=full harness:** SIGTERM + persist-file `sync`; boot1 `EFI PART` at leftover HPA; `enable_shadow_vmcs=0` fatal on full; [m8_persist_nested.md](runbooks/m8_persist_nested.md). Nested-OK needs `raynuvsrv1` VMLAUNCH. Cloud `kvm_spurious_fault` cannot close it. Not iron persist OK. Never `ISO-INSTALL-OK`. Do not F11. months 0.0 held; overall 99 held |
