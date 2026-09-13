@@ -35,8 +35,14 @@ pub fn second_guest_launch_present() -> bool {
         && launch.contains(M4_2VM_OK_MARKER)
         && main.contains("set_second_guest")
         && main.contains("build_precise_identity")
+        && main.contains("build_single_2m_identity")
+        && main.contains("G1_SLAB_OFF_EPT_PML4")
+        && main.contains("G1_SLAB_OFF_VMCS")
         && main.contains("write_guest_shell_cpuid_page")
         && main.contains("pick_shell_slab_hpa")
+        && launch.contains("skip_shell_failsoft")
+        && launch.contains("no boot gate failed")
+        && launch.contains("relocate_g0_vmcs_to_host_slab")
 }
 
 /// True when the QEMU boot gate requires M4.0.

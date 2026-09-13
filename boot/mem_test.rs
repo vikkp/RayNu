@@ -68,3 +68,90 @@ fn pick_prefer_guest_ram_leaves_bar_window() {
     // BAR/shell window [256MiB, 512MiB) must remain outside the pool.
     assert!(p0 + p_pages * PAGE_SIZE <= 256 * 1024 * 1024);
 }
+
+#[test]
+fn pick_prefer_precise_allows_512mib_when_asked() {
+    let start = 16 * 1024 * 1024u64;
+    let end = 512 * 1024 * 1024u64;
+    let pages = (end - start) / PAGE_SIZE;
+    let regions = [(start, pages)];
+    let prefer = 512 * 1024 * 1024u64;
+    let (p0, p_pages) =
+        pick_conventional_region_prefer(&regions, 256, prefer).expect("precise pool");
+    assert_eq!(p0, start);
+    assert_eq!(p0 + p_pages * PAGE_SIZE, prefer);
+}
+
+#[test]
+fn pick_above_takes_dram_past_precise() {
+    let regions = [
+        (0x100000u64, 0x1F000u64),        // [1MiB, 512MiB)
+        (0x140110000u64, 16_000_000u64), // ~61 GiB high
+    ];
+    let (start, pages) =
+        pick_conventional_region_above(&regions, 512, 512 * 1024 * 1024).expect("high dram");
+    assert_eq!(start, 0x140110000);
+    assert_eq!(pages, 16_000_000);
+    assert!(pick_conventional_region_above(&regions, 512, 0x140110000u64 + 16_000_000 * PAGE_SIZE)
+        .is_none());
+    assert_eq!(
+        conventional_pages_above(&regions, 512 * 1024 * 1024),
+        16_000_000
+    );
+}
+
+#[test]
+fn pick_above_clips_spanning_region_at_precise() {
+    let start = 0x100000u64;
+    let end = 4 * 1024 * 1024 * 1024u64;
+    let pages = (end - start) / PAGE_SIZE;
+    let regions = [(start, pages)];
+    let floor = 512 * 1024 * 1024u64;
+    let (s, p) = pick_conventional_region_above(&regions, 512, floor).expect("span");
+    assert_eq!(s, floor);
+    assert_eq!(s + p * PAGE_SIZE, end);
+    assert_eq!(conventional_pages_above(&regions, floor), p);
+}
+
+#[test]
+fn pick_persist_disk_region_largest_then_lowest() {
+    let try_bytes = &[
+        1024 * 1024 * 1024u64,
+        512 * 1024 * 1024,
+        256 * 1024 * 1024,
+    ];
+    // 400 MiB persist → 256 MiB. Unaligned start rounds up 2 MiB.
+    let small = [(0x1000u64, (400 * 1024 * 1024) / PAGE_SIZE)];
+    let (hpa, bytes) = pick_persist_disk_region(&small, try_bytes).expect("256MiB");
+    assert_eq!(hpa, PERSIST_DISK_ALIGN);
+    assert_eq!(bytes, 256 * 1024 * 1024);
+    // Two regions: 2 GiB high + 512 MiB low → 1 GiB from the high span.
+    let mixed = [
+        (0x2000_0000u64, (512 * 1024 * 1024) / PAGE_SIZE),
+        (0x1_0000_0000u64, (2 * 1024 * 1024 * 1024) / PAGE_SIZE),
+    ];
+    let (hpa, bytes) = pick_persist_disk_region(&mixed, try_bytes).expect("1GiB");
+    assert_eq!(hpa, 0x1_0000_0000);
+    assert_eq!(bytes, 1024 * 1024 * 1024);
+    assert!(pick_persist_disk_region(&[(0x2000_0000, 16)], try_bytes).is_none());
+}
+
+#[test]
+fn pick_above_prefer_lowest_span_that_fits_want() {
+    let floor = 512 * 1024 * 1024u64;
+    let low_pages = 600_000u64; // ~2.3 GiB leftover above PRECISE
+    let regions = [
+        (floor, low_pages),
+        (0x140110000u64, 16_000_000u64),
+    ];
+    let want = 1008 * 512;
+    let (start, pages) =
+        pick_conventional_region_above_prefer(&regions, want, 512, floor).expect("low");
+    assert_eq!(start, floor);
+    assert_eq!(pages, low_pages);
+    let tiny = [(floor, 1024u64), (0x140110000u64, 16_000_000u64)];
+    let (hi, hi_pages) =
+        pick_conventional_region_above_prefer(&tiny, want, 512, floor).expect("high fallback");
+    assert_eq!(hi, 0x140110000);
+    assert_eq!(hi_pages, 16_000_000);
+}

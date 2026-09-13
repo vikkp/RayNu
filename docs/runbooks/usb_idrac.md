@@ -4,6 +4,12 @@
 **Smoke:** `./tools/m7-ship-smoke.sh`  
 **Package:** `./tools/package-release.sh`
 
+**M8.0 known-good flash:** GitHub Latest [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed)
+→ git `f72b4276d198b5e90147e9be1037d0d0b7213a28` / CI `--run 34552377351` /
+EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc`.
+COM2 `build: sha=f72b4276d198`. Do not flash a later persist prototype as the known-good.
+Do not F11 `34548550755` / `7f8dc0a9`. See [`.cursor/rules/iron-rollback.mdc`](../../.cursor/rules/iron-rollback.mdc).
+
 ## Story
 
 M7.0 produces an **ops-trustable EFI release kit**: versioned `r640-hypervisor.efi`,
@@ -94,7 +100,10 @@ First time only (creates the symlink):
 ~/projects/raynu/tools/flashcruzer.sh --install-launcher
 ```
 
-The wrapper `git pull --ff-only`s the current branch, downloads
+`--branch NAME` fetches `origin/NAME` and `git checkout -B` onto that tip
+(not a SHA; `git fetch origin NAME` alone only writes `FETCH_HEAD`).
+`--no-git` skips fetch/checkout when you already moved HEAD. The wrapper
+then `git pull --ff-only`s the current branch when `--branch` is omitted, downloads
 `r640-hypervisor.efi` from the latest successful `ci` run (prefers
 `pull_request` over `push` so a nested-KVM QEMU flake does not hide a green
 PR artifact), verifies size + SHA256, refuses known-bad prefixes, then calls
@@ -106,6 +115,12 @@ Never hardcode `/dev/sdc`. Never write PERC `sda`/`sdb`. Never format. Leave
 
 WANT: `RAYNU-V-CRUZER-FLASH-OK` and `RAYNU-V-FLASHCRUZER-OK`.  
 Next: BIOS boot order stays Ubuntu on PERC; one-time **F11** Cruzer.
+
+A **4 GB** unlabeled stick (alpine-extended / F7) may be a LogiLink **UDisk**
+(`lsusb abcd:1234`, serial `General_UDisk-0:0`) rather than Cruzer Micro
+`0781:5151`. First flash: [`r640_f7_iso_iron.md`](r640_f7_iso_iron.md)
+(`--init-new-cruzer` `--allow-new-serial` `--any-cruzer-usb` `--linux-iso`
+`--raynu-f`). Do not reflash P0-14 `2b795a0` for that attempt.
 
 `--wait` polls until HEAD CI finishes. `--download-only` writes
 `~/r640-hypervisor.efi` without flashing. `--self-test` is host/CI only.

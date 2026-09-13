@@ -5,10 +5,10 @@ use super::{
     eth_header_view, grc_mode_is_linux_le, grc_mode_le_host, inherit_skips_chip_reset,
     inherit_snp_phy, keep_ape_phy_for_idrac, mac_mode_from_link, parse_mocked_rx_bd_bytes,
     pci_cfg_save_dword_count, pci_id_is_bcm5720, pci_mem_bar_addr, phy_addr_5717_plus,
-    pick_bcm5720_pci, pick_bcm5720_try_order, ring_idx, rx_bd_packet_len, rx_return_pending,
-    skip_bmcr_reset, skip_coreclk_reset, skip_http_listen_without_lstatus, station_mac,
-    Bcm5720PickReason, BCM5720_DEVICE, BCM5720_VENDOR, ETH_FCS_LEN, FRAME_MAX, RING, RING_MASK,
-    RX_LEN_MAX_HW,
+    pick_bcm5720_pci, pick_bcm5720_try_order, ring_idx, rx_bd_packet_len, rx_dump_is_interesting,
+    rx_return_pending, skip_bmcr_reset, skip_coreclk_reset, skip_http_listen_without_lstatus,
+    station_mac, Bcm5720PickReason, BCM5720_DEVICE, BCM5720_VENDOR, ETHERTYPE_ARP, ETH_FCS_LEN,
+    FRAME_MAX, RING, RING_MASK, RX_LEN_MAX_HW,
 };
 
 /// R640 dual-port BCM5720 from COM2: func 0 = unused jack, func 1 = SNP / LAN.
@@ -255,6 +255,10 @@ fn bringup_follows_linux_tg3_not_bnxt() {
     assert!(src.contains("grc=bswap+wswap"));
     assert!(src.contains("fn eth_header_view("));
     assert!(src.contains("fn dump_first_rx("));
+    assert!(src.contains("fn dump_first_tx("));
+    assert!(src.contains("fn rx_dump_is_interesting("));
+    assert!(src.contains("fn reset_host_nic_frame_dumps("));
+    assert!(src.contains("HOST-NIC BCM5720 tx to="));
     assert!(src.contains("pre-reset bmsr"));
     assert!(src.contains("MII_TG3_MISC_SHDW"));
     assert!(src.contains("skip CORECLK_RESET"));
@@ -347,11 +351,23 @@ fn eth_header_view_arp_broadcast() {
     let (dst, src, etype) = eth_header_view(&f).unwrap();
     assert_eq!(dst, [0xff; 6]);
     assert_eq!(src, MAC_FUNC0);
-    assert_eq!(etype, 0x0806);
+    assert_eq!(etype, ETHERTYPE_ARP);
     assert_eq!(eth_dst_kind(dst, MAC_FUNC0), "bcast");
     assert_eq!(eth_dst_kind(MAC_FUNC0, MAC_FUNC0), "us");
     assert_eq!(eth_dst_kind(MAC_FUNC1, MAC_FUNC0), "other");
     assert!(eth_header_view(&f[..13]).is_none());
+    assert!(rx_dump_is_interesting(&f, MAC_FUNC0));
+    let mut to_us = f;
+    to_us[0..6].copy_from_slice(&MAC_FUNC0);
+    to_us[12] = 0x08;
+    to_us[13] = 0x00;
+    assert!(rx_dump_is_interesting(&to_us, MAC_FUNC0));
+    let mut other = f;
+    other[0..6].copy_from_slice(&MAC_FUNC1);
+    other[12] = 0x08;
+    other[13] = 0x00;
+    assert!(!rx_dump_is_interesting(&other, MAC_FUNC0));
+    assert!(!rx_dump_is_interesting(&f[..13], MAC_FUNC0));
 }
 
 #[test]

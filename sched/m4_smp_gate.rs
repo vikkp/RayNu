@@ -20,6 +20,8 @@ pub fn smp_launch_path_present() -> bool {
     let ept = include_str!("../memory/ept_hw.rs");
     launch.contains(M4_SMP_OK_MARKER)
         && launch.contains("try_launch_smp_probe")
+        && launch.contains("skip_smp_failsoft")
+        && launch.contains("place_mmio_probe_on_host_slab")
         && launch.contains("set_smp_probe")
         && launch.contains("smp_probe")
         && main.contains("smp_probe::init")

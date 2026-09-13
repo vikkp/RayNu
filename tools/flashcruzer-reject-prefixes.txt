@@ -12,3 +12,46 @@ f413a9fc
 618e89e2
 63cd694f
 26db0610
+# 2d6b109 dest skip (IoReadFifo8 still skips dest 0x205f18 inside identity 0x200000).
+# FLASHCRUZER-OK on run 33321642509 is not F11. Pin ea30da1 run 33389381409.
+6fc742b0
+# 24c5fa6 / 33555104832 wait-for-irq then stacked PIT livelock (ataio=0).
+937a2f6e
+# e3cbfa5 / 33558261624 PIT one-shot then HLT hang (ataio=0).
+8a2a359e
+# 21dc562 / 33559849096 skip-HLT after one-shot then same CpuSleep (ataio=0).
+938f9928
+# 184ee61 / 33562028442 cmdwr=6 last wr=0x0 stored 0x1 (OR hid disable).
+43a38ac8
+# abba969 / 33567464001 honor COMMAND then same hang (pcicmd=0 wr=0 ataio=0).
+80c79a6f
+# 060c504 / 33569757025 cmdwr seq all zeros (EnableAttributes never wrote 0x5).
+cafaafd1
+# c144001 / 33571164257 EnableAttributes pcicmd=0x5 still ataio=0.
+2389db6a
+# 61991be / 33573126367 HLT cf8=0x0 (CONFIG_ADDRESS cleared, still ataio=0).
+12f84c66
+# 5de9e1c / 33575888121 HLT cf8en=0x80004008 (00:08.0+08 host class, still ataio=0).
+59e0a391
+# 7ba1ccf / 33627470674 HLT cf8ide=0x80000930 (00:01.1+30 Expansion ROM, still ataio=0).
+f7c2f14b
+# 118edcf / 33630723649 HLT romwr=0xfffffffe (ROM size probe, enable bit clear, still ataio=0).
+6c359fea
+# 27eda8c / 33695570769 hide-slot0 still ataio=0 (CDROM-OK via PIIX, same CpuSleep).
+687b3b20
+# 2d4ab51 / 33697154185 HLT ret=0x7ff0e055 (DxeCore WaitForEvent, still ataio=0).
+e9a5fd01
+# 6c4bfde / 33699177232 ConIn CR still ataio=0 (same DxeCore CpuSleep).
+8dd46b1c
+# 0b770cd / 33701350767 rethx=0xe056ff41b84d8b48 still ataio=0 (call [r14-0x20] CpuSleep).
+b17314b7
+# e0d5c55 / 33753069821 WFE return caller=0x7feffe28 then EPT 0x34 rip=0x7ec8f6ff still ataio=0.
+5d85f5c7
+# c8d504d / 33757018875 ZeroMem ept fill never printed (0x34 is preempt not EPT) still ataio=0.
+30215d93
+# d0e44d4 / 33815993163 WFE preempt skip len=12 rip=0x7ff0e7e8 still ataio=0 (mov rax,3).
+4f9042de
+# 9474ab6 / 33817483733 WFE state4 poke then #PF cr2=0xffffffffffffffb8 rip=0x7ff0e018 still ataio=0.
+de05db35
+# 4e16b59 / 33820727776 firmware WFE event #PF inject fired OVMF own #PF then CpuDeadLoop still ataio=0 (ADR-016 RayNu-F pivot).
+23f33693

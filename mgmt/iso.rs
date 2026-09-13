@@ -319,7 +319,9 @@ pub fn attach_cdrom_uefi(iso_id: u64) -> Result<CdromAttach, IsoError> {
         iso_id,
         catalog_lba: existing.map(|r| r.catalog_lba).unwrap_or(20),
         load_lba: existing.map(|r| r.load_lba).unwrap_or(22),
-        sector_count: existing.map(|r| r.sector_count).unwrap_or(4),
+        sector_count: existing
+            .map(|r| r.sector_count)
+            .unwrap_or(crate::devices::ide_cdrom::ELTORITO_SECTOR_COUNT),
         efi: existing.map(|r| r.efi).unwrap_or(true),
         image_type: existing
             .map(|r| r.image_type)

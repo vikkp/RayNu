@@ -23,6 +23,8 @@ pub fn net_launch_path_present() -> bool {
     let ept = include_str!("../memory/ept_hw.rs");
     launch.contains(M4_NET_OK_MARKER)
         && launch.contains("try_launch_net_probe")
+        && launch.contains("skip_net_failsoft")
+        && launch.contains("place_mmio_probe_on_host_slab")
         && launch.contains("virtio_net")
         && main.contains("virtio_net::init")
         && main.contains("write_guest_net_probe_page")

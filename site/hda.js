@@ -11,6 +11,7 @@
     const m = Number(months);
     const b = Number(baseline) || 4.5;
     if (!(m >= 0) || !(b > 0)) return 40;
+    if (m === 0) return 100;
     // Full bar ≈ baseline months; shrinks as we get closer.
     return Math.max(8, Math.min(100, Math.round((m / b) * 100)));
   };
@@ -21,16 +22,36 @@
     const overall = data.overall_pct;
     const baseline = data.baseline_months || 4.5;
     const summits = data.summits || {};
+    const closed = Number(months) === 0;
 
-    if ($("hda-months")) $("hda-months").textContent = fmtMonths(months);
+    if (closed) {
+      document.body.classList.add("page-hda--closed");
+    }
+
+    if ($("hda-tracker-label")) {
+      $("hda-tracker-label").textContent = closed
+        ? "Mount Everest"
+        : "Months to Mount Everest";
+    }
+    if ($("hda-months")) {
+      $("hda-months").textContent = closed ? "Closed" : fmtMonths(months);
+    }
     if ($("hda-delta")) {
-      const delta = Number(months) - Number(prev);
-      let label = `was ${fmtMonths(prev)}`;
-      if (!Number.isNaN(delta) && delta !== 0) {
-        const sign = delta < 0 ? "−" : "+";
-        label = `${sign}${fmtMonths(Math.abs(delta))} mo · was ${fmtMonths(prev)}`;
+      if (closed) {
+        const prevN = Number(prev);
+        $("hda-delta").textContent =
+          !Number.isNaN(prevN) && prevN === 0
+            ? "0.0 months remaining · summit 2026-09-11"
+            : `0.0 months remaining · was ${fmtMonths(prev)}`;
+      } else {
+        const delta = Number(months) - Number(prev);
+        let label = `was ${fmtMonths(prev)}`;
+        if (!Number.isNaN(delta) && delta !== 0) {
+          const sign = delta < 0 ? "−" : "+";
+          label = `${sign}${fmtMonths(Math.abs(delta))} mo · was ${fmtMonths(prev)}`;
+        }
+        $("hda-delta").textContent = label;
       }
-      $("hda-delta").textContent = label;
     }
     if ($("hda-overall")) $("hda-overall").textContent = `${overall}%`;
     if ($("hda-eta")) $("hda-eta").textContent = data.everest_eta_month;
@@ -42,14 +63,20 @@
     if ($("hda-path") && Array.isArray(data.mount_everest_path)) {
       $("hda-path").textContent = data.mount_everest_path.join(" → ");
     }
+    if ($("hda-bar-months-name")) {
+      $("hda-bar-months-name").textContent = closed ? "Everest" : "Months to Everest";
+    }
     if ($("hda-bar-months-label")) {
-      $("hda-bar-months-label").textContent = `${fmtMonths(months)} mo`;
+      $("hda-bar-months-label").textContent = closed
+        ? "summit"
+        : `${fmtMonths(months)} mo`;
     }
     if ($("hda-bar-overall-label")) {
       $("hda-bar-overall-label").textContent = `${overall}%`;
     }
     if ($("hda-bar-months")) {
       $("hda-bar-months").style.width = `${monthsBarWidth(months, baseline)}%`;
+      $("hda-bar-months").classList.toggle("hda-bar__fill--summit", closed);
     }
     if ($("hda-bar-overall")) {
       $("hda-bar-overall").style.width = `${Math.max(0, Math.min(100, overall))}%`;

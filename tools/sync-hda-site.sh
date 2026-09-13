@@ -93,7 +93,7 @@ payload = {
         "boot real R640",
         "network vSphere-like UI",
         "deploy Linux ISO",
-        "M7 single-host ship",
+        "M7 closed on iron",
     ],
     "months_to_everest": data["months_to_everest"],
     "months_to_everest_prev": data["months_to_everest_prev"],

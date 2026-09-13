@@ -855,6 +855,22 @@ pub fn eth_header_view(frame: &[u8]) -> Option<([u8; 6], [u8; 6], u16)> {
     Some((dst, src, etype))
 }
 
+/// ARP ethertype (big-endian 0x0806).
+pub const ETHERTYPE_ARP: u16 = 0x0806;
+
+/// After the first LAN dump window, keep logging ARP and dest=`station`.
+///
+/// INVARIANTS:
+/// - `true` for ARP (`ETHERTYPE_ARP`) or dest equal to `station`
+/// - `false` for short frames
+/// - Never panics
+pub fn rx_dump_is_interesting(frame: &[u8], station: [u8; 6]) -> bool {
+    match eth_header_view(frame) {
+        Some((dst, _, etype)) => etype == ETHERTYPE_ARP || dst == station,
+        None => false,
+    }
+}
+
 /// Classify Ethernet dest vs our station MAC.
 ///
 /// INVARIANTS:
@@ -1075,6 +1091,12 @@ static RX_DROP: AtomicU32 = AtomicU32::new(0);
 /// First N RX frames dump dest/etype/len on COM2 (endian / ARP diagnose).
 #[cfg(feature = "uefi-bin")]
 static RX_DUMP_LEFT: AtomicU32 = AtomicU32::new(8);
+/// After the first N, dump ARP / dest=us (Mac SYN / ARP after LAN noise).
+#[cfg(feature = "uefi-bin")]
+static RX_INTERESTING_LEFT: AtomicU32 = AtomicU32::new(8);
+/// First N TX frames (ARP reply / SYN-ACK diagnose). Iron `7f8dc0a9` RX-only.
+#[cfg(feature = "uefi-bin")]
+static TX_DUMP_LEFT: AtomicU32 = AtomicU32::new(4);
 
 /// Poll-mode RX/TX snapshot for COM2 (AfterBootOk listen).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1131,6 +1153,17 @@ pub fn bcm5720_phy_link_up() -> bool {
 #[cfg(not(feature = "uefi-bin"))]
 pub fn bcm5720_phy_link_up() -> bool {
     false
+}
+
+/// Restart RX/TX first-frame COM2 dumps at coexist listen (Phase B idle).
+///
+/// Iron `7f8dc0a9`: eight LAN bcast/mDNS frames consumed the dump before
+/// Mac `curl` (`curl: (7)`). Re-arm so ARP / dest=us still print.
+#[cfg(feature = "uefi-bin")]
+pub fn reset_host_nic_frame_dumps() {
+    RX_DUMP_LEFT.store(8, Ordering::Relaxed);
+    RX_INTERESTING_LEFT.store(8, Ordering::Relaxed);
+    TX_DUMP_LEFT.store(4, Ordering::Relaxed);
 }
 
 /// Kick HOSTCC and snapshot ring indices + parse counters (COM2 listen).
@@ -1265,6 +1298,8 @@ pub fn init_bcm5720(prefer_mac: [u8; 6]) -> Result<[u8; 6], Bcm5720Error> {
             RX_OK.store(0, Ordering::Relaxed);
             RX_DROP.store(0, Ordering::Relaxed);
             RX_DUMP_LEFT.store(8, Ordering::Relaxed);
+            RX_INTERESTING_LEFT.store(8, Ordering::Relaxed);
+            TX_DUMP_LEFT.store(4, Ordering::Relaxed);
             NIC = Some(NicState {
                 mmio: bar,
                 mac,
@@ -2541,6 +2576,8 @@ unsafe fn tx_one(n: &mut NicState, dma: &mut DmaArena, frame: &[u8]) -> bool {
     }
     let i = prod as usize;
     core::ptr::copy_nonoverlapping(frame.as_ptr(), dma.tx_buf[i].as_mut_ptr(), len);
+    #[cfg(feature = "uefi-bin")]
+    dump_first_tx(&frame[..len], n.mac);
     let addr = dma.tx_buf[i].as_ptr() as u64;
     core::ptr::write_volatile(
         core::ptr::addr_of_mut!(dma.tx[i].addr_hi),
@@ -2681,13 +2718,22 @@ fn write_u16_dec(n: u16) {
 }
 
 /// First few RX frames: dest kind + ethertype + lengths (COM2 endian check).
+/// After that window, still dump ARP and dest=us (Mac curl after LAN noise).
 #[cfg(feature = "uefi-bin")]
 fn dump_first_rx(frame: &[u8], hw_len: u16, station: [u8; 6]) {
     let left = RX_DUMP_LEFT.load(Ordering::Relaxed);
-    if left == 0 {
+    let interesting = rx_dump_is_interesting(frame, station);
+    if left > 0 {
+        RX_DUMP_LEFT.store(left.saturating_sub(1), Ordering::Relaxed);
+    } else if interesting {
+        let ileft = RX_INTERESTING_LEFT.load(Ordering::Relaxed);
+        if ileft == 0 {
+            return;
+        }
+        RX_INTERESTING_LEFT.store(ileft.saturating_sub(1), Ordering::Relaxed);
+    } else {
         return;
     }
-    RX_DUMP_LEFT.store(left.saturating_sub(1), Ordering::Relaxed);
     serial_step("boot: HOST-NIC BCM5720 rx to=");
     match eth_header_view(frame) {
         Some((dst, src, etype)) => {
@@ -2696,6 +2742,35 @@ fn dump_first_rx(frame: &[u8], hw_len: u16, station: [u8; 6]) {
             write_hex_u16(etype);
             serial_step(" hw=");
             write_u16_dec(hw_len);
+            serial_step(" n=");
+            write_u16_dec(frame.len() as u16);
+            serial_step(" dst=");
+            write_mac(dst);
+            serial_step(" src=");
+            write_mac(src);
+        }
+        None => {
+            serial_step("short n=");
+            write_u16_dec(frame.len() as u16);
+        }
+    }
+    crate::boot::serial::write_byte(b'\n');
+}
+
+/// First few TX frames so COM2 shows ARP replies / SYN-ACK after listen.
+#[cfg(feature = "uefi-bin")]
+fn dump_first_tx(frame: &[u8], station: [u8; 6]) {
+    let left = TX_DUMP_LEFT.load(Ordering::Relaxed);
+    if left == 0 {
+        return;
+    }
+    TX_DUMP_LEFT.store(left.saturating_sub(1), Ordering::Relaxed);
+    serial_step("boot: HOST-NIC BCM5720 tx to=");
+    match eth_header_view(frame) {
+        Some((dst, src, etype)) => {
+            serial_step(eth_dst_kind(dst, station));
+            serial_step(" etype=");
+            write_hex_u16(etype);
             serial_step(" n=");
             write_u16_dec(frame.len() as u16);
             serial_step(" dst=");

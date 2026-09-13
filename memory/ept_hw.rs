@@ -744,6 +744,7 @@ pub unsafe fn write_guest_shell_cpuid_page(page_phys: u64) {
 }
 
 /// Offsets within the M4.0 G1 2 MiB slab (code/stack/IDT/page tables).
+/// Iron COM2: slab `HPA=0x10400000` → guest CR3 GPA `0x10403000` (`G1_SLAB_OFF_PML4`).
 pub const G1_SLAB_OFF_CODE: u64 = 0;
 pub const G1_SLAB_OFF_STACK: u64 = 0x1000;
 pub const G1_SLAB_OFF_IDT: u64 = 0x2000;
@@ -1236,6 +1237,7 @@ mod ept_hw_test {
         assert_eq!(frames_required(EptPageSize::TwoMib), 3); // legacy 1 GiB @ 2M
         assert_eq!(frames_required_gib(EptPageSize::TwoMib, 4), 6);
         assert_eq!(frames_required_precise(), 3); // 512 MiB @ 2M → one PD
+        assert_eq!(frames_required_single_2m(), 3);
         assert_eq!(frames_required_2m_bytes(PRECISE_BYTES), 3);
         assert_eq!(firmware_alias_pt_count(0xFFC0_0000, 4 * 1024 * 1024), 2);
         assert_eq!(firmware_alias_pt_count(0xFFE0_0000, 2 * 1024 * 1024), 1);

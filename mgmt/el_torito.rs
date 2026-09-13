@@ -78,25 +78,49 @@ fn parse_catalog(cat: &[u8], catalog_lba: u32) -> Result<ElToritoImage, ElTorito
     if cat[0] != 0x01 || cat[30] != 0x55 || cat[31] != 0xAA {
         return Err(ElToritoError::BadCatalog);
     }
+    // Walk the catalog: the default (initial) entry follows validation and
+    // inherits the validation platform; later 0x90/0x91 section headers
+    // switch platform for the entries after them. A hybrid BIOS+UEFI ISO
+    // (Alpine, Debian, Ubuntu…) puts isolinux first (platform 0) and the FAT
+    // ESP under an EFI (0xEF) section header — so **prefer the EFI entry**
+    // and fall back to the default only when no EFI section exists.
+    let validation_efi = cat[1] == 0xEF;
+    let mut platform_efi = validation_efi;
+    let mut default: Option<(u32, u16)> = None;
+    let mut efi_entry: Option<(u32, u16)> = None;
     let mut off = 32;
-    let mut efi = cat[1] == 0xEF;
-    // Optional EFI section header 0x90/0x91.
-    if cat.len() >= off + 32 && (cat[off] == 0x90 || cat[off] == 0x91) {
-        efi = efi || cat[off + 1] == 0xEF;
+    let mut seen = 0;
+    while off + 32 <= cat.len() && seen < 64 {
+        let e = &cat[off..off + 32];
+        match e[0] {
+            0x90 | 0x91 => {
+                platform_efi = e[1] == 0xEF;
+            }
+            0x88 => {
+                let count = u16::from_le_bytes([e[6], e[7]]);
+                let lba = u32::from_le_bytes([e[8], e[9], e[10], e[11]]);
+                if lba != 0 {
+                    if platform_efi && efi_entry.is_none() {
+                        efi_entry = Some((lba, count));
+                    }
+                    if default.is_none() {
+                        default = Some((lba, count));
+                    }
+                }
+            }
+            // 0x00 right after validation is a non-bootable default entry;
+            // anywhere else it is the end of the catalog.
+            0x00 if off == 32 => {}
+            _ => break,
+        }
         off += 32;
+        seen += 1;
     }
-    if cat.len() < off + 32 {
-        return Err(ElToritoError::Truncated);
-    }
-    let ent = &cat[off..off + 32];
-    if ent[0] != 0x88 {
-        return Err(ElToritoError::NotBootable);
-    }
-    let sector_count = u16::from_le_bytes([ent[6], ent[7]]);
-    let load_lba = u32::from_le_bytes([ent[8], ent[9], ent[10], ent[11]]);
-    if load_lba == 0 {
-        return Err(ElToritoError::NotBootable);
-    }
+    let (load_lba, sector_count, efi) = match (efi_entry, default) {
+        (Some((l, c)), _) => (l, c, true),
+        (None, Some((l, c))) => (l, c, validation_efi),
+        (None, None) => return Err(ElToritoError::NotBootable),
+    };
     Ok(ElToritoImage {
         catalog_lba,
         load_lba,
@@ -118,32 +142,29 @@ fn id_starts_with(field: &[u8], prefix: &[u8]) -> bool {
     field.len() >= prefix.len() && &field[..prefix.len()] == prefix
 }
 
-/// Bytes needed for [`write_mock_efi_iso`] (boot record + catalog + load LBA).
-/// Boot record at 17, catalog at 20, load LBA 22 with 4 sectors → need 26.
-pub const MOCK_EFI_ISO_BYTES: usize = 26 * ISO_SECTOR;
+/// Bytes needed for [`write_mock_efi_iso`] (boot record + catalog + FAT + ISO9660).
+/// Boot record at 17, catalog at 20, load LBA 22 with 8 FAT ISO sectors, ISO9660
+/// `\EFI\BOOT` at LBA 30–33 → 36.
+pub const MOCK_EFI_ISO_BYTES: usize = crate::devices::ide_cdrom::MOCK_EFI_ISO_BYTES;
 
 /// Write a minimal EFI El Torito prefix into `iso`. No allocation.
+/// Same bytes as [`crate::devices::ide_cdrom::write_placeholder_iso`].
 pub fn write_mock_efi_iso(iso: &mut [u8]) -> Result<usize, ElToritoError> {
     if iso.len() < MOCK_EFI_ISO_BYTES {
         return Err(ElToritoError::Truncated);
     }
     iso[..MOCK_EFI_ISO_BYTES].fill(0);
-    let br = 17 * ISO_SECTOR;
-    iso[br] = 0;
-    iso[br + 1..br + 6].copy_from_slice(b"CD001");
-    iso[br + 6] = 1;
-    iso[br + 7..br + 7 + 23].copy_from_slice(b"EL TORITO SPECIFICATION");
-    iso[br + 71..br + 75].copy_from_slice(&20u32.to_le_bytes());
-    let cat = 20 * ISO_SECTOR;
-    iso[cat] = 0x01;
-    iso[cat + 1] = 0xEF;
-    iso[cat + 30] = 0x55;
-    iso[cat + 31] = 0xAA;
-    iso[cat + 32] = 0x91;
-    iso[cat + 33] = 0xEF;
-    iso[cat + 64] = 0x88;
-    iso[cat + 70..cat + 72].copy_from_slice(&4u16.to_le_bytes());
-    iso[cat + 72..cat + 76].copy_from_slice(&22u32.to_le_bytes());
+    crate::devices::ide_cdrom::write_placeholder_iso(iso);
+    let load = 22 * ISO_SECTOR;
+    if iso.len() < load + crate::devices::ide_cdrom::ELTORITO_BOOTX64_OFF + 2 {
+        return Err(ElToritoError::Truncated);
+    }
+    if &iso[load + crate::devices::ide_cdrom::ELTORITO_BOOTX64_OFF
+        ..load + crate::devices::ide_cdrom::ELTORITO_BOOTX64_OFF + 2]
+        != b"MZ"
+    {
+        return Err(ElToritoError::Truncated);
+    }
     Ok(MOCK_EFI_ISO_BYTES)
 }
 
