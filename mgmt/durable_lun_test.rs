@@ -31,6 +31,8 @@ fn cruzer_esp() -> LunCandidate {
         bus: 0,
         dev: 0,
         func: 0,
+        class: 0,
+        subclass: 0,
         size_bytes: 4 * 1024 * 1024 * 1024,
         is_esp_boot: true,
     }
@@ -44,6 +46,8 @@ fn usb_data(size: u64) -> LunCandidate {
         bus: 2,
         dev: 0,
         func: 0,
+        class: 0,
+        subclass: 0,
         size_bytes: size,
         is_esp_boot: false,
     }
@@ -214,4 +218,58 @@ fn usb_host_vec_serves_virtio() {
     assert_eq!(&peek, b"EFI PART");
     reset();
     durable_lun_clear();
+}
+
+#[test]
+fn r640_iron_census_picks_nvme_then_usb_never_perc() {
+    assert_eq!(PCI_XHCI_LEWISBURG, 0xA1AF);
+    assert_eq!(PCI_LEWISBURG_AHCI, 0xA182);
+    assert_eq!(PCI_ICH9_SATA, 0x2922);
+    assert_eq!(
+        pci_storage_skip_note(
+            PCI_VENDOR_INTEL,
+            PCI_LEWISBURG_AHCI,
+            PCI_CLASS_STORAGE,
+            PCI_SUBCLASS_AHCI
+        ),
+        "skip AHCI"
+    );
+    assert_eq!(
+        classify_pci_storage(
+            PCI_VENDOR_INTEL,
+            PCI_LEWISBURG_AHCI,
+            PCI_CLASS_STORAGE,
+            PCI_SUBCLASS_AHCI
+        ),
+        LunTransport::Other
+    );
+    assert_eq!(
+        classify_pci_storage(
+            PCI_VENDOR_LSI,
+            PCI_PERC_H740P,
+            PCI_CLASS_STORAGE,
+            PCI_SUBCLASS_RAID
+        ),
+        LunTransport::Perc
+    );
+    let (only_perc, n) = r640_iron_lun_candidates(0, 0, false);
+    assert_eq!(pick_durable_lun(&only_perc[..n]), Err(LunReject::Perc));
+    assert!(durable_lun_need_media(LunReject::Perc));
+    let (cruzer_only, n) = r640_iron_lun_candidates(0, 0, true);
+    assert_eq!(pick_durable_lun(&cruzer_only[..n]), Err(LunReject::Perc));
+    assert_eq!(pick_durable_lun(&[cruzer_esp()]), Err(LunReject::EspCruzer));
+    assert!(durable_lun_need_media(LunReject::EspCruzer));
+    let (usb, n) = r640_iron_lun_candidates(0, 16 * 1024 * 1024 * 1024, true);
+    assert_eq!(
+        pick_durable_lun(&usb[..n]).unwrap().transport,
+        LunTransport::Usb
+    );
+    let (nvme, n) =
+        r640_iron_lun_candidates(32 * 1024 * 1024 * 1024, 16 * 1024 * 1024 * 1024, true);
+    let p = pick_durable_lun(&nvme[..n]).expect("nvme");
+    assert_eq!(p.transport, LunTransport::Nvme);
+    assert!(durable_lun_can_virtio_attach(&p, true));
+    assert!(DURABLE_LUN_NEED_MEDIA_NOTE.contains("NVMe class 01:08"));
+    assert!(DURABLE_LUN_NEED_MEDIA_NOTE.contains("Cruzer 2-8GiB"));
+    assert!(!DURABLE_LUN_NEED_MEDIA_NOTE.contains("RAYNU-V-M8-DISK-PERSIST-OK"));
 }

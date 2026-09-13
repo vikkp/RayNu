@@ -275,7 +275,9 @@ pub unsafe fn leave_firmware() -> Handoff {
                     write_u64_hex(disk_hpa);
                     serial::write_str(" bytes=");
                     write_u64(disk_bytes);
-                    serial::write_line(" (not ISO-INSTALL-OK)");
+                    serial::write_line(
+                        " (leftover DRAM; durable LUN not ready; not ISO-INSTALL-OK)",
+                    );
                 }
             } else if bytes != 0 {
                 // Nested 2560M leftover was ~1020 MiB — 4 MiB short of
