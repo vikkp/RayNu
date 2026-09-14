@@ -172,6 +172,7 @@ fn start_stop_and_read_probe_named() {
 struct CountingUsb {
     inner: MockUsb,
     start_stop: u32,
+    tur: u32,
     recovers: u32,
 }
 
@@ -179,6 +180,12 @@ impl UsbBulk for CountingUsb {
     fn bulk_out(&mut self, data: &[u8]) -> Result<(), UsbBotError> {
         if data.len() == CBW_LEN && get_le_u32(data, 0) == CBW_SIG && data[15] == SCSI_START_STOP {
             self.start_stop = self.start_stop.saturating_add(1);
+        }
+        if data.len() == CBW_LEN
+            && get_le_u32(data, 0) == CBW_SIG
+            && data[15] == SCSI_TEST_UNIT_READY
+        {
+            self.tur = self.tur.saturating_add(1);
         }
         self.inner.bulk_out(data)
     }
@@ -193,15 +200,17 @@ impl UsbBulk for CountingUsb {
 }
 
 #[test]
-fn bring_up_does_not_send_start_stop() {
+fn bring_up_does_not_send_start_stop_or_tur() {
     let ns = vec![0u8; NS_BYTES];
     let mut hw = CountingUsb {
         inner: MockUsb::new(ns),
         start_stop: 0,
+        tur: 0,
         recovers: 0,
     };
     usb_bot_bring_up(&mut hw, 1024 * 1024).expect("bring-up");
     assert_eq!(hw.start_stop, 0);
+    assert_eq!(hw.tur, 0);
     assert_eq!(hw.recovers, 0);
     assert_eq!(usb_bot_last_scsi(), SCSI_TAG_READ);
 }
@@ -210,10 +219,17 @@ struct FlakyReadUsb {
     inner: MockUsb,
     fail_reads: u32,
     recovers: u32,
+    tur: u32,
 }
 
 impl UsbBulk for FlakyReadUsb {
     fn bulk_out(&mut self, data: &[u8]) -> Result<(), UsbBotError> {
+        if data.len() == CBW_LEN
+            && get_le_u32(data, 0) == CBW_SIG
+            && data[15] == SCSI_TEST_UNIT_READY
+        {
+            self.tur = self.tur.saturating_add(1);
+        }
         if data.len() == CBW_LEN && get_le_u32(data, 0) == CBW_SIG && data[15] == SCSI_READ_10 {
             if self.fail_reads > 0 {
                 self.fail_reads -= 1;
@@ -245,11 +261,14 @@ fn rw_retry_calls_recover_pipes() {
         inner: MockUsb::new(ns),
         fail_reads: 1,
         recovers: 0,
+        tur: 0,
     };
     let (bytes, lba) = usb_bot_bring_up(&mut hw, 1024 * 1024).expect("bring-up");
     assert_eq!(bytes, NS_BYTES as u64);
     assert_eq!(lba, 512);
     assert_eq!(hw.recovers, 1);
+    assert_eq!(hw.tur, 0);
+    assert_eq!(usb_bot_last_scsi(), SCSI_TAG_READ);
 }
 
 #[test]
