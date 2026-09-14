@@ -708,7 +708,9 @@ pub fn init_durable_lun_usb_io() {
                     write_hex64(crate::mgmt::usb_bot::usb_bot_last_portsc());
                     serial::write_str(" cmpl=0x");
                     write_hex64(crate::mgmt::usb_bot::usb_bot_last_cmpl());
-                    serial::write_line(" (leftover DRAM; not ISO-INSTALL-OK)");
+                    serial::write_line(
+                        " (leftover DRAM; do not setup-disk; not persist; not ISO-INSTALL-OK)",
+                    );
                     serial::write_str("boot: Stage 46 durable LUN ");
                     serial::write_str(DURABLE_LUN_NEED_MEDIA_NOTE);
                     serial::write_line(" (not ISO-INSTALL-OK)");

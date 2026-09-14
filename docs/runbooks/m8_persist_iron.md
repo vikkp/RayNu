@@ -42,9 +42,12 @@ After ExitBootServices:
 
 - `durable LUN nvme I/O ready bytes=…` **or**
 - `durable LUN usb I/O ready bytes=…` (ESP Cruzer window skipped; next port)
-- `xhci caplen=… ports=… p1=0x…` (all ports through 16, not only 4)
+- `xhci cap caplen=… slots=… ports=… scratch=…/64 csz=` on **every** USB attempt (before PORTSC)
+- `xhci cap … scan=… p1=0x…` (first 16 PORTSC words) then `xhci ccs pN=0x…` for every CCS port (Lewisburg 26 ports, not a 16-port walk)
+- `xhci enum pN sc=0x… speed= usb3= csz= cmd= cmpl=0x…` on Enum fail (cmd `1` reset `2` slot `3` addr `4` desc `5` cfg). `cmpl=0x11` is Parameter Error. `cmpl=0xff` + `timeout` means the command never completed (not a real CC). Iron `3473a0b9` `cmpl=0x40` was **MaxSlots**, not CC 64.
+- After Address Device: `xhci enum pN vid= did= class= proto=` so UDisk vs Toshiba is named. `uas-no-bot` means MSC protocol 0x62 only (BOT 0x50 missing).
 
-Fail: `nvme I/O fail` / `usb I/O fail err=` + leftover DRAM. Intel PCH scratchpad ≤ 16 pages is supported; more is `err=1` Cap.
+Fail: `nvme I/O fail` / `usb I/O fail err=` + leftover DRAM. Intel PCH scratchpad ≤ 64 pages; more is `err=1` Cap + `over-budget`. `mmio-dead` means CAPLENGTH was 0 or `0xffffffff` (BAR unread). Iron `ac3b92cd` (2026-09-14): Lewisburg `8086:a1af` named, then `usb I/O fail err=1 bar=0x92b00000 portsc=0 cmpl=0` — Cap before PORTSC; 16-page budget. Cap EFI `67db8a68` (`build: sha=50b5d8bb29fb`): `scratch=34/64` then Polling `0x000206e1`. Enum EFI `53d1f7f7` (`build: sha=c6bdd671b330`): HS U0 `sc=0x00000e03` PED=1 speed=3 then `xhci enum p10/p11/p14 cmd=3 cmpl=0x11` — Address Device Parameter Error (Slot Context DW1 Number of Ports was the port number; Hub=0). Slot DW1 EFI `3473a0b9`: Parameter Error gone; p10 Address Device then p11/p14 Enable Slot printed `cmpl=0x40` (stale MaxSlots after Address Device never posted; command ring stayed busy so later CCS ports never got a fair try). Guest `vda` was 1.07 GiB leftover DRAM. Toshiba unused. Everest loop (`ISO-INSTALL-OK` → F7 `DISK-BOOT-OK` → `login:`) is **not** persist. Do not Force Off that guest expecting `RAYNU-V-M8-DISK-PERSIST-OK`. Do not setup-disk on leftover. Next flash (`cursor/m8-xhci-enum-recover-8366`): timeout≠MaxSlots, CRCR abort between CCS ports, vid/did + UAS detect.
 
 ### 3. Phase B attach
 
