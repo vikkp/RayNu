@@ -13,6 +13,10 @@
 
 use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
+/// SCSI TEST UNIT READY.
+pub const SCSI_TEST_UNIT_READY: u8 = 0x00;
+/// SCSI REQUEST SENSE.
+pub const SCSI_REQUEST_SENSE: u8 = 0x03;
 /// SCSI INQUIRY.
 pub const SCSI_INQUIRY: u8 = 0x12;
 /// SCSI READ CAPACITY(10).
@@ -124,6 +128,19 @@ pub fn cdb_inquiry() -> [u8; 16] {
     c
 }
 
+/// SCSI TEST UNIT READY (no data).
+pub fn cdb_tur() -> [u8; 16] {
+    [0u8; 16]
+}
+
+/// SCSI REQUEST SENSE (18-byte fixed).
+pub fn cdb_request_sense() -> [u8; 16] {
+    let mut c = [0u8; 16];
+    c[0] = SCSI_REQUEST_SENSE;
+    c[4] = 18;
+    c
+}
+
 /// Last LBA (inclusive) and block size from READ CAPACITY(10).
 pub fn capacity10_bytes(data: &[u8]) -> Option<(u64, u32)> {
     if data.len() < 8 {
@@ -169,10 +186,17 @@ fn bot_cmd(
     Ok(())
 }
 
-/// INQUIRY + READ CAPACITY(10). Returns (size_bytes, lba_bytes).
+/// INQUIRY + TUR/SENSE + READ CAPACITY(10). Returns (size_bytes, lba_bytes).
 pub fn usb_bot_bring_up(hw: &mut impl UsbBulk, min_bytes: u64) -> Result<(u64, u32), UsbBotError> {
     let mut inq = [0u8; 36];
     let _ = bot_cmd(hw, 1, true, &cdb_inquiry(), &mut inq);
+    for i in 0..5u32 {
+        if bot_cmd(hw, 3 + i, false, &cdb_tur(), &mut []).is_ok() {
+            break;
+        }
+        let mut sense = [0u8; 18];
+        let _ = bot_cmd(hw, 8 + i, true, &cdb_request_sense(), &mut sense);
+    }
     let mut cap = [0u8; 8];
     bot_cmd(hw, 2, true, &cdb_read_capacity10(), &mut cap)?;
     let (bytes, lba) = capacity10_bytes(&cap).ok_or(UsbBotError::Capacity)?;
@@ -237,6 +261,7 @@ pub fn usb_bot_lba_bytes() -> u32 {
 pub fn store_usb_bot_ready(bytes: u64, lba: u32) {
     NS_BYTES.store(bytes, Ordering::Release);
     LBA_BYTES.store(u64::from(lba), Ordering::Release);
+    LAST_ERR.store(0, Ordering::Release);
     IO_READY.store(true, Ordering::Release);
 }
 

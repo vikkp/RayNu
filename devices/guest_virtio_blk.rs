@@ -1170,11 +1170,27 @@ fn mmio_write_locked(v: &mut VirtioPci, off: u16, size: u8, val: u64) {
 }
 
 /// Apply a virtio-blk sector request to `disk`. Host-testable.
+///
+/// Install disk (`/dev/vda`) may use DurableLun. Product ISO (`/dev/vdb`)
+/// must pass `allow_lun = false` so USB BOT I/O cannot steal ISO reads.
 pub fn blk_sector_rw(disk: &mut [u8], ty: u32, sector: u64, buf: &mut [u8]) -> u8 {
+    blk_sector_rw_with(disk, ty, sector, buf, true)
+}
+
+fn blk_sector_rw_with(
+    disk: &mut [u8],
+    ty: u32,
+    sector: u64,
+    buf: &mut [u8],
+    allow_lun: bool,
+) -> u8 {
     if ty == VIRTIO_BLK_T_FLUSH {
         return VIRTIO_BLK_S_OK;
     }
-    if crate::mgmt::durable_lun::durable_lun_serving() && LUN_ATTACHED.load(Ordering::Acquire) {
+    if allow_lun
+        && crate::mgmt::durable_lun::durable_lun_serving()
+        && LUN_ATTACHED.load(Ordering::Acquire)
+    {
         let off = match sector.checked_mul(SECTOR as u64) {
             Some(o) => o,
             None => return VIRTIO_BLK_S_IOERR,
@@ -1521,6 +1537,7 @@ fn xfer_data_seg(
     gpa: u64,
     len: u32,
     device_write: bool,
+    allow_lun: bool,
 ) -> (u8, u32) {
     let n = len as usize;
     let mut buf = [0u8; 4096];
@@ -1530,7 +1547,7 @@ fn xfer_data_seg(
         let take = core::cmp::min(n - done, buf.len());
         let sec = sector.saturating_add(((byte_off + done) / SECTOR) as u64);
         if device_write {
-            let status = blk_sector_rw(disk, ty, sec, &mut buf[..take]);
+            let status = blk_sector_rw_with(disk, ty, sec, &mut buf[..take], allow_lun);
             if status != VIRTIO_BLK_S_OK {
                 return (status, wrote);
             }
@@ -1538,7 +1555,7 @@ fn xfer_data_seg(
                 return (VIRTIO_BLK_S_IOERR, wrote);
             }
         } else if read_bytes(translate, gpa + done as u64, &mut buf[..take]) {
-            let status = blk_sector_rw(disk, ty, sec, &mut buf[..take]);
+            let status = blk_sector_rw_with(disk, ty, sec, &mut buf[..take], allow_lun);
             if status != VIRTIO_BLK_S_OK {
                 return (status, wrote);
             }
@@ -1663,6 +1680,7 @@ fn process_blk_queue(
                     gpa,
                     len,
                     device_write,
+                    !readonly,
                 );
                 status = st;
                 req_bytes = req_bytes.saturating_add(w);
@@ -1772,8 +1790,8 @@ fn drain_disk(translate: &impl Fn(u64) -> Option<u64>) -> u32 {
         }
         return 0;
     }
-    let lun = LUN_ATTACHED.load(Ordering::Acquire)
-        && crate::mgmt::durable_lun::durable_lun_serving();
+    let lun =
+        LUN_ATTACHED.load(Ordering::Acquire) && crate::mgmt::durable_lun::durable_lun_serving();
     let hpa = DISK_HPA.load(Ordering::Acquire);
     let dlen = DISK_LEN.load(Ordering::Acquire) as usize;
     if !lun && (hpa == 0 || dlen == 0) {
@@ -1825,8 +1843,7 @@ fn drain_disk(translate: &impl Fn(u64) -> Option<u64>) -> u32 {
 }
 
 fn drain_iso(translate: &impl Fn(u64) -> Option<u64>) {
-    let (notified, enabled, qsize, last, used_i, desc, avail, used) =
-        with_iso(|v| take_queue(v));
+    let (notified, enabled, qsize, last, used_i, desc, avail, used) = with_iso(|v| take_queue(v));
     if !enabled {
         if notified {
             crate::devices::guest_irq::raise_virtio_iso();
@@ -2010,9 +2027,7 @@ pub const MMIO_ALU_STOS: u8 = 33;
 pub const MMIO_ALU_LODS: u8 = 34;
 
 pub fn mmio_alu_is_string(alu: u8) -> bool {
-    (MMIO_ALU_MOVS..=MMIO_ALU_LODS).contains(&alu)
-        || alu == MMIO_ALU_CMPS
-        || alu == MMIO_ALU_SCAS
+    (MMIO_ALU_MOVS..=MMIO_ALU_LODS).contains(&alu) || alu == MMIO_ALU_CMPS || alu == MMIO_ALU_SCAS
 }
 
 pub fn mmio_alu_is_movs(alu: u8) -> bool {
@@ -2284,8 +2299,7 @@ pub fn mmio_adc_rflags(old: u64, left: u64, right: u64, size: u8) -> u64 {
     if sum > u128::from(mask) {
         f |= 1 << 0;
     }
-    if mmio_as_signed(a, size) + mmio_as_signed(b, size) + i128::from(c)
-        != mmio_as_signed(r, size)
+    if mmio_as_signed(a, size) + mmio_as_signed(b, size) + i128::from(c) != mmio_as_signed(r, size)
     {
         f |= 1 << 11;
     }
@@ -2303,8 +2317,7 @@ pub fn mmio_sbb_rflags(old: u64, left: u64, right: u64, size: u8) -> u64 {
     if u128::from(a) < u128::from(b) + u128::from(c) {
         f |= 1 << 0;
     }
-    if mmio_as_signed(a, size) - mmio_as_signed(b, size) - i128::from(c)
-        != mmio_as_signed(r, size)
+    if mmio_as_signed(a, size) - mmio_as_signed(b, size) - i128::from(c) != mmio_as_signed(r, size)
     {
         f |= 1 << 11;
     }
@@ -2412,14 +2425,7 @@ pub fn mmio_shift_apply(cur: u64, count: u64, alu: u8, size: u8, cf: bool) -> u6
 }
 
 /// Group-2 RFLAGS. Count 0 leaves flags. OF defined only for count==1.
-pub fn mmio_shift_rflags(
-    old: u64,
-    cur: u64,
-    count: u64,
-    result: u64,
-    alu: u8,
-    size: u8,
-) -> u64 {
+pub fn mmio_shift_rflags(old: u64, cur: u64, count: u64, result: u64, alu: u8, size: u8) -> u64 {
     let n = mmio_shift_amt(count, size);
     if n == 0 {
         return old;
@@ -2497,9 +2503,7 @@ pub fn mmio_shift_rflags(
     }
     if n == 1 {
         let of = match alu {
-            MMIO_ALU_SHL | MMIO_ALU_ROL | MMIO_ALU_RCL => {
-                ((r & mmio_sign_bit(size)) != 0) != cf
-            }
+            MMIO_ALU_SHL | MMIO_ALU_ROL | MMIO_ALU_RCL => ((r & mmio_sign_bit(size)) != 0) != cf,
             MMIO_ALU_SHR => (a & mmio_sign_bit(size)) != 0,
             MMIO_ALU_SAR => false,
             MMIO_ALU_ROR | MMIO_ALU_RCR => {
@@ -2760,13 +2764,7 @@ pub fn mmio_mul_pair_apply(ax: u64, mem: u64, size: u8, signed: bool) -> (u64, u
 
 /// Unsigned DIV or signed IDIV. `None` = #DE (divisor 0 or quotient overflow).
 /// Byte: dividend AX, quot AL, rem AH packed in `lo`. Wider: dividend DX:AX.
-pub fn mmio_div_apply(
-    ax: u64,
-    dx: u64,
-    mem: u64,
-    size: u8,
-    signed: bool,
-) -> Option<(u64, u64)> {
+pub fn mmio_div_apply(ax: u64, dx: u64, mem: u64, size: u8, signed: bool) -> Option<(u64, u64)> {
     match size {
         1 => {
             let dividend = ax & 0xffff;
@@ -3145,11 +3143,12 @@ pub fn mmio_decoded_len(bytes: &[u8], long64: bool) -> Option<usize> {
                 let ext = (rest[0] >> 3) & 7;
                 mmio_len_after_modrm(rest, addr16, if ext <= 1 { opsz } else { 0 })?
             }
-            0x88 | 0x89 | 0x8A | 0x8B | 0x86 | 0x87 | 0x84 | 0x85 | 0x8F | 0xFE | 0xFF
-            | 0x00 | 0x01 | 0x02 | 0x03 | 0x08 | 0x09 | 0x0A | 0x0B | 0x10 | 0x11 | 0x12
-            | 0x13 | 0x18 | 0x19 | 0x1A | 0x1B | 0x20 | 0x21 | 0x22 | 0x23 | 0x28 | 0x29
-            | 0x2A | 0x2B | 0x30 | 0x31 | 0x32 | 0x33 | 0x38 | 0x39 | 0x3A | 0x3B
-            | 0xD0 | 0xD1 | 0xD2 | 0xD3 => mmio_len_after_modrm(rest, addr16, 0)?,
+            0x88 | 0x89 | 0x8A | 0x8B | 0x86 | 0x87 | 0x84 | 0x85 | 0x8F | 0xFE | 0xFF | 0x00
+            | 0x01 | 0x02 | 0x03 | 0x08 | 0x09 | 0x0A | 0x0B | 0x10 | 0x11 | 0x12 | 0x13 | 0x18
+            | 0x19 | 0x1A | 0x1B | 0x20 | 0x21 | 0x22 | 0x23 | 0x28 | 0x29 | 0x2A | 0x2B | 0x30
+            | 0x31 | 0x32 | 0x33 | 0x38 | 0x39 | 0x3A | 0x3B | 0xD0 | 0xD1 | 0xD2 | 0xD3 => {
+                mmio_len_after_modrm(rest, addr16, 0)?
+            }
             _ => return None,
         }
     };
