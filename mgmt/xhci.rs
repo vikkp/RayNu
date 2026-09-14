@@ -48,9 +48,11 @@ pub const USBCMD_INTE: u32 = 1 << 2;
 pub const USBSTS_HCH: u32 = 1;
 pub const USBSTS_CNR: u32 = 1 << 11;
 
-/// Intel PCH (C620) often needs several scratchpad pages. QEMU qemu-xhci
-/// usually wants 0. Cap at 16×4 KiB `.bss`. Not iron persist OK.
-pub const XHCI_SCRATCH_MAX: u32 = 16;
+/// Intel PCH (C620 / Lewisburg `8086:a1af`) typically asks for 31 scratchpad
+/// pages. QEMU `qemu-xhci` usually wants 0. Cap at 64×4 KiB `.bss`.
+/// Iron COM2 `ac3b92cd`: `usb I/O fail err=1` `portsc=0` `cmpl=0` on BAR
+/// `0x92b00000` — Cap before PORTSC (16-page budget). Not iron persist OK.
+pub const XHCI_SCRATCH_MAX: u32 = 64;
 
 /// xHCI USBLEGSUP (extended cap ID 1).
 pub const USBLEGSUP_ID: u8 = 1;
@@ -62,9 +64,70 @@ pub fn xhci_scratchpad_bufs(hcs2: u32) -> u32 {
     ((hcs2 >> 21) & 0x1F) << 5 | ((hcs2 >> 27) & 0x1F)
 }
 
+/// Inverse of [`xhci_scratchpad_bufs`] (host tests + HCS2 fixtures).
+pub fn xhci_hcs2_with_scratch(n: u32) -> u32 {
+    let lo = n & 0x1F;
+    let hi = (n >> 5) & 0x1F;
+    (hi << 21) | (lo << 27)
+}
+
 /// True when this controller's scratchpad fits our `.bss` pages.
 pub fn xhci_scratchpad_supported(hcs2: u32) -> bool {
     xhci_scratchpad_bufs(hcs2) <= XHCI_SCRATCH_MAX
+}
+
+/// CAPLENGTH / HCSPARAMS1 / HCSPARAMS2 snapshot (capability space).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct XhciCapSnap {
+    pub cap0: u32,
+    pub hcs1: u32,
+    pub hcs2: u32,
+}
+
+impl XhciCapSnap {
+    pub fn caplen(self) -> u8 {
+        self.cap0 as u8
+    }
+
+    pub fn max_slots(self) -> u8 {
+        self.hcs1 as u8
+    }
+
+    pub fn max_ports(self) -> u8 {
+        (self.hcs1 >> 24) as u8
+    }
+
+    pub fn scratch(self) -> u32 {
+        xhci_scratchpad_bufs(self.hcs2)
+    }
+
+    /// MMIO returned all-zero or all-ones — do not HCRST.
+    pub fn mmio_dead(self) -> bool {
+        self.cap0 == 0 || self.cap0 == 0xFFFF_FFFF
+    }
+
+    pub fn over_budget(self) -> bool {
+        self.scratch() > XHCI_SCRATCH_MAX
+    }
+}
+
+/// Read capability registers without starting the controller.
+pub fn xhci_read_cap_snap(hw: &mut impl XhciHw) -> XhciCapSnap {
+    XhciCapSnap {
+        cap0: hw.read32(0),
+        hcs1: hw.read32(0x04),
+        hcs2: hw.read32(0x08),
+    }
+}
+
+/// Pack CAPLENGTH+HCSPARAMS1 into the existing `portsc` diag word.
+pub fn xhci_cap_diag_portsc(snap: XhciCapSnap) -> u64 {
+    u64::from(snap.cap0) | (u64::from(snap.hcs1) << 32)
+}
+
+/// Pack HCSPARAMS2 + scratch count into the existing `cmpl` diag word.
+pub fn xhci_cap_diag_cmpl(snap: XhciCapSnap) -> u64 {
+    u64::from(snap.hcs2) | (u64::from(snap.scratch()) << 32)
 }
 
 /// Run bit only. Never OR [`USBCMD_INTE`] (firmware ISRs move ERDP).
@@ -147,19 +210,24 @@ pub struct XhciCaps {
 }
 
 pub fn parse_caps(hw: &mut impl XhciHw) -> Result<XhciCaps, UsbBotError> {
-    let cap0 = hw.read32(0);
-    let caplen = cap0 as u8;
-    if caplen < 0x20 {
+    let snap = xhci_read_cap_snap(hw);
+    parse_caps_from_snap(hw, snap)
+}
+
+pub fn parse_caps_from_snap(
+    hw: &mut impl XhciHw,
+    snap: XhciCapSnap,
+) -> Result<XhciCaps, UsbBotError> {
+    if snap.caplen() < 0x20 {
         return Err(UsbBotError::Cap);
     }
-    let hcs1 = hw.read32(0x04);
     let hcc1 = hw.read32(0x10);
     Ok(XhciCaps {
-        op: u32::from(caplen),
+        op: u32::from(snap.caplen()),
         rt: hw.read32(0x18) & !0x1F,
         db: hw.read32(0x14) & !0x3,
-        max_slots: hcs1 as u8,
-        max_ports: (hcs1 >> 24) as u8,
+        max_slots: snap.max_slots(),
+        max_ports: snap.max_ports(),
         csz: (hcc1 & (1 << 2)) != 0,
     })
 }
@@ -316,6 +384,42 @@ fn portsc_off(op: u32, port: u8) -> u32 {
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_caps(snap: XhciCapSnap) {
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 xhci cap caplen=0x");
+    serial_hex32(snap.cap0);
+    serial::write_str(" hcs1=0x");
+    serial_hex32(snap.hcs1);
+    serial::write_str(" hcs2=0x");
+    serial_hex32(snap.hcs2);
+    serial::write_str(" slots=");
+    serial_dec_u32(u32::from(snap.max_slots()));
+    serial::write_str(" ports=");
+    serial_dec_u32(u32::from(snap.max_ports()));
+    serial::write_str(" scratch=");
+    serial_dec_u32(snap.scratch());
+    serial::write_str("/");
+    serial_dec_u32(XHCI_SCRATCH_MAX);
+    if snap.mmio_dead() {
+        serial::write_str(" mmio-dead");
+    }
+    if snap.over_budget() {
+        serial::write_str(" over-budget");
+    }
+    serial::write_line(" (not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_scratch_over(scratch: u32) {
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 xhci scratch=");
+    serial_dec_u32(scratch);
+    serial::write_str(" > max=");
+    serial_dec_u32(XHCI_SCRATCH_MAX);
+    serial::write_line(" (Cap; leftover DRAM; not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn serial_xhci_ports(hw: &mut impl XhciHw, op: u32, ports: u8, caps: &XhciCaps) {
     use crate::boot::serial;
     serial::write_str("boot: Stage 46 xhci caplen=0x");
@@ -360,6 +464,33 @@ fn serial_dec_u8(v: u8) {
     n += 1;
     crate::boot::serial::write_str(core::str::from_utf8(&buf[..n]).unwrap_or("?"));
 }
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_dec_u32(v: u32) {
+    if v == 0 {
+        crate::boot::serial::write_str("0");
+        return;
+    }
+    let mut digits = [0u8; 10];
+    let mut n = 0usize;
+    let mut x = v;
+    while x > 0 && n < digits.len() {
+        digits[n] = b'0' + (x % 10) as u8;
+        n += 1;
+        x /= 10;
+    }
+    let mut out = [0u8; 10];
+    for i in 0..n {
+        out[i] = digits[n - 1 - i];
+    }
+    crate::boot::serial::write_str(core::str::from_utf8(&out[..n]).unwrap_or("?"));
+}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_caps(_snap: XhciCapSnap) {}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_scratch_over(_scratch: u32) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_ports(_hw: &mut impl XhciHw, _op: u32, _ports: u8, _caps: &XhciCaps) {}
@@ -466,7 +597,18 @@ fn xhci_start(
     mem: &XhciMem,
 ) -> Result<(XhciCaps, Ring, EventRing), UsbBotError> {
     handshake_legacy(hw);
-    let caps = parse_caps(hw)?;
+    let snap = xhci_read_cap_snap(hw);
+    store_usb_bot_diag(
+        UsbBotError::Cap,
+        0,
+        xhci_cap_diag_portsc(snap),
+        xhci_cap_diag_cmpl(snap),
+    );
+    serial_xhci_caps(snap);
+    if snap.mmio_dead() {
+        return Err(UsbBotError::Cap);
+    }
+    let caps = parse_caps_from_snap(hw, snap)?;
     if caps.max_slots == 0 || caps.max_ports == 0 {
         return Err(UsbBotError::Cap);
     }
@@ -501,6 +643,13 @@ fn xhci_start(
     let hcs2 = hw.read32(0x08);
     let scratch = xhci_scratchpad_bufs(hcs2);
     if scratch > XHCI_SCRATCH_MAX {
+        serial_xhci_scratch_over(scratch);
+        store_usb_bot_diag(
+            UsbBotError::Cap,
+            0,
+            xhci_cap_diag_portsc(snap),
+            xhci_cap_diag_cmpl(snap),
+        );
         return Err(UsbBotError::Cap);
     }
     if scratch != 0 {
@@ -1254,9 +1403,17 @@ mod xhci_pack_test {
     fn intel_pch_scratchpad_and_usblegsup_run_without_inte() {
         assert_eq!(xhci_scratchpad_bufs(0), 0);
         assert_eq!(xhci_scratchpad_bufs(4u32 << 27), 4);
+        assert_eq!(xhci_scratchpad_bufs(31u32 << 27), 31);
+        assert_eq!(xhci_scratchpad_bufs(xhci_hcs2_with_scratch(31)), 31);
+        assert_eq!(xhci_scratchpad_bufs(xhci_hcs2_with_scratch(64)), 64);
         assert!(xhci_scratchpad_supported(4u32 << 27));
-        assert!(xhci_scratchpad_supported(XHCI_SCRATCH_MAX << 27));
-        assert!(!xhci_scratchpad_supported(17u32 << 27));
+        assert!(xhci_scratchpad_supported(31u32 << 27));
+        assert!(xhci_scratchpad_supported(xhci_hcs2_with_scratch(
+            XHCI_SCRATCH_MAX
+        )));
+        assert!(!xhci_scratchpad_supported(xhci_hcs2_with_scratch(
+            XHCI_SCRATCH_MAX + 1
+        )));
         assert_eq!(xhci_run_usbcmd(), USBCMD_RS);
         assert_eq!(xhci_run_usbcmd() & USBCMD_INTE, 0);
         assert_eq!(USBLEGSUP_ID, 1);
@@ -1292,6 +1449,76 @@ mod xhci_pack_test {
         };
         handshake_legacy(&mut hw);
         assert_ne!(hw.leg & USBLEGSUP_OS_OWNED, 0);
+    }
+
+    #[test]
+    fn cap_snap_packs_diag_and_rejects_dead_mmio() {
+        struct Caps {
+            cap0: u32,
+            hcs1: u32,
+            hcs2: u32,
+        }
+        impl XhciHw for Caps {
+            fn read32(&mut self, off: u32) -> u32 {
+                match off {
+                    0 => self.cap0,
+                    0x04 => self.hcs1,
+                    0x08 => self.hcs2,
+                    0x10 => 0,
+                    0x14 => 0x1000,
+                    0x18 => 0x2000,
+                    _ => 0,
+                }
+            }
+            fn write32(&mut self, _off: u32, _val: u32) {}
+            fn dma_read(&mut self, _hpa: u64, buf: &mut [u8]) {
+                buf.fill(0);
+            }
+            fn dma_write(&mut self, _hpa: u64, _buf: &[u8]) {}
+        }
+        let mut dead = Caps {
+            cap0: 0,
+            hcs1: 0,
+            hcs2: 0,
+        };
+        let snap0 = xhci_read_cap_snap(&mut dead);
+        assert!(snap0.mmio_dead());
+        assert!(parse_caps_from_snap(&mut dead, snap0).is_err());
+
+        let mut ones = Caps {
+            cap0: 0xFFFF_FFFF,
+            hcs1: 0xFFFF_FFFF,
+            hcs2: 0xFFFF_FFFF,
+        };
+        let snap_ff = xhci_read_cap_snap(&mut ones);
+        assert!(snap_ff.mmio_dead());
+        assert!(snap_ff.over_budget());
+
+        // Lewisburg-shaped: caplen 0x20, 64 slots, 22 ports, 31 scratch.
+        let mut pch = Caps {
+            cap0: 0x20,
+            hcs1: 64 | (22u32 << 24),
+            hcs2: 31u32 << 27,
+        };
+        let snap = xhci_read_cap_snap(&mut pch);
+        assert!(!snap.mmio_dead());
+        assert_eq!(snap.caplen(), 0x20);
+        assert_eq!(snap.max_slots(), 64);
+        assert_eq!(snap.max_ports(), 22);
+        assert_eq!(snap.scratch(), 31);
+        assert!(!snap.over_budget());
+        assert_eq!(
+            xhci_cap_diag_portsc(snap),
+            u64::from(snap.cap0) | (u64::from(snap.hcs1) << 32)
+        );
+        assert_eq!(
+            xhci_cap_diag_cmpl(snap),
+            u64::from(snap.hcs2) | (31u64 << 32)
+        );
+        let caps = parse_caps_from_snap(&mut pch, snap).expect("pch caps");
+        assert_eq!(caps.max_slots, 64);
+        assert_eq!(caps.max_ports, 22);
+        assert_eq!(caps.op, 0x20);
     }
 
     #[test]
