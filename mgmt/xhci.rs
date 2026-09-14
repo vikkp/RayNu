@@ -56,6 +56,9 @@ pub const USBSTS_CNR: u32 = 1 << 11;
 /// Iron COM2 `50b5d8bb` (Cap EFI): `scratch=34/64` then `err=3` Enum
 /// `cmpl=0x11` (Parameter Error) `portsc=0`; CCS on p10/p11/p14 `0x206e1`
 /// (PLS=Polling, PED=0). Not iron persist OK.
+/// Iron COM2 `c6bdd671` (Enum EFI `53d1f7f7`): HS U0 `sc=0xe03` PED=1
+/// speed=3 then Address Device `cmd=3` `cmpl=0x11` on p10/p11/p14 — Slot
+/// Context DW1 Number of Ports was the port number (Hub=0). Not persist OK.
 pub const XHCI_SCRATCH_MAX: u32 = 64;
 
 /// Do not cap the port walk at 16. Lewisburg `max_ports=26`.
@@ -847,9 +850,17 @@ fn xhci_start(
     Ok((caps, Ring::new(mem.cmd), EventRing::new(mem.evt)))
 }
 
-/// Slot Context DW1: spec Root Hub Port is 31:24; QEMU 8.2 looks at 23:16.
+/// Slot Context DW1 (xHCI 1.2 Table 6-8):
+/// Root Hub Port Number is **23:16**. Number of Ports is **31:24** and is
+/// hubs only. Writing the port number into 31:24 with Hub=0 is Intel
+/// Parameter Error (`cmpl=0x11`) on Address Device. QEMU 8.2 reads 23:16.
 pub fn slot_ctx_dw1_port(port: u8) -> u32 {
-    u32::from(port) << 24 | u32::from(port) << 16
+    u32::from(port) << 16
+}
+
+/// Number of Ports field (DW1 31:24). Must stay 0 unless Hub=1.
+pub fn slot_ctx_dw1_num_ports(dw1: u32) -> u8 {
+    (dw1 >> 24) as u8
 }
 
 fn ep0_max_packet(speed: u8) -> u16 {
@@ -1600,9 +1611,16 @@ mod xhci_pack_test {
     }
 
     #[test]
-    fn slot_ctx_dw1_port_sets_spec_and_qemu_fields() {
-        assert_eq!(slot_ctx_dw1_port(1), 0x0101_0000);
-        assert_eq!(slot_ctx_dw1_port(5), 0x0505_0000);
+    fn slot_ctx_dw1_port_is_root_hub_port_only() {
+        // Iron Enum EFI `c6bdd671`: Address Device Parameter Error when
+        // Number of Ports (31:24) copied the port number (10/11/14) with Hub=0.
+        assert_eq!(slot_ctx_dw1_port(1), 0x0001_0000);
+        assert_eq!(slot_ctx_dw1_port(5), 0x0005_0000);
+        assert_eq!(slot_ctx_dw1_port(10), 0x000a_0000);
+        assert_eq!(slot_ctx_dw1_port(14), 0x000e_0000);
+        assert_eq!(slot_ctx_dw1_num_ports(slot_ctx_dw1_port(14)), 0);
+        let dual = u32::from(14u8) << 24 | u32::from(14u8) << 16;
+        assert_ne!(slot_ctx_dw1_port(14), dual);
     }
 
     #[test]
@@ -1840,5 +1858,15 @@ mod xhci_pack_test {
             CMPL_PARAMETER
         );
         assert_eq!(xhci_enum_diag_portsc(IRON_POLL, 10) >> 32, 10);
+
+        // Enum EFI after WPR: HS U0 PED=1. Address Device still Parameter Error
+        // because DW1 Number of Ports was 10/11/14.
+        const IRON_HS_U0: u32 = 0x0000_0e03;
+        assert!(portsc_link_ready(IRON_HS_U0));
+        assert_eq!(portsc_speed(IRON_HS_U0), 3);
+        assert_eq!(portsc_pls(IRON_HS_U0), 0);
+        assert_eq!(slot_ctx_dw1_num_ports(slot_ctx_dw1_port(14)), 0);
+        assert_eq!(XHCI_ENUM_CMD_ADDR, 3);
+        assert_eq!(CMPL_PARAMETER, 17);
     }
 }
