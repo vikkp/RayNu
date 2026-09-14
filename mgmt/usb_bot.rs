@@ -25,17 +25,25 @@ pub const SCSI_READ_CAPACITY_10: u8 = 0x25;
 pub const SCSI_READ_10: u8 = 0x28;
 /// SCSI WRITE(10).
 pub const SCSI_WRITE_10: u8 = 0x2A;
-/// SCSI START STOP UNIT (spin up a USB HDD before the first READ).
+/// SCSI START STOP UNIT (kept for CDB builders; bring-up does not send it).
 pub const SCSI_START_STOP: u8 = 0x1B;
 /// SCSI READ CAPACITY(16).
 pub const SCSI_READ_CAPACITY_16: u8 = 0x9E;
 /// Iron `6c278e85`: INQUIRY/TUR/CAPACITY succeeded; first 512-byte READ
-/// timed out (`err=8` `cmpl=0xff` at `off=0x200`). Retry after START STOP.
+/// timed out (`err=8` `cmpl=0xff` at `off=0x200`). Retry + `recover_pipes`.
 pub const USB_BOT_RW_TRIES: u8 = 3;
 /// BOT stage stamped into [`usb_bot_last_stage`] for COM2 `bot=`.
 pub const BOT_STAGE_CBW: u8 = 1;
 pub const BOT_STAGE_DATA: u8 = 2;
 pub const BOT_STAGE_CSW: u8 = 3;
+/// SCSI command stamped into [`usb_bot_last_scsi`] for COM2 `scsi=`.
+pub const SCSI_TAG_INQUIRY: u8 = 1;
+pub const SCSI_TAG_TUR: u8 = 2;
+pub const SCSI_TAG_SENSE: u8 = 3;
+pub const SCSI_TAG_SSTOP: u8 = 4;
+pub const SCSI_TAG_CAPACITY: u8 = 5;
+pub const SCSI_TAG_READ: u8 = 6;
+pub const SCSI_TAG_WRITE: u8 = 7;
 
 /// CBW signature `'USBC'`.
 pub const CBW_SIG: u32 = 0x4342_5355;
@@ -71,6 +79,10 @@ pub enum UsbBotError {
 pub trait UsbBulk {
     fn bulk_out(&mut self, data: &[u8]) -> Result<(), UsbBotError>;
     fn bulk_in(&mut self, data: &mut [u8]) -> Result<usize, UsbBotError>;
+    /// Reset both bulk pipes after a failed READ/WRITE. Not TUR/START STOP.
+    /// Iron `73dc4d2e`: auto Reset Endpoint on ignored START STOP timed out
+    /// the later CSW (`bot=csw` `err=8`).
+    fn recover_pipes(&mut self) {}
 }
 
 fn put_be_u32(b: &mut [u8], off: usize, v: u32) {
@@ -154,6 +166,8 @@ pub fn cdb_request_sense() -> [u8; 16] {
 }
 
 /// SCSI START STOP UNIT. `start=true` spins the platter (Immed=0).
+/// Not sent during [`usb_bot_bring_up`] — iron `73dc4d2e` timed out CSW after
+/// START STOP + auto EP-reset. Keep the CDB for host tests.
 pub fn cdb_start_stop(start: bool) -> [u8; 16] {
     let mut c = [0u8; 16];
     c[0] = SCSI_START_STOP;
@@ -169,6 +183,42 @@ pub fn usb_bot_stage_name(stage: u8) -> &'static str {
         BOT_STAGE_CSW => "csw",
         _ => "?",
     }
+}
+
+/// COM2 `scsi=` tag for a SCSI command byte.
+pub fn usb_bot_scsi_name(tag: u8) -> &'static str {
+    match tag {
+        SCSI_TAG_INQUIRY => "inquiry",
+        SCSI_TAG_TUR => "tur",
+        SCSI_TAG_SENSE => "sense",
+        SCSI_TAG_SSTOP => "sstop",
+        SCSI_TAG_CAPACITY => "capacity",
+        SCSI_TAG_READ => "read",
+        SCSI_TAG_WRITE => "write",
+        _ => "?",
+    }
+}
+
+/// Hub skip must not overwrite Xfer/Bot/Capacity LAST_CMPL / LAST_PORTSC.
+/// Iron `73dc4d2e`: p14 hub stamped `cmpl=0` over p11 CSW.
+pub fn usb_bot_keep_xfer_diag(err: u8) -> bool {
+    err == UsbBotError::Xfer as u8
+        || err == UsbBotError::Bot as u8
+        || err == UsbBotError::Capacity as u8
+}
+
+fn stamp_scsi_cdb(cdb: &[u8]) {
+    let tag = match cdb.first().copied().unwrap_or(0) {
+        SCSI_INQUIRY => SCSI_TAG_INQUIRY,
+        SCSI_TEST_UNIT_READY => SCSI_TAG_TUR,
+        SCSI_REQUEST_SENSE => SCSI_TAG_SENSE,
+        SCSI_START_STOP => SCSI_TAG_SSTOP,
+        SCSI_READ_CAPACITY_10 | SCSI_READ_CAPACITY_16 => SCSI_TAG_CAPACITY,
+        SCSI_READ_10 => SCSI_TAG_READ,
+        SCSI_WRITE_10 => SCSI_TAG_WRITE,
+        _ => 0,
+    };
+    LAST_SCSI.store(tag, Ordering::Release);
 }
 
 /// Last LBA (inclusive) and block size from READ CAPACITY(10).
@@ -195,6 +245,7 @@ fn bot_cmd(
 ) -> Result<(), UsbBotError> {
     let data_len = buf.len() as u32;
     let cbw = Cbw::scsi(tag, data_len, dir_in, 0, cdb);
+    stamp_scsi_cdb(cdb);
     store_usb_bot_stage(BOT_STAGE_CBW);
     hw.bulk_out(&cbw.bytes)?;
     if data_len != 0 {
@@ -219,9 +270,11 @@ fn bot_cmd(
     Ok(())
 }
 
-/// INQUIRY + TUR/SENSE + START STOP + READ CAPACITY(10) + one native READ.
-/// Iron `6c278e85`: CAPACITY alone printed `usb I/O ready` then peek READ
-/// timed out. Do not claim ready until a data-stage READ completes.
+/// INQUIRY + TUR/SENSE + READ CAPACITY(10) + one native READ.
+/// Iron `6c278e85`: CAPACITY printed `usb I/O ready` then peek READ timed out.
+/// Iron `73dc4d2e`: START STOP (Immed=0) + ignored timeout + auto EP-reset
+/// failed CSW before ready. Do not send START STOP here. Do not claim ready
+/// until a data-stage READ completes.
 pub fn usb_bot_bring_up(hw: &mut impl UsbBulk, min_bytes: u64) -> Result<(u64, u32), UsbBotError> {
     let mut inq = [0u8; 36];
     let _ = bot_cmd(hw, 1, true, &cdb_inquiry(), &mut inq);
@@ -232,7 +285,6 @@ pub fn usb_bot_bring_up(hw: &mut impl UsbBulk, min_bytes: u64) -> Result<(u64, u
         let mut sense = [0u8; 18];
         let _ = bot_cmd(hw, 8 + i, true, &cdb_request_sense(), &mut sense);
     }
-    let _ = bot_cmd(hw, 12, false, &cdb_start_stop(true), &mut []);
     let mut cap = [0u8; 8];
     bot_cmd(hw, 2, true, &cdb_read_capacity10(), &mut cap)?;
     let (bytes, lba) = capacity10_bytes(&cap).ok_or(UsbBotError::Capacity)?;
@@ -283,13 +335,7 @@ pub fn usb_bot_rw(
             Err(e) => {
                 last = e;
                 let _ = bot_cmd(hw, tag.wrapping_add(50), false, &cdb_tur(), &mut []);
-                let _ = bot_cmd(
-                    hw,
-                    tag.wrapping_add(51),
-                    false,
-                    &cdb_start_stop(true),
-                    &mut [],
-                );
+                hw.recover_pipes();
             }
         }
     }
@@ -305,6 +351,7 @@ static LAST_BAR: AtomicU64 = AtomicU64::new(0);
 static LAST_PORTSC: AtomicU64 = AtomicU64::new(0);
 static LAST_CMPL: AtomicU64 = AtomicU64::new(0);
 static LAST_STAGE: core::sync::atomic::AtomicU8 = core::sync::atomic::AtomicU8::new(0);
+static LAST_SCSI: core::sync::atomic::AtomicU8 = core::sync::atomic::AtomicU8::new(0);
 static BOT_TAG: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(10);
 
 pub fn usb_bot_io_ready() -> bool {
@@ -374,6 +421,10 @@ pub fn usb_bot_last_cmpl() -> u64 {
 
 pub fn usb_bot_last_stage() -> u8 {
     LAST_STAGE.load(Ordering::Acquire)
+}
+
+pub fn usb_bot_last_scsi() -> u8 {
+    LAST_SCSI.load(Ordering::Acquire)
 }
 
 pub fn store_usb_bot_stage(stage: u8) {

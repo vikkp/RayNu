@@ -11,9 +11,9 @@
 //! ADR-004: persist backing is virtio-blk / BlockIo only.
 
 use super::usb_bot::{
-    next_bot_tag, store_usb_bot_diag, store_usb_bot_ready, usb_bot_bring_up, usb_bot_last_bar,
-    usb_bot_last_cmpl, usb_bot_last_portsc, usb_bot_last_stage, usb_bot_stage_name, UsbBotError,
-    UsbBulk,
+    next_bot_tag, store_usb_bot_diag, store_usb_bot_ready, usb_bot_bring_up,
+    usb_bot_keep_xfer_diag, usb_bot_last_bar, usb_bot_last_cmpl, usb_bot_last_err,
+    usb_bot_last_portsc, usb_bot_last_stage, usb_bot_stage_name, UsbBotError, UsbBulk, CSW_LEN,
 };
 
 /// Same window as [`crate::mgmt::durable_lun::usb_is_esp_cruzer_window`].
@@ -41,8 +41,9 @@ pub const TRB_EVENT_CMD: u32 = 33;
 pub const TRB_CYCLE: u32 = 1;
 pub const TRB_IOC: u32 = 1 << 5;
 pub const TRB_IDT: u32 = 1 << 6;
-/// Interrupt on Short Packet (Normal / Data TRB). CSW is 13 bytes on a
-/// 512-byte HS bulk MPS.
+/// Interrupt on Short Packet. CSW is 13 bytes on a 512-byte HS bulk MPS.
+/// Iron `73dc4d2e`: ISP on every bulk IN (including 512-byte READ) plus
+/// auto EP-reset after ignored START STOP failed CSW. ISP only on CSW.
 pub const TRB_ISP: u32 = 1 << 2;
 pub const TRB_TC: u32 = 1 << 1;
 
@@ -264,8 +265,9 @@ pub fn usb_dev_is_hub(class: u8) -> bool {
     class == USB_CLASS_HUB
 }
 
-/// Keep Cruzer / TooSmall / an earlier DESC fail when a later port is a hub.
+/// Keep Cruzer / TooSmall / an earlier DESC/Xfer fail when a later port is a hub.
 /// Iron `06ca0f95`: p11 GET_DESC `cmd=4 cmpl=0` then p14 hub `err=4` hid Toshiba.
+/// Iron `73dc4d2e`: hub skip stamped `cmpl=0` over p11 CSW (`bot=csw`).
 pub fn xhci_bring_up_keep_err(last: UsbBotError, e: UsbBotError) -> UsbBotError {
     match e {
         UsbBotError::Cruzer => UsbBotError::Cruzer,
@@ -1414,6 +1416,15 @@ fn reset_bulk_ep(
     );
 }
 
+/// ISP only on the 13-byte CSW short packet. Full-size READ/WRITE IN uses IOC.
+pub fn bulk_in_trb_flags(len: usize) -> u32 {
+    if len == CSW_LEN {
+        TRB_IOC | TRB_ISP
+    } else {
+        TRB_IOC
+    }
+}
+
 impl UsbBulk for LiveXhci {
     fn bulk_out(&mut self, data: &[u8]) -> Result<(), UsbBotError> {
         if data.is_empty() || data.len() > 4096 {
@@ -1429,31 +1440,14 @@ impl UsbBulk for LiveXhci {
             trb_ctrl(0, TRB_NORMAL, TRB_IOC),
         );
         doorbell(&mut hw, self.caps.db, self.slot, self.dci_out);
-        match consume_event(
+        consume_event(
             &mut hw,
             &self.caps,
             &mut self.ev,
             TRB_EVENT_TRANSFER,
             BULK_SPINS,
-        ) {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                let dci = self.dci_out;
-                let hpa = self.bulk_out_hpa;
-                let slot = self.slot;
-                reset_bulk_ep(
-                    &mut hw,
-                    &self.caps,
-                    &mut self.cmd,
-                    &mut self.ev,
-                    &mut self.bulk_out,
-                    hpa,
-                    slot,
-                    dci,
-                );
-                Err(e)
-            }
-        }
+        )
+        .map(|_| ())
     }
 
     fn bulk_in(&mut self, data: &mut [u8]) -> Result<usize, UsbBotError> {
@@ -1468,7 +1462,7 @@ impl UsbBulk for LiveXhci {
             &mut hw,
             self.bounce,
             data.len() as u32,
-            trb_ctrl(0, TRB_NORMAL, TRB_IOC | TRB_ISP),
+            trb_ctrl(0, TRB_NORMAL, bulk_in_trb_flags(data.len())),
         );
         doorbell(&mut hw, self.caps.db, self.slot, self.dci_in);
         match consume_event(
@@ -1482,23 +1476,38 @@ impl UsbBulk for LiveXhci {
                 hw.dma_read(self.bounce, data);
                 Ok(data.len())
             }
-            Err(e) => {
-                let dci = self.dci_in;
-                let hpa = self.bulk_in_hpa;
-                let slot = self.slot;
-                reset_bulk_ep(
-                    &mut hw,
-                    &self.caps,
-                    &mut self.cmd,
-                    &mut self.ev,
-                    &mut self.bulk_in,
-                    hpa,
-                    slot,
-                    dci,
-                );
-                Err(e)
-            }
+            Err(e) => Err(e),
         }
+    }
+
+    fn recover_pipes(&mut self) {
+        let mut hw = MmioXhci { base: self.mmio };
+        let caps = self.caps;
+        let slot = self.slot;
+        let dci_out = self.dci_out;
+        let dci_in = self.dci_in;
+        let hpa_out = self.bulk_out_hpa;
+        let hpa_in = self.bulk_in_hpa;
+        reset_bulk_ep(
+            &mut hw,
+            &caps,
+            &mut self.cmd,
+            &mut self.ev,
+            &mut self.bulk_out,
+            hpa_out,
+            slot,
+            dci_out,
+        );
+        reset_bulk_ep(
+            &mut hw,
+            &caps,
+            &mut self.cmd,
+            &mut self.ev,
+            &mut self.bulk_in,
+            hpa_in,
+            slot,
+            dci_in,
+        );
     }
 }
 
@@ -1676,8 +1685,10 @@ fn try_port(
     );
     if usb_dev_is_hub(dev[4]) {
         serial_xhci_hub(port);
-        let sc = hw.read32(portsc_off(caps.op, port));
-        store_usb_bot_diag(UsbBotError::Hub, mmio, xhci_enum_diag_portsc(sc, port), 0);
+        if !usb_bot_keep_xfer_diag(usb_bot_last_err()) {
+            let sc = hw.read32(portsc_off(caps.op, port));
+            store_usb_bot_diag(UsbBotError::Hub, mmio, xhci_enum_diag_portsc(sc, port), 0);
+        }
         recover_enum(hw, caps, mem, cmd_ring, ev, slot);
         return Err(UsbBotError::Hub);
     }
@@ -2382,6 +2393,8 @@ mod xhci_pack_test {
         assert_eq!(ADDR_SPINS > SPINS, true);
         assert_eq!(BULK_SPINS > ADDR_SPINS, true);
         assert_eq!(TRB_ISP, 1 << 2);
+        assert_eq!(bulk_in_trb_flags(CSW_LEN), TRB_IOC | TRB_ISP);
+        assert_eq!(bulk_in_trb_flags(512), TRB_IOC);
         assert_eq!(usb_bot_stage_name(2), "data");
         assert!(usb_bot_last_stage() <= 3);
         // Iron Slot DW1 EFI `3473a0b9`: stamp_enum printed MaxSlots as cmpl.
@@ -2426,6 +2439,13 @@ mod xhci_pack_test {
             xhci_bring_up_keep_err(UsbBotError::Reset, UsbBotError::Xfer),
             UsbBotError::Xfer
         );
+        store_usb_bot_diag(UsbBotError::Xfer, 0x92b0_0000, 0x0e03, 0xff);
+        assert!(usb_bot_keep_xfer_diag(usb_bot_last_err()));
+        if !usb_bot_keep_xfer_diag(usb_bot_last_err()) {
+            store_usb_bot_diag(UsbBotError::Hub, 0x92b0_0000, 0, 0);
+        }
+        assert_eq!(usb_bot_last_err(), UsbBotError::Xfer as u8);
+        assert_eq!(usb_bot_last_cmpl(), 0xff);
         let mut hub_cfg = [0u8; 18];
         hub_cfg[0] = 9;
         hub_cfg[1] = 2;

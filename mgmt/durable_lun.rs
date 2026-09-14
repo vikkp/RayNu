@@ -774,6 +774,10 @@ pub fn init_durable_lun_usb_io() {
                     serial::write_str(crate::mgmt::usb_bot::usb_bot_stage_name(
                         crate::mgmt::usb_bot::usb_bot_last_stage(),
                     ));
+                    serial::write_str(" scsi=");
+                    serial::write_str(crate::mgmt::usb_bot::usb_bot_scsi_name(
+                        crate::mgmt::usb_bot::usb_bot_last_scsi(),
+                    ));
                     serial::write_line(
                         " (leftover DRAM; do not setup-disk; not persist; not ISO-INSTALL-OK)",
                     );
