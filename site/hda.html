@@ -122,8 +122,11 @@
           <p class="hda-aside" data-reveal>
             99% on purpose. TLS, leftover-disk persist across a hypervisor
             reboot, and a guest console UI are <strong>M8</strong>
-            (<a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-018.md">ADR-018</a>)
-            — not a reopened Everest.
+            (<a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-018.md">ADR-018</a>).
+            Unmodified-ISO / firmware split is the sibling
+            <a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-020.md">ADR-020</a>
+            queue — not a reopened Everest, and not a license to delete
+            the Alpine patcher before persist COM2.
           </p>
         </div>
       </section>
@@ -232,7 +235,10 @@ localhost:~# cat /proc/cmdline</code></pre>
             <code>ISO-INSTALL-OK</code>. Overall stays 99% because
             leftover-disk persist across a <em>hypervisor</em> reboot, TLS,
             and a guest console UI are the next mountain —
-            <strong>M8</strong> operator hardening (ADR-018). Cluster /
+            <strong>M8</strong> operator hardening (ADR-018). The guest
+            contract (unmodified ISO, RayNu-F split) is a sibling queue
+            (ADR-020) — do not delete the Alpine patcher before persist
+            COM2. Cluster /
             vMotion-like is <strong>M9</strong>. Rollback kit:
             <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed"
               ><code>v0.1.0-everest-closed</code></a

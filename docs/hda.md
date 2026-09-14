@@ -4,7 +4,7 @@ last_updated: 2026-09-13
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
-mount_everest_target: "CLOSED on iron 2026-09-11: Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest). Next: M8 operator hardening (ADR-018)."
+mount_everest_target: "CLOSED on iron 2026-09-11: Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest). Next: M8 operator hardening (ADR-018) + Gen-1 sibling queue (ADR-020)."
 months_to_everest: 0.0
 months_to_everest_prev: 0.0
 velocity_commits_30d: 612
@@ -26,11 +26,11 @@ summit_prod_pct: 100
 
 > **Living document.** Updated on every meaningful commit by Cursor (see `.cursor/rules/hda-update.mdc`).  
 > **North star product loop (“Mount Everest”):** **CLOSED on iron 2026-09-11.**  
-> Ship the EFI → boot on a **real PowerEdge R640** → **network-reachable** vSphere-like UI → **deploy a Linux ISO** (M7 / ADR-009). Production bar (M6.8–M6.9) is already closed on Latitude. **Next mountain: M8 operator hardening** ([ADR-018](adr/ADR-018.md)).  
+> Ship the EFI → boot on a **real PowerEdge R640** → **network-reachable** vSphere-like UI → **deploy a Linux ISO** (M7 / ADR-009). Production bar (M6.8–M6.9) is already closed on Latitude. **Next mountain: M8 operator hardening** ([ADR-018](adr/ADR-018.md)) · **Gen-1 sibling queue** ([ADR-020](adr/ADR-020.md)).  
 > **Iron rollback:** GitHub Latest [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) (`f72b4276` / `34552377351` / EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc`).
 
 Pillars: **[V]** verified core · **[Z]** single binary · **[D]** iDRAC-native · **[A]** audit-first.  
-Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m7_plan.md) (closed) · M8: [`m8_plan.md`](m8_plan.md) · ADR: [`adr/ADR-009.md`](adr/ADR-009.md) · close: [`adr/ADR-018.md`](adr/ADR-018.md) · fleet disks: [`adr/ADR-019.md`](adr/ADR-019.md) · constitution: [`CLAUDE.md`](../CLAUDE.md).
+Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m7_plan.md) (closed) · M8: [`m8_plan.md`](m8_plan.md) · Gen-1: [`gen1_plan.md`](gen1_plan.md) · ADR: [`adr/ADR-009.md`](adr/ADR-009.md) · close: [`adr/ADR-018.md`](adr/ADR-018.md) · fleet disks: [`adr/ADR-019.md`](adr/ADR-019.md) · queues: [`adr/ADR-020.md`](adr/ADR-020.md) · constitution: [`CLAUDE.md`](../CLAUDE.md).
 
 ---
 
@@ -38,7 +38,7 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 
 | Metric | Value | Δ vs previous HDA |
 |--------|------:|-------------------|
-| **Overall product readiness** | **99%** | **held** — Everest **CLOSED**. M8.0 persist-first + nested File RAM + DurableLun NVMe/USB. **ADR-019:** USB/NVMe is **M8.0-mech**; fleet SKU is **PERC RAID VD** (`RAYNU-V-M8-PERC-LUN-OK`, open). Nested QEMU ≠ R640. Not 100%: iron Force Off / PERC I/O / TLS / console |
+| **Overall product readiness** | **99%** | **held** — Everest **CLOSED**. M8.0 persist-first + nested File RAM + DurableLun NVMe/USB. **ADR-019:** USB/NVMe is **M8.0-mech**; fleet SKU is **PERC RAID VD** (`RAYNU-V-M8-PERC-LUN-OK`, open). **ADR-020:** two queues (operator vs Gen-1); do not delete Alpine patcher before mech COM2. Nested QEMU ≠ R640. Not 100%: iron Force Off / PERC I/O / TLS / console |
 | **Months to Mount Everest** | **0.0** | **held** (summit reached 2026-09-11; `f72b4276` SPA ISO loop) |
 | **ETA month** | **2026-09** | **closed this month on iron**; next work is M8, not a slipped Everest |
 | **Confidence** | high | E1–E6 on COM2. M8 named separately so polish cannot reopen the summit |
@@ -72,7 +72,7 @@ All must be true (no hand-waving):
 | E5 | **Linux ISO deploy** | Operator registers a distro ISO → VM boots **UEFI installer** (ADR-014) to virtio-blk → reboot to disk. Extract-boot/bzImage is lab MVP only. Windows ISO later, same model. | [Z] |
 | E6 | **Production bar** | M6.8 soak + M6.9 external audit/spec review closed per `progress.md` | [V][A] |
 
-**Out of Everest / M7 scope:** operator polish is **M8** ([ADR-018](adr/ADR-018.md)): leftover-disk persist across HV reboot (**M8.0-mech** USB/NVMe, then **M8.0-perc** PERC RAID VDs for the fleet SKU — [ADR-019](adr/ADR-019.md)), TLS, real auth, console UI, ISO upload, UEFI catalog persist, Windows later. Cluster / elasticity is **M9**. Full vSphere parity, Dell Tier-2 PERC **health** OEM, multi-site DR, Windows guest WHQL stay later still. PERC **I/O** is M8.0-perc, not “never.” Windows **install** is M8.6 under [ADR-014](adr/ADR-014.md).
+**Out of Everest / M7 scope:** operator polish is **M8** ([ADR-018](adr/ADR-018.md)): leftover-disk persist across HV reboot (**M8.0-mech** USB/NVMe, then **M8.0-perc** PERC RAID VDs for the fleet SKU — [ADR-019](adr/ADR-019.md)), TLS, real auth, console UI, ISO upload, UEFI catalog persist. Windows later is **Gen-1 Phase 5** ([ADR-020](adr/ADR-020.md)), not a TLS peer. Unmodified-ISO / firmware split is the sibling [gen1_plan.md](gen1_plan.md) queue. Cluster / elasticity is **M9**. Full vSphere parity, Dell Tier-2 PERC **health** OEM, multi-site DR, Windows guest WHQL stay later still. PERC **I/O** is M8.0-perc, not “never.” Windows **install** is M8.6 under [ADR-014](adr/ADR-014.md) **after** the Generation 1 freeze (that freeze does not exist yet).
 
 ---
 
@@ -167,7 +167,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 | M+2 | 2026-09 | E3b native NIC lab (QEMU e1000) + ISO residual | ADR-013 Phase C | **Phase C DONE (QEMU)** |
 | M+3 | 2026-08 | E3b iron HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | **DONE (M7.8 iron)** |
 | M+4 | 2026-09 | Phase B (SPA → installed disk) | remaining Everest | **DONE — EVEREST CLOSED** (`f72b4276` / `34552377351`) |
-| M+5 | 2026-10 | **M8.0** persist (file nested / LUN iron / leftover fallback) | `RAYNU-V-M8-DISK-PERSIST-OK` on COM2 | **NEXT** (nested-OK closed; iron 1–3 host-ready; iron Force Off open) |
+| M+5 | 2026-10 | **M8.0-mech** persist (USB/NVMe) then PERC; Gen-1 Phase 1 design may overlap | `RAYNU-V-M8-DISK-PERSIST-OK` on COM2 | **NEXT** (nested-OK closed; iron 1–3 host-ready; iron Force Off open; [ADR-020](adr/ADR-020.md) two queues) |
 
 ### Timeline burn-down
 
@@ -175,7 +175,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 2026-07 ████████  HDA + M6 closed (Latitude)
 2026-08 ████████  R640 boot (E2) + E3b HTTP-OK
 2026-09 ████████  E5 + Phase B — **Mount Everest CLOSED** (`f72b4276`)  ← months_to_everest = 0.0
-2026-10 ░░░░░░░░  M8.0 persist (nested-OK closed; iron 1–3 host-ready; Force Off open)
+2026-10 ░░░░░░░░  M8.0-mech persist (nested-OK closed; iron Force Off open); Gen-1 patcher stays
 2026-11 ░░░░░░░░  M8.1+ TLS/auth/console
 ```
 
@@ -245,7 +245,8 @@ Ordered for critical path (parallelize B with D design):
 | P0-9 | M6.9 external audit + spec review | E6 | **DONE** | proofs green | `docs/`, `ept_model/`, `mgmt/ext` |
 | P0-10 | R640 soak / hardware confidence | E2 | 0.5 | P0-2 | `tools/`, `mgmt/soak` — post M7.5 |
 | P0-11 | **M9 sketch** vMotion-like / DRS-like / hot-add | — | — | M8 | deferred — was M8 in ADR-009; **M9** after operator hardening (ADR-018) |
-| P0-64 | **M8** operator product hardening | — | IN PROGRESS | Everest closed | [ADR-018](adr/ADR-018.md) / [m8_plan.md](m8_plan.md) / [m8_persist_nested.md](runbooks/m8_persist_nested.md) / [m8_persist_iron.md](runbooks/m8_persist_iron.md). **M8.0 nested Alpine `MODE=full` CLOSED** on `raynuvsrv1` (`ce3d8a09`). Iron 1–3 host-ready (census / PCH scratchpad / leftover named). Nested QEMU ≠ R640. Iron COM2 `I/O ready` + `RAYNU-V-M8-DISK-PERSIST-OK` open. Then TLS, auth, console UI, ISO upload, UEFI catalog, Windows later. |
+| P0-64 | **M8** operator product hardening | — | IN PROGRESS | Everest closed | [ADR-018](adr/ADR-018.md) / [ADR-020](adr/ADR-020.md) / [m8_plan.md](m8_plan.md) / [m8_persist_nested.md](runbooks/m8_persist_nested.md) / [m8_persist_iron.md](runbooks/m8_persist_iron.md). **M8.0 nested Alpine `MODE=full` CLOSED** on `raynuvsrv1` (`ce3d8a09`). Iron 1–3 host-ready (census / PCH scratchpad / leftover named). Nested QEMU ≠ R640. Iron COM2 `I/O ready` + `RAYNU-V-M8-DISK-PERSIST-OK` open. Then TLS, auth, console, upload, catalog. Windows = Gen-1 Phase 5. |
+| P0-65 | **Gen-1** guest contract | — | OPEN | M8.0-mech | [ADR-020](adr/ADR-020.md) / [gen1_plan.md](gen1_plan.md). Phase 0 nested reboot-to-disk landed. Phase 1 split `guest_uefi.rs` open. Phase 2 (delete ISO patcher + auto-answer) **must not** start before M8.0-mech COM2. Phase 4 freeze (`docs/raynu_vm_gen1.md`) does not exist. |
 
 ---
 
@@ -354,11 +355,11 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-perc-product-adr |
-| Summary | **ADR-019: PERC RAID VDs are the R640 fleet datastore.** USB/NVMe DurableLun stays M8.0-mech (tonight’s 16 GiB stick). Fleet close is `RAYNU-V-M8-PERC-LUN-OK` on a spare MegaRAID VD — not Ubuntu, not census `skip PERC`. Nested QEMU ≠ R640. Iron persist still open. Never `ISO-INSTALL-OK`. Do not format the Ubuntu PERC. Do not F11 until USB `I/O ready`. |
-| Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. M8 residual now names PERC I/O. Not 100%. |
-| Gates touched | ADR-019 + plan/HDA/progress/mapper comments. `./tools/sync-hda-site.sh --check`. No MegaRAID driver yet. |
-| Months Δ | 0.0 held (Everest closed; fleet persist still open) |
+| Commit | m8-gen1-queues-adr |
+| Summary | **ADR-020: two queues after Everest.** M8 = operator (disks/TLS/console). Gen-1 = guest contract (unmodified media / RayNu-F). Serialized closes: M8.0-mech NOW; do not delete Alpine patcher before that COM2; Windows is Phase 5 not a TLS peer. Always-on `.cursor/rules/m8-gen1-queues.mdc`. Nested QEMU ≠ R640. Iron persist still open. Never `ISO-INSTALL-OK`. Do not format Ubuntu PERC. Do not F11 until USB `I/O ready`. |
+| Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Formalizes agent contract so persist / patcher / TLS / Windows cannot fight. Not 100%. |
+| Gates touched | ADR-020 + `docs/gen1_plan.md` + CLAUDE/m8/progress/HDA/site. `./tools/sync-hda-site.sh --check`. No MegaRAID, no TLS, no patcher delete. |
+| Months Δ | 0.0 held (Everest closed; queues named, not closed) |
 
 
 ## Blockers & risks (Everest-relevant)
@@ -372,6 +373,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | H5 | ~~Phase B — iron SPA still launches the SHELL stub~~ | — | **Resolved** 2026-09-11 (`f72b4276` / `34552377351`). Residual polish is **M8**, not Everest. |
 | H10 | Leftover-DRAM disk dies on **HV** reboot | MED | **M8.0-mech** ([m8_plan.md](m8_plan.md)): USB/NVMe DurableLun. Nested-OK closed. Iron 1–3 host-ready. Iron `RAYNU-V-M8-DISK-PERSIST-OK` still open. |
 | H12 | Fleet disks are PERC RAID, not USB | HIGH | **ADR-019.** Census `skip PERC` is lab safety (Ubuntu standing VD). Product close `RAYNU-V-M8-PERC-LUN-OK` on a **spare** VD. USB persist ≠ fleet SKU. Do not format Ubuntu. |
+| H13 | Agent queue collision (delete patcher vs persist vs TLS vs Windows) | MED | **ADR-020** + always-on [`.cursor/rules/m8-gen1-queues.mdc`](../.cursor/rules/m8-gen1-queues.mdc). Two queues, serialized closes. Do not delete ISO patcher before M8.0-mech COM2. Windows ≠ TLS peer. |
 | H11 | Truncated `site/` on feature branches | LOW | `./tools/check-site-chrome.sh` + CI `site-chrome`; always-on `.cursor/rules/site-chrome.mdc`. Do not replace `site/index.html` wholesale. |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
@@ -382,6 +384,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-13 | m8-gen1-queues-adr | 0.0 | 99 | **ADR-020:** two queues after Everest (M8 operator vs RayNu VM Generation 1). Serialized closes: M8.0-mech NOW; do not delete Alpine patcher before COM2 persist; Windows is Gen-1 Phase 5 not a TLS peer. Always-on Cursor rule. `docs/gen1_plan.md` living. Nested QEMU ≠ R640. Iron persist open. Never `ISO-INSTALL-OK`. Do not F11. months 0.0 held; overall 99 held |
 | 2026-09-13 | m8-perc-product-adr | 0.0 | 99 | **ADR-019:** existing R640 fleets keep disks on PERC RAID VDs. USB/NVMe DurableLun is M8.0-mech only; fleet SKU is `RAYNU-V-M8-PERC-LUN-OK` on a spare MegaRAID VD (not Ubuntu). Census `skip PERC` stays lab safety. No MegaRAID driver in this commit. Never `ISO-INSTALL-OK`. Do not F11. months 0.0 held; overall 99 held |
 | 2026-09-13 | m8-main-catchup | 0.0 | 99 | **`main` catch-up:** merge iron-LUN tip (`993a904d`) onto `origin/main` so users are not left on pre-Everest public copy. Preserves updater chrome + Please reboot story; lived HDA/site = Everest closed + M8 next (iron DurableLun 1–3 host-ready). Nested QEMU ≠ R640. Iron persist open. Never `ISO-INSTALL-OK`. Do not F11 until I/O ready on a ≥16 GiB LUN. months 0.0 held; overall 99 held |
 | 2026-09-13 | m8-disk-persist-iron-lun | 0.0 | 99 | **Iron DurableLun 1–3 host-ready:** R640 census fixture (PERC/AHCI skip, NVMe then USB); Intel PCH scratchpad ≤16 + USBLEGSUP; leftover named when LUN not ready; [m8_persist_iron.md](runbooks/m8_persist_iron.md). Nested QEMU ≠ R640. Iron persist open. Never `ISO-INSTALL-OK`. Do not F11 until I/O ready + virtio on the LUN. months 0.0 held; overall 99 held |
@@ -928,7 +931,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     **M8.0 iron** Force Off / `RAYNU-V-M8-DISK-PERSIST-OK` (nested-OK closed on `raynuvsrv1` `ce3d8a09`; not this Cloud VM) ([ADR-018](adr/ADR-018.md) / [m8_plan.md](m8_plan.md) / [m8_persist_nested.md](runbooks/m8_persist_nested.md))
+Next move:     **M8.0-mech iron** Force Off / `RAYNU-V-M8-DISK-PERSIST-OK` (nested-OK closed on `raynuvsrv1` `ce3d8a09`; not this Cloud VM). Keep Alpine patcher. Do not start TLS / delete patcher / Windows ([ADR-018](adr/ADR-018.md) / [ADR-020](adr/ADR-020.md) / [m8_plan.md](m8_plan.md) / [gen1_plan.md](gen1_plan.md) / [m8_persist_nested.md](runbooks/m8_persist_nested.md))
 Rollback:      GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351
                EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc
                COM2 build: sha=f72b4276d198. Do not flash a later M8 persist prototype as known-good.
@@ -936,7 +939,7 @@ Do not F11:    `34548550755` / `7f8dc0a9` or earlier Phase B fails
 Tcp4 residual: Floppy publishes PXE/HTTP, not Tcp4 SB (platform limit)
 SNP after EBS: dead — native BCM5720 is the durable mgmt path (E3b closed 2026-08-20)
 Preserve NIC:  releases/v0.1.0-adr013-baseline (pre-native-NIC; not the Everest flash kit)
-Do not claim:  100% product / TLS / leftover persist across HV reboot / multi-distro / cluster. Host/CI never print ISO-INSTALL-OK. Cluster is M9.
+Do not claim:  100% product / TLS / leftover persist across HV reboot / unmodified ISO / Gen-1 freeze / cluster. Host/CI never print ISO-INSTALL-OK. Cluster is M9. Do not delete the Alpine patcher before M8.0-mech.
 ```
 
 Public checklist: [`docs/runbooks/r640_iron_week.md`](runbooks/r640_iron_week.md) ·

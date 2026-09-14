@@ -1,0 +1,57 @@
+---
+description: Two queues after Everest — M8 operator vs RayNu VM Generation 1. Do not delete the Alpine patcher, start TLS, or treat Windows as next.
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+# Two queues after Everest (ADR-020)
+
+You are working in **RayNu-V** (`vikkp/RayNu`). Everest (M7) is **CLOSED on iron**. There are **two queues**, one binary. They are not competing “next” items.
+
+| Queue | Question | Plan | ADR |
+|-------|----------|------|-----|
+| **M8 operator** | Where do disks and the operator live? | [`docs/m8_plan.md`](docs/m8_plan.md) | [ADR-018](docs/adr/ADR-018.md) · [ADR-019](docs/adr/ADR-019.md) |
+| **RayNu VM Generation 1** | What is the guest allowed to be? | [`docs/gen1_plan.md`](docs/gen1_plan.md) | [ADR-020](docs/adr/ADR-020.md) · [ADR-016](docs/adr/ADR-016.md) |
+
+**Contract:** [ADR-020](docs/adr/ADR-020.md). If two “next” items conflict, cite the ADR-020 order table. Do not pick the more exciting one.
+
+## Close order (serialized)
+
+Design overlap is allowed. **Closing** out of order is not, unless ADR-020 + the living plans are rewritten.
+
+1. **M8.0-mech NOW** — USB/NVMe Force Off persist. `RAYNU-V-M8-DISK-PERSIST-OK` on real R640 COM2. Keep patched Alpine + auto-answer. Do not F11 until COM2 `I/O ready` + virtio on the LUN.
+2. **M8.0-perc** — spare PERC VD (`RAYNU-V-M8-PERC-LUN-OK`). Not Ubuntu. Design may overlap (1).
+3. **Gen-1 Phase 1** — split `vmx/guest_uefi.rs`. OVMF = `tools/` oracle. After (1).
+4. **Gen-1 Phase 2** — **delete** ISO patcher + auto-answer. Unpatched alpine-extended → login. **Do not delete the patcher before (1).**
+5. **M8.1 + M8.2** — TLS then real auth. Do not close before (1).
+6. **M8.3** — SPA guest console.
+7. **Gen-1 Phase 3** — Runtime services v1.0. `efi=noruntime` is lab.
+8. **M8.4 / M8.5** — ISO upload, UEFI catalog.
+9. **Gen-1 Phase 4** — freeze `docs/raynu_vm_gen1.md`. Do not claim this freeze exists.
+10. **M8.6 / Phase 5** — Windows / Secure Boot / vTPM. **After** Phase 4. Not a peer of TLS.
+11. **M9** — cluster. Not a persist substitute.
+
+## Lived (do not use stale paste)
+
+- `raynu_f/` **is** the product path. Iron `ISO-INSTALL-OK` + `DISK-BOOT-OK` **closed**. Nested persist nested-OK **closed**. Phase 0 nested reboot-to-disk **landed**.
+- Patcher / auto-answer still used on iron → Phase 2 **open**, not “Everest unfinished.”
+- `vmx/guest_uefi.rs` still huge → Phase 1 **open**.
+- Nested QEMU ≠ R640. USB persist ≠ PERC persist ≠ leftover DRAM.
+
+## Do not
+
+- Delete `mgmt/iso_install.rs` `patch_iso_linux_serial_console` or `devices/guest_serial_answer.rs` before M8.0-mech COM2.
+- Add new guest-side product patches / per-ISO stanzas.
+- Start product TLS until persist is on COM2 unless `docs/m8_plan.md` is rewritten.
+- Treat Windows as next because ADR-018 numbered it M8.6.
+- Format the Ubuntu PERC. Census `skip PERC` is lab safety, not product policy (ADR-019).
+- Print `RAYNU-V-M7-ISO-INSTALL-OK`, `RAYNU-V-M8-DISK-PERSIST-OK`, or `RAYNU-V-M8-PERC-LUN-OK` from host, CI, or nested.
+- Put MegaRAID / TLS / RayNu-F in Proven Core without a new ADR.
+- Reopen Everest because the Alpine ISO is still patched.
+- Claim a distro until an **unmodified** ISO installs.
+- Flash a later persist prototype as the known-good — use [`.cursor/rules/iron-rollback.mdc`](iron-rollback.mdc).
+
+## NOW
+
+Iron **M8.0-mech** on a ≥16 GiB USB (different port from the LogiLink ESP). Keep the patcher. Do not F11 until `durable LUN usb|nvme I/O ready` and `virtio-blk … (durable LUN …)`.

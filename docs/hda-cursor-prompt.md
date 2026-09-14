@@ -32,6 +32,7 @@ Before you finish this commit/push:
    - In-process REST ≠ network UI
    - bzImage/initrd ≠ ISO deploy
    - Demo SPA ≠ vSphere-like
+   - Two queues (ADR-020): do not delete the Alpine ISO patcher before M8.0-mech COM2; Windows is not a TLS peer
 7. Commit message footer line:
    HDA: months X→Y · overall A%→B% · ETA YYYY-MM
 

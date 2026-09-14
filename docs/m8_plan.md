@@ -1,7 +1,8 @@
 # M8 Plan — operator product hardening (post-Everest)
 
 **Status:** **OPEN** — M7 Mount Everest **CLOSED on iron** (`f72b4276` / `34552377351`, 2026-09-11).  
-**Parent:** [ADR-018](adr/ADR-018.md) · Everest: [ADR-009](adr/ADR-009.md) · lived: [progress.md](progress.md) · HDA: [hda.md](hda.md)  
+**Parent:** [ADR-018](adr/ADR-018.md) · queues: [ADR-020](adr/ADR-020.md) · fleet disks: [ADR-019](adr/ADR-019.md) · Everest: [ADR-009](adr/ADR-009.md) · lived: [progress.md](progress.md) · HDA: [hda.md](hda.md)  
+**Sibling:** [gen1_plan.md](gen1_plan.md) (RayNu VM Generation 1 — unmodified media / firmware split).  
 **Prior track:** [m7_plan.md](m7_plan.md) (closed). Cluster / elasticity is **M9**, not this plan.
 
 M8 is the polish table that used to read as “Everest residual.” It is **not** a claim that the product loop is unfinished. COM2 already printed `HOST-NIC-HTTP-OK` → SPA Start of RayNu-F → `ISO-INSTALL-OK` → `DISK-BOOT-OK` → `login:`.
@@ -29,20 +30,25 @@ Evidence: [`docs/evidence/r640/2026-09-11-f72b4276-phase-b-spa-iso-install-disk-
 
 **Harden the single-host operator product before cluster features.**
 
+This plan is the **operator** queue (where disks and the operator live). RayNu VM Generation 1 (what the guest is allowed to be) is [gen1_plan.md](gen1_plan.md). [ADR-020](adr/ADR-020.md) serializes both. Cursor rule: [`.cursor/rules/m8-gen1-queues.mdc`](../.cursor/rules/m8-gen1-queues.mdc).
+
 - Do **not** reopen M7. Host/CI never print `RAYNU-V-M7-ISO-INSTALL-OK`.
-- Do **not** pull TLS / persist / console into Proven Core without a new ADR (default **no**).
+- Do **not** pull TLS / persist / console / RayNu-F into Proven Core without a new ADR (default **no**).
 - Do **not** start vMotion / DRS / hot-add on this path (→ **M9**).
-- Build **in order**. A later gate may be designed in parallel; it does not close before its predecessor without rewriting this plan.
+- Do **not** delete the Alpine ISO patcher / auto-answer before M8.0-mech COM2 (that is Gen-1 Phase 2).
+- Do **not** treat Windows (M8.6) as a peer of TLS — it is Gen-1 Phase 5, after the Generation 1 freeze.
+- Build **in order**. A later gate may be designed in parallel; it does not close before its predecessor without rewriting this plan **and** ADR-020.
 
 ```
-M8.0-mech  Persist across HV reboot on NVMe or USB (lab mechanism)
+M8.0-mech  Persist across HV reboot on NVMe or USB (lab mechanism)  ← NOW
 M8.0-perc  PERC RAID virtual disk as DurableLun (fleet SKU, ADR-019)
-M8.1  TLS on coexist :8443
-M8.2  Real operator auth (not bring-up token as product default)
+           [Gen-1 Phase 1 design may overlap: split guest_uefi.rs]
+M8.1  TLS on coexist :8443          (do not close before M8.0-mech)
+M8.2  Real operator auth
 M8.3  Guest console UI (web/VNC; serial already worked)
 M8.4  ISO blob upload via SPA/REST
 M8.5  UEFI catalog persist (SFS/NVMe write)
-M8.6  Windows / multi-distro (ADR-014 later)
+M8.6  Windows / multi-distro (ADR-014) = Gen-1 Phase 5, after freeze
 
 → M9 sketch: vMotion-like · DRS-like · hot-add
 ```
@@ -148,11 +154,13 @@ HDA + `site/hda.html` stay fresh: update `docs/hda.md`, then `./tools/sync-hda-s
 
 ---
 
-### M8.6 — Windows / multi-distro (ADR-014)
+### M8.6 — Windows / multi-distro (ADR-014 / ADR-020 Phase 5)
 
-**Status: open** (later)
+**Status: open** (later — **after** Gen-1 Phase 4 freeze)
 
-**Goal:** Same UEFI+virtio product boot; typed `windows_iso` / additional Linux. Not a RayNu-F rewrite. Not WHQL.
+**Goal:** Same UEFI+virtio product boot; typed `windows_iso` / additional Linux. Not a RayNu-F rewrite. Not WHQL. **Not a peer of M8.1 TLS.** Unmodified media is Gen-1; do not invent a Windows ISO patcher.
+
+**Depends on:** [gen1_plan.md](gen1_plan.md) Phase 4 (`docs/raynu_vm_gen1.md` freeze). That freeze does not exist today.
 
 ---
 
@@ -172,4 +180,4 @@ Do not pull M9 into M8 gate lists.
 
 **M8.0 persist-first attach.** Choice remains **file-backed nested / durable LUN on iron / leftover DRAM as fallback**. Attach prefers persist (`attach_disk_keep` / `attach_lun` when the media looks installed). Nested `M8_PERSIST_IMG` backs QEMU RAM (distro OVMF ignores nvdimm/pc-dimm), default off. **NVMe I/O** (`MODE=lun`) Identify + Read/Write backs virtio when Identify succeeds; empty NVMe is not 1 GiB-zeroed. **USB BOT** (`MODE=usb`) is TCG-proven. Iron **M8.0-mech** marker is `RAYNU-V-M8-DISK-PERSIST-OK`. Fleet **M8.0-perc** marker is `RAYNU-V-M8-PERC-LUN-OK` ([ADR-019](adr/ADR-019.md)). Host marker is `RAYNU-V-M8-DISK-PERSIST-HOST-OK`. Keep ADR-004 exclusive ownership. Do not claim persist from nested QEMU alone. Do not copy 1 GiB through the Cruzer ESP. Do not format the Ubuntu PERC. USB persist does not close the fleet SKU. Keep [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) as the flash rollback until iron COM2 prints the persist marker.
 
-**Next:** (1) iron M8.0-mech on USB/NVMe — [runbook](runbooks/m8_persist_iron.md). Do not F11 until COM2 `I/O ready` + virtio on the LUN. (2) M8.0-perc MegaRAID VD persist ([ADR-019](adr/ADR-019.md)) — fleet SKU; spare VD only; do not format Ubuntu. Do not start M8.1 TLS until M8.0-mech COM2 exists (design-only overlap is allowed). PERC driver design may overlap; it does not close before mech without rewriting this plan.
+**Next:** (1) iron M8.0-mech on USB/NVMe — [runbook](runbooks/m8_persist_iron.md). Do not F11 until COM2 `I/O ready` + virtio on the LUN. Keep patched Alpine + auto-answer. (2) M8.0-perc MegaRAID VD persist ([ADR-019](adr/ADR-019.md)) — fleet SKU; spare VD only; do not format Ubuntu. Do not start M8.1 TLS until M8.0-mech COM2 exists (design-only overlap is allowed). Do not delete the ISO patcher (Gen-1 Phase 2) before (1). PERC driver / `guest_uefi.rs` split design may overlap; they do not close before mech without rewriting this plan **and** [ADR-020](adr/ADR-020.md).

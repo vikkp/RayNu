@@ -11,11 +11,11 @@ You are working in **RayNu-V** (`vikkp/RayNu`). Governance: root `CLAUDE.md`. Li
 
 ## Mount Everest (product loop)
 
-**CLOSED on iron 2026-09-11.** Ship EFI → boot on **real Dell PowerEdge R640** → **network** vSphere-like UI → **deploy Linux ISO** (milestone **M7 / ADR-009**). M6 production bar is already closed on Latitude. Next mountain is **M8** operator hardening (ADR-018) — leftover persist / TLS / console. Do not reopen Everest. Do not mark overall 100%.
+**CLOSED on iron 2026-09-11.** Ship EFI → boot on **real Dell PowerEdge R640** → **network** vSphere-like UI → **deploy Linux ISO** (milestone **M7 / ADR-009**). M6 production bar is already closed on Latitude. Next mountain is **M8** operator hardening (ADR-018) — leftover persist / TLS / console. Sibling queue **Gen-1** (ADR-020) — do not delete the Alpine patcher before M8.0-mech. Do not reopen Everest. Do not mark overall 100%.
 
 Living tracker (source of truth): **`docs/hda.md`** (YAML frontmatter + scoreboard + month timeline).  
-Everest plan (closed): **`docs/m7_plan.md`**. Next mountain: **`docs/m8_plan.md`** (ADR-018). Public site page: **`site/hda.html`** (reads **`site/hda.json`**).  
-**M8.0 iron rollback:** GitHub Latest [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) → `f72b4276` / `--run 34552377351` / EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc`. See `.cursor/rules/iron-rollback.mdc`.
+Everest plan (closed): **`docs/m7_plan.md`**. Next mountain: **`docs/m8_plan.md`** (ADR-018) · Gen-1: **`docs/gen1_plan.md`** (ADR-020). Public site page: **`site/hda.html`** (reads **`site/hda.json`**).  
+**M8.0 iron rollback:** GitHub Latest [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) → `f72b4276` / `--run 34552377351` / EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc`. See `.cursor/rules/iron-rollback.mdc` · `.cursor/rules/m8-gen1-queues.mdc`.
 
 ## When you MUST update HDA (+ site sync)
 

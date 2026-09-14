@@ -17,7 +17,7 @@
     "deploy Linux ISO",
     "M7 closed on iron"
   ],
-  "mount_everest_target": "CLOSED on iron 2026-09-11: Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest). Next: M8 operator hardening (ADR-018).",
+  "mount_everest_target": "CLOSED on iron 2026-09-11: Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest). Next: M8 operator hardening (ADR-018) + Gen-1 sibling queue (ADR-020).",
   "overall_pct": 99,
   "source": "docs/hda.md",
   "summits": {
