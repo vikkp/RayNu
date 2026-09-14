@@ -42,9 +42,10 @@ After ExitBootServices:
 
 - `durable LUN nvme I/O ready bytes=…` **or**
 - `durable LUN usb I/O ready bytes=…` (ESP Cruzer window skipped; next port)
-- `xhci caplen=… ports=… p1=0x…` (all ports through 16, not only 4)
+- `xhci cap caplen=… slots=… ports=… p1=0x…` (all ports through 16, not only 4)
+- `xhci cap caplen=… hcs1=… hcs2=… slots=… ports=… scratch=…/64` on **every** USB attempt (before PORTSC)
 
-Fail: `nvme I/O fail` / `usb I/O fail err=` + leftover DRAM. Intel PCH scratchpad ≤ 16 pages is supported; more is `err=1` Cap.
+Fail: `nvme I/O fail` / `usb I/O fail err=` + leftover DRAM. Intel PCH scratchpad ≤ 64 pages; more is `err=1` Cap + `over-budget`. `mmio-dead` means CAPLENGTH was 0 or `0xffffffff` (BAR unread). Iron `ac3b92cd` (2026-09-14): Lewisburg `8086:a1af` named, then `usb I/O fail err=1 bar=0x92b00000 portsc=0 cmpl=0` — Cap before PORTSC; 16-page budget. Guest `vda` was 1.07 GiB leftover DRAM. Toshiba unused. Everest loop (`ISO-INSTALL-OK` → F7 `DISK-BOOT-OK` → `login:`) is **not** persist. Do not Force Off that guest expecting `RAYNU-V-M8-DISK-PERSIST-OK`.
 
 ### 3. Phase B attach
 
