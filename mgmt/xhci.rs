@@ -32,6 +32,8 @@ pub const TRB_ENABLE_SLOT: u32 = 9;
 pub const TRB_DISABLE_SLOT: u32 = 10;
 pub const TRB_ADDRESS_DEV: u32 = 11;
 pub const TRB_CONFIG_EP: u32 = 12;
+pub const TRB_RESET_EP: u32 = 14;
+pub const TRB_SET_TR_DEQ: u32 = 16;
 pub const TRB_EVENT_TRANSFER: u32 = 32;
 pub const TRB_EVENT_CMD: u32 = 33;
 
@@ -97,6 +99,11 @@ pub const ADDR_SPINS: u32 = 50_000_000;
 /// MSC BOT / UAS interface protocol (USB Mass Storage).
 pub const USB_MSC_BOT: u8 = 0x50;
 pub const USB_MSC_UAS: u8 = 0x62;
+/// USB Hub bDeviceClass. Iron `06ca0f95` p14 `1604:10c0` class 09 proto 01.
+pub const USB_CLASS_HUB: u8 = 0x09;
+/// GET_DESC retries after Address Device. Iron `06ca0f95` p11 `cmd=4 cmpl=0`
+/// (Toshiba `0480:a004` on p11 the prior recover flash). Not persist OK.
+pub const XHCI_DESC_TRIES: u8 = 3;
 
 /// xHCI USBLEGSUP (extended cap ID 1).
 pub const USBLEGSUP_ID: u8 = 1;
@@ -236,6 +243,45 @@ pub fn crcr_is_running(crcr: u64) -> bool {
 
 pub fn crcr_restart(cmd_hpa: u64) -> u64 {
     (cmd_hpa & !0x3F) | CRCR_RCS
+}
+
+/// Slot ID[31:24] + Endpoint ID[20:16] for Reset Endpoint / Set TR Dequeue.
+pub fn xhci_ep_cmd_extra(slot: u8, dci: u8) -> u32 {
+    u32::from(slot) << 24 | u32::from(dci) << 16
+}
+
+/// Device descriptor bDeviceClass 09 is a hub, not BOT.
+pub fn usb_dev_is_hub(class: u8) -> bool {
+    class == USB_CLASS_HUB
+}
+
+/// Keep Cruzer / TooSmall / an earlier DESC fail when a later port is a hub.
+/// Iron `06ca0f95`: p11 GET_DESC `cmd=4 cmpl=0` then p14 hub `err=4` hid Toshiba.
+pub fn xhci_bring_up_keep_err(last: UsbBotError, e: UsbBotError) -> UsbBotError {
+    match e {
+        UsbBotError::Cruzer => UsbBotError::Cruzer,
+        UsbBotError::TooSmall => {
+            if last == UsbBotError::Cruzer {
+                last
+            } else {
+                UsbBotError::TooSmall
+            }
+        }
+        UsbBotError::Hub => {
+            if last == UsbBotError::Reset {
+                UsbBotError::Hub
+            } else {
+                last
+            }
+        }
+        other => {
+            if last == UsbBotError::Cruzer || last == UsbBotError::TooSmall {
+                last
+            } else {
+                other
+            }
+        }
+    }
 }
 
 /// Pack Enum `portsc=` as PORTSC | (port << 32).
@@ -633,6 +679,24 @@ fn serial_xhci_uas(port: u8) {
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_hub(port: u8) {
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 xhci enum p");
+    serial_dec_u8(port);
+    serial::write_line(" hub skip (err=9; leftover DRAM; not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_desc_retry(port: u8, n: u8) {
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 xhci enum p");
+    serial_dec_u8(port);
+    serial::write_str(" desc retry n=");
+    serial_dec_u8(n);
+    serial::write_line(" (not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn serial_hex32(v: u32) {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut buf = [0u8; 8];
@@ -698,6 +762,12 @@ fn serial_xhci_dev(_port: u8, _vid: u16, _pid: u16, _class: u8, _proto: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_uas(_port: u8) {}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_hub(_port: u8) {}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_desc_retry(_port: u8, _n: u8) {}
 
 fn doorbell(hw: &mut impl XhciHw, db: u32, slot: u8, target: u8) {
     hw.write32(db + u32::from(slot) * 4, u32::from(target));
@@ -1096,6 +1166,60 @@ fn reset_port(hw: &mut impl XhciHw, caps: &XhciCaps, port: u8) -> Result<u32, Us
     Ok(sc)
 }
 
+fn reset_ep0(
+    hw: &mut impl XhciHw,
+    caps: &XhciCaps,
+    mem: &XhciMem,
+    cmd_ring: &mut Ring,
+    ev: &mut EventRing,
+    ep0: &mut Ring,
+    slot: u8,
+) {
+    drain_events(hw, caps, ev);
+    let extra = xhci_ep_cmd_extra(slot, 1);
+    let _ = cmd(hw, caps, cmd_ring, ev, 0, trb_ctrl(0, TRB_RESET_EP, extra));
+    zero_page(hw, mem.ep0);
+    *ep0 = Ring::new(mem.ep0);
+    let _ = cmd(
+        hw,
+        caps,
+        cmd_ring,
+        ev,
+        mem.ep0 | 1,
+        trb_ctrl(0, TRB_SET_TR_DEQ, extra),
+    );
+}
+
+fn control_in_retry(
+    hw: &mut impl XhciHw,
+    caps: &XhciCaps,
+    mem: &XhciMem,
+    cmd_ring: &mut Ring,
+    ep0: &mut Ring,
+    ev: &mut EventRing,
+    slot: u8,
+    bounce: u64,
+    setup: [u8; 8],
+    data: &mut [u8],
+    port: u8,
+) -> Result<(), UsbBotError> {
+    let mut last = UsbBotError::Enum;
+    for n in 0..XHCI_DESC_TRIES {
+        drain_events(hw, caps, ev);
+        match control_in(hw, caps, ep0, ev, slot, bounce, setup, data) {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                last = e;
+                if n + 1 < XHCI_DESC_TRIES {
+                    serial_xhci_desc_retry(port, n + 1);
+                    reset_ep0(hw, caps, mem, cmd_ring, ev, ep0, slot);
+                }
+            }
+        }
+    }
+    Err(last)
+}
+
 fn control_in(
     hw: &mut impl XhciHw,
     caps: &XhciCaps,
@@ -1441,15 +1565,18 @@ fn try_port(
     })?;
     let mut ep0 = Ring::new(mem.ep0);
     let mut dev = [0u8; 18];
-    control_in(
+    control_in_retry(
         hw,
         caps,
+        mem,
+        cmd_ring,
         &mut ep0,
         ev,
         slot,
         mem.bounce,
         setup_get_desc(1, 18),
         &mut dev,
+        port,
     )
     .map_err(|e| {
         recover_enum(hw, caps, mem, cmd_ring, ev, slot);
@@ -1462,16 +1589,26 @@ fn try_port(
         dev[4],
         dev[6],
     );
+    if usb_dev_is_hub(dev[4]) {
+        serial_xhci_hub(port);
+        let sc = hw.read32(portsc_off(caps.op, port));
+        store_usb_bot_diag(UsbBotError::Hub, mmio, xhci_enum_diag_portsc(sc, port), 0);
+        recover_enum(hw, caps, mem, cmd_ring, ev, slot);
+        return Err(UsbBotError::Hub);
+    }
     let mut cfg9 = [0u8; 9];
-    control_in(
+    control_in_retry(
         hw,
         caps,
+        mem,
+        cmd_ring,
         &mut ep0,
         ev,
         slot,
         mem.bounce,
         setup_get_desc(2, 9),
         &mut cfg9,
+        port,
     )
     .map_err(|e| {
         recover_enum(hw, caps, mem, cmd_ring, ev, slot);
@@ -1479,15 +1616,18 @@ fn try_port(
     })?;
     let total = u16::from_le_bytes([cfg9[2], cfg9[3]]).min(256);
     let mut cfg = [0u8; 256];
-    control_in(
+    control_in_retry(
         hw,
         caps,
+        mem,
+        cmd_ring,
         &mut ep0,
         ev,
         slot,
         mem.bounce,
         setup_get_desc(2, total),
         &mut cfg[..total as usize],
+        port,
     )
     .map_err(|e| {
         recover_enum(hw, caps, mem, cmd_ring, ev, slot);
@@ -1607,22 +1747,13 @@ fn xhci_bring_up(
             mmio,
         ) {
             Ok(live) => return Ok(live),
-            Err(UsbBotError::Cruzer) => last = UsbBotError::Cruzer,
-            Err(UsbBotError::TooSmall) => {
-                if last != UsbBotError::Cruzer {
-                    last = UsbBotError::TooSmall;
-                }
-            }
-            Err(e) => {
-                if last != UsbBotError::Cruzer && last != UsbBotError::TooSmall {
-                    last = e;
-                }
-            }
+            Err(e) => last = xhci_bring_up_keep_err(last, e),
         }
     }
     if !any_ccs {
         return Err(UsbBotError::Reset);
     }
+    store_usb_bot_diag(last, mmio, usb_bot_last_portsc(), usb_bot_last_cmpl());
     Err(last)
 }
 
@@ -2166,5 +2297,45 @@ mod xhci_pack_test {
         assert_eq!(USB_MSC_UAS, 0x62);
         assert_eq!(xhci_event_err(TRB_EVENT_TRANSFER), UsbBotError::Xfer);
         assert_eq!(xhci_event_err(TRB_ENABLE_SLOT), UsbBotError::Enum);
+    }
+
+    #[test]
+    fn usb_hub_skip_does_not_hide_desc_fail() {
+        // Iron `06ca0f95`: p11 GET_DESC `cmd=4 cmpl=0`; p14 hub `1604:10c0`
+        // class 09 became `err=4` and leftover DRAM Everest ran. ISO isolation
+        // is proven (`last_st=0x0`, `ISO-INSTALL-OK` leftover). Not persist.
+        assert!(usb_dev_is_hub(USB_CLASS_HUB));
+        assert!(!usb_dev_is_hub(0));
+        assert_eq!(USB_CLASS_HUB, 9);
+        assert_eq!(XHCI_DESC_TRIES, 3);
+        assert_eq!(TRB_RESET_EP, 14);
+        assert_eq!(TRB_SET_TR_DEQ, 16);
+        assert_eq!(UsbBotError::Hub as u8, 9);
+        assert_eq!(xhci_ep_cmd_extra(3, 1), 3u32 << 24 | 1u32 << 16);
+        assert_eq!(
+            xhci_bring_up_keep_err(UsbBotError::Xfer, UsbBotError::Hub),
+            UsbBotError::Xfer
+        );
+        assert_eq!(
+            xhci_bring_up_keep_err(UsbBotError::Reset, UsbBotError::Hub),
+            UsbBotError::Hub
+        );
+        assert_eq!(
+            xhci_bring_up_keep_err(UsbBotError::Cruzer, UsbBotError::Hub),
+            UsbBotError::Cruzer
+        );
+        assert_eq!(
+            xhci_bring_up_keep_err(UsbBotError::Reset, UsbBotError::Xfer),
+            UsbBotError::Xfer
+        );
+        let mut hub_cfg = [0u8; 18];
+        hub_cfg[0] = 9;
+        hub_cfg[1] = 2;
+        hub_cfg[2] = 18;
+        hub_cfg[9] = 9;
+        hub_cfg[10] = 4;
+        hub_cfg[14] = USB_CLASS_HUB;
+        assert_eq!(parse_bot_eps(&hub_cfg), None);
+        assert_eq!(cfg_msc_protos(&hub_cfg), (false, false));
     }
 }

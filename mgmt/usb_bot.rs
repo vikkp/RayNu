@@ -53,6 +53,9 @@ pub enum UsbBotError {
     TooSmall = 6,
     Cruzer = 7,
     Xfer = 8,
+    /// USB hub (class 09). Skip and keep scanning CCS ports.
+    /// Iron `06ca0f95`: p14 `1604:10c0` class 09 became `err=4` and hid p11 DESC.
+    Hub = 9,
 }
 
 /// USB bulk pipes used after Configure Endpoint.
