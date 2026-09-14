@@ -62,7 +62,7 @@
           id="loi-path"
           aria-label="Path to LOI"
         >
-          Everest loop (closed) → persist across HV reboot → SKU honesty → TLS
+          Everest loop (closed) → persist across HV reboot → SKU card → TLS
           for InfoSec → Bar A dedicated-box LOI → PERC RAID I/O → Bar B fleet LOI
         </p>
       </div>
@@ -148,8 +148,9 @@
           <p class="section__lede">
             A Letter of Intent here is a fleet owner saying they intend to run
             RayNu-V in <strong>non-production</strong> on named iron. It is not
-            a purchase order, not 1.0, not cluster, not Windows. Mixing the two
-            bars is how we lose the room.
+            a purchase order, not 1.0, not cluster, not Windows. The two bars
+            are separate conversations; presenting them as one overstates
+            what is ready.
           </p>
           <div class="loi-cards" data-reveal>
             <article class="loi-card">
@@ -157,8 +158,8 @@
               <h3>Dedicated box</h3>
               <p>
                 One PowerEdge we own, or they can afford to dedicate. The guest
-                disk must survive Force Off of the hypervisor. HTTPS so InfoSec
-                can look without flinching. Alpine-on-virtio is an acceptable
+                disk must survive Force Off of the hypervisor. HTTPS so the
+                management plane can be shown to InfoSec. Alpine-on-virtio is an acceptable
                 first guest if the SKU card says so.
               </p>
               <p class="loi-card__effect">
@@ -188,11 +189,11 @@
       <section class="section section--loi-pieces" id="pieces">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>The pieces</p>
-          <h2 class="section__title">What has to be true, and why it bites</h2>
+          <h2 class="section__title">What has to be true, and why it matters</h2>
           <p class="section__lede">
             Everest HDA scored the loop. LOIHDA scores the <em>consequences</em>
-            of each leftover. A feature can be “in the binary” and still be
-            dishonest to sell.
+            of each leftover. A feature can be in the binary and still overstate
+            what a buyer can use.
           </p>
           <ol class="loi-pieces">
             <li data-reveal>
@@ -242,8 +243,8 @@
                 One page: what ships, what does not. Dedicated-box versus fleet.
                 USB versus PERC. Alpine-patched versus unmodified. No cluster.
                 No Windows. This page is the start of that card. Until persist
-                and TLS close, the card has to say “not yet.” Inflated copy
-                here is how LOI conversations die in the second meeting.
+                and TLS close, the card has to say “not yet.” Overstated copy
+                here does not survive a second diligence meeting.
               </p>
             </li>
             <li data-reveal>
@@ -306,7 +307,7 @@
                 <em>classifies</em> RAID and prints <code>skip PERC</code> so
                 we do not destroy the lab OS. Classification is not I/O. There
                 is no MegaRAID mailbox driver. Firmware RAID BlockIo dies at
-                ExitBootServices. This 15% is census plus honesty. Bar B waits
+                ExitBootServices. This 15% is census plus classification. Bar B waits
                 on a <strong>spare</strong> virtual disk — not the Ubuntu
                 standing boot.
               </p>
@@ -359,13 +360,19 @@ never:  host / CI / nested printing that marker</code></pre>
 
       <section class="section" id="locks">
         <div class="section__inner">
-          <h2 class="section__title">Locks so we do not lie</h2>
+          <p class="milestone-kicker" data-reveal>Scope</p>
+          <h2 class="section__title">What this tracker does not claim</h2>
+          <p class="section__lede">
+            Open work stays named. These boundaries keep a dedicated-box
+            conversation distinct from a fleet replacement, and keep Everest
+            closed while M8 continues.
+          </p>
           <ul class="loi-locks">
-            <li>Do not take a RAID-fleet LOI on a USB demo.</li>
-            <li>Do not claim TLS, unmodified ISO, or cluster.</li>
-            <li>Do not reopen Everest because Alpine is still patched.</li>
-            <li>Host and CI never print iron install or persist markers.</li>
-            <li>Latitude / nested QEMU still ≠ R640.</li>
+            <li>A USB persist demonstration is the dedicated-box mechanism. RAID-fleet LOI waits on PERC virtual-disk persist.</li>
+            <li>TLS, unmodified ISO install, and cluster remain open and are not presented as closed.</li>
+            <li>Everest remains closed. A patched Alpine ISO is a named residual, not a reason to reopen the summit.</li>
+            <li>Iron install and persist markers are printed on R640 COM2 only. Host and CI do not emit them.</li>
+            <li>Latitude and nested QEMU are not PowerEdge R640 evidence.</li>
           </ul>
           <div class="cta" data-reveal>
             <a

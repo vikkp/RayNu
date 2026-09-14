@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | loi-hda-page |
-| Summary | **Public LOI path.** Living `docs/loihda.md` + `site/loi.html`. Journey nav shortcut replaced by LOI. Two bars: dedicated-box vs RAID-fleet. HDA 99% is not an LOI. Nested QEMU ≠ R640. Iron persist still open. Never `ISO-INSTALL-OK`. |
+| Commit | loi-scope-copy |
+| Summary | **LOI scope copy.** Public `site/loi.html` + `docs/loihda.md`: “What this tracker does not claim” (USB persist ≠ RAID-fleet; TLS/ISO/cluster remain open; Alpine residual does not reopen Everest). Months **0.0 held**. Overall **99 held**. |
 | Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. |
 | Gates touched | docs/site only. `./tools/sync-hda-site.sh --check` + `./tools/sync-loihda-site.sh --check` + `./tools/check-site-chrome.sh`. |
 | Months Δ | 0.0 held (Everest closed; LOI is a different mountain) |
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-14 | loi-scope-copy | 0.0 | 99 | **LOI scope copy:** public “What this tracker does not claim.” USB persist is Bar A mechanism; RAID-fleet waits on PERC; TLS/ISO/cluster remain open; Alpine residual does not reopen Everest. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-14 | loi-hda-page | 0.0 | 99 | **Public LOI path:** living `docs/loihda.md` + `site/loi.html`. Journey nav → LOI. HDA 99% is Everest, not an LOI. Two bars (dedicated-box / RAID-fleet). Nested QEMU ≠ R640. Iron persist open. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |
 | 2026-09-13 | m8-main-catchup | 0.0 | 99 | **`main` catch-up:** merge iron-LUN tip (`993a904d`) onto `origin/main` so users are not left on pre-Everest public copy. Preserves updater chrome + Please reboot story; lived HDA/site = Everest closed + M8 next (iron DurableLun 1–3 host-ready). Nested QEMU ≠ R640. Iron persist open. Never `ISO-INSTALL-OK`. Do not F11 until I/O ready on a ≥16 GiB LUN. months 0.0 held; overall 99 held |
 | 2026-09-13 | m8-disk-persist-iron-lun | 0.0 | 99 | **Iron DurableLun 1–3 host-ready:** R640 census fixture (PERC/AHCI skip, NVMe then USB); Intel PCH scratchpad ≤16 + USBLEGSUP; leftover named when LUN not ready; [m8_persist_iron.md](runbooks/m8_persist_iron.md). Nested QEMU ≠ R640. Iron persist open. Never `ISO-INSTALL-OK`. Do not F11 until I/O ready + virtio on the LUN. months 0.0 held; overall 99 held |

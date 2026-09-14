@@ -11,7 +11,7 @@ alwaysApply: true
 
 # LOIHDA auto-update (path to Letter of Intent)
 
-You are working in **RayNu-V** (`vikkp/RayNu`). Everest HDA (`docs/hda.md`) measures the **closed** product loop. **LOIHDA** (`docs/loihda.md`) measures whether we can take a **non-production LOI** without lying.
+You are working in **RayNu-V** (`vikkp/RayNu`). Everest HDA (`docs/hda.md`) measures the **closed** product loop. **LOIHDA** (`docs/loihda.md`) measures whether a **non-production LOI** is in scope, and which bar.
 
 Public page: **`site/loi.html`** (reads **`site/loi.json`**). Sync: `./tools/sync-loihda-site.sh`.
 
@@ -43,9 +43,9 @@ Also run the Everest HDA procedure if that rule also fires. The two trackers mus
 5. `./tools/sync-loihda-site.sh` and `--check`. Stage `docs/loihda.md` + `site/loi.json`. If `site/loi.html` copy is stale, patch HTML in the same commit.
 6. Footer: `LOIHDA: Bar A X%→Y% · Bar B A%→B% · months A M→N`
 
-## Honesty
+## Scope of claims
 
-- Do not take a RAID-fleet LOI on a USB demo.
-- Do not format Ubuntu PERC.
-- Do not print iron persist/PERC markers from host/CI/nested.
-- Do not reopen Everest because Alpine is still patched.
+- RAID-fleet LOI waits on PERC virtual-disk persist. A USB demonstration is not that close.
+- The Ubuntu PERC is not formatted as an LOI strategy.
+- Host/CI/nested do not print iron persist or PERC markers.
+- Everest remains closed. A patched Alpine ISO is a named residual, not a reopened summit.
