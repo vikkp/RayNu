@@ -81,6 +81,9 @@ impl MockUsb {
                 let lba = get_be_u32(&cbw[15..], 2);
                 self.write_off = Some((lba as usize).saturating_mul(LBA as usize));
             }
+            SCSI_START_STOP => {
+                self.queue_csw();
+            }
             _ => {}
         }
     }
@@ -143,6 +146,18 @@ fn mock_bot_write_read_efi_part() {
     let mut back = [0u8; 512];
     usb_bot_rw(&mut hw, &mut tag, lba, 512, &mut back, false).expect("read");
     assert_eq!(&back[..8], b"EFI PART");
+}
+
+#[test]
+fn start_stop_and_read_probe_named() {
+    assert_eq!(SCSI_START_STOP, 0x1B);
+    assert_eq!(USB_BOT_RW_TRIES, 3);
+    assert_eq!(usb_bot_stage_name(BOT_STAGE_CBW), "cbw");
+    assert_eq!(usb_bot_stage_name(BOT_STAGE_DATA), "data");
+    assert_eq!(usb_bot_stage_name(BOT_STAGE_CSW), "csw");
+    assert_eq!(cdb_start_stop(true)[0], SCSI_START_STOP);
+    assert_eq!(cdb_start_stop(true)[4], 1);
+    assert_eq!(cdb_start_stop(false)[4], 0);
 }
 
 #[test]
