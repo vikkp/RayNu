@@ -24,7 +24,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 **Iron rollback (M8.0 known-good):** GitHub Latest [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) → git `f72b4276d198b5e90147e9be1037d0d0b7213a28` / CI `--run 34552377351` / EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc`. COM2 `build: sha=f72b4276d198`. Do not flash a later persist prototype as the known-good. Do not F11 `34548550755` / `7f8dc0a9`. Historical pre-native-NIC preserve (not this kit): [`releases/v0.1.0-adr013-baseline/`](releases/v0.1.0-adr013-baseline/).
 
 **Mount Everest (product loop):** **CLOSED on iron** — ship EFI → real R640 → network UI → Linux ISO deploy (`HOST-NIC-HTTP-OK` → SPA Start of RayNu-F → `ISO-INSTALL-OK` → `DISK-BOOT-OK` → `login:`). Checkpoint, not 1.0/GA. HDA overall 99%.  
-Honest distance + month timeline: **[docs/hda.md](docs/hda.md)** · public tracker: **[site/hda.html](site/hda.html)** · M8 plan: [docs/m8_plan.md](docs/m8_plan.md) · rollback rule: [`.cursor/rules/iron-rollback.mdc`](.cursor/rules/iron-rollback.mdc).
+Honest distance + month timeline: **[docs/hda.md](docs/hda.md)** · public tracker: **[site/hda.html](site/hda.html)** · path to LOI: [docs/loihda.md](docs/loihda.md) · [site/loi.html](site/loi.html) · M8 plan: [docs/m8_plan.md](docs/m8_plan.md) · rollback rule: [`.cursor/rules/iron-rollback.mdc`](.cursor/rules/iron-rollback.mdc).
 
 ## Repository Layout
 

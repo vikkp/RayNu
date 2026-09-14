@@ -1,0 +1,231 @@
+---
+loihda_version: 1
+last_updated: 2026-09-14
+last_commit: PENDING
+last_commit_short: PENDING
+updated_by: cursor
+loi_target: "Non-prod Letter of Intent. Bar A = dedicated-box lab. Bar B = RAID-fleet replacement. HDA 99% is Everest, not an LOI."
+months_to_loi_a: 1.5
+months_to_loi_a_prev: 1.5
+months_to_loi_b: 3.5
+months_to_loi_b_prev: 3.5
+overall_pct: 38
+confidence: medium
+baseline_date: 2026-09-14
+baseline_months: 1.5
+loi_a_eta_month: "2026-11"
+loi_b_eta_month: "2026-12"
+bar_a_pct: 42
+bar_b_pct: 18
+piece_everest_pct: 100
+piece_persist_pct: 70
+piece_sku_pct: 25
+piece_tls_pct: 8
+piece_auth_pct: 28
+piece_console_pct: 22
+piece_perc_pct: 15
+piece_unmodified_pct: 20
+---
+
+# LOIHDA — Honest Distance to a Letter of Intent
+
+> **Living document.** Updated on every LOI-relevant commit (see `.cursor/rules/loihda-update.mdc`).  
+> **Sibling of Everest HDA:** [`docs/hda.md`](hda.md) measures the product loop (closed). This file measures **whether we can take a non-production LOI conversation without lying**.  
+> Public page: [`site/loi.html`](../site/loi.html) (fed by [`site/loi.json`](../site/loi.json)).  
+> **HDA 99% is not an LOI.** Everest closed the loop on one path. An LOI asks a buyer to put intent in writing.
+
+Pillars: **[Z]** single binary · **[D]** Dell-native · **[A]** audit. Formal verification **[V]** is the north star; it is **not** an LOI gate.  
+Lived: [`docs/progress.md`](progress.md) · M8: [`docs/m8_plan.md`](m8_plan.md) · ADR-018: [`docs/adr/ADR-018.md`](adr/ADR-018.md).
+
+---
+
+## Scoreboard (read this first)
+
+| Metric | Value | Meaning |
+|--------|------:|---------|
+| **Overall LOI readiness** | **38%** | Nearest honest conversation is Bar A. Not Bar B. Not GA. |
+| **Bar A — dedicated-box** | **42%** | One PowerEdge we own or they dedicate. Disk must survive HV reboot. TLS for InfoSec. |
+| **Bar B — RAID-fleet** | **18%** | Replace the licensed hypervisor on PERC virtual disks they already paid for. |
+| **Months to Bar A** | **1.5** | Baseline 2026-09-14. ETA **2026-11**. Shrink only with DONE evidence. |
+| **Months to Bar B** | **3.5** | PERC I/O is the long pole. ETA **2026-12**. |
+| **Confidence** | medium | Everest is high-confidence. LOI is not, until persist prints on COM2. |
+
+```
+Bar A (dedicated-box)  ████████░░░░░░░░░░░░  42%
+Bar B (RAID fleet)      ███░░░░░░░░░░░░░░░░░  18%
+Overall LOI             ███████░░░░░░░░░░░░░  38%
+```
+
+**How the month number moves:** same honesty as Everest HDA. Closed iron gates shrink `months_to_loi_*`. Nested QEMU, host tests, and design docs do **not**. Stalls or new scope slip the ETA. Prefer under-claiming.
+
+---
+
+## What an LOI is (and is not)
+
+A **Letter of Intent** here is a fleet owner saying, in writing, that they intend to run RayNu-V in **non-production** on named iron. It is not a purchase order, not GA, not cluster, not Windows WHQL.
+
+There are **two** LOIs. Mixing them is how we lose the room.
+
+| Bar | Who signs | What they are buying | Close when |
+|-----|-----------|----------------------|------------|
+| **A — dedicated-box** | A lab / innovation / “spare R640” owner | One binary on a box they can afford to dedicate. Guest disk survives Force Off. HTTPS they can show InfoSec. | M8.0-mech on COM2 + SKU card + TLS path |
+| **B — RAID-fleet** | Someone whose disks already live on PERC H740P | “Keep the iron, replace the licensed hypervisor.” USB is not this. | `RAYNU-V-M8-PERC-LUN-OK` on a **spare** VD, not Ubuntu |
+
+**Do not take a Bar B conversation until Bar B is honest.** A USB stick persist demo is a Bar A mechanism proof. Selling it as “we run on your RAID” is the failure mode this tracker exists to prevent.
+
+Everest (HDA) answered: *can we install Linux from a browser on a real R640?*  
+LOIHDA answers: *can we look a buyer in the eye?*
+
+---
+
+## Definition of done
+
+### Bar A — dedicated-box non-prod LOI
+
+All must be true:
+
+| # | Criterion | Done when | Product effect |
+|---|-----------|-----------|----------------|
+| A1 | **Everest loop** | Iron `ISO-INSTALL-OK` → `DISK-BOOT-OK` → `login:` | Without this there is no product to intent toward. **DONE** (`f72b4276`). |
+| A2 | **Persist across HV reboot** | COM2 `RAYNU-V-M8-DISK-PERSIST-OK` after Force Off | Today the guest disk is leftover DRAM. Force Off = gone. A buyer who reboots RayNu-V must not lose the VM. Nested-OK ≠ this. |
+| A3 | **SKU card** | One page: what ships, what does not, dedicated-box vs fleet | Stops us promising PERC, Windows, or cluster in a Bar A conversation. |
+| A4 | **TLS** | Browser/`curl --cacert` on `:8443` after `BOOT-OK` | InfoSec will not sign plaintext HTTP + bring-up token. Everest deferred this on purpose. |
+| A5 | **Auth beyond bring-up** | Product default is not `raynu-v-bringup` | A shared lab latch is not an operator credential. |
+| A6 | **Operator keyboard** | Type in the guest from the SPA (not only iDRAC SOL) | Soft for the first LOI; still on the polish table. Serial already installed Alpine. |
+
+A2 is the **NOW** gate. A4 is the usual InfoSec latch. A3 can close in docs the same week as A2. A5/A6 may trail a first dedicated-box LOI if named as residuals.
+
+### Bar B — RAID-fleet non-prod LOI
+
+| # | Criterion | Done when | Product effect |
+|---|-----------|-----------|----------------|
+| B1 | Bar A honest | Bar A criteria closed or explicitly waived in the SKU card | Do not skip A to sell B. |
+| B2 | **PERC virtual disk I/O** | COM2 `RAYNU-V-M8-PERC-LUN-OK` on a VD that is **not** Ubuntu | ~80% of R640 fleets boot guests from RAID. USB persist does not extend those fleets. |
+| B3 | Census skip ≠ product policy | Mapper still refuses the **lab** Ubuntu VD; product talks to a **spare** VD | Formatting `raynuvsrv1` Ubuntu is not an LOI strategy. |
+
+---
+
+## The pieces (what they mean)
+
+Each row is a product effect, not a feature checkbox. Percents are **this tracker’s** scores, not HDA.
+
+### 1. Everest loop — 100%
+
+**What it is.** Ship EFI → real R640 → network SPA → Linux ISO → reboot to disk → `login:`. Closed 2026-09-11.
+
+**Product effect.** There is a thing a buyer can watch. Without it, an LOI is a research pitch.
+
+**Not this.** Disks that survive a **hypervisor** reboot. HTTPS. RAID. Unmodified Ubuntu.
+
+### 2. Disk persist (M8.0-mech) — 70%
+
+**What it is.** The virtio disk `setup-disk` wrote is leftover DRAM above PRECISE. Guest F7 keeps it (ADR-017). A RayNu-V reboot **zeros** it.
+
+**Product effect.** “Install Linux” without persist is a demo that dies when the operator Force Offs the box — which they will, because that is how you recover a Type-1. Nested File persist (`ce3d8a09`) and DurableLun USB/NVMe I/O are the mechanism. Iron Force Off is still open. USB ≥ 16 GiB (not the ESP Cruzer) is tonight’s media. Nested QEMU ≠ R640.
+
+**Honest remainder.** 30% is iron COM2 `RAYNU-V-M8-DISK-PERSIST-OK`. Do not F11 until `I/O ready` + virtio on the LUN.
+
+### 3. SKU card — 25%
+
+**What it is.** A one-page “what you are buying.” Dedicated-box vs fleet. USB vs PERC. Alpine-patched vs unmodified. No cluster. No Windows.
+
+**Product effect.** This page **is** the start of that card. Until A2/A4 close, the card must say “not yet.” Inflated copy here is how LOI conversations die.
+
+### 4. TLS — 8%
+
+**What it is.** Coexist listen is plaintext HTTP on `10.99.99.x:8443`. That closed Everest (ADR-009 deferred TLS).
+
+**Product effect.** A CISO will ask “is management encrypted?” The honest answer today is no. Bar A that skips TLS is a lab handshake, not an InfoSec-safe LOI.
+
+### 5. Auth — 28%
+
+**What it is.** ESP `auth.token` can override the bring-up token. Iron used `raynu-v-bringup` / `AuthAllowed`.
+
+**Product effect.** Shared lab latch ≠ operator credential. Soft for a dedicated box you control; not soft if two people on the LAN can start VMs.
+
+### 6. Guest console UI — 22%
+
+**What it is.** Serial auto-answer already typed `setup-disk`. SPA has serial logs. No in-browser guest keyboard/VNC.
+
+**Product effect.** Operators should not need iDRAC SOL to log into Alpine. Soft for Bar A if we name it. Hard for anyone who thinks this is vSphere.
+
+### 7. PERC RAID I/O — 15%
+
+**What it is.** The R640 “HDD” is Ubuntu on PERC H740P (`01:04`). The DurableLun mapper **classifies** RAID and prints `skip PERC` so we do not destroy the lab OS. There is no MegaRAID mailbox driver. PRE-EBS UEFI RAID BlockIo dies at ExitBootServices.
+
+**Product effect.** This is the difference between a lab hypervisor and “extend the life of the fleet you already paid for.” USB persist is mechanism. Fleet persist is a spare virtual disk. Do not format Ubuntu.
+
+### 8. Unmodified media (Gen-1) — 20%
+
+**What it is.** Iron Alpine still uses an ISO patcher + serial auto-answer. RayNu-F is the firmware; the guest is not yet a specified Generation 1 VM on stock ISOs.
+
+**Product effect.** Fine for a dedicated-box demo. A Bar B claim of “unmodified Linux ISO” is false until that patcher is gone. Windows is later still. **Not** a Bar A blocker if the SKU card says Alpine-on-virtio.
+
+---
+
+## Two-path timeline
+
+| When | Focus | Exit | Status |
+|------|-------|------|--------|
+| 2026-09-11 | Everest | Iron ISO → disk → login | **DONE** — HDA 99%, months 0.0 |
+| 2026-09-13 | Persist mechanism | Nested-OK + DurableLun USB/NVMe I/O | **DONE nested / host**; iron Force Off **open** |
+| **NOW** | Bar A A2 | USB/NVMe Force Off on COM2 | **NEXT** |
+| then | Bar A A3+A4 | SKU card + TLS | design overlap OK; do not close TLS before persist COM2 |
+| then | Bar B B2 | Spare PERC VD persist | after A2; census skip is lab safety |
+| later | Auth / console / unmodified ISO | A5, A6, Gen-1 Phase 2 | named residuals, not fake closes |
+
+```
+2026-09  ████████  Everest closed
+2026-10  ░░░░░░░░  Bar A: iron persist (USB/NVMe)
+2026-11  ░░░░░░░░  Bar A: SKU + TLS  → first dedicated-box LOI window
+2026-12  ░░░░░░░░  Bar B: PERC VD I/O
+```
+
+---
+
+## Honesty locks
+
+- Latitude / nested QEMU ≠ R640.
+- Leftover DRAM ≠ USB persist ≠ NVMe persist ≠ PERC persist.
+- Host/CI never print `RAYNU-V-M7-ISO-INSTALL-OK`, `RAYNU-V-M8-DISK-PERSIST-OK`, or `RAYNU-V-M8-PERC-LUN-OK`.
+- Do not format the Ubuntu PERC on `raynuvsrv1`.
+- Do not take a RAID-fleet LOI on a USB demo.
+- Do not reopen Everest because the Alpine ISO is still patched.
+- Cluster / vMotion is **M9**, not an LOI closer.
+- Proven Core stays closed unless a new ADR says otherwise. MegaRAID/TLS/RayNu-F stay outside.
+
+---
+
+## This-commit delta
+
+| Field | Value |
+|-------|-------|
+| Commit | loi-hda-page |
+| Summary | **Stand up LOIHDA + public `loi.html`.** Journey nav shortcut replaced by LOI. Two bars (dedicated-box vs RAID-fleet) with piece explanations. Numbers are a baseline, not a close. |
+| Everest impact | none — HDA months 0.0 / 99% held |
+| LOI impact | tracker **born** at Bar A 42% / Bar B 18% / overall 38% / 1.5 mo to Bar A |
+| Gates touched | docs + site only. No MegaRAID. No TLS. No F11. |
+
+---
+
+## LOIHDA changelog
+
+| Date | Slice | A% | B% | Note |
+|------|-------|----:|---:|------|
+| 2026-09-14 | loi-hda-page | 42 | 18 | **Born.** Public LOI page + living `docs/loihda.md`. Journey → LOI in site nav. Everest remains the HDA mountain. Iron persist still open. Never `ISO-INSTALL-OK`. |
+
+---
+
+## Operator quick view
+
+```
+LOI:           NOT OPEN. Tracker born 2026-09-14.
+Bar A:         42% · 1.5 months · dedicated-box non-prod
+Bar B:         18% · 3.5 months · PERC RAID fleet (do not sell yet)
+Overall:       38% · confidence medium
+NOW:           M8.0-mech iron Force Off (USB ≥ 16 GiB, not Cruzer, not Ubuntu PERC)
+Do not:        RAID-fleet LOI · format Ubuntu · claim TLS · claim unmodified ISO
+Everest:       still closed (HDA 99% / 0.0 months) — different mountain
+```
+
+Public page: [`site/loi.html`](../site/loi.html). Living doc: this file. Sync: `./tools/sync-loihda-site.sh`.

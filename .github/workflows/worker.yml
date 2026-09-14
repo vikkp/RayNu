@@ -24,6 +24,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: HDA tracker fresh
         run: ./tools/sync-hda-site.sh --check
+      - name: LOIHDA tracker fresh
+        run: ./tools/sync-loihda-site.sh --check
       - name: Deploy Worker with static assets
         uses: cloudflare/wrangler-action@v3
         with:

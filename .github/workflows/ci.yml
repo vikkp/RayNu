@@ -17,9 +17,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: site/hda.json matches docs/hda.md
         run: ./tools/sync-hda-site.sh --check
+      - name: site/loi.json matches docs/loihda.md
+        run: ./tools/sync-loihda-site.sh --check
 
   site-chrome:
-    name: site chrome (CIO / Status / Stories / HDA)
+    name: site chrome (CIO / Status / Stories / HDA / LOI)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

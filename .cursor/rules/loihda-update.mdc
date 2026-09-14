@@ -1,0 +1,51 @@
+---
+description: LOIHDA — update docs/loihda.md + site/loi.html tracker on LOI-relevant commits
+globs:
+  - "docs/loihda.md"
+  - "docs/m8_plan.md"
+  - "site/loi.*"
+  - "mgmt/durable_lun.rs"
+  - "mgmt/disk_persist.rs"
+alwaysApply: true
+---
+
+# LOIHDA auto-update (path to Letter of Intent)
+
+You are working in **RayNu-V** (`vikkp/RayNu`). Everest HDA (`docs/hda.md`) measures the **closed** product loop. **LOIHDA** (`docs/loihda.md`) measures whether we can take a **non-production LOI** without lying.
+
+Public page: **`site/loi.html`** (reads **`site/loi.json`**). Sync: `./tools/sync-loihda-site.sh`.
+
+## Two bars (do not mix)
+
+| Bar | Meaning | Close |
+|-----|---------|-------|
+| **A dedicated-box** | One PowerEdge we own or they dedicate | Persist on COM2 + SKU card + TLS |
+| **B RAID-fleet** | Replace the licensed HV on PERC VDs they already paid for | `RAYNU-V-M8-PERC-LUN-OK` on a **spare** VD, not Ubuntu |
+
+HDA 99% ≠ LOI. USB persist ≠ PERC persist. Nested QEMU ≠ R640.
+
+## When you MUST update LOIHDA
+
+Same change (or tight follow-up) when you:
+
+1. Commit / push / merge LOI-relevant work (persist, PERC, TLS, auth, console, SKU honesty).
+2. Close or open an M8 marker (`RAYNU-V-M8-DISK-PERSIST-OK`, `RAYNU-V-M8-PERC-LUN-OK`, TLS).
+3. User says: `loihda`, `update loi`, `path to LOI`.
+
+Also run the Everest HDA procedure if that rule also fires. The two trackers must not contradict (Everest stays closed; LOI stays open until Bar A is honest).
+
+## Procedure
+
+1. Read `docs/loihda.md` (frontmatter + scoreboard + changelog).
+2. Re-score Bar A / Bar B pieces. Prefer under-claiming.
+3. Set `months_to_loi_*_prev` before changing months. Only **decrease** months with COM2/DONE evidence.
+4. Rewrite frontmatter, scoreboard, this-commit delta, changelog.
+5. `./tools/sync-loihda-site.sh` and `--check`. Stage `docs/loihda.md` + `site/loi.json`. If `site/loi.html` copy is stale, patch HTML in the same commit.
+6. Footer: `LOIHDA: Bar A X%→Y% · Bar B A%→B% · months A M→N`
+
+## Honesty
+
+- Do not take a RAID-fleet LOI on a USB demo.
+- Do not format Ubuntu PERC.
+- Do not print iron persist/PERC markers from host/CI/nested.
+- Do not reopen Everest because Alpine is still patched.

@@ -34,7 +34,7 @@ The look of `https://raynuv.com` is the **site-updater** design from PRs **#218â
 
 `site/index.html` must contain all of:
 
-- `nav.site-nav` with links: Status, Console, Journey, Stories, Everest, Paper, **CIO View**
+- `nav.site-nav` with links: Status, Console, **LOI**, Stories, Everest, Paper, **CIO View**
 - HTML comment `REQUIRED SITE CHROME`
 - `#status` (lived milestone copy â€” currently Everest closed on iron)
 - `#start-here` with `fork__card` (CIO View + engineers)
