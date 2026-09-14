@@ -133,7 +133,8 @@ use super::{
     guest_uefi_virtio_stall_dump_reset_on_notify,
     guest_uefi_virtio_stall_dump_pit,
     guest_uefi_virtio_stall_dump_pit_hold,
-    guest_uefi_virtio_stall_dump_pit_paced, guest_uefi_virtio_stall_probe, StallProbe,
+    guest_uefi_virtio_stall_dump_pit_paced, guest_uefi_virtio_stall_dump_frozen,
+    guest_uefi_virtio_stall_probe, StallProbe,
     STALL_PROBE_TSC_PER_SEC,
     guest_uefi_virtio_stall_empty,
     guest_uefi_virtio_stall_dump_intx,
@@ -1799,6 +1800,14 @@ fn marker_and_residual_honest() {
     );
     assert!(!guest_uefi_virtio_stall_dump_pit_paced(true, false));
     assert!(!guest_uefi_virtio_stall_dump_pit_paced(false, true));
+    assert!(
+        !guest_uefi_virtio_stall_dump_frozen(1),
+        "virtio stall dump frozen"
+    );
+    assert!(
+        guest_uefi_virtio_stall_dump_frozen(2),
+        "virtio stall dump frozen"
+    );
     // virtio stall probe: samples, then SysRq w/m/t/l, then a final sample.
     let s = STALL_PROBE_TSC_PER_SEC;
     assert_eq!(guest_uefi_virtio_stall_probe(0, 0), None);

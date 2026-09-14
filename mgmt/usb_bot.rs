@@ -25,8 +25,17 @@ pub const SCSI_READ_CAPACITY_10: u8 = 0x25;
 pub const SCSI_READ_10: u8 = 0x28;
 /// SCSI WRITE(10).
 pub const SCSI_WRITE_10: u8 = 0x2A;
+/// SCSI START STOP UNIT (spin up a USB HDD before the first READ).
+pub const SCSI_START_STOP: u8 = 0x1B;
 /// SCSI READ CAPACITY(16).
 pub const SCSI_READ_CAPACITY_16: u8 = 0x9E;
+/// Iron `6c278e85`: INQUIRY/TUR/CAPACITY succeeded; first 512-byte READ
+/// timed out (`err=8` `cmpl=0xff` at `off=0x200`). Retry after START STOP.
+pub const USB_BOT_RW_TRIES: u8 = 3;
+/// BOT stage stamped into [`usb_bot_last_stage`] for COM2 `bot=`.
+pub const BOT_STAGE_CBW: u8 = 1;
+pub const BOT_STAGE_DATA: u8 = 2;
+pub const BOT_STAGE_CSW: u8 = 3;
 
 /// CBW signature `'USBC'`.
 pub const CBW_SIG: u32 = 0x4342_5355;
@@ -144,6 +153,24 @@ pub fn cdb_request_sense() -> [u8; 16] {
     c
 }
 
+/// SCSI START STOP UNIT. `start=true` spins the platter (Immed=0).
+pub fn cdb_start_stop(start: bool) -> [u8; 16] {
+    let mut c = [0u8; 16];
+    c[0] = SCSI_START_STOP;
+    c[4] = if start { 1 } else { 0 };
+    c
+}
+
+/// COM2 `bot=` tag for a BOT stage byte.
+pub fn usb_bot_stage_name(stage: u8) -> &'static str {
+    match stage {
+        BOT_STAGE_CBW => "cbw",
+        BOT_STAGE_DATA => "data",
+        BOT_STAGE_CSW => "csw",
+        _ => "?",
+    }
+}
+
 /// Last LBA (inclusive) and block size from READ CAPACITY(10).
 pub fn capacity10_bytes(data: &[u8]) -> Option<(u64, u32)> {
     if data.len() < 8 {
@@ -168,8 +195,10 @@ fn bot_cmd(
 ) -> Result<(), UsbBotError> {
     let data_len = buf.len() as u32;
     let cbw = Cbw::scsi(tag, data_len, dir_in, 0, cdb);
+    store_usb_bot_stage(BOT_STAGE_CBW);
     hw.bulk_out(&cbw.bytes)?;
     if data_len != 0 {
+        store_usb_bot_stage(BOT_STAGE_DATA);
         if dir_in {
             let n = hw.bulk_in(buf)?;
             if n < buf.len() {
@@ -181,6 +210,7 @@ fn bot_cmd(
             hw.bulk_out(buf)?;
         }
     }
+    store_usb_bot_stage(BOT_STAGE_CSW);
     let mut csw = [0u8; CSW_LEN];
     let n = hw.bulk_in(&mut csw)?;
     if n < CSW_LEN || !csw_ok(&csw) {
@@ -189,7 +219,9 @@ fn bot_cmd(
     Ok(())
 }
 
-/// INQUIRY + TUR/SENSE + READ CAPACITY(10). Returns (size_bytes, lba_bytes).
+/// INQUIRY + TUR/SENSE + START STOP + READ CAPACITY(10) + one native READ.
+/// Iron `6c278e85`: CAPACITY alone printed `usb I/O ready` then peek READ
+/// timed out. Do not claim ready until a data-stage READ completes.
 pub fn usb_bot_bring_up(hw: &mut impl UsbBulk, min_bytes: u64) -> Result<(u64, u32), UsbBotError> {
     let mut inq = [0u8; 36];
     let _ = bot_cmd(hw, 1, true, &cdb_inquiry(), &mut inq);
@@ -200,12 +232,20 @@ pub fn usb_bot_bring_up(hw: &mut impl UsbBulk, min_bytes: u64) -> Result<(u64, u
         let mut sense = [0u8; 18];
         let _ = bot_cmd(hw, 8 + i, true, &cdb_request_sense(), &mut sense);
     }
+    let _ = bot_cmd(hw, 12, false, &cdb_start_stop(true), &mut []);
     let mut cap = [0u8; 8];
     bot_cmd(hw, 2, true, &cdb_read_capacity10(), &mut cap)?;
     let (bytes, lba) = capacity10_bytes(&cap).ok_or(UsbBotError::Capacity)?;
     if bytes < min_bytes {
         return Err(UsbBotError::TooSmall);
     }
+    let n = lba as usize;
+    if n == 0 || n > 4096 {
+        return Err(UsbBotError::Capacity);
+    }
+    let mut probe = [0u8; 4096];
+    let mut tag = 20u32;
+    usb_bot_rw(hw, &mut tag, lba, 0, &mut probe[..n], false)?;
     Ok((bytes, lba))
 }
 
@@ -231,12 +271,29 @@ pub fn usb_bot_rw(
     if nlb == 0 || nlb > 0xFFFF || slba > u64::from(u32::MAX) {
         return Err(UsbBotError::Xfer);
     }
-    *tag = tag.wrapping_add(1);
-    if *tag == 0 {
-        *tag = 1;
+    let mut last = UsbBotError::Xfer;
+    for _ in 0..USB_BOT_RW_TRIES {
+        *tag = tag.wrapping_add(1);
+        if *tag == 0 {
+            *tag = 1;
+        }
+        let cdb = cdb_rw10(write, slba as u32, nlb as u16);
+        match bot_cmd(hw, *tag, !write, &cdb, buf) {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                last = e;
+                let _ = bot_cmd(hw, tag.wrapping_add(50), false, &cdb_tur(), &mut []);
+                let _ = bot_cmd(
+                    hw,
+                    tag.wrapping_add(51),
+                    false,
+                    &cdb_start_stop(true),
+                    &mut [],
+                );
+            }
+        }
     }
-    let cdb = cdb_rw10(write, slba as u32, nlb as u16);
-    bot_cmd(hw, *tag, !write, &cdb, buf)
+    Err(last)
 }
 
 static IO_READY: AtomicBool = AtomicBool::new(false);
@@ -247,6 +304,7 @@ static LAST_ERR: core::sync::atomic::AtomicU8 = core::sync::atomic::AtomicU8::ne
 static LAST_BAR: AtomicU64 = AtomicU64::new(0);
 static LAST_PORTSC: AtomicU64 = AtomicU64::new(0);
 static LAST_CMPL: AtomicU64 = AtomicU64::new(0);
+static LAST_STAGE: core::sync::atomic::AtomicU8 = core::sync::atomic::AtomicU8::new(0);
 static BOT_TAG: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(10);
 
 pub fn usb_bot_io_ready() -> bool {
@@ -312,6 +370,14 @@ pub fn usb_bot_last_portsc() -> u64 {
 
 pub fn usb_bot_last_cmpl() -> u64 {
     LAST_CMPL.load(Ordering::Acquire)
+}
+
+pub fn usb_bot_last_stage() -> u8 {
+    LAST_STAGE.load(Ordering::Acquire)
+}
+
+pub fn store_usb_bot_stage(stage: u8) {
+    LAST_STAGE.store(stage, Ordering::Release);
 }
 
 pub fn store_usb_bot_diag(err: UsbBotError, bar: u64, portsc: u64, cmpl: u64) {

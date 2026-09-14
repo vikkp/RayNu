@@ -3338,6 +3338,14 @@ pub fn guest_uefi_virtio_stall_dump_pit_paced(dumped: bool, packages: bool) -> b
     dumped && packages
 }
 
+/// Iron `6c278e85`: after `sfdisk: cannot open /dev/vda: I/O error` COM2
+/// kept printing `PIT paced n=6402` (virtio MMIO frozen; USB BOT READ
+/// timed out). Cap the heartbeat after two prints of the same `n`.
+/// Keep PIT. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_virtio_stall_dump_frozen(same_n_heartbeats: u32) -> bool {
+    same_n_heartbeats >= 2
+}
+
 /// One step of the stall probe after an apk empty-ring dump.
 /// virtio stall probe.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -4379,6 +4387,11 @@ static VIRTIO_STALL_DUMP_TSC: AtomicU64 = AtomicU64::new(0);
 /// Next [`guest_uefi_virtio_stall_probe`] step after the dump.
 #[cfg(target_os = "uefi")]
 static VIRTIO_STALL_PROBE_STEP: AtomicU8 = AtomicU8::new(0);
+/// Last `n=` printed by the stall heartbeat (frozen-n cap).
+#[cfg(target_os = "uefi")]
+static VIRTIO_STALL_FROZEN_N: AtomicU32 = AtomicU32::new(0);
+#[cfg(target_os = "uefi")]
+static VIRTIO_STALL_FROZEN_HITS: AtomicU32 = AtomicU32::new(0);
 #[cfg(target_os = "uefi")]
 static LINUX_PIC_LEFTOVER_GSI2_LOG: AtomicBool = AtomicBool::new(false);
 #[cfg(target_os = "uefi")]
@@ -7774,6 +7787,8 @@ unsafe fn raynu_f_reset_relaunch(_src: crate::devices::guest_platform::ResetSrc)
     VIRTIO_STALL_PIT_HOLD_TSC.store(0, Ordering::Release);
     VIRTIO_STALL_DUMP_TSC.store(0, Ordering::Release);
     VIRTIO_STALL_PROBE_STEP.store(0, Ordering::Release);
+    VIRTIO_STALL_FROZEN_N.store(0, Ordering::Release);
+    VIRTIO_STALL_FROZEN_HITS.store(0, Ordering::Release);
     LINUX_PIC_LEFTOVER_GSI2_LOG.store(false, Ordering::Release);
     LINUX_VIRTIO_REASSERT_LOG.store(false, Ordering::Release);
     LINUX_VIRTIO_PIC_LOG.store(false, Ordering::Release);
@@ -12142,6 +12157,20 @@ unsafe fn maybe_virtio_stall_dump_pit_hold() {
         return;
     }
     VIRTIO_STALL_PIT_HOLD_TSC.store(now, Ordering::Release);
+    let n = LAST_VIRTIO_MMIO_HIT.load(Ordering::Acquire);
+    let prev = VIRTIO_STALL_FROZEN_N.load(Ordering::Acquire);
+    let hits = if n == prev {
+        VIRTIO_STALL_FROZEN_HITS
+            .load(Ordering::Acquire)
+            .saturating_add(1)
+    } else {
+        1
+    };
+    VIRTIO_STALL_FROZEN_N.store(n, Ordering::Release);
+    VIRTIO_STALL_FROZEN_HITS.store(hits, Ordering::Release);
+    if guest_uefi_virtio_stall_dump_frozen(hits) {
+        return;
+    }
     // Snapshot before this heartbeat's own bytes land in the shared ring,
     // otherwise `ring`/`pend` always show our text. UART THRE chain telemetry.
     let ring = serial::guest_tx_len();
@@ -12149,7 +12178,7 @@ unsafe fn maybe_virtio_stall_dump_pit_hold() {
     let chain = crate::devices::guest_uart::thre_chain();
     let pic = crate::devices::guest_irq::pic_master_snap();
     serial::write_str_nowait("boot: guest-UEFI virtio stall dump PIT paced n=");
-    write_dec_nowait(u64::from(LAST_VIRTIO_MMIO_HIT.load(Ordering::Acquire)));
+    write_dec_nowait(u64::from(n));
     serial::write_str_nowait(" (not ISO-INSTALL-OK)\n");
     virtio_stall_dump_thre_chain(ring, com2_lsr, &chain, &pic);
 }
@@ -12665,6 +12694,8 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
             VIRTIO_STALL_PIT_HOLD_TSC.store(0, Ordering::Release);
             VIRTIO_STALL_DUMP_TSC.store(0, Ordering::Release);
             VIRTIO_STALL_PROBE_STEP.store(0, Ordering::Release);
+            VIRTIO_STALL_FROZEN_N.store(0, Ordering::Release);
+            VIRTIO_STALL_FROZEN_HITS.store(0, Ordering::Release);
             serial::write_line_nowait(
                 "boot: guest-UEFI virtio stall dump notify reset (apk harvest; not ISO-INSTALL-OK)",
             );

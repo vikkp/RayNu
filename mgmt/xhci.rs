@@ -12,7 +12,8 @@
 
 use super::usb_bot::{
     next_bot_tag, store_usb_bot_diag, store_usb_bot_ready, usb_bot_bring_up, usb_bot_last_bar,
-    usb_bot_last_cmpl, usb_bot_last_portsc, UsbBotError, UsbBulk,
+    usb_bot_last_cmpl, usb_bot_last_portsc, usb_bot_last_stage, usb_bot_stage_name, UsbBotError,
+    UsbBulk,
 };
 
 /// Same window as [`crate::mgmt::durable_lun::usb_is_esp_cruzer_window`].
@@ -40,6 +41,9 @@ pub const TRB_EVENT_CMD: u32 = 33;
 pub const TRB_CYCLE: u32 = 1;
 pub const TRB_IOC: u32 = 1 << 5;
 pub const TRB_IDT: u32 = 1 << 6;
+/// Interrupt on Short Packet (Normal / Data TRB). CSW is 13 bytes on a
+/// 512-byte HS bulk MPS.
+pub const TRB_ISP: u32 = 1 << 2;
 pub const TRB_TC: u32 = 1 << 1;
 
 pub const CMPL_SUCCESS: u8 = 1;
@@ -95,6 +99,11 @@ pub const CRCR_CRR: u64 = 1 << 3;
 /// Address Device issues SET_ADDRESS on the wire. Enable Slot does not.
 /// `SPINS` was enough for Enable Slot on iron; Address Device was not.
 pub const ADDR_SPINS: u32 = 50_000_000;
+/// Bulk Transfer Event wait. Iron `6c278e85` (DESC retry): Toshiba p11
+/// `0480:a004` INQUIRY/TUR/CAPACITY (≤36 B) succeeded (`lba=512`) then the
+/// first 512-byte READ timed out (`err=8` `cmpl=0xff` at `off=0x200`).
+/// Mechanical USB HDD first READ after CAPACITY can be seconds.
+pub const BULK_SPINS: u32 = 100_000_000;
 
 /// MSC BOT / UAS interface protocol (USB Mass Storage).
 pub const USB_MSC_BOT: u8 = 0x50;
@@ -1367,14 +1376,42 @@ struct LiveXhci {
     mmio: u64,
     caps: XhciCaps,
     ev: EventRing,
+    cmd: Ring,
     bulk_out: Ring,
     bulk_in: Ring,
     slot: u8,
     dci_out: u8,
     dci_in: u8,
     bounce: u64,
+    bulk_out_hpa: u64,
+    bulk_in_hpa: u64,
     lba: u32,
     tag: u32,
+}
+
+fn reset_bulk_ep(
+    hw: &mut impl XhciHw,
+    caps: &XhciCaps,
+    cmd_ring: &mut Ring,
+    ev: &mut EventRing,
+    ring: &mut Ring,
+    hpa: u64,
+    slot: u8,
+    dci: u8,
+) {
+    drain_events(hw, caps, ev);
+    let extra = xhci_ep_cmd_extra(slot, dci);
+    let _ = cmd(hw, caps, cmd_ring, ev, 0, trb_ctrl(0, TRB_RESET_EP, extra));
+    zero_page(hw, hpa);
+    *ring = Ring::new(hpa);
+    let _ = cmd(
+        hw,
+        caps,
+        cmd_ring,
+        ev,
+        hpa | 1,
+        trb_ctrl(0, TRB_SET_TR_DEQ, extra),
+    );
 }
 
 impl UsbBulk for LiveXhci {
@@ -1392,8 +1429,31 @@ impl UsbBulk for LiveXhci {
             trb_ctrl(0, TRB_NORMAL, TRB_IOC),
         );
         doorbell(&mut hw, self.caps.db, self.slot, self.dci_out);
-        consume_event(&mut hw, &self.caps, &mut self.ev, TRB_EVENT_TRANSFER, SPINS)?;
-        Ok(())
+        match consume_event(
+            &mut hw,
+            &self.caps,
+            &mut self.ev,
+            TRB_EVENT_TRANSFER,
+            BULK_SPINS,
+        ) {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                let dci = self.dci_out;
+                let hpa = self.bulk_out_hpa;
+                let slot = self.slot;
+                reset_bulk_ep(
+                    &mut hw,
+                    &self.caps,
+                    &mut self.cmd,
+                    &mut self.ev,
+                    &mut self.bulk_out,
+                    hpa,
+                    slot,
+                    dci,
+                );
+                Err(e)
+            }
+        }
     }
 
     fn bulk_in(&mut self, data: &mut [u8]) -> Result<usize, UsbBotError> {
@@ -1408,12 +1468,37 @@ impl UsbBulk for LiveXhci {
             &mut hw,
             self.bounce,
             data.len() as u32,
-            trb_ctrl(0, TRB_NORMAL, TRB_IOC),
+            trb_ctrl(0, TRB_NORMAL, TRB_IOC | TRB_ISP),
         );
         doorbell(&mut hw, self.caps.db, self.slot, self.dci_in);
-        consume_event(&mut hw, &self.caps, &mut self.ev, TRB_EVENT_TRANSFER, SPINS)?;
-        hw.dma_read(self.bounce, data);
-        Ok(data.len())
+        match consume_event(
+            &mut hw,
+            &self.caps,
+            &mut self.ev,
+            TRB_EVENT_TRANSFER,
+            BULK_SPINS,
+        ) {
+            Ok(_) => {
+                hw.dma_read(self.bounce, data);
+                Ok(data.len())
+            }
+            Err(e) => {
+                let dci = self.dci_in;
+                let hpa = self.bulk_in_hpa;
+                let slot = self.slot;
+                reset_bulk_ep(
+                    &mut hw,
+                    &self.caps,
+                    &mut self.cmd,
+                    &mut self.ev,
+                    &mut self.bulk_in,
+                    hpa,
+                    slot,
+                    dci,
+                );
+                Err(e)
+            }
+        }
     }
 }
 
@@ -1693,12 +1778,19 @@ fn try_port(
             deq: ev.deq,
             cycle: ev.cycle,
         },
+        cmd: Ring {
+            base: cmd_ring.base,
+            enq: cmd_ring.enq,
+            cycle: cmd_ring.cycle,
+        },
         bulk_out: Ring::new(mem.bulk_out),
         bulk_in: Ring::new(mem.bulk_in),
         slot,
         dci_out,
         dci_in,
         bounce: mem.bounce,
+        bulk_out_hpa: mem.bulk_out,
+        bulk_in_hpa: mem.bulk_in,
         lba: 512,
         tag: 10,
     };
@@ -1930,6 +2022,8 @@ fn serial_xhci_rw_fail(off: u64, write: bool, err: UsbBotError) {
     serial_dec_u8(err as u8);
     serial::write_str(" cmpl=0x");
     serial_hex32(usb_bot_last_cmpl() as u32);
+    serial::write_str(" bot=");
+    serial::write_str(usb_bot_stage_name(usb_bot_last_stage()));
     serial::write_line(" (not ISO-INSTALL-OK)");
 }
 
@@ -2286,6 +2380,10 @@ mod xhci_pack_test {
         assert_eq!(CMPL_PARAMETER, 17);
         assert_eq!(CMPL_TIMEOUT, 0xFF);
         assert_eq!(ADDR_SPINS > SPINS, true);
+        assert_eq!(BULK_SPINS > ADDR_SPINS, true);
+        assert_eq!(TRB_ISP, 1 << 2);
+        assert_eq!(usb_bot_stage_name(2), "data");
+        assert!(usb_bot_last_stage() <= 3);
         // Iron Slot DW1 EFI `3473a0b9`: stamp_enum printed MaxSlots as cmpl.
         let stale = xhci_reset_diag_cmpl(64, 26, 0x80, 10);
         assert_eq!(stale as u8, 0x40);
