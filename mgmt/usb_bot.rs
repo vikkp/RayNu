@@ -270,21 +270,16 @@ fn bot_cmd(
     Ok(())
 }
 
-/// INQUIRY + TUR/SENSE + READ CAPACITY(10) + one native READ.
+/// INQUIRY (ignored) + READ CAPACITY(10) + one native READ.
 /// Iron `6c278e85`: CAPACITY printed `usb I/O ready` then peek READ timed out.
 /// Iron `73dc4d2e`: START STOP (Immed=0) + ignored timeout + auto EP-reset
-/// failed CSW before ready. Do not send START STOP here. Do not claim ready
-/// until a data-stage READ completes.
+/// failed CSW before ready. Iron `68e16633`: `scsi=tur bot=cbw` was the
+/// READ-probe recovery TUR (stamped over the READ fail) plus p14 hub
+/// `cmpl=0` clobber — not "LUN stayed on p10". Do not send START STOP or
+/// TUR here. Do not claim ready until a data-stage READ completes.
 pub fn usb_bot_bring_up(hw: &mut impl UsbBulk, min_bytes: u64) -> Result<(u64, u32), UsbBotError> {
     let mut inq = [0u8; 36];
     let _ = bot_cmd(hw, 1, true, &cdb_inquiry(), &mut inq);
-    for i in 0..5u32 {
-        if bot_cmd(hw, 3 + i, false, &cdb_tur(), &mut []).is_ok() {
-            break;
-        }
-        let mut sense = [0u8; 18];
-        let _ = bot_cmd(hw, 8 + i, true, &cdb_request_sense(), &mut sense);
-    }
     let mut cap = [0u8; 8];
     bot_cmd(hw, 2, true, &cdb_read_capacity10(), &mut cap)?;
     let (bytes, lba) = capacity10_bytes(&cap).ok_or(UsbBotError::Capacity)?;
@@ -334,7 +329,6 @@ pub fn usb_bot_rw(
             Ok(()) => return Ok(()),
             Err(e) => {
                 last = e;
-                let _ = bot_cmd(hw, tag.wrapping_add(50), false, &cdb_tur(), &mut []);
                 hw.recover_pipes();
             }
         }

@@ -11,9 +11,9 @@
 //! ADR-004: persist backing is virtio-blk / BlockIo only.
 
 use super::usb_bot::{
-    next_bot_tag, store_usb_bot_diag, store_usb_bot_ready, usb_bot_bring_up,
-    usb_bot_keep_xfer_diag, usb_bot_last_bar, usb_bot_last_cmpl, usb_bot_last_err,
-    usb_bot_last_portsc, usb_bot_last_stage, usb_bot_stage_name, UsbBotError, UsbBulk, CSW_LEN,
+    next_bot_tag, store_usb_bot_diag, store_usb_bot_ready, usb_bot_bring_up, usb_bot_last_bar,
+    usb_bot_last_cmpl, usb_bot_last_portsc, usb_bot_last_stage, usb_bot_stage_name, UsbBotError,
+    UsbBulk, CSW_LEN,
 };
 
 /// Same window as [`crate::mgmt::durable_lun::usb_is_esp_cruzer_window`].
@@ -215,6 +215,16 @@ pub fn portsc_pls_training(pls: u32) -> bool {
 /// xHCI Parameter Error (`cmpl=0x11`).
 pub fn portsc_link_ready(sc: u32) -> bool {
     sc & PORTSC_PED != 0 && portsc_speed(sc) != 0 && !portsc_pls_training(portsc_pls(sc))
+}
+
+/// Connected ports are always reset. Never inherit PED=1 / PLS=U0 from
+/// firmware. xHCI HCRST does not fully clear PORTSC on some Intel PCH, and
+/// Address Device on a device the UEFI driver already addressed times out
+/// (`cmpl=0xff`). Iron `68e16633` scan was Polling `0x206e1` on p10/p11/p14
+/// (HCRST *did* drop PED) — skip-if-U0 was not why p10 timed out — but it
+/// is still a landmine if a later flash leaves the boot stick enabled.
+pub fn port_must_reset(sc: u32) -> bool {
+    sc & PORTSC_CCS != 0
 }
 
 /// Warm-reset (WPR) when the protocol cap, PLS, or SuperSpeed field says USB3.
@@ -698,6 +708,27 @@ fn serial_xhci_hub(port: u8) {
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_hcrst() {
+    crate::boot::serial::write_line(
+        "boot: Stage 46 xhci hcrst (own rings; leftover DRAM; not ISO-INSTALL-OK)",
+    );
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_bot_eps(port: u8, ep_out: u8, ep_in: u8, cfg: u8) {
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 xhci bot p");
+    serial_dec_u8(port);
+    serial::write_str(" iface=08/06/50 ep_out=");
+    serial_dec_u8(ep_out);
+    serial::write_str(" ep_in=");
+    serial_dec_u8(ep_in);
+    serial::write_str(" cfg=");
+    serial_dec_u8(cfg);
+    serial::write_line(" (not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn serial_xhci_desc_retry(port: u8, n: u8) {
     use crate::boot::serial;
     serial::write_str("boot: Stage 46 xhci enum p");
@@ -776,6 +807,12 @@ fn serial_xhci_uas(_port: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_hub(_port: u8) {}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_hcrst() {}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_bot_eps(_port: u8, _ep_out: u8, _ep_in: u8, _cfg: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_desc_retry(_port: u8, _n: u8) {}
@@ -997,6 +1034,7 @@ fn xhci_start(
     if !wait_clear(hw, usbsts, USBSTS_CNR) {
         return Err(UsbBotError::Reset);
     }
+    serial_xhci_hcrst();
     handshake_legacy(hw);
     let slots = xhci_config_slots(caps.max_slots);
     hw.write32(caps.op + 0x38, u32::from(slots));
@@ -1142,9 +1180,7 @@ fn reset_port(hw: &mut impl XhciHw, caps: &XhciCaps, port: u8) -> Result<u32, Us
     if sc & PORTSC_CCS == 0 {
         return Err(UsbBotError::Reset);
     }
-    if portsc_link_ready(sc) {
-        return Ok(sc);
-    }
+    // Always reset. Never inherit PED=1 / U0 (`port_must_reset`).
     let usb3 = port_reset_use_wpr(port_is_usb3(hw, port), sc);
     if !issue_port_reset(hw, off, usb3) && !issue_port_reset(hw, off, !usb3) {
         sc = hw.read32(off);
@@ -1685,10 +1721,6 @@ fn try_port(
     );
     if usb_dev_is_hub(dev[4]) {
         serial_xhci_hub(port);
-        if !usb_bot_keep_xfer_diag(usb_bot_last_err()) {
-            let sc = hw.read32(portsc_off(caps.op, port));
-            store_usb_bot_diag(UsbBotError::Hub, mmio, xhci_enum_diag_portsc(sc, port), 0);
-        }
         recover_enum(hw, caps, mem, cmd_ring, ev, slot);
         return Err(UsbBotError::Hub);
     }
@@ -1738,6 +1770,7 @@ fn try_port(
         recover_enum(hw, caps, mem, cmd_ring, ev, slot);
         return Err(UsbBotError::Bot);
     };
+    serial_xhci_bot_eps(port, ep_out, ep_in, cfg_val);
     let dci_out = ep_out * 2;
     let dci_in = ep_in * 2 + 1;
     let hi = core::cmp::max(dci_out, dci_in);
@@ -1817,6 +1850,13 @@ fn try_port(
             Ok(live)
         }
         Err(e) => {
+            let sc = hw.read32(portsc_off(caps.op, port));
+            store_usb_bot_diag(
+                e,
+                mmio,
+                xhci_enum_diag_portsc(sc, port),
+                usb_bot_last_cmpl(),
+            );
             recover_enum(hw, caps, mem, cmd_ring, ev, slot);
             Err(e)
         }
@@ -2051,6 +2091,7 @@ pub fn xhci_live_rw(_off: u64, _buf: &mut [u8], _write: bool) -> bool {
 #[cfg(test)]
 mod xhci_pack_test {
     use super::*;
+    use crate::mgmt::usb_bot::{usb_bot_keep_xfer_diag, usb_bot_last_err};
 
     #[test]
     fn trb_ctrl_packs_type_and_cycle() {
@@ -2379,10 +2420,17 @@ mod xhci_pack_test {
             CMPL_PARAMETER
         );
         assert_eq!(xhci_enum_diag_portsc(IRON_POLL, 10) >> 32, 10);
+        // Iron CSW `68e16633`: fail `portsc=0x0000000e00000e03` is packed
+        // port **14** + PORTSC `0xe03`, not "LUN stuck on p10".
+        const IRON_HS_U0: u32 = 0x0000_0e03;
+        assert_eq!(xhci_enum_diag_portsc(IRON_HS_U0, 14), 0x0000_000e_0000_0e03);
+        assert_eq!(xhci_enum_diag_portsc(IRON_HS_U0, 10), 0x0000_000a_0000_0e03);
+        assert!(port_must_reset(IRON_POLL));
+        assert!(port_must_reset(IRON_HS_U0));
+        assert!(!port_must_reset(0));
 
         // Enum EFI after WPR: HS U0 PED=1. Address Device still Parameter Error
         // because DW1 Number of Ports was 10/11/14.
-        const IRON_HS_U0: u32 = 0x0000_0e03;
         assert!(portsc_link_ready(IRON_HS_U0));
         assert_eq!(portsc_speed(IRON_HS_U0), 3);
         assert_eq!(portsc_pls(IRON_HS_U0), 0);
@@ -2439,13 +2487,13 @@ mod xhci_pack_test {
             xhci_bring_up_keep_err(UsbBotError::Reset, UsbBotError::Xfer),
             UsbBotError::Xfer
         );
-        store_usb_bot_diag(UsbBotError::Xfer, 0x92b0_0000, 0x0e03, 0xff);
+        store_usb_bot_diag(UsbBotError::Xfer, 0x92b0_0000, 0x0000_000b_0000_0e03, 0xff);
         assert!(usb_bot_keep_xfer_diag(usb_bot_last_err()));
-        if !usb_bot_keep_xfer_diag(usb_bot_last_err()) {
-            store_usb_bot_diag(UsbBotError::Hub, 0x92b0_0000, 0, 0);
-        }
+        // Hub skip must not stamp — even when LAST_ERR is Reset, not Xfer.
+        // Iron `68e16633`: p14 hub wrote `cmpl=0` + packed port 14 over p11 BOT.
         assert_eq!(usb_bot_last_err(), UsbBotError::Xfer as u8);
         assert_eq!(usb_bot_last_cmpl(), 0xff);
+        assert_eq!(usb_bot_last_portsc(), 0x0000_000b_0000_0e03);
         let mut hub_cfg = [0u8; 18];
         hub_cfg[0] = 9;
         hub_cfg[1] = 2;
