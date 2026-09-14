@@ -7,7 +7,7 @@ alwaysApply: true
 
 # Iron rollback (M8.0 known-good)
 
-You are working in **RayNu-V** (`vikkp/RayNu`). Mount Everest (M7) **closed on iron**. Next numbered work is **M8 operator product hardening** ([ADR-018](docs/adr/ADR-018.md), [docs/m8_plan.md](docs/m8_plan.md)). **M8.0** is leftover-DRAM disk persist across a **hypervisor** reboot.
+You are working in **RayNu-V** (`vikkp/RayNu`). Mount Everest (M7) **closed on iron**. Next numbered work is **M8 operator product hardening** ([ADR-018](docs/adr/ADR-018.md), [docs/m8_plan.md](docs/m8_plan.md)). **M8.0** is leftover-DRAM disk persist across a **hypervisor** reboot. **Two queues:** [ADR-020](docs/adr/ADR-020.md) — do not delete the Alpine ISO patcher to “help” Generation 1 before M8.0-mech COM2. Windows is not next.
 
 ## Flash this if an M8 persist prototype misbehaves
 
@@ -32,6 +32,7 @@ That pin printed coexist `HOST-NIC-HTTP-OK` on `10.99.99.145:8443` → SPA Start
 - Claim 1.0 / GA / TLS / leftover persist across HV reboot / 100% HDA. Checkpoint. Overall stays **99%**.
 - Print `RAYNU-V-M7-ISO-INSTALL-OK` from host, CI, or nested QEMU. Latitude/QEMU ≠ R640.
 - Start M9 cluster / vMotion on the M8 path.
+- Delete the Alpine ISO patcher / auto-answer before M8.0-mech ([ADR-020](docs/adr/ADR-020.md) / [`.cursor/rules/m8-gen1-queues.mdc`](m8-gen1-queues.mdc)).
 
 ## Where this is recorded
 

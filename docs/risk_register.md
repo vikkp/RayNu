@@ -10,7 +10,8 @@ Derived from Production Roadmap v1.2. Severity: HIGH / MEDIUM-HIGH / MEDIUM / LO
 | R04 | Linux boot exposes emulation holes (M3) | HIGH | — | Outside-core device stubs; iterative QEMU+R640 bring-up |
 | R05 | Live migration exposes guest memory | HIGH | [V][A] | Migration page transfer in EPT theorem; zero-on-free; audit events |
 | R06 | Binary exceeds 20 MB hard size limit | MEDIUM | [Z] | Lazy asset decompress; `tools/check-size.sh`; split-mode fallback (ADR-003) |
-| R07 | Dell Tier 2 (PERC/OEM Redfish) blocks a milestone | MEDIUM | [D] | Never gate on Tier 2; Tier 1 sufficient to ship (ADR-005) |
+| R07 | Dell Tier 2 OEM **health** (Redfish) blocks a milestone | MEDIUM | [D] | Never gate Everest on Tier 2 health (ADR-005). Distinct from ADR-019 PERC **I/O**. |
+| R15 | Fleet SKU needs PERC VD I/O; USB-only persist is not a product | HIGH | [D][Z] | ADR-019: M8.0-mech USB/NVMe then `RAYNU-V-M8-PERC-LUN-OK` on a spare VD. Do not format lab Ubuntu. |
 | R08 | Proof effort exceeds estimates | MEDIUM-HIGH | [V] | Ship at L1/L2 if blocked; AI-assisted proofs; maturity model (ADR-006) |
 | R09 | Specs prove the wrong property | HIGH | [V] | External spec review; fuzz Proven Core; ADR-004 formal statement |
 | R10 | Single-developer velocity limits delivery | HIGH | all | Near-term [Z][D][A] bets ship value; [V] shapes architecture without blocking |

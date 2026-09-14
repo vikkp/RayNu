@@ -20,11 +20,11 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**Gates:** M0 → M6 closed on Latitude/QEMU (`RAYNU-V-M6-EXT-OK`). M7 Mount Everest **CLOSED on iron** 2026-09-11 (EFI `f72b4276` / `--run 34552377351`). Next is **M8** operator hardening ([ADR-018](docs/adr/ADR-018.md)).  
+**Gates:** M0 → M6 closed on Latitude/QEMU (`RAYNU-V-M6-EXT-OK`). M7 Mount Everest **CLOSED on iron** 2026-09-11 (EFI `f72b4276` / `--run 34552377351`). Next is **M8** operator hardening ([ADR-018](docs/adr/ADR-018.md), [ADR-020](docs/adr/ADR-020.md)).  
 **Iron rollback (M8.0 known-good):** GitHub Latest [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) → git `f72b4276d198b5e90147e9be1037d0d0b7213a28` / CI `--run 34552377351` / EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc`. COM2 `build: sha=f72b4276d198`. Do not flash a later persist prototype as the known-good. Do not F11 `34548550755` / `7f8dc0a9`. Historical pre-native-NIC preserve (not this kit): [`releases/v0.1.0-adr013-baseline/`](releases/v0.1.0-adr013-baseline/).
 
 **Mount Everest (product loop):** **CLOSED on iron** — ship EFI → real R640 → network UI → Linux ISO deploy (`HOST-NIC-HTTP-OK` → SPA Start of RayNu-F → `ISO-INSTALL-OK` → `DISK-BOOT-OK` → `login:`). Checkpoint, not 1.0/GA. HDA overall 99%.  
-Honest distance + month timeline: **[docs/hda.md](docs/hda.md)** · public tracker: **[site/hda.html](site/hda.html)** · M8 plan: [docs/m8_plan.md](docs/m8_plan.md) · rollback rule: [`.cursor/rules/iron-rollback.mdc`](.cursor/rules/iron-rollback.mdc).
+Honest distance + month timeline: **[docs/hda.md](docs/hda.md)** · public tracker: **[site/hda.html](site/hda.html)** · M8 plan: [docs/m8_plan.md](docs/m8_plan.md) · Gen-1: [docs/gen1_plan.md](docs/gen1_plan.md) · rollback rule: [`.cursor/rules/iron-rollback.mdc`](.cursor/rules/iron-rollback.mdc) · queues: [`.cursor/rules/m8-gen1-queues.mdc`](.cursor/rules/m8-gen1-queues.mdc).
 
 ## Repository Layout
 
