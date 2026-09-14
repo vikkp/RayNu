@@ -42,9 +42,11 @@ After ExitBootServices:
 
 - `durable LUN nvme I/O ready bytes=…` **or**
 - `durable LUN usb I/O ready bytes=…` (ESP Cruzer window skipped; next port)
-- `xhci caplen=… ports=… p1=0x…` (all ports through 16, not only 4)
+- `xhci cap caplen=… slots=… ports=… scratch=…/64 csz=` on **every** USB attempt (before PORTSC)
+- `xhci cap … scan=… p1=0x…` (first 16 PORTSC words) then `xhci ccs pN=0x…` for every CCS port (Lewisburg 26 ports, not a 16-port walk)
+- `xhci enum pN sc=0x… speed= usb3= csz= cmd= cmpl=0x…` on Enum fail (cmd `1` reset `2` slot `3` addr `4` desc `5` cfg). `cmpl=0x11` is Parameter Error.
 
-Fail: `nvme I/O fail` / `usb I/O fail err=` + leftover DRAM. Intel PCH scratchpad ≤ 16 pages is supported; more is `err=1` Cap.
+Fail: `nvme I/O fail` / `usb I/O fail err=` + leftover DRAM. Intel PCH scratchpad ≤ 64 pages; more is `err=1` Cap + `over-budget`. `mmio-dead` means CAPLENGTH was 0 or `0xffffffff` (BAR unread). Iron `ac3b92cd` (2026-09-14): Lewisburg `8086:a1af` named, then `usb I/O fail err=1 bar=0x92b00000 portsc=0 cmpl=0` — Cap before PORTSC; 16-page budget. Cap EFI `67db8a68` (`build: sha=50b5d8bb29fb`): `scratch=34/64` then `usb I/O fail err=3 … portsc=0 cmpl=0x11` — Enum Parameter Error; CCS p10/p11/p14 `0x000206e1` (PLS=Polling, PED=0). Guest `vda` was 1.07 GiB leftover DRAM. Toshiba unused. Everest loop (`ISO-INSTALL-OK` → F7 `DISK-BOOT-OK` → `login:`) is **not** persist. Do not Force Off that guest expecting `RAYNU-V-M8-DISK-PERSIST-OK`. Next flash (`cursor/m8-xhci-enum-8366`) must print `xhci enum pN sc=` if Enum still fails — not `portsc=0`.
 
 ### 3. Phase B attach
 
