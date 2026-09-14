@@ -1,17 +1,16 @@
 use super::{
-    blk_sector_rw, decode_mmio_insn, is_virtio_bar_2m_gpa, is_virtio_bar_gpa, iso_visible,
-    latch_dxe_virtio_did, mmio_decoded_len, mmio_effective_len, mmio_insn_bytes_this_page,
-    mmio_read, mmio_read_iso, mmio_write, mmio_write_iso,
-    pci_addr_selects_owned, pci_addr_selects_slot0, pci_addr_selects_virtio,
+    attach_disk, attach_disk_keep, blk_sector_rw, decode_mmio_insn, disk_bytes, disk_bytes_written,
+    is_virtio_bar_2m_gpa, is_virtio_bar_gpa, iso_visible, latch_dxe_virtio_did, mmio_decoded_len,
+    mmio_effective_len, mmio_insn_bytes_this_page, mmio_read, mmio_read_iso, mmio_write,
+    mmio_write_iso, pci_addr_selects_owned, pci_addr_selects_slot0, pci_addr_selects_virtio,
     pci_addr_selects_virtio_iso, pci_config_addr, pci_config_addr_iso, pci_config_addr_slot0,
     pci_enumerated, pci_read_data, pci_write_addr, pci_write_data, pei_host_bridge_did, present,
-    process_blk_queue_in, process_iso_queue_in, queues_armed, reset, take_marker,
-    attach_disk, attach_disk_keep, raynu_f_disk_read, raynu_f_disk_write, reset_keep_disk, disk_bytes,
-    disk_bytes_written,
-    virtio_disk_evidence, virtio_needs_pit_over_uart, GUEST_VIRTIO_BAR0_DEFAULT,
-    GUEST_VIRTIO_BAR0_SIZE_MASK, GUEST_VIRTIO_ISO_BAR0_DEFAULT, GUEST_VIRTIO_PCI_DEVICE,
-    GUEST_VIRTIO_PCI_VENDOR, M7_E5_OVMF_VIRTIO_OK_MARKER, VIRTIO_BLK_F_RO, VIRTIO_BLK_S_IOERR,
-    VIRTIO_BLK_S_OK, VIRTIO_BLK_T_FLUSH, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, VIRTIO_F_VERSION_1,
+    process_blk_queue_in, process_iso_queue_in, queues_armed, raynu_f_disk_read,
+    raynu_f_disk_write, reset, reset_keep_disk, take_marker, virtio_disk_evidence,
+    virtio_needs_pit_over_uart, GUEST_VIRTIO_BAR0_DEFAULT, GUEST_VIRTIO_BAR0_SIZE_MASK,
+    GUEST_VIRTIO_ISO_BAR0_DEFAULT, GUEST_VIRTIO_PCI_DEVICE, GUEST_VIRTIO_PCI_VENDOR,
+    M7_E5_OVMF_VIRTIO_OK_MARKER, VIRTIO_BLK_F_RO, VIRTIO_BLK_S_IOERR, VIRTIO_BLK_S_OK,
+    VIRTIO_BLK_T_FLUSH, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, VIRTIO_F_VERSION_1,
     VIRTIO_PCI_CAP_COMMON, VIRTIO_PCI_CAP_NOTIFY, VIRTIO_PCI_CAP_VNDR,
 };
 use crate::devices::guest_platform::{
@@ -78,7 +77,10 @@ fn lab_stub_keeps_enum_cap_product_iso_gets_vendor_caps() {
     pci_write_data(0xCFC, 4, GUEST_VIRTIO_BAR0_DEFAULT);
     assert!(is_virtio_bar_gpa(u64::from(GUEST_VIRTIO_BAR0_DEFAULT)));
     pci_write_data(0xCFC, 4, 0x8000_1000);
-    assert!(is_virtio_bar_gpa(0x8000_1000), "virtio BAR trap over scratch");
+    assert!(
+        is_virtio_bar_gpa(0x8000_1000),
+        "virtio BAR trap over scratch"
+    );
     assert!(!is_virtio_bar_gpa(u64::from(GUEST_VIRTIO_BAR0_DEFAULT)));
     pci_write_data(0xCFC, 4, GUEST_VIRTIO_BAR0_DEFAULT);
     assert!(is_virtio_bar_gpa(u64::from(GUEST_VIRTIO_BAR0_DEFAULT)));
@@ -226,7 +228,11 @@ fn packed_common_cfg_write_rmw_bytes() {
     mmio_write(0x16, 2, 1);
     mmio_write(0x14, 1, 3);
     assert_eq!(mmio_read(0x14, 1), 3);
-    assert_eq!(mmio_read(0x16, 2), 1, "byte status store keeps queue_select");
+    assert_eq!(
+        mmio_read(0x16, 2),
+        1,
+        "byte status store keeps queue_select"
+    );
     reset();
     reset_cd();
 }
@@ -329,7 +335,8 @@ fn blk_queue_flush_completes_zero_bytes() {
     let avail = 256u64;
     let used = 512u64;
     let hdr_gpa = 0x300u64;
-    guest[hdr_gpa as usize..hdr_gpa as usize + 4].copy_from_slice(&VIRTIO_BLK_T_FLUSH.to_le_bytes());
+    guest[hdr_gpa as usize..hdr_gpa as usize + 4]
+        .copy_from_slice(&VIRTIO_BLK_T_FLUSH.to_le_bytes());
     let st_gpa = 0x700u64;
     guest[st_gpa as usize] = 0xFF;
     fn put_desc(mem: &mut [u8], i: u16, addr: u64, len: u32, flags: u16, next: u16) {
@@ -459,7 +466,8 @@ fn blk_queue_used_write_fail_retries() {
     let avail = 256u64;
     let used = 512u64;
     let hdr_gpa = 0x300u64;
-    guest[hdr_gpa as usize..hdr_gpa as usize + 4].copy_from_slice(&VIRTIO_BLK_T_FLUSH.to_le_bytes());
+    guest[hdr_gpa as usize..hdr_gpa as usize + 4]
+        .copy_from_slice(&VIRTIO_BLK_T_FLUSH.to_le_bytes());
     let st_gpa = 0x700u64;
     guest[st_gpa as usize] = 0xFF;
     fn put_desc(mem: &mut [u8], i: u16, addr: u64, len: u32, flags: u16, next: u16) {
@@ -524,13 +532,17 @@ fn virtio_live_avail_idx_reads_driver_ring() {
     let mut mem = vec![0u8; 4096];
     mem[258..260].copy_from_slice(&42u16.to_le_bytes());
     let base = mem.as_ptr() as u64;
-    let live = super::virtio_live_avail_idx(false, |gpa| {
-        if gpa < 4096 {
-            Some(base + gpa)
-        } else {
-            None
-        }
-    });
+    let live =
+        super::virtio_live_avail_idx(
+            false,
+            |gpa| {
+                if gpa < 4096 {
+                    Some(base + gpa)
+                } else {
+                    None
+                }
+            },
+        );
     assert_eq!(live, 42, "virtio stall dump PIT");
     reset();
     reset_cd();
@@ -596,8 +608,16 @@ fn virtio_ring_live_reads_used_idx_and_last_status() {
     assert_eq!(guest[st_gpa as usize], VIRTIO_BLK_S_OK);
     let mem_used = u16::from_le_bytes([guest[used as usize + 2], guest[used as usize + 3]]);
     assert_eq!(mem_used, 1, "in-guest used.idx");
-    let id = u32::from_le_bytes(guest[used as usize + 4..used as usize + 8].try_into().unwrap());
-    let len = u32::from_le_bytes(guest[used as usize + 8..used as usize + 12].try_into().unwrap());
+    let id = u32::from_le_bytes(
+        guest[used as usize + 4..used as usize + 8]
+            .try_into()
+            .unwrap(),
+    );
+    let len = u32::from_le_bytes(
+        guest[used as usize + 8..used as usize + 12]
+            .try_into()
+            .unwrap(),
+    );
     assert_eq!((id, len), (2, 513));
     // A ring that does not translate is counted, not skipped silently.
     let mut last2 = 0u16;
@@ -615,7 +635,11 @@ fn virtio_ring_live_reads_used_idx_and_last_status() {
         &mut super::LastReq::default(),
     );
     assert_eq!(nreq2, 0);
-    assert_eq!(super::virtio_xlate_fail_count(), before + 1, "virtio stall dump ring");
+    assert_eq!(
+        super::virtio_xlate_fail_count(),
+        before + 1,
+        "virtio stall dump ring"
+    );
     // Unarmed function: nothing to read, default snapshot.
     reset();
     let live = super::virtio_ring_live(true, |_gpa| None);
@@ -790,9 +814,7 @@ fn decode_mmio_mov_encodings() {
     let xa = decode_mmio_insn(&[0x0F, 0xC1, 0x01], 3).unwrap();
     assert!(xa.atomic == super::MMIO_XADD && xa.is_write && xa.zero_ext);
     let c8 = decode_mmio_insn(&[0x0F, 0xC7, 0x09], 3).unwrap();
-    assert!(
-        c8.atomic == super::MMIO_CMPXCHG8B && c8.is_write && c8.size == 8 && c8.reg == 0
-    );
+    assert!(c8.atomic == super::MMIO_CMPXCHG8B && c8.is_write && c8.size == 8 && c8.reg == 0);
     let c8l = decode_mmio_insn(&[0xF0, 0x0F, 0xC7, 0x09], 4).unwrap();
     assert!(c8l.atomic == super::MMIO_CMPXCHG8B && c8l.size == 8);
     assert!(decode_mmio_insn(&[0x48, 0x0F, 0xC7, 0x09], 4).is_none());
@@ -805,9 +827,7 @@ fn decode_mmio_mov_encodings() {
     let adcl = decode_mmio_insn(&[0x11, 0x01], 2).unwrap();
     assert!(adcl.alu == super::MMIO_ALU_ADC && adcl.is_write && !adcl.alu_reg_left);
     let adc_rm = decode_mmio_insn(&[0x13, 0x01], 2).unwrap();
-    assert!(
-        adc_rm.alu == super::MMIO_ALU_ADC && adc_rm.alu_reg_left && !adc_rm.is_write
-    );
+    assert!(adc_rm.alu == super::MMIO_ALU_ADC && adc_rm.alu_reg_left && !adc_rm.is_write);
     let sbbi = decode_mmio_insn(&[0x83, 0x19, 0x01], 3).unwrap();
     assert!(sbbi.alu == super::MMIO_ALU_SBB && sbbi.has_imm && sbbi.imm == 1);
     let adci = decode_mmio_insn(&[0x80, 0x10, 0x01], 3).unwrap();
@@ -837,7 +857,10 @@ fn decode_mmio_mov_encodings() {
         super::mmio_shift_apply(0x80, 1, super::MMIO_ALU_SAR, 1, false) & 0xff,
         0xc0
     );
-    assert_eq!(super::mmio_shift_rflags(2, 0x80, 1, 0, super::MMIO_ALU_SHL, 1) & 1, 1);
+    assert_eq!(
+        super::mmio_shift_rflags(2, 0x80, 1, 0, super::MMIO_ALU_SHL, 1) & 1,
+        1
+    );
     assert_eq!(
         super::mmio_shift_apply(0, 1, super::MMIO_ALU_RCL, 1, true) & 0xff,
         1
@@ -855,9 +878,7 @@ fn decode_mmio_mov_encodings() {
     assert!(clflush.alu == super::MMIO_ALU_HINT);
     assert!(decode_mmio_insn(&[0x0F, 0xAE, 0x10], 3).is_none());
     let bsf = decode_mmio_insn(&[0x0F, 0xBC, 0x01], 3).unwrap();
-    assert!(
-        bsf.alu == super::MMIO_ALU_BSF && bsf.alu_reg_left && !bsf.is_write && bsf.size == 4
-    );
+    assert!(bsf.alu == super::MMIO_ALU_BSF && bsf.alu_reg_left && !bsf.is_write && bsf.size == 4);
     let bsr = decode_mmio_insn(&[0x48, 0x0F, 0xBD, 0x01], 4).unwrap();
     assert!(bsr.alu == super::MMIO_ALU_BSR && bsr.size == 8);
     let (idx, z) = super::mmio_scan_apply(0x10, 4, false);
@@ -871,9 +892,7 @@ fn decode_mmio_mov_encodings() {
     assert!(super::mmio_alu_is_hint(super::MMIO_ALU_HINT));
     assert!(super::mmio_alu_is_scan(super::MMIO_ALU_BSF));
     let tz = decode_mmio_insn(&[0xF3, 0x0F, 0xBC, 0x01], 4).unwrap();
-    assert!(
-        tz.alu == super::MMIO_ALU_TZCNT && tz.alu_reg_left && !tz.is_write && tz.size == 4
-    );
+    assert!(tz.alu == super::MMIO_ALU_TZCNT && tz.alu_reg_left && !tz.is_write && tz.size == 4);
     let lz = decode_mmio_insn(&[0xF3, 0x0F, 0xBD, 0x01], 4).unwrap();
     assert!(lz.alu == super::MMIO_ALU_LZCNT && lz.size == 4);
     let pc = decode_mmio_insn(&[0xF3, 0x0F, 0xB8, 0x01], 4).unwrap();
@@ -977,7 +996,10 @@ fn decode_mmio_mov_encodings() {
     let xmm8 = decode_mmio_insn(&[0x44, 0x0F, 0x10, 0x01], 4).unwrap();
     assert!(xmm8.reg == 8 && xmm8.alu == super::MMIO_ALU_SSE);
     assert!(decode_mmio_insn(&[0x0F, 0x6F, 0x01], 3).is_none());
-    assert_eq!(super::mmio_sse_from_mem(0x1111_2222_3333_4444, 4), 0x3333_4444);
+    assert_eq!(
+        super::mmio_sse_from_mem(0x1111_2222_3333_4444, 4),
+        0x3333_4444
+    );
     assert_eq!(
         super::mmio_sse_from_mem(0xaaaa_bbbb_cccc_dddd_1111_2222_3333_4444, 8),
         0x1111_2222_3333_4444
@@ -1059,7 +1081,10 @@ fn decode_mmio_mov_encodings() {
     );
     let shrdcl = decode_mmio_insn(&[0x0F, 0xAD, 0x01], 3).unwrap();
     assert!(
-        shrdcl.alu == super::MMIO_ALU_SHRD && shrdcl.is_write && !shrdcl.has_imm && shrdcl.size == 4
+        shrdcl.alu == super::MMIO_ALU_SHRD
+            && shrdcl.is_write
+            && !shrdcl.has_imm
+            && shrdcl.size == 4
     );
     let shldq = decode_mmio_insn(&[0x48, 0x0F, 0xA4, 0x01, 0x04], 5).unwrap();
     assert!(shldq.size == 8 && shldq.alu == super::MMIO_ALU_SHLD && shldq.imm == 4);
@@ -1323,8 +1348,16 @@ fn mmio_decoded_len_from_bytes_when_vmcs_len_is_zero() {
     assert_eq!(mmio_effective_len(&mov_disp32, 6, false), 6);
     assert_eq!(mmio_effective_len(&mov_disp32, 0, false), 6);
     assert_eq!(mmio_effective_len(&mov_disp32, 99, false), 6);
-    assert_eq!(mmio_effective_len(&mov_disp32, 2, false), 2, "prefer valid VMCS");
-    assert_eq!(mmio_effective_len(&[], 5, false), 5, "EAX fallback keeps VMCS len");
+    assert_eq!(
+        mmio_effective_len(&mov_disp32, 2, false),
+        2,
+        "prefer valid VMCS"
+    );
+    assert_eq!(
+        mmio_effective_len(&[], 5, false),
+        5,
+        "EAX fallback keeps VMCS len"
+    );
     // 32-bit INC EAX is not REX; do not swallow it into the following MOV.
     assert_eq!(
         mmio_decoded_len(&[0x40, 0x89, 0x05, 0, 0, 0, 0], false),
@@ -1372,6 +1405,9 @@ fn attach_disk_zeros_attach_disk_keep_preserves() {
     unsafe {
         assert!(attach_disk(mem.as_mut_ptr() as u64, mem.len()));
     }
-    assert!(mem.iter().all(|&b| b == 0), "first attach zeros so ISO wins");
+    assert!(
+        mem.iter().all(|&b| b == 0),
+        "first attach zeros so ISO wins"
+    );
     reset();
 }

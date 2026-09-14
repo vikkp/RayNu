@@ -449,6 +449,7 @@ pub fn durable_lun_serving() -> bool {
 }
 
 /// Read or write the NVMe namespace, USB BOT LUN, or host-test Vec. Splits at 4 KiB.
+/// Unaligned 512-byte virtio I/O RMW-s native SCSI/NVMe blocks (4Kn 512e).
 pub fn durable_lun_rw(off: u64, buf: &mut [u8], write: bool) -> bool {
     if buf.is_empty() {
         return true;
@@ -460,12 +461,44 @@ pub fn durable_lun_rw(off: u64, buf: &mut [u8], write: bool) -> bool {
         return false;
     }
     let nvme = crate::mgmt::nvme::nvme_io_ready();
+    let lba = lun_native_lba(nvme);
+    if lba == 0 || lba > 4096 {
+        return false;
+    }
+    if off % u64::from(lba) == 0 && (buf.len() as u64) % u64::from(lba) == 0 {
+        return durable_lun_native_rw(off, buf, write, nvme, lba);
+    }
+    durable_lun_512e_rw(off, buf, write, nvme, lba)
+}
+
+fn lun_native_lba(nvme: bool) -> u32 {
     let lba = if nvme {
         crate::mgmt::nvme::nvme_lba_bytes()
     } else {
         crate::mgmt::usb_bot::usb_bot_lba_bytes()
     };
-    let lba = if lba == 0 { 512 } else { lba };
+    if lba == 0 {
+        512
+    } else {
+        lba
+    }
+}
+
+fn lun_backend_rw(cur: u64, slice: &mut [u8], write: bool, nvme: bool) -> bool {
+    if cfg!(test) {
+        if nvme {
+            crate::mgmt::nvme::host_nvme_rw(cur, slice, write)
+        } else {
+            crate::mgmt::usb_bot::host_usb_rw(cur, slice, write)
+        }
+    } else if nvme {
+        crate::mgmt::nvme::nvme_live_rw(cur, slice, write)
+    } else {
+        crate::mgmt::xhci::xhci_live_rw(cur, slice, write)
+    }
+}
+
+fn durable_lun_native_rw(off: u64, buf: &mut [u8], write: bool, nvme: bool, lba: u32) -> bool {
     let mut done = 0usize;
     while done < buf.len() {
         let take = (buf.len() - done).min(4096);
@@ -474,21 +507,52 @@ pub fn durable_lun_rw(off: u64, buf: &mut [u8], write: bool) -> bool {
             return false;
         }
         let slice = &mut buf[done..done + take];
-        let ok = if cfg!(test) {
-            if nvme {
-                crate::mgmt::nvme::host_nvme_rw(cur, slice, write)
-            } else {
-                crate::mgmt::usb_bot::host_usb_rw(cur, slice, write)
-            }
-        } else if nvme {
-            crate::mgmt::nvme::nvme_live_rw(cur, slice, write)
-        } else {
-            crate::mgmt::xhci::xhci_live_rw(cur, slice, write)
-        };
-        if !ok {
+        if !lun_backend_rw(cur, slice, write, nvme) {
             return false;
         }
         done = done.saturating_add(take);
+    }
+    true
+}
+
+fn durable_lun_512e_rw(off: u64, buf: &mut [u8], write: bool, nvme: bool, lba: u32) -> bool {
+    let lba64 = u64::from(lba);
+    let n = lba as usize;
+    let Some(end) = off.checked_add(buf.len() as u64) else {
+        return false;
+    };
+    let pad = lba64.saturating_sub(1);
+    let Some(end_al) = end.checked_add(pad).map(|v| (v / lba64) * lba64) else {
+        return false;
+    };
+    let mut block = [0u8; 4096];
+    let mut cur = (off / lba64) * lba64;
+    while cur < end_al {
+        let slice = &mut block[..n];
+        let overlap_lo = core::cmp::max(cur, off);
+        let overlap_hi = core::cmp::min(cur.saturating_add(lba64), end);
+        if overlap_lo >= overlap_hi {
+            cur = cur.saturating_add(lba64);
+            continue;
+        }
+        let partial = overlap_lo != cur || overlap_hi != cur.saturating_add(lba64);
+        if !write || partial {
+            if !durable_lun_native_rw(cur, slice, false, nvme, lba) {
+                return false;
+            }
+        }
+        let dst = (overlap_lo - cur) as usize;
+        let src = (overlap_lo - off) as usize;
+        let ncopy = (overlap_hi - overlap_lo) as usize;
+        if write {
+            slice[dst..dst + ncopy].copy_from_slice(&buf[src..src + ncopy]);
+            if !durable_lun_native_rw(cur, slice, true, nvme, lba) {
+                return false;
+            }
+        } else {
+            buf[src..src + ncopy].copy_from_slice(&slice[dst..dst + ncopy]);
+        }
+        cur = cur.saturating_add(lba64);
     }
     true
 }
@@ -533,7 +597,7 @@ fn lun_cache_line_ptr(slot: usize) -> *mut u8 {
 
 fn lun_cache_fill(aligned: u64, lba: u64) -> bool {
     let chunk = LUN_CACHE_LINE as u64;
-    if lba == 0 || chunk % lba != 0 || aligned % lba != 0 {
+    if lba == 0 || lba > 4096 || aligned % chunk != 0 {
         return false;
     }
     let ns = lun_ns_bytes();
@@ -543,7 +607,6 @@ fn lun_cache_fill(aligned: u64, lba: u64) -> bool {
             return false;
         }
         n = chunk.min(ns.saturating_sub(aligned));
-        n = (n / lba) * lba;
         if n == 0 {
             return false;
         }
@@ -579,9 +642,6 @@ pub fn durable_lun_read_any(off: u64, buf: &mut [u8]) -> bool {
         return false;
     }
     let chunk = LUN_CACHE_LINE as u64;
-    if chunk % lba != 0 {
-        return false;
-    }
     let mut copied = 0usize;
     while copied < buf.len() {
         let cur = off.saturating_add(copied as u64);
@@ -691,6 +751,8 @@ pub fn init_durable_lun_usb_io() {
                     use crate::boot::serial;
                     serial::write_str("boot: Stage 46 durable LUN usb I/O ready bytes=");
                     write_dec(bytes);
+                    serial::write_str(" lba=");
+                    write_dec(u64::from(crate::mgmt::usb_bot::usb_bot_lba_bytes()));
                     serial::write_line(" (not ISO-INSTALL-OK)");
                     serial_lun_peek("usb");
                 }
@@ -770,6 +832,8 @@ fn serial_lun_peek(tag: &str) {
     ));
     serial::write_str(" usb_err=");
     write_dec(u64::from(crate::mgmt::usb_bot::usb_bot_last_err()));
+    serial::write_str(" lba=");
+    write_dec(u64::from(crate::mgmt::usb_bot::usb_bot_lba_bytes()));
     serial::write_str(" bootx64=");
     write_dec(u64::from(boot));
     serial::write_str(" ext4=");

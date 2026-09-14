@@ -726,6 +726,14 @@ fn drain_events(hw: &mut impl XhciHw, caps: &XhciCaps, ev: &mut EventRing) {
     }
 }
 
+fn xhci_event_err(want_type: u32) -> UsbBotError {
+    if want_type == TRB_EVENT_TRANSFER {
+        UsbBotError::Xfer
+    } else {
+        UsbBotError::Enum
+    }
+}
+
 fn consume_event(
     hw: &mut impl XhciHw,
     caps: &XhciCaps,
@@ -743,13 +751,14 @@ fn consume_event(
             if ty == want_type {
                 let code = trb_cmpl_code(get_u32(&t, 8));
                 if code != CMPL_SUCCESS && code != CMPL_SHORT {
+                    let err = xhci_event_err(want_type);
                     store_usb_bot_diag(
-                        UsbBotError::Enum,
+                        err,
                         usb_bot_last_bar(),
                         usb_bot_last_portsc(),
                         u64::from(code),
                     );
-                    return Err(UsbBotError::Enum);
+                    return Err(err);
                 }
                 return Ok(t);
             }
@@ -757,13 +766,14 @@ fn consume_event(
         }
         spins = spins.saturating_add(1);
         if spins > spins_max {
+            let err = xhci_event_err(want_type);
             store_usb_bot_diag(
-                UsbBotError::Enum,
+                err,
                 usb_bot_last_bar(),
                 usb_bot_last_portsc(),
                 u64::from(CMPL_TIMEOUT),
             );
-            return Err(UsbBotError::Enum);
+            return Err(err);
         }
     }
 }
@@ -1650,6 +1660,8 @@ static mut SCRATCH0: [Page; XHCI_SCRATCH_MAX as usize] =
 static mut LIVE: Option<LiveXhci> = None;
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 static LIVE_LOCK: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+static RW_FAIL_NOTED: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn xhci_bar(bus: u8, dev: u8, func: u8) -> u64 {
@@ -1748,10 +1760,24 @@ pub fn xhci_live_rw(off: u64, buf: &mut [u8], write: bool) -> bool {
                         write,
                     );
                     live.tag = tag;
-                    if r.is_ok() && !write {
-                        buf.copy_from_slice(&slice[..buf.len()]);
+                    match r {
+                        Ok(()) => {
+                            if !write {
+                                buf.copy_from_slice(&slice[..buf.len()]);
+                            }
+                            true
+                        }
+                        Err(e) => {
+                            store_usb_bot_diag(
+                                e,
+                                live.mmio,
+                                usb_bot_last_portsc(),
+                                usb_bot_last_cmpl(),
+                            );
+                            serial_xhci_rw_fail(off, write, e);
+                            false
+                        }
                     }
-                    r.is_ok()
                 }
             }
             None => false,
@@ -1759,6 +1785,21 @@ pub fn xhci_live_rw(off: u64, buf: &mut [u8], write: bool) -> bool {
     };
     LIVE_LOCK.store(false, core::sync::atomic::Ordering::Release);
     ok
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_rw_fail(off: u64, write: bool, err: UsbBotError) {
+    if RW_FAIL_NOTED.swap(true, core::sync::atomic::Ordering::AcqRel) {
+        return;
+    }
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 durable LUN usb rw fail off=0x");
+    serial_hex32(off as u32);
+    serial::write_str(if write { " wr=1 err=" } else { " wr=0 err=" });
+    serial_dec_u8(err as u8);
+    serial::write_str(" cmpl=0x");
+    serial_hex32(usb_bot_last_cmpl() as u32);
+    serial::write_line(" (not ISO-INSTALL-OK)");
 }
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
@@ -2123,5 +2164,7 @@ mod xhci_pack_test {
         assert_eq!(crcr_restart(0x1000) & CRCR_RCS, CRCR_RCS);
         assert_eq!(USB_MSC_BOT, 0x50);
         assert_eq!(USB_MSC_UAS, 0x62);
+        assert_eq!(xhci_event_err(TRB_EVENT_TRANSFER), UsbBotError::Xfer);
+        assert_eq!(xhci_event_err(TRB_ENABLE_SLOT), UsbBotError::Enum);
     }
 }

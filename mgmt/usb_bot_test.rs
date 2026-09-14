@@ -42,6 +42,16 @@ impl MockUsb {
         self.after_data = false;
         let cdb0 = cbw[15];
         match cdb0 {
+            SCSI_TEST_UNIT_READY => {
+                self.queue_csw();
+            }
+            SCSI_REQUEST_SENSE => {
+                let mut s = vec![0u8; 18];
+                s[0] = 0x70;
+                s[7] = 10;
+                self.pending_in = s;
+                self.after_data = true;
+            }
             SCSI_INQUIRY => {
                 let mut inq = vec![0u8; 36];
                 inq[0] = 0;

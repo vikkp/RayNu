@@ -221,6 +221,81 @@ fn usb_host_vec_serves_virtio() {
 }
 
 #[test]
+fn usb_4kn_serves_512e_virtio() {
+    use crate::devices::guest_virtio_blk::{
+        attach_lun, blk_sector_rw, reset, VIRTIO_BLK_S_OK, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT,
+    };
+    durable_lun_clear();
+    reset();
+    let ns = Box::leak(vec![0u8; 2 * 1024 * 1024].into_boxed_slice());
+    let ns_len = ns.len();
+    crate::mgmt::usb_bot::host_usb_attach(ns, 4096);
+    assert!(durable_lun_serving());
+    assert!(attach_lun(ns_len, false));
+    let mut buf = [0u8; 512];
+    buf[..8].copy_from_slice(b"EFI PART");
+    assert_eq!(
+        blk_sector_rw(&mut [], VIRTIO_BLK_T_OUT, 1, &mut buf),
+        VIRTIO_BLK_S_OK
+    );
+    let mut back = [0u8; 512];
+    assert_eq!(
+        blk_sector_rw(&mut [], VIRTIO_BLK_T_IN, 1, &mut back),
+        VIRTIO_BLK_S_OK
+    );
+    assert_eq!(&back[..8], b"EFI PART");
+    let mut peek = [0u8; 8];
+    assert!(durable_lun_read_any(512, &mut peek));
+    assert_eq!(&peek, b"EFI PART");
+    reset();
+    durable_lun_clear();
+}
+
+#[test]
+fn iso_queue_ignores_usb_lun() {
+    use crate::devices::guest_virtio_blk::{
+        attach_lun, process_iso_queue_in, reset, VIRTIO_BLK_S_OK, VIRTIO_BLK_T_IN,
+    };
+    durable_lun_clear();
+    reset();
+    let ns = Box::leak(vec![0xCDu8; 2 * 1024 * 1024].into_boxed_slice());
+    let ns_len = ns.len();
+    crate::mgmt::usb_bot::host_usb_attach(ns, 512);
+    assert!(attach_lun(ns_len, false));
+    let mut guest = vec![0u8; 4096];
+    let mut iso = vec![0u8; 2048];
+    iso[..512].fill(0xAB);
+    let qsize = 4u16;
+    let desc = 0u64;
+    let avail = 256u64;
+    let used = 512u64;
+    let hdr_gpa = 0x300u64;
+    guest[hdr_gpa as usize..hdr_gpa as usize + 4].copy_from_slice(&VIRTIO_BLK_T_IN.to_le_bytes());
+    let data_gpa = 0x400u64;
+    let st_gpa = 0x700u64;
+    guest[st_gpa as usize] = 0xFF;
+    fn put_desc(mem: &mut [u8], i: u16, addr: u64, len: u32, flags: u16, next: u16) {
+        let o = (i as usize) * 16;
+        mem[o..o + 8].copy_from_slice(&addr.to_le_bytes());
+        mem[o + 8..o + 12].copy_from_slice(&len.to_le_bytes());
+        mem[o + 12..o + 14].copy_from_slice(&flags.to_le_bytes());
+        mem[o + 14..o + 16].copy_from_slice(&next.to_le_bytes());
+    }
+    put_desc(&mut guest, 0, hdr_gpa, 16, 1, 1);
+    put_desc(&mut guest, 1, data_gpa, 512, 3, 2);
+    put_desc(&mut guest, 2, st_gpa, 1, 2, 0);
+    guest[avail as usize + 2..avail as usize + 4].copy_from_slice(&1u16.to_le_bytes());
+    guest[avail as usize + 4..avail as usize + 6].copy_from_slice(&0u16.to_le_bytes());
+    let mut last = 0u16;
+    let n = process_iso_queue_in(&mut guest, &mut iso, qsize, &mut last, desc, avail, used);
+    assert_eq!(n, 512);
+    assert_eq!(guest[st_gpa as usize], VIRTIO_BLK_S_OK);
+    assert_eq!(guest[data_gpa as usize], 0xAB, "ISO must not read USB LUN");
+    reset();
+    durable_lun_clear();
+}
+
+#[test]
 fn r640_iron_census_picks_nvme_then_usb_never_perc() {
     assert_eq!(PCI_XHCI_LEWISBURG, 0xA1AF);
     assert_eq!(PCI_LEWISBURG_AHCI, 0xA182);
