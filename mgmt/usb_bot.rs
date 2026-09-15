@@ -83,6 +83,10 @@ pub trait UsbBulk {
     /// Iron `73dc4d2e`: auto Reset Endpoint on ignored START STOP timed out
     /// the later CSW (`bot=csw` `err=8`).
     fn recover_pipes(&mut self) {}
+    /// Beat after CAPACITY before the first 512-byte READ. Default no-op
+    /// (host mocks). Live xHCI spins. Iron `96024edc`: CAPACITY (8 B)
+    /// succeeded then READ CBW failed `cmpl=0`.
+    fn settle(&mut self) {}
 }
 
 fn put_be_u32(b: &mut [u8], off: usize, v: u32) {
@@ -218,6 +222,14 @@ pub fn store_usb_bot_diag_unless_kept(err: UsbBotError, bar: u64, portsc: u64, c
     store_usb_bot_diag(err, bar, portsc, cmpl);
 }
 
+/// Reset Endpoint after DATA/CSW fail (pending IN TRB). Do **not** reset
+/// after a CBW fail — iron `96024edc` READ `bot=cbw cmpl=0` plus
+/// `73dc4d2e` showed Reset Endpoint on a live OUT pipe kills the next
+/// command. A leftover bulk-IN Transfer Event is not a halted OUT EP.
+pub fn usb_bot_recover_after_fail(stage: u8) -> bool {
+    stage != BOT_STAGE_CBW
+}
+
 fn stamp_scsi_cdb(cdb: &[u8]) {
     let tag = match cdb.first().copied().unwrap_or(0) {
         SCSI_INQUIRY => SCSI_TAG_INQUIRY,
@@ -293,6 +305,7 @@ pub fn usb_bot_bring_up(hw: &mut impl UsbBulk, min_bytes: u64) -> Result<(u64, u
     let _ = bot_cmd(hw, 1, true, &cdb_inquiry(), &mut inq);
     let mut cap = [0u8; 8];
     bot_cmd(hw, 2, true, &cdb_read_capacity10(), &mut cap)?;
+    hw.settle();
     let (bytes, lba) = capacity10_bytes(&cap).ok_or(UsbBotError::Capacity)?;
     if bytes < min_bytes {
         return Err(UsbBotError::TooSmall);
@@ -340,7 +353,9 @@ pub fn usb_bot_rw(
             Ok(()) => return Ok(()),
             Err(e) => {
                 last = e;
-                hw.recover_pipes();
+                if usb_bot_recover_after_fail(usb_bot_last_stage()) {
+                    hw.recover_pipes();
+                }
             }
         }
     }
