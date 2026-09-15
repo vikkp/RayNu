@@ -49,6 +49,8 @@ pub const TRB_IDT: u32 = 1 << 6;
 /// auto EP-reset after ignored START STOP failed CSW. ISP only on CSW.
 pub const TRB_ISP: u32 = 1 << 2;
 pub const TRB_TC: u32 = 1 << 1;
+/// Chain (xHCI 6.4.6 bit 4). Control TD: SETUP+DATA CH=1, STATUS CH=0.
+pub const TRB_CH: u32 = 1 << 4;
 
 pub const CMPL_SUCCESS: u8 = 1;
 pub const CMPL_SHORT: u8 = 13;
@@ -109,11 +111,12 @@ pub const CRCR_CRR: u64 = 1 << 3;
 /// Address Device issues SET_ADDRESS on the wire. Enable Slot does not.
 /// `SPINS` was enough for Enable Slot on iron; Address Device was not.
 pub const ADDR_SPINS: u32 = 50_000_000;
-/// GET_DESC / SET_CONFIG on EP0. Iron `cbd9bf47` / stop-ep COM2: Toshiba
-/// device descriptor succeeded then config GET_DESC `cmd=4 cmpl=0xff`
-/// `bot=? scsi=?`. Timeout retries must Stop Endpoint (not stack TRBs;
-/// Reset is Halted-only). Mechanical HDD + leftover SETUP events need
-/// Address Device time; wait the STATUS TRB (not any Transfer Event).
+/// GET_DESC / SET_CONFIG on EP0. Iron ep0-stop COM2: Toshiba device
+/// descriptor lived (18-byte exact) then 9-byte config GET_DESC
+/// `cmd=4 cmpl=0xff` `bot=? scsi=?`. HS MPS=64 + wLength=9 babbles if
+/// the device returns wTotalLength; Intel may skip STATUS after a short
+/// DATA stage. Wait STATUS, or DATA success/short if STATUS never posts.
+/// Do not match leftover SETUP. Chain SETUP+DATA. One-shot config 256.
 pub const DESC_SPINS: u32 = ADDR_SPINS;
 /// Default control endpoint DCI.
 pub const XHCI_EP0_DCI: u8 = 1;
@@ -131,6 +134,8 @@ pub const USB_CLASS_HUB: u8 = 0x09;
 /// GET_DESC retries after Address Device. Iron `06ca0f95` p11 `cmd=4 cmpl=0`
 /// (Toshiba `0480:a004` on p11 the prior recover flash). Not persist OK.
 pub const XHCI_DESC_TRIES: u8 = 3;
+/// GET_CONFIGURATION in one shot. Iron ep0-stop: 9-byte probe `cmd=4`.
+pub const USB_CFG_DESC_MAX: u16 = 256;
 
 /// xHCI USBLEGSUP (extended cap ID 1).
 pub const USBLEGSUP_ID: u8 = 1;
@@ -367,6 +372,37 @@ pub fn xhci_event_dci(ctrl: u32) -> u8 {
 /// leftover CSW IN (same DCI as a later READ IN) must not retire that IN.
 pub fn xhci_event_trb_ptr(ev: &[u8; 16]) -> u64 {
     get_u64(ev, 0) & !0xF
+}
+
+/// SETUP TRB flags: Immediate Data + Chain + TRT (IN=3, no-data=0).
+pub fn control_setup_flags(data_in: bool) -> u32 {
+    let trt = if data_in { 3u32 << 16 } else { 0 };
+    trb_ctrl(0, TRB_SETUP, TRB_IDT | TRB_CH) | trt
+}
+
+/// DATA IN TRB: Chain + ISP + DIR=IN. Short packet vs HS MPS=64 posts.
+pub fn control_data_in_flags() -> u32 {
+    trb_ctrl(0, TRB_DATA, TRB_CH | TRB_ISP | (1 << 16))
+}
+
+/// STATUS OUT (control IN data stage): IOC, DIR=OUT.
+pub fn control_status_out_flags() -> u32 {
+    trb_ctrl(0, TRB_STATUS, TRB_IOC)
+}
+
+/// True when the Transfer Event completes the control TD (DATA or STATUS).
+/// Leftover SETUP must not match (`cbd9bf47`).
+pub fn xhci_control_event_matches(ev: &[u8; 16], data_ptr: u64, status_ptr: u64) -> bool {
+    let p = xhci_event_trb_ptr(ev);
+    p == (data_ptr & !0xF) || p == (status_ptr & !0xF)
+}
+
+/// Configuration descriptor wTotalLength, or 0 if the header is junk.
+pub fn usb_cfg_w_total(cfg: &[u8]) -> u16 {
+    if cfg.len() < 4 || cfg[1] != 2 {
+        return 0;
+    }
+    u16::from_le_bytes([cfg[2], cfg[3]]).min(cfg.len() as u16)
 }
 
 /// True when a Transfer Event belongs to this slot + bulk DCI.
@@ -975,6 +1011,78 @@ fn consume_transfer(
     )
 }
 
+/// Control IN: wait STATUS, or DATA success/short if STATUS never posts.
+/// Leftover SETUP is ignored. Iron ep0-stop: 9-byte GET_CONFIG STATUS never
+/// posted after a short/babble DATA stage (`cmd=4 cmpl=0xff`).
+fn consume_control(
+    hw: &mut impl XhciHw,
+    caps: &XhciCaps,
+    ev: &mut EventRing,
+    slot: u8,
+    data_ptr: u64,
+    status_ptr: u64,
+    spins_max: u32,
+) -> Result<[u8; 16], UsbBotError> {
+    let data = data_ptr & !0xF;
+    let status = status_ptr & !0xF;
+    let mut saw_data = false;
+    let mut data_ev = [0u8; 16];
+    let mut spins = 0u32;
+    loop {
+        let t = read_trb(hw, ev.base, ev.deq);
+        let ctrl = get_u32(&t, 12);
+        if (ctrl & 1) == (ev.cycle & 1) {
+            let ty = trb_type(ctrl);
+            advance_event(hw, caps, ev);
+            if ty != TRB_EVENT_TRANSFER || !xhci_xfer_matches(ctrl, slot, XHCI_EP0_DCI) {
+                continue;
+            }
+            let p = xhci_event_trb_ptr(&t);
+            let code = trb_cmpl_code(get_u32(&t, 8));
+            if p == data {
+                if code != CMPL_SUCCESS && code != CMPL_SHORT {
+                    store_usb_bot_diag(
+                        UsbBotError::Xfer,
+                        usb_bot_last_bar(),
+                        usb_bot_last_portsc(),
+                        xhci_xfer_diag_cmpl(code, xhci_event_dci(ctrl), xhci_event_slot(ctrl)),
+                    );
+                    return Err(UsbBotError::Xfer);
+                }
+                saw_data = true;
+                data_ev = t;
+                continue;
+            }
+            if p != status {
+                continue;
+            }
+            if code != CMPL_SUCCESS && code != CMPL_SHORT {
+                store_usb_bot_diag(
+                    UsbBotError::Xfer,
+                    usb_bot_last_bar(),
+                    usb_bot_last_portsc(),
+                    xhci_xfer_diag_cmpl(code, xhci_event_dci(ctrl), xhci_event_slot(ctrl)),
+                );
+                return Err(UsbBotError::Xfer);
+            }
+            return Ok(t);
+        }
+        spins = spins.saturating_add(1);
+        if spins > spins_max {
+            if saw_data {
+                return Ok(data_ev);
+            }
+            store_usb_bot_diag(
+                UsbBotError::Xfer,
+                usb_bot_last_bar(),
+                usb_bot_last_portsc(),
+                u64::from(CMPL_TIMEOUT),
+            );
+            return Err(UsbBotError::Xfer);
+        }
+    }
+}
+
 fn consume_posted(
     hw: &mut impl XhciHw,
     caps: &XhciCaps,
@@ -1382,6 +1490,7 @@ fn recover_ep(
             hpa | 1,
             trb_ctrl(0, TRB_SET_TR_DEQ, extra),
         );
+        drain_events(hw, caps, ev);
     });
 }
 
@@ -1449,21 +1558,11 @@ fn control_in(
 ) -> Result<(), UsbBotError> {
     let z = [0u8; 4096];
     hw.dma_write(bounce, &z[..data.len().min(4096)]);
-    ep0.place(
-        hw,
-        u64::from_le_bytes(setup),
-        8,
-        trb_ctrl(0, TRB_SETUP, TRB_IDT) | (3u32 << 16),
-    );
-    ep0.place(
-        hw,
-        bounce,
-        data.len() as u32,
-        trb_ctrl(0, TRB_DATA, 1 << 16),
-    );
-    let status = ep0.place(hw, 0, 0, trb_ctrl(0, TRB_STATUS, TRB_IOC));
+    ep0.place(hw, u64::from_le_bytes(setup), 8, control_setup_flags(true));
+    let data_ptr = ep0.place(hw, bounce, data.len() as u32, control_data_in_flags());
+    let status = ep0.place(hw, 0, 0, control_status_out_flags());
     doorbell(hw, caps.db, slot, XHCI_EP0_DCI);
-    consume_transfer(hw, caps, ev, slot, XHCI_EP0_DCI, status, DESC_SPINS)?;
+    consume_control(hw, caps, ev, slot, data_ptr, status, DESC_SPINS)?;
     hw.dma_read(bounce, data);
     Ok(())
 }
@@ -1476,12 +1575,7 @@ fn control_nodata(
     slot: u8,
     setup: [u8; 8],
 ) -> Result<(), UsbBotError> {
-    ep0.place(
-        hw,
-        u64::from_le_bytes(setup),
-        8,
-        trb_ctrl(0, TRB_SETUP, TRB_IDT),
-    );
+    ep0.place(hw, u64::from_le_bytes(setup), 8, control_setup_flags(false));
     let status = ep0.place(hw, 0, 0, trb_ctrl(0, TRB_STATUS, TRB_IOC) | (1 << 16));
     doorbell(hw, caps.db, slot, XHCI_EP0_DCI);
     consume_transfer(hw, caps, ev, slot, XHCI_EP0_DCI, status, DESC_SPINS)?;
@@ -1937,25 +2031,8 @@ fn try_port(
         recover_enum(hw, caps, mem, cmd_ring, ev, slot);
         return Err(UsbBotError::Hub);
     }
-    let mut cfg9 = [0u8; 9];
-    control_in_retry(
-        hw,
-        caps,
-        mem,
-        cmd_ring,
-        &mut ep0,
-        ev,
-        slot,
-        mem.bounce,
-        setup_get_desc(2, 9),
-        &mut cfg9,
-        port,
-    )
-    .map_err(|e| {
-        recover_enum(hw, caps, mem, cmd_ring, ev, slot);
-        stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_DESC, e)
-    })?;
-    let total = u16::from_le_bytes([cfg9[2], cfg9[3]]).min(256);
+    // One-shot GET_CONFIGURATION (not 9-byte then wTotalLength).
+    // Iron ep0-stop: 18-byte device desc lived, 9-byte config timed out.
     let mut cfg = [0u8; 256];
     control_in_retry(
         hw,
@@ -1966,14 +2043,26 @@ fn try_port(
         ev,
         slot,
         mem.bounce,
-        setup_get_desc(2, total),
-        &mut cfg[..total as usize],
+        setup_get_desc(2, USB_CFG_DESC_MAX),
+        &mut cfg,
         port,
     )
     .map_err(|e| {
         recover_enum(hw, caps, mem, cmd_ring, ev, slot);
         stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_DESC, e)
     })?;
+    let total = usb_cfg_w_total(&cfg);
+    if total < 9 {
+        recover_enum(hw, caps, mem, cmd_ring, ev, slot);
+        return Err(stamp_enum(
+            hw,
+            caps,
+            mmio,
+            port,
+            XHCI_ENUM_CMD_DESC,
+            UsbBotError::Enum,
+        ));
+    }
     let Some((ep_out, ep_in, mps_out, mps_in, cfg_val)) = parse_bot_eps(&cfg[..total as usize])
     else {
         let (_bot, uas) = cfg_msc_protos(&cfg[..total as usize]);
@@ -2698,6 +2787,34 @@ mod xhci_pack_test {
             consume_transfer(&mut hw, &caps, &mut ev, 1, XHCI_EP0_DCI, 0x2020, 8).expect("status");
         assert_eq!(xhci_event_trb_ptr(&got), 0x2020);
 
+        // Iron ep0-stop: leftover SETUP must not complete control; DATA short
+        // packet without STATUS still completes (Intel skip-STATUS / 9-byte
+        // GET_CONFIG `cmd=4 cmpl=0xff`).
+        let mut hw = FakeMem { mem: [0; 4096] };
+        write_trb(
+            &mut hw,
+            0,
+            0,
+            0x2000,
+            u32::from(CMPL_SUCCESS) << 24,
+            trb_ctrl(1, TRB_EVENT_TRANSFER, extra),
+        );
+        write_trb(
+            &mut hw,
+            0,
+            1,
+            0x2010,
+            u32::from(CMPL_SHORT) << 24,
+            trb_ctrl(1, TRB_EVENT_TRANSFER, extra),
+        );
+        let mut ev = EventRing::new(0);
+        let got = consume_control(&mut hw, &caps, &mut ev, 1, 0x2010, 0x2020, 8).expect("data");
+        assert_eq!(xhci_event_trb_ptr(&got), 0x2010);
+        assert!(xhci_control_event_matches(&got, 0x2010, 0x2020));
+        let mut setup_only = [0u8; 16];
+        put_u64(&mut setup_only, 0, 0x2000);
+        assert!(!xhci_control_event_matches(&setup_only, 0x2010, 0x2020));
+
         // Same bulk DCI leftover CSW IN vs later READ IN.
         let mut hw = FakeMem { mem: [0; 4096] };
         let in_extra = (1u32 << 24) | (3u32 << 16);
@@ -2794,6 +2911,25 @@ mod xhci_pack_test {
         assert_eq!(BOT_SETTLE_SPINS > SPINS, true);
         assert_eq!(DESC_SPINS, ADDR_SPINS);
         assert_eq!(XHCI_EP0_DCI, 1);
+        assert_eq!(TRB_CH, 1 << 4);
+        assert_eq!(USB_CFG_DESC_MAX, 256);
+        let setup_in = control_setup_flags(true);
+        assert_ne!(setup_in & TRB_CH, 0);
+        assert_ne!(setup_in & TRB_IDT, 0);
+        assert_eq!((setup_in >> 16) & 3, 3);
+        let data_in = control_data_in_flags();
+        assert_ne!(data_in & TRB_CH, 0);
+        assert_ne!(data_in & TRB_ISP, 0);
+        assert_eq!(control_status_out_flags() & TRB_CH, 0);
+        assert_eq!(usb_cfg_w_total(&[9, 2, 32, 0]), 4); // min(32, len=4) on short slice
+        let mut cfg256 = [0u8; 32];
+        cfg256[0] = 9;
+        cfg256[1] = 2;
+        cfg256[2] = 32;
+        assert_eq!(usb_cfg_w_total(&cfg256), 32);
+        assert_eq!(usb_cfg_w_total(&[9, 1, 18, 0]), 0);
+        assert_eq!(setup_get_desc(2, USB_CFG_DESC_MAX)[6], 0);
+        assert_eq!(setup_get_desc(2, USB_CFG_DESC_MAX)[7], 1);
         // Iron `cbd9bf47`: leftover SETUP TRB must not match STATUS TRB.
         let mut setup_ev = [0u8; 16];
         put_u64(&mut setup_ev, 0, 0x2000);
