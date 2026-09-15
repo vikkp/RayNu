@@ -225,9 +225,10 @@
                 Today the install disk is leftover DRAM above the precise EPT
                 pool. A <em>guest</em> reset keeps it. A <em>hypervisor</em>
                 Force Off zeros it. Nested File persist is closed; USB/NVMe
-                DurableLun I/O is host-ready; iron COM2 is not. First-cbw COM2
-                was <code>cmpl=0x13 bot=cbw scsi=capacity</code> after SET_CONFIG
-                (Reset Endpoint on a Running EP). The remaining 30% is still
+                DurableLun I/O is host-ready; iron COM2 is not. Stop-ep COM2
+                named Toshiba then config GET_DESC timed out
+                (<code>cmd=4 cmpl=0xff</code> <code>bot=? scsi=?</code>).
+                The remaining 30% is still
                 <code>RAYNU-V-M8-DISK-PERSIST-OK</code> after Force Off on a
                 ≥16 GiB Toshiba LUN, not the ESP Cruzer/UDisk. A buyer who
                 reboots RayNu-V to recover the box must not lose the VM — that

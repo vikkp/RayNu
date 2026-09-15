@@ -175,7 +175,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 2026-07 ████████  HDA + M6 closed (Latitude)
 2026-08 ████████  R640 boot (E2) + E3b HTTP-OK
 2026-09 ████████  E5 + Phase B — **Mount Everest CLOSED** (`f72b4276`)  ← months_to_everest = 0.0
-2026-10 ░░░░░░░░  M8.0 persist (nested-OK closed; first-cbw `cmpl=0x13`; Force Off open)
+2026-10 ░░░░░░░░  M8.0 persist (nested-OK closed; stop-ep `cmd=4`; Force Off open)
 2026-11 ░░░░░░░░  M8.1+ TLS/auth/console
 ```
 
@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-usb-stop-ep |
-| Summary | **Iron leftover, not persist.** First-cbw COM2: SET_CONFIG held then `bot=cbw scsi=capacity cmpl=0x13`. Context State Error is Reset Endpoint on a Running bulk EP after CBW timeout (xHCI 4.6.8 Halted-only). This EFI: Stop Endpoint then Set TR Dequeue; Reset only if Stop fails; do not clobber BOT `cmpl`. Months **0.0 held**. Overall **99 held**. |
-| Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. No persist gate. LOIHDA now on this USB stack: persist 70% held (A2 still open). |
-| Gates touched | `xhci.rs` Stop Endpoint recover; [m8_persist_iron.md](runbooks/m8_persist_iron.md); [loihda.md](loihda.md). `./tools/sync-hda-site.sh --check`. `./tools/sync-loihda-site.sh --check`. |
+| Commit | m8-usb-ep0-stop |
+| Summary | **Iron leftover, not persist.** Stop-ep COM2: Toshiba named then config GET_DESC `cmd=4 cmpl=0xff` `bot=? scsi=?` leftover 1 GiB. BOT never started. Timeout retries stacked EP0 TRBs. This EFI: Stop Endpoint on EP0 GET_DESC timeout. Months **0.0 held**. Overall **99 held**. |
+| Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. No persist gate. LOIHDA persist **70% held** (A2 still open). |
+| Gates touched | `xhci.rs` EP0 Stop recover; [m8_persist_iron.md](runbooks/m8_persist_iron.md); [loihda.md](loihda.md). `./tools/sync-hda-site.sh --check`. `./tools/sync-loihda-site.sh --check`. |
 | Months Δ | 0.0 held (Everest closed; iron Force Off still open) |
 
 
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-15 | m8-usb-ep0-stop | 0.0 | 99 | **Iron leftover, not persist:** stop-ep COM2 Toshiba named then `cmd=4 cmpl=0xff` `bot=? scsi=?`. GET_DESC timeout stacked EP0 TRBs. This EFI: Stop Endpoint on EP0 timeout. LOIHDA Bar A 42% held. Nested QEMU ≠ R640. Iron persist open. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |
 | 2026-09-15 | m8-usb-stop-ep | 0.0 | 99 | **Iron leftover, not persist:** first-cbw COM2 SET_CONFIG then `bot=cbw scsi=capacity cmpl=0x13`. Context State Error is Reset Endpoint on Running after CBW timeout. This EFI: Stop Endpoint then Set TR Dequeue. LOIHDA on this stack (Bar A 42% held). Nested QEMU ≠ R640. Iron persist open. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |
 | 2026-09-15 | m8-usb-first-cbw | 0.0 | 99 | **Iron leftover, not persist:** skip-INQUIRY COM2 `bot=cbw scsi=capacity cmpl=0xff` after SET_CONFIG. First bulk OUT had no settle/INQUIRY. This EFI: settle + waited INQUIRY then CAPACITY retry. Nested QEMU ≠ R640. Iron persist open. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |
 | 2026-09-15 | m8-usb-cap-csw | 0.0 | 99 | **Iron leftover, not persist:** COM2 `0780df21` leftover Everest. Coexist HTTP-OK → SPA → `ISO-INSTALL-OK` → `DISK-BOOT-OK` → login `root=UUID=1bc8b57d-…`. USB SET_CONFIG then CAPACITY CSW `cmpl=0xff`. This EFI: drop ignored INQUIRY; retry CAPACITY with `recover_pipes`; restore host-gate needle `Do not send START STOP or`. Nested QEMU ≠ R640. Iron persist open. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |
