@@ -103,6 +103,13 @@ pub const CRCR_CRR: u64 = 1 << 3;
 /// Address Device issues SET_ADDRESS on the wire. Enable Slot does not.
 /// `SPINS` was enough for Enable Slot on iron; Address Device was not.
 pub const ADDR_SPINS: u32 = 50_000_000;
+/// GET_DESC / SET_CONFIG on EP0. Iron `cbd9bf47`: Toshiba p11 device
+/// descriptor succeeded then config GET_DESC `cmd=4 cmpl=0xff` under
+/// [`SPINS`]. Mechanical HDD + leftover SETUP events need Address Device
+/// time, and the wait must be the STATUS TRB (not any Transfer Event).
+pub const DESC_SPINS: u32 = ADDR_SPINS;
+/// Default control endpoint DCI.
+pub const XHCI_EP0_DCI: u8 = 1;
 /// Bulk Transfer Event wait. Iron `6c278e85` (DESC retry): Toshiba p11
 /// `0480:a004` INQUIRY/TUR/CAPACITY (≤36 B) succeeded (`lba=512`) then the
 /// first 512-byte READ timed out (`err=8` `cmpl=0xff` at `off=0x200`).
@@ -342,6 +349,13 @@ pub fn xhci_event_dci(ctrl: u32) -> u8 {
     ((ctrl >> 16) & 0x1F) as u8
 }
 
+/// Transfer Event TRB Pointer (xHCI 6.4.2.1 DW0-1, bits 63:4).
+/// Iron `cbd9bf47`: leftover EP0 SETUP/DATA must not retire GET_DESC STATUS;
+/// leftover CSW IN (same DCI as a later READ IN) must not retire that IN.
+pub fn xhci_event_trb_ptr(ev: &[u8; 16]) -> u64 {
+    get_u64(ev, 0) & !0xF
+}
+
 /// True when a Transfer Event belongs to this slot + bulk DCI.
 /// Iron `96024edc`: READ CBW `cmpl=0` after CAPACITY CSW — a leftover bulk-IN
 /// event (Toshiba `ep_in=1` → DCI 3) must not retire the CBW OUT (DCI 4).
@@ -404,6 +418,10 @@ fn put_u32(b: &mut [u8], off: usize, v: u32) {
 
 fn get_u32(b: &[u8], off: usize) -> u32 {
     u32::from_le_bytes(b[off..off + 4].try_into().unwrap_or([0; 4]))
+}
+
+fn get_u64(b: &[u8], off: usize) -> u64 {
+    u64::from_le_bytes(b[off..off + 8].try_into().unwrap_or([0; 8]))
 }
 
 /// MMIO + DMA. Host tests pack TRBs without this; UEFI uses BAR0.
@@ -492,7 +510,7 @@ impl Ring {
         }
     }
 
-    fn place(&mut self, hw: &mut impl XhciHw, ptr: u64, status: u32, ctrl: u32) {
+    fn place(&mut self, hw: &mut impl XhciHw, ptr: u64, status: u32, ctrl: u32) -> u64 {
         if self.enq == RING_TRBS - 1 {
             write_trb(
                 hw,
@@ -505,6 +523,7 @@ impl Ring {
             self.enq = 0;
             self.cycle ^= 1;
         }
+        let hpa = self.base + u64::from(self.enq) * 16;
         write_trb(
             hw,
             self.base,
@@ -514,6 +533,7 @@ impl Ring {
             (ctrl & !1) | (self.cycle & 1),
         );
         self.enq = self.enq.saturating_add(1);
+        hpa
     }
 }
 
@@ -918,7 +938,7 @@ fn consume_event(
     want_type: u32,
     spins_max: u32,
 ) -> Result<[u8; 16], UsbBotError> {
-    consume_posted(hw, caps, ev, want_type, 0, 0, spins_max)
+    consume_posted(hw, caps, ev, want_type, 0, 0, 0, spins_max)
 }
 
 fn consume_transfer(
@@ -927,9 +947,19 @@ fn consume_transfer(
     ev: &mut EventRing,
     slot: u8,
     dci: u8,
+    want_ptr: u64,
     spins_max: u32,
 ) -> Result<[u8; 16], UsbBotError> {
-    consume_posted(hw, caps, ev, TRB_EVENT_TRANSFER, slot, dci, spins_max)
+    consume_posted(
+        hw,
+        caps,
+        ev,
+        TRB_EVENT_TRANSFER,
+        slot,
+        dci,
+        want_ptr,
+        spins_max,
+    )
 }
 
 fn consume_posted(
@@ -939,6 +969,7 @@ fn consume_posted(
     want_type: u32,
     slot: u8,
     dci: u8,
+    want_ptr: u64,
     spins_max: u32,
 ) -> Result<[u8; 16], UsbBotError> {
     let mut spins = 0u32;
@@ -952,6 +983,12 @@ fn consume_posted(
                 if want_type == TRB_EVENT_TRANSFER
                     && dci != 0
                     && !xhci_xfer_matches(ctrl, slot, dci)
+                {
+                    continue;
+                }
+                if want_type == TRB_EVENT_TRANSFER
+                    && want_ptr != 0
+                    && xhci_event_trb_ptr(&t) != (want_ptr & !0xF)
                 {
                     continue;
                 }
@@ -1349,12 +1386,18 @@ fn control_in_retry(
                 last = e;
                 if n + 1 < XHCI_DESC_TRIES {
                     serial_xhci_desc_retry(port, n + 1);
-                    reset_ep0(hw, caps, mem, cmd_ring, ev, ep0, slot);
+                    if should_reset_ep0(e) {
+                        reset_ep0(hw, caps, mem, cmd_ring, ev, ep0, slot);
+                    }
                 }
             }
         }
     }
     Err(last)
+}
+
+fn should_reset_ep0(err: UsbBotError) -> bool {
+    err != UsbBotError::Xfer || usb_bot_last_cmpl() as u8 != CMPL_TIMEOUT
 }
 
 fn control_in(
@@ -1381,9 +1424,9 @@ fn control_in(
         data.len() as u32,
         trb_ctrl(0, TRB_DATA, 1 << 16),
     );
-    ep0.place(hw, 0, 0, trb_ctrl(0, TRB_STATUS, TRB_IOC));
-    doorbell(hw, caps.db, slot, 1);
-    consume_event(hw, caps, ev, TRB_EVENT_TRANSFER, SPINS)?;
+    let status = ep0.place(hw, 0, 0, trb_ctrl(0, TRB_STATUS, TRB_IOC));
+    doorbell(hw, caps.db, slot, XHCI_EP0_DCI);
+    consume_transfer(hw, caps, ev, slot, XHCI_EP0_DCI, status, DESC_SPINS)?;
     hw.dma_read(bounce, data);
     Ok(())
 }
@@ -1402,9 +1445,9 @@ fn control_nodata(
         8,
         trb_ctrl(0, TRB_SETUP, TRB_IDT),
     );
-    ep0.place(hw, 0, 0, trb_ctrl(0, TRB_STATUS, TRB_IOC) | (1 << 16));
-    doorbell(hw, caps.db, slot, 1);
-    consume_event(hw, caps, ev, TRB_EVENT_TRANSFER, SPINS)?;
+    let status = ep0.place(hw, 0, 0, trb_ctrl(0, TRB_STATUS, TRB_IOC) | (1 << 16));
+    doorbell(hw, caps.db, slot, XHCI_EP0_DCI);
+    consume_transfer(hw, caps, ev, slot, XHCI_EP0_DCI, status, DESC_SPINS)?;
     Ok(())
 }
 
@@ -1428,7 +1471,9 @@ fn control_nodata_retry(
                 last = e;
                 if n + 1 < XHCI_DESC_TRIES {
                     serial_xhci_desc_retry(port, n + 1);
-                    reset_ep0(hw, caps, mem, cmd_ring, ev, ep0, slot);
+                    if should_reset_ep0(e) {
+                        reset_ep0(hw, caps, mem, cmd_ring, ev, ep0, slot);
+                    }
                 }
             }
         }
@@ -1592,7 +1637,7 @@ impl UsbBulk for LiveXhci {
         let mut hw = MmioXhci { base: self.mmio };
         drain_events(&mut hw, &self.caps, &mut self.ev);
         hw.dma_write(self.bounce, data);
-        self.bulk_out.place(
+        let trb = self.bulk_out.place(
             &mut hw,
             self.bounce,
             data.len() as u32,
@@ -1605,6 +1650,7 @@ impl UsbBulk for LiveXhci {
             &mut self.ev,
             self.slot,
             self.dci_out,
+            trb,
             BULK_SPINS,
         )
         .map(|_| ())
@@ -1618,7 +1664,7 @@ impl UsbBulk for LiveXhci {
         drain_events(&mut hw, &self.caps, &mut self.ev);
         let z = [0u8; 4096];
         hw.dma_write(self.bounce_in, &z[..data.len()]);
-        self.bulk_in.place(
+        let trb = self.bulk_in.place(
             &mut hw,
             self.bounce_in,
             data.len() as u32,
@@ -1631,6 +1677,7 @@ impl UsbBulk for LiveXhci {
             &mut self.ev,
             self.slot,
             self.dci_in,
+            trb,
             BULK_SPINS,
         ) {
             Ok(_) => {
@@ -2556,6 +2603,88 @@ mod xhci_pack_test {
     }
 
     #[test]
+    fn leftover_setup_event_does_not_retire_status_trb() {
+        // Iron `cbd9bf47`: GET_DESC waited for any EP0 Transfer Event.
+        // Leftover SETUP/DATA (or a prior STATUS) retired the wait; config
+        // GET_DESC then timed out (`cmd=4 cmpl=0xff`). Wait the STATUS TRB.
+        let mut hw = FakeMem { mem: [0; 4096] };
+        let caps = XhciCaps {
+            op: 0,
+            rt: 0,
+            db: 0,
+            max_slots: 64,
+            max_ports: 26,
+            csz: false,
+        };
+        let extra = (1u32 << 24) | (u32::from(XHCI_EP0_DCI) << 16);
+        write_trb(
+            &mut hw,
+            0,
+            0,
+            0x2000,
+            u32::from(CMPL_SUCCESS) << 24,
+            trb_ctrl(1, TRB_EVENT_TRANSFER, extra),
+        );
+        write_trb(
+            &mut hw,
+            0,
+            1,
+            0x2020,
+            u32::from(CMPL_SUCCESS) << 24,
+            trb_ctrl(1, TRB_EVENT_TRANSFER, extra),
+        );
+        let mut any = EventRing::new(0);
+        let old =
+            consume_transfer(&mut hw, &caps, &mut any, 1, XHCI_EP0_DCI, 0, 8).expect("any event");
+        assert_eq!(xhci_event_trb_ptr(&old), 0x2000);
+
+        let mut hw = FakeMem { mem: [0; 4096] };
+        write_trb(
+            &mut hw,
+            0,
+            0,
+            0x2000,
+            u32::from(CMPL_SUCCESS) << 24,
+            trb_ctrl(1, TRB_EVENT_TRANSFER, extra),
+        );
+        write_trb(
+            &mut hw,
+            0,
+            1,
+            0x2020,
+            u32::from(CMPL_SUCCESS) << 24,
+            trb_ctrl(1, TRB_EVENT_TRANSFER, extra),
+        );
+        let mut ev = EventRing::new(0);
+        let got =
+            consume_transfer(&mut hw, &caps, &mut ev, 1, XHCI_EP0_DCI, 0x2020, 8).expect("status");
+        assert_eq!(xhci_event_trb_ptr(&got), 0x2020);
+
+        // Same bulk DCI leftover CSW IN vs later READ IN.
+        let mut hw = FakeMem { mem: [0; 4096] };
+        let in_extra = (1u32 << 24) | (3u32 << 16);
+        write_trb(
+            &mut hw,
+            0,
+            0,
+            0x4000,
+            u32::from(CMPL_SUCCESS) << 24,
+            trb_ctrl(1, TRB_EVENT_TRANSFER, in_extra),
+        );
+        write_trb(
+            &mut hw,
+            0,
+            1,
+            0x4020,
+            u32::from(CMPL_SUCCESS) << 24,
+            trb_ctrl(1, TRB_EVENT_TRANSFER, in_extra),
+        );
+        let mut ev = EventRing::new(0);
+        let got = consume_transfer(&mut hw, &caps, &mut ev, 1, 3, 0x4020, 8).expect("read in");
+        assert_eq!(xhci_event_trb_ptr(&got), 0x4020);
+    }
+
+    #[test]
     fn iron_lewisburg_enum_portsc_polling_is_not_link_ready() {
         // Iron Cap EFI COM2 `50b5d8bb` / `67db8a68`: p10/p11/p14 PORTSC=0x000206e1
         // (CCS=1, PED=0, PLS=Polling, Speed=FS). Address Device with that
@@ -2625,6 +2754,29 @@ mod xhci_pack_test {
         assert_eq!(xhci_event_dci(cbw_out), 4);
         assert_eq!(xhci_xfer_diag_cmpl(0, 4, 1), 0x0001_0400);
         assert_eq!(BOT_SETTLE_SPINS > SPINS, true);
+        assert_eq!(DESC_SPINS, ADDR_SPINS);
+        assert_eq!(XHCI_EP0_DCI, 1);
+        // Iron `cbd9bf47`: leftover SETUP TRB must not match STATUS TRB.
+        let mut setup_ev = [0u8; 16];
+        put_u64(&mut setup_ev, 0, 0x2000);
+        let mut status_ev = [0u8; 16];
+        put_u64(&mut status_ev, 0, 0x2020);
+        assert_eq!(xhci_event_trb_ptr(&setup_ev), 0x2000);
+        assert_eq!(xhci_event_trb_ptr(&status_ev), 0x2020);
+        assert_ne!(
+            xhci_event_trb_ptr(&setup_ev),
+            xhci_event_trb_ptr(&status_ev)
+        );
+        // Same DCI leftover CSW IN vs later READ IN.
+        let mut csw_ptr = [0u8; 16];
+        put_u64(&mut csw_ptr, 0, 0x4000);
+        let mut read_ptr = [0u8; 16];
+        put_u64(&mut read_ptr, 0, 0x4020);
+        assert_ne!(xhci_event_trb_ptr(&csw_ptr), xhci_event_trb_ptr(&read_ptr));
+        store_usb_bot_diag(UsbBotError::Xfer, 0, 0, u64::from(CMPL_TIMEOUT));
+        assert!(!should_reset_ep0(UsbBotError::Xfer));
+        store_usb_bot_diag(UsbBotError::Xfer, 0, 0, 6);
+        assert!(should_reset_ep0(UsbBotError::Xfer));
         assert_eq!(xhci_reset_diag_cmpl(64, 26, 0x80, 14), 0x0e80_1a40);
         assert_eq!(CMPL_PARAMETER, 17);
         assert_eq!(CMPL_TIMEOUT, 0xFF);
