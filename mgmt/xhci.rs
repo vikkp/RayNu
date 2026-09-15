@@ -11,9 +11,9 @@
 //! ADR-004: persist backing is virtio-blk / BlockIo only.
 
 use super::usb_bot::{
-    next_bot_tag, store_usb_bot_diag, store_usb_bot_diag_unless_kept, store_usb_bot_ready,
-    usb_bot_bring_up, usb_bot_last_bar, usb_bot_last_cmpl, usb_bot_last_portsc, usb_bot_last_stage,
-    usb_bot_stage_name, UsbBotError, UsbBulk, CSW_LEN,
+    next_bot_tag, restore_usb_bot_diag, store_usb_bot_diag, store_usb_bot_diag_unless_kept,
+    store_usb_bot_ready, usb_bot_bring_up, usb_bot_last_bar, usb_bot_last_cmpl, usb_bot_last_err,
+    usb_bot_last_portsc, usb_bot_last_stage, usb_bot_stage_name, UsbBotError, UsbBulk, CSW_LEN,
 };
 
 /// Same window as [`crate::mgmt::durable_lun::usb_is_esp_cruzer_window`].
@@ -34,6 +34,9 @@ pub const TRB_DISABLE_SLOT: u32 = 10;
 pub const TRB_ADDRESS_DEV: u32 = 11;
 pub const TRB_CONFIG_EP: u32 = 12;
 pub const TRB_RESET_EP: u32 = 14;
+/// Stop Endpoint (xHCI 4.6.9). Timeout leaves EP Running; Reset Endpoint
+/// is Halted-only and returns Context State Error (`cmpl=0x13`).
+pub const TRB_STOP_EP: u32 = 15;
 pub const TRB_SET_TR_DEQ: u32 = 16;
 pub const TRB_EVENT_TRANSFER: u32 = 32;
 pub const TRB_EVENT_CMD: u32 = 33;
@@ -49,6 +52,9 @@ pub const TRB_TC: u32 = 1 << 1;
 
 pub const CMPL_SUCCESS: u8 = 1;
 pub const CMPL_SHORT: u8 = 13;
+/// Context State Error (xHCI Table 6-91). Iron first-cbw: Reset Endpoint
+/// on a Running bulk EP after CAPACITY CBW timeout stamped `cmpl=0x13`.
+pub const CMPL_CONTEXT_STATE: u8 = 19;
 
 pub const USBCMD_RS: u32 = 1;
 pub const USBCMD_HCRST: u32 = 1 << 1;
@@ -294,9 +300,15 @@ pub fn crcr_restart(cmd_hpa: u64) -> u64 {
     (cmd_hpa & !0x3F) | CRCR_RCS
 }
 
-/// Slot ID[31:24] + Endpoint ID[20:16] for Reset Endpoint / Set TR Dequeue.
+/// Slot ID[31:24] + Endpoint ID[20:16] for Stop/Reset Endpoint / Set TR Dequeue.
 pub fn xhci_ep_cmd_extra(slot: u8, dci: u8) -> u32 {
     u32::from(slot) << 24 | u32::from(dci) << 16
+}
+
+/// Reset Endpoint only when Stop Endpoint did not succeed (Halted / already
+/// Stopped). Iron first-cbw `cmpl=0x13`: Reset on Running after CBW timeout.
+pub fn xhci_ep_recover_need_reset(stop_ok: bool) -> bool {
+    !stop_ok
 }
 
 /// Device descriptor bDeviceClass 09 is a hub, not BOT.
@@ -1591,6 +1603,16 @@ struct LiveXhci {
     tag: u32,
 }
 
+fn hold_bot_diag<R>(f: impl FnOnce() -> R) -> R {
+    let err = usb_bot_last_err();
+    let bar = usb_bot_last_bar();
+    let portsc = usb_bot_last_portsc();
+    let cmpl = usb_bot_last_cmpl();
+    let r = f();
+    restore_usb_bot_diag(err, bar, portsc, cmpl);
+    r
+}
+
 fn reset_bulk_ep(
     hw: &mut impl XhciHw,
     caps: &XhciCaps,
@@ -1601,19 +1623,26 @@ fn reset_bulk_ep(
     slot: u8,
     dci: u8,
 ) {
-    drain_events(hw, caps, ev);
-    let extra = xhci_ep_cmd_extra(slot, dci);
-    let _ = cmd(hw, caps, cmd_ring, ev, 0, trb_ctrl(0, TRB_RESET_EP, extra));
-    zero_page(hw, hpa);
-    *ring = Ring::new(hpa);
-    let _ = cmd(
-        hw,
-        caps,
-        cmd_ring,
-        ev,
-        hpa | 1,
-        trb_ctrl(0, TRB_SET_TR_DEQ, extra),
-    );
+    hold_bot_diag(|| {
+        drain_events(hw, caps, ev);
+        let extra = xhci_ep_cmd_extra(slot, dci);
+        // Timeout: EP is Running. Stop Endpoint then Set TR Dequeue.
+        // Reset Endpoint is Halted-only (iron first-cbw `cmpl=0x13`).
+        let stop_ok = cmd(hw, caps, cmd_ring, ev, 0, trb_ctrl(0, TRB_STOP_EP, extra)).is_ok();
+        if xhci_ep_recover_need_reset(stop_ok) {
+            let _ = cmd(hw, caps, cmd_ring, ev, 0, trb_ctrl(0, TRB_RESET_EP, extra));
+        }
+        zero_page(hw, hpa);
+        *ring = Ring::new(hpa);
+        let _ = cmd(
+            hw,
+            caps,
+            cmd_ring,
+            ev,
+            hpa | 1,
+            trb_ctrl(0, TRB_SET_TR_DEQ, extra),
+        );
+    });
 }
 
 /// ISP only on the 13-byte CSW short packet. Full-size READ/WRITE IN uses IOC.
@@ -2279,7 +2308,10 @@ pub fn xhci_live_rw(_off: u64, _buf: &mut [u8], _write: bool) -> bool {
 #[cfg(test)]
 mod xhci_pack_test {
     use super::*;
-    use crate::mgmt::usb_bot::{usb_bot_keep_xfer_diag, usb_bot_last_err};
+    use crate::mgmt::usb_bot::{
+        store_usb_bot_diag, usb_bot_keep_xfer_diag, usb_bot_last_cmpl, usb_bot_last_err,
+        usb_bot_last_portsc,
+    };
 
     #[test]
     fn trb_ctrl_packs_type_and_cycle() {
@@ -2810,7 +2842,11 @@ mod xhci_pack_test {
         assert_eq!(USB_CLASS_HUB, 9);
         assert_eq!(XHCI_DESC_TRIES, 3);
         assert_eq!(TRB_RESET_EP, 14);
+        assert_eq!(TRB_STOP_EP, 15);
         assert_eq!(TRB_SET_TR_DEQ, 16);
+        assert_eq!(CMPL_CONTEXT_STATE, 19);
+        assert!(!xhci_ep_recover_need_reset(true));
+        assert!(xhci_ep_recover_need_reset(false));
         assert_eq!(UsbBotError::Hub as u8, 9);
         assert_eq!(xhci_ep_cmd_extra(3, 1), 3u32 << 24 | 1u32 << 16);
         assert_eq!(
@@ -2837,6 +2873,12 @@ mod xhci_pack_test {
         assert_eq!(usb_bot_last_err(), UsbBotError::Xfer as u8);
         assert_eq!(usb_bot_last_cmpl(), 0xff);
         assert_eq!(usb_bot_last_portsc(), 0x0000_000b_0000_0e03);
+        // Iron first-cbw: Reset Endpoint CC 19 must not clobber CBW timeout.
+        super::hold_bot_diag(|| {
+            store_usb_bot_diag(UsbBotError::Enum, 0, 0, u64::from(CMPL_CONTEXT_STATE));
+        });
+        assert_eq!(usb_bot_last_err(), UsbBotError::Xfer as u8);
+        assert_eq!(usb_bot_last_cmpl(), 0xff);
         let mut hub_cfg = [0u8; 18];
         hub_cfg[0] = 9;
         hub_cfg[1] = 2;
