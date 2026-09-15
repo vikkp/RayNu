@@ -2,7 +2,8 @@
 # Guard the public-site look from the Kimi site-updater PR (#218–#226).
 # Feature branches that truncated `site/` still pass cargo tests; Cloudflare
 # Git integration then deploys that truncated tree over raynuv.com.
-# Fail CI / Worker / Pages deploy if the updater chrome is missing.
+# 2026-09-15: USB persist PRs overwrote production and dropped site/loi.html.
+# Fail CI / Worker / Pages deploy if the updater chrome (including LOI) is missing.
 #
 # Lived copy (Everest closed, M8 residual, COM2 snippets) MAY change.
 # Chrome landmarks MUST NOT. Do not require "Not Everest".
@@ -40,6 +41,9 @@ need_file "com2.html"
 need_file "hda.html"
 need_file "hda.js"
 need_file "hda.json"
+need_file "loi.html"
+need_file "loi.js"
+need_file "loi.json"
 need_file "styles.css"
 need_file "main.js"
 need_file "404.html"
@@ -53,6 +57,7 @@ need_file "assets/r640-boot-ok-com2-800.webp"
 # Homepage chrome — never delete these while "updating status"
 need_text "index.html" 'nav class="site-nav' "fixed site nav"
 need_text "index.html" "CIO View" "CIO View nav"
+need_text "index.html" ">LOI</a>" "LOI nav shortcut"
 need_text "index.html" "fork__card" "CIO/engineer fork cards"
 need_text "index.html" 'id="status"' "status section"
 need_text "index.html" 'id="start-here"' "audience fork section"
@@ -75,6 +80,13 @@ need_text "com2.html" 'nav class="site-nav' "COM2 page nav"
 need_text "hda.html" "Honest Distance Assessment" "HDA mast"
 need_text "hda.html" "hda.js" "HDA JSON loader"
 need_text "hda.html" 'nav class="site-nav' "HDA page nav"
+need_text "hda.html" ">LOI</a>" "LOI nav on HDA page"
+
+need_text "loi.html" "LOI Honest Distance Assessment" "LOI mast"
+need_text "loi.html" "loi.js" "LOI JSON loader"
+need_text "loi.html" 'nav class="site-nav' "LOI page nav"
+need_text "loi.html" "Bar A" "LOI Bar A"
+need_text "loi.html" "Bar B" "LOI Bar B"
 
 need_text "paper.html" 'nav class="site-nav' "Paper page nav"
 
@@ -100,5 +112,5 @@ if [[ "$fail" -ne 0 ]]; then
   exit 1
 fi
 
-echo "site chrome OK — CIO View + Status + Stories + HDA updater look present"
+echo "site chrome OK — CIO View + Status + Stories + HDA + LOI updater look present"
 exit 0

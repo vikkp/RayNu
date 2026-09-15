@@ -54,7 +54,8 @@ M8.6  Windows / multi-distro (ADR-014 later)
 Software gates: CI + host/QEMU smoke.  
 Iron gates: real PowerEdge R640 COM2 (or documented HTTPS capture) — Latitude/QEMU insufficient when the claim is “survives a host reboot” or “browser TLS.”
 
-HDA + `site/hda.html` stay fresh: update `docs/hda.md`, then `./tools/sync-hda-site.sh`.
+HDA + `site/hda.html` stay fresh: update `docs/hda.md`, then `./tools/sync-hda-site.sh`.  
+LOI distance is a sibling tracker: [`docs/loihda.md`](loihda.md) / [`site/loi.html`](../site/loi.html). HDA 99% is not an LOI.
 
 ---
 

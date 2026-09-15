@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RayNu-V — Path to LOI</title>
+    <meta
+      name="description"
+      content="Honest distance to a non-production Letter of Intent. Bar A is a dedicated box. Bar B is RAID-fleet replacement. HDA 99% is Everest, not an LOI."
+    />
+    <meta property="og:title" content="RayNu-V · Path to LOI" />
+    <meta
+      property="og:description"
+      content="Two bars: dedicated-box 42%, RAID-fleet 18%. Persist across a hypervisor reboot is the NOW gate. USB is not PERC."
+    />
+    <meta property="og:type" content="website" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="assets/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="page-hda page-loi">
+    <nav class="site-nav site-nav--solid" aria-label="Site">
+      <a class="site-nav__brand" href="index.html">RayNu-V</a>
+      <div class="site-nav__links">
+        <a href="index.html#status" data-hide-sm>Status</a>
+        <a href="index.html#console" data-hide-sm>Console</a>
+        <a href="loi.html" aria-current="page">LOI</a>
+        <a href="stories.html">Stories</a>
+        <a href="hda.html">Everest</a>
+        <a href="paper.html">Paper</a>
+        <a href="ciospeak.html">CIO View</a>
+        <a href="https://github.com/vikkp/RayNu" data-hide-sm>GitHub</a>
+      </div>
+    </nav>
+    <header class="hda-mast">
+      <div class="hda-mast__inner">
+        <p class="hda-mast__nav">
+          <a href="index.html">RayNu-V</a>
+          <span aria-hidden="true">·</span>
+          <span>LOI Honest Distance Assessment</span>
+        </p>
+        <p class="brand reveal">RayNu-V</p>
+        <p class="hda-mast__kicker reveal">Born 14 September 2026 · after Everest</p>
+        <h1 class="hda-mast__title reveal reveal--delay-1">
+          The next mountain is a letter of intent
+        </h1>
+        <p class="hda-mast__lede reveal reveal--delay-2">
+          Everest asked whether the loop works on a real PowerEdge: EFI, network
+          UI, Linux ISO, reboot to login. That answer is yes. An LOI asks a
+          different question — would a fleet owner put <em>non-production
+          intent</em> in writing? HDA 99% is not that answer.
+        </p>
+        <p
+          class="hda-path reveal reveal--delay-3"
+          id="loi-path"
+          aria-label="Path to LOI"
+        >
+          Everest loop (closed) → persist across HV reboot → SKU card → TLS
+          for InfoSec → Bar A dedicated-box LOI → PERC RAID I/O → Bar B fleet LOI
+        </p>
+      </div>
+    </header>
+
+    <main>
+      <section class="section section--hda-tracker" id="tracker">
+        <div class="section__inner">
+          <p class="milestone-kicker" data-reveal>
+            Tracker · synced from <code>docs/loihda.md</code>
+          </p>
+          <div class="hda-tracker" data-reveal>
+            <div class="hda-tracker__hero">
+              <p class="hda-tracker__label" id="loi-tracker-label">Months to Bar A</p>
+              <p class="hda-tracker__months" id="loi-months">1.5 mo</p>
+              <p class="hda-tracker__delta" id="loi-delta">Bar A · was 1.5 · Bar B 3.5 mo</p>
+            </div>
+            <dl class="hda-tracker__meta">
+              <div>
+                <dt>Overall LOI readiness</dt>
+                <dd id="loi-overall">38%</dd>
+              </div>
+              <div>
+                <dt>Bar A ETA</dt>
+                <dd id="loi-eta">2026-11</dd>
+              </div>
+              <div>
+                <dt>Bar B ETA</dt>
+                <dd id="loi-eta-b">2026-12</dd>
+              </div>
+              <div>
+                <dt>Confidence</dt>
+                <dd id="loi-confidence">medium</dd>
+              </div>
+              <div>
+                <dt>Updated</dt>
+                <dd id="loi-updated">2026-09-15</dd>
+              </div>
+            </dl>
+          </div>
+          <div class="hda-bars" data-reveal>
+            <div class="hda-bar">
+              <div class="hda-bar__head">
+                <span>Bar A · dedicated-box</span>
+                <span id="loi-bar-a-label">42%</span>
+              </div>
+              <div class="hda-bar__track" aria-hidden="true">
+                <span class="hda-bar__fill" id="loi-bar-a" style="width: 42%"></span>
+              </div>
+            </div>
+            <div class="hda-bar">
+              <div class="hda-bar__head">
+                <span>Bar B · RAID fleet</span>
+                <span id="loi-bar-b-label">18%</span>
+              </div>
+              <div class="hda-bar__track" aria-hidden="true">
+                <span class="hda-bar__fill loi-bar__fill--fleet" id="loi-bar-b" style="width: 18%"></span>
+              </div>
+            </div>
+            <div class="hda-bar">
+              <div class="hda-bar__head">
+                <span>Overall LOI readiness</span>
+                <span id="loi-bar-overall-label">38%</span>
+              </div>
+              <div class="hda-bar__track" aria-hidden="true">
+                <span class="hda-bar__fill" id="loi-bar-overall" style="width: 38%"></span>
+              </div>
+            </div>
+          </div>
+          <p class="hda-aside" data-reveal>
+            These numbers are a <strong>baseline</strong>, not a close. They
+            shrink only when COM2 prints a persist marker, TLS is reachable, or
+            a spare PERC virtual disk actually holds a guest. Nested QEMU and
+            host tests do not move the month count.
+          </p>
+        </div>
+      </section>
+
+      <section class="section" id="what">
+        <div class="section__inner">
+          <p class="milestone-kicker" data-reveal>Definition</p>
+          <h2 class="section__title">Two letters, not one</h2>
+          <p class="section__lede">
+            A Letter of Intent here is a fleet owner saying they intend to run
+            RayNu-V in <strong>non-production</strong> on named iron. It is not
+            a purchase order, not 1.0, not cluster, not Windows. The two bars
+            are separate conversations; presenting them as one overstates
+            what is ready.
+          </p>
+          <div class="loi-cards" data-reveal>
+            <article class="loi-card">
+              <p class="loi-card__kicker">Bar A · 42%</p>
+              <h3>Dedicated box</h3>
+              <p>
+                One PowerEdge we own, or they can afford to dedicate. The guest
+                disk must survive Force Off of the hypervisor. HTTPS so the
+                management plane can be shown to InfoSec. Alpine-on-virtio is an acceptable
+                first guest if the SKU card says so.
+              </p>
+              <p class="loi-card__effect">
+                <strong>Product effect:</strong> a lab handshake we can take
+                without promising to replace their RAID array.
+              </p>
+            </article>
+            <article class="loi-card">
+              <p class="loi-card__kicker">Bar B · 18%</p>
+              <h3>RAID fleet</h3>
+              <p>
+                Keep the iron. Replace the licensed hypervisor. Guest and boot
+                disks already live on PERC H740P virtual disks — that is most
+                of the R640 installed base. USB persist does not close this.
+                Formatting the lab Ubuntu array does not close this.
+              </p>
+              <p class="loi-card__effect">
+                <strong>Product effect:</strong> this is the “extend the life
+                of the fleet you already paid for” pitch. Until a spare VD
+                holds a guest across Force Off, we do not take this conversation.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section--loi-pieces" id="pieces">
+        <div class="section__inner">
+          <p class="milestone-kicker" data-reveal>The pieces</p>
+          <h2 class="section__title">What has to be true, and why it matters</h2>
+          <p class="section__lede">
+            Everest HDA scored the loop. LOIHDA scores the <em>consequences</em>
+            of each leftover. A feature can be in the binary and still overstate
+            what a buyer can use.
+          </p>
+          <ol class="loi-pieces">
+            <li data-reveal>
+              <header>
+                <span class="loi-pieces__name">Everest loop</span>
+                <span class="loi-pieces__pct" data-piece="everest">100%</span>
+              </header>
+              <div class="hda-bar__track" aria-hidden="true">
+                <span class="hda-bar__fill hda-bar__fill--summit" data-piece-fill="everest" style="width: 100%"></span>
+              </div>
+              <p>
+                Closed on iron 11 September 2026: SPA Start of RayNu-F → Alpine
+                <code>setup-disk</code> → <code>ISO-INSTALL-OK</code> → F7 →
+                <code>DISK-BOOT-OK</code> → <code>login:</code>. There is a
+                thing a buyer can watch. Without this, an LOI is a research
+                pitch. This piece does <em>not</em> mean disks survive a
+                hypervisor reboot, or that management is encrypted.
+              </p>
+            </li>
+            <li data-reveal>
+              <header>
+                <span class="loi-pieces__name">Persist across HV reboot</span>
+                <span class="loi-pieces__pct" data-piece="persist">70%</span>
+              </header>
+              <div class="hda-bar__track" aria-hidden="true">
+                <span class="hda-bar__fill" data-piece-fill="persist" style="width: 70%"></span>
+              </div>
+              <p>
+                Today the install disk is leftover DRAM above the precise EPT
+                pool. A <em>guest</em> reset keeps it. A <em>hypervisor</em>
+                Force Off zeros it. Nested File persist is closed; USB/NVMe
+                DurableLun I/O is host-ready; iron COM2 is not. The remaining
+                30% is one Force Off on a ≥16 GiB stick that is not the ESP
+                Cruzer. A buyer who reboots RayNu-V to recover the box must not
+                lose the VM — that is the first thing they will do.
+              </p>
+            </li>
+            <li data-reveal>
+              <header>
+                <span class="loi-pieces__name">SKU card</span>
+                <span class="loi-pieces__pct" data-piece="sku">25%</span>
+              </header>
+              <div class="hda-bar__track" aria-hidden="true">
+                <span class="hda-bar__fill" data-piece-fill="sku" style="width: 25%"></span>
+              </div>
+              <p>
+                One page: what ships, what does not. Dedicated-box versus fleet.
+                USB versus PERC. Alpine-patched versus unmodified. No cluster.
+                No Windows. This page is the start of that card. Until persist
+                and TLS close, the card has to say “not yet.” Overstated copy
+                here does not survive a second diligence meeting.
+              </p>
+            </li>
+            <li data-reveal>
+              <header>
+                <span class="loi-pieces__name">TLS</span>
+                <span class="loi-pieces__pct" data-piece="tls">8%</span>
+              </header>
+              <div class="hda-bar__track" aria-hidden="true">
+                <span class="hda-bar__fill" data-piece-fill="tls" style="width: 8%"></span>
+              </div>
+              <p>
+                Everest closed on plaintext HTTP on a bring-up LAN. That was
+                an honest deferral, not a product. A CISO will ask whether
+                management is encrypted. The answer today is no. A dedicated-box
+                LOI that skips TLS is a handshake in a lab, not something
+                InfoSec countersigns.
+              </p>
+            </li>
+            <li data-reveal>
+              <header>
+                <span class="loi-pieces__name">Auth beyond bring-up</span>
+                <span class="loi-pieces__pct" data-piece="auth">28%</span>
+              </header>
+              <div class="hda-bar__track" aria-hidden="true">
+                <span class="hda-bar__fill" data-piece-fill="auth" style="width: 28%"></span>
+              </div>
+              <p>
+                <code>raynu-v-bringup</code> is a lab latch. ESP
+                <code>auth.token</code> can override it; iron still used the
+                latch. Fine on a box you physically control. Not fine if two
+                people on the LAN can start VMs. Soft for Bar A if named;
+                not silent.
+              </p>
+            </li>
+            <li data-reveal>
+              <header>
+                <span class="loi-pieces__name">Guest console UI</span>
+                <span class="loi-pieces__pct" data-piece="console">22%</span>
+              </header>
+              <div class="hda-bar__track" aria-hidden="true">
+                <span class="hda-bar__fill" data-piece-fill="console" style="width: 22%"></span>
+              </div>
+              <p>
+                Serial already typed the Alpine installer. The SPA shows logs.
+                Nobody has a keyboard in the browser yet. Operators should not
+                need iDRAC SOL to log in. Soft for the first dedicated-box LOI.
+                Hard for anyone who thinks this is vSphere.
+              </p>
+            </li>
+            <li data-reveal>
+              <header>
+                <span class="loi-pieces__name">PERC RAID I/O</span>
+                <span class="loi-pieces__pct" data-piece="perc">15%</span>
+              </header>
+              <div class="hda-bar__track" aria-hidden="true">
+                <span class="hda-bar__fill loi-bar__fill--fleet" data-piece-fill="perc" style="width: 15%"></span>
+              </div>
+              <p>
+                The R640 “HDD” is Ubuntu on a PERC H740P. The mapper already
+                <em>classifies</em> RAID and prints <code>skip PERC</code> so
+                we do not destroy the lab OS. Classification is not I/O. There
+                is no MegaRAID mailbox driver. Firmware RAID BlockIo dies at
+                ExitBootServices. This 15% is census plus classification. Bar B waits
+                on a <strong>spare</strong> virtual disk — not the Ubuntu
+                standing boot.
+              </p>
+            </li>
+            <li data-reveal>
+              <header>
+                <span class="loi-pieces__name">Unmodified media</span>
+                <span class="loi-pieces__pct" data-piece="unmodified">20%</span>
+              </header>
+              <div class="hda-bar__track" aria-hidden="true">
+                <span class="hda-bar__fill" data-piece-fill="unmodified" style="width: 20%"></span>
+              </div>
+              <p>
+                Iron Alpine still rides an ISO patcher and serial auto-answer.
+                Fine for a dedicated-box demo if the SKU card says so. A fleet
+                claim of “unmodified Linux ISO” is false until that patcher is
+                gone. Windows is later still, and is not a peer of TLS.
+              </p>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="section section--hda-com2" id="now">
+        <div class="section__inner">
+          <p class="milestone-kicker" data-reveal>NOW · M8.0-mech</p>
+          <h2 class="section__title">Force Off is the first honest test</h2>
+          <p class="section__lede">
+            Nested persist already rebooted Alpine without <code>setup-disk</code>.
+            Nested QEMU is not a PowerEdge. The next print that moves Bar A is
+            COM2 after a real Force Off, with virtio still on a DurableLun.
+          </p>
+          <pre class="ship-code" data-reveal><code>need:  ≥16 GiB USB, different port from the LogiLink ESP
+refuse: ESP Cruzer (2–8 GiB) · Ubuntu-on-PERC · leftover DRAM
+wait:   durable LUN usb|nvme I/O ready
+        virtio-blk … (durable LUN …)
+then:   F11 this persist EFI only
+close:  RAYNU-V-M8-DISK-PERSIST-OK   ← iron COM2 only
+never:  host / CI / nested printing that marker</code></pre>
+          <p class="section__lede section__lede--follow" data-reveal>
+            Rollback remains GitHub Latest
+            <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed"
+              ><code>v0.1.0-everest-closed</code></a
+            >
+            — do not flash a persist prototype as the known-good. Do not format
+            the Ubuntu PERC.
+          </p>
+        </div>
+      </section>
+
+      <section class="section" id="locks">
+        <div class="section__inner">
+          <p class="milestone-kicker" data-reveal>Scope</p>
+          <h2 class="section__title">What this tracker does not claim</h2>
+          <p class="section__lede">
+            Open work stays named. These boundaries keep a dedicated-box
+            conversation distinct from a fleet replacement, and keep Everest
+            closed while M8 continues.
+          </p>
+          <ul class="loi-locks">
+            <li>A USB persist demonstration is the dedicated-box mechanism. RAID-fleet LOI waits on PERC virtual-disk persist.</li>
+            <li>TLS, unmodified ISO install, and cluster remain open and are not presented as closed.</li>
+            <li>Everest remains closed. A patched Alpine ISO is a named residual, not a reason to reopen the summit.</li>
+            <li>Iron install and persist markers are printed on R640 COM2 only. Host and CI do not emit them.</li>
+            <li>Latitude and nested QEMU are not PowerEdge R640 evidence.</li>
+          </ul>
+          <div class="cta" data-reveal>
+            <a
+              class="cta__primary"
+              href="https://github.com/vikkp/RayNu/blob/main/docs/loihda.md"
+              >Full living LOIHDA</a
+            >
+            <a class="cta__secondary" href="hda.html">Everest HDA (closed)</a>
+          </div>
+          <p class="hda-sync-note" data-reveal>
+            Numbers load from <code>site/loi.json</code>, regenerated from
+            <code>docs/loihda.md</code> by <code>./tools/sync-loihda-site.sh</code>.
+            Last commit:
+            <code id="loi-commit">PENDING</code>.
+            Updated
+            <time id="loi-updated-foot">2026-09-15</time>.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>
+        <span class="brand brand--footer">RayNu-V</span>
+        · Path to LOI — not a close
+      </p>
+      <p class="footer__meta">
+        <a href="index.html">Home</a>
+        ·
+        <a href="hda.html">Everest</a>
+        ·
+        <a href="stories.html">Stories</a>
+        ·
+        <a href="paper.html">Verification Paper</a>
+        ·
+        <a href="https://github.com/vikkp/RayNu">GitHub</a>
+        ·
+        <a href="https://github.com/vikkp/RayNu/blob/main/docs/loihda.md">docs/loihda.md</a>
+      </p>
+    </footer>
+
+    <script src="main.js" defer></script>
+    <script src="loi.js" defer></script>
+  </body>
+</html>

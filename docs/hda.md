@@ -1,10 +1,10 @@
 ---
 hda_version: 1
-last_updated: 2026-09-13
+last_updated: 2026-09-14
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
-mount_everest_target: "CLOSED on iron 2026-09-11: Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest). Next: M8 operator hardening (ADR-018)."
+mount_everest_target: "CLOSED on iron 2026-09-11: Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest). Next: M8 operator hardening (ADR-018). Commercial next mountain: non-prod LOI (LOIHDA)."
 months_to_everest: 0.0
 months_to_everest_prev: 0.0
 velocity_commits_30d: 612
@@ -26,11 +26,11 @@ summit_prod_pct: 100
 
 > **Living document.** Updated on every meaningful commit by Cursor (see `.cursor/rules/hda-update.mdc`).  
 > **North star product loop (“Mount Everest”):** **CLOSED on iron 2026-09-11.**  
-> Ship the EFI → boot on a **real PowerEdge R640** → **network-reachable** vSphere-like UI → **deploy a Linux ISO** (M7 / ADR-009). Production bar (M6.8–M6.9) is already closed on Latitude. **Next mountain: M8 operator hardening** ([ADR-018](adr/ADR-018.md)).  
+> Ship the EFI → boot on a **real PowerEdge R640** → **network-reachable** vSphere-like UI → **deploy a Linux ISO** (M7 / ADR-009). Production bar (M6.8–M6.9) is already closed on Latitude. **Next mountain: M8 operator hardening** ([ADR-018](adr/ADR-018.md)). Commercial next mountain: **non-production LOI** ([loihda.md](loihda.md) / [`site/loi.html`](../site/loi.html)).  
 > **Iron rollback:** GitHub Latest [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) (`f72b4276` / `34552377351` / EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc`).
 
 Pillars: **[V]** verified core · **[Z]** single binary · **[D]** iDRAC-native · **[A]** audit-first.  
-Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m7_plan.md) (closed) · M8: [`m8_plan.md`](m8_plan.md) · ADR: [`adr/ADR-009.md`](adr/ADR-009.md) · close: [`adr/ADR-018.md`](adr/ADR-018.md) · constitution: [`CLAUDE.md`](../CLAUDE.md).
+Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m7_plan.md) (closed) · M8: [`m8_plan.md`](m8_plan.md) · LOI: [`loihda.md`](loihda.md) · ADR: [`adr/ADR-009.md`](adr/ADR-009.md) · close: [`adr/ADR-018.md`](adr/ADR-018.md) · constitution: [`CLAUDE.md`](../CLAUDE.md).
 
 ---
 
@@ -354,11 +354,11 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-main-catchup |
-| Summary | **Land the lived tip on `main`.** Merge `cursor/m8-iron-lun-8366` (`993a904d`) into `origin/main` (`99ef2271`) so public `main` is not stuck on pre-Everest copy. Hypervisor + HDA + M8 through iron DurableLun 1–3 come from the tip. Public site chrome (nav / Status / CIO View / Stories / Please reboot) stays the Kimi updater look; lived strings patched to Everest closed + M8 next. Nested QEMU ≠ R640. Iron persist still open. Never `ISO-INSTALL-OK`. Do not F11 until COM2 `I/O ready` + virtio on a ≥16 GiB LUN (not the LogiLink ESP). |
-| Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. No new iron gate. |
-| Gates touched | docs/site catch-up only vs `993a904d`. `./tools/sync-hda-site.sh --check` + `./tools/check-site-chrome.sh`. |
-| Months Δ | 0.0 held (Everest closed; iron Force Off still open) |
+| Commit | loi-scope-copy |
+| Summary | **LOI scope copy.** Public `site/loi.html` + `docs/loihda.md`: “What this tracker does not claim” (USB persist ≠ RAID-fleet; TLS/ISO/cluster remain open; Alpine residual does not reopen Everest). Months **0.0 held**. Overall **99 held**. |
+| Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. |
+| Gates touched | docs/site only. `./tools/sync-hda-site.sh --check` + `./tools/sync-loihda-site.sh --check` + `./tools/check-site-chrome.sh`. |
+| Months Δ | 0.0 held (Everest closed; LOI is a different mountain) |
 
 
 ## Blockers & risks (Everest-relevant)
@@ -381,6 +381,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-14 | loi-scope-copy | 0.0 | 99 | **LOI scope copy:** public “What this tracker does not claim.” USB persist is Bar A mechanism; RAID-fleet waits on PERC; TLS/ISO/cluster remain open; Alpine residual does not reopen Everest. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
+| 2026-09-14 | loi-hda-page | 0.0 | 99 | **Public LOI path:** living `docs/loihda.md` + `site/loi.html`. Journey nav → LOI. HDA 99% is Everest, not an LOI. Two bars (dedicated-box / RAID-fleet). Nested QEMU ≠ R640. Iron persist open. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |
 | 2026-09-13 | m8-main-catchup | 0.0 | 99 | **`main` catch-up:** merge iron-LUN tip (`993a904d`) onto `origin/main` so users are not left on pre-Everest public copy. Preserves updater chrome + Please reboot story; lived HDA/site = Everest closed + M8 next (iron DurableLun 1–3 host-ready). Nested QEMU ≠ R640. Iron persist open. Never `ISO-INSTALL-OK`. Do not F11 until I/O ready on a ≥16 GiB LUN. months 0.0 held; overall 99 held |
 | 2026-09-13 | m8-disk-persist-iron-lun | 0.0 | 99 | **Iron DurableLun 1–3 host-ready:** R640 census fixture (PERC/AHCI skip, NVMe then USB); Intel PCH scratchpad ≤16 + USBLEGSUP; leftover named when LUN not ready; [m8_persist_iron.md](runbooks/m8_persist_iron.md). Nested QEMU ≠ R640. Iron persist open. Never `ISO-INSTALL-OK`. Do not F11 until I/O ready + virtio on the LUN. months 0.0 held; overall 99 held |
 | 2026-09-13 | m8-disk-persist-nested-ok | 0.0 | 99 | **Nested Alpine `MODE=full` CLOSED on `raynuvsrv1`:** `ce3d8a09` File persist 512 MiB `hpa=0x20000000`; boot1 `keep=0` + install complete; HV kill; boot2 `keep=1` + `DISK-BOOT-OK`; `RAYNU-V-M8-DISK-PERSIST-NESTED-OK`. Nested QEMU ≠ R640. Iron persist open. Never `ISO-INSTALL-OK`. Do not F11. months 0.0 held; overall 99 held |
@@ -926,7 +928,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     **M8.0 iron** Force Off / `RAYNU-V-M8-DISK-PERSIST-OK` (nested-OK closed on `raynuvsrv1` `ce3d8a09`; not this Cloud VM) ([ADR-018](adr/ADR-018.md) / [m8_plan.md](m8_plan.md) / [m8_persist_nested.md](runbooks/m8_persist_nested.md))
+Next move:     **M8.0 iron** Force Off / `RAYNU-V-M8-DISK-PERSIST-OK` (nested-OK closed on `raynuvsrv1` `ce3d8a09`; not this Cloud VM). LOI tracker: [loihda.md](loihda.md) / [site/loi.html](../site/loi.html) — Bar A 42% / Bar B 18%; HDA 99% is not an LOI.
 Rollback:      GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351
                EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc
                COM2 build: sha=f72b4276d198. Do not flash a later M8 persist prototype as known-good.

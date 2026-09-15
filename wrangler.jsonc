@@ -1,7 +1,10 @@
 {
   // Redeploy trigger: bump this note to force a CI redeploy from main.
   // worker.yml watches this file; deploy then purges the edge cache.
-  // Last trigger: 2026-08-26T18:35Z — Kimi Kleen sweep on request.
+  // Cloudflare Workers Builds Git integration MUST publish PRODUCTION from
+  // `main` only. Feature-branch builds are previews. Deploying USB persist
+  // PRs (#258–#268) to production wiped site/loi.html on 2026-09-15.
+  // Last trigger: 2026-09-15T09:30Z — restore LOI page.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "raynuv",
   "compatibility_date": "2026-07-19",
