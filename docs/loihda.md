@@ -1,6 +1,6 @@
 ---
 loihda_version: 1
-last_updated: 2026-09-14
+last_updated: 2026-09-15
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
@@ -200,11 +200,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | loi-scope-copy |
-| Summary | **Public LOI scope copy.** `site/loi.html` “What this tracker does not claim” replaces command-style lock language. Scores held. |
+| Commit | loi-page-restore |
+| Summary | **Public LOI page restore.** Cloudflare Workers Builds published USB persist PRs over production and dropped `site/loi.html`. Files were never on `main`. Scores held. Production Git branch must stay `main`. |
 | Everest impact | none — HDA months 0.0 / 99% held |
-| LOI impact | tracker **born** at Bar A 42% / Bar B 18% / overall 38% / 1.5 mo to Bar A |
-| Gates touched | docs + site only. No MegaRAID. No TLS. No F11. |
+| LOI impact | tracker still Bar A 42% / Bar B 18% / overall 38% / 1.5 mo to Bar A. Iron persist still open. |
+| Gates touched | docs + site + deploy notes. No MegaRAID. No TLS. No F11. |
 
 ---
 
@@ -212,6 +212,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-15 | loi-page-restore | 42 | 18 | **Restore.** Live `loi.html` vanished because Workers Builds deployed USB persist feature branches to production. Page + tracker still on PR #257; `main` / `gh-pages` never had them. Scores held. Iron persist still open. |
 | 2026-09-14 | loi-scope-copy | 42 | 18 | **Scope copy.** Public section retitled “What this tracker does not claim.” USB persist stays Bar A mechanism; RAID-fleet waits on PERC; TLS/ISO/cluster remain open; Everest stays closed. Scores held. |
 | 2026-09-14 | loi-hda-page | 42 | 18 | **Born.** Public LOI page + living `docs/loihda.md`. Journey → LOI in site nav. Everest remains the HDA mountain. Iron persist still open. Never `ISO-INSTALL-OK`. |
 

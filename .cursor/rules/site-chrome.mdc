@@ -27,7 +27,7 @@ The look of `https://raynuv.com` is the **site-updater** design from PRs **#218â
 - Replace `site/index.html` wholesale while updating HDA, Everest, ISO, or SPA status.
 - Delete `nav.site-nav`, `#status`, `#start-here` / `fork__card`, `#console`, `#buddies`, `ciospeak.html`, `com2.html`, `404.html`, `robots.txt`, `sitemap.xml`, or responsive `site/assets/*.webp`.
 - Restyle `site/index.html` / `site/styles.css` as part of hypervisor work. HDA closed-summit CSS (`.page-hda--closed`, `.section--hda-com2`) may be added; chrome CSS must stay.
-- Point Cloudflare Git production at a feature branch.
+- Point Cloudflare Git **production** at a feature branch. Production branch is **`main`**. Other branches are **preview** only. On 2026-09-15, Workers Builds published USB persist PRs `#258`â€“`#268` over `raynuv.com` and deleted the live `loi.html` (the files still exist on PR `#257`).
 - Claim `RAYNU-V-M7-ISO-INSTALL-OK` from nested QEMU, host tests, or CI.
 
 ## Required homepage landmarks
@@ -47,4 +47,5 @@ The look of `https://raynuv.com` is the **site-updater** design from PRs **#218â
 ```bash
 ./tools/check-site-chrome.sh
 ./tools/sync-hda-site.sh --check
+./tools/sync-loihda-site.sh --check
 ```

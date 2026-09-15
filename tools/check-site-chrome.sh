@@ -2,7 +2,8 @@
 # Guard the public-site look from the Kimi site-updater PR (#218–#226).
 # Feature branches that truncated `site/` still pass cargo tests; Cloudflare
 # Git integration then deploys that truncated tree over raynuv.com.
-# Fail CI / Worker / Pages deploy if the updater chrome is missing.
+# 2026-09-15: USB persist PRs overwrote production and dropped site/loi.html.
+# Fail CI / Worker / Pages deploy if the updater chrome (including LOI) is missing.
 #
 # Lived copy (Everest closed, M8 residual, COM2 snippets) MAY change.
 # Chrome landmarks MUST NOT. Do not require "Not Everest".
