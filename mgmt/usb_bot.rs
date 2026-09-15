@@ -302,18 +302,48 @@ fn bot_cmd(
     Ok(())
 }
 
-/// INQUIRY (ignored) + READ CAPACITY(10) + one native READ.
-/// Iron `6c278e85`: CAPACITY printed `usb I/O ready` then peek READ timed out.
-/// Iron `73dc4d2e`: START STOP (Immed=0) + ignored timeout + auto EP-reset
-/// failed CSW before ready. Iron `68e16633`: `scsi=tur bot=cbw` was the
-/// READ-probe recovery TUR (stamped over the READ fail) plus p14 hub
-/// `cmpl=0` clobber — not "LUN stayed on p10". Do not send START STOP or
-/// TUR here. Do not claim ready until a data-stage READ completes.
+fn bot_cmd_retry(
+    hw: &mut impl UsbBulk,
+    tag: &mut u32,
+    dir_in: bool,
+    cdb: &[u8],
+    buf: &mut [u8],
+) -> Result<(), UsbBotError> {
+    let mut last = UsbBotError::Xfer;
+    for _ in 0..USB_BOT_RW_TRIES {
+        *tag = tag.wrapping_add(1);
+        if *tag == 0 {
+            *tag = 1;
+        }
+        match bot_cmd(hw, *tag, dir_in, cdb, buf) {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                last = e;
+                if usb_bot_recover_after_fail(usb_bot_last_stage()) {
+                    hw.recover_pipes();
+                }
+            }
+        }
+    }
+    Err(last)
+}
+
+/// READ CAPACITY(10) + one native READ. Do not send START STOP or
+/// INQUIRY / TUR. Iron `6c278e85`: CAPACITY printed `usb I/O ready`
+/// then peek READ timed out. Iron `73dc4d2e`: START STOP (Immed=0) +
+/// ignored timeout + auto EP-reset failed CSW before ready. Iron
+/// `68e16633`: `scsi=tur bot=cbw` was the READ-probe recovery TUR
+/// (stamped over the READ fail) plus p14 hub `cmpl=0` clobber — not
+/// "LUN stayed on p10". Iron `6ba076cc`: CAPACITY held, READ CBW
+/// `cmpl=0xff`. Iron `0780df21`: SET_CONFIG held then
+/// `bot=csw scsi=capacity cmpl=0xff` — ignored INQUIRY can leave a
+/// pending IN TRB so CAPACITY CSW times out. Retry CAPACITY with
+/// `recover_pipes` on DATA/CSW timeout. Do not claim ready until a
+/// data-stage READ completes.
 pub fn usb_bot_bring_up(hw: &mut impl UsbBulk, min_bytes: u64) -> Result<(u64, u32), UsbBotError> {
-    let mut inq = [0u8; 36];
-    let _ = bot_cmd(hw, 1, true, &cdb_inquiry(), &mut inq);
+    let mut tag = 1u32;
     let mut cap = [0u8; 8];
-    bot_cmd(hw, 2, true, &cdb_read_capacity10(), &mut cap)?;
+    bot_cmd_retry(hw, &mut tag, true, &cdb_read_capacity10(), &mut cap)?;
     hw.settle();
     let (bytes, lba) = capacity10_bytes(&cap).ok_or(UsbBotError::Capacity)?;
     if bytes < min_bytes {
@@ -324,7 +354,6 @@ pub fn usb_bot_bring_up(hw: &mut impl UsbBulk, min_bytes: u64) -> Result<(u64, u
         return Err(UsbBotError::Capacity);
     }
     let mut probe = [0u8; 4096];
-    let mut tag = 20u32;
     usb_bot_rw(hw, &mut tag, lba, 0, &mut probe[..n], false)?;
     Ok((bytes, lba))
 }
@@ -351,24 +380,8 @@ pub fn usb_bot_rw(
     if nlb == 0 || nlb > 0xFFFF || slba > u64::from(u32::MAX) {
         return Err(UsbBotError::Xfer);
     }
-    let mut last = UsbBotError::Xfer;
-    for _ in 0..USB_BOT_RW_TRIES {
-        *tag = tag.wrapping_add(1);
-        if *tag == 0 {
-            *tag = 1;
-        }
-        let cdb = cdb_rw10(write, slba as u32, nlb as u16);
-        match bot_cmd(hw, *tag, !write, &cdb, buf) {
-            Ok(()) => return Ok(()),
-            Err(e) => {
-                last = e;
-                if usb_bot_recover_after_fail(usb_bot_last_stage()) {
-                    hw.recover_pipes();
-                }
-            }
-        }
-    }
-    Err(last)
+    let cdb = cdb_rw10(write, slba as u32, nlb as u16);
+    bot_cmd_retry(hw, tag, !write, &cdb, buf)
 }
 
 static IO_READY: AtomicBool = AtomicBool::new(false);

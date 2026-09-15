@@ -174,6 +174,7 @@ struct CountingUsb {
     inner: MockUsb,
     start_stop: u32,
     tur: u32,
+    inquiry: u32,
     recovers: u32,
 }
 
@@ -187,6 +188,9 @@ impl UsbBulk for CountingUsb {
             && data[15] == SCSI_TEST_UNIT_READY
         {
             self.tur = self.tur.saturating_add(1);
+        }
+        if data.len() == CBW_LEN && get_le_u32(data, 0) == CBW_SIG && data[15] == SCSI_INQUIRY {
+            self.inquiry = self.inquiry.saturating_add(1);
         }
         self.inner.bulk_out(data)
     }
@@ -207,11 +211,13 @@ fn bring_up_does_not_send_start_stop_or_tur() {
         inner: MockUsb::new(ns),
         start_stop: 0,
         tur: 0,
+        inquiry: 0,
         recovers: 0,
     };
     usb_bot_bring_up(&mut hw, 1024 * 1024).expect("bring-up");
     assert_eq!(hw.start_stop, 0);
     assert_eq!(hw.tur, 0);
+    assert_eq!(hw.inquiry, 0);
     assert_eq!(hw.recovers, 0);
     assert_eq!(usb_bot_last_scsi(), SCSI_TAG_READ);
 }
@@ -265,6 +271,74 @@ fn rw_cbw_fail_does_not_reset_endpoint() {
     assert_eq!(lba, 512);
     assert_eq!(hw.recovers, 0);
     assert_eq!(hw.fail_cbw, 0);
+}
+
+struct CapCswFailUsb {
+    inner: MockUsb,
+    fail_csw: u32,
+    recovers: u32,
+    inquiry: u32,
+    cap_ins: u32,
+    on_capacity: bool,
+}
+
+impl UsbBulk for CapCswFailUsb {
+    fn bulk_out(&mut self, data: &[u8]) -> Result<(), UsbBotError> {
+        if data.len() == CBW_LEN && get_le_u32(data, 0) == CBW_SIG && data[15] == SCSI_INQUIRY {
+            self.inquiry = self.inquiry.saturating_add(1);
+        }
+        if data.len() == CBW_LEN
+            && get_le_u32(data, 0) == CBW_SIG
+            && data[15] == SCSI_READ_CAPACITY_10
+        {
+            self.on_capacity = true;
+            self.cap_ins = 0;
+        } else if data.len() == CBW_LEN {
+            self.on_capacity = false;
+        }
+        self.inner.bulk_out(data)
+    }
+
+    fn bulk_in(&mut self, data: &mut [u8]) -> Result<usize, UsbBotError> {
+        if self.on_capacity {
+            self.cap_ins = self.cap_ins.saturating_add(1);
+            if self.cap_ins == 2 && self.fail_csw > 0 {
+                self.fail_csw -= 1;
+                store_usb_bot_diag(UsbBotError::Xfer, 0, 0, u64::from(USB_BOT_CMPL_TIMEOUT));
+                return Err(UsbBotError::Xfer);
+            }
+        }
+        self.inner.bulk_in(data)
+    }
+
+    fn recover_pipes(&mut self) {
+        self.recovers = self.recovers.saturating_add(1);
+        self.inner.pending_in.clear();
+        self.inner.after_data = false;
+        self.inner.write_off = None;
+        self.on_capacity = false;
+        self.cap_ins = 0;
+    }
+}
+
+#[test]
+fn capacity_csw_timeout_recovers_and_retries() {
+    let ns = vec![0u8; NS_BYTES];
+    let mut hw = CapCswFailUsb {
+        inner: MockUsb::new(ns),
+        fail_csw: 1,
+        recovers: 0,
+        inquiry: 0,
+        cap_ins: 0,
+        on_capacity: false,
+    };
+    let (bytes, lba) = usb_bot_bring_up(&mut hw, 1024 * 1024).expect("bring-up");
+    assert_eq!(bytes, NS_BYTES as u64);
+    assert_eq!(lba, 512);
+    assert_eq!(hw.inquiry, 0);
+    assert_eq!(hw.recovers, 1);
+    assert_eq!(hw.fail_csw, 0);
+    assert_eq!(usb_bot_last_scsi(), SCSI_TAG_READ);
 }
 
 struct FlakyReadUsb {
