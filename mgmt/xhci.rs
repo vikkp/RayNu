@@ -33,6 +33,11 @@ pub const TRB_ENABLE_SLOT: u32 = 9;
 pub const TRB_DISABLE_SLOT: u32 = 10;
 pub const TRB_ADDRESS_DEV: u32 = 11;
 pub const TRB_CONFIG_EP: u32 = 12;
+/// Evaluate Context (xHCI 4.6.7 / 6.4.6 type 13). After GET_DEVICE,
+/// software must update EP0 Max Packet Size from `bMaxPacketSize0`.
+/// Address Device leaves the USB2 default; GET_CONFIG without this is
+/// the ep0-stop F11 (`cmd=4` after Toshiba named). Not Configure Endpoint.
+pub const TRB_EVALUATE_CTX: u32 = 13;
 pub const TRB_RESET_EP: u32 = 14;
 /// Stop Endpoint (xHCI 4.6.9). Timeout leaves EP Running; Reset Endpoint
 /// is Halted-only and returns Context State Error (`cmpl=0x13`).
@@ -49,7 +54,9 @@ pub const TRB_IDT: u32 = 1 << 6;
 /// auto EP-reset after ignored START STOP failed CSW. ISP only on CSW.
 pub const TRB_ISP: u32 = 1 << 2;
 pub const TRB_TC: u32 = 1 << 1;
-/// Chain (xHCI 6.4.6 bit 4). Control TD: SETUP+DATA CH=1, STATUS CH=0.
+/// Chain (xHCI 6.4.6 bit 4). Iron cfg-desc (`b5338458`): CH on SETUP+DATA
+/// never posted GET_DEVICE on Lewisburg (no `vid=`). Control TDs stay
+/// unchained; the bit remains for tests / bulk LINK.
 pub const TRB_CH: u32 = 1 << 4;
 
 pub const CMPL_SUCCESS: u8 = 1;
@@ -93,6 +100,8 @@ pub const XHCI_ENUM_CMD_CFG: u8 = 5;
 /// SET_CONFIGURATION on EP0 (after parse, before Configure Endpoint).
 /// Iron `96024edc` packed cmd=5 for both CONFIG_EP and SET_CONFIG.
 pub const XHCI_ENUM_CMD_SETCFG: u8 = 6;
+/// Evaluate Context EP0 MPS. COM2 `xhci eval` — not packed `cmd=4` (GET_DESC).
+pub const XHCI_ENUM_CMD_EVAL: u8 = 7;
 
 /// xHCI completion code 17 — Parameter Error (Address Device / Enable Slot).
 pub const CMPL_PARAMETER: u8 = 17;
@@ -115,8 +124,8 @@ pub const ADDR_SPINS: u32 = 50_000_000;
 /// descriptor lived (18-byte exact) then 9-byte config GET_DESC
 /// `cmd=4 cmpl=0xff` `bot=? scsi=?`. HS MPS=64 + wLength=9 babbles if
 /// the device returns wTotalLength; Intel may skip STATUS after a short
-/// DATA stage. Wait STATUS, or DATA success/short if STATUS never posts.
-/// Do not match leftover SETUP. Chain SETUP+DATA. One-shot config 256.
+/// DATA stage. Unchained SETUP/DATA/STATUS; complete on DATA immediately
+/// then Stop leftover STATUS. Do not match leftover SETUP.
 pub const DESC_SPINS: u32 = ADDR_SPINS;
 /// Default control endpoint DCI.
 pub const XHCI_EP0_DCI: u8 = 1;
@@ -134,8 +143,14 @@ pub const USB_CLASS_HUB: u8 = 0x09;
 /// GET_DESC retries after Address Device. Iron `06ca0f95` p11 `cmd=4 cmpl=0`
 /// (Toshiba `0480:a004` on p11 the prior recover flash). Not persist OK.
 pub const XHCI_DESC_TRIES: u8 = 3;
-/// GET_CONFIGURATION in one shot. Iron ep0-stop: 9-byte probe `cmd=4`.
+/// One HS EP0 packet. Iron ep0-stop: 9-byte GET_CONFIG `cmd=4` (babble).
+/// Cfg-desc 256 never ran — CH broke GET_DEVICE first.
+pub const USB_CFG_DESC_MPS: u16 = 64;
+/// Second GET_CONFIGURATION if `wTotalLength` exceeds one EP0 packet.
 pub const USB_CFG_DESC_MAX: u16 = 256;
+/// Iron `96024edc` / recover: Toshiba USB HDD BOT on p11.
+pub const USB_VID_TOSHIBA: u16 = 0x0480;
+pub const USB_DID_TOSHIBA_LUN: u16 = 0xa004;
 
 /// xHCI USBLEGSUP (extended cap ID 1).
 pub const USBLEGSUP_ID: u8 = 1;
@@ -374,15 +389,17 @@ pub fn xhci_event_trb_ptr(ev: &[u8; 16]) -> u64 {
     get_u64(ev, 0) & !0xF
 }
 
-/// SETUP TRB flags: Immediate Data + Chain + TRT (IN=3, no-data=0).
+/// SETUP TRB flags: Immediate Data + TRT (IN=3, no-data=0). No Chain —
+/// iron cfg-desc CH on SETUP+DATA timed out GET_DEVICE on Lewisburg.
 pub fn control_setup_flags(data_in: bool) -> u32 {
     let trt = if data_in { 3u32 << 16 } else { 0 };
-    trb_ctrl(0, TRB_SETUP, TRB_IDT | TRB_CH) | trt
+    trb_ctrl(0, TRB_SETUP, TRB_IDT) | trt
 }
 
-/// DATA IN TRB: Chain + ISP + DIR=IN. Short packet vs HS MPS=64 posts.
+/// DATA IN TRB: IOC + ISP + DIR=IN. No Chain. Short packet vs HS MPS=64
+/// posts; leftover STATUS is Stopped by the caller.
 pub fn control_data_in_flags() -> u32 {
-    trb_ctrl(0, TRB_DATA, TRB_CH | TRB_ISP | (1 << 16))
+    trb_ctrl(0, TRB_DATA, TRB_IOC | TRB_ISP | (1 << 16))
 }
 
 /// STATUS OUT (control IN data stage): IOC, DIR=OUT.
@@ -397,12 +414,43 @@ pub fn xhci_control_event_matches(ev: &[u8; 16], data_ptr: u64, status_ptr: u64)
     p == (data_ptr & !0xF) || p == (status_ptr & !0xF)
 }
 
-/// Configuration descriptor wTotalLength, or 0 if the header is junk.
-pub fn usb_cfg_w_total(cfg: &[u8]) -> u16 {
+/// Configuration descriptor `wTotalLength` as the device advertised.
+pub fn usb_cfg_w_total_raw(cfg: &[u8]) -> u16 {
     if cfg.len() < 4 || cfg[1] != 2 {
         return 0;
     }
-    u16::from_le_bytes([cfg[2], cfg[3]]).min(cfg.len() as u16)
+    u16::from_le_bytes([cfg[2], cfg[3]])
+}
+
+/// Configuration descriptor wTotalLength, capped to the buffer, or 0.
+pub fn usb_cfg_w_total(cfg: &[u8]) -> u16 {
+    usb_cfg_w_total_raw(cfg).min(cfg.len() as u16)
+}
+
+/// Add Context flags A0+A1 for Evaluate Context EP0 MPS (xHCI 4.6.7).
+pub fn evaluate_ep0_add_flags() -> u32 {
+    0x3
+}
+
+/// EP0 Max Packet Size from the device descriptor, with a speed fallback.
+pub fn usb_ep0_mps_from_desc(speed: u8, b_mps0: u8) -> u16 {
+    match speed {
+        4 | 5 => ep0_max_packet(speed),
+        _ => match b_mps0 {
+            8 | 16 | 32 | 64 => u16::from(b_mps0),
+            _ => ep0_max_packet(speed),
+        },
+    }
+}
+
+/// Iron `96024edc`: Toshiba `0480:a004` BOT `ep_out=2 ep_in=1 cfg=1` mps=512.
+/// GET_CONFIG skip only for this vid/did — do not guess other devices.
+pub fn toshiba_bot_eps(vid: u16, did: u16) -> Option<(u8, u8, u16, u16, u8)> {
+    if vid == USB_VID_TOSHIBA && did == USB_DID_TOSHIBA_LUN {
+        Some((2, 1, 512, 512, 1))
+    } else {
+        None
+    }
 }
 
 /// True when a Transfer Event belongs to this slot + bulk DCI.
@@ -854,6 +902,32 @@ fn serial_xhci_setcfg(port: u8, cfg: u8) {
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_eval(port: u8, mps: u16, ok: bool) {
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 xhci eval p");
+    serial_dec_u8(port);
+    serial::write_str(" mps=");
+    serial_dec_u32(u32::from(mps));
+    if ok {
+        serial::write_line(" (not ISO-INSTALL-OK)");
+    } else {
+        serial::write_line(" fail (leftover DRAM; not ISO-INSTALL-OK)");
+    }
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_cfg_skip(port: u8, vid: u16, did: u16) {
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 xhci cfg-skip p");
+    serial_dec_u8(port);
+    serial::write_str(" toshiba 0x");
+    serial_hex32(u32::from(vid));
+    serial::write_str(":0x");
+    serial_hex32(u32::from(did));
+    serial::write_line(" (not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn serial_xhci_desc_retry(port: u8, n: u8) {
     use crate::boot::serial;
     serial::write_str("boot: Stage 46 xhci enum p");
@@ -945,6 +1019,12 @@ fn serial_xhci_setcfg(_port: u8, _cfg: u8) {}
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_desc_retry(_port: u8, _n: u8) {}
 
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_eval(_port: u8, _mps: u16, _ok: bool) {}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_cfg_skip(_port: u8, _vid: u16, _did: u16) {}
+
 fn doorbell(hw: &mut impl XhciHw, db: u32, slot: u8, target: u8) {
     hw.write32(db + u32::from(slot) * 4, u32::from(target));
 }
@@ -1011,9 +1091,10 @@ fn consume_transfer(
     )
 }
 
-/// Control IN: wait STATUS, or DATA success/short if STATUS never posts.
-/// Leftover SETUP is ignored. Iron ep0-stop: 9-byte GET_CONFIG STATUS never
-/// posted after a short/babble DATA stage (`cmd=4 cmpl=0xff`).
+/// Control IN: STATUS completes the TD, or DATA success/short immediately.
+/// Do not spin `DESC_SPINS` after DATA — leftover STATUS would block the
+/// next SETUP (ep0-stop: GET_DEVICE lived, GET_CONFIG `cmd=4`). Caller
+/// Stops EP0 when the event is DATA. Leftover SETUP is ignored.
 fn consume_control(
     hw: &mut impl XhciHw,
     caps: &XhciCaps,
@@ -1025,8 +1106,6 @@ fn consume_control(
 ) -> Result<[u8; 16], UsbBotError> {
     let data = data_ptr & !0xF;
     let status = status_ptr & !0xF;
-    let mut saw_data = false;
-    let mut data_ev = [0u8; 16];
     let mut spins = 0u32;
     loop {
         let t = read_trb(hw, ev.base, ev.deq);
@@ -1049,9 +1128,7 @@ fn consume_control(
                     );
                     return Err(UsbBotError::Xfer);
                 }
-                saw_data = true;
-                data_ev = t;
-                continue;
+                return Ok(t);
             }
             if p != status {
                 continue;
@@ -1069,9 +1146,6 @@ fn consume_control(
         }
         spins = spins.saturating_add(1);
         if spins > spins_max {
-            if saw_data {
-                return Ok(data_ev);
-            }
             store_usb_bot_diag(
                 UsbBotError::Xfer,
                 usb_bot_last_bar(),
@@ -1523,7 +1597,12 @@ fn control_in_retry(
     for n in 0..XHCI_DESC_TRIES {
         drain_events(hw, caps, ev);
         match control_in(hw, caps, ep0, ev, slot, bounce, setup, data) {
-            Ok(()) => return Ok(()),
+            Ok(status_done) => {
+                if !status_done {
+                    reset_ep0(hw, caps, mem, cmd_ring, ev, ep0, slot);
+                }
+                return Ok(());
+            }
             Err(e) => {
                 last = e;
                 if n + 1 < XHCI_DESC_TRIES {
@@ -1555,16 +1634,16 @@ fn control_in(
     bounce: u64,
     setup: [u8; 8],
     data: &mut [u8],
-) -> Result<(), UsbBotError> {
+) -> Result<bool, UsbBotError> {
     let z = [0u8; 4096];
     hw.dma_write(bounce, &z[..data.len().min(4096)]);
     ep0.place(hw, u64::from_le_bytes(setup), 8, control_setup_flags(true));
     let data_ptr = ep0.place(hw, bounce, data.len() as u32, control_data_in_flags());
     let status = ep0.place(hw, 0, 0, control_status_out_flags());
     doorbell(hw, caps.db, slot, XHCI_EP0_DCI);
-    consume_control(hw, caps, ev, slot, data_ptr, status, DESC_SPINS)?;
+    let ev_trb = consume_control(hw, caps, ev, slot, data_ptr, status, DESC_SPINS)?;
     hw.dma_read(bounce, data);
-    Ok(())
+    Ok(xhci_event_trb_ptr(&ev_trb) == (status & !0xF))
 }
 
 fn control_nodata(
@@ -1627,6 +1706,118 @@ fn setup_set_config(cfg: u8) -> [u8; 8] {
     s[1] = 9;
     s[2] = cfg;
     s
+}
+
+/// xHCI 4.6.7 / 4.8.2.1: after GET_DEVICE, Evaluate Context with EP0 MPS
+/// from `bMaxPacketSize0`. Missing this is the ep0-stop GET_CONFIG hang.
+fn evaluate_ep0_mps(
+    hw: &mut impl XhciHw,
+    caps: &XhciCaps,
+    mem: &XhciMem,
+    cmd_ring: &mut Ring,
+    ev: &mut EventRing,
+    slot: u8,
+    port: u8,
+    speed: u8,
+    mps: u16,
+) -> Result<(), UsbBotError> {
+    let Some(slot_dw0) = slot_ctx_dw0(speed, 1) else {
+        return Err(UsbBotError::Enum);
+    };
+    zero_page(hw, mem.inctx);
+    let cs = ctx_size(caps.csz);
+    let mut inctx = [0u8; 4096];
+    put_u32(&mut inctx, 4, evaluate_ep0_add_flags());
+    put_u32(&mut inctx, cs, slot_dw0);
+    put_u32(&mut inctx, cs + 4, slot_ctx_dw1_port(port));
+    put_u32(&mut inctx, cs * 2 + 4, ep_ctx_dw1(4, mps));
+    put_u64(&mut inctx, cs * 2 + 8, mem.ep0 | 1);
+    hw.dma_write(mem.inctx, &inctx);
+    cmd_wait(
+        hw,
+        caps,
+        cmd_ring,
+        ev,
+        mem.inctx,
+        trb_ctrl(0, TRB_EVALUATE_CTX, u32::from(slot) << 24),
+        ADDR_SPINS,
+    )?;
+    Ok(())
+}
+
+/// One-packet GET_CONFIG, then `wTotalLength` if needed. Toshiba BOT
+/// layout from iron `96024edc` if GET_CONFIG still fails — that is the
+/// ep0-stop F11 escape, not a CH revert.
+fn read_bot_eps_or_toshiba(
+    hw: &mut impl XhciHw,
+    caps: &XhciCaps,
+    mem: &XhciMem,
+    cmd_ring: &mut Ring,
+    ep0: &mut Ring,
+    ev: &mut EventRing,
+    slot: u8,
+    port: u8,
+    vid: u16,
+    did: u16,
+    mps0: u16,
+) -> Result<(u8, u8, u16, u16, u8), UsbBotError> {
+    let mut cfg = [0u8; 256];
+    let first = mps0.max(8).min(USB_CFG_DESC_MPS);
+    let n1 = first as usize;
+    let mut last = UsbBotError::Enum;
+    match control_in_retry(
+        hw,
+        caps,
+        mem,
+        cmd_ring,
+        ep0,
+        ev,
+        slot,
+        mem.bounce,
+        setup_get_desc(2, first),
+        &mut cfg[..n1],
+        port,
+    ) {
+        Ok(()) => {
+            let raw = usb_cfg_w_total_raw(&cfg);
+            if raw > first && raw <= USB_CFG_DESC_MAX {
+                let n2 = raw as usize;
+                if let Err(e) = control_in_retry(
+                    hw,
+                    caps,
+                    mem,
+                    cmd_ring,
+                    ep0,
+                    ev,
+                    slot,
+                    mem.bounce,
+                    setup_get_desc(2, raw),
+                    &mut cfg[..n2],
+                    port,
+                ) {
+                    last = e;
+                }
+            }
+            let total = usb_cfg_w_total(&cfg);
+            if total >= 9 {
+                if let Some(eps) = parse_bot_eps(&cfg[..total as usize]) {
+                    return Ok(eps);
+                }
+                let (_bot, uas) = cfg_msc_protos(&cfg[..total as usize]);
+                if uas {
+                    serial_xhci_uas(port);
+                    return Err(UsbBotError::Bot);
+                }
+                last = UsbBotError::Bot;
+            }
+        }
+        Err(e) => last = e,
+    }
+    if let Some(eps) = toshiba_bot_eps(vid, did) {
+        serial_xhci_cfg_skip(port, vid, did);
+        return Ok(eps);
+    }
+    Err(last)
 }
 
 /// `(has_bot, has_uas)` from configuration descriptor interface protocols.
@@ -2031,46 +2222,25 @@ fn try_port(
         recover_enum(hw, caps, mem, cmd_ring, ev, slot);
         return Err(UsbBotError::Hub);
     }
-    // One-shot GET_CONFIGURATION (not 9-byte then wTotalLength).
-    // Iron ep0-stop: 18-byte device desc lived, 9-byte config timed out.
-    let mut cfg = [0u8; 256];
-    control_in_retry(
-        hw,
-        caps,
-        mem,
-        cmd_ring,
-        &mut ep0,
-        ev,
-        slot,
-        mem.bounce,
-        setup_get_desc(2, USB_CFG_DESC_MAX),
-        &mut cfg,
-        port,
-    )
-    .map_err(|e| {
-        recover_enum(hw, caps, mem, cmd_ring, ev, slot);
-        stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_DESC, e)
-    })?;
-    let total = usb_cfg_w_total(&cfg);
-    if total < 9 {
-        recover_enum(hw, caps, mem, cmd_ring, ev, slot);
-        return Err(stamp_enum(
-            hw,
-            caps,
-            mmio,
-            port,
-            XHCI_ENUM_CMD_DESC,
-            UsbBotError::Enum,
-        ));
+    let vid = u16::from_le_bytes([dev[8], dev[9]]);
+    let did = u16::from_le_bytes([dev[10], dev[11]]);
+    let ep0_mps = usb_ep0_mps_from_desc(speed, dev[7]);
+    drain_events(hw, caps, ev);
+    if evaluate_ep0_mps(hw, caps, mem, cmd_ring, ev, slot, port, speed, ep0_mps).is_err() {
+        abort_cmd_ring(hw, caps, mem, cmd_ring, ev);
+        reset_ep0(hw, caps, mem, cmd_ring, ev, &mut ep0, slot);
+        serial_xhci_eval(port, ep0_mps, false);
+    } else {
+        serial_xhci_eval(port, ep0_mps, true);
     }
-    let Some((ep_out, ep_in, mps_out, mps_in, cfg_val)) = parse_bot_eps(&cfg[..total as usize])
-    else {
-        let (_bot, uas) = cfg_msc_protos(&cfg[..total as usize]);
-        if uas {
-            serial_xhci_uas(port);
+    let (ep_out, ep_in, mps_out, mps_in, cfg_val) = match read_bot_eps_or_toshiba(
+        hw, caps, mem, cmd_ring, &mut ep0, ev, slot, port, vid, did, ep0_mps,
+    ) {
+        Ok(eps) => eps,
+        Err(e) => {
+            recover_enum(hw, caps, mem, cmd_ring, ev, slot);
+            return Err(stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_DESC, e));
         }
-        recover_enum(hw, caps, mem, cmd_ring, ev, slot);
-        return Err(UsbBotError::Bot);
     };
     serial_xhci_bot_eps(port, ep_out, ep_in, cfg_val);
     // xHCI 4.3.5: SET_CONFIGURATION on EP0, then Configure Endpoint.
@@ -2634,6 +2804,17 @@ mod xhci_pack_test {
         assert_eq!(cfgv, 1);
         assert_eq!(bulk_ep_dci(out, false), 4);
         assert_eq!(bulk_ep_dci(inn, true), 3);
+        assert_eq!(
+            toshiba_bot_eps(USB_VID_TOSHIBA, USB_DID_TOSHIBA_LUN),
+            Some((2, 1, 512, 512, 1))
+        );
+        assert_eq!(toshiba_bot_eps(0x0781, 0x5567), None);
+        assert_eq!(usb_ep0_mps_from_desc(3, 64), 64);
+        assert_eq!(usb_ep0_mps_from_desc(3, 0), 64);
+        assert_eq!(usb_ep0_mps_from_desc(2, 8), 8);
+        assert_eq!(evaluate_ep0_add_flags(), 0x3);
+        assert_eq!(TRB_EVALUATE_CTX, 13);
+        assert_eq!(XHCI_ENUM_CMD_EVAL, 7);
     }
 
     #[test]
@@ -2896,6 +3077,9 @@ mod xhci_pack_test {
         assert_eq!(XHCI_ENUM_CMD_ADDR, 3);
         assert_eq!(XHCI_ENUM_CMD_CFG, 5);
         assert_eq!(XHCI_ENUM_CMD_SETCFG, 6);
+        assert_eq!(XHCI_ENUM_CMD_EVAL, 7);
+        assert_eq!(TRB_EVALUATE_CTX, 13);
+        assert_eq!(TRB_CONFIG_EP, 12);
         assert_eq!(bulk_ep_dci(2, false), 4);
         assert_eq!(bulk_ep_dci(1, true), 3);
         assert_eq!(ep_ctx_dw1(2, 512) >> 16, 512);
@@ -2912,22 +3096,27 @@ mod xhci_pack_test {
         assert_eq!(DESC_SPINS, ADDR_SPINS);
         assert_eq!(XHCI_EP0_DCI, 1);
         assert_eq!(TRB_CH, 1 << 4);
+        assert_eq!(USB_CFG_DESC_MPS, 64);
         assert_eq!(USB_CFG_DESC_MAX, 256);
         let setup_in = control_setup_flags(true);
-        assert_ne!(setup_in & TRB_CH, 0);
+        assert_eq!(setup_in & TRB_CH, 0);
         assert_ne!(setup_in & TRB_IDT, 0);
         assert_eq!((setup_in >> 16) & 3, 3);
         let data_in = control_data_in_flags();
-        assert_ne!(data_in & TRB_CH, 0);
+        assert_eq!(data_in & TRB_CH, 0);
         assert_ne!(data_in & TRB_ISP, 0);
+        assert_ne!(data_in & TRB_IOC, 0);
         assert_eq!(control_status_out_flags() & TRB_CH, 0);
         assert_eq!(usb_cfg_w_total(&[9, 2, 32, 0]), 4); // min(32, len=4) on short slice
+        assert_eq!(usb_cfg_w_total_raw(&[9, 2, 32, 0]), 32);
         let mut cfg256 = [0u8; 32];
         cfg256[0] = 9;
         cfg256[1] = 2;
         cfg256[2] = 32;
         assert_eq!(usb_cfg_w_total(&cfg256), 32);
         assert_eq!(usb_cfg_w_total(&[9, 1, 18, 0]), 0);
+        assert_eq!(setup_get_desc(2, USB_CFG_DESC_MPS)[6], 64);
+        assert_eq!(setup_get_desc(2, USB_CFG_DESC_MPS)[7], 0);
         assert_eq!(setup_get_desc(2, USB_CFG_DESC_MAX)[6], 0);
         assert_eq!(setup_get_desc(2, USB_CFG_DESC_MAX)[7], 1);
         // Iron `cbd9bf47`: leftover SETUP TRB must not match STATUS TRB.

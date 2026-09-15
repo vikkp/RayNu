@@ -167,7 +167,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 | M+2 | 2026-09 | E3b native NIC lab (QEMU e1000) + ISO residual | ADR-013 Phase C | **Phase C DONE (QEMU)** |
 | M+3 | 2026-08 | E3b iron HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | **DONE (M7.8 iron)** |
 | M+4 | 2026-09 | Phase B (SPA → installed disk) | remaining Everest | **DONE — EVEREST CLOSED** (`f72b4276` / `34552377351`) |
-| M+5 | 2026-10 | **M8.0** persist (file nested / LUN iron / leftover fallback) | `RAYNU-V-M8-DISK-PERSIST-OK` on COM2 | **NEXT** (nested-OK closed; iron 1–3 host-ready; first-cbw `bot=cbw scsi=capacity cmpl=0x13`; Stop Endpoint recover; iron Force Off open) |
+| M+5 | 2026-10 | **M8.0** persist (file nested / LUN iron / leftover fallback) | `RAYNU-V-M8-DISK-PERSIST-OK` on COM2 | **NEXT** (nested-OK closed; iron 1–3 host-ready; cfg-desc no `vid=`; Evaluate Context + Toshiba cfg-skip; iron Force Off open) |
 
 ### Timeline burn-down
 
@@ -175,7 +175,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 2026-07 ████████  HDA + M6 closed (Latitude)
 2026-08 ████████  R640 boot (E2) + E3b HTTP-OK
 2026-09 ████████  E5 + Phase B — **Mount Everest CLOSED** (`f72b4276`)  ← months_to_everest = 0.0
-2026-10 ░░░░░░░░  M8.0 persist (nested-OK closed; stop-ep `cmd=4`; Force Off open)
+2026-10 ░░░░░░░░  M8.0 persist (nested-OK closed; cfg-desc no vid=; Force Off open)
 2026-11 ░░░░░░░░  M8.1+ TLS/auth/console
 ```
 
@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-usb-cfg-desc |
-| Summary | **Iron leftover, not persist.** EP0-stop COM2: Toshiba named then 9-byte config GET_DESC `cmd=4 cmpl=0xff` `bot=? scsi=?` leftover 1 GiB. BOT never started. Device desc lived; STATUS-only + wLength=9 vs HS MPS. This EFI: Chain SETUP+DATA, GET_CONFIGURATION 256, DATA short if STATUS skipped. Months **0.0 held**. Overall **99 held**. |
+| Commit | m8-usb-ep0-eval |
+| Summary | **Iron leftover, not persist.** Cfg-desc COM2: CH never named Toshiba (GET_DEVICE `cmd=4`). EP0-stop named Toshiba then 9-byte GET_CONFIG `cmd=4`. This EFI: unchain + Evaluate Context EP0 MPS + GET_CONFIG 64 + Toshiba BOT fallback. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. No persist gate. LOIHDA persist **70% held** (A2 still open). |
-| Gates touched | `xhci.rs` control TD CH + 256-byte GET_CONFIG; [m8_persist_iron.md](runbooks/m8_persist_iron.md); [loihda.md](loihda.md). `./tools/sync-hda-site.sh --check`. `./tools/sync-loihda-site.sh --check`. |
+| Gates touched | `xhci.rs` Evaluate Context + Toshiba cfg-skip; [m8_persist_iron.md](runbooks/m8_persist_iron.md); [loihda.md](loihda.md). `./tools/sync-hda-site.sh --check`. `./tools/sync-loihda-site.sh --check`. |
 | Months Δ | 0.0 held (Everest closed; iron Force Off still open) |
 
 
@@ -370,7 +370,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | H3 | ~~Guest UEFI CD not bootable / no reboot-to-disk on iron~~ | — | **Resolved** 2026-09-10 (`56a3ffd` / run `34480107961`): `RAYNU-V-RAYNU-F-DISK-BOOT-OK` + second Linux `root=UUID=` from `vda` + `login:` on the real R640. Chain: `59ac070` install-to-disk (`ISO-INSTALL-OK`) → F7 VMCLEAR/VMPTRLD (81 KiB `FirmwareState::new()` stack temporary over the VMCS; template reset + 32-page stack guard) → `975f8fc` relaunch into the installed GRUB menu, 1 M exit-cap inside GRUB's 2 s menu poll loop (~2 exits/µs) → `56a3ffd` RayNu-F wall cap (time, not exits, bounds the loader phase). Earlier: `916af96` THRE chain telemetry → UART TX ring room + line-rate pace + COM2 FIFO burst fixed the `apk` console stall. Evidence: [2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md](evidence/r640/2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md). Do not F11 `34474850361` / `34425781629` for Phase A; `34480107961` is the Phase A reference pin. |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
 | H5 | ~~Phase B — iron SPA still launches the SHELL stub~~ | — | **Resolved** 2026-09-11 (`f72b4276` / `34552377351`). Residual polish is **M8**, not Everest. |
-| H10 | Leftover-DRAM disk dies on **HV** reboot | MED | **M8.0** first gate ([m8_plan.md](m8_plan.md)): persist-first attach; nested File RAM + `MODE=keep`; DurableLun NVMe/USB I/O; **`MODE=lunkeep`/`usbkeep` TCG keep=1**; leftover/File persist RAM **3584M**; **`MODE=full` nested-OK CLOSED on `raynuvsrv1` `ce3d8a09`**. **Iron 1–3 host-ready** ([m8_persist_iron.md](runbooks/m8_persist_iron.md)). Iron Cap `err=1` then `scratch=34/64`; Enum HS U0; Slot DW1 `3473a0b9` `cmpl=0x40` = MaxSlots. Recover `568e8696` Toshiba 298 GiB `usb I/O ready` + leftover skip; peek/guest `vda`+`vdb` IOERR (ISO stole LUN). Isolation `06ca0f95` leftover Everest ISO `last_st=0x0` (not persist). DESC retry `6c278e85` enum+ISO proven; peek `usb_err=8`. BOT READ `73dc4d2e` leftover Everest `bot=csw` (hub clobber). CSW `68e16633` packed p14. Port `96024edc`: p11 `ep_out=2 ep_in=1` then SET_CONFIG `cmd=5 cmpl=0`; second COM2 `bot=cbw scsi=read cmpl=0` after CAPACITY; leftover Everest `root=UUID=45213e85-…` — not persist. CBW `cbd9bf47` leftover Everest `root=UUID=35bfa02f-…`; p11 GET_DESC `cmd=4 cmpl=0xff`. STATUS-TRB `6ba076cc` leftover Everest: SET_CONFIG + CAPACITY then READ CBW `cmpl=0xff`; SNP DHCP failed → Phase B idle `SPA Start needs HTTP`. DHCP `0780df21` leftover Everest: coexist HTTP-OK → SPA → `ISO-INSTALL-OK` → `DISK-BOOT-OK` → login `root=UUID=1bc8b57d-…`; USB `bot=csw scsi=capacity cmpl=0xff`. Skip-INQUIRY COM2 `bot=cbw scsi=capacity cmpl=0xff`. First-cbw COM2 `bot=cbw scsi=capacity cmpl=0x13` (Reset Endpoint on Running). Stop-ep / EP0-stop COM2: Toshiba named then 9-byte GET_CONFIG `cmd=4 cmpl=0xff` `bot=? scsi=?`. This EFI: Chain SETUP+DATA, GET_CONFIGURATION 256, DATA short if STATUS skipped. Do not Force Off expecting persist. Do not `setup-disk` until virtio READ on the 298 GiB LUN works. Nested QEMU ≠ R640. Iron `RAYNU-V-M8-DISK-PERSIST-OK` still open. Guest F7 persist already closed (ADR-017). |
+| H10 | Leftover-DRAM disk dies on **HV** reboot | MED | **M8.0** first gate ([m8_plan.md](m8_plan.md)): persist-first attach; nested File RAM + `MODE=keep`; DurableLun NVMe/USB I/O; **`MODE=lunkeep`/`usbkeep` TCG keep=1**; leftover/File persist RAM **3584M**; **`MODE=full` nested-OK CLOSED on `raynuvsrv1` `ce3d8a09`**. **Iron 1–3 host-ready** ([m8_persist_iron.md](runbooks/m8_persist_iron.md)). Iron Cap `err=1` then `scratch=34/64`; Enum HS U0; Slot DW1 `3473a0b9` `cmpl=0x40` = MaxSlots. Recover `568e8696` Toshiba 298 GiB `usb I/O ready` + leftover skip; peek/guest `vda`+`vdb` IOERR (ISO stole LUN). Isolation `06ca0f95` leftover Everest ISO `last_st=0x0` (not persist). DESC retry `6c278e85` enum+ISO proven; peek `usb_err=8`. BOT READ `73dc4d2e` leftover Everest `bot=csw` (hub clobber). CSW `68e16633` packed p14. Port `96024edc`: p11 `ep_out=2 ep_in=1` then SET_CONFIG `cmd=5 cmpl=0`; second COM2 `bot=cbw scsi=read cmpl=0` after CAPACITY; leftover Everest `root=UUID=45213e85-…` — not persist. CBW `cbd9bf47` leftover Everest `root=UUID=35bfa02f-…`; p11 GET_DESC `cmd=4 cmpl=0xff`. STATUS-TRB `6ba076cc` leftover Everest: SET_CONFIG + CAPACITY then READ CBW `cmpl=0xff`; SNP DHCP failed → Phase B idle `SPA Start needs HTTP`. DHCP `0780df21` leftover Everest: coexist HTTP-OK → SPA → `ISO-INSTALL-OK` → `DISK-BOOT-OK` → login `root=UUID=1bc8b57d-…`; USB `bot=csw scsi=capacity cmpl=0xff`. Skip-INQUIRY COM2 `bot=cbw scsi=capacity cmpl=0xff`. First-cbw COM2 `bot=cbw scsi=capacity cmpl=0x13` (Reset Endpoint on Running). Cfg-desc COM2 (`b5338458`) never named Toshiba (CH broke GET_DEVICE). EP0-stop named Toshiba then 9-byte GET_CONFIG `cmd=4`. This EFI: unchain + Evaluate Context EP0 MPS + GET_CONFIG 64 + Toshiba BOT fallback. Do not Force Off expecting persist. Do not `setup-disk` until virtio READ on the 298 GiB LUN works. Nested QEMU ≠ R640. Iron `RAYNU-V-M8-DISK-PERSIST-OK` still open. Guest F7 persist already closed (ADR-017). |
 | H11 | Truncated `site/` on feature branches | LOW | **This commit (main catch-up):** keep Kimi updater chrome from `origin/main` (nav / Status / CIO View / Stories / Please reboot); patch lived Everest-closed strings in place; `./tools/check-site-chrome.sh` + CI `site-chrome`; always-on `.cursor/rules/site-chrome.mdc`. Do not replace `site/index.html` wholesale on HDA/Everest work. |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-15 | m8-usb-ep0-eval | 0.0 | 99 | **Iron leftover, not persist:** cfg-desc COM2 CH never named Toshiba; ep0-stop 9-byte GET_CONFIG `cmd=4`. This EFI: Evaluate Context EP0 MPS + GET_CONFIG 64 + Toshiba BOT fallback. LOIHDA Bar A 42% held. Nested QEMU ≠ R640. Iron persist open. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |
 | 2026-09-15 | m8-usb-cfg-desc | 0.0 | 99 | **Iron leftover, not persist:** EP0-stop COM2 Toshiba named then 9-byte GET_CONFIG `cmd=4 cmpl=0xff` `bot=? scsi=?`. STATUS-only wait + wLength=9 vs HS MPS. This EFI: CH + 256-byte GET_CONFIGURATION + DATA-or-STATUS. LOIHDA Bar A 42% held. Nested QEMU ≠ R640. Iron persist open. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |
 | 2026-09-15 | m8-usb-ep0-stop | 0.0 | 99 | **Iron leftover, not persist:** stop-ep COM2 Toshiba named then `cmd=4 cmpl=0xff` `bot=? scsi=?`. GET_DESC timeout stacked EP0 TRBs. This EFI: Stop Endpoint on EP0 timeout. LOIHDA Bar A 42% held. Nested QEMU ≠ R640. Iron persist open. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |
 | 2026-09-15 | m8-usb-stop-ep | 0.0 | 99 | **Iron leftover, not persist:** first-cbw COM2 SET_CONFIG then `bot=cbw scsi=capacity cmpl=0x13`. Context State Error is Reset Endpoint on Running after CBW timeout. This EFI: Stop Endpoint then Set TR Dequeue. LOIHDA on this stack (Bar A 42% held). Nested QEMU ≠ R640. Iron persist open. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |
@@ -944,7 +945,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     **M8.0 iron** COM2 `usb I/O ready` without `read-fail` + Alpine `vda` 298 GiB, then Force Off / `RAYNU-V-M8-DISK-PERSIST-OK`. EP0-stop `cmd=4` leftover DRAM is **not** persist. Nested-OK closed on `raynuvsrv1` `ce3d8a09`.
+Next move:     **M8.0 iron** COM2 `usb I/O ready` without `read-fail` + Alpine `vda` 298 GiB, then Force Off / `RAYNU-V-M8-DISK-PERSIST-OK`. Cfg-desc no `vid=` / ep0-stop `cmd=4` leftover DRAM is **not** persist. Nested-OK closed on `raynuvsrv1` `ce3d8a09`.
 Rollback:      GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351
                EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc
                COM2 build: sha=f72b4276d198. Do not flash a later M8 persist prototype as known-good.
