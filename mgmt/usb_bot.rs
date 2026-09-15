@@ -342,19 +342,19 @@ fn bot_cmd_retry(
 /// CAPACITY held, READ CBW `cmpl=0xff`. Iron `0780df21`: `let _ = INQUIRY`
 /// then `bot=csw scsi=capacity cmpl=0xff` (pending IN). Iron cap-csw:
 /// skip INQUIRY then `bot=cbw scsi=capacity cmpl=0xff` — first bulk OUT
-/// after SET_CONFIG with no settle/INQUIRY. Toshiba is a spinning HDD:
-/// settle + waited INQUIRY (recover_pipes on fail, never ignore). Retry
-/// CAPACITY with `recover_pipes` on DATA/CSW timeout. Iron first-cbw:
-/// `cmpl=0x13` was Reset Endpoint on a Running EP after CBW timeout —
-/// Stop Endpoint first (Halted-only Reset). Do not claim ready until a
-/// data-stage READ completes.
+/// after SET_CONFIG with no settle/INQUIRY. Iron ep0-eval: SET_CONFIG +
+/// BOT parse lived then `bot=cbw scsi=capacity err=8` — swallowing a
+/// failed INQUIRY left dirty bulk rings. Require waited INQUIRY
+/// (`recover_pipes` on fail, never ignore). Toshiba is a spinning HDD:
+/// settle + INQUIRY then CAPACITY. Iron first-cbw: `cmpl=0x13` was Reset
+/// Endpoint on a Running EP after CBW timeout — Stop Endpoint first
+/// (Halted-only Reset). Do not claim ready until a data-stage READ completes.
 pub fn usb_bot_bring_up(hw: &mut impl UsbBulk, min_bytes: u64) -> Result<(u64, u32), UsbBotError> {
     hw.settle();
     let mut tag = 1u32;
     let mut inq = [0u8; 36];
-    if bot_cmd_retry(hw, &mut tag, true, &cdb_inquiry(), &mut inq).is_err() {
-        hw.settle();
-    }
+    bot_cmd_retry(hw, &mut tag, true, &cdb_inquiry(), &mut inq)?;
+    hw.settle();
     let mut cap = [0u8; 8];
     bot_cmd_retry(hw, &mut tag, true, &cdb_read_capacity10(), &mut cap)?;
     hw.settle();
