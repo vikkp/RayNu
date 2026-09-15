@@ -176,6 +176,7 @@ struct CountingUsb {
     tur: u32,
     inquiry: u32,
     recovers: u32,
+    settles: u32,
 }
 
 impl UsbBulk for CountingUsb {
@@ -202,6 +203,10 @@ impl UsbBulk for CountingUsb {
     fn recover_pipes(&mut self) {
         self.recovers = self.recovers.saturating_add(1);
     }
+
+    fn settle(&mut self) {
+        self.settles = self.settles.saturating_add(1);
+    }
 }
 
 #[test]
@@ -213,12 +218,14 @@ fn bring_up_does_not_send_start_stop_or_tur() {
         tur: 0,
         inquiry: 0,
         recovers: 0,
+        settles: 0,
     };
     usb_bot_bring_up(&mut hw, 1024 * 1024).expect("bring-up");
     assert_eq!(hw.start_stop, 0);
     assert_eq!(hw.tur, 0);
-    assert_eq!(hw.inquiry, 0);
+    assert!(hw.inquiry >= 1);
     assert_eq!(hw.recovers, 0);
+    assert!(hw.settles >= 2);
     assert_eq!(usb_bot_last_scsi(), SCSI_TAG_READ);
 }
 
@@ -335,9 +342,55 @@ fn capacity_csw_timeout_recovers_and_retries() {
     let (bytes, lba) = usb_bot_bring_up(&mut hw, 1024 * 1024).expect("bring-up");
     assert_eq!(bytes, NS_BYTES as u64);
     assert_eq!(lba, 512);
-    assert_eq!(hw.inquiry, 0);
+    assert_eq!(hw.inquiry, 1);
     assert_eq!(hw.recovers, 1);
     assert_eq!(hw.fail_csw, 0);
+    assert_eq!(usb_bot_last_scsi(), SCSI_TAG_READ);
+}
+
+struct InqCbwFailUsb {
+    inner: MockUsb,
+    fail_inq_cbw: u32,
+    recovers: u32,
+}
+
+impl UsbBulk for InqCbwFailUsb {
+    fn bulk_out(&mut self, data: &[u8]) -> Result<(), UsbBotError> {
+        if data.len() == CBW_LEN && get_le_u32(data, 0) == CBW_SIG && data[15] == SCSI_INQUIRY {
+            if self.fail_inq_cbw > 0 {
+                self.fail_inq_cbw -= 1;
+                store_usb_bot_diag(UsbBotError::Xfer, 0, 0, u64::from(USB_BOT_CMPL_TIMEOUT));
+                return Err(UsbBotError::Xfer);
+            }
+        }
+        self.inner.bulk_out(data)
+    }
+
+    fn bulk_in(&mut self, data: &mut [u8]) -> Result<usize, UsbBotError> {
+        self.inner.bulk_in(data)
+    }
+
+    fn recover_pipes(&mut self) {
+        self.recovers = self.recovers.saturating_add(1);
+        self.inner.pending_in.clear();
+        self.inner.after_data = false;
+        self.inner.write_off = None;
+    }
+}
+
+#[test]
+fn inquiry_cbw_timeout_recovers_then_capacity() {
+    let ns = vec![0u8; NS_BYTES];
+    let mut hw = InqCbwFailUsb {
+        inner: MockUsb::new(ns),
+        fail_inq_cbw: 1,
+        recovers: 0,
+    };
+    let (bytes, lba) = usb_bot_bring_up(&mut hw, 1024 * 1024).expect("bring-up");
+    assert_eq!(bytes, NS_BYTES as u64);
+    assert_eq!(lba, 512);
+    assert_eq!(hw.fail_inq_cbw, 0);
+    assert_eq!(hw.recovers, 1);
     assert_eq!(usb_bot_last_scsi(), SCSI_TAG_READ);
 }
 
