@@ -11,9 +11,9 @@
 //! ADR-004: persist backing is virtio-blk / BlockIo only.
 
 use super::usb_bot::{
-    next_bot_tag, store_usb_bot_diag, store_usb_bot_ready, usb_bot_bring_up, usb_bot_last_bar,
-    usb_bot_last_cmpl, usb_bot_last_portsc, usb_bot_last_stage, usb_bot_stage_name, UsbBotError,
-    UsbBulk, CSW_LEN,
+    next_bot_tag, store_usb_bot_diag, store_usb_bot_diag_unless_kept, store_usb_bot_ready,
+    usb_bot_bring_up, usb_bot_last_bar, usb_bot_last_cmpl, usb_bot_last_portsc, usb_bot_last_stage,
+    usb_bot_stage_name, UsbBotError, UsbBulk, CSW_LEN,
 };
 
 /// Same window as [`crate::mgmt::durable_lun::usb_is_esp_cruzer_window`].
@@ -82,6 +82,9 @@ pub const XHCI_ENUM_CMD_SLOT: u8 = 2;
 pub const XHCI_ENUM_CMD_ADDR: u8 = 3;
 pub const XHCI_ENUM_CMD_DESC: u8 = 4;
 pub const XHCI_ENUM_CMD_CFG: u8 = 5;
+/// SET_CONFIGURATION on EP0 (after parse, before Configure Endpoint).
+/// Iron `96024edc` packed cmd=5 for both CONFIG_EP and SET_CONFIG.
+pub const XHCI_ENUM_CMD_SETCFG: u8 = 6;
 
 /// xHCI completion code 17 — Parameter Error (Address Device / Enable Slot).
 pub const CMPL_PARAMETER: u8 = 17;
@@ -230,6 +233,25 @@ pub fn port_must_reset(sc: u32) -> bool {
 /// Warm-reset (WPR) when the protocol cap, PLS, or SuperSpeed field says USB3.
 pub fn port_reset_use_wpr(protocol_usb3: bool, sc: u32) -> bool {
     protocol_usb3 || portsc_pls_training(portsc_pls(sc)) || portsc_speed(sc) >= 4
+}
+
+/// DCI for bulk EP address n: OUT = 2n, IN = 2n+1.
+pub fn bulk_ep_dci(ep: u8, dir_in: bool) -> u8 {
+    if dir_in {
+        ep.saturating_mul(2).saturating_add(1)
+    } else {
+        ep.saturating_mul(2)
+    }
+}
+
+/// EP Context DW1: EP Type[5:3] + CErr[2:1] + Max Packet Size[31:16].
+pub fn ep_ctx_dw1(ep_type: u32, mps: u16) -> u32 {
+    (ep_type << 3) | (3 << 1) | (u32::from(mps) << 16)
+}
+
+/// EP Context DW4 Average TRB Length. Bulk uses max packet.
+pub fn ep_ctx_dw4_avg_trb(mps: u16) -> u32 {
+    u32::from(mps)
 }
 
 /// Slot Context DW0: Speed[23:20] + Context Entries[31:27]. Speed 0 is reserved.
@@ -585,6 +607,8 @@ fn serial_xhci_caps(snap: XhciCapSnap) {
     serial_hex32(snap.hcs1);
     serial::write_str(" hcs2=0x");
     serial_hex32(snap.hcs2);
+    serial::write_str(" hcc1=0x");
+    serial_hex32(snap.hcc1);
     serial::write_str(" slots=");
     serial_dec_u32(u32::from(snap.max_slots()));
     serial::write_str(" ports=");
@@ -729,6 +753,16 @@ fn serial_xhci_bot_eps(port: u8, ep_out: u8, ep_in: u8, cfg: u8) {
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_setcfg(port: u8, cfg: u8) {
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 xhci setcfg p");
+    serial_dec_u8(port);
+    serial::write_str(" val=");
+    serial_dec_u8(cfg);
+    serial::write_line(" (not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn serial_xhci_desc_retry(port: u8, n: u8) {
     use crate::boot::serial;
     serial::write_str("boot: Stage 46 xhci enum p");
@@ -813,6 +847,9 @@ fn serial_xhci_hcrst() {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_bot_eps(_port: u8, _ep_out: u8, _ep_in: u8, _cfg: u8) {}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_setcfg(_port: u8, _cfg: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_desc_retry(_port: u8, _n: u8) {}
@@ -1171,7 +1208,7 @@ fn reset_port(hw: &mut impl XhciHw, caps: &XhciCaps, port: u8) -> Result<u32, Us
     let off = portsc_off(caps.op, port);
     let mut sc = hw.read32(off);
     let cmpl = xhci_reset_diag_cmpl(caps.max_slots, caps.max_ports, caps.op, port);
-    store_usb_bot_diag(
+    store_usb_bot_diag_unless_kept(
         UsbBotError::Reset,
         usb_bot_last_bar(),
         xhci_enum_diag_portsc(sc, port),
@@ -1184,7 +1221,7 @@ fn reset_port(hw: &mut impl XhciHw, caps: &XhciCaps, port: u8) -> Result<u32, Us
     let usb3 = port_reset_use_wpr(port_is_usb3(hw, port), sc);
     if !issue_port_reset(hw, off, usb3) && !issue_port_reset(hw, off, !usb3) {
         sc = hw.read32(off);
-        store_usb_bot_diag(
+        store_usb_bot_diag_unless_kept(
             UsbBotError::Reset,
             usb_bot_last_bar(),
             xhci_enum_diag_portsc(sc, port),
@@ -1195,7 +1232,7 @@ fn reset_port(hw: &mut impl XhciHw, caps: &XhciCaps, port: u8) -> Result<u32, Us
     hw.write32(off, PORTSC_PP | PORTSC_PRC | PORTSC_WRC | PORTSC_CSC);
     if !wait_port_link(hw, off) {
         sc = hw.read32(off);
-        store_usb_bot_diag(
+        store_usb_bot_diag_unless_kept(
             UsbBotError::Reset,
             usb_bot_last_bar(),
             xhci_enum_diag_portsc(sc, port),
@@ -1204,7 +1241,7 @@ fn reset_port(hw: &mut impl XhciHw, caps: &XhciCaps, port: u8) -> Result<u32, Us
         return Err(UsbBotError::Reset);
     }
     sc = hw.read32(off);
-    store_usb_bot_diag(
+    store_usb_bot_diag_unless_kept(
         UsbBotError::Reset,
         usb_bot_last_bar(),
         xhci_enum_diag_portsc(sc, port),
@@ -1316,6 +1353,34 @@ fn control_nodata(
     doorbell(hw, caps.db, slot, 1);
     consume_event(hw, caps, ev, TRB_EVENT_TRANSFER, SPINS)?;
     Ok(())
+}
+
+fn control_nodata_retry(
+    hw: &mut impl XhciHw,
+    caps: &XhciCaps,
+    mem: &XhciMem,
+    cmd_ring: &mut Ring,
+    ep0: &mut Ring,
+    ev: &mut EventRing,
+    slot: u8,
+    setup: [u8; 8],
+    port: u8,
+) -> Result<(), UsbBotError> {
+    let mut last = UsbBotError::Xfer;
+    for n in 0..XHCI_DESC_TRIES {
+        drain_events(hw, caps, ev);
+        match control_nodata(hw, caps, ep0, ev, slot, setup) {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                last = e;
+                if n + 1 < XHCI_DESC_TRIES {
+                    serial_xhci_desc_retry(port, n + 1);
+                    reset_ep0(hw, caps, mem, cmd_ring, ev, ep0, slot);
+                }
+            }
+        }
+    }
+    Err(last)
 }
 
 fn setup_get_desc(ty: u8, len: u16) -> [u8; 8] {
@@ -1771,30 +1836,40 @@ fn try_port(
         return Err(UsbBotError::Bot);
     };
     serial_xhci_bot_eps(port, ep_out, ep_in, cfg_val);
-    let dci_out = ep_out * 2;
-    let dci_in = ep_in * 2 + 1;
+    // xHCI 4.3.5: SET_CONFIGURATION on EP0, then Configure Endpoint.
+    // Iron `96024edc`: CONFIG_EP first then SET_CONFIG `cmd=5 cmpl=0 err=8`.
+    control_nodata_retry(
+        hw,
+        caps,
+        mem,
+        cmd_ring,
+        &mut ep0,
+        ev,
+        slot,
+        setup_set_config(cfg_val),
+        port,
+    )
+    .map_err(|e| {
+        recover_enum(hw, caps, mem, cmd_ring, ev, slot);
+        stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_SETCFG, e)
+    })?;
+    serial_xhci_setcfg(port, cfg_val);
+    let dci_out = bulk_ep_dci(ep_out, false);
+    let dci_in = bulk_ep_dci(ep_in, true);
     let hi = core::cmp::max(dci_out, dci_in);
     zero_page(hw, mem.inctx);
     let mut ic = [0u8; 4096];
     put_u32(&mut ic, 4, 1 | (1 << dci_out) | (1 << dci_in));
     put_u32(&mut ic, cs, slot_ctx_dw0(speed, hi).unwrap_or(slot_dw0));
     put_u32(&mut ic, cs + 4, slot_ctx_dw1_port(port));
-    put_u32(&mut ic, cs * 2 + 4, (4u32 << 3) | (3 << 1) | (mps0 << 16));
-    put_u64(&mut ic, cs * 2 + 8, mem.ep0 | 1);
     let out_off = cs * (1 + dci_out as usize);
-    put_u32(
-        &mut ic,
-        out_off + 4,
-        (2u32 << 3) | (3 << 1) | (u32::from(mps_out) << 16),
-    );
+    put_u32(&mut ic, out_off + 4, ep_ctx_dw1(2, mps_out));
     put_u64(&mut ic, out_off + 8, mem.bulk_out | 1);
+    put_u32(&mut ic, out_off + 16, ep_ctx_dw4_avg_trb(mps_out));
     let in_off = cs * (1 + dci_in as usize);
-    put_u32(
-        &mut ic,
-        in_off + 4,
-        (6u32 << 3) | (3 << 1) | (u32::from(mps_in) << 16),
-    );
+    put_u32(&mut ic, in_off + 4, ep_ctx_dw1(6, mps_in));
     put_u64(&mut ic, in_off + 8, mem.bulk_in | 1);
+    put_u32(&mut ic, in_off + 16, ep_ctx_dw4_avg_trb(mps_in));
     hw.dma_write(mem.inctx, &ic);
     zero_page(hw, mem.bulk_out);
     zero_page(hw, mem.bulk_in);
@@ -1807,10 +1882,6 @@ fn try_port(
         trb_ctrl(0, TRB_CONFIG_EP, u32::from(slot) << 24),
     )
     .map_err(|e| {
-        recover_enum(hw, caps, mem, cmd_ring, ev, slot);
-        stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_CFG, e)
-    })?;
-    control_nodata(hw, caps, &mut ep0, ev, slot, setup_set_config(cfg_val)).map_err(|e| {
         recover_enum(hw, caps, mem, cmd_ring, ev, slot);
         stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_CFG, e)
     })?;
@@ -2289,6 +2360,39 @@ mod xhci_pack_test {
     }
 
     #[test]
+    fn parse_toshiba_bot_eps_out2_in1() {
+        // Iron `96024edc`: `xhci bot p11 iface=08/06/50 ep_out=2 ep_in=1 cfg=1`.
+        let mut cfg = [0u8; 32];
+        cfg[0] = 9;
+        cfg[1] = 2;
+        cfg[2] = 32;
+        cfg[5] = 1;
+        cfg[9] = 9;
+        cfg[10] = 4;
+        cfg[14] = 8;
+        cfg[15] = 6;
+        cfg[16] = USB_MSC_BOT;
+        cfg[18] = 7;
+        cfg[19] = 5;
+        cfg[20] = 0x02;
+        cfg[21] = 2;
+        cfg[22] = 0x00;
+        cfg[23] = 0x02;
+        cfg[25] = 7;
+        cfg[26] = 5;
+        cfg[27] = 0x81;
+        cfg[28] = 2;
+        cfg[29] = 0x00;
+        cfg[30] = 0x02;
+        let (out, inn, _, _, cfgv) = parse_bot_eps(&cfg).expect("bot");
+        assert_eq!(out, 2);
+        assert_eq!(inn, 1);
+        assert_eq!(cfgv, 1);
+        assert_eq!(bulk_ep_dci(out, false), 4);
+        assert_eq!(bulk_ep_dci(inn, true), 3);
+    }
+
+    #[test]
     fn parse_uas_only_config_is_not_bot() {
         let mut cfg = [0u8; 18];
         cfg[0] = 9;
@@ -2436,6 +2540,13 @@ mod xhci_pack_test {
         assert_eq!(portsc_pls(IRON_HS_U0), 0);
         assert_eq!(slot_ctx_dw1_num_ports(slot_ctx_dw1_port(14)), 0);
         assert_eq!(XHCI_ENUM_CMD_ADDR, 3);
+        assert_eq!(XHCI_ENUM_CMD_CFG, 5);
+        assert_eq!(XHCI_ENUM_CMD_SETCFG, 6);
+        assert_eq!(bulk_ep_dci(2, false), 4);
+        assert_eq!(bulk_ep_dci(1, true), 3);
+        assert_eq!(ep_ctx_dw1(2, 512) >> 16, 512);
+        assert_eq!(ep_ctx_dw4_avg_trb(512), 512);
+        assert_eq!(xhci_reset_diag_cmpl(64, 26, 0x80, 14), 0x0e80_1a40);
         assert_eq!(CMPL_PARAMETER, 17);
         assert_eq!(CMPL_TIMEOUT, 0xFF);
         assert_eq!(ADDR_SPINS > SPINS, true);
@@ -2489,6 +2600,7 @@ mod xhci_pack_test {
         );
         store_usb_bot_diag(UsbBotError::Xfer, 0x92b0_0000, 0x0000_000b_0000_0e03, 0xff);
         assert!(usb_bot_keep_xfer_diag(usb_bot_last_err()));
+        assert!(usb_bot_keep_xfer_diag(UsbBotError::Enum as u8));
         // Hub skip must not stamp — even when LAST_ERR is Reset, not Xfer.
         // Iron `68e16633`: p14 hub wrote `cmpl=0` + packed port 14 over p11 BOT.
         assert_eq!(usb_bot_last_err(), UsbBotError::Xfer as u8);

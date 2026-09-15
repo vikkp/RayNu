@@ -199,12 +199,23 @@ pub fn usb_bot_scsi_name(tag: u8) -> &'static str {
     }
 }
 
-/// Hub skip must not overwrite Xfer/Bot/Capacity LAST_CMPL / LAST_PORTSC.
+/// Later-port Reset/Hub must not overwrite Enum/Xfer/Bot/Capacity LAST_*.
 /// Iron `73dc4d2e`: p14 hub stamped `cmpl=0` over p11 CSW.
+/// Iron `96024edc`: p11 SET_CONFIG `cmd=5 err=8` then p14 `reset_port`
+/// wrote packed `portsc=…0e00000e03` `cmpl=0x0e801a40` (`bot=? scsi=?`).
 pub fn usb_bot_keep_xfer_diag(err: u8) -> bool {
     err == UsbBotError::Xfer as u8
         || err == UsbBotError::Bot as u8
         || err == UsbBotError::Capacity as u8
+        || err == UsbBotError::Enum as u8
+}
+
+/// Stamp unless a prior Enum/Xfer/Bot/Capacity fail is already latched.
+pub fn store_usb_bot_diag_unless_kept(err: UsbBotError, bar: u64, portsc: u64, cmpl: u64) {
+    if usb_bot_keep_xfer_diag(usb_bot_last_err()) {
+        return;
+    }
+    store_usb_bot_diag(err, bar, portsc, cmpl);
 }
 
 fn stamp_scsi_cdb(cdb: &[u8]) {
