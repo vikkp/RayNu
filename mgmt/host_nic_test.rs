@@ -1,6 +1,6 @@
 use super::{
     coexist_millis_from_tsc, http_accept_should_idle_abort, prop_http_accept_idle_abort,
-    COEXIST_TSC_HZ_FALLBACK, HOST_NIC_HTTP_IDLE_MS,
+    COEXIST_TSC_HZ_FALLBACK, HOST_NIC_DHCP_MS, HOST_NIC_HTTP_IDLE_MS,
 };
 
 #[test]
@@ -35,6 +35,12 @@ fn coexist_millis_from_tsc_2g1_one_ms() {
 fn coexist_millis_from_tsc_hz_zero_uses_fallback() {
     assert_eq!(coexist_millis_from_tsc(0, 2_100_000, 0), 1);
     assert_eq!(coexist_millis_from_tsc(0, 2_100_000, 999), 1);
+}
+
+#[test]
+fn native_dhcp_budget_is_longer_than_idle_abort() {
+    assert_eq!(HOST_NIC_DHCP_MS, 12_000);
+    assert!(HOST_NIC_DHCP_MS > HOST_NIC_HTTP_IDLE_MS);
 }
 
 #[test]

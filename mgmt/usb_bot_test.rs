@@ -247,9 +247,13 @@ impl UsbBulk for CbwFailUsb {
 
 #[test]
 fn rw_cbw_fail_does_not_reset_endpoint() {
+    store_usb_bot_diag(UsbBotError::Xfer, 0, 0, 0);
     assert!(!usb_bot_recover_after_fail(BOT_STAGE_CBW));
     assert!(usb_bot_recover_after_fail(BOT_STAGE_DATA));
     assert!(usb_bot_recover_after_fail(BOT_STAGE_CSW));
+    store_usb_bot_diag(UsbBotError::Xfer, 0, 0, u64::from(USB_BOT_CMPL_TIMEOUT));
+    assert!(usb_bot_recover_after_fail(BOT_STAGE_CBW));
+    store_usb_bot_diag(UsbBotError::Xfer, 0, 0, 0);
     let ns = vec![0u8; NS_BYTES];
     let mut hw = CbwFailUsb {
         inner: MockUsb::new(ns),

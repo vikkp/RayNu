@@ -45,6 +45,17 @@ pub fn load() -> Option<ParkedMgmtLease> {
     with_lease(|slot| *slot).flatten()
 }
 
+/// Usable parked lease, if any.
+pub fn load_usable() -> Option<ParkedMgmtLease> {
+    load().filter(lease_is_usable)
+}
+
+/// BCM5720 `prefer_mac`. Zero octets means pick by link (no SNP lease).
+/// Iron `6ba076cc`: SNP DHCP failed → skip analog/coexist → Phase B idle.
+pub fn prefer_mac() -> [u8; 6] {
+    load_usable().map(|l| l.mac).unwrap_or([0; 6])
+}
+
 /// True when `prefix` is a plausible IPv4 prefix and `ip` is not unspecified.
 pub fn lease_is_usable(lease: &ParkedMgmtLease) -> bool {
     lease.prefix > 0

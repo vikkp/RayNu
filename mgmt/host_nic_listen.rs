@@ -4,9 +4,11 @@
 //! Proven Core: **outside**
 //!
 //! Firmware SNP is never polled. QEMU e1000 uses static user-net addressing.
-//! Iron BCM5720 (`14e4:165f`) reuses the PRE-EBS SNP lease and binds the
-//! function with live `BMSR_LSTATUS` first (Dedicated iDRAC + host LOM);
-//! otherwise MAC match to that lease; otherwise try func 0 (LOM1) then func 1.
+//! Iron BCM5720 (`14e4:165f`) reuses the PRE-EBS SNP lease when parked;
+//! if SNP DHCP failed, native smoltcp DHCP binds the live LOM (`lease.mac`
+//! is empty → pick by link). Function with live `BMSR_LSTATUS` first
+//! (Dedicated iDRAC + host LOM); otherwise MAC match to that lease;
+//! otherwise try func 0 (LOM1) then func 1.
 //! Hardware bring-up runs **immediately after EBS**
 //! so UNDI analog is not left idle through the guest path. Phase F coexist
 //! listens **while VMX is on** (`bounded_poll` on a scheduler quantum).
@@ -22,7 +24,7 @@ use crate::boot::serial;
 use crate::mgmt::bcm5720::Bcm5720Device;
 use crate::mgmt::e1000::E1000Device;
 use crate::mgmt::host_nic::{
-    coexist_millis_from_tsc, host_nic_lab_armed, http_accept_should_idle_abort,
+    coexist_millis_from_tsc, host_nic_lab_armed, http_accept_should_idle_abort, HOST_NIC_DHCP_MS,
     HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS, HOST_NIC_MAX_EXCHANGES, M7_HOST_NIC_QEMU_MARKER,
     QEMU_USERNET_GW, QEMU_USERNET_IPV4, QEMU_USERNET_PREFIX,
 };
@@ -35,7 +37,7 @@ use crate::mgmt::pci_census;
 use core::mem::MaybeUninit;
 use smoltcp::iface::{Config, Interface, SocketHandle, SocketSet, SocketStorage};
 use smoltcp::phy::Device;
-use smoltcp::socket::tcp;
+use smoltcp::socket::{dhcpv4, tcp};
 use smoltcp::time::Instant;
 use smoltcp::wire::{EthernetAddress, IpAddress, IpCidr, Ipv4Address};
 
@@ -101,7 +103,7 @@ pub fn run_post_boot_ok_native_idle() {
 ///
 /// INVARIANTS:
 /// - Does not call `VMXOFF`
-/// - Does not spin; caller resumes guests
+/// - DHCP may spin up to [`HOST_NIC_DHCP_MS`] when SNP parked no lease
 /// - Scratch is `.bss`, not `FrameAllocator`
 pub fn arm_bcm5720_coexist() -> bool {
     if unsafe { COEXIST_ARMED } {
@@ -113,16 +115,18 @@ pub fn arm_bcm5720_coexist() -> bool {
     if !crate::mgmt::bcm5720_mmio::bcm5720_present() {
         return false;
     }
-    let Some(lease) = mgmt_lease::load().filter(mgmt_lease::lease_is_usable) else {
-        serial::write_line("boot: WARN — HOST-NIC coexist skip (no parked SNP lease)");
-        return false;
-    };
-    let mut device = match Bcm5720Device::init(lease.mac) {
+    let mut device = match Bcm5720Device::init(mgmt_lease::prefer_mac()) {
         Ok(d) => d,
         Err(_) => {
             serial::write_line("boot: WARN — HOST-NIC coexist skip (device init)");
             return false;
         }
+    };
+    let Some(lease) = mgmt_lease::load_usable().or_else(|| dhcp_bcm5720(&mut device)) else {
+        serial::write_line(
+            "boot: WARN — HOST-NIC coexist skip (no parked SNP lease; native DHCP failed)",
+        );
+        return false;
     };
     if crate::mgmt::bcm5720_mmio::skip_http_listen_without_lstatus()
         && !crate::mgmt::bcm5720_mmio::bcm5720_phy_link_up()
@@ -365,14 +369,9 @@ fn run_listen(when: ListenWhen) {
 /// funcs `cand bmsr=7949` then `CORECLK_RESET` without BMCR still
 /// `link=timeout`. AfterBootOk listen is skipped without `LSTATUS`.
 fn bringup_bcm5720_post_ebs() {
-    let Some(lease) = mgmt_lease::load().filter(mgmt_lease::lease_is_usable) else {
-        serial::write_line(
-            "boot: WARN — HOST-NIC BCM5720 post-EBS bring-up skipped (no parked SNP lease)",
-        );
-        return;
-    };
+    let prefer = mgmt_lease::prefer_mac();
     serial::write_line("boot: HOST-NIC BCM5720 post-EBS bring-up (keep analog before guest path)");
-    match Bcm5720Device::init(lease.mac) {
+    match Bcm5720Device::init(prefer) {
         Ok(dev) => {
             serial::write_str("boot: HOST-NIC BCM5720 post-EBS Device MAC=");
             write_mac(dev.mac());
@@ -441,13 +440,14 @@ fn fatal_kind(e: MgmtFatal) -> u8 {
 }
 
 fn listen_bcm5720(port: u16, when: ListenWhen, arena: &mut MgmtArena) -> Result<(), MgmtFatal> {
-    let Some(lease) = mgmt_lease::load().filter(mgmt_lease::lease_is_usable) else {
+    let mut device =
+        Bcm5720Device::init(mgmt_lease::prefer_mac()).map_err(|_| MgmtFatal::Device)?;
+    let Some(lease) = mgmt_lease::load_usable().or_else(|| dhcp_bcm5720(&mut device)) else {
         serial::write_line(
-            "boot: WARN — HOST-NIC BCM5720: no parked SNP lease (cannot bind; skip MMIO)",
+            "boot: WARN — HOST-NIC BCM5720: no parked SNP lease (native DHCP failed; skip MMIO)",
         );
         return Err(MgmtFatal::Bind);
     };
-    let mut device = Bcm5720Device::init(lease.mac).map_err(|_| MgmtFatal::Device)?;
     let mac = device.mac();
     if crate::mgmt::bcm5720_mmio::skip_http_listen_without_lstatus()
         && !crate::mgmt::bcm5720_mmio::bcm5720_phy_link_up()
@@ -480,6 +480,73 @@ fn listen_bcm5720(port: u16, when: ListenWhen, arena: &mut MgmtArena) -> Result<
         arena,
         "BCM5720",
     )
+}
+
+/// Native DHCP when firmware SNP did not park a lease (ADR-013).
+/// Iron `6ba076cc`: SNP DHCP failed → analog/coexist skipped → Phase B idle.
+fn dhcp_bcm5720(device: &mut Bcm5720Device) -> Option<mgmt_lease::ParkedMgmtLease> {
+    let mac = device.mac();
+    serial::write_line("boot: HOST-NIC BCM5720 DHCP discover…");
+    let mut config = Config::new(EthernetAddress(mac).into());
+    config.random_seed = mac_seed(mac);
+    let tsc0 = crate::arch::cpu::rdtsc();
+    let hz = crate::boot::raynu_f_flag::tsc_hz();
+    let mut iface = Interface::new(config, device, Instant::from_millis(0));
+    let mut storage = [SocketStorage::EMPTY; 1];
+    let mut sockets = SocketSet::new(&mut storage[..]);
+    let dhcp_handle = sockets.add(dhcpv4::Socket::new());
+    let mut leased: Option<smoltcp::wire::Ipv4Cidr> = None;
+    let mut leased_router: Option<Ipv4Address> = None;
+    let mut millis: i64 = 0;
+    while millis <= HOST_NIC_DHCP_MS {
+        let ts = Instant::from_millis(millis);
+        let _ = bounded_poll(HOST_NIC_POLL_BUDGET, || {
+            matches!(
+                iface.poll(ts, device, &mut sockets),
+                smoltcp::iface::PollResult::SocketStateChanged
+            )
+        });
+        match sockets.get_mut::<dhcpv4::Socket>(dhcp_handle).poll() {
+            Some(dhcpv4::Event::Configured(cfg)) => {
+                leased = Some(cfg.address);
+                leased_router = cfg.router;
+                break;
+            }
+            Some(dhcpv4::Event::Deconfigured) => {
+                iface.update_ip_addrs(|addrs| addrs.clear());
+                iface.routes_mut().remove_default_ipv4_route();
+            }
+            None => {}
+        }
+        millis = coexist_millis_from_tsc(tsc0, crate::arch::cpu::rdtsc(), hz);
+        core::hint::spin_loop();
+    }
+    let Some(cidr) = leased else {
+        serial::write_line("boot: WARN — HOST-NIC BCM5720 DHCP failed (no lease)");
+        return None;
+    };
+    let ip = cidr.address();
+    serial::write_str("boot: HOST-NIC BCM5720 DHCP lease ");
+    write_ipv4(ip);
+    serial::write_byte(b'/');
+    write_u16_dec(cidr.prefix_len() as u16);
+    if let Some(r) = leased_router {
+        serial::write_str(" router=");
+        write_ipv4(r);
+    } else {
+        serial::write_str(" router=none");
+    }
+    serial::write_byte(b'\n');
+    let lease = mgmt_lease::ParkedMgmtLease {
+        ip: ip.octets(),
+        prefix: cidr.prefix_len(),
+        router: leased_router.map(|r| r.octets()).unwrap_or([0; 4]),
+        has_router: leased_router.is_some(),
+        mac,
+        port: MGMT_HTTP_DEFAULT_PORT,
+    };
+    mgmt_lease::store(lease);
+    Some(lease)
 }
 
 fn listen_e1000(port: u16, when: ListenWhen, arena: &mut MgmtArena) -> Result<(), MgmtFatal> {

@@ -27,6 +27,10 @@ pub const QEMU_USERNET_PREFIX: u8 = 24;
 /// Post-EBS listen window on the native NIC (ms). Then guest path continues.
 pub const HOST_NIC_LISTEN_MS: u64 = 20_000;
 
+/// Native BCM5720 DHCP budget when SNP did not park a lease.
+/// Iron `6ba076cc`: SNP DHCP failed; coexist skipped; SPA Start never ran.
+pub const HOST_NIC_DHCP_MS: i64 = 12_000;
+
 /// Max HTTP exchanges in the Phase C window.
 pub const HOST_NIC_MAX_EXCHANGES: u32 = 8;
 
