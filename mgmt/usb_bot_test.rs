@@ -165,6 +165,7 @@ fn start_stop_and_read_probe_named() {
     assert!(usb_bot_keep_xfer_diag(UsbBotError::Xfer as u8));
     assert!(usb_bot_keep_xfer_diag(UsbBotError::Bot as u8));
     assert!(usb_bot_keep_xfer_diag(UsbBotError::Capacity as u8));
+    assert!(usb_bot_keep_xfer_diag(UsbBotError::Enum as u8));
     assert!(!usb_bot_keep_xfer_diag(UsbBotError::Hub as u8));
     assert!(!usb_bot_keep_xfer_diag(UsbBotError::Reset as u8));
 }
@@ -282,6 +283,23 @@ fn hub_skip_does_not_clobber_xfer_cmpl() {
     }
     assert_eq!(usb_bot_last_err(), UsbBotError::Xfer as u8);
     assert_eq!(usb_bot_last_cmpl(), 0xff);
+}
+
+#[test]
+fn later_port_reset_does_not_clobber_xfer_cmpl() {
+    use crate::mgmt::usb_bot::store_usb_bot_diag_unless_kept;
+    store_usb_bot_diag(UsbBotError::Xfer, 0x92b0_0000, 0x0000_000b_0000_0e03, 0);
+    assert!(usb_bot_keep_xfer_diag(usb_bot_last_err()));
+    // Iron `96024edc`: p14 reset_diag `0x0e801a40` over p11 SET_CONFIG.
+    store_usb_bot_diag_unless_kept(
+        UsbBotError::Reset,
+        0x92b0_0000,
+        0x0000_000e_0000_0e03,
+        0x0000_0000_0e80_1a40,
+    );
+    assert_eq!(usb_bot_last_err(), UsbBotError::Xfer as u8);
+    assert_eq!(usb_bot_last_cmpl(), 0);
+    assert_eq!(usb_bot_last_portsc(), 0x0000_000b_0000_0e03);
 }
 
 #[test]
