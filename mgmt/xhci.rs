@@ -928,6 +928,20 @@ fn serial_xhci_cfg_skip(port: u8, vid: u16, did: u16) {
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_maxlun(port: u8, lun: u8, ok: bool) {
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 xhci maxlun p");
+    serial_dec_u8(port);
+    if ok {
+        serial::write_str(" val=");
+        serial_dec_u8(lun);
+        serial::write_line(" (not ISO-INSTALL-OK)");
+    } else {
+        serial::write_line(" fail (continue; leftover DRAM; not ISO-INSTALL-OK)");
+    }
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn serial_xhci_desc_retry(port: u8, n: u8) {
     use crate::boot::serial;
     serial::write_str("boot: Stage 46 xhci enum p");
@@ -1018,6 +1032,9 @@ fn serial_xhci_setcfg(_port: u8, _cfg: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_desc_retry(_port: u8, _n: u8) {}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_maxlun(_port: u8, _lun: u8, _ok: bool) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_eval(_port: u8, _mps: u16, _ok: bool) {}
@@ -1273,23 +1290,27 @@ fn recover_enum(
     ev: &mut EventRing,
     slot: u8,
 ) {
-    abort_cmd_ring(hw, caps, mem, cmd_ring, ev);
-    if slot != 0 {
-        let _ = cmd(
-            hw,
-            caps,
-            cmd_ring,
-            ev,
-            0,
-            trb_ctrl(0, TRB_DISABLE_SLOT, u32::from(slot) << 24),
-        );
+    // Iron ep0-eval COM2: p11 CAPACITY CBW `err=8` then p14 hub Disable Slot
+    // stamped `cmpl=0` over the BOT diag. Keep the p11 `cmpl`.
+    hold_bot_diag(|| {
         abort_cmd_ring(hw, caps, mem, cmd_ring, ev);
-        let z = [0u8; 8];
-        hw.dma_write(mem.dcbaa + u64::from(slot) * 8, &z);
-        zero_page(hw, mem.inctx);
-        zero_page(hw, mem.devctx);
-        zero_page(hw, mem.ep0);
-    }
+        if slot != 0 {
+            let _ = cmd(
+                hw,
+                caps,
+                cmd_ring,
+                ev,
+                0,
+                trb_ctrl(0, TRB_DISABLE_SLOT, u32::from(slot) << 24),
+            );
+            abort_cmd_ring(hw, caps, mem, cmd_ring, ev);
+            let z = [0u8; 8];
+            hw.dma_write(mem.dcbaa + u64::from(slot) * 8, &z);
+            zero_page(hw, mem.inctx);
+            zero_page(hw, mem.devctx);
+            zero_page(hw, mem.ep0);
+        }
+    });
 }
 
 fn event_slot(ev: &[u8; 16]) -> u8 {
@@ -1708,6 +1729,17 @@ fn setup_set_config(cfg: u8) -> [u8; 8] {
     s
 }
 
+/// MSC BOT Get Max LUN (class IN 0xFE, 1 byte). Linux sends this after
+/// SET_CONFIG before the first CBW. Iron ep0-eval: SET_CONFIG lived then
+/// CAPACITY CBW `err=8` `bot=cbw scsi=capacity`.
+fn setup_get_max_lun() -> [u8; 8] {
+    let mut s = [0u8; 8];
+    s[0] = 0xA1;
+    s[1] = 0xFE;
+    s[6] = 1;
+    s
+}
+
 /// xHCI 4.6.7 / 4.8.2.1: after GET_DEVICE, Evaluate Context with EP0 MPS
 /// from `bMaxPacketSize0`. Missing this is the ep0-stop GET_CONFIG hang.
 fn evaluate_ep0_mps(
@@ -1945,9 +1977,11 @@ pub fn bulk_in_trb_flags(len: usize) -> u32 {
     }
 }
 
-/// After CAPACITY CSW, before the first 512-byte READ. Iron `6c278e85`
-/// timed out READ data; `96024edc` failed READ CBW (`cmpl=0`).
-const BOT_SETTLE_SPINS: u32 = 20_000_000;
+/// After CAPACITY CSW, before the first 512-byte READ, and after SET_CONFIG
+/// before the first CBW. Iron `6c278e85` timed out READ data; `96024edc`
+/// failed READ CBW (`cmpl=0`). Iron ep0-eval: SET_CONFIG held then CAPACITY
+/// CBW `err=8` — Toshiba spinning HDD needs more than 20M spins.
+const BOT_SETTLE_SPINS: u32 = 80_000_000;
 
 impl UsbBulk for LiveXhci {
     fn bulk_out(&mut self, data: &[u8]) -> Result<(), UsbBotError> {
@@ -2292,6 +2326,27 @@ fn try_port(
         recover_enum(hw, caps, mem, cmd_ring, ev, slot);
         stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_CFG, e)
     })?;
+    drain_events(hw, caps, ev);
+    let mut maxlun = [0u8; 1];
+    match control_in_retry(
+        hw,
+        caps,
+        mem,
+        cmd_ring,
+        &mut ep0,
+        ev,
+        slot,
+        mem.bounce,
+        setup_get_max_lun(),
+        &mut maxlun,
+        port,
+    ) {
+        Ok(()) => serial_xhci_maxlun(port, maxlun[0], true),
+        Err(_) => {
+            reset_ep0(hw, caps, mem, cmd_ring, ev, &mut ep0, slot);
+            serial_xhci_maxlun(port, 0, false);
+        }
+    }
     let mut live = LiveXhci {
         mmio,
         caps: *caps,
@@ -3117,6 +3172,11 @@ mod xhci_pack_test {
         assert_eq!(usb_cfg_w_total(&[9, 1, 18, 0]), 0);
         assert_eq!(setup_get_desc(2, USB_CFG_DESC_MPS)[6], 64);
         assert_eq!(setup_get_desc(2, USB_CFG_DESC_MPS)[7], 0);
+        let maxlun = setup_get_max_lun();
+        assert_eq!(maxlun[0], 0xA1);
+        assert_eq!(maxlun[1], 0xFE);
+        assert_eq!(maxlun[6], 1);
+        assert_eq!(BOT_SETTLE_SPINS >= 80_000_000, true);
         assert_eq!(setup_get_desc(2, USB_CFG_DESC_MAX)[6], 0);
         assert_eq!(setup_get_desc(2, USB_CFG_DESC_MAX)[7], 1);
         // Iron `cbd9bf47`: leftover SETUP TRB must not match STATUS TRB.
