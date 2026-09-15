@@ -328,20 +328,26 @@ fn bot_cmd_retry(
     Err(last)
 }
 
-/// READ CAPACITY(10) + one native READ. Do not send START STOP or
-/// INQUIRY / TUR. Iron `6c278e85`: CAPACITY printed `usb I/O ready`
-/// then peek READ timed out. Iron `73dc4d2e`: START STOP (Immed=0) +
-/// ignored timeout + auto EP-reset failed CSW before ready. Iron
-/// `68e16633`: `scsi=tur bot=cbw` was the READ-probe recovery TUR
-/// (stamped over the READ fail) plus p14 hub `cmpl=0` clobber — not
-/// "LUN stayed on p10". Iron `6ba076cc`: CAPACITY held, READ CBW
-/// `cmpl=0xff`. Iron `0780df21`: SET_CONFIG held then
-/// `bot=csw scsi=capacity cmpl=0xff` — ignored INQUIRY can leave a
-/// pending IN TRB so CAPACITY CSW times out. Retry CAPACITY with
-/// `recover_pipes` on DATA/CSW timeout. Do not claim ready until a
-/// data-stage READ completes.
+/// Waited INQUIRY + READ CAPACITY(10) + one native READ. Do not send START STOP or
+/// TUR. Iron `6c278e85`: CAPACITY printed `usb I/O ready` then peek READ
+/// timed out. Iron `73dc4d2e`: START STOP (Immed=0) + ignored timeout +
+/// auto EP-reset failed CSW before ready. Iron `68e16633`: `scsi=tur bot=cbw`
+/// was the READ-probe recovery TUR (stamped over the READ fail) plus p14
+/// hub `cmpl=0` clobber — not "LUN stayed on p10". Iron `6ba076cc`:
+/// CAPACITY held, READ CBW `cmpl=0xff`. Iron `0780df21`: `let _ = INQUIRY`
+/// then `bot=csw scsi=capacity cmpl=0xff` (pending IN). Iron cap-csw:
+/// skip INQUIRY then `bot=cbw scsi=capacity cmpl=0xff` — first bulk OUT
+/// after SET_CONFIG with no settle/INQUIRY. Toshiba is a spinning HDD:
+/// settle + waited INQUIRY (recover_pipes on fail, never ignore). Retry
+/// CAPACITY with `recover_pipes` on DATA/CSW timeout. Do not claim ready
+/// until a data-stage READ completes.
 pub fn usb_bot_bring_up(hw: &mut impl UsbBulk, min_bytes: u64) -> Result<(u64, u32), UsbBotError> {
+    hw.settle();
     let mut tag = 1u32;
+    let mut inq = [0u8; 36];
+    if bot_cmd_retry(hw, &mut tag, true, &cdb_inquiry(), &mut inq).is_err() {
+        hw.settle();
+    }
     let mut cap = [0u8; 8];
     bot_cmd_retry(hw, &mut tag, true, &cdb_read_capacity10(), &mut cap)?;
     hw.settle();
