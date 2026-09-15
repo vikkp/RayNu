@@ -1,4 +1,4 @@
-use super::{lease_is_usable, load, store, ParkedMgmtLease};
+use super::{lease_is_usable, load, load_usable, prefer_mac, store, ParkedMgmtLease};
 
 fn sample() -> ParkedMgmtLease {
     ParkedMgmtLease {
@@ -17,6 +17,23 @@ fn store_load_roundtrip() {
     let got = load().expect("lease");
     assert_eq!(got, sample());
     assert!(lease_is_usable(&got));
+}
+
+#[test]
+fn prefer_mac_zero_without_lease_and_matches_parked() {
+    store(ParkedMgmtLease {
+        ip: [0, 0, 0, 0],
+        prefix: 24,
+        router: [0; 4],
+        has_router: false,
+        mac: [0; 6],
+        port: 8443,
+    });
+    assert!(load_usable().is_none());
+    assert_eq!(prefer_mac(), [0; 6]);
+    store(sample());
+    assert_eq!(prefer_mac(), sample().mac);
+    assert!(load_usable().is_some());
 }
 
 #[test]

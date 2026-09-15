@@ -159,6 +159,7 @@ pub fn disk_persist_surface_present() -> bool {
         && include_str!("xhci.rs").contains("bounce_in")
         && include_str!("xhci.rs").contains("BOT_SETTLE_SPINS")
         && include_str!("usb_bot.rs").contains("fn usb_bot_recover_after_fail(")
+        && include_str!("usb_bot.rs").contains("USB_BOT_CMPL_TIMEOUT")
         && include_str!("usb_bot.rs").contains("fn settle(")
         && include_str!("xhci.rs").contains("fn reset_bulk_ep(")
         && include_str!("xhci.rs").contains("fn recover_pipes(")

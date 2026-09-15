@@ -16,7 +16,7 @@ use smoltcp::socket::{dhcpv4, tcp};
 use smoltcp::time::Instant;
 use smoltcp::wire::{EthernetAddress, IpCidr, Ipv4Address, Ipv4Cidr};
 
-const DHCP_BUDGET_MS: u64 = 8_000;
+const DHCP_BUDGET_MS: u64 = 12_000;
 
 /// Bind `:port` on the first usable SNP NIC via DHCP + smoltcp TCP.
 pub fn uefi_snp_listen(port: u16) -> Result<(), MgmtListenError> {

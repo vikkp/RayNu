@@ -222,12 +222,21 @@ pub fn store_usb_bot_diag_unless_kept(err: UsbBotError, bar: u64, portsc: u64, c
     store_usb_bot_diag(err, bar, portsc, cmpl);
 }
 
+/// xHCI software timeout (`consume_transfer` spun out). Not a real CC.
+pub const USB_BOT_CMPL_TIMEOUT: u8 = 0xFF;
+
 /// Reset Endpoint after DATA/CSW fail (pending IN TRB). Do **not** reset
-/// after a CBW fail — iron `96024edc` READ `bot=cbw cmpl=0` plus
-/// `73dc4d2e` showed Reset Endpoint on a live OUT pipe kills the next
-/// command. A leftover bulk-IN Transfer Event is not a halted OUT EP.
+/// after a CBW fail with a real completion — iron `96024edc` READ
+/// `bot=cbw cmpl=0` plus `73dc4d2e` showed Reset Endpoint on a live OUT
+/// pipe kills the next command. Iron `6ba076cc`: SET_CONFIG + CAPACITY
+/// held, then READ CBW **timeout** `cmpl=0xff` — retry stacked a second
+/// CBW behind a still-pending TRB. Timeout (not leftover `cmpl=0`)
+/// resets pipes so the retry has a clean OUT ring.
 pub fn usb_bot_recover_after_fail(stage: u8) -> bool {
-    stage != BOT_STAGE_CBW
+    if stage != BOT_STAGE_CBW {
+        return true;
+    }
+    usb_bot_last_cmpl() as u8 == USB_BOT_CMPL_TIMEOUT
 }
 
 fn stamp_scsi_cdb(cdb: &[u8]) {
