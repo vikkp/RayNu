@@ -225,9 +225,10 @@
                 Today the install disk is leftover DRAM above the precise EPT
                 pool. A <em>guest</em> reset keeps it. A <em>hypervisor</em>
                 Force Off zeros it. Nested File persist is closed; USB/NVMe
-                DurableLun I/O is host-ready; iron COM2 is not. Stop-ep COM2
-                named Toshiba then config GET_DESC timed out
+                DurableLun I/O is host-ready; iron COM2 is not. EP0-stop COM2
+                named Toshiba then 9-byte config GET_DESC timed out
                 (<code>cmd=4 cmpl=0xff</code> <code>bot=? scsi=?</code>).
+                This EFI: chained control TD + 256-byte GET_CONFIGURATION.
                 The remaining 30% is still
                 <code>RAYNU-V-M8-DISK-PERSIST-OK</code> after Force Off on a
                 ≥16 GiB Toshiba LUN, not the ESP Cruzer/UDisk. A buyer who

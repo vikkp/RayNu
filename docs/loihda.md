@@ -123,7 +123,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 **Product effect.** “Install Linux” without persist is a demo that dies when the operator Force Offs the box — which they will, because that is how you recover a Type-1. Nested File persist (`ce3d8a09`) and DurableLun USB/NVMe I/O are the mechanism. Iron Force Off is still open. USB ≥ 16 GiB (not the ESP Cruzer / 2–8 GiB UDisk) is the Toshiba LUN. Nested QEMU ≠ R640.
 
-**Iron NOW (not a score bump).** Stop-ep COM2: p11 Toshiba named, then config GET_DESC `cmd=4 cmpl=0xff` `bot=? scsi=?` leftover 1 GiB DRAM. BOT never started. Timeout retries stacked EP0 TRBs. This stack: Stop Endpoint on EP0 GET_DESC timeout. Do not Force Off leftover DRAM.
+**Iron NOW (not a score bump).** EP0-stop COM2: p11 Toshiba named, then 9-byte config GET_DESC `cmd=4 cmpl=0xff` `bot=? scsi=?` leftover 1 GiB DRAM. BOT never started. Device desc is 18/18 (STATUS posts); wLength=9 vs HS MPS=64 can babble or skip STATUS. This stack: Chain SETUP+DATA, one-shot GET_CONFIGURATION 256, complete on DATA short if STATUS never posts. Do not Force Off leftover DRAM.
 
 **Honest remainder.** 30% is iron COM2 `RAYNU-V-M8-DISK-PERSIST-OK`. Do not F11 until `I/O ready` + virtio on the LUN.
 
@@ -171,14 +171,14 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 |------|-------|------|--------|
 | 2026-09-11 | Everest | Iron ISO → disk → login | **DONE** — HDA 99%, months 0.0 |
 | 2026-09-13 | Persist mechanism | Nested-OK + DurableLun USB/NVMe I/O | **DONE nested / host**; iron Force Off **open** |
-| **NOW** | Bar A A2 | USB/NVMe Force Off on COM2 | **NEXT** (stop-ep `cmd=4 cmpl=0xff` `bot=?`; leftover 1 GiB ≠ persist) |
+| **NOW** | Bar A A2 | USB/NVMe Force Off on COM2 | **NEXT** (ep0-stop `cmd=4 cmpl=0xff` `bot=?`; leftover 1 GiB ≠ persist) |
 | then | Bar A A3+A4 | SKU card + TLS | design overlap OK; do not close TLS before persist COM2 |
 | then | Bar B B2 | Spare PERC VD persist | after A2; census skip is lab safety |
 | later | Auth / console / unmodified ISO | A5, A6, Gen-1 Phase 2 | named residuals, not fake closes |
 
 ```
 2026-09  ████████  Everest closed
-2026-10  ░░░░░░░░  Bar A: iron persist (stop-ep `cmd=4`; Force Off open)
+2026-10  ░░░░░░░░  Bar A: iron persist (ep0-stop `cmd=4`; Force Off open)
 2026-11  ░░░░░░░░  Bar A: SKU + TLS  → first dedicated-box LOI window
 2026-12  ░░░░░░░░  Bar B: PERC VD I/O
 ```
@@ -202,11 +202,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-usb-ep0-stop |
-| Summary | **Iron leftover, not persist.** Stop-ep COM2: Toshiba named then config GET_DESC `cmd=4 cmpl=0xff` `bot=? scsi=?`. Timeout retries stacked EP0 TRBs. This EFI: Stop Endpoint on EP0 GET_DESC timeout. Scores **held**. |
+| Commit | m8-usb-cfg-desc |
+| Summary | **Iron leftover, not persist.** EP0-stop COM2: Toshiba named then 9-byte config GET_DESC `cmd=4 cmpl=0xff` `bot=? scsi=?`. Device desc lived; STATUS-only wait + wLength=9 vs HS MPS. This EFI: Chain SETUP+DATA, GET_CONFIGURATION 256, DATA short completes if STATUS skipped. Scores **held**. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Bar A **42% held** / Bar B **18% held** / overall **38% held** / months A **1.5 held**. Persist piece **70% held**. A2 still open. |
-| Gates touched | `xhci.rs` EP0 Stop recover; [loihda.md](loihda.md). `./tools/sync-loihda-site.sh --check`. No MegaRAID. No TLS. No F11. |
+| Gates touched | `xhci.rs` control TD CH + 256-byte GET_CONFIG; [loihda.md](loihda.md). `./tools/sync-loihda-site.sh --check`. No MegaRAID. No TLS. No F11. |
 
 ---
 
@@ -214,6 +214,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-15 | m8-usb-cfg-desc | 42 | 18 | **Iron leftover, not persist.** EP0-stop COM2 `cmd=4 cmpl=0xff` `bot=? scsi=?` after Toshiba named. 9-byte GET_CONFIG STATUS never posted. This EFI: CH + 256-byte GET_CONFIGURATION + DATA-or-STATUS. Persist 70% held. A2 open. |
 | 2026-09-15 | m8-usb-ep0-stop | 42 | 18 | **Iron leftover, not persist.** Stop-ep COM2 `cmd=4 cmpl=0xff` `bot=? scsi=?` after Toshiba named. GET_DESC timeout stacked EP0 TRBs. This EFI: Stop Endpoint on EP0 timeout. Persist 70% held. A2 open. |
 | 2026-09-15 | m8-usb-stop-ep | 42 | 18 | **Iron leftover, not persist.** First-cbw COM2 `cmpl=0x13 bot=cbw scsi=capacity` after SET_CONFIG. Reset Endpoint on Running. This EFI: Stop Endpoint. LOIHDA now lives on the USB stack. Persist 70% held. A2 open. |
 | 2026-09-15 | m8-usb-first-cbw | 42 | 18 | **Iron leftover, not persist.** Skip-INQUIRY was `cmpl=0xff`; settle + waited INQUIRY then CAPACITY. Next COM2 was `cmpl=0x13`. Scores held. |
