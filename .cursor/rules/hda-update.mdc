@@ -26,7 +26,7 @@ Update HDA in the **same change** (or a tight follow-up commit) when **any** of:
 3. You touch Everest-path code: `mgmt/`, `assets/webui.html`, `guest/`, `devices/`, `idrac/`, `boot/`, `net/`, `migrate/`, datastore/ISO/HTTP/TLS, release/size tooling, R640 runbooks.
 4. User says: "update HDA", "distance assessment", "months to Everest".
 
-**Skip** only for pure typo/comment-only commits with zero Everest relevance — still preferred to bump `last_commit` if you already have the file open.
+Also run **LOIHDA** (`docs/loihda.md`, `.cursor/rules/loihda-update.mdc`) on persist / USB BOT / xHCI / PERC / TLS commits. Everest stays closed; LOI stays open until Bar A is honest. `./tools/sync-loihda-site.sh`.
 
 ## Procedure (every HDA update)
 

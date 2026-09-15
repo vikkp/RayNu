@@ -1227,3 +1227,117 @@ figure[id] {
     flex-direction: column;
   }
 }
+
+/* —— LOI path page (after Everest). Keep when restoring chrome from main. —— */
+
+.page-loi .hda-mast {
+  background:
+    linear-gradient(135deg, rgba(15, 110, 106, 0.18) 0%, transparent 48%),
+    linear-gradient(180deg, rgba(184, 107, 52, 0.12) 0%, transparent 70%);
+}
+
+.page-loi .hda-mast__title {
+  max-width: 18ch;
+}
+
+.loi-bar__fill--fleet {
+  background: linear-gradient(90deg, var(--steel), var(--copper));
+}
+
+.loi-cards {
+  display: grid;
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+
+@media (min-width: 800px) {
+  .loi-cards {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.loi-card {
+  padding: 1.4rem 1.35rem 1.25rem;
+  border: 1px solid rgba(16, 24, 32, 0.12);
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.loi-card__kicker {
+  margin: 0 0 0.45rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--copper);
+}
+
+.loi-card h3 {
+  margin: 0 0 0.7rem;
+  font-family: var(--font-brand);
+  font-size: 1.45rem;
+}
+
+.loi-card p {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.loi-card__effect {
+  margin-top: 1rem !important;
+  padding-top: 0.85rem;
+  border-top: 1px solid rgba(16, 24, 32, 0.1);
+}
+
+.section--loi-pieces {
+  background: linear-gradient(
+    180deg,
+    rgba(26, 58, 74, 0.05) 0%,
+    transparent 70%
+  );
+}
+
+.loi-pieces {
+  list-style: none;
+  margin: 2rem 0 0;
+  padding: 0;
+}
+
+.loi-pieces li {
+  padding: 1.35rem 0;
+  border-bottom: 1px solid rgba(16, 24, 32, 0.1);
+}
+
+.loi-pieces li header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  margin-bottom: 0.55rem;
+}
+
+.loi-pieces__name {
+  font-family: var(--font-brand);
+  font-weight: 700;
+  font-size: 1.2rem;
+}
+
+.loi-pieces__pct {
+  font-family: var(--font-mono);
+  color: var(--teal);
+  font-weight: 500;
+}
+
+.loi-pieces li p {
+  margin: 0.85rem 0 0;
+  color: var(--ink-soft);
+}
+
+.loi-locks {
+  margin: 1.25rem 0 2rem;
+  padding-left: 1.15rem;
+  color: var(--ink-soft);
+}
+
+.loi-locks li {
+  margin: 0.4rem 0;
+}
