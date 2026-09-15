@@ -332,6 +332,28 @@ pub fn xhci_enum_diag_portsc(sc: u32, port: u8) -> u64 {
     u64::from(sc) | (u64::from(port) << 32)
 }
 
+/// Transfer Event Slot ID (xHCI 6.4.2.1 DW3[31:24]).
+pub fn xhci_event_slot(ctrl: u32) -> u8 {
+    (ctrl >> 24) as u8
+}
+
+/// Transfer Event Endpoint ID / DCI (xHCI 6.4.2.1 DW3[20:16]).
+pub fn xhci_event_dci(ctrl: u32) -> u8 {
+    ((ctrl >> 16) & 0x1F) as u8
+}
+
+/// True when a Transfer Event belongs to this slot + bulk DCI.
+/// Iron `96024edc`: READ CBW `cmpl=0` after CAPACITY CSW — a leftover bulk-IN
+/// event (Toshiba `ep_in=1` → DCI 3) must not retire the CBW OUT (DCI 4).
+pub fn xhci_xfer_matches(ctrl: u32, slot: u8, dci: u8) -> bool {
+    xhci_event_slot(ctrl) == slot && xhci_event_dci(ctrl) == dci
+}
+
+/// Pack bulk Transfer Event `cmpl=` as CC | (dci << 8) | (slot << 16).
+pub fn xhci_xfer_diag_cmpl(code: u8, dci: u8, slot: u8) -> u64 {
+    u64::from(code) | (u64::from(dci) << 8) | (u64::from(slot) << 16)
+}
+
 /// Pack CAPLENGTH+HCSPARAMS1 into the existing `portsc` diag word.
 pub fn xhci_cap_diag_portsc(snap: XhciCapSnap) -> u64 {
     u64::from(snap.cap0) | (u64::from(snap.hcs1) << 32)
@@ -896,6 +918,29 @@ fn consume_event(
     want_type: u32,
     spins_max: u32,
 ) -> Result<[u8; 16], UsbBotError> {
+    consume_posted(hw, caps, ev, want_type, 0, 0, spins_max)
+}
+
+fn consume_transfer(
+    hw: &mut impl XhciHw,
+    caps: &XhciCaps,
+    ev: &mut EventRing,
+    slot: u8,
+    dci: u8,
+    spins_max: u32,
+) -> Result<[u8; 16], UsbBotError> {
+    consume_posted(hw, caps, ev, TRB_EVENT_TRANSFER, slot, dci, spins_max)
+}
+
+fn consume_posted(
+    hw: &mut impl XhciHw,
+    caps: &XhciCaps,
+    ev: &mut EventRing,
+    want_type: u32,
+    slot: u8,
+    dci: u8,
+    spins_max: u32,
+) -> Result<[u8; 16], UsbBotError> {
     let mut spins = 0u32;
     loop {
         let t = read_trb(hw, ev.base, ev.deq);
@@ -904,15 +949,21 @@ fn consume_event(
             let ty = trb_type(ctrl);
             advance_event(hw, caps, ev);
             if ty == want_type {
+                if want_type == TRB_EVENT_TRANSFER
+                    && dci != 0
+                    && !xhci_xfer_matches(ctrl, slot, dci)
+                {
+                    continue;
+                }
                 let code = trb_cmpl_code(get_u32(&t, 8));
                 if code != CMPL_SUCCESS && code != CMPL_SHORT {
                     let err = xhci_event_err(want_type);
-                    store_usb_bot_diag(
-                        err,
-                        usb_bot_last_bar(),
-                        usb_bot_last_portsc(),
-                        u64::from(code),
-                    );
+                    let cmpl = if want_type == TRB_EVENT_TRANSFER {
+                        xhci_xfer_diag_cmpl(code, xhci_event_dci(ctrl), xhci_event_slot(ctrl))
+                    } else {
+                        u64::from(code)
+                    };
+                    store_usb_bot_diag(err, usb_bot_last_bar(), usb_bot_last_portsc(), cmpl);
                     return Err(err);
                 }
                 return Ok(t);
@@ -1010,7 +1061,7 @@ fn recover_enum(
 }
 
 fn event_slot(ev: &[u8; 16]) -> u8 {
-    (get_u32(ev, 12) >> 24) as u8
+    xhci_event_slot(get_u32(ev, 12))
 }
 
 /// Identity-mapped pages the live driver owns.
@@ -1026,6 +1077,7 @@ pub struct XhciMem {
     pub bulk_out: u64,
     pub bulk_in: u64,
     pub bounce: u64,
+    pub bounce_in: u64,
     pub scratch0: u64,
 }
 
@@ -1085,6 +1137,7 @@ fn xhci_start(
     zero_page(hw, mem.bulk_out);
     zero_page(hw, mem.bulk_in);
     zero_page(hw, mem.bounce);
+    zero_page(hw, mem.bounce_in);
     let hcs2 = hw.read32(0x08);
     let scratch = xhci_scratchpad_bufs(hcs2);
     if scratch > XHCI_SCRATCH_MAX {
@@ -1486,6 +1539,7 @@ struct LiveXhci {
     dci_out: u8,
     dci_in: u8,
     bounce: u64,
+    bounce_in: u64,
     bulk_out_hpa: u64,
     bulk_in_hpa: u64,
     lba: u32,
@@ -1526,6 +1580,10 @@ pub fn bulk_in_trb_flags(len: usize) -> u32 {
     }
 }
 
+/// After CAPACITY CSW, before the first 512-byte READ. Iron `6c278e85`
+/// timed out READ data; `96024edc` failed READ CBW (`cmpl=0`).
+const BOT_SETTLE_SPINS: u32 = 20_000_000;
+
 impl UsbBulk for LiveXhci {
     fn bulk_out(&mut self, data: &[u8]) -> Result<(), UsbBotError> {
         if data.is_empty() || data.len() > 4096 {
@@ -1541,11 +1599,12 @@ impl UsbBulk for LiveXhci {
             trb_ctrl(0, TRB_NORMAL, TRB_IOC),
         );
         doorbell(&mut hw, self.caps.db, self.slot, self.dci_out);
-        consume_event(
+        consume_transfer(
             &mut hw,
             &self.caps,
             &mut self.ev,
-            TRB_EVENT_TRANSFER,
+            self.slot,
+            self.dci_out,
             BULK_SPINS,
         )
         .map(|_| ())
@@ -1558,23 +1617,24 @@ impl UsbBulk for LiveXhci {
         let mut hw = MmioXhci { base: self.mmio };
         drain_events(&mut hw, &self.caps, &mut self.ev);
         let z = [0u8; 4096];
-        hw.dma_write(self.bounce, &z[..data.len()]);
+        hw.dma_write(self.bounce_in, &z[..data.len()]);
         self.bulk_in.place(
             &mut hw,
-            self.bounce,
+            self.bounce_in,
             data.len() as u32,
             trb_ctrl(0, TRB_NORMAL, bulk_in_trb_flags(data.len())),
         );
         doorbell(&mut hw, self.caps.db, self.slot, self.dci_in);
-        match consume_event(
+        match consume_transfer(
             &mut hw,
             &self.caps,
             &mut self.ev,
-            TRB_EVENT_TRANSFER,
+            self.slot,
+            self.dci_in,
             BULK_SPINS,
         ) {
             Ok(_) => {
-                hw.dma_read(self.bounce, data);
+                hw.dma_read(self.bounce_in, data);
                 Ok(data.len())
             }
             Err(e) => Err(e),
@@ -1609,6 +1669,12 @@ impl UsbBulk for LiveXhci {
             slot,
             dci_in,
         );
+    }
+
+    fn settle(&mut self) {
+        for _ in 0..BOT_SETTLE_SPINS {
+            core::hint::spin_loop();
+        }
     }
 }
 
@@ -1904,6 +1970,7 @@ fn try_port(
         dci_out,
         dci_in,
         bounce: mem.bounce,
+        bounce_in: mem.bounce_in,
         bulk_out_hpa: mem.bulk_out,
         bulk_in_hpa: mem.bulk_in,
         lba: 512,
@@ -1998,6 +2065,8 @@ static mut BULKIN: Page = Page([0; 4096]);
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 static mut BOUNCE: Page = Page([0; 4096]);
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+static mut BOUNCE_IN: Page = Page([0; 4096]);
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 static mut SCRATCH0: [Page; XHCI_SCRATCH_MAX as usize] =
     [Page([0; 4096]); XHCI_SCRATCH_MAX as usize];
 
@@ -2051,6 +2120,7 @@ pub fn xhci_init_pci(bus: u8, dev: u8, func: u8, min_bytes: u64) -> Result<u64, 
             bulk_out: core::ptr::addr_of_mut!(BULKOUT) as u64,
             bulk_in: core::ptr::addr_of_mut!(BULKIN) as u64,
             bounce: core::ptr::addr_of_mut!(BOUNCE) as u64,
+            bounce_in: core::ptr::addr_of_mut!(BOUNCE_IN) as u64,
             scratch0: core::ptr::addr_of_mut!(SCRATCH0) as u64,
         }
     };
@@ -2546,6 +2616,15 @@ mod xhci_pack_test {
         assert_eq!(bulk_ep_dci(1, true), 3);
         assert_eq!(ep_ctx_dw1(2, 512) >> 16, 512);
         assert_eq!(ep_ctx_dw4_avg_trb(512), 512);
+        // Toshiba p11: leftover CSW IN (DCI 3) must not match CBW OUT (DCI 4).
+        let csw_in = trb_ctrl(1, TRB_EVENT_TRANSFER, 0) | (1u32 << 24) | (3u32 << 16);
+        let cbw_out = trb_ctrl(1, TRB_EVENT_TRANSFER, 0) | (1u32 << 24) | (4u32 << 16);
+        assert!(!xhci_xfer_matches(csw_in, 1, 4));
+        assert!(xhci_xfer_matches(cbw_out, 1, 4));
+        assert_eq!(xhci_event_dci(csw_in), 3);
+        assert_eq!(xhci_event_dci(cbw_out), 4);
+        assert_eq!(xhci_xfer_diag_cmpl(0, 4, 1), 0x0001_0400);
+        assert_eq!(BOT_SETTLE_SPINS > SPINS, true);
         assert_eq!(xhci_reset_diag_cmpl(64, 26, 0x80, 14), 0x0e80_1a40);
         assert_eq!(CMPL_PARAMETER, 17);
         assert_eq!(CMPL_TIMEOUT, 0xFF);
