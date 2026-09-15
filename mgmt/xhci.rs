@@ -109,10 +109,11 @@ pub const CRCR_CRR: u64 = 1 << 3;
 /// Address Device issues SET_ADDRESS on the wire. Enable Slot does not.
 /// `SPINS` was enough for Enable Slot on iron; Address Device was not.
 pub const ADDR_SPINS: u32 = 50_000_000;
-/// GET_DESC / SET_CONFIG on EP0. Iron `cbd9bf47`: Toshiba p11 device
-/// descriptor succeeded then config GET_DESC `cmd=4 cmpl=0xff` under
-/// [`SPINS`]. Mechanical HDD + leftover SETUP events need Address Device
-/// time, and the wait must be the STATUS TRB (not any Transfer Event).
+/// GET_DESC / SET_CONFIG on EP0. Iron `cbd9bf47` / stop-ep COM2: Toshiba
+/// device descriptor succeeded then config GET_DESC `cmd=4 cmpl=0xff`
+/// `bot=? scsi=?`. Timeout retries must Stop Endpoint (not stack TRBs;
+/// Reset is Halted-only). Mechanical HDD + leftover SETUP events need
+/// Address Device time; wait the STATUS TRB (not any Transfer Event).
 pub const DESC_SPINS: u32 = ADDR_SPINS;
 /// Default control endpoint DCI.
 pub const XHCI_EP0_DCI: u8 = 1;
@@ -1352,6 +1353,38 @@ fn reset_port(hw: &mut impl XhciHw, caps: &XhciCaps, port: u8) -> Result<u32, Us
     Ok(sc)
 }
 
+fn recover_ep(
+    hw: &mut impl XhciHw,
+    caps: &XhciCaps,
+    cmd_ring: &mut Ring,
+    ev: &mut EventRing,
+    ring: &mut Ring,
+    hpa: u64,
+    slot: u8,
+    dci: u8,
+) {
+    hold_bot_diag(|| {
+        drain_events(hw, caps, ev);
+        let extra = xhci_ep_cmd_extra(slot, dci);
+        // Timeout: EP is Running. Stop Endpoint then Set TR Dequeue.
+        // Reset Endpoint is Halted-only (iron first-cbw `cmpl=0x13`).
+        let stop_ok = cmd(hw, caps, cmd_ring, ev, 0, trb_ctrl(0, TRB_STOP_EP, extra)).is_ok();
+        if xhci_ep_recover_need_reset(stop_ok) {
+            let _ = cmd(hw, caps, cmd_ring, ev, 0, trb_ctrl(0, TRB_RESET_EP, extra));
+        }
+        zero_page(hw, hpa);
+        *ring = Ring::new(hpa);
+        let _ = cmd(
+            hw,
+            caps,
+            cmd_ring,
+            ev,
+            hpa | 1,
+            trb_ctrl(0, TRB_SET_TR_DEQ, extra),
+        );
+    });
+}
+
 fn reset_ep0(
     hw: &mut impl XhciHw,
     caps: &XhciCaps,
@@ -1361,19 +1394,7 @@ fn reset_ep0(
     ep0: &mut Ring,
     slot: u8,
 ) {
-    drain_events(hw, caps, ev);
-    let extra = xhci_ep_cmd_extra(slot, 1);
-    let _ = cmd(hw, caps, cmd_ring, ev, 0, trb_ctrl(0, TRB_RESET_EP, extra));
-    zero_page(hw, mem.ep0);
-    *ep0 = Ring::new(mem.ep0);
-    let _ = cmd(
-        hw,
-        caps,
-        cmd_ring,
-        ev,
-        mem.ep0 | 1,
-        trb_ctrl(0, TRB_SET_TR_DEQ, extra),
-    );
+    recover_ep(hw, caps, cmd_ring, ev, ep0, mem.ep0, slot, XHCI_EP0_DCI);
 }
 
 fn control_in_retry(
@@ -1408,8 +1429,12 @@ fn control_in_retry(
     Err(last)
 }
 
+/// Recover EP0 before GET_DESC retry. Timeout leaves EP0 Running — Stop
+/// Endpoint (not Reset). Iron stop-ep COM2: device desc lived, then config
+/// `cmd=4 cmpl=0xff` `bot=? scsi=?` because timeout retries stacked TRBs.
+/// Iron `6ba076cc`: do not Reset Endpoint on timeout (Halted-only).
 fn should_reset_ep0(err: UsbBotError) -> bool {
-    err != UsbBotError::Xfer || usb_bot_last_cmpl() as u8 != CMPL_TIMEOUT
+    matches!(err, UsbBotError::Xfer | UsbBotError::Enum)
 }
 
 fn control_in(
@@ -1623,26 +1648,7 @@ fn reset_bulk_ep(
     slot: u8,
     dci: u8,
 ) {
-    hold_bot_diag(|| {
-        drain_events(hw, caps, ev);
-        let extra = xhci_ep_cmd_extra(slot, dci);
-        // Timeout: EP is Running. Stop Endpoint then Set TR Dequeue.
-        // Reset Endpoint is Halted-only (iron first-cbw `cmpl=0x13`).
-        let stop_ok = cmd(hw, caps, cmd_ring, ev, 0, trb_ctrl(0, TRB_STOP_EP, extra)).is_ok();
-        if xhci_ep_recover_need_reset(stop_ok) {
-            let _ = cmd(hw, caps, cmd_ring, ev, 0, trb_ctrl(0, TRB_RESET_EP, extra));
-        }
-        zero_page(hw, hpa);
-        *ring = Ring::new(hpa);
-        let _ = cmd(
-            hw,
-            caps,
-            cmd_ring,
-            ev,
-            hpa | 1,
-            trb_ctrl(0, TRB_SET_TR_DEQ, extra),
-        );
-    });
+    recover_ep(hw, caps, cmd_ring, ev, ring, hpa, slot, dci);
 }
 
 /// ISP only on the 13-byte CSW short packet. Full-size READ/WRITE IN uses IOC.
@@ -2806,9 +2812,10 @@ mod xhci_pack_test {
         put_u64(&mut read_ptr, 0, 0x4020);
         assert_ne!(xhci_event_trb_ptr(&csw_ptr), xhci_event_trb_ptr(&read_ptr));
         store_usb_bot_diag(UsbBotError::Xfer, 0, 0, u64::from(CMPL_TIMEOUT));
-        assert!(!should_reset_ep0(UsbBotError::Xfer));
+        assert!(should_reset_ep0(UsbBotError::Xfer));
         store_usb_bot_diag(UsbBotError::Xfer, 0, 0, 6);
         assert!(should_reset_ep0(UsbBotError::Xfer));
+        assert!(!should_reset_ep0(UsbBotError::Hub));
         assert_eq!(xhci_reset_diag_cmpl(64, 26, 0x80, 14), 0x0e80_1a40);
         assert_eq!(CMPL_PARAMETER, 17);
         assert_eq!(CMPL_TIMEOUT, 0xFF);
