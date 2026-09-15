@@ -1,0 +1,43 @@
+{
+  "bars": {
+    "a": 42,
+    "b": 18
+  },
+  "baseline_date": "2026-09-14",
+  "baseline_months": 1.5,
+  "confidence": "medium",
+  "docs_url": "https://github.com/vikkp/RayNu/blob/main/docs/loihda.md",
+  "last_commit": "PENDING",
+  "last_commit_short": "PENDING",
+  "last_updated": "2026-09-15",
+  "loi_a_eta_month": "2026-11",
+  "loi_b_eta_month": "2026-12",
+  "loi_path": [
+    "Everest loop (closed)",
+    "persist across HV reboot",
+    "SKU honesty",
+    "TLS for InfoSec",
+    "Bar A dedicated-box LOI",
+    "PERC RAID I/O",
+    "Bar B fleet LOI"
+  ],
+  "loi_target": "Non-prod Letter of Intent. Bar A = dedicated-box lab. Bar B = RAID-fleet replacement. HDA 99% is Everest, not an LOI.",
+  "loihda_version": 1,
+  "months_to_loi_a": 1.5,
+  "months_to_loi_a_prev": 1.5,
+  "months_to_loi_b": 3.5,
+  "months_to_loi_b_prev": 3.5,
+  "overall_pct": 38,
+  "pieces": {
+    "auth": 28,
+    "console": 22,
+    "everest": 100,
+    "perc": 15,
+    "persist": 70,
+    "sku": 25,
+    "tls": 8,
+    "unmodified": 20
+  },
+  "source": "docs/loihda.md",
+  "updated_by": "cursor"
+}

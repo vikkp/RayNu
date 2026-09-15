@@ -224,19 +224,24 @@ pub fn store_usb_bot_diag_unless_kept(err: UsbBotError, bar: u64, portsc: u64, c
 
 /// xHCI software timeout (`consume_transfer` spun out). Not a real CC.
 pub const USB_BOT_CMPL_TIMEOUT: u8 = 0xFF;
+/// xHCI Context State Error (CC 19). Iron first-cbw CAPACITY CBW: Reset
+/// Endpoint on a Running EP after timeout stamped this over `cmpl=0xff`.
+pub const USB_BOT_CMPL_CONTEXT_STATE: u8 = 19;
 
-/// Reset Endpoint after DATA/CSW fail (pending IN TRB). Do **not** reset
-/// after a CBW fail with a real completion — iron `96024edc` READ
+/// Recover pipes after DATA/CSW fail (pending IN TRB). Do **not** recover
+/// after a CBW fail with a leftover completion — iron `96024edc` READ
 /// `bot=cbw cmpl=0` plus `73dc4d2e` showed Reset Endpoint on a live OUT
 /// pipe kills the next command. Iron `6ba076cc`: SET_CONFIG + CAPACITY
 /// held, then READ CBW **timeout** `cmpl=0xff` — retry stacked a second
 /// CBW behind a still-pending TRB. Timeout (not leftover `cmpl=0`)
-/// resets pipes so the retry has a clean OUT ring.
+/// stops the EP so the retry has a clean OUT ring. Iron first-cbw:
+/// `cmpl=0x13` after timeout was Reset Endpoint on Running (illegal).
 pub fn usb_bot_recover_after_fail(stage: u8) -> bool {
     if stage != BOT_STAGE_CBW {
         return true;
     }
-    usb_bot_last_cmpl() as u8 == USB_BOT_CMPL_TIMEOUT
+    let c = usb_bot_last_cmpl() as u8;
+    c == USB_BOT_CMPL_TIMEOUT || c == USB_BOT_CMPL_CONTEXT_STATE
 }
 
 fn stamp_scsi_cdb(cdb: &[u8]) {
@@ -339,8 +344,10 @@ fn bot_cmd_retry(
 /// skip INQUIRY then `bot=cbw scsi=capacity cmpl=0xff` — first bulk OUT
 /// after SET_CONFIG with no settle/INQUIRY. Toshiba is a spinning HDD:
 /// settle + waited INQUIRY (recover_pipes on fail, never ignore). Retry
-/// CAPACITY with `recover_pipes` on DATA/CSW timeout. Do not claim ready
-/// until a data-stage READ completes.
+/// CAPACITY with `recover_pipes` on DATA/CSW timeout. Iron first-cbw:
+/// `cmpl=0x13` was Reset Endpoint on a Running EP after CBW timeout —
+/// Stop Endpoint first (Halted-only Reset). Do not claim ready until a
+/// data-stage READ completes.
 pub fn usb_bot_bring_up(hw: &mut impl UsbBulk, min_bytes: u64) -> Result<(u64, u32), UsbBotError> {
     hw.settle();
     let mut tag = 1u32;
@@ -481,6 +488,15 @@ pub fn store_usb_bot_stage(stage: u8) {
 
 pub fn store_usb_bot_diag(err: UsbBotError, bar: u64, portsc: u64, cmpl: u64) {
     LAST_ERR.store(err as u8, Ordering::Release);
+    LAST_BAR.store(bar, Ordering::Release);
+    LAST_PORTSC.store(portsc, Ordering::Release);
+    LAST_CMPL.store(cmpl, Ordering::Release);
+}
+
+/// Restore BOT diag after Stop/Reset Endpoint so command CC 19 does not
+/// clobber `bot=cbw scsi=capacity cmpl=0xff`. Iron first-cbw `cmpl=0x13`.
+pub fn restore_usb_bot_diag(err: u8, bar: u64, portsc: u64, cmpl: u64) {
+    LAST_ERR.store(err, Ordering::Release);
     LAST_BAR.store(bar, Ordering::Release);
     LAST_PORTSC.store(portsc, Ordering::Release);
     LAST_CMPL.store(cmpl, Ordering::Release);
