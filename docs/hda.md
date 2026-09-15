@@ -357,7 +357,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Commit | m8-usb-cap-csw |
 | Summary | **Iron leftover, not persist.** COM2 `0780df21` leftover Everest: coexist HTTP-OK `10.99.99.145:8443` → SPA Start → `ISO-INSTALL-OK` → F7 `DISK-BOOT-OK` → login `root=UUID=1bc8b57d-…`. USB SET_CONFIG then CAPACITY CSW timeout `cmpl=0xff`. `vda` 1.07 GiB leftover. This EFI: drop ignored INQUIRY; retry CAPACITY with `recover_pipes` on CSW timeout. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. No persist gate. |
-| Gates touched | `usb_bot.rs` skip INQUIRY + `bot_cmd_retry` CAPACITY; [m8_persist_iron.md](runbooks/m8_persist_iron.md). `./tools/sync-hda-site.sh --check`. |
+| Gates touched | `usb_bot.rs` skip INQUIRY + `bot_cmd_retry` CAPACITY; host gate needle `Do not send START STOP or`; [m8_persist_iron.md](runbooks/m8_persist_iron.md). `./tools/sync-hda-site.sh --check`. |
 | Months Δ | 0.0 held (Everest closed; iron Force Off still open) |
 
 
@@ -381,7 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
-| 2026-09-15 | m8-usb-cap-csw | 0.0 | 99 | **Iron leftover, not persist:** COM2 `0780df21` leftover Everest. Coexist HTTP-OK → SPA → `ISO-INSTALL-OK` → `DISK-BOOT-OK` → login `root=UUID=1bc8b57d-…`. USB SET_CONFIG then CAPACITY CSW `cmpl=0xff`. This EFI: drop ignored INQUIRY; retry CAPACITY with `recover_pipes`. Nested QEMU ≠ R640. Iron persist open. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |
+| 2026-09-15 | m8-usb-cap-csw | 0.0 | 99 | **Iron leftover, not persist:** COM2 `0780df21` leftover Everest. Coexist HTTP-OK → SPA → `ISO-INSTALL-OK` → `DISK-BOOT-OK` → login `root=UUID=1bc8b57d-…`. USB SET_CONFIG then CAPACITY CSW `cmpl=0xff`. This EFI: drop ignored INQUIRY; retry CAPACITY with `recover_pipes`; restore host-gate needle `Do not send START STOP or`. Nested QEMU ≠ R640. Iron persist open. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |
 | 2026-09-15 | m8-nic-dhcp-nolease | 0.0 | 99 | **Iron leftover, not persist:** COM2 `6ba076cc` leftover Everest. SET_CONFIG + CAPACITY then READ CBW `cmpl=0xff`. SNP DHCP failed → analog/coexist skip → Phase B idle `SPA Start needs HTTP`. This EFI: native BCM5720 DHCP without SNP lease; analog always post-EBS; CBW timeout recovers pipes. Nested QEMU ≠ R640. Iron persist open. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |
 | 2026-09-15 | m8-usb-ep0-status | 0.0 | 99 | **Iron leftover, not persist:** COM2 `cbd9bf47` leftover Everest `root=UUID=35bfa02f-…`. p11 GET_DESC `cmd=4 cmpl=0xff` (`bot=?`). This EFI: STATUS TRB ptr + `DESC_SPINS` + no EP0 reset on timeout. Nested QEMU ≠ R640. Iron persist open. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |
 | 2026-09-15 | m8-usb-bot-read-cbw | 0.0 | 99 | **Iron leftover, not persist:** Port `96024edc` second COM2 leftover Everest. SET_CONFIG held; `bot=cbw scsi=read cmpl=0` after CAPACITY (leftover IN event retired CBW). This EFI: slot+DCI Transfer Event match; IN bounce; no Reset EP on CBW fail; settle after CAPACITY. Nested QEMU ≠ R640. Iron persist open. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |

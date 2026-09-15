@@ -328,13 +328,14 @@ fn bot_cmd_retry(
     Err(last)
 }
 
-/// READ CAPACITY(10) + one native READ. No INQUIRY / TUR / START STOP.
-/// Iron `6c278e85`: CAPACITY printed `usb I/O ready` then peek READ timed out.
-/// Iron `73dc4d2e`: START STOP (Immed=0) + ignored timeout + auto EP-reset
-/// failed CSW before ready. Iron `68e16633`: `scsi=tur bot=cbw` was the
-/// READ-probe recovery TUR (stamped over the READ fail) plus p14 hub
-/// `cmpl=0` clobber — not "LUN stayed on p10". Iron `6ba076cc`: CAPACITY
-/// held, READ CBW `cmpl=0xff`. Iron `0780df21`: SET_CONFIG held then
+/// READ CAPACITY(10) + one native READ. Do not send START STOP or
+/// INQUIRY / TUR. Iron `6c278e85`: CAPACITY printed `usb I/O ready`
+/// then peek READ timed out. Iron `73dc4d2e`: START STOP (Immed=0) +
+/// ignored timeout + auto EP-reset failed CSW before ready. Iron
+/// `68e16633`: `scsi=tur bot=cbw` was the READ-probe recovery TUR
+/// (stamped over the READ fail) plus p14 hub `cmpl=0` clobber — not
+/// "LUN stayed on p10". Iron `6ba076cc`: CAPACITY held, READ CBW
+/// `cmpl=0xff`. Iron `0780df21`: SET_CONFIG held then
 /// `bot=csw scsi=capacity cmpl=0xff` — ignored INQUIRY can leave a
 /// pending IN TRB so CAPACITY CSW times out. Retry CAPACITY with
 /// `recover_pipes` on DATA/CSW timeout. Do not claim ready until a
