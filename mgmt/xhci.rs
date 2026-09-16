@@ -31,6 +31,11 @@ pub const TRB_SETUP: u32 = 2;
 pub const TRB_DATA: u32 = 3;
 pub const TRB_STATUS: u32 = 4;
 pub const TRB_LINK: u32 = 6;
+/// No-Op Command (xHCI 6.4.6 type 23). Transfer No-Op is type 8.
+/// Iron p11first COM2: first Enable Slot after HCRST never posted
+/// (`cmd=2 cmpl=0xff`, abort crr=0) then p14 hub enumerated. Prime the
+/// command ring so Toshiba is not the lost first doorbell.
+pub const TRB_NO_OP_CMD: u32 = 23;
 pub const TRB_ENABLE_SLOT: u32 = 9;
 pub const TRB_DISABLE_SLOT: u32 = 10;
 pub const TRB_ADDRESS_DEV: u32 = 11;
@@ -120,7 +125,9 @@ pub const CRCR_CA: u64 = 1 << 2;
 pub const CRCR_CRR: u64 = 1 << 3;
 
 /// Address Device issues SET_ADDRESS on the wire. Enable Slot does not.
-/// `SPINS` was enough for Enable Slot on iron; Address Device was not.
+/// Iron p11first COM2: first Enable Slot after HCRST used `SPINS` and
+/// printed `cmd=2 cmpl=0xff` (doorbell lost; abort crr=0). Wait
+/// ADDR_SPINS and retry Enable Slot on the same port.
 pub const ADDR_SPINS: u32 = 50_000_000;
 /// GET_DESC / SET_CONFIG on EP0. Iron ep0-stop COM2: Toshiba device
 /// descriptor lived (18-byte exact) then 9-byte config GET_DESC
@@ -440,8 +447,27 @@ pub fn xhci_event_trb_ptr(ev: &[u8; 16]) -> u64 {
 /// Device abort retired CONFIG_EP (`cmd=5 cmpl=0` `bot=?`). recover_enum
 /// Disable Slot'd the Toshiba slot and the mapper printed need-media —
 /// looks like "no device". Do not match any command event.
+///
+/// Iron p11first COM2: first Enable Slot after HCRST never posted. Some
+/// Lewisburg completions arrive with Command TRB Pointer 0 on Success.
+/// Accept ptr=0 only on Success so leftover Invalid (CC=0) still cannot
+/// retire CONFIG_EP.
 pub fn xhci_cmd_event_matches(ev: &[u8; 16], want_ptr: u64) -> bool {
-    want_ptr != 0 && xhci_event_trb_ptr(ev) == (want_ptr & !0xF)
+    if want_ptr == 0 {
+        return false;
+    }
+    let p = xhci_event_trb_ptr(ev);
+    if p == (want_ptr & !0xF) {
+        return true;
+    }
+    p == 0 && trb_cmpl_code(get_u32(ev, 8)) == CMPL_SUCCESS
+}
+
+/// Iron p11first COM2: first Enable Slot timed out (`cmd=2 cmpl=0xff`)
+/// then abort crr=0 and p14 hub enumerated. Retry Enable Slot on the
+/// same CCS port after abort; do not walk to the hub.
+pub fn xhci_retry_enable_slot(first_posted: bool) -> bool {
+    !first_posted
 }
 
 /// SETUP TRB flags: Immediate Data + TRT (IN=3, no-data=0). No Chain —
@@ -1116,6 +1142,20 @@ fn serial_xhci_p11first() {
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_nop() {
+    use crate::boot::serial;
+    serial::write_line("boot: Stage 46 xhci nop (not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_slotretry(port: u8) {
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 xhci slotretry p");
+    serial_dec_u8(port);
+    serial::write_line(" (not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn serial_xhci_abort(crr: u8) {
     use crate::boot::serial;
     serial::write_str("boot: Stage 46 xhci abort crr=");
@@ -1312,6 +1352,12 @@ fn serial_xhci_toshiba_named(_port: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_p11first() {}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_nop() {}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_slotretry(_port: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_abort(_crr: u8) {}
@@ -1667,6 +1713,51 @@ fn abort_cmd_ring(
     *cmd_ring = Ring::new(mem.cmd);
     write64(hw, off, crcr_restart(mem.cmd));
     !crcr_is_running(read64(hw, off))
+}
+
+/// Prime the command ring with a No-Op after HCRST+RS. Iron p11first COM2:
+/// the first Enable Slot doorbell was lost (`cmd=2 cmpl=0xff`); abort then
+/// p14 enumerated. A failed No-Op aborts so Toshiba is not the lost first
+/// command. Do not stamp BOT diag — this is warmup, not enum fail.
+fn prime_cmd_ring(
+    hw: &mut impl XhciHw,
+    caps: &XhciCaps,
+    mem: &XhciMem,
+    cmd_ring: &mut Ring,
+    ev: &mut EventRing,
+) {
+    serial_xhci_nop();
+    hold_bot_diag(|| {
+        let extra = trb_ctrl(0, TRB_NO_OP_CMD, 0);
+        if cmd_wait(hw, caps, cmd_ring, ev, 0, extra, ADDR_SPINS).is_err() {
+            recover_enum(hw, caps, mem, cmd_ring, ev, 0);
+        }
+    });
+}
+
+/// Enable Slot after HCRST. Iron p11first COM2: first doorbell lost on p11
+/// (`cmd=2 cmpl=0xff`, abort crr=0) then the walk named p14 hub instead of
+/// Toshiba. Wait ADDR_SPINS; on fail abort and retry once on the same port.
+fn enable_slot(
+    hw: &mut impl XhciHw,
+    caps: &XhciCaps,
+    mem: &XhciMem,
+    cmd_ring: &mut Ring,
+    ev: &mut EventRing,
+    port: u8,
+) -> Result<[u8; 16], UsbBotError> {
+    let extra = trb_ctrl(0, TRB_ENABLE_SLOT, 0);
+    match cmd_wait(hw, caps, cmd_ring, ev, 0, extra, ADDR_SPINS) {
+        Ok(ev_en) => Ok(ev_en),
+        Err(_) => {
+            recover_enum(hw, caps, mem, cmd_ring, ev, 0);
+            serial_xhci_slotretry(port);
+            cmd_wait(hw, caps, cmd_ring, ev, 0, extra, ADDR_SPINS).map_err(|e2| {
+                recover_enum(hw, caps, mem, cmd_ring, ev, 0);
+                e2
+            })
+        }
+    }
 }
 
 /// Address Device that never completes leaves CRR=1. The next CCS port's
@@ -2702,10 +2793,8 @@ fn try_port(
             UsbBotError::Enum,
         ));
     };
-    let ev_en = cmd(hw, caps, cmd_ring, ev, 0, trb_ctrl(0, TRB_ENABLE_SLOT, 0)).map_err(|e| {
-        recover_enum(hw, caps, mem, cmd_ring, ev, 0);
-        stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_SLOT, e)
-    })?;
+    let ev_en = enable_slot(hw, caps, mem, cmd_ring, ev, port)
+        .map_err(|e| stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_SLOT, e))?;
     let slot = event_slot(&ev_en);
     if slot == 0 {
         recover_enum(hw, caps, mem, cmd_ring, ev, 0);
@@ -3034,6 +3123,7 @@ fn xhci_bring_up(
     let mut any_ccs = false;
     let ports = xhci_scan_ports(caps.max_ports);
     serial_xhci_p11first();
+    prime_cmd_ring(hw, &caps, mem, &mut cmd_ring, &mut ev);
     for idx in 0..ports {
         let Some(port) = xhci_enum_port_at(ports, idx) else {
             break;
@@ -3849,6 +3939,17 @@ mod xhci_pack_test {
         assert!(!xhci_cmd_event_matches(&leftover_cc0, 0x2000));
         assert!(xhci_cmd_event_matches(&config_ep_trb, 0x2000));
         assert!(!xhci_cmd_event_matches(&config_ep_trb, 0));
+        // Iron p11first: Lewisburg Success with Command TRB Pointer 0
+        // must match; leftover Invalid CC=0 ptr=0 must not.
+        let leftover_cc0_ptr0 = [0u8; 16];
+        assert!(!xhci_cmd_event_matches(&leftover_cc0_ptr0, 0x2000));
+        let mut success_ptr0 = [0u8; 16];
+        put_u32(&mut success_ptr0, 8, u32::from(CMPL_SUCCESS) << 24);
+        assert!(xhci_cmd_event_matches(&success_ptr0, 0x2000));
+        assert!(!xhci_cmd_event_matches(&success_ptr0, 0));
+        assert_eq!(TRB_NO_OP_CMD, 23);
+        assert!(xhci_retry_enable_slot(false));
+        assert!(!xhci_retry_enable_slot(true));
         assert!(cmd_cc_ring_stopped(CMPL_CMD_STOPPED));
         assert!(cmd_cc_ring_stopped(CMPL_CMD_ABORTED));
         assert!(!cmd_cc_ring_stopped(0));
