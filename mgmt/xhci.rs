@@ -11,11 +11,11 @@
 //! ADR-004: persist backing is virtio-blk / BlockIo only.
 
 use super::usb_bot::{
-    cdb_inquiry, csw_ok, next_bot_tag, restore_usb_bot_diag, stamp_scsi_cdb, store_usb_bot_diag,
+    csw_ok, next_bot_tag, restore_usb_bot_diag, stamp_scsi_cdb, store_usb_bot_diag,
     store_usb_bot_diag_unless_kept, store_usb_bot_ready, store_usb_bot_stage, usb_bot_bring_up,
     usb_bot_last_bar, usb_bot_last_cmpl, usb_bot_last_err, usb_bot_last_portsc, usb_bot_last_stage,
     usb_bot_stage_name, Cbw, UsbBotError, UsbBulk, BOT_STAGE_CBW, BOT_STAGE_CSW, BOT_STAGE_DATA,
-    CBW_LEN, CSW_LEN,
+    CBW_LEN, CSW_LEN, SCSI_READ_CAPACITY_10,
 };
 
 /// Same window as [`crate::mgmt::durable_lun::usb_is_esp_cruzer_window`].
@@ -1104,6 +1104,14 @@ fn serial_xhci_firstread(port: u8) {
     use crate::boot::serial;
     serial::write_str("boot: Stage 46 xhci firstread p");
     serial_dec_u8(port);
+    serial::write_line(" overlap (not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_capoverlap(port: u8) {
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 xhci capoverlap p");
+    serial_dec_u8(port);
     serial::write_line(" (not ISO-INSTALL-OK)");
 }
 
@@ -1213,6 +1221,9 @@ fn serial_xhci_firstcbw(_port: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_firstread(_port: u8) {}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_capoverlap(_port: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_eval(_port: u8, _mps: u16, _ok: bool) {}
@@ -2375,17 +2386,19 @@ impl UsbBulk for LiveXhci {
         self.arm_first_bulk(false);
     }
 
-    fn first_inquiry(&mut self, tag: u32, buf: &mut [u8]) -> Result<(), UsbBotError> {
-        // Iron skipmaxlun COM2: `maxlun skip` + Running EPs then INQUIRY
-        // CBW never posted a Transfer Event. Arm CBW OUT and DATA IN
-        // before waiting (either order). Not ISP-on-every-IN; this path
-        // only. Keep skip GET_MAX_LUN / norearm.
-        if buf.len() != 36 {
+    fn overlapped_in(&mut self, tag: u32, cdb: &[u8], buf: &mut [u8]) -> Result<(), UsbBotError> {
+        // Iron overlap COM2: INQUIRY overlap lived (`xhci firstcbw overlap`)
+        // then sequential CAPACITY CBW `cmpl=0xff`. Overlap every IN BOT
+        // command (CAPACITY + READ too). Keep skip GET_MAX_LUN / norearm.
+        if buf.is_empty() || buf.len() > 4096 {
             return Err(UsbBotError::Xfer);
         }
-        let cdb = cdb_inquiry();
-        let cbw = Cbw::scsi(tag, 36, true, 0, &cdb);
-        stamp_scsi_cdb(&cdb);
+        if cdb.first().copied().unwrap_or(0) == SCSI_READ_CAPACITY_10 {
+            serial_xhci_capoverlap(self.port);
+        }
+        let data_len = buf.len() as u32;
+        let cbw = Cbw::scsi(tag, data_len, true, 0, cdb);
+        stamp_scsi_cdb(cdb);
         store_usb_bot_stage(BOT_STAGE_CBW);
         let mut hw = MmioXhci { base: self.mmio };
         drain_events(&mut hw, &self.caps, &mut self.ev);
@@ -2397,11 +2410,11 @@ impl UsbBulk for LiveXhci {
             trb_ctrl(0, TRB_NORMAL, TRB_IOC | TRB_ISP),
         );
         let z = [0u8; 4096];
-        hw.dma_write(self.bounce_in, &z[..36]);
+        hw.dma_write(self.bounce_in, &z[..buf.len()]);
         let _trb_in = self.bulk_in.place(
             &mut hw,
             self.bounce_in,
-            36,
+            data_len,
             trb_ctrl(0, TRB_NORMAL, TRB_IOC | TRB_ISP),
         );
         doorbell(&mut hw, self.caps.db, self.slot, self.dci_out);
