@@ -310,6 +310,13 @@ pub fn xhci_enum_diag_cmpl(cmpl: u8, cmd: u8, speed: u8, csz: bool) -> u64 {
     u64::from(cmpl) | (u64::from(cmd) << 8) | (u64::from(speed) << 16) | (u64::from(csz) << 24)
 }
 
+/// Command Completion Code 0 is Invalid (xHCI Table 6-91). Iron capoverlap
+/// COM2: SET_CONFIG lived then CONFIG_EP `cmd=5 cmpl=0` `err=3 bot=?`.
+/// Do not treat that leftover as the Configure Endpoint result.
+pub fn cmd_cc_invalid(code: u8) -> bool {
+    code == 0
+}
+
 /// PORTSC-scan / reset_port LAST_CMPL. Low byte is MaxSlots (`0x40` on Lewisburg).
 pub fn xhci_reset_diag_cmpl(max_slots: u8, max_ports: u8, op: u32, port: u8) -> u64 {
     u64::from(max_slots)
@@ -1030,6 +1037,24 @@ fn serial_xhci_setcfg(port: u8, cfg: u8) {
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_config(port: u8) {
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 xhci config p");
+    serial_dec_u8(port);
+    serial::write_line(" (not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_cfgretry(port: u8, n: u8) {
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 xhci cfgretry p");
+    serial_dec_u8(port);
+    serial::write_str(" n=");
+    serial_dec_u8(n);
+    serial::write_line(" (not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn serial_xhci_eval(port: u8, mps: u16, ok: bool) {
     use crate::boot::serial;
     serial::write_str("boot: Stage 46 xhci eval p");
@@ -1203,6 +1228,12 @@ fn serial_xhci_bot_eps(_port: u8, _ep_out: u8, _ep_in: u8, _cfg: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_setcfg(_port: u8, _cfg: u8) {}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_config(_port: u8) {}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_cfgretry(_port: u8, _n: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_desc_retry(_port: u8, _n: u8) {}
@@ -1394,6 +1425,9 @@ fn consume_posted(
                     continue;
                 }
                 let code = trb_cmpl_code(get_u32(&t, 8));
+                if want_type == TRB_EVENT_CMD && cmd_cc_invalid(code) {
+                    continue;
+                }
                 if code != CMPL_SUCCESS && code != CMPL_SHORT {
                     let err = xhci_event_err(want_type);
                     let cmpl = if want_type == TRB_EVENT_TRANSFER {
@@ -2723,19 +2757,58 @@ fn try_port(
     hw.dma_write(mem.inctx, &ic);
     zero_page(hw, mem.bulk_out);
     zero_page(hw, mem.bulk_in);
-    cmd_wait(
-        hw,
-        caps,
-        cmd_ring,
-        ev,
-        mem.inctx,
-        trb_ctrl(0, TRB_CONFIG_EP, u32::from(slot) << 24),
-        ADDR_SPINS,
-    )
-    .map_err(|e| {
+    // Iron capoverlap COM2: SET_CONFIG lived then CONFIG_EP `cmd=5 cmpl=0`
+    // `err=3 bot=? scsi=?`. Leftover Invalid command event (CC=0) can retire
+    // Configure Endpoint. Drain, skip CC=0, retry once with a fresh ring.
+    serial_xhci_config(port);
+    drain_events(hw, caps, ev);
+    let mut cfg_err = UsbBotError::Enum;
+    let mut cfg_ok = false;
+    for n in 0u8..2 {
+        if n > 0 {
+            serial_xhci_cfgretry(port, n);
+            abort_cmd_ring(hw, caps, mem, cmd_ring, ev);
+            hw.dma_read(mem.devctx, &mut outctx);
+            zero_page(hw, mem.inctx);
+            fill_config_ep_input(
+                &mut ic,
+                &outctx,
+                cs,
+                speed,
+                port,
+                dci_out,
+                dci_in,
+                ep0.tr_dequeue(),
+                mem.bulk_out,
+                mem.bulk_in,
+                mps_out,
+                mps_in,
+                ep0_mps,
+            );
+            hw.dma_write(mem.inctx, &ic);
+            zero_page(hw, mem.bulk_out);
+            zero_page(hw, mem.bulk_in);
+        }
+        match cmd_wait(
+            hw,
+            caps,
+            cmd_ring,
+            ev,
+            mem.inctx,
+            trb_ctrl(0, TRB_CONFIG_EP, u32::from(slot) << 24),
+            ADDR_SPINS,
+        ) {
+            Ok(_) => {
+                cfg_ok = true;
+                break;
+            }
+            Err(e) => cfg_err = e,
+        }
+    }
+    if !cfg_ok {
         recover_enum(hw, caps, mem, cmd_ring, ev, slot);
-        stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_CFG, e)
-    })?;
+        return Err(stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_CFG, cfg_err));
+    }
     drain_events(hw, caps, ev);
     hw.dma_read(mem.devctx, &mut outctx);
     serial_xhci_epst(
@@ -3666,6 +3739,13 @@ mod xhci_pack_test {
         assert_eq!(XHCI_ENUM_CMD_CFG, 5);
         assert_eq!(XHCI_ENUM_CMD_SETCFG, 6);
         assert_eq!(XHCI_ENUM_CMD_EVAL, 7);
+        assert!(cmd_cc_invalid(0));
+        assert!(!cmd_cc_invalid(CMPL_SUCCESS));
+        // Iron capoverlap COM2: fail `cmpl=0x30500` is CC=0 + cmd=5 + speed=3.
+        assert_eq!(
+            xhci_enum_diag_cmpl(0, XHCI_ENUM_CMD_CFG, 3, false),
+            0x0003_0500
+        );
         assert_eq!(TRB_EVALUATE_CTX, 13);
         assert_eq!(TRB_CONFIG_EP, 12);
         assert_eq!(bulk_ep_dci(2, false), 4);
