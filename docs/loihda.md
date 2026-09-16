@@ -123,7 +123,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 **Product effect.** “Install Linux” without persist is a demo that dies when the operator Force Offs the box — which they will, because that is how you recover a Type-1. Nested File persist (`ce3d8a09`) and DurableLun USB/NVMe I/O are the mechanism. Iron Force Off is still open. USB ≥ 16 GiB (not the ESP Cruzer / 2–8 GiB UDisk) is the Toshiba LUN. Nested QEMU ≠ R640.
 
-**Iron NOW (not a score bump).** Capoverlap COM2: p11 Toshiba named, `xhci setcfg p11 val=1` then `xhci enum p11 cmd=5 cmpl=0` (`err=3 bot=? scsi=?` packed `cmpl=0x30500` = CC=0). BOT never started — leftover Invalid command event retired CONFIG_EP. Leftover 1 GiB ≠ persist. This EFI: drain + skip CC=0 + CONFIG_EP retry (`xhci config` / `xhci cfgretry`). Keep skip GET_MAX_LUN + INQUIRY/CAPACITY overlap. Do not Force Off leftover DRAM.
+**Iron NOW (not a score bump).** Capoverlap COM2: p11 Toshiba **was named** (`0480:a004`), `xhci setcfg p11 val=1` then `xhci enum p11 cmd=5 cmpl=0` (`err=3 bot=? scsi=?`). Leftover Invalid command event retired CONFIG_EP; recover_enum Disable Slot'd the slot; mapper printed need-media — looks like "no device". Recover/DESC-retry `usb I/O ready` ~298 GiB is the regression vs leftover-cmd matching. This EFI: match Command Completion by TRB pointer (`xhci cmdptr`). Keep skip GET_MAX_LUN + overlap + CONFIG_EP retry. Do not Force Off leftover DRAM.
 
 **Honest remainder.** 30% is iron COM2 `RAYNU-V-M8-DISK-PERSIST-OK`. Do not F11 until `I/O ready` + virtio on the LUN.
 
@@ -171,7 +171,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 |------|-------|------|--------|
 | 2026-09-11 | Everest | Iron ISO → disk → login | **DONE** — HDA 99%, months 0.0 |
 | 2026-09-13 | Persist mechanism | Nested-OK + DurableLun USB/NVMe I/O | **DONE nested / host**; iron Force Off **open** |
-| **NOW** | Bar A A2 | USB/NVMe Force Off on COM2 | **NEXT** (capoverlap COM2 SET_CONFIG then CONFIG_EP `cmd=5 cmpl=0` `bot=?`; leftover 1 GiB ≠ persist) |
+| **NOW** | Bar A A2 | USB/NVMe Force Off on COM2 | **NEXT** (capoverlap COM2 Toshiba named then CONFIG_EP leftover CC=0; not "device missing"; leftover 1 GiB ≠ persist) |
 | then | Bar A A3+A4 | SKU card + TLS | design overlap OK; do not close TLS before persist COM2 |
 | then | Bar B B2 | Spare PERC VD persist | after A2; census skip is lab safety |
 | later | Auth / console / unmodified ISO | A5, A6, Gen-1 Phase 2 | named residuals, not fake closes |
@@ -202,11 +202,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-usb-bot-cfg-retry |
-| Summary | **Iron leftover, not persist.** Capoverlap COM2: SET_CONFIG then CONFIG_EP `cmd=5 cmpl=0` `err=3 bot=?`. BOT never started. This EFI: drain + skip CC=0 + CONFIG_EP retry. Scores **held**. |
+| Commit | m8-usb-bot-cmdptr |
+| Summary | **Iron leftover, not persist.** Capoverlap COM2 named Toshiba p11 then CONFIG_EP `cmd=5 cmpl=0` `bot=?`. Not device-missing — leftover cmd event. This EFI: Command TRB Pointer match. Scores **held**. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Bar A **42% held** / Bar B **18% held** / overall **38% held** / months A **1.5 held**. Persist piece **70% held**. A2 still open. |
-| Gates touched | `xhci.rs` CONFIG_EP drain/skip-CC=0/retry; [loihda.md](loihda.md). `./tools/sync-loihda-site.sh --check`. No MegaRAID. No TLS. No F11. |
+| Gates touched | `xhci.rs` Command TRB Pointer match; [loihda.md](loihda.md). `./tools/sync-loihda-site.sh --check`. No MegaRAID. No TLS. No F11. |
 
 ---
 
@@ -214,6 +214,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-16 | m8-usb-bot-cmdptr | 42 | 18 | **Iron leftover, not persist.** Capoverlap COM2 named Toshiba p11 then CONFIG_EP `cmd=5 cmpl=0` `bot=?`. Not device-missing — leftover cmd event + Disable Slot. This EFI: Command TRB Pointer match. Persist 70% held. A2 open. |
 | 2026-09-16 | m8-usb-bot-cfg-retry | 42 | 18 | **Iron leftover, not persist.** Capoverlap COM2 SET_CONFIG then CONFIG_EP `cmd=5 cmpl=0` `err=3 bot=?`. BOT never started. This EFI: drain + skip CC=0 + CONFIG_EP retry. Persist 70% held. A2 open. |
 | 2026-09-16 | m8-usb-bot-cap-overlap | 42 | 18 | **Iron leftover, not persist.** Overlap COM2 `xhci firstcbw overlap` then CAPACITY CBW `cmpl=0xff`. INQUIRY overlap lived. This EFI: overlap CAPACITY + READ IN. Persist 70% held. A2 open. |
 | 2026-09-16 | m8-usb-bot-inq-overlap | 42 | 18 | **Iron leftover, not persist.** Skipmaxlun COM2 `xhci maxlun skip` + `epst ep0=1` then INQUIRY CBW `cmpl=0xff`. EP0-Stopped is falsified. This EFI: overlap first INQUIRY CBW+DATA IN. Persist 70% held. A2 open. |
