@@ -123,7 +123,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 **Product effect.** “Install Linux” without persist is a demo that dies when the operator Force Offs the box — which they will, because that is how you recover a Type-1. Nested File persist (`ce3d8a09`) and DurableLun USB/NVMe I/O are the mechanism. Iron Force Off is still open. USB ≥ 16 GiB (not the ESP Cruzer / 2–8 GiB UDisk) is the Toshiba LUN. Nested QEMU ≠ R640.
 
-**Iron NOW (not a score bump).** Firstcbw COM2: p11 Toshiba named, `xhci epst` Running, `botrst`, `maxlun val=0`, `xhci firstcbw p11`, then `usb I/O fail err=8 bot=cbw scsi=inquiry cmpl=0xff` leftover 1 GiB. 800M wait + Stop+rearm did not retire the CBW. This EFI: `xhci firstcbw norearm` — long wait, keep CONFIG_EP dequeue. Do not Force Off leftover DRAM.
+**Iron NOW (not a score bump).** Norearm COM2: p11 Toshiba named, CONFIG_EP `epst ep0=1 out=1 in=1`, `botrst`, GET_MAX_LUN `val=0`, then `epst ep0=3 out=1 in=1` before `xhci firstcbw p11 norearm`. INQUIRY CBW `cmpl=0xff` leftover 1 GiB. GET_MAX_LUN DATA-then-Stop left EP0 Stopped. This EFI: skip optional GET_MAX_LUN (`xhci maxlun pN skip`) so EP0 stays Running before first CBW. Do not Force Off leftover DRAM.
 
 **Honest remainder.** 30% is iron COM2 `RAYNU-V-M8-DISK-PERSIST-OK`. Do not F11 until `I/O ready` + virtio on the LUN.
 
@@ -171,7 +171,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 |------|-------|------|--------|
 | 2026-09-11 | Everest | Iron ISO → disk → login | **DONE** — HDA 99%, months 0.0 |
 | 2026-09-13 | Persist mechanism | Nested-OK + DurableLun USB/NVMe I/O | **DONE nested / host**; iron Force Off **open** |
-| **NOW** | Bar A A2 | USB/NVMe Force Off on COM2 | **NEXT** (ep0-eval SET_CONFIG then CAPACITY CBW `err=8`; leftover 1 GiB ≠ persist) |
+| **NOW** | Bar A A2 | USB/NVMe Force Off on COM2 | **NEXT** (norearm COM2 `epst ep0=3` after GET_MAX_LUN then INQUIRY `cmpl=0xff`; leftover 1 GiB ≠ persist) |
 | then | Bar A A3+A4 | SKU card + TLS | design overlap OK; do not close TLS before persist COM2 |
 | then | Bar B B2 | Spare PERC VD persist | after A2; census skip is lab safety |
 | later | Auth / console / unmodified ISO | A5, A6, Gen-1 Phase 2 | named residuals, not fake closes |
@@ -202,11 +202,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-usb-bot-norearm |
-| Summary | **Iron leftover, not persist.** Firstcbw COM2: `xhci firstcbw` then INQUIRY CBW `cmpl=0xff`. Rearm before unused CBW did not help. This EFI: norearm + long wait. Scores **held**. |
+| Commit | m8-usb-bot-skipmaxlun |
+| Summary | **Iron leftover, not persist.** Norearm COM2: `xhci firstcbw norearm` then `epst ep0=3` after GET_MAX_LUN DATA-then-Stop; INQUIRY CBW `cmpl=0xff`. This EFI: skip optional GET_MAX_LUN so EP0 stays Running. Scores **held**. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Bar A **42% held** / Bar B **18% held** / overall **38% held** / months A **1.5 held**. Persist piece **70% held**. A2 still open. |
-| Gates touched | `xhci.rs` / `usb_bot.rs` firstcbw norearm; [loihda.md](loihda.md). `./tools/sync-loihda-site.sh --check`. No MegaRAID. No TLS. No F11. |
+| Gates touched | `xhci.rs` skip GET_MAX_LUN; [loihda.md](loihda.md). `./tools/sync-loihda-site.sh --check`. No MegaRAID. No TLS. No F11. |
 
 ---
 
@@ -214,6 +214,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-16 | m8-usb-bot-skipmaxlun | 42 | 18 | **Iron leftover, not persist.** Norearm COM2 `xhci firstcbw norearm` then `epst ep0=3` after GET_MAX_LUN DATA-then-Stop; INQUIRY CBW `cmpl=0xff`. This EFI: skip optional GET_MAX_LUN so EP0 stays Running. Persist 70% held. A2 open. |
 | 2026-09-16 | m8-usb-bot-norearm | 42 | 18 | **Iron leftover, not persist.** Firstcbw COM2 `xhci firstcbw` then INQUIRY CBW `cmpl=0xff`. Rearm before unused CBW did not retire a Transfer Event. This EFI: `norearm` + long wait. Persist 70% held. A2 open. |
 | 2026-09-16 | m8-usb-bot-firstcbw | 42 | 18 | **Iron leftover, not persist.** Firstread COM2 `epst`/`botrst`/`maxlun` then INQUIRY CBW `cmpl=0xff`. No `xhci firstread`. This EFI: `prepare_first_cbw` before INQUIRY. Persist 70% held. A2 open. |
 | 2026-09-16 | m8-usb-bot-firstread | 42 | 18 | **Iron leftover, not persist.** Epst COM2 `epst out=1 in=1` + BOT reset; INQUIRY/CAPACITY lived; READ CBW `cmpl=0xff`. This EFI: prepare_first_read + longer first-READ wait. Persist 70% held. A2 open. |
