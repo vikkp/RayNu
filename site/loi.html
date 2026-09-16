@@ -225,14 +225,12 @@
                 Today the install disk is leftover DRAM above the precise EPT
                 pool. A <em>guest</em> reset keeps it. A <em>hypervisor</em>
                 Force Off zeros it. Nested File persist is closed; USB/NVMe
-                DurableLun I/O is host-ready; iron COM2 is not. Skipmaxlun COM2
-                named Toshiba, printed <code>xhci maxlun p11 skip</code> with
-                EP0 still Running (<code>epst ep0=1</code>), then INQUIRY CBW
-                timed out
-                (<code>err=8 bot=cbw scsi=inquiry cmpl=0xff</code>).
-                EP0-Stopped is falsified. This EFI: overlap first INQUIRY
-                CBW OUT + DATA IN
-                (<code>xhci firstcbw pN overlap</code>). Leftover 1 GiB DRAM is not persist.
+                DurableLun I/O is host-ready; iron COM2 is not. Overlap COM2
+                printed <code>xhci firstcbw p11 overlap</code>; INQUIRY
+                completed, then CAPACITY CBW timed out
+                (<code>err=8 bot=cbw scsi=capacity cmpl=0xff</code>).
+                This EFI: overlap CAPACITY and READ IN
+                (<code>xhci capoverlap</code>). Leftover 1 GiB DRAM is not persist.
                 The remaining 30% is still
                 <code>RAYNU-V-M8-DISK-PERSIST-OK</code> after Force Off on a
                 ≥16 GiB Toshiba LUN, not the ESP Cruzer/UDisk. A buyer who

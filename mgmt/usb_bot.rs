@@ -99,7 +99,16 @@ pub trait UsbBulk {
     where
         Self: Sized,
     {
-        bot_cmd(self, tag, true, &cdb_inquiry(), buf)
+        self.overlapped_in(tag, &cdb_inquiry(), buf)
+    }
+    /// IN BOT command. Default is sequential CBW then DATA (host mocks).
+    /// Live xHCI overlaps CBW OUT + DATA IN. Iron overlap COM2: INQUIRY
+    /// lived then CAPACITY CBW `cmpl=0xff`.
+    fn overlapped_in(&mut self, tag: u32, cdb: &[u8], buf: &mut [u8]) -> Result<(), UsbBotError>
+    where
+        Self: Sized,
+    {
+        bot_cmd(self, tag, true, cdb, buf)
     }
     /// After CAPACITY CSW, before the first 512-byte READ. Live xHCI:
     /// print EP state, Stop+rearm bulk rings, Clear Halt, long READ wait.
@@ -328,6 +337,31 @@ fn bot_cmd(
     Ok(())
 }
 
+fn bot_in_retry(
+    hw: &mut impl UsbBulk,
+    tag: &mut u32,
+    cdb: &[u8],
+    buf: &mut [u8],
+) -> Result<(), UsbBotError> {
+    let mut last = UsbBotError::Xfer;
+    for _ in 0..USB_BOT_RW_TRIES {
+        *tag = tag.wrapping_add(1);
+        if *tag == 0 {
+            *tag = 1;
+        }
+        match hw.overlapped_in(*tag, cdb, buf) {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                last = e;
+                if usb_bot_recover_after_fail(usb_bot_last_stage()) {
+                    hw.recover_pipes();
+                }
+            }
+        }
+    }
+    Err(last)
+}
+
 fn bot_inquiry_retry(
     hw: &mut impl UsbBulk,
     tag: &mut u32,
@@ -403,6 +437,9 @@ fn bot_cmd_retry(
 /// Iron skipmaxlun COM2: `maxlun skip` + `epst ep0=1` then INQUIRY CBW
 /// `cmpl=0xff` leftover 1 GiB. EP0-Stopped is falsified. Sequential CBW
 /// wait never posted a Transfer Event — live xHCI overlaps CBW+DATA IN.
+/// Iron overlap COM2: `xhci firstcbw overlap` then `bot=cbw scsi=capacity`
+/// `cmpl=0xff` leftover 1 GiB — INQUIRY overlap lived; sequential CAPACITY
+/// CBW did not. Overlap CAPACITY and READ IN the same way.
 pub fn usb_bot_bring_up(hw: &mut impl UsbBulk, min_bytes: u64) -> Result<(u64, u32), UsbBotError> {
     hw.prepare_first_cbw();
     hw.settle();
@@ -411,7 +448,7 @@ pub fn usb_bot_bring_up(hw: &mut impl UsbBulk, min_bytes: u64) -> Result<(u64, u
     bot_inquiry_retry(hw, &mut tag, &mut inq)?;
     hw.settle();
     let mut cap = [0u8; 8];
-    bot_cmd_retry(hw, &mut tag, true, &cdb_read_capacity10(), &mut cap)?;
+    bot_in_retry(hw, &mut tag, &cdb_read_capacity10(), &mut cap)?;
     hw.settle();
     // Iron epst COM2: INQUIRY + CAPACITY lived, first READ CBW `cmpl=0xff`.
     hw.prepare_first_read();
@@ -452,7 +489,11 @@ pub fn usb_bot_rw(
         return Err(UsbBotError::Xfer);
     }
     let cdb = cdb_rw10(write, slba as u32, nlb as u16);
-    bot_cmd_retry(hw, tag, !write, &cdb, buf)
+    if write {
+        bot_cmd_retry(hw, tag, false, &cdb, buf)
+    } else {
+        bot_in_retry(hw, tag, &cdb, buf)
+    }
 }
 
 static IO_READY: AtomicBool = AtomicBool::new(false);
