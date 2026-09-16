@@ -405,6 +405,16 @@ pub fn xhci_event_trb_ptr(ev: &[u8; 16]) -> u64 {
     get_u64(ev, 0) & !0xF
 }
 
+/// Command Completion Event matches the command TRB we doorbell'd
+/// (xHCI 6.4.2.2 Command TRB Pointer). Iron capoverlap COM2: p11 Toshiba
+/// `0480:a004` was named, then leftover Invalid (CC=0) from p10 Address
+/// Device abort retired CONFIG_EP (`cmd=5 cmpl=0` `bot=?`). recover_enum
+/// Disable Slot'd the Toshiba slot and the mapper printed need-media —
+/// looks like "no device". Do not match any command event.
+pub fn xhci_cmd_event_matches(ev: &[u8; 16], want_ptr: u64) -> bool {
+    want_ptr != 0 && xhci_event_trb_ptr(ev) == (want_ptr & !0xF)
+}
+
 /// SETUP TRB flags: Immediate Data + TRT (IN=3, no-data=0). No Chain —
 /// iron cfg-desc CH on SETUP+DATA timed out GET_DEVICE on Lewisburg.
 pub fn control_setup_flags(data_in: bool) -> u32 {
@@ -1055,6 +1065,22 @@ fn serial_xhci_cfgretry(port: u8, n: u8) {
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_cmdptr(port: u8) {
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 xhci cmdptr p");
+    serial_dec_u8(port);
+    serial::write_line(" (not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_toshiba_named(port: u8) {
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 xhci toshiba p");
+    serial_dec_u8(port);
+    serial::write_line(" named; CONFIG_EP leftover — not I/O ready (not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn serial_xhci_eval(port: u8, mps: u16, ok: bool) {
     use crate::boot::serial;
     serial::write_str("boot: Stage 46 xhci eval p");
@@ -1236,6 +1262,12 @@ fn serial_xhci_config(_port: u8) {}
 fn serial_xhci_cfgretry(_port: u8, _n: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_cmdptr(_port: u8) {}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_toshiba_named(_port: u8) {}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_desc_retry(_port: u8, _n: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
@@ -1295,16 +1327,6 @@ fn xhci_event_err(want_type: u32) -> UsbBotError {
     } else {
         UsbBotError::Enum
     }
-}
-
-fn consume_event(
-    hw: &mut impl XhciHw,
-    caps: &XhciCaps,
-    ev: &mut EventRing,
-    want_type: u32,
-    spins_max: u32,
-) -> Result<[u8; 16], UsbBotError> {
-    consume_posted(hw, caps, ev, want_type, 0, 0, 0, spins_max)
 }
 
 fn consume_transfer(
@@ -1424,8 +1446,16 @@ fn consume_posted(
                 {
                     continue;
                 }
+                // Iron capoverlap: leftover CC=0 from p10 abort must not
+                // retire p11 CONFIG_EP. Match Command TRB Pointer.
+                if want_type == TRB_EVENT_CMD
+                    && want_ptr != 0
+                    && !xhci_cmd_event_matches(&t, want_ptr)
+                {
+                    continue;
+                }
                 let code = trb_cmpl_code(get_u32(&t, 8));
-                if want_type == TRB_EVENT_CMD && cmd_cc_invalid(code) {
+                if want_type == TRB_EVENT_CMD && want_ptr == 0 && cmd_cc_invalid(code) {
                     continue;
                 }
                 if code != CMPL_SUCCESS && code != CMPL_SHORT {
@@ -1550,9 +1580,9 @@ fn cmd_wait(
     extra_and_type: u32,
     spins_max: u32,
 ) -> Result<[u8; 16], UsbBotError> {
-    cmd_ring.place(hw, ptr, 0, extra_and_type);
+    let trb_ptr = cmd_ring.place(hw, ptr, 0, extra_and_type);
     doorbell(hw, caps.db, 0, 0);
-    consume_event(hw, caps, ev, TRB_EVENT_CMD, spins_max)
+    consume_posted(hw, caps, ev, TRB_EVENT_CMD, 0, 0, trb_ptr, spins_max)
 }
 
 fn abort_cmd_ring(
@@ -2761,6 +2791,7 @@ fn try_port(
     // `err=3 bot=? scsi=?`. Leftover Invalid command event (CC=0) can retire
     // Configure Endpoint. Drain, skip CC=0, retry once with a fresh ring.
     serial_xhci_config(port);
+    serial_xhci_cmdptr(port);
     drain_events(hw, caps, ev);
     let mut cfg_err = UsbBotError::Enum;
     let mut cfg_ok = false;
@@ -2806,6 +2837,9 @@ fn try_port(
         }
     }
     if !cfg_ok {
+        if toshiba_bot_eps(vid, did).is_some() {
+            serial_xhci_toshiba_named(port);
+        }
         recover_enum(hw, caps, mem, cmd_ring, ev, slot);
         return Err(stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_CFG, cfg_err));
     }
@@ -3746,6 +3780,14 @@ mod xhci_pack_test {
             xhci_enum_diag_cmpl(0, XHCI_ENUM_CMD_CFG, 3, false),
             0x0003_0500
         );
+        // Leftover p10 abort CC=0 must not match p11 CONFIG_EP TRB.
+        let mut leftover_cc0 = [0u8; 16];
+        put_u64(&mut leftover_cc0, 0, 0x1000);
+        let mut config_ep_trb = [0u8; 16];
+        put_u64(&mut config_ep_trb, 0, 0x2000);
+        assert!(!xhci_cmd_event_matches(&leftover_cc0, 0x2000));
+        assert!(xhci_cmd_event_matches(&config_ep_trb, 0x2000));
+        assert!(!xhci_cmd_event_matches(&config_ep_trb, 0));
         assert_eq!(TRB_EVALUATE_CTX, 13);
         assert_eq!(TRB_CONFIG_EP, 12);
         assert_eq!(bulk_ep_dci(2, false), 4);
