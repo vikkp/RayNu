@@ -13,9 +13,13 @@
 use super::usb_bot::{
     csw_ok, next_bot_tag, restore_usb_bot_diag, stamp_scsi_cdb, store_usb_bot_diag,
     store_usb_bot_diag_unless_kept, store_usb_bot_ready, store_usb_bot_stage, usb_bot_bring_up,
-    usb_bot_last_bar, usb_bot_last_cmpl, usb_bot_last_err, usb_bot_last_portsc, usb_bot_last_stage,
-    usb_bot_stage_name, Cbw, UsbBotError, UsbBulk, BOT_STAGE_CBW, BOT_STAGE_CSW, BOT_STAGE_DATA,
-    CBW_LEN, CSW_LEN, SCSI_READ_CAPACITY_10,
+    usb_bot_last_bar, usb_bot_last_cmpl, usb_bot_last_err, usb_bot_last_portsc, Cbw, UsbBotError,
+    UsbBulk, BOT_STAGE_CBW, BOT_STAGE_CSW, BOT_STAGE_DATA, CBW_LEN, CSW_LEN, SCSI_READ_CAPACITY_10,
+};
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+use super::usb_bot::{
+    usb_bot_last_scsi, usb_bot_last_stage, usb_bot_scsi_name, usb_bot_stage_name,
 };
 
 /// Same window as [`crate::mgmt::durable_lun::usb_is_esp_cruzer_window`].
@@ -493,6 +497,19 @@ pub fn xhci_desc_timeout_is_ep0_xfer(cmd: u8, cmpl: u8) -> bool {
 /// Slot throws away Slotretry's win.
 pub fn xhci_keep_slot_after_desc() -> bool {
     true
+}
+
+/// Iron descabort COM2 (`b0c2b678`): bring-up 512-byte READ lived
+/// (`FIRST_READ_SPINS`) then Alpine `vda` 298 GiB mixed `last_st=0x0`
+/// with seek/4K `last_st=0x1`; `sfdisk` I/O error. Guest live BOT must
+/// keep the long wait — `end_first_read` must not drop to `BULK_SPINS`.
+pub fn xhci_guest_rw_long_wait() -> bool {
+    true
+}
+
+/// Rate-limit `lun rw fail` so COM2 names CBW/DATA/CSW without a flood.
+pub fn xhci_rw_fail_should_print(n: u32) -> bool {
+    n < 8 || n % 64 == 0
 }
 
 /// SETUP TRB flags: Immediate Data + TRT (IN=3, no-data=0). No Chain —
@@ -1306,6 +1323,12 @@ fn serial_hex32(v: u32) {
         buf[i] = HEX[((v >> (28 - i * 4)) & 0xF) as usize];
     }
     crate::boot::serial::write_str(core::str::from_utf8(&buf).unwrap_or("????????"));
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_hex64(v: u64) {
+    serial_hex32((v >> 32) as u32);
+    serial_hex32(v as u32);
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
@@ -2830,7 +2853,7 @@ impl UsbBulk for LiveXhci {
 
 impl LiveXhci {
     fn bulk_wait(&self) -> u32 {
-        if self.long_bulk {
+        if self.long_bulk || xhci_guest_rw_long_wait() {
             FIRST_READ_SPINS
         } else {
             BULK_SPINS
@@ -3323,7 +3346,7 @@ static mut LIVE: Option<LiveXhci> = None;
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 static LIVE_LOCK: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
-static RW_FAIL_NOTED: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+static RW_FAIL_N: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn xhci_bar(bus: u8, dev: u8, func: u8) -> u64 {
@@ -3399,6 +3422,7 @@ pub fn xhci_init_pci(bus: u8, dev: u8, func: u8, min_bytes: u64) -> Result<u64, 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 pub fn xhci_live_rw(off: u64, buf: &mut [u8], write: bool) -> bool {
     if LIVE_LOCK.swap(true, core::sync::atomic::Ordering::Acquire) {
+        serial_xhci_rw_busy(off, write);
         return false;
     }
     // SAFETY: lock held; LIVE set by xhci_init_pci.
@@ -3408,6 +3432,7 @@ pub fn xhci_live_rw(off: u64, buf: &mut [u8], write: bool) -> bool {
                 if buf.len() > 4096 {
                     false
                 } else {
+                    live.long_bulk = xhci_guest_rw_long_wait();
                     let mut slice = [0u8; 4096];
                     if write {
                         slice[..buf.len()].copy_from_slice(buf);
@@ -3452,18 +3477,37 @@ pub fn xhci_live_rw(off: u64, buf: &mut [u8], write: bool) -> bool {
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn serial_xhci_rw_fail(off: u64, write: bool, err: UsbBotError) {
-    if RW_FAIL_NOTED.swap(true, core::sync::atomic::Ordering::AcqRel) {
+    let n = RW_FAIL_N.fetch_add(1, core::sync::atomic::Ordering::AcqRel);
+    if !xhci_rw_fail_should_print(n) {
         return;
     }
     use crate::boot::serial;
     serial::write_str("boot: Stage 46 durable LUN usb rw fail off=0x");
-    serial_hex32(off as u32);
+    serial_hex64(off);
     serial::write_str(if write { " wr=1 err=" } else { " wr=0 err=" });
     serial_dec_u8(err as u8);
     serial::write_str(" cmpl=0x");
     serial_hex32(usb_bot_last_cmpl() as u32);
     serial::write_str(" bot=");
     serial::write_str(usb_bot_stage_name(usb_bot_last_stage()));
+    serial::write_str(" scsi=");
+    serial::write_str(usb_bot_scsi_name(usb_bot_last_scsi()));
+    serial::write_str(" n=");
+    serial_dec_u8(n.min(250) as u8);
+    serial::write_line(" (not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_rw_busy(off: u64, write: bool) {
+    let n = RW_FAIL_N.fetch_add(1, core::sync::atomic::Ordering::AcqRel);
+    if !xhci_rw_fail_should_print(n) {
+        return;
+    }
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 durable LUN usb rw busy off=0x");
+    serial_hex64(off);
+    serial::write_str(if write { " wr=1 n=" } else { " wr=0 n=" });
+    serial_dec_u8(n.min(250) as u8);
     serial::write_line(" (not ISO-INSTALL-OK)");
 }
 
@@ -3482,7 +3526,8 @@ mod xhci_pack_test {
     use super::*;
     use crate::mgmt::usb_bot::{
         store_usb_bot_diag, usb_bot_keep_xfer_diag, usb_bot_last_cmpl, usb_bot_last_err,
-        usb_bot_last_portsc,
+        usb_bot_last_portsc, usb_bot_last_scsi, usb_bot_last_stage, usb_bot_scsi_name,
+        usb_bot_stage_name,
     };
 
     #[test]
@@ -4106,6 +4151,11 @@ mod xhci_pack_test {
         assert_eq!(XHCI_ENUM_CMD_EVAL, 7);
         assert_ne!(XHCI_ENUM_CMD_DESC, XHCI_ENUM_CMD_EVAL);
         assert!(xhci_keep_slot_after_desc());
+        assert!(xhci_guest_rw_long_wait());
+        assert!(xhci_rw_fail_should_print(0));
+        assert!(xhci_rw_fail_should_print(7));
+        assert!(!xhci_rw_fail_should_print(8));
+        assert!(xhci_rw_fail_should_print(64));
         assert!(cmd_cc_ring_stopped(CMPL_CMD_STOPPED));
         assert!(cmd_cc_ring_stopped(CMPL_CMD_ABORTED));
         assert!(!cmd_cc_ring_stopped(0));
@@ -4209,6 +4259,7 @@ mod xhci_pack_test {
         assert_eq!(bulk_in_trb_flags(512), TRB_IOC);
         assert_eq!(usb_bot_stage_name(2), "data");
         assert!(usb_bot_last_stage() <= 3);
+        assert_eq!(usb_bot_scsi_name(usb_bot_last_scsi()).is_empty(), false);
         // Iron Slot DW1 EFI `3473a0b9`: stamp_enum printed MaxSlots as cmpl.
         let stale = xhci_reset_diag_cmpl(64, 26, 0x80, 10);
         assert_eq!(stale as u8, 0x40);

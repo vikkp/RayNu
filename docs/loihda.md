@@ -123,7 +123,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 **Product effect.** “Install Linux” without persist is a demo that dies when the operator Force Offs the box — which they will, because that is how you recover a Type-1. Nested File persist (`ce3d8a09`) and DurableLun USB/NVMe I/O are the mechanism. Iron Force Off is still open. USB ≥ 16 GiB (not the ESP Cruzer / 2–8 GiB UDisk) is the Toshiba LUN. Nested QEMU ≠ R640.
 
-**Iron NOW (not a score bump).** Slotretry COM2: `xhci p11first` + `xhci nop` then p11 GET_DESC `cmd=4 cmpl=0xff` — **EP0 timeout, not Evaluate Context**. Enable Slot lived. abort crr=0 then walked to p14 hub and threw away the live slot. This EFI: keep DCBAA (`xhci descabort keep-slot`); retry EP0 then port-reset + Address Device on the same slot; do not Disable Slot; do not start p14/p10; fail durable-LUN. Keep nop/slotretry/p11first/cmdptr. Do not Force Off leftover DRAM.
+**Iron NOW (not a score bump).** Descabort COM2 (`b0c2b678`): Toshiba named; `usb I/O ready` 298 GiB; leftover skipped; virtio `keep=0 (durable LUN usb)`; Alpine `vda` 298 GiB then `last_st=0x1` / `sfdisk` I/O error. ISO `vdb` `last_st=0x0` `login: root`. Guest BOT dropped to `BULK_SPINS` after first READ. This EFI: keep `FIRST_READ_SPINS` for live guest I/O; print `usb rw fail bot= scsi=`. Keep descabort/nop/slotretry/p11first/cmdptr. Do not Force Off. Do not setup-disk until `vda` READs stay `last_st=0x0`.
 
 **Honest remainder.** 30% is iron COM2 `RAYNU-V-M8-DISK-PERSIST-OK`. Do not F11 until `I/O ready` + virtio on the LUN.
 
@@ -171,7 +171,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 |------|-------|------|--------|
 | 2026-09-11 | Everest | Iron ISO → disk → login | **DONE** — HDA 99%, months 0.0 |
 | 2026-09-13 | Persist mechanism | Nested-OK + DurableLun USB/NVMe I/O | **DONE nested / host**; iron Force Off **open** |
-| **NOW** | Bar A A2 | USB/NVMe Force Off on COM2 | **NEXT** (slotretry COM2 p11 GET_DESC `cmd=4` then p14 hub; Enable Slot lived; leftover 1 GiB ≠ persist) |
+| **NOW** | Bar A A2 | USB/NVMe Force Off on COM2 | **NEXT** (descabort COM2 Toshiba 298 GiB ready + virtio keep=0 then Alpine vda last_st=0x1; leftover skipped ≠ persist) |
 | then | Bar A A3+A4 | SKU card + TLS | design overlap OK; do not close TLS before persist COM2 |
 | then | Bar B B2 | Spare PERC VD persist | after A2; census skip is lab safety |
 | later | Auth / console / unmodified ISO | A5, A6, Gen-1 Phase 2 | named residuals, not fake closes |
@@ -202,11 +202,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-usb-bot-descabort |
-| Summary | **Iron leftover, not persist.** Slotretry COM2: nop + p11 EP0 GET_DESC timeout (`cmd=4`, not Eval) then walked to p14. Enable Slot lived. This EFI: keep-slot descabort; no p14 walk. Scores **held**. |
+| Commit | m8-usb-bot-guestio |
+| Summary | **Iron leftover skipped, not persist.** Descabort COM2: Toshiba 298 GiB ready + virtio keep=0; Alpine vda last_st=0x1. This EFI: guest BOT FIRST_READ_SPINS + lun rw fail serial. Scores **held**. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Bar A **42% held** / Bar B **18% held** / overall **38% held** / months A **1.5 held**. Persist piece **70% held**. A2 still open. |
-| Gates touched | `xhci.rs` descabort; [loihda.md](loihda.md). `./tools/sync-loihda-site.sh --check`. No MegaRAID. No TLS. No F11. |
+| Gates touched | `xhci.rs` guest BOT `FIRST_READ_SPINS` + lun rw fail serial; [loihda.md](loihda.md). `./tools/sync-loihda-site.sh --check`. No MegaRAID. No TLS. No F11. |
 
 ---
 
@@ -214,6 +214,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-16 | m8-usb-bot-guestio | 42 | 18 | **Iron leftover skipped, not persist.** Descabort COM2 Toshiba 298 GiB ready + virtio keep=0; Alpine vda last_st=0x1; sfdisk I/O error. ISO vdb last_st=0x0. This EFI: guest BOT FIRST_READ_SPINS + lun rw fail serial. Persist 70% held. A2 open. |
 | 2026-09-16 | m8-usb-bot-descabort | 42 | 18 | **Iron leftover, not persist.** Slotretry COM2 nop + p11 EP0 GET_DESC timeout then p14 hub. Enable Slot lived. This EFI: keep-slot (`xhci descabort`); no Disable Slot; no p14 walk. Persist 70% held. A2 open. |
 | 2026-09-16 | m8-usb-bot-slotretry | 42 | 18 | **Iron leftover, not persist.** p11first COM2 p11 Enable Slot `cmd=2 cmpl=0xff` then p14 hub. Toshiba not named. This EFI: No-Op prime + Enable Slot ADDR_SPINS retry (`xhci nop` / `xhci slotretry`). Persist 70% held. A2 open. |
 | 2026-09-16 | m8-usb-bot-p11first | 42 | 18 | **Iron leftover, not persist.** Cmdptr COM2 p10 ADDR then p11 Enable Slot `cmd=2 cmpl=0xff`. Toshiba not named. This EFI: p11-first + abort ADDR_SPINS, no Disable Slot wait. Persist 70% held. A2 open. |
