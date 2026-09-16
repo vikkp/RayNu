@@ -11,9 +11,11 @@
 //! ADR-004: persist backing is virtio-blk / BlockIo only.
 
 use super::usb_bot::{
-    next_bot_tag, restore_usb_bot_diag, store_usb_bot_diag, store_usb_bot_diag_unless_kept,
-    store_usb_bot_ready, usb_bot_bring_up, usb_bot_last_bar, usb_bot_last_cmpl, usb_bot_last_err,
-    usb_bot_last_portsc, usb_bot_last_stage, usb_bot_stage_name, UsbBotError, UsbBulk, CSW_LEN,
+    cdb_inquiry, csw_ok, next_bot_tag, restore_usb_bot_diag, stamp_scsi_cdb, store_usb_bot_diag,
+    store_usb_bot_diag_unless_kept, store_usb_bot_ready, store_usb_bot_stage, usb_bot_bring_up,
+    usb_bot_last_bar, usb_bot_last_cmpl, usb_bot_last_err, usb_bot_last_portsc, usb_bot_last_stage,
+    usb_bot_stage_name, Cbw, UsbBotError, UsbBulk, BOT_STAGE_CBW, BOT_STAGE_CSW, BOT_STAGE_DATA,
+    CBW_LEN, CSW_LEN,
 };
 
 /// Same window as [`crate::mgmt::durable_lun::usb_is_esp_cruzer_window`].
@@ -1094,7 +1096,7 @@ fn serial_xhci_firstcbw(port: u8) {
     use crate::boot::serial;
     serial::write_str("boot: Stage 46 xhci firstcbw p");
     serial_dec_u8(port);
-    serial::write_line(" norearm (not ISO-INSTALL-OK)");
+    serial::write_line(" overlap (not ISO-INSTALL-OK)");
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
@@ -1406,6 +1408,80 @@ fn consume_posted(
             );
             return Err(err);
         }
+    }
+}
+
+/// Wait for bulk OUT and bulk IN Transfer Events in either order.
+/// Iron skipmaxlun COM2: sequential CBW wait never posted; some BOT
+/// devices do not complete the CBW TD until the DATA IN pipe is primed.
+/// Do not require TRB pointer match — leftover EP0 events are skipped
+/// by slot+DCI. Unmatched events are dropped (same as consume_posted).
+fn consume_bulk_pair(
+    hw: &mut impl XhciHw,
+    caps: &XhciCaps,
+    ev: &mut EventRing,
+    slot: u8,
+    dci_out: u8,
+    dci_in: u8,
+    spins_max: u32,
+) -> Result<(), UsbBotError> {
+    let mut got_out = false;
+    let mut got_in = false;
+    let mut spins = 0u32;
+    loop {
+        if got_out && got_in {
+            return Ok(());
+        }
+        let t = read_trb(hw, ev.base, ev.deq);
+        let ctrl = get_u32(&t, 12);
+        if (ctrl & 1) == (ev.cycle & 1) {
+            let ty = trb_type(ctrl);
+            advance_event(hw, caps, ev);
+            if ty != TRB_EVENT_TRANSFER {
+                continue;
+            }
+            let code = trb_cmpl_code(get_u32(&t, 8));
+            if code != CMPL_SUCCESS && code != CMPL_SHORT {
+                store_usb_bot_diag(
+                    UsbBotError::Xfer,
+                    usb_bot_last_bar(),
+                    usb_bot_last_portsc(),
+                    xhci_xfer_diag_cmpl(code, xhci_event_dci(ctrl), xhci_event_slot(ctrl)),
+                );
+                return Err(UsbBotError::Xfer);
+            }
+            bulk_pair_take(&mut got_out, &mut got_in, ctrl, slot, dci_out, dci_in);
+            continue;
+        }
+        spins = spins.saturating_add(1);
+        if spins > spins_max {
+            if got_out {
+                store_usb_bot_stage(BOT_STAGE_DATA);
+            }
+            store_usb_bot_diag(
+                UsbBotError::Xfer,
+                usb_bot_last_bar(),
+                usb_bot_last_portsc(),
+                u64::from(CMPL_TIMEOUT),
+            );
+            return Err(UsbBotError::Xfer);
+        }
+    }
+}
+
+/// Record a Transfer Event as CBW OUT and/or DATA IN for overlapped BOT.
+pub fn bulk_pair_take(
+    got_out: &mut bool,
+    got_in: &mut bool,
+    ctrl: u32,
+    slot: u8,
+    dci_out: u8,
+    dci_in: u8,
+) {
+    if xhci_xfer_matches(ctrl, slot, dci_out) {
+        *got_out = true;
+    } else if xhci_xfer_matches(ctrl, slot, dci_in) {
+        *got_in = true;
     }
 }
 
@@ -2294,8 +2370,60 @@ impl UsbBulk for LiveXhci {
     fn prepare_first_cbw(&mut self) {
         // Iron firstcbw COM2: rearm+Clear Halt+FIRST_READ_SPINS then INQUIRY
         // still `cmpl=0xff`. Epst boot (CONFIG_EP dequeue, no Stop) got
-        // INQUIRY+CAPACITY. Set TR Deq is fire-and-forget.
+        // INQUIRY+CAPACITY. Set TR Deq is fire-and-forget. Iron skipmaxlun
+        // COM2: `norearm` + `epst ep0=1` then sequential CBW `cmpl=0xff`.
         self.arm_first_bulk(false);
+    }
+
+    fn first_inquiry(&mut self, tag: u32, buf: &mut [u8]) -> Result<(), UsbBotError> {
+        // Iron skipmaxlun COM2: `maxlun skip` + Running EPs then INQUIRY
+        // CBW never posted a Transfer Event. Arm CBW OUT and DATA IN
+        // before waiting (either order). Not ISP-on-every-IN; this path
+        // only. Keep skip GET_MAX_LUN / norearm.
+        if buf.len() != 36 {
+            return Err(UsbBotError::Xfer);
+        }
+        let cdb = cdb_inquiry();
+        let cbw = Cbw::scsi(tag, 36, true, 0, &cdb);
+        stamp_scsi_cdb(&cdb);
+        store_usb_bot_stage(BOT_STAGE_CBW);
+        let mut hw = MmioXhci { base: self.mmio };
+        drain_events(&mut hw, &self.caps, &mut self.ev);
+        hw.dma_write(self.bounce, &cbw.bytes);
+        let _trb_out = self.bulk_out.place(
+            &mut hw,
+            self.bounce,
+            CBW_LEN as u32,
+            trb_ctrl(0, TRB_NORMAL, TRB_IOC | TRB_ISP),
+        );
+        let z = [0u8; 4096];
+        hw.dma_write(self.bounce_in, &z[..36]);
+        let _trb_in = self.bulk_in.place(
+            &mut hw,
+            self.bounce_in,
+            36,
+            trb_ctrl(0, TRB_NORMAL, TRB_IOC | TRB_ISP),
+        );
+        doorbell(&mut hw, self.caps.db, self.slot, self.dci_out);
+        doorbell(&mut hw, self.caps.db, self.slot, self.dci_in);
+        let spins = self.bulk_wait();
+        consume_bulk_pair(
+            &mut hw,
+            &self.caps,
+            &mut self.ev,
+            self.slot,
+            self.dci_out,
+            self.dci_in,
+            spins,
+        )?;
+        hw.dma_read(self.bounce_in, buf);
+        store_usb_bot_stage(BOT_STAGE_CSW);
+        let mut csw = [0u8; CSW_LEN];
+        let n = UsbBulk::bulk_in(self, &mut csw)?;
+        if n < CSW_LEN || !csw_ok(&csw) {
+            return Err(UsbBotError::Bot);
+        }
+        Ok(())
     }
 
     fn prepare_first_read(&mut self) {
@@ -3537,6 +3665,18 @@ mod xhci_pack_test {
         assert!(!xhci_xfer_matches(csw_in, 1, 4));
         assert!(xhci_xfer_matches(cbw_out, 1, 4));
         assert_eq!(xhci_event_dci(csw_in), 3);
+        // Iron skipmaxlun: overlapped INQUIRY accepts OUT then IN, or IN then OUT.
+        let mut got_out = false;
+        let mut got_in = false;
+        bulk_pair_take(&mut got_out, &mut got_in, csw_in, 1, 4, 3);
+        assert!(!got_out && got_in);
+        bulk_pair_take(&mut got_out, &mut got_in, cbw_out, 1, 4, 3);
+        assert!(got_out && got_in);
+        got_out = false;
+        got_in = false;
+        bulk_pair_take(&mut got_out, &mut got_in, cbw_out, 1, 4, 3);
+        bulk_pair_take(&mut got_out, &mut got_in, csw_in, 1, 4, 3);
+        assert!(got_out && got_in);
         assert_eq!(xhci_event_dci(cbw_out), 4);
         assert_eq!(xhci_xfer_diag_cmpl(0, 4, 1), 0x0001_0400);
         assert_eq!(BOT_SETTLE_SPINS > SPINS, true);

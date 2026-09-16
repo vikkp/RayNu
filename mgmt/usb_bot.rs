@@ -92,6 +92,15 @@ pub trait UsbBulk {
     /// then INQUIRY still `cmpl=0xff`. Epst boot (no pre-INQUIRY rearm)
     /// got INQUIRY+CAPACITY.
     fn prepare_first_cbw(&mut self) {}
+    /// First INQUIRY. Default is sequential CBW then DATA (host mocks).
+    /// Live xHCI arms CBW OUT and DATA IN before waiting — Iron skipmaxlun
+    /// COM2: `maxlun skip` + `epst ep0=1` then INQUIRY CBW `cmpl=0xff`.
+    fn first_inquiry(&mut self, tag: u32, buf: &mut [u8]) -> Result<(), UsbBotError>
+    where
+        Self: Sized,
+    {
+        bot_cmd(self, tag, true, &cdb_inquiry(), buf)
+    }
     /// After CAPACITY CSW, before the first 512-byte READ. Live xHCI:
     /// print EP state, Stop+rearm bulk rings, Clear Halt, long READ wait.
     /// Iron epst COM2: INQUIRY/CAPACITY lived then `bot=cbw scsi=read`.
@@ -256,7 +265,7 @@ pub fn usb_bot_recover_after_fail(stage: u8) -> bool {
     c == USB_BOT_CMPL_TIMEOUT || c == USB_BOT_CMPL_CONTEXT_STATE
 }
 
-fn stamp_scsi_cdb(cdb: &[u8]) {
+pub fn stamp_scsi_cdb(cdb: &[u8]) {
     let tag = match cdb.first().copied().unwrap_or(0) {
         SCSI_INQUIRY => SCSI_TAG_INQUIRY,
         SCSI_TEST_UNIT_READY => SCSI_TAG_TUR,
@@ -319,6 +328,30 @@ fn bot_cmd(
     Ok(())
 }
 
+fn bot_inquiry_retry(
+    hw: &mut impl UsbBulk,
+    tag: &mut u32,
+    buf: &mut [u8],
+) -> Result<(), UsbBotError> {
+    let mut last = UsbBotError::Xfer;
+    for _ in 0..USB_BOT_RW_TRIES {
+        *tag = tag.wrapping_add(1);
+        if *tag == 0 {
+            *tag = 1;
+        }
+        match hw.first_inquiry(*tag, buf) {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                last = e;
+                if usb_bot_recover_after_fail(usb_bot_last_stage()) {
+                    hw.recover_pipes();
+                }
+            }
+        }
+    }
+    Err(last)
+}
+
 fn bot_cmd_retry(
     hw: &mut impl UsbBulk,
     tag: &mut u32,
@@ -367,12 +400,15 @@ fn bot_cmd_retry(
 /// COM2: same enum then `bot=cbw scsi=inquiry` — firstread never ran.
 /// Iron firstcbw COM2: `xhci firstcbw` + rearm then INQUIRY still `cmpl=0xff`.
 /// Do not Stop unused Running bulk EPs before the first CBW; keep the long wait.
+/// Iron skipmaxlun COM2: `maxlun skip` + `epst ep0=1` then INQUIRY CBW
+/// `cmpl=0xff` leftover 1 GiB. EP0-Stopped is falsified. Sequential CBW
+/// wait never posted a Transfer Event — live xHCI overlaps CBW+DATA IN.
 pub fn usb_bot_bring_up(hw: &mut impl UsbBulk, min_bytes: u64) -> Result<(u64, u32), UsbBotError> {
     hw.prepare_first_cbw();
     hw.settle();
     let mut tag = 1u32;
     let mut inq = [0u8; 36];
-    bot_cmd_retry(hw, &mut tag, true, &cdb_inquiry(), &mut inq)?;
+    bot_inquiry_retry(hw, &mut tag, &mut inq)?;
     hw.settle();
     let mut cap = [0u8; 8];
     bot_cmd_retry(hw, &mut tag, true, &cdb_read_capacity10(), &mut cap)?;
