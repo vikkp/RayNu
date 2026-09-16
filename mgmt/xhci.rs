@@ -337,6 +337,35 @@ pub fn crcr_restart(cmd_hpa: u64) -> u64 {
     (cmd_hpa & !0x3F) | CRCR_RCS
 }
 
+/// Command Ring Stopped / Command Aborted after CRCR.CA (xHCI Table 6-91).
+pub fn cmd_cc_ring_stopped(code: u8) -> bool {
+    code == CMPL_CMD_STOPPED || code == CMPL_CMD_ABORTED
+}
+
+/// Iron cmdptr COM2: p10 Address Device `cmd=3 cmpl=0xff` then p11 Enable
+/// Slot `cmd=2 cmpl=0xff`. Toshiba is p11; p10 has never named a device.
+/// Walk 11..=max then 1..=10 so SET_ADDRESS on the stuck port cannot
+/// wedge CRR before Toshiba.
+pub const XHCI_ENUM_TOSHIBA_PORT: u8 = 11;
+
+/// Port at `idx` (0-based) in Toshiba-first enum order.
+pub fn xhci_enum_port_at(max_ports: u8, idx: u8) -> Option<u8> {
+    if max_ports == 0 || idx >= max_ports {
+        return None;
+    }
+    let first = XHCI_ENUM_TOSHIBA_PORT;
+    if max_ports < first {
+        return Some(idx + 1);
+    }
+    let tail = first - 1;
+    let head = max_ports - tail;
+    if idx < head {
+        Some(first + idx)
+    } else {
+        Some(idx - head + 1)
+    }
+}
+
 /// Slot ID[31:24] + Endpoint ID[20:16] for Stop/Reset Endpoint / Set TR Dequeue.
 pub fn xhci_ep_cmd_extra(slot: u8, dci: u8) -> u32 {
     u32::from(slot) << 24 | u32::from(dci) << 16
@@ -1081,6 +1110,20 @@ fn serial_xhci_toshiba_named(port: u8) {
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_p11first() {
+    use crate::boot::serial;
+    serial::write_line("boot: Stage 46 xhci p11first (not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_abort(crr: u8) {
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 xhci abort crr=");
+    serial_dec_u8(crr);
+    serial::write_line(" (not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn serial_xhci_eval(port: u8, mps: u16, ok: bool) {
     use crate::boot::serial;
     serial::write_str("boot: Stage 46 xhci eval p");
@@ -1266,6 +1309,12 @@ fn serial_xhci_cmdptr(_port: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_toshiba_named(_port: u8) {}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_p11first() {}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_abort(_crr: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_desc_retry(_port: u8, _n: u8) {}
@@ -1591,20 +1640,33 @@ fn abort_cmd_ring(
     mem: &XhciMem,
     cmd_ring: &mut Ring,
     ev: &mut EventRing,
-) {
+) -> bool {
     let off = caps.op + 0x18;
     let cur = read64(hw, off);
     write64(hw, off, crcr_abort_bits(cur));
-    for _ in 0..SPINS {
-        let crcr = read64(hw, off);
-        if !crcr_is_running(crcr) {
+    // Iron cmdptr COM2: Address Device used ADDR_SPINS then abort polled
+    // only SPINS; CRR stayed 1, CRCR restart was ignored, p11 Enable Slot
+    // timed out. Wait as long as Address Device. Command Ring Stopped
+    // points at the *aborted* TRB — do not require cmdptr match.
+    for _ in 0..ADDR_SPINS {
+        if !crcr_is_running(read64(hw, off)) {
             break;
+        }
+        let t = read_trb(hw, ev.base, ev.deq);
+        let ctrl = get_u32(&t, 12);
+        if (ctrl & 1) == (ev.cycle & 1) {
+            advance_event(hw, caps, ev);
+            if trb_type(ctrl) == TRB_EVENT_CMD && cmd_cc_ring_stopped(trb_cmpl_code(get_u32(&t, 8)))
+            {
+                break;
+            }
         }
     }
     drain_events(hw, caps, ev);
     zero_page(hw, mem.cmd);
     *cmd_ring = Ring::new(mem.cmd);
     write64(hw, off, crcr_restart(mem.cmd));
+    !crcr_is_running(read64(hw, off))
 }
 
 /// Address Device that never completes leaves CRR=1. The next CCS port's
@@ -1619,18 +1681,13 @@ fn recover_enum(
 ) {
     // Iron ep0-eval COM2: p11 CAPACITY CBW `err=8` then p14 hub Disable Slot
     // stamped `cmpl=0` over the BOT diag. Keep the p11 `cmpl`.
+    // Iron cmdptr COM2: Disable Slot *wait* skipped Command Ring Stopped
+    // (wrong TRB pointer) and p11 Enable Slot timed out. Abort+restart
+    // only; leak the slot (64 MaxSlots).
     hold_bot_diag(|| {
-        abort_cmd_ring(hw, caps, mem, cmd_ring, ev);
+        let crr_clear = abort_cmd_ring(hw, caps, mem, cmd_ring, ev);
+        serial_xhci_abort(if crr_clear { 0 } else { 1 });
         if slot != 0 {
-            let _ = cmd(
-                hw,
-                caps,
-                cmd_ring,
-                ev,
-                0,
-                trb_ctrl(0, TRB_DISABLE_SLOT, u32::from(slot) << 24),
-            );
-            abort_cmd_ring(hw, caps, mem, cmd_ring, ev);
             let z = [0u8; 8];
             hw.dma_write(mem.dcbaa + u64::from(slot) * 8, &z);
             zero_page(hw, mem.inctx);
@@ -2976,7 +3033,11 @@ fn xhci_bring_up(
     let mut last = UsbBotError::Reset;
     let mut any_ccs = false;
     let ports = xhci_scan_ports(caps.max_ports);
-    for port in 1..=ports {
+    serial_xhci_p11first();
+    for idx in 0..ports {
+        let Some(port) = xhci_enum_port_at(ports, idx) else {
+            break;
+        };
         let sc = hw.read32(portsc_off(caps.op, port));
         if sc & PORTSC_CCS == 0 {
             continue;
@@ -3788,6 +3849,16 @@ mod xhci_pack_test {
         assert!(!xhci_cmd_event_matches(&leftover_cc0, 0x2000));
         assert!(xhci_cmd_event_matches(&config_ep_trb, 0x2000));
         assert!(!xhci_cmd_event_matches(&config_ep_trb, 0));
+        assert!(cmd_cc_ring_stopped(CMPL_CMD_STOPPED));
+        assert!(cmd_cc_ring_stopped(CMPL_CMD_ABORTED));
+        assert!(!cmd_cc_ring_stopped(0));
+        assert_eq!(xhci_enum_port_at(26, 0), Some(11));
+        assert_eq!(xhci_enum_port_at(26, 1), Some(12));
+        assert_eq!(xhci_enum_port_at(26, 15), Some(26));
+        assert_eq!(xhci_enum_port_at(26, 16), Some(1));
+        assert_eq!(xhci_enum_port_at(26, 25), Some(10));
+        assert_eq!(xhci_enum_port_at(8, 0), Some(1));
+        assert_eq!(XHCI_ENUM_TOSHIBA_PORT, 11);
         assert_eq!(TRB_EVALUATE_CTX, 13);
         assert_eq!(TRB_CONFIG_EP, 12);
         assert_eq!(bulk_ep_dci(2, false), 4);

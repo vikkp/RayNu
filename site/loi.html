@@ -225,14 +225,13 @@
                 Today the install disk is leftover DRAM above the precise EPT
                 pool. A <em>guest</em> reset keeps it. A <em>hypervisor</em>
                 Force Off zeros it. Nested File persist is closed; USB/NVMe
-                DurableLun I/O is host-ready; iron COM2 is not. Capoverlap COM2
-                named Toshiba <code>0480:a004</code> on p11, then Configure
-                Endpoint <code>cmd=5 cmpl=0</code>
-                (<code>err=3 bot=? scsi=? cmpl=0x30500</code>).
-                That is leftover command-event matching, not a missing disk.
-                Recover/DESC-retry printed <code>usb I/O ready</code> ~298 GiB.
-                This EFI: match Command Completion by TRB pointer
-                (<code>xhci cmdptr</code>).
+                DurableLun I/O is host-ready; iron COM2 is not. Cmdptr COM2
+                never named Toshiba: p10 Address Device timed out, then p11
+                Enable Slot <code>cmd=2 cmpl=0xff</code>. The prior boot
+                <em>did</em> name <code>0480:a004</code> on p11. This EFI:
+                walk p11 before p10 (<code>xhci p11first</code>) and abort
+                the command ring for as long as Address Device
+                (<code>xhci abort crr=</code>), without waiting Disable Slot.
                 Leftover 1 GiB DRAM is not persist.
                 The remaining 30% is still
                 <code>RAYNU-V-M8-DISK-PERSIST-OK</code> after Force Off on a
