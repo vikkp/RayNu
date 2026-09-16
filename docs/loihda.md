@@ -1,6 +1,6 @@
 ---
 loihda_version: 1
-last_updated: 2026-09-15
+last_updated: 2026-09-16
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
@@ -123,7 +123,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 **Product effect.** “Install Linux” without persist is a demo that dies when the operator Force Offs the box — which they will, because that is how you recover a Type-1. Nested File persist (`ce3d8a09`) and DurableLun USB/NVMe I/O are the mechanism. Iron Force Off is still open. USB ≥ 16 GiB (not the ESP Cruzer / 2–8 GiB UDisk) is the Toshiba LUN. Nested QEMU ≠ R640.
 
-**Iron NOW (not a score bump).** Ep0-eval COM2: p11 Toshiba named, `xhci eval mps=64`, BOT `ep_out=2 ep_in=1`, `setcfg val=1`, then `usb I/O fail err=8 bot=cbw scsi=capacity cmpl=0` leftover 1 GiB. Enum/GET_CONFIG/SET_CONFIG lived. `cmpl=0` is p14 Disable Slot clobber, not persist. This EFI: GET_MAX_LUN after CONFIG_EP, required INQUIRY, longer settle, recover_enum keeps BOT `cmpl`. Do not Force Off leftover DRAM.
+**Iron NOW (not a score bump).** Maxlun COM2: p11 Toshiba named, `xhci eval mps=64`, BOT `ep_out=2 ep_in=1`, `setcfg val=1`, `xhci maxlun p11 val=0`, then `usb I/O fail err=8 bot=cbw scsi=inquiry cmpl=0xff` leftover 1 GiB. Enum/GET_CONFIG/SET_CONFIG/GET_MAX_LUN lived. First bulk OUT still timed out. This EFI: CONFIG_EP copies Output Slot+A1; `xhci epst`; MSC BOT reset + Clear Halt before INQUIRY. Do not Force Off leftover DRAM.
 
 **Honest remainder.** 30% is iron COM2 `RAYNU-V-M8-DISK-PERSIST-OK`. Do not F11 until `I/O ready` + virtio on the LUN.
 
@@ -202,11 +202,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-usb-bot-maxlun |
-| Summary | **Iron leftover, not persist.** Ep0-eval COM2: Toshiba + eval + BOT parse + SET_CONFIG then CAPACITY CBW `err=8 cmpl=0`. Enum lived. This EFI: GET_MAX_LUN + required INQUIRY + longer settle + recover_enum keeps `cmpl`. Scores **held**. |
+| Commit | m8-usb-bot-epst |
+| Summary | **Iron leftover, not persist.** Maxlun COM2: Toshiba + eval + SET_CONFIG + GET_MAX_LUN `val=0` then INQUIRY CBW `cmpl=0xff` leftover 1 GiB. Enum lived. This EFI: CONFIG_EP copies Output Slot+A1; `xhci epst`; MSC BOT reset + Clear Halt. Scores **held**. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Bar A **42% held** / Bar B **18% held** / overall **38% held** / months A **1.5 held**. Persist piece **70% held**. A2 still open. |
-| Gates touched | `xhci.rs` GET_MAX_LUN; `usb_bot.rs` required INQUIRY; [loihda.md](loihda.md). `./tools/sync-loihda-site.sh --check`. No MegaRAID. No TLS. No F11. |
+| Gates touched | `xhci.rs` CONFIG_EP copy + epst + BOT reset; [loihda.md](loihda.md). `./tools/sync-loihda-site.sh --check`. No MegaRAID. No TLS. No F11. |
 
 ---
 
@@ -214,6 +214,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-16 | m8-usb-bot-epst | 42 | 18 | **Iron leftover, not persist.** Maxlun COM2 GET_MAX_LUN `val=0` then INQUIRY CBW `cmpl=0xff`. Enum/eval/setcfg/maxlun lived. This EFI: CONFIG_EP copies Output Slot+A1; `xhci epst`; MSC BOT reset + Clear Halt. Persist 70% held. A2 open. |
 | 2026-09-15 | m8-usb-bot-maxlun | 42 | 18 | **Iron leftover, not persist.** Ep0-eval COM2 SET_CONFIG then CAPACITY CBW `err=8`. Enum/eval/GET_CONFIG lived. This EFI: GET_MAX_LUN + required INQUIRY. Persist 70% held. A2 open. |
 | 2026-09-15 | m8-usb-ep0-eval | 42 | 18 | **Iron leftover, not persist.** Cfg-desc COM2 CH never named Toshiba; ep0-stop 9-byte GET_CONFIG `cmd=4`. This EFI: Evaluate Context EP0 MPS + GET_CONFIG 64 + Toshiba `0480:a004` BOT fallback. Persist 70% held. A2 open. |
 | 2026-09-15 | m8-usb-cfg-desc | 42 | 18 | **Iron leftover, not persist.** EP0-stop COM2 `cmd=4 cmpl=0xff` `bot=? scsi=?` after Toshiba named. 9-byte GET_CONFIG STATUS never posted. This EFI: CH + 256-byte GET_CONFIGURATION + DATA-or-STATUS. Persist 70% held. A2 open. |
