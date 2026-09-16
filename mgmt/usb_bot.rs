@@ -87,6 +87,10 @@ pub trait UsbBulk {
     /// (host mocks). Live xHCI spins. Iron `96024edc`: CAPACITY (8 B)
     /// succeeded then READ CBW failed `cmpl=0`.
     fn settle(&mut self) {}
+    /// Before the first INQUIRY CBW. Live xHCI: Stop+rearm bulk, Clear Halt,
+    /// long wait. Iron firstread COM2: `epst`/`botrst`/`maxlun` then
+    /// `bot=cbw scsi=inquiry` — post-CAPACITY prepare never ran.
+    fn prepare_first_cbw(&mut self) {}
     /// After CAPACITY CSW, before the first 512-byte READ. Live xHCI:
     /// print EP state, Stop+rearm bulk rings, Clear Halt, long READ wait.
     /// Iron epst COM2: INQUIRY/CAPACITY lived then `bot=cbw scsi=read`.
@@ -358,9 +362,11 @@ fn bot_cmd_retry(
 /// CAPACITY. Iron first-cbw: `cmpl=0x13` was Reset
 /// Endpoint on a Running EP after CBW timeout — Stop Endpoint first
 /// (Halted-only Reset). Iron epst COM2: `epst out=1 in=1` + BOT reset +
-/// INQUIRY/CAPACITY then `bot=cbw scsi=read cmpl=0xff`. Prepare pipes
-/// before the first media READ; do not claim ready until it completes.
+/// INQUIRY/CAPACITY then `bot=cbw scsi=read cmpl=0xff`. Iron firstread
+/// COM2: same enum then `bot=cbw scsi=inquiry` — firstread never ran.
+/// Arm pipes before the first bulk CBW; keep the long wait through READ.
 pub fn usb_bot_bring_up(hw: &mut impl UsbBulk, min_bytes: u64) -> Result<(u64, u32), UsbBotError> {
+    hw.prepare_first_cbw();
     hw.settle();
     let mut tag = 1u32;
     let mut inq = [0u8; 36];
