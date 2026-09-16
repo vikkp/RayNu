@@ -191,6 +191,8 @@ pub fn disk_persist_surface_present() -> bool {
         && include_str!("xhci.rs").contains("FIRST_READ_SPINS")
         && include_str!("xhci.rs").contains("xhci firstread")
         && include_str!("xhci.rs").contains("xhci firstcbw")
+        && include_str!("xhci.rs").contains("norearm")
+        && include_str!("xhci.rs").contains("Iron firstcbw COM2")
         && include_str!("xhci.rs").contains("Iron epst COM2")
         && include_str!("xhci.rs").contains("Iron firstread COM2")
         && include_str!("usb_bot.rs").contains("fn prepare_first_cbw(")

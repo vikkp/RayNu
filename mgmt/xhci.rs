@@ -136,8 +136,9 @@ pub const XHCI_EP0_DCI: u8 = 1;
 pub const BULK_SPINS: u32 = 100_000_000;
 /// First bulk CBW after GET_MAX_LUN (INQUIRY, then CAPACITY, then READ).
 /// Iron epst COM2: INQUIRY/CAPACITY lived, READ CBW `cmpl=0xff`.
-/// Iron firstread COM2: `epst`/`botrst`/`maxlun` then INQUIRY CBW
-/// `cmpl=0xff` — post-CAPACITY `xhci firstread` never printed.
+/// Iron firstread COM2: `epst`/`botrst`/`maxlun` then INQUIRY CBW `cmpl=0xff`.
+/// Iron firstcbw COM2: `xhci firstcbw` then INQUIRY still `cmpl=0xff` —
+/// Stop+rearm before the unused first CBW did not retire a Transfer Event.
 /// Toshiba spinning HDD can NAK the first bulk CBW for seconds.
 pub const FIRST_READ_SPINS: u32 = 800_000_000;
 
@@ -1097,7 +1098,7 @@ fn serial_xhci_firstcbw(port: u8) {
     use crate::boot::serial;
     serial::write_str("boot: Stage 46 xhci firstcbw p");
     serial_dec_u8(port);
-    serial::write_line(" (not ISO-INSTALL-OK)");
+    serial::write_line(" norearm (not ISO-INSTALL-OK)");
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
@@ -2289,8 +2290,9 @@ impl UsbBulk for LiveXhci {
     }
 
     fn prepare_first_cbw(&mut self) {
-        // Iron firstread COM2: epst Running + botrst + maxlun then INQUIRY
-        // CBW `cmpl=0xff`. Post-CAPACITY firstread never printed.
+        // Iron firstcbw COM2: rearm+Clear Halt+FIRST_READ_SPINS then INQUIRY
+        // still `cmpl=0xff`. Epst boot (CONFIG_EP dequeue, no Stop) got
+        // INQUIRY+CAPACITY. Set TR Deq is fire-and-forget.
         self.arm_first_bulk(false);
     }
 
@@ -2314,73 +2316,21 @@ impl LiveXhci {
     }
 
     fn arm_first_bulk(&mut self, read: bool) {
-        // Stop+rearm (not Reset — first-cbw `cmpl=0x13`) + Clear Halt, then
-        // FIRST_READ_SPINS for the next bulk CBW.
+        // Iron firstcbw COM2: Stop+rearm before unused bulk CBW, then
+        // INQUIRY `cmpl=0xff` at FIRST_READ_SPINS. Keep CONFIG_EP dequeue.
+        // recover_pipes stays on CBW timeout retry only.
         self.long_bulk = true;
         let mut hw = MmioXhci { base: self.mmio };
         let mut outctx = [0u8; 4096];
         hw.dma_read(self.mem.devctx, &mut outctx);
         let cs = self.cs;
+        let port = self.port;
         serial_xhci_epst(
-            self.port,
+            port,
             ep_ctx_state(get_u32(&outctx, output_ep_ctx_off(cs, 1))),
             ep_ctx_state(get_u32(&outctx, output_ep_ctx_off(cs, self.dci_out))),
             ep_ctx_state(get_u32(&outctx, output_ep_ctx_off(cs, self.dci_in))),
         );
-        self.recover_pipes();
-        let mem = self.mem;
-        let caps = self.caps;
-        let slot = self.slot;
-        let port = self.port;
-        let ep_out = self.ep_out;
-        let ep_in = self.ep_in;
-        let mut hw = MmioXhci { base: self.mmio };
-        if control_nodata_retry(
-            &mut hw,
-            &caps,
-            &mem,
-            &mut self.cmd,
-            &mut self.ep0,
-            &mut self.ev,
-            slot,
-            setup_clear_halt(ep_out),
-            port,
-        )
-        .is_err()
-        {
-            reset_ep0(
-                &mut hw,
-                &caps,
-                &mem,
-                &mut self.cmd,
-                &mut self.ev,
-                &mut self.ep0,
-                slot,
-            );
-        }
-        if control_nodata_retry(
-            &mut hw,
-            &caps,
-            &mem,
-            &mut self.cmd,
-            &mut self.ep0,
-            &mut self.ev,
-            slot,
-            setup_clear_halt(ep_in | 0x80),
-            port,
-        )
-        .is_err()
-        {
-            reset_ep0(
-                &mut hw,
-                &caps,
-                &mem,
-                &mut self.cmd,
-                &mut self.ev,
-                &mut self.ep0,
-                slot,
-            );
-        }
         self.settle();
         if read {
             serial_xhci_firstread(port);
