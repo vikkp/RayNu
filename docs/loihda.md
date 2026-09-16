@@ -123,7 +123,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 **Product effect.** “Install Linux” without persist is a demo that dies when the operator Force Offs the box — which they will, because that is how you recover a Type-1. Nested File persist (`ce3d8a09`) and DurableLun USB/NVMe I/O are the mechanism. Iron Force Off is still open. USB ≥ 16 GiB (not the ESP Cruzer / 2–8 GiB UDisk) is the Toshiba LUN. Nested QEMU ≠ R640.
 
-**Iron NOW (not a score bump).** Cmdptr COM2: p10 Address Device `cmd=3 cmpl=0xff` then p11 Enable Slot `cmd=2 cmpl=0xff` — Toshiba **not named**. Disable Slot wait skipped Command Ring Stopped (wrong TRB pointer) and wedged CRR. Prior capoverlap boot *did* name `0480:a004`. This EFI: walk p11 before p10 (`xhci p11first`); abort waits ADDR_SPINS; no Disable Slot wait (`xhci abort crr=`). Keep cmdptr. Do not Force Off leftover DRAM.
+**Iron NOW (not a score bump).** p11first COM2: `xhci p11first` then `xhci abort crr=0` then p11 Enable Slot `cmd=2 cmpl=0xff` — Toshiba **not named**. p14 hub `1604:10c0` then enumerated. First doorbell after HCRST lost; abort primed the ring; product walked away from Toshiba. This EFI: No-Op prime (`xhci nop`); Enable Slot ADDR_SPINS; abort+retry same port (`xhci slotretry pN`); accept Command TRB Pointer 0 on Success. Keep p11first + cmdptr. Do not Force Off leftover DRAM.
 
 **Honest remainder.** 30% is iron COM2 `RAYNU-V-M8-DISK-PERSIST-OK`. Do not F11 until `I/O ready` + virtio on the LUN.
 
@@ -171,7 +171,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 |------|-------|------|--------|
 | 2026-09-11 | Everest | Iron ISO → disk → login | **DONE** — HDA 99%, months 0.0 |
 | 2026-09-13 | Persist mechanism | Nested-OK + DurableLun USB/NVMe I/O | **DONE nested / host**; iron Force Off **open** |
-| **NOW** | Bar A A2 | USB/NVMe Force Off on COM2 | **NEXT** (cmdptr COM2 p11 Enable Slot timeout after p10 ADDR; Toshiba not named; leftover 1 GiB ≠ persist) |
+| **NOW** | Bar A A2 | USB/NVMe Force Off on COM2 | **NEXT** (p11first COM2 p11 Enable Slot timeout then p14 hub; Toshiba not named; leftover 1 GiB ≠ persist) |
 | then | Bar A A3+A4 | SKU card + TLS | design overlap OK; do not close TLS before persist COM2 |
 | then | Bar B B2 | Spare PERC VD persist | after A2; census skip is lab safety |
 | later | Auth / console / unmodified ISO | A5, A6, Gen-1 Phase 2 | named residuals, not fake closes |
@@ -202,11 +202,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-usb-bot-p11first |
-| Summary | **Iron leftover, not persist.** Cmdptr COM2: p11 Enable Slot `cmd=2 cmpl=0xff` after p10 ADDR timeout. Toshiba not named. This EFI: p11-first + abort ADDR_SPINS. Scores **held**. |
+| Commit | m8-usb-bot-slotretry |
+| Summary | **Iron leftover, not persist.** p11first COM2: p11 Enable Slot `cmd=2 cmpl=0xff` then p14 hub. Toshiba not named. This EFI: No-Op prime + Enable Slot ADDR_SPINS retry. Scores **held**. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Bar A **42% held** / Bar B **18% held** / overall **38% held** / months A **1.5 held**. Persist piece **70% held**. A2 still open. |
-| Gates touched | `xhci.rs` p11-first + abort; [loihda.md](loihda.md). `./tools/sync-loihda-site.sh --check`. No MegaRAID. No TLS. No F11. |
+| Gates touched | `xhci.rs` nop + slotretry; [loihda.md](loihda.md). `./tools/sync-loihda-site.sh --check`. No MegaRAID. No TLS. No F11. |
 
 ---
 
@@ -214,6 +214,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-16 | m8-usb-bot-slotretry | 42 | 18 | **Iron leftover, not persist.** p11first COM2 p11 Enable Slot `cmd=2 cmpl=0xff` then p14 hub. Toshiba not named. This EFI: No-Op prime + Enable Slot ADDR_SPINS retry (`xhci nop` / `xhci slotretry`). Persist 70% held. A2 open. |
 | 2026-09-16 | m8-usb-bot-p11first | 42 | 18 | **Iron leftover, not persist.** Cmdptr COM2 p10 ADDR then p11 Enable Slot `cmd=2 cmpl=0xff`. Toshiba not named. This EFI: p11-first + abort ADDR_SPINS, no Disable Slot wait. Persist 70% held. A2 open. |
 | 2026-09-16 | m8-usb-bot-cmdptr | 42 | 18 | **Iron leftover, not persist.** Capoverlap COM2 named Toshiba p11 then CONFIG_EP `cmd=5 cmpl=0` `bot=?`. Not device-missing — leftover cmd event + Disable Slot. This EFI: Command TRB Pointer match. Persist 70% held. A2 open. |
 | 2026-09-16 | m8-usb-bot-cfg-retry | 42 | 18 | **Iron leftover, not persist.** Capoverlap COM2 SET_CONFIG then CONFIG_EP `cmd=5 cmpl=0` `err=3 bot=?`. BOT never started. This EFI: drain + skip CC=0 + CONFIG_EP retry. Persist 70% held. A2 open. |
