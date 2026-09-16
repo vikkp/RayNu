@@ -317,6 +317,11 @@ pub fn xhci_enum_diag_cmpl(cmpl: u8, cmd: u8, speed: u8, csz: bool) -> u64 {
     u64::from(cmpl) | (u64::from(cmd) << 8) | (u64::from(speed) << 16) | (u64::from(csz) << 24)
 }
 
+/// Command tag from a packed Enum `cmpl=` (bits 15:8).
+pub fn xhci_enum_diag_cmd(packed: u64) -> u8 {
+    ((packed >> 8) & 0xFF) as u8
+}
+
 /// Command Completion Code 0 is Invalid (xHCI Table 6-91). Iron capoverlap
 /// COM2: SET_CONFIG lived then CONFIG_EP `cmd=5 cmpl=0` `err=3 bot=?`.
 /// Do not treat that leftover as the Configure Endpoint result.
@@ -468,6 +473,26 @@ pub fn xhci_cmd_event_matches(ev: &[u8; 16], want_ptr: u64) -> bool {
 /// same CCS port after abort; do not walk to the hub.
 pub fn xhci_retry_enable_slot(first_posted: bool) -> bool {
     !first_posted
+}
+
+/// Iron slotretry COM2: No-Op + Enable Slot + Address Device lived on p11
+/// (`xhci nop`, no `cmd=2`). GET_DESC retried n=1,n=2 then `cmd=4 cmpl=0xff`
+/// with no Transfer Event — EP0 drain, **not** Evaluate Context (`cmd=7`).
+/// abort crr=0; walking to p14 threw away the live slot. Keep DCBAA; do not
+/// Disable Slot; do not start p14/p10 after a DESC miss.
+pub fn xhci_desc_fail_stops_walk(packed_cmpl: u64) -> bool {
+    xhci_enum_diag_cmd(packed_cmpl) == XHCI_ENUM_CMD_DESC
+}
+
+/// Packed `cmd=4` + `cmpl=0xff` is GET_DESC with no Transfer Event, not Eval.
+pub fn xhci_desc_timeout_is_ep0_xfer(cmd: u8, cmpl: u8) -> bool {
+    cmd == XHCI_ENUM_CMD_DESC && cmpl == CMPL_TIMEOUT
+}
+
+/// Keep the Enable Slot id after GET_DESC timeout. Zeroing DCBAA / Disable
+/// Slot throws away Slotretry's win.
+pub fn xhci_keep_slot_after_desc() -> bool {
+    true
 }
 
 /// SETUP TRB flags: Immediate Data + TRT (IN=3, no-data=0). No Chain —
@@ -1032,6 +1057,12 @@ fn serial_xhci_enum(port: u8, sc: u32, speed: u8, usb3: bool, csz: bool, cmd: u8
     serial_dec_u8(cmd);
     serial::write_str(" cmpl=0x");
     serial_hex32(u32::from(cmpl));
+    if cmd == XHCI_ENUM_CMD_DESC && cmpl == CMPL_TIMEOUT {
+        serial::write_line(
+            " ep0 timeout (not Evaluate Context; leftover DRAM; not ISO-INSTALL-OK)",
+        );
+        return;
+    }
     if cmpl == CMPL_TIMEOUT {
         serial::write_str(" timeout");
     }
@@ -1153,6 +1184,14 @@ fn serial_xhci_slotretry(port: u8) {
     serial::write_str("boot: Stage 46 xhci slotretry p");
     serial_dec_u8(port);
     serial::write_line(" (not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_descabort(port: u8) {
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 xhci descabort p");
+    serial_dec_u8(port);
+    serial::write_line(" keep-slot (not Disable Slot; not ISO-INSTALL-OK)");
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
@@ -1358,6 +1397,9 @@ fn serial_xhci_nop() {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_slotretry(_port: u8) {}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_descabort(_port: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_abort(_crr: u8) {}
@@ -1786,6 +1828,131 @@ fn recover_enum(
             zero_page(hw, mem.ep0);
         }
     });
+}
+
+/// Abort the command ring; keep DCBAA[slot]. Iron slotretry COM2: GET_DESC
+/// timeout then recover_enum zeroed the live slot and the walk named p14.
+fn abort_keep_slot(
+    hw: &mut impl XhciHw,
+    caps: &XhciCaps,
+    mem: &XhciMem,
+    cmd_ring: &mut Ring,
+    ev: &mut EventRing,
+) {
+    hold_bot_diag(|| {
+        let crr_clear = abort_cmd_ring(hw, caps, mem, cmd_ring, ev);
+        serial_xhci_abort(if crr_clear { 0 } else { 1 });
+    });
+}
+
+fn fill_address_input(
+    inctx: &mut [u8; 4096],
+    cs: usize,
+    slot_dw0: u32,
+    port: u8,
+    speed: u8,
+    ep0_hpa: u64,
+) {
+    put_u32(inctx, 4, 0x3);
+    put_u32(inctx, cs, slot_dw0);
+    put_u32(inctx, cs + 4, slot_ctx_dw1_port(port));
+    let mps0 = u32::from(ep0_max_packet(speed));
+    put_u32(inctx, cs * 2 + 4, (4u32 << 3) | (3 << 1) | (mps0 << 16));
+    put_u64(inctx, cs * 2 + 8, ep0_hpa | 1);
+}
+
+/// Address Device on an already-enabled slot. Do not Enable Slot again.
+fn address_device(
+    hw: &mut impl XhciHw,
+    caps: &XhciCaps,
+    mem: &XhciMem,
+    cmd_ring: &mut Ring,
+    ev: &mut EventRing,
+    port: u8,
+    slot: u8,
+    speed: u8,
+    mmio: u64,
+) -> Result<(), UsbBotError> {
+    let Some(slot_dw0) = slot_ctx_dw0(speed, 1) else {
+        store_usb_bot_diag(UsbBotError::Enum, mmio, xhci_enum_diag_portsc(0, port), 0);
+        return Err(stamp_enum(
+            hw,
+            caps,
+            mmio,
+            port,
+            XHCI_ENUM_CMD_ADDR,
+            UsbBotError::Enum,
+        ));
+    };
+    zero_page(hw, mem.inctx);
+    zero_page(hw, mem.devctx);
+    zero_page(hw, mem.ep0);
+    let cs = ctx_size(caps.csz);
+    let mut inctx = [0u8; 4096];
+    fill_address_input(&mut inctx, cs, slot_dw0, port, speed, mem.ep0);
+    hw.dma_write(mem.inctx, &inctx);
+    cmd_wait(
+        hw,
+        caps,
+        cmd_ring,
+        ev,
+        mem.inctx,
+        trb_ctrl(0, TRB_ADDRESS_DEV, u32::from(slot) << 24),
+        ADDR_SPINS,
+    )
+    .map_err(|e| {
+        abort_keep_slot(hw, caps, mem, cmd_ring, ev);
+        stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_ADDR, e)
+    })?;
+    Ok(())
+}
+
+/// GET_DEVICE on a live slot. Iron slotretry COM2: no Transfer Event after
+/// Address Device (`cmd=4 cmpl=0xff`) — EP0 drain, not Evaluate Context.
+/// Abort the command ring, keep DCBAA, retry EP0; then port-reset + Address
+/// Device on the **same** slot. Do not Disable Slot. Do not Enable Slot again.
+fn get_device_desc(
+    hw: &mut impl XhciHw,
+    caps: &XhciCaps,
+    mem: &XhciMem,
+    cmd_ring: &mut Ring,
+    ev: &mut EventRing,
+    ep0: &mut Ring,
+    slot: u8,
+    port: u8,
+    mmio: u64,
+) -> Result<[u8; 18], UsbBotError> {
+    let mut dev = [0u8; 18];
+    let setup = setup_get_desc(1, 18);
+    if let Err(e) = control_in_retry(
+        hw, caps, mem, cmd_ring, ep0, ev, slot, mem.bounce, setup, &mut dev, port,
+    ) {
+        // Split COM2: packed cmd=4 + no Transfer Event is EP0 GET_DESC,
+        // not Evaluate Context (cmd=7 / `xhci eval`).
+        let _ = stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_DESC, e);
+    } else {
+        return Ok(dev);
+    }
+    abort_keep_slot(hw, caps, mem, cmd_ring, ev);
+    reset_ep0(hw, caps, mem, cmd_ring, ev, ep0, slot);
+    serial_xhci_descabort(port);
+    if control_in_retry(
+        hw, caps, mem, cmd_ring, ep0, ev, slot, mem.bounce, setup, &mut dev, port,
+    )
+    .is_ok()
+    {
+        return Ok(dev);
+    }
+    let sc = reset_port(hw, caps, port)
+        .map_err(|e| stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_RESET, e))?;
+    let speed = portsc_speed(sc);
+    address_device(hw, caps, mem, cmd_ring, ev, port, slot, speed, mmio)?;
+    *ep0 = Ring::new(mem.ep0);
+    serial_xhci_descabort(port);
+    control_in_retry(
+        hw, caps, mem, cmd_ring, ep0, ev, slot, mem.bounce, setup, &mut dev, port,
+    )?;
+    Ok(dev)
 }
 
 fn event_slot(ev: &[u8; 16]) -> u8 {
@@ -2782,7 +2949,7 @@ fn try_port(
     let sc = reset_port(hw, caps, port)
         .map_err(|e| stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_RESET, e))?;
     let speed = portsc_speed(sc);
-    let Some(slot_dw0) = slot_ctx_dw0(speed, 1) else {
+    if slot_ctx_dw0(speed, 1).is_none() {
         store_usb_bot_diag(UsbBotError::Enum, mmio, xhci_enum_diag_portsc(sc, port), 0);
         return Err(stamp_enum(
             hw,
@@ -2792,7 +2959,7 @@ fn try_port(
             XHCI_ENUM_CMD_ADDR,
             UsbBotError::Enum,
         ));
-    };
+    }
     let ev_en = enable_slot(hw, caps, mem, cmd_ring, ev, port)
         .map_err(|e| stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_SLOT, e))?;
     let slot = event_slot(&ev_en);
@@ -2807,57 +2974,14 @@ fn try_port(
             UsbBotError::Enum,
         ));
     }
+    let cs = ctx_size(caps.csz);
     let mut dc = [0u8; 8];
     put_u64(&mut dc, 0, mem.devctx);
     hw.dma_write(mem.dcbaa + u64::from(slot) * 8, &dc);
-    zero_page(hw, mem.inctx);
-    zero_page(hw, mem.devctx);
-    zero_page(hw, mem.ep0);
-    let cs = ctx_size(caps.csz);
-    let mut inctx = [0u8; 4096];
-    put_u32(&mut inctx, 4, 0x3);
-    put_u32(&mut inctx, cs, slot_dw0);
-    put_u32(&mut inctx, cs + 4, slot_ctx_dw1_port(port));
-    let mps0 = u32::from(ep0_max_packet(speed));
-    put_u32(
-        &mut inctx,
-        cs * 2 + 4,
-        (4u32 << 3) | (3 << 1) | (mps0 << 16),
-    );
-    put_u64(&mut inctx, cs * 2 + 8, mem.ep0 | 1);
-    hw.dma_write(mem.inctx, &inctx);
-    cmd_wait(
-        hw,
-        caps,
-        cmd_ring,
-        ev,
-        mem.inctx,
-        trb_ctrl(0, TRB_ADDRESS_DEV, u32::from(slot) << 24),
-        ADDR_SPINS,
-    )
-    .map_err(|e| {
-        recover_enum(hw, caps, mem, cmd_ring, ev, slot);
-        stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_ADDR, e)
-    })?;
+    address_device(hw, caps, mem, cmd_ring, ev, port, slot, speed, mmio)?;
     let mut ep0 = Ring::new(mem.ep0);
-    let mut dev = [0u8; 18];
-    control_in_retry(
-        hw,
-        caps,
-        mem,
-        cmd_ring,
-        &mut ep0,
-        ev,
-        slot,
-        mem.bounce,
-        setup_get_desc(1, 18),
-        &mut dev,
-        port,
-    )
-    .map_err(|e| {
-        recover_enum(hw, caps, mem, cmd_ring, ev, slot);
-        stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_DESC, e)
-    })?;
+    let dev = get_device_desc(hw, caps, mem, cmd_ring, ev, &mut ep0, slot, port, mmio)
+        .map_err(|e| stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_DESC, e))?;
     serial_xhci_dev(
         port,
         u16::from_le_bytes([dev[8], dev[9]]),
@@ -3144,7 +3268,15 @@ fn xhci_bring_up(
             mmio,
         ) {
             Ok(live) => return Ok(live),
-            Err(e) => last = xhci_bring_up_keep_err(last, e),
+            Err(e) => {
+                // Iron slotretry COM2: p11 GET_DESC EP0 timeout then p14 hub.
+                // Keep the live slot; do not start p14/p10.
+                if xhci_desc_fail_stops_walk(usb_bot_last_cmpl()) {
+                    store_usb_bot_diag(e, mmio, usb_bot_last_portsc(), usb_bot_last_cmpl());
+                    return Err(e);
+                }
+                last = xhci_bring_up_keep_err(last, e);
+            }
         }
     }
     if !any_ccs {
@@ -3950,6 +4082,30 @@ mod xhci_pack_test {
         assert_eq!(TRB_NO_OP_CMD, 23);
         assert!(xhci_retry_enable_slot(false));
         assert!(!xhci_retry_enable_slot(true));
+        // Iron slotretry COM2: packed fail `cmpl=0x303ff` is p10 ADDR (cmd=3),
+        // not the p11 GET_DESC timeout (`cmd=4`). Stop the walk on cmd=4;
+        // keep the live slot (no Disable Slot / no p14).
+        let desc_to = xhci_enum_diag_cmpl(CMPL_TIMEOUT, XHCI_ENUM_CMD_DESC, 3, false);
+        assert_eq!(xhci_enum_diag_cmd(desc_to), XHCI_ENUM_CMD_DESC);
+        assert!(xhci_desc_fail_stops_walk(desc_to));
+        assert!(!xhci_desc_fail_stops_walk(0x0003_03ff));
+        assert!(!xhci_desc_fail_stops_walk(xhci_enum_diag_cmpl(
+            CMPL_TIMEOUT,
+            XHCI_ENUM_CMD_SLOT,
+            3,
+            false
+        )));
+        assert!(xhci_desc_timeout_is_ep0_xfer(
+            XHCI_ENUM_CMD_DESC,
+            CMPL_TIMEOUT
+        ));
+        assert!(!xhci_desc_timeout_is_ep0_xfer(
+            XHCI_ENUM_CMD_EVAL,
+            CMPL_TIMEOUT
+        ));
+        assert_eq!(XHCI_ENUM_CMD_EVAL, 7);
+        assert_ne!(XHCI_ENUM_CMD_DESC, XHCI_ENUM_CMD_EVAL);
+        assert!(xhci_keep_slot_after_desc());
         assert!(cmd_cc_ring_stopped(CMPL_CMD_STOPPED));
         assert!(cmd_cc_ring_stopped(CMPL_CMD_ABORTED));
         assert!(!cmd_cc_ring_stopped(0));
