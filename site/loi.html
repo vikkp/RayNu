@@ -225,12 +225,13 @@
                 Today the install disk is leftover DRAM above the precise EPT
                 pool. A <em>guest</em> reset keeps it. A <em>hypervisor</em>
                 Force Off zeros it. Nested File persist is closed; USB/NVMe
-                DurableLun I/O is host-ready; iron COM2 is not. Ep0-eval COM2
-                named Toshiba, Evaluate Context and SET_CONFIG lived, then
-                CAPACITY CBW failed
-                (<code>err=8 bot=cbw scsi=capacity</code>).
-                This EFI: GET_MAX_LUN after Configure Endpoint, required
-                INQUIRY, longer HDD settle. Leftover 1 GiB DRAM is not persist.
+                DurableLun I/O is host-ready; iron COM2 is not. Maxlun COM2
+                named Toshiba, Evaluate Context, SET_CONFIG and GET_MAX_LUN
+                lived, then INQUIRY CBW timed out
+                (<code>err=8 bot=cbw scsi=inquiry cmpl=0xff</code>).
+                This EFI: Configure Endpoint copies the Output Slot + A1 live
+                EP0 dequeue, prints <code>xhci epst</code>, then MSC BOT reset
+                + Clear Halt before INQUIRY. Leftover 1 GiB DRAM is not persist.
                 The remaining 30% is still
                 <code>RAYNU-V-M8-DISK-PERSIST-OK</code> after Force Off on a
                 ≥16 GiB Toshiba LUN, not the ESP Cruzer/UDisk. A buyer who

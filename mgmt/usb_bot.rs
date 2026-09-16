@@ -344,9 +344,11 @@ fn bot_cmd_retry(
 /// skip INQUIRY then `bot=cbw scsi=capacity cmpl=0xff` — first bulk OUT
 /// after SET_CONFIG with no settle/INQUIRY. Iron ep0-eval: SET_CONFIG +
 /// BOT parse lived then `bot=cbw scsi=capacity err=8` — swallowing a
-/// failed INQUIRY left dirty bulk rings. Require waited INQUIRY
-/// (`recover_pipes` on fail, never ignore). Toshiba is a spinning HDD:
-/// settle + INQUIRY then CAPACITY. Iron first-cbw: `cmpl=0x13` was Reset
+/// failed INQUIRY left dirty bulk rings. Iron maxlun COM2: GET_MAX_LUN
+/// `val=0` then INQUIRY CBW `cmpl=0xff` — CONFIG_EP packing / Halt, not a
+/// GET_MAX_LUN revert. Require waited INQUIRY (`recover_pipes` on fail,
+/// never ignore). Toshiba is a spinning HDD: settle + INQUIRY then
+/// CAPACITY. Iron first-cbw: `cmpl=0x13` was Reset
 /// Endpoint on a Running EP after CBW timeout — Stop Endpoint first
 /// (Halted-only Reset). Do not claim ready until a data-stage READ completes.
 pub fn usb_bot_bring_up(hw: &mut impl UsbBulk, min_bytes: u64) -> Result<(u64, u32), UsbBotError> {

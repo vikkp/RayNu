@@ -432,6 +432,123 @@ pub fn evaluate_ep0_add_flags() -> u32 {
     0x3
 }
 
+/// Add Context flags A0+A1+bulk DCIs for Configure Endpoint (xHCI 4.6.6).
+/// Iron maxlun COM2: A0+A3+A4 only (no A1, reconstructed Slot) then INQUIRY
+/// CBW `cmpl=0xff`. Copy Output Slot/EP0 into Input and keep EP0 at the
+/// live dequeue so Evaluate Context's rewind to `mem.ep0|1` does not leave
+/// HW chewing completed GET_DEVICE TRBs while bulk OUT is doorbell'd.
+pub fn config_ep_add_flags(dci_out: u8, dci_in: u8) -> u32 {
+    1 | (1 << 1) | (1u32 << dci_out) | (1u32 << dci_in)
+}
+
+/// Output Device Context: Slot at 0, DCI n at cs*n (xHCI 6.1).
+pub fn output_ep_ctx_off(cs: usize, dci: u8) -> usize {
+    cs.saturating_mul(usize::from(dci))
+}
+
+/// Input Context: Control at 0, Slot at cs, DCI n at cs*(1+n) (xHCI 6.2.5).
+pub fn input_ep_ctx_off(cs: usize, dci: u8) -> usize {
+    cs.saturating_mul(1 + usize::from(dci))
+}
+
+/// EP State in EP Context DW0[2:0]. 0 Disabled, 1 Running, 2 Halted, 3 Stopped.
+pub fn ep_ctx_state(dw0: u32) -> u8 {
+    (dw0 & 7) as u8
+}
+
+pub const EP_STATE_DISABLED: u8 = 0;
+pub const EP_STATE_RUNNING: u8 = 1;
+pub const EP_STATE_HALTED: u8 = 2;
+pub const EP_STATE_STOPPED: u8 = 3;
+
+/// Input EP Context EP State is reserved — must be 0 (xHCI 6.2.3.1).
+pub fn ep_ctx_input_clear_state(dw0: u32) -> u32 {
+    dw0 & !7
+}
+
+/// Slot Context Speed[23:20].
+pub fn slot_ctx_speed(dw0: u32) -> u8 {
+    ((dw0 >> 20) & 0xF) as u8
+}
+
+/// Update Context Entries[31:27] without clobbering Route String / Speed.
+pub fn slot_ctx_set_entries(dw0: u32, entries: u8) -> u32 {
+    (dw0 & !(0x1F << 27)) | (u32::from(entries) << 27)
+}
+
+/// Input Slot State[31:27] of DW3 is reserved (xHCI 6.2.2).
+pub fn slot_ctx_input_clear_state(dw3: u32) -> u32 {
+    dw3 & !(0x1F << 27)
+}
+
+/// Context Size: 32 bytes when HCCPARAMS1 CSZ=0, 64 when CSZ=1.
+pub fn xhci_ctx_size(csz: bool) -> usize {
+    if csz {
+        64
+    } else {
+        32
+    }
+}
+
+/// Pack Configure Endpoint Input Context from the live Output Device Context.
+/// Iron maxlun COM2 reconstructed Slot DW0/DW1 only (USB address / Route
+/// String dropped) and skipped A1.
+pub fn fill_config_ep_input(
+    ic: &mut [u8],
+    out: &[u8],
+    cs: usize,
+    speed: u8,
+    port: u8,
+    dci_out: u8,
+    dci_in: u8,
+    ep0_deq: u64,
+    bulk_out: u64,
+    bulk_in: u64,
+    mps_out: u16,
+    mps_in: u16,
+    ep0_mps: u16,
+) {
+    if cs == 0 || ic.len() < cs.saturating_mul(6) {
+        return;
+    }
+    let hi = core::cmp::max(dci_out, dci_in);
+    put_u32(ic, 4, config_ep_add_flags(dci_out, dci_in));
+    if out.len() >= cs {
+        ic[cs..cs + cs].copy_from_slice(&out[..cs]);
+        let mut dw0 = slot_ctx_set_entries(get_u32(ic, cs), hi);
+        if slot_ctx_speed(dw0) == 0 {
+            dw0 = slot_ctx_dw0(speed, hi).unwrap_or(dw0);
+            put_u32(ic, cs + 4, slot_ctx_dw1_port(port));
+        }
+        put_u32(ic, cs, dw0);
+        put_u32(
+            ic,
+            cs + 12,
+            slot_ctx_input_clear_state(get_u32(ic, cs + 12)),
+        );
+    } else if let Some(dw0) = slot_ctx_dw0(speed, hi) {
+        put_u32(ic, cs, dw0);
+        put_u32(ic, cs + 4, slot_ctx_dw1_port(port));
+    }
+    let ep0_dst = input_ep_ctx_off(cs, 1);
+    let ep0_src = output_ep_ctx_off(cs, 1);
+    if out.len() >= ep0_src + cs {
+        ic[ep0_dst..ep0_dst + cs].copy_from_slice(&out[ep0_src..ep0_src + cs]);
+        put_u32(ic, ep0_dst, ep_ctx_input_clear_state(get_u32(ic, ep0_dst)));
+    } else {
+        put_u32(ic, ep0_dst + 4, ep_ctx_dw1(4, ep0_mps));
+    }
+    put_u64(ic, ep0_dst + 8, ep0_deq);
+    let out_off = input_ep_ctx_off(cs, dci_out);
+    put_u32(ic, out_off + 4, ep_ctx_dw1(2, mps_out));
+    put_u64(ic, out_off + 8, bulk_out | 1);
+    put_u32(ic, out_off + 16, ep_ctx_dw4_avg_trb(mps_out));
+    let in_off = input_ep_ctx_off(cs, dci_in);
+    put_u32(ic, in_off + 4, ep_ctx_dw1(6, mps_in));
+    put_u64(ic, in_off + 8, bulk_in | 1);
+    put_u32(ic, in_off + 16, ep_ctx_dw4_avg_trb(mps_in));
+}
+
 /// EP0 Max Packet Size from the device descriptor, with a speed fallback.
 pub fn usb_ep0_mps_from_desc(speed: u8, b_mps0: u8) -> u16 {
     match speed {
@@ -585,11 +702,7 @@ pub fn parse_caps_from_snap(
 }
 
 fn ctx_size(csz: bool) -> usize {
-    if csz {
-        64
-    } else {
-        32
-    }
+    xhci_ctx_size(csz)
 }
 
 pub struct Ring {
@@ -605,6 +718,12 @@ impl Ring {
             enq: 0,
             cycle: 1,
         }
+    }
+
+    /// Next TRB the xHC should process (HPA | DCS). Used as EP0 dequeue in
+    /// Configure Endpoint A1 so Evaluate Context cannot rewind to TRB 0.
+    pub fn tr_dequeue(&self) -> u64 {
+        self.base + u64::from(self.enq) * 16 | u64::from(self.cycle & 1)
     }
 
     fn place(&mut self, hw: &mut impl XhciHw, ptr: u64, status: u32, ctrl: u32) -> u64 {
@@ -942,6 +1061,32 @@ fn serial_xhci_maxlun(port: u8, lun: u8, ok: bool) {
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_epst(port: u8, ep0: u8, bulk_out: u8, bulk_in: u8) {
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 xhci epst p");
+    serial_dec_u8(port);
+    serial::write_str(" ep0=");
+    serial_dec_u8(ep0);
+    serial::write_str(" out=");
+    serial_dec_u8(bulk_out);
+    serial::write_str(" in=");
+    serial_dec_u8(bulk_in);
+    serial::write_line(" (not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_botrst(port: u8, ok: bool) {
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 xhci botrst p");
+    serial_dec_u8(port);
+    if ok {
+        serial::write_line(" (not ISO-INSTALL-OK)");
+    } else {
+        serial::write_line(" fail (continue; leftover DRAM; not ISO-INSTALL-OK)");
+    }
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn serial_xhci_desc_retry(port: u8, n: u8) {
     use crate::boot::serial;
     serial::write_str("boot: Stage 46 xhci enum p");
@@ -1035,6 +1180,12 @@ fn serial_xhci_desc_retry(_port: u8, _n: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_maxlun(_port: u8, _lun: u8, _ok: bool) {}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_epst(_port: u8, _ep0: u8, _bulk_out: u8, _bulk_in: u8) {}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_botrst(_port: u8, _ok: bool) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_eval(_port: u8, _mps: u16, _ok: bool) {}
@@ -1740,6 +1891,27 @@ fn setup_get_max_lun() -> [u8; 8] {
     s
 }
 
+/// MSC Bulk-Only Mass Storage Reset (class OUT 0xFF, interface 0).
+/// Iron maxlun COM2: GET_MAX_LUN `val=0` then INQUIRY CBW `cmpl=0xff`.
+/// USB MSC 3.1: Reset then Clear Feature ENDPOINT_HALT on both bulk EPs
+/// before the first CBW. Not a CH / GET_MAX_LUN revert.
+fn setup_msc_bot_reset() -> [u8; 8] {
+    let mut s = [0u8; 8];
+    s[0] = 0x21;
+    s[1] = 0xFF;
+    s
+}
+
+/// CLEAR_FEATURE ENDPOINT_HALT. `ep_addr` is the USB endpoint address
+/// (IN has 0x80).
+fn setup_clear_halt(ep_addr: u8) -> [u8; 8] {
+    let mut s = [0u8; 8];
+    s[0] = 0x02;
+    s[1] = 1;
+    s[4] = ep_addr;
+    s
+}
+
 /// xHCI 4.6.7 / 4.8.2.1: after GET_DEVICE, Evaluate Context with EP0 MPS
 /// from `bMaxPacketSize0`. Missing this is the ep0-stop GET_CONFIG hang.
 fn evaluate_ep0_mps(
@@ -2297,36 +2469,95 @@ fn try_port(
     serial_xhci_setcfg(port, cfg_val);
     let dci_out = bulk_ep_dci(ep_out, false);
     let dci_in = bulk_ep_dci(ep_in, true);
-    let hi = core::cmp::max(dci_out, dci_in);
+    let mut outctx = [0u8; 4096];
+    hw.dma_read(mem.devctx, &mut outctx);
     zero_page(hw, mem.inctx);
     let mut ic = [0u8; 4096];
-    put_u32(&mut ic, 4, 1 | (1 << dci_out) | (1 << dci_in));
-    put_u32(&mut ic, cs, slot_ctx_dw0(speed, hi).unwrap_or(slot_dw0));
-    put_u32(&mut ic, cs + 4, slot_ctx_dw1_port(port));
-    let out_off = cs * (1 + dci_out as usize);
-    put_u32(&mut ic, out_off + 4, ep_ctx_dw1(2, mps_out));
-    put_u64(&mut ic, out_off + 8, mem.bulk_out | 1);
-    put_u32(&mut ic, out_off + 16, ep_ctx_dw4_avg_trb(mps_out));
-    let in_off = cs * (1 + dci_in as usize);
-    put_u32(&mut ic, in_off + 4, ep_ctx_dw1(6, mps_in));
-    put_u64(&mut ic, in_off + 8, mem.bulk_in | 1);
-    put_u32(&mut ic, in_off + 16, ep_ctx_dw4_avg_trb(mps_in));
+    fill_config_ep_input(
+        &mut ic,
+        &outctx,
+        cs,
+        speed,
+        port,
+        dci_out,
+        dci_in,
+        ep0.tr_dequeue(),
+        mem.bulk_out,
+        mem.bulk_in,
+        mps_out,
+        mps_in,
+        ep0_mps,
+    );
     hw.dma_write(mem.inctx, &ic);
     zero_page(hw, mem.bulk_out);
     zero_page(hw, mem.bulk_in);
-    cmd(
+    cmd_wait(
         hw,
         caps,
         cmd_ring,
         ev,
         mem.inctx,
         trb_ctrl(0, TRB_CONFIG_EP, u32::from(slot) << 24),
+        ADDR_SPINS,
     )
     .map_err(|e| {
         recover_enum(hw, caps, mem, cmd_ring, ev, slot);
         stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_CFG, e)
     })?;
     drain_events(hw, caps, ev);
+    hw.dma_read(mem.devctx, &mut outctx);
+    serial_xhci_epst(
+        port,
+        ep_ctx_state(get_u32(&outctx, output_ep_ctx_off(cs, 1))),
+        ep_ctx_state(get_u32(&outctx, output_ep_ctx_off(cs, dci_out))),
+        ep_ctx_state(get_u32(&outctx, output_ep_ctx_off(cs, dci_in))),
+    );
+    let rst_ok = control_nodata_retry(
+        hw,
+        caps,
+        mem,
+        cmd_ring,
+        &mut ep0,
+        ev,
+        slot,
+        setup_msc_bot_reset(),
+        port,
+    )
+    .is_ok();
+    if !rst_ok {
+        reset_ep0(hw, caps, mem, cmd_ring, ev, &mut ep0, slot);
+    }
+    serial_xhci_botrst(port, rst_ok);
+    if control_nodata_retry(
+        hw,
+        caps,
+        mem,
+        cmd_ring,
+        &mut ep0,
+        ev,
+        slot,
+        setup_clear_halt(ep_out),
+        port,
+    )
+    .is_err()
+    {
+        reset_ep0(hw, caps, mem, cmd_ring, ev, &mut ep0, slot);
+    }
+    if control_nodata_retry(
+        hw,
+        caps,
+        mem,
+        cmd_ring,
+        &mut ep0,
+        ev,
+        slot,
+        setup_clear_halt(ep_in | 0x80),
+        port,
+    )
+    .is_err()
+    {
+        reset_ep0(hw, caps, mem, cmd_ring, ev, &mut ep0, slot);
+    }
     let mut maxlun = [0u8; 1];
     match control_in_retry(
         hw,
@@ -2870,6 +3101,77 @@ mod xhci_pack_test {
         assert_eq!(evaluate_ep0_add_flags(), 0x3);
         assert_eq!(TRB_EVALUATE_CTX, 13);
         assert_eq!(XHCI_ENUM_CMD_EVAL, 7);
+        assert_eq!(config_ep_add_flags(4, 3), 0x1B);
+        assert_eq!(xhci_ctx_size(false), 32);
+        assert_eq!(xhci_ctx_size(true), 64);
+        assert_eq!(ep_ctx_state(1), EP_STATE_RUNNING);
+        assert_eq!(ep_ctx_input_clear_state(1), 0);
+    }
+
+    #[test]
+    fn config_ep_input_copies_output_slot_and_clears_ep_state() {
+        // Iron maxlun COM2: reconstructed Slot + A0+A3+A4 then INQUIRY CBW
+        // timeout. Input must copy Output Slot (keep Speed), set Context
+        // Entries=4, include A1 with live EP0 dequeue, EP State=0 in Input.
+        let cs = xhci_ctx_size(false);
+        let mut out = [0u8; 4096];
+        put_u32(&mut out, 0, slot_ctx_dw0(3, 1).expect("slot"));
+        put_u32(&mut out, 4, slot_ctx_dw1_port(11));
+        put_u32(&mut out, 12, 5);
+        put_u32(
+            &mut out,
+            output_ep_ctx_off(cs, 1),
+            u32::from(EP_STATE_RUNNING),
+        );
+        put_u32(&mut out, output_ep_ctx_off(cs, 1) + 4, ep_ctx_dw1(4, 64));
+        put_u64(&mut out, output_ep_ctx_off(cs, 1) + 8, 0x2000 | 1);
+        let mut ic = [0u8; 4096];
+        let ring = Ring::new(0x2000);
+        fill_config_ep_input(
+            &mut ic,
+            &out,
+            cs,
+            3,
+            11,
+            4,
+            3,
+            ring.tr_dequeue(),
+            0x3000,
+            0x4000,
+            512,
+            512,
+            64,
+        );
+        assert_eq!(get_u32(&ic, 4), config_ep_add_flags(4, 3));
+        assert_eq!(slot_ctx_speed(get_u32(&ic, cs)), 3);
+        assert_eq!(get_u32(&ic, cs) >> 27, 4);
+        assert_eq!(slot_ctx_dw1_num_ports(get_u32(&ic, cs + 4)), 0);
+        assert_eq!(get_u32(&ic, cs + 4) >> 16, 11);
+        assert_eq!(get_u32(&ic, cs + 12), 5);
+        assert_eq!(
+            ep_ctx_state(get_u32(&ic, input_ep_ctx_off(cs, 1))),
+            EP_STATE_DISABLED
+        );
+        assert_eq!(get_u64(&ic, input_ep_ctx_off(cs, 1) + 8), ring.tr_dequeue());
+        assert_eq!(ring.tr_dequeue(), 0x2000 | 1);
+        assert_eq!(get_u32(&ic, input_ep_ctx_off(cs, 4) + 4) >> 16, 512);
+        assert_eq!(get_u64(&ic, input_ep_ctx_off(cs, 4) + 8), 0x3000 | 1);
+        assert_eq!(get_u32(&ic, input_ep_ctx_off(cs, 3) + 4) >> 16, 512);
+        let rst = setup_msc_bot_reset();
+        assert_eq!(rst[0], 0x21);
+        assert_eq!(rst[1], 0xFF);
+        assert_eq!(rst[6], 0);
+        let halt_out = setup_clear_halt(2);
+        assert_eq!(halt_out[0], 0x02);
+        assert_eq!(halt_out[1], 1);
+        assert_eq!(halt_out[4], 2);
+        assert_eq!(setup_clear_halt(0x81)[4], 0x81);
+        assert_eq!(
+            slot_ctx_set_entries(slot_ctx_dw0(3, 1).unwrap(), 4) >> 27,
+            4
+        );
+        assert_eq!(output_ep_ctx_off(32, 4), 128);
+        assert_eq!(input_ep_ctx_off(32, 4), 160);
     }
 
     #[test]
@@ -3176,6 +3478,8 @@ mod xhci_pack_test {
         assert_eq!(maxlun[0], 0xA1);
         assert_eq!(maxlun[1], 0xFE);
         assert_eq!(maxlun[6], 1);
+        assert_eq!(setup_msc_bot_reset()[1], 0xFF);
+        assert_eq!(config_ep_add_flags(4, 3) & (1 << 1), 2);
         assert_eq!(BOT_SETTLE_SPINS >= 80_000_000, true);
         assert_eq!(setup_get_desc(2, USB_CFG_DESC_MAX)[6], 0);
         assert_eq!(setup_get_desc(2, USB_CFG_DESC_MAX)[7], 1);
