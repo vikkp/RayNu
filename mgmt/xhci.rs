@@ -13,9 +13,13 @@
 use super::usb_bot::{
     csw_ok, next_bot_tag, restore_usb_bot_diag, stamp_scsi_cdb, store_usb_bot_diag,
     store_usb_bot_diag_unless_kept, store_usb_bot_ready, store_usb_bot_stage, usb_bot_bring_up,
-    usb_bot_last_bar, usb_bot_last_cmpl, usb_bot_last_err, usb_bot_last_portsc, usb_bot_last_scsi,
-    usb_bot_last_stage, usb_bot_scsi_name, usb_bot_stage_name, Cbw, UsbBotError, UsbBulk,
-    BOT_STAGE_CBW, BOT_STAGE_CSW, BOT_STAGE_DATA, CBW_LEN, CSW_LEN, SCSI_READ_CAPACITY_10,
+    usb_bot_last_bar, usb_bot_last_cmpl, usb_bot_last_err, usb_bot_last_portsc, Cbw, UsbBotError,
+    UsbBulk, BOT_STAGE_CBW, BOT_STAGE_CSW, BOT_STAGE_DATA, CBW_LEN, CSW_LEN, SCSI_READ_CAPACITY_10,
+};
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+use super::usb_bot::{
+    usb_bot_last_scsi, usb_bot_last_stage, usb_bot_scsi_name, usb_bot_stage_name,
 };
 
 /// Same window as [`crate::mgmt::durable_lun::usb_is_esp_cruzer_window`].
@@ -3522,7 +3526,8 @@ mod xhci_pack_test {
     use super::*;
     use crate::mgmt::usb_bot::{
         store_usb_bot_diag, usb_bot_keep_xfer_diag, usb_bot_last_cmpl, usb_bot_last_err,
-        usb_bot_last_portsc,
+        usb_bot_last_portsc, usb_bot_last_scsi, usb_bot_last_stage, usb_bot_scsi_name,
+        usb_bot_stage_name,
     };
 
     #[test]
