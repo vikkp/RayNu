@@ -225,14 +225,16 @@
                 Today the install disk is leftover DRAM above the precise EPT
                 pool. A <em>guest</em> reset keeps it. A <em>hypervisor</em>
                 Force Off zeros it. Nested File persist is closed; USB/NVMe
-                DurableLun I/O is host-ready; iron COM2 is not. Slotretry COM2
-                reached Enable Slot on p11 (<code>xhci nop</code>, no
-                <code>cmd=2</code>) then GET_DESC timed out with no
-                Transfer Event (<code>cmd=4 cmpl=0xff</code> — EP0 drain,
-                not Evaluate Context). abort then walked to p14 and lost
-                the live slot. This EFI: keep the slot
-                (<code>xhci descabort keep-slot</code>), retry EP0, do not
-                Disable Slot, do not start p14/p10.
+                DurableLun I/O is host-ready; iron COM2 is not. Descabort COM2
+                named Toshiba <code>0480:a004</code>, printed
+                <code>usb I/O ready</code> 298 GiB, skipped leftover DRAM,
+                and attached virtio <code>keep=0</code>. Alpine then mixed
+                <code>vda last_st=0x1</code> (<code>sfdisk</code> I/O error)
+                after guest BOT dropped to <code>BULK_SPINS</code>. ISO
+                <code>vdb</code> stayed <code>last_st=0x0</code>. This EFI:
+                keep <code>FIRST_READ_SPINS</code> for live guest BOT and
+                print <code>usb rw fail bot= scsi=</code>. Keep descabort /
+                nop / slotretry / p11first. Do not Force Off.
                 Leftover 1 GiB DRAM is not persist.
                 The remaining 30% is still
                 <code>RAYNU-V-M8-DISK-PERSIST-OK</code> after Force Off on a
