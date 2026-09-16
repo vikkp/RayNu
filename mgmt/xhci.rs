@@ -134,6 +134,11 @@ pub const XHCI_EP0_DCI: u8 = 1;
 /// first 512-byte READ timed out (`err=8` `cmpl=0xff` at `off=0x200`).
 /// Mechanical USB HDD first READ after CAPACITY can be seconds.
 pub const BULK_SPINS: u32 = 100_000_000;
+/// First 512-byte READ after CAPACITY. Iron epst COM2: `xhci epst … out=1
+/// in=1` (Running) + `xhci botrst` + GET_MAX_LUN then INQUIRY/CAPACITY
+/// lived and the native READ CBW timed out (`bot=cbw scsi=read cmpl=0xff`).
+/// Toshiba spinning HDD first media READ can NAK the CBW for seconds.
+pub const FIRST_READ_SPINS: u32 = 800_000_000;
 
 /// MSC BOT / UAS interface protocol (USB Mass Storage).
 pub const USB_MSC_BOT: u8 = 0x50;
@@ -1087,6 +1092,14 @@ fn serial_xhci_botrst(port: u8, ok: bool) {
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_firstread(port: u8) {
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 xhci firstread p");
+    serial_dec_u8(port);
+    serial::write_line(" (not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn serial_xhci_desc_retry(port: u8, n: u8) {
     use crate::boot::serial;
     serial::write_str("boot: Stage 46 xhci enum p");
@@ -1186,6 +1199,9 @@ fn serial_xhci_epst(_port: u8, _ep0: u8, _bulk_out: u8, _bulk_in: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_botrst(_port: u8, _ok: bool) {}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_firstread(_port: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_eval(_port: u8, _mps: u16, _ok: bool) {}
@@ -1469,6 +1485,7 @@ fn event_slot(ev: &[u8; 16]) -> u8 {
 }
 
 /// Identity-mapped pages the live driver owns.
+#[derive(Clone, Copy)]
 pub struct XhciMem {
     pub dcbaa: u64,
     pub scratch_array: u64,
@@ -2102,8 +2119,10 @@ pub fn parse_bot_eps(cfg: &[u8]) -> Option<(u8, u8, u16, u16, u8)> {
 struct LiveXhci {
     mmio: u64,
     caps: XhciCaps,
+    mem: XhciMem,
     ev: EventRing,
     cmd: Ring,
+    ep0: Ring,
     bulk_out: Ring,
     bulk_in: Ring,
     slot: u8,
@@ -2113,6 +2132,11 @@ struct LiveXhci {
     bounce_in: u64,
     bulk_out_hpa: u64,
     bulk_in_hpa: u64,
+    cs: usize,
+    port: u8,
+    ep_out: u8,
+    ep_in: u8,
+    long_bulk: bool,
     lba: u32,
     tag: u32,
 }
@@ -2170,6 +2194,7 @@ impl UsbBulk for LiveXhci {
             trb_ctrl(0, TRB_NORMAL, TRB_IOC),
         );
         doorbell(&mut hw, self.caps.db, self.slot, self.dci_out);
+        let spins = self.bulk_wait();
         consume_transfer(
             &mut hw,
             &self.caps,
@@ -2177,7 +2202,7 @@ impl UsbBulk for LiveXhci {
             self.slot,
             self.dci_out,
             trb,
-            BULK_SPINS,
+            spins,
         )
         .map(|_| ())
     }
@@ -2197,6 +2222,7 @@ impl UsbBulk for LiveXhci {
             trb_ctrl(0, TRB_NORMAL, bulk_in_trb_flags(data.len())),
         );
         doorbell(&mut hw, self.caps.db, self.slot, self.dci_in);
+        let spins = self.bulk_wait();
         match consume_transfer(
             &mut hw,
             &self.caps,
@@ -2204,7 +2230,7 @@ impl UsbBulk for LiveXhci {
             self.slot,
             self.dci_in,
             trb,
-            BULK_SPINS,
+            spins,
         ) {
             Ok(_) => {
                 hw.dma_read(self.bounce_in, data);
@@ -2247,6 +2273,93 @@ impl UsbBulk for LiveXhci {
     fn settle(&mut self) {
         for _ in 0..BOT_SETTLE_SPINS {
             core::hint::spin_loop();
+        }
+    }
+
+    fn prepare_first_read(&mut self) {
+        // Iron epst COM2: bulk EPs Running; INQUIRY/CAPACITY lived; READ CBW
+        // `cmpl=0xff`. Stop+rearm (not Reset — first-cbw `cmpl=0x13`) + Clear
+        // Halt, then FIRST_READ_SPINS for the media READ CBW.
+        self.long_bulk = true;
+        let mut hw = MmioXhci { base: self.mmio };
+        let mut outctx = [0u8; 4096];
+        hw.dma_read(self.mem.devctx, &mut outctx);
+        let cs = self.cs;
+        serial_xhci_epst(
+            self.port,
+            ep_ctx_state(get_u32(&outctx, output_ep_ctx_off(cs, 1))),
+            ep_ctx_state(get_u32(&outctx, output_ep_ctx_off(cs, self.dci_out))),
+            ep_ctx_state(get_u32(&outctx, output_ep_ctx_off(cs, self.dci_in))),
+        );
+        self.recover_pipes();
+        let mem = self.mem;
+        let caps = self.caps;
+        let slot = self.slot;
+        let port = self.port;
+        let ep_out = self.ep_out;
+        let ep_in = self.ep_in;
+        let mut hw = MmioXhci { base: self.mmio };
+        if control_nodata_retry(
+            &mut hw,
+            &caps,
+            &mem,
+            &mut self.cmd,
+            &mut self.ep0,
+            &mut self.ev,
+            slot,
+            setup_clear_halt(ep_out),
+            port,
+        )
+        .is_err()
+        {
+            reset_ep0(
+                &mut hw,
+                &caps,
+                &mem,
+                &mut self.cmd,
+                &mut self.ev,
+                &mut self.ep0,
+                slot,
+            );
+        }
+        if control_nodata_retry(
+            &mut hw,
+            &caps,
+            &mem,
+            &mut self.cmd,
+            &mut self.ep0,
+            &mut self.ev,
+            slot,
+            setup_clear_halt(ep_in | 0x80),
+            port,
+        )
+        .is_err()
+        {
+            reset_ep0(
+                &mut hw,
+                &caps,
+                &mem,
+                &mut self.cmd,
+                &mut self.ev,
+                &mut self.ep0,
+                slot,
+            );
+        }
+        self.settle();
+        serial_xhci_firstread(port);
+    }
+
+    fn end_first_read(&mut self) {
+        self.long_bulk = false;
+    }
+}
+
+impl LiveXhci {
+    fn bulk_wait(&self) -> u32 {
+        if self.long_bulk {
+            FIRST_READ_SPINS
+        } else {
+            BULK_SPINS
         }
     }
 }
@@ -2581,6 +2694,7 @@ fn try_port(
     let mut live = LiveXhci {
         mmio,
         caps: *caps,
+        mem: *mem,
         ev: EventRing {
             base: ev.base,
             deq: ev.deq,
@@ -2591,6 +2705,11 @@ fn try_port(
             enq: cmd_ring.enq,
             cycle: cmd_ring.cycle,
         },
+        ep0: Ring {
+            base: ep0.base,
+            enq: ep0.enq,
+            cycle: ep0.cycle,
+        },
         bulk_out: Ring::new(mem.bulk_out),
         bulk_in: Ring::new(mem.bulk_in),
         slot,
@@ -2600,6 +2719,11 @@ fn try_port(
         bounce_in: mem.bounce_in,
         bulk_out_hpa: mem.bulk_out,
         bulk_in_hpa: mem.bulk_in,
+        cs,
+        port,
+        ep_out,
+        ep_in,
+        long_bulk: false,
         lba: 512,
         tag: 10,
     };
@@ -3510,6 +3634,7 @@ mod xhci_pack_test {
         assert_eq!(CMPL_TIMEOUT, 0xFF);
         assert_eq!(ADDR_SPINS > SPINS, true);
         assert_eq!(BULK_SPINS > ADDR_SPINS, true);
+        assert_eq!(FIRST_READ_SPINS > BULK_SPINS, true);
         assert_eq!(TRB_ISP, 1 << 2);
         assert_eq!(bulk_in_trb_flags(CSW_LEN), TRB_IOC | TRB_ISP);
         assert_eq!(bulk_in_trb_flags(512), TRB_IOC);

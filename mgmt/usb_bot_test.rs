@@ -178,6 +178,7 @@ struct CountingUsb {
     inquiry: u32,
     recovers: u32,
     settles: u32,
+    firstread: u32,
 }
 
 impl UsbBulk for CountingUsb {
@@ -208,6 +209,10 @@ impl UsbBulk for CountingUsb {
     fn settle(&mut self) {
         self.settles = self.settles.saturating_add(1);
     }
+
+    fn prepare_first_read(&mut self) {
+        self.firstread = self.firstread.saturating_add(1);
+    }
 }
 
 #[test]
@@ -220,6 +225,7 @@ fn bring_up_does_not_send_start_stop_or_tur() {
         inquiry: 0,
         recovers: 0,
         settles: 0,
+        firstread: 0,
     };
     usb_bot_bring_up(&mut hw, 1024 * 1024).expect("bring-up");
     assert_eq!(hw.start_stop, 0);
@@ -227,6 +233,7 @@ fn bring_up_does_not_send_start_stop_or_tur() {
     assert!(hw.inquiry >= 1);
     assert_eq!(hw.recovers, 0);
     assert!(hw.settles >= 2);
+    assert_eq!(hw.firstread, 1);
     assert_eq!(usb_bot_last_scsi(), SCSI_TAG_READ);
 }
 

@@ -87,6 +87,13 @@ pub trait UsbBulk {
     /// (host mocks). Live xHCI spins. Iron `96024edc`: CAPACITY (8 B)
     /// succeeded then READ CBW failed `cmpl=0`.
     fn settle(&mut self) {}
+    /// After CAPACITY CSW, before the first 512-byte READ. Live xHCI:
+    /// print EP state, Stop+rearm bulk rings, Clear Halt, long READ wait.
+    /// Iron epst COM2: INQUIRY/CAPACITY lived then `bot=cbw scsi=read`.
+    fn prepare_first_read(&mut self) {}
+    /// After the required 512-byte READ completes. Live xHCI drops the
+    /// long first-READ wait so later guest I/O uses `BULK_SPINS`.
+    fn end_first_read(&mut self) {}
 }
 
 fn put_be_u32(b: &mut [u8], off: usize, v: u32) {
@@ -350,7 +357,9 @@ fn bot_cmd_retry(
 /// never ignore). Toshiba is a spinning HDD: settle + INQUIRY then
 /// CAPACITY. Iron first-cbw: `cmpl=0x13` was Reset
 /// Endpoint on a Running EP after CBW timeout — Stop Endpoint first
-/// (Halted-only Reset). Do not claim ready until a data-stage READ completes.
+/// (Halted-only Reset). Iron epst COM2: `epst out=1 in=1` + BOT reset +
+/// INQUIRY/CAPACITY then `bot=cbw scsi=read cmpl=0xff`. Prepare pipes
+/// before the first media READ; do not claim ready until it completes.
 pub fn usb_bot_bring_up(hw: &mut impl UsbBulk, min_bytes: u64) -> Result<(u64, u32), UsbBotError> {
     hw.settle();
     let mut tag = 1u32;
@@ -360,6 +369,8 @@ pub fn usb_bot_bring_up(hw: &mut impl UsbBulk, min_bytes: u64) -> Result<(u64, u
     let mut cap = [0u8; 8];
     bot_cmd_retry(hw, &mut tag, true, &cdb_read_capacity10(), &mut cap)?;
     hw.settle();
+    // Iron epst COM2: INQUIRY + CAPACITY lived, first READ CBW `cmpl=0xff`.
+    hw.prepare_first_read();
     let (bytes, lba) = capacity10_bytes(&cap).ok_or(UsbBotError::Capacity)?;
     if bytes < min_bytes {
         return Err(UsbBotError::TooSmall);
@@ -370,6 +381,7 @@ pub fn usb_bot_bring_up(hw: &mut impl UsbBulk, min_bytes: u64) -> Result<(u64, u
     }
     let mut probe = [0u8; 4096];
     usb_bot_rw(hw, &mut tag, lba, 0, &mut probe[..n], false)?;
+    hw.end_first_read();
     Ok((bytes, lba))
 }
 
