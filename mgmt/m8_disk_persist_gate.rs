@@ -178,6 +178,8 @@ pub fn disk_persist_surface_present() -> bool {
         && include_str!("xhci.rs").contains("xhci cfg-skip")
         && include_str!("xhci.rs").contains("fn setup_get_max_lun(")
         && include_str!("xhci.rs").contains("xhci maxlun")
+        && include_str!("xhci.rs").contains(" skip (not ISO-INSTALL-OK)")
+        && include_str!("xhci.rs").contains("Iron norearm COM2")
         && include_str!("xhci.rs").contains("Iron ep0-eval COM2")
         && include_str!("xhci.rs").contains("fn fill_config_ep_input(")
         && include_str!("xhci.rs").contains("fn config_ep_add_flags(")

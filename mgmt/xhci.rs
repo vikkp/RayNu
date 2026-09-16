@@ -1053,18 +1053,14 @@ fn serial_xhci_cfg_skip(port: u8, vid: u16, did: u16) {
     serial::write_line(" (not ISO-INSTALL-OK)");
 }
 
+/// Iron norearm COM2: GET_MAX_LUN `val=0` then `epst ep0=3` before first CBW.
+/// Skip the optional class IN so COM2 prints `xhci maxlun pN skip`.
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
-fn serial_xhci_maxlun(port: u8, lun: u8, ok: bool) {
+fn serial_xhci_maxlun(port: u8) {
     use crate::boot::serial;
     serial::write_str("boot: Stage 46 xhci maxlun p");
     serial_dec_u8(port);
-    if ok {
-        serial::write_str(" val=");
-        serial_dec_u8(lun);
-        serial::write_line(" (not ISO-INSTALL-OK)");
-    } else {
-        serial::write_line(" fail (continue; leftover DRAM; not ISO-INSTALL-OK)");
-    }
+    serial::write_line(" skip (not ISO-INSTALL-OK)");
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
@@ -1202,7 +1198,7 @@ fn serial_xhci_setcfg(_port: u8, _cfg: u8) {}
 fn serial_xhci_desc_retry(_port: u8, _n: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
-fn serial_xhci_maxlun(_port: u8, _lun: u8, _ok: bool) {}
+fn serial_xhci_maxlun(_port: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_epst(_port: u8, _ep0: u8, _bulk_out: u8, _bulk_in: u8) {}
@@ -1801,6 +1797,11 @@ fn control_in_retry(
         match control_in(hw, caps, ep0, ev, slot, bounce, setup, data) {
             Ok(status_done) => {
                 if !status_done {
+                    // DATA-complete without STATUS: Stop leftover STATUS TRB.
+                    // Iron norearm COM2: GET_MAX_LUN took this path → EP0
+                    // Stopped (`epst ep0=3`) immediately before the first CBW.
+                    // Optional GET_MAX_LUN is skipped in try_port so this Stop
+                    // does not run there.
                     reset_ep0(hw, caps, mem, cmd_ring, ev, ep0, slot);
                 }
                 return Ok(());
@@ -1910,9 +1911,10 @@ fn setup_set_config(cfg: u8) -> [u8; 8] {
     s
 }
 
-/// MSC BOT Get Max LUN (class IN 0xFE, 1 byte). Linux sends this after
-/// SET_CONFIG before the first CBW. Iron ep0-eval: SET_CONFIG lived then
-/// CAPACITY CBW `err=8` `bot=cbw scsi=capacity`.
+/// MSC BOT Get Max LUN (class IN 0xFE, 1 byte). Optional (USB MSC 3.2).
+/// Iron norearm COM2: GET_MAX_LUN `val=0` then `epst ep0=3` before first CBW
+/// (`control_in_retry` DATA-then-Stop). try_port skips the class IN; packet
+/// stays in-tree (gate + pack test). Not a BOT-reset / INQUIRY revert.
 fn setup_get_max_lun() -> [u8; 8] {
     let mut s = [0u8; 8];
     s[0] = 0xA1;
@@ -2647,26 +2649,14 @@ fn try_port(
     {
         reset_ep0(hw, caps, mem, cmd_ring, ev, &mut ep0, slot);
     }
-    let mut maxlun = [0u8; 1];
-    match control_in_retry(
-        hw,
-        caps,
-        mem,
-        cmd_ring,
-        &mut ep0,
-        ev,
-        slot,
-        mem.bounce,
-        setup_get_max_lun(),
-        &mut maxlun,
-        port,
-    ) {
-        Ok(()) => serial_xhci_maxlun(port, maxlun[0], true),
-        Err(_) => {
-            reset_ep0(hw, caps, mem, cmd_ring, ev, &mut ep0, slot);
-            serial_xhci_maxlun(port, 0, false);
-        }
-    }
+    // Iron norearm COM2: GET_MAX_LUN `val=0` then `epst ep0=3 out=1 in=1`
+    // before `xhci firstcbw norearm`. `control_in_retry` returns on DATA
+    // (STATUS often still pending) and Stop+Set TR Deq (`reset_ep0`) so EP0
+    // is Stopped immediately before the first CBW. GET_MAX_LUN is optional
+    // (USB MSC 3.2). Skip the class IN so EP0 stays Running. Packet stays
+    // in-tree (gate + pack test). Not a BOT-reset / INQUIRY revert.
+    let _ = setup_get_max_lun();
+    serial_xhci_maxlun(port);
     let mut live = LiveXhci {
         mmio,
         caps: *caps,
