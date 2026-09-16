@@ -225,13 +225,14 @@
                 Today the install disk is leftover DRAM above the precise EPT
                 pool. A <em>guest</em> reset keeps it. A <em>hypervisor</em>
                 Force Off zeros it. Nested File persist is closed; USB/NVMe
-                DurableLun I/O is host-ready; iron COM2 is not. p11first COM2
-                never named Toshiba: first Enable Slot after HCRST timed out
-                (<code>cmd=2 cmpl=0xff</code>), abort cleared CRR, then p14
-                hub enumerated. The prior boot <em>did</em> name
-                <code>0480:a004</code> on p11. This EFI: No-Op prime
-                (<code>xhci nop</code>) and Enable Slot retry on the same
-                port (<code>xhci slotretry</code>), keeping p11-first.
+                DurableLun I/O is host-ready; iron COM2 is not. Slotretry COM2
+                reached Enable Slot on p11 (<code>xhci nop</code>, no
+                <code>cmd=2</code>) then GET_DESC timed out with no
+                Transfer Event (<code>cmd=4 cmpl=0xff</code> — EP0 drain,
+                not Evaluate Context). abort then walked to p14 and lost
+                the live slot. This EFI: keep the slot
+                (<code>xhci descabort keep-slot</code>), retry EP0, do not
+                Disable Slot, do not start p14/p10.
                 Leftover 1 GiB DRAM is not persist.
                 The remaining 30% is still
                 <code>RAYNU-V-M8-DISK-PERSIST-OK</code> after Force Off on a
