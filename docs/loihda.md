@@ -123,7 +123,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 **Product effect.** “Install Linux” without persist is a demo that dies when the operator Force Offs the box — which they will, because that is how you recover a Type-1. Nested File persist (`ce3d8a09`) and DurableLun USB/NVMe I/O are the mechanism. Iron Force Off is still open. USB ≥ 16 GiB (not the ESP Cruzer / 2–8 GiB UDisk) is the Toshiba LUN. Nested QEMU ≠ R640.
 
-**Iron NOW (not a score bump).** Epst COM2: p11 Toshiba named, `xhci epst p11 ep0=1 out=1 in=1` (Running), `xhci botrst`, `maxlun val=0`, then `usb I/O fail err=8 bot=cbw scsi=read cmpl=0xff` leftover 1 GiB. INQUIRY + CAPACITY lived. CONFIG_EP packing is not Disabled. This EFI: `prepare_first_read` (`xhci firstread`) + `FIRST_READ_SPINS`. Do not Force Off leftover DRAM.
+**Iron NOW (not a score bump).** Firstread COM2: p11 Toshiba named, `xhci epst p11 ep0=1 out=1 in=1` (Running), `xhci botrst`, `maxlun val=0`, then `usb I/O fail err=8 bot=cbw scsi=inquiry cmpl=0xff` leftover 1 GiB. No `xhci firstread` — post-CAPACITY prepare never ran. This EFI: `prepare_first_cbw` (`xhci firstcbw`) before INQUIRY. Do not Force Off leftover DRAM.
 
 **Honest remainder.** 30% is iron COM2 `RAYNU-V-M8-DISK-PERSIST-OK`. Do not F11 until `I/O ready` + virtio on the LUN.
 
@@ -202,11 +202,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-usb-bot-firstread |
-| Summary | **Iron leftover, not persist.** Epst COM2: `epst out=1 in=1` + BOT reset; INQUIRY/CAPACITY lived; READ CBW `cmpl=0xff` leftover 1 GiB. This EFI: prepare_first_read + longer first-READ wait. Scores **held**. |
+| Commit | m8-usb-bot-firstcbw |
+| Summary | **Iron leftover, not persist.** Firstread COM2: `epst`/`botrst`/`maxlun` then INQUIRY CBW `cmpl=0xff` leftover 1 GiB. No `xhci firstread`. This EFI: `prepare_first_cbw` before INQUIRY. Scores **held**. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Bar A **42% held** / Bar B **18% held** / overall **38% held** / months A **1.5 held**. Persist piece **70% held**. A2 still open. |
-| Gates touched | `xhci.rs` / `usb_bot.rs` first-READ prepare; [loihda.md](loihda.md). `./tools/sync-loihda-site.sh --check`. No MegaRAID. No TLS. No F11. |
+| Gates touched | `xhci.rs` / `usb_bot.rs` first-CBW prepare; [loihda.md](loihda.md). `./tools/sync-loihda-site.sh --check`. No MegaRAID. No TLS. No F11. |
 
 ---
 
@@ -214,6 +214,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-16 | m8-usb-bot-firstcbw | 42 | 18 | **Iron leftover, not persist.** Firstread COM2 `epst`/`botrst`/`maxlun` then INQUIRY CBW `cmpl=0xff`. No `xhci firstread`. This EFI: `prepare_first_cbw` before INQUIRY. Persist 70% held. A2 open. |
 | 2026-09-16 | m8-usb-bot-firstread | 42 | 18 | **Iron leftover, not persist.** Epst COM2 `epst out=1 in=1` + BOT reset; INQUIRY/CAPACITY lived; READ CBW `cmpl=0xff`. This EFI: prepare_first_read + longer first-READ wait. Persist 70% held. A2 open. |
 | 2026-09-16 | m8-usb-bot-epst | 42 | 18 | **Iron leftover, not persist.** Maxlun COM2 GET_MAX_LUN `val=0` then INQUIRY CBW `cmpl=0xff`. Enum/eval/setcfg/maxlun lived. This EFI: CONFIG_EP copies Output Slot+A1; `xhci epst`; MSC BOT reset + Clear Halt. Persist 70% held. A2 open. |
 | 2026-09-15 | m8-usb-bot-maxlun | 42 | 18 | **Iron leftover, not persist.** Ep0-eval COM2 SET_CONFIG then CAPACITY CBW `err=8`. Enum/eval/GET_CONFIG lived. This EFI: GET_MAX_LUN + required INQUIRY. Persist 70% held. A2 open. |

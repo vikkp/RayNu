@@ -134,10 +134,11 @@ pub const XHCI_EP0_DCI: u8 = 1;
 /// first 512-byte READ timed out (`err=8` `cmpl=0xff` at `off=0x200`).
 /// Mechanical USB HDD first READ after CAPACITY can be seconds.
 pub const BULK_SPINS: u32 = 100_000_000;
-/// First 512-byte READ after CAPACITY. Iron epst COM2: `xhci epst … out=1
-/// in=1` (Running) + `xhci botrst` + GET_MAX_LUN then INQUIRY/CAPACITY
-/// lived and the native READ CBW timed out (`bot=cbw scsi=read cmpl=0xff`).
-/// Toshiba spinning HDD first media READ can NAK the CBW for seconds.
+/// First bulk CBW after GET_MAX_LUN (INQUIRY, then CAPACITY, then READ).
+/// Iron epst COM2: INQUIRY/CAPACITY lived, READ CBW `cmpl=0xff`.
+/// Iron firstread COM2: `epst`/`botrst`/`maxlun` then INQUIRY CBW
+/// `cmpl=0xff` — post-CAPACITY `xhci firstread` never printed.
+/// Toshiba spinning HDD can NAK the first bulk CBW for seconds.
 pub const FIRST_READ_SPINS: u32 = 800_000_000;
 
 /// MSC BOT / UAS interface protocol (USB Mass Storage).
@@ -1092,6 +1093,14 @@ fn serial_xhci_botrst(port: u8, ok: bool) {
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_firstcbw(port: u8) {
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 xhci firstcbw p");
+    serial_dec_u8(port);
+    serial::write_line(" (not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn serial_xhci_firstread(port: u8) {
     use crate::boot::serial;
     serial::write_str("boot: Stage 46 xhci firstread p");
@@ -1199,6 +1208,9 @@ fn serial_xhci_epst(_port: u8, _ep0: u8, _bulk_out: u8, _bulk_in: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_botrst(_port: u8, _ok: bool) {}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_firstcbw(_port: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_firstread(_port: u8) {}
@@ -2276,10 +2288,34 @@ impl UsbBulk for LiveXhci {
         }
     }
 
+    fn prepare_first_cbw(&mut self) {
+        // Iron firstread COM2: epst Running + botrst + maxlun then INQUIRY
+        // CBW `cmpl=0xff`. Post-CAPACITY firstread never printed.
+        self.arm_first_bulk(false);
+    }
+
     fn prepare_first_read(&mut self) {
-        // Iron epst COM2: bulk EPs Running; INQUIRY/CAPACITY lived; READ CBW
-        // `cmpl=0xff`. Stop+rearm (not Reset — first-cbw `cmpl=0x13`) + Clear
-        // Halt, then FIRST_READ_SPINS for the media READ CBW.
+        // Iron epst COM2: INQUIRY/CAPACITY lived; READ CBW `cmpl=0xff`.
+        self.arm_first_bulk(true);
+    }
+
+    fn end_first_read(&mut self) {
+        self.long_bulk = false;
+    }
+}
+
+impl LiveXhci {
+    fn bulk_wait(&self) -> u32 {
+        if self.long_bulk {
+            FIRST_READ_SPINS
+        } else {
+            BULK_SPINS
+        }
+    }
+
+    fn arm_first_bulk(&mut self, read: bool) {
+        // Stop+rearm (not Reset — first-cbw `cmpl=0x13`) + Clear Halt, then
+        // FIRST_READ_SPINS for the next bulk CBW.
         self.long_bulk = true;
         let mut hw = MmioXhci { base: self.mmio };
         let mut outctx = [0u8; 4096];
@@ -2346,20 +2382,10 @@ impl UsbBulk for LiveXhci {
             );
         }
         self.settle();
-        serial_xhci_firstread(port);
-    }
-
-    fn end_first_read(&mut self) {
-        self.long_bulk = false;
-    }
-}
-
-impl LiveXhci {
-    fn bulk_wait(&self) -> u32 {
-        if self.long_bulk {
-            FIRST_READ_SPINS
+        if read {
+            serial_xhci_firstread(port);
         } else {
-            BULK_SPINS
+            serial_xhci_firstcbw(port);
         }
     }
 }
