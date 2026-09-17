@@ -283,9 +283,18 @@ pub fn usb_bot_recover_after_fail(stage: u8) -> bool {
 /// Iron nlb1 COM2 (`920f606b`): sequential `usb rw ok` at
 /// `0x0`/`0x200`/`0x400`/`0x600`/`0x800` (nlb=1 lived) then
 /// `bot=cbw scsi=sense` / `bot=csw scsi=sense` after Xfer timeout.
+/// Iron sensebot COM2 (`c0a726de`): Bot-only SENSE lived (no `scsi=sense`);
+/// nlb=1 oks then `bot=csw scsi=read cmpl=0xff`. Settle between chunks
+/// so the spinning HDD is not back-to-back CBW'd.
 pub fn usb_bot_guest_chunk(lba: u32, remaining: usize) -> usize {
     let n = if lba == 0 { 512usize } else { lba as usize };
     remaining.min(n).min(4096)
+}
+
+/// True when another native-LBA BOT command follows in this `usb_bot_rw`.
+/// Iron sensebot COM2: five 512-byte oks then CSW timeout at `0xa00`.
+pub fn usb_bot_settle_between_chunks(done: usize, total: usize) -> bool {
+    done < total
 }
 
 /// CSW status != 0 (`UsbBotError::Bot`) leaves sense on the Toshiba.
@@ -391,6 +400,7 @@ fn bot_in_retry(
                 last = e;
                 if usb_bot_recover_after_fail(usb_bot_last_stage()) {
                     hw.recover_pipes();
+                    hw.settle();
                 }
                 usb_bot_clear_sense(hw, tag, e);
             }
@@ -416,6 +426,7 @@ fn bot_inquiry_retry(
                 last = e;
                 if usb_bot_recover_after_fail(usb_bot_last_stage()) {
                     hw.recover_pipes();
+                    hw.settle();
                 }
                 usb_bot_clear_sense(hw, tag, e);
             }
@@ -443,6 +454,7 @@ fn bot_cmd_retry(
                 last = e;
                 if usb_bot_recover_after_fail(usb_bot_last_stage()) {
                     hw.recover_pipes();
+                    hw.settle();
                 }
                 usb_bot_clear_sense(hw, tag, e);
             }
@@ -543,6 +555,9 @@ pub fn usb_bot_rw(
             bot_in_retry(hw, tag, &cdb, slice)?;
         }
         done = done.saturating_add(take);
+        if usb_bot_settle_between_chunks(done, buf.len()) {
+            hw.settle();
+        }
     }
     Ok(())
 }

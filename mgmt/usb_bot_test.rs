@@ -170,6 +170,8 @@ fn guest_chunk_is_one_native_lba() {
         BOT_STAGE_DATA,
         UsbBotError::Bot
     ));
+    assert!(usb_bot_settle_between_chunks(512, 4096));
+    assert!(!usb_bot_settle_between_chunks(4096, 4096));
     let ns = vec![0u8; NS_BYTES];
     let mut hw = MockUsb::new(ns);
     let (bytes, lba) = usb_bot_bring_up(&mut hw, 1024 * 1024).expect("bring-up");
@@ -373,6 +375,11 @@ fn bring_up_does_not_send_start_stop_or_tur() {
     assert_eq!(hw.firstcbw, 1);
     assert_eq!(hw.firstread, 1);
     assert_eq!(usb_bot_last_scsi(), SCSI_TAG_READ);
+    let after_bring = hw.settles;
+    let mut fourk = [0u8; 4096];
+    let mut tag = 10u32;
+    usb_bot_rw(&mut hw, &mut tag, 512, 0, &mut fourk, false).expect("4k read");
+    assert!(hw.settles >= after_bring.saturating_add(7));
 }
 
 struct CbwFailUsb {
