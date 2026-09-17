@@ -1,6 +1,6 @@
 ---
 loihda_version: 1
-last_updated: 2026-09-16
+last_updated: 2026-09-17
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
@@ -123,7 +123,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 **Product effect.** “Install Linux” without persist is a demo that dies when the operator Force Offs the box — which they will, because that is how you recover a Type-1. Nested File persist (`ce3d8a09`) and DurableLun USB/NVMe I/O are the mechanism. Iron Force Off is still open. USB ≥ 16 GiB (not the ESP Cruzer / 2–8 GiB UDisk) is the Toshiba LUN. Nested QEMU ≠ R640.
 
-**Iron NOW (not a score bump).** Guestio COM2 (`f2c55be4`): Toshiba named; `usb I/O ready` 298 GiB; leftover skipped; virtio `keep=0`; Alpine `[vda] 298 GiB` `vda1`; disk 3/3 ISO 556/556. Leftover apk stall dump during ISO mount (queues drained — not `last_st=0x1`). No `usb rw fail`. This EFI: hold stall dump until `Installing packages` while USB LUN live; print `usb rw ok`/`wait`. Keep FIRST_READ_SPINS/descabort. Do not Force Off. Do not setup-disk until `vda` stays `last_st=0x0`.
+**Iron NOW (not a score bump).** Stallquiet COM2: p11 GET_DESC timeout + `xhci descabort p11 keep-slot` then `cmd=3 cmpl=0x13` leftover 1 GiB. Toshiba not named. Port-reset + Address Device on an already-Addressed slot is Context State Error. This EFI: Reset Device (`xhci rstdev`) before re-Address; keep DCBAA; no Disable Slot; no p14. Keep stallquiet/guestio/descabort. Do not Force Off. Do not setup-disk.
 
 **Honest remainder.** 30% is iron COM2 `RAYNU-V-M8-DISK-PERSIST-OK`. Do not F11 until `I/O ready` + virtio on the LUN.
 
@@ -202,11 +202,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-usb-bot-stallquiet |
-| Summary | **Iron leftover skipped, not persist.** Guestio COM2: Toshiba 298 GiB ready + vda1; leftover apk stall dump during ISO mount. This EFI: hold stall dump until apk on USB LUN. Scores **held**. |
+| Commit | m8-usb-bot-rstdev |
+| Summary | **Iron leftover, not persist.** Stallquiet COM2: GET_DESC timeout + descabort then `cmd=3 cmpl=0x13` leftover 1 GiB. This EFI: Reset Device before re-Address. Scores **held**. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Bar A **42% held** / Bar B **18% held** / overall **38% held** / months A **1.5 held**. Persist piece **70% held**. A2 still open. |
-| Gates touched | `guest_uefi.rs` USB stall-quiet; `xhci.rs` `usb rw ok`; [loihda.md](loihda.md). `./tools/sync-loihda-site.sh --check`. No MegaRAID. No TLS. No F11. |
+| Gates touched | `xhci.rs` Reset Device (`xhci rstdev`); [loihda.md](loihda.md). `./tools/sync-loihda-site.sh --check`. No MegaRAID. No TLS. No F11. |
 
 ---
 
@@ -214,6 +214,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-17 | m8-usb-bot-rstdev | 42 | 18 | **Iron leftover, not persist.** Stallquiet COM2 GET_DESC timeout + descabort then Address Device `cmd=3 cmpl=0x13` leftover 1 GiB. Toshiba not named. This EFI: Reset Device (`xhci rstdev`) before re-Address. Persist 70% held. A2 open. |
 | 2026-09-16 | m8-usb-bot-stallquiet | 42 | 18 | **Iron leftover skipped, not persist.** Guestio COM2 Toshiba 298 GiB ready + vda1; leftover apk stall dump during ISO mount. This EFI: hold stall dump until apk on USB LUN; usb rw ok/wait. Persist 70% held. A2 open. |
 | 2026-09-16 | m8-usb-bot-guestio | 42 | 18 | **Iron leftover skipped, not persist.** Descabort COM2 Toshiba 298 GiB ready + virtio keep=0; Alpine vda last_st=0x1; sfdisk I/O error. ISO vdb last_st=0x0. This EFI: guest BOT FIRST_READ_SPINS + lun rw fail serial. Persist 70% held. A2 open. |
 | 2026-09-16 | m8-usb-bot-descabort | 42 | 18 | **Iron leftover, not persist.** Slotretry COM2 nop + p11 EP0 GET_DESC timeout then p14 hub. Enable Slot lived. This EFI: keep-slot (`xhci descabort`); no Disable Slot; no p14 walk. Persist 70% held. A2 open. |
