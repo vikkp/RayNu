@@ -123,7 +123,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 **Product effect.** “Install Linux” without persist is a demo that dies when the operator Force Offs the box — which they will, because that is how you recover a Type-1. Nested File persist (`ce3d8a09`) and DurableLun USB/NVMe I/O are the mechanism. Iron Force Off is still open. USB ≥ 16 GiB (not the ESP Cruzer / 2–8 GiB UDisk) is the Toshiba LUN. Nested QEMU ≠ R640.
 
-**Iron NOW (not a score bump).** Stallquiet COM2: p11 GET_DESC timeout + `xhci descabort p11 keep-slot` then `cmd=3 cmpl=0x13` leftover 1 GiB. Toshiba not named. Port-reset + Address Device on an already-Addressed slot is Context State Error. This EFI: Reset Device (`xhci rstdev`) before re-Address; keep DCBAA; no Disable Slot; no p14. Keep stallquiet/guestio/descabort. Do not Force Off. Do not setup-disk.
+**Iron NOW (not a score bump).** rstdev/udiskkick COM2: p11 Toshiba `0480:a004` named + CONFIG_EP Running + `firstcbw overlap` + `usb rw wait` then p14 hub / p10 ADDR leftover 1 GiB. Packed `cmpl=0x303ff` is p10. Regression vs guestio I/O ready. This EFI: `xhci stopwalk` keep-slot + BOT retry; no Disable Slot; no p14. Keep rstdev/stallquiet/guestio/descabort. Do not Force Off. Do not setup-disk.
 
 **Honest remainder.** 30% is iron COM2 `RAYNU-V-M8-DISK-PERSIST-OK`. Do not F11 until `I/O ready` + virtio on the LUN.
 
@@ -202,11 +202,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-usb-bot-reexec |
-| Summary | **Host flash, not persist.** `--branch` left bash on the old flashcruzer.sh so UDisk kick never ran. Re-exec after checkout. Never Toshiba `/dev/sdc`. Scores **held**. |
+| Commit | m8-usb-bot-stopwalk |
+| Summary | **Iron leftover, not persist.** rstdev COM2 named Toshiba then walked p14 after INQUIRY CSW — regression vs guestio. `xhci stopwalk` keep-slot + BOT retry. Never Toshiba `/dev/sdc`. Scores **held**. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Bar A **42% held** / Bar B **18% held** / overall **38% held** / months A **1.5 held**. Persist piece **70% held**. A2 still open. |
-| Gates touched | `flashcruzer.sh` re-exec after checkout; [usb_idrac.md](runbooks/usb_idrac.md). `./tools/sync-loihda-site.sh --check`. No MegaRAID. No TLS. No F11. |
+| Gates touched | `xhci.rs` named-MSC stop-walk; [m8_persist_iron.md](runbooks/m8_persist_iron.md). `./tools/sync-loihda-site.sh --check`. No MegaRAID. No TLS. No F11. |
 
 ---
 
@@ -214,6 +214,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-17 | m8-usb-bot-stopwalk | 42 | 18 | **Iron leftover, not persist.** rstdev/udiskkick COM2 Toshiba named p11 then p14/p10 leftover 1 GiB — regression vs guestio I/O ready. This EFI: `xhci stopwalk` keep-slot + BOT retry. Persist 70% held. A2 open. |
 | 2026-09-17 | m8-usb-bot-reexec | 42 | 18 | **Host flash, not persist.** `--branch` ran old flashcruzer.sh so UDisk kick never ran. Re-exec after checkout. Never Toshiba `/dev/sdc`. Persist 70% held. A2 open. |
 | 2026-09-17 | m8-usb-bot-udiskkick | 42 | 18 | **Host flash, not persist.** lsusb UDisk `abcd:1234` but no lsblk. Authorized cycle that VID/PID only; never Toshiba `/dev/sdc`. Persist 70% held. A2 open. |
 | 2026-09-17 | m8-usb-bot-rstdev | 42 | 18 | **Iron leftover, not persist.** Stallquiet COM2 GET_DESC timeout + descabort then Address Device `cmd=3 cmpl=0x13` leftover 1 GiB. Toshiba not named. This EFI: Reset Device (`xhci rstdev`) before re-Address. Persist 70% held. A2 open. |
