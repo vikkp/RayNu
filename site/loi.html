@@ -225,13 +225,14 @@
                 Today the install disk is leftover DRAM above the precise EPT
                 pool. A <em>guest</em> reset keeps it. A <em>hypervisor</em>
                 Force Off zeros it. Nested File persist is closed; USB/NVMe
-                DurableLun I/O is host-ready; iron COM2 is not. Stallquiet COM2
-                timed out p11 GET_DESC, kept the slot (`descabort`), then
-                Address Device returned <code>cmd=3 cmpl=0x13</code> leftover
-                1 GiB — Context State Error on an already-Addressed slot.
-                This EFI: Reset Device (<code>xhci rstdev</code>) before
-                re-Address; keep DCBAA; no Disable Slot; no p14.
-                Keep stallquiet / FIRST_READ_SPINS / descabort. Do not Force Off.
+                DurableLun I/O is host-ready; iron COM2 is not. rstdev/udiskkick
+                COM2 named Toshiba p11, armed firstcbw, then walked p14/p10 after
+                INQUIRY CSW wait — leftover 1 GiB. Packed <code>cmpl=0x303ff</code>
+                is p10 ADDR, not the live slot. Regression vs guestio
+                <code>usb I/O ready</code>.
+                This EFI: <code>xhci stopwalk</code> keep-slot + BOT retry;
+                no Disable Slot; no p14. Keep rstdev / stallquiet / descabort.
+                Do not Force Off.
                 Leftover 1 GiB DRAM is not persist.
                 The remaining 30% is still
                 <code>RAYNU-V-M8-DISK-PERSIST-OK</code> after Force Off on a

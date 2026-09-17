@@ -494,6 +494,39 @@ pub fn xhci_desc_fail_stops_walk(packed_cmpl: u64) -> bool {
     xhci_enum_diag_cmd(packed_cmpl) == XHCI_ENUM_CMD_DESC
 }
 
+/// Iron rstdev/udiskkick COM2 (`9f251ff6`): p11 Toshiba `0480:a004` named,
+/// eval/setcfg/CONFIG_EP Running, `firstcbw overlap`, `usb rw wait` then
+/// recover_enum zeroed DCBAA and the walk named p14 hub `1604:10c0` + p10
+/// ADDR `cmd=3 cmpl=0xff`. Packed fail `cmpl=0x303ff` is p10, not the p11
+/// `bot=csw scsi=inquiry`. Guestio (`f2c55be4`) reached `usb I/O ready` on
+/// this named path — walking after a named MSC is a regression.
+/// Keep DCBAA; do not Disable Slot; do not start p14/p10. Cruzer still walks.
+pub fn xhci_named_msc_fail_stops_walk(e: UsbBotError, named: bool) -> bool {
+    named
+        && !matches!(
+            e,
+            UsbBotError::Cruzer | UsbBotError::Hub | UsbBotError::Reset | UsbBotError::Cap
+        )
+}
+
+/// Keep the live slot after a named MSC BOT/enum fail. Zeroing DCBAA /
+/// Disable Slot then walking p14 is the rstdev COM2 regression.
+pub fn xhci_keep_slot_after_named_msc() -> bool {
+    true
+}
+
+static MSC_NAMED: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+
+/// Record that GET_DESC named a non-hub MSC on the current CCS port.
+pub fn xhci_note_msc_named(named: bool) {
+    MSC_NAMED.store(named, core::sync::atomic::Ordering::SeqCst);
+}
+
+/// True after [`xhci_note_msc_named`] on this port (cleared at try_port).
+pub fn xhci_msc_was_named() -> bool {
+    MSC_NAMED.load(core::sync::atomic::Ordering::SeqCst)
+}
+
 /// Packed `cmd=4` + `cmpl=0xff` is GET_DESC with no Transfer Event, not Eval.
 pub fn xhci_desc_timeout_is_ep0_xfer(cmd: u8, cmpl: u8) -> bool {
     cmd == XHCI_ENUM_CMD_DESC && cmpl == CMPL_TIMEOUT
@@ -1237,6 +1270,14 @@ fn serial_xhci_rstdev(port: u8) {
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_stopwalk(port: u8) {
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 xhci stopwalk p");
+    serial_dec_u8(port);
+    serial::write_line(" keep-slot (named MSC; not p14; not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn serial_xhci_abort(crr: u8) {
     use crate::boot::serial;
     serial::write_str("boot: Stage 46 xhci abort crr=");
@@ -1451,6 +1492,9 @@ fn serial_xhci_descabort(_port: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_rstdev(_port: u8) {}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_stopwalk(_port: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_abort(_crr: u8) {}
@@ -1895,6 +1939,26 @@ fn abort_keep_slot(
         let crr_clear = abort_cmd_ring(hw, caps, mem, cmd_ring, ev);
         serial_xhci_abort(if crr_clear { 0 } else { 1 });
     });
+}
+
+/// After GET_DESC named a non-hub MSC, do not zero DCBAA. Iron rstdev COM2
+/// walked p14 after Toshiba BOT fail and clobbered `bot=csw scsi=inquiry`.
+fn recover_named_or_drop(
+    hw: &mut impl XhciHw,
+    caps: &XhciCaps,
+    mem: &XhciMem,
+    cmd_ring: &mut Ring,
+    ev: &mut EventRing,
+    slot: u8,
+    port: u8,
+    named: bool,
+) {
+    if named && xhci_keep_slot_after_named_msc() {
+        abort_keep_slot(hw, caps, mem, cmd_ring, ev);
+        serial_xhci_stopwalk(port);
+    } else {
+        recover_enum(hw, caps, mem, cmd_ring, ev, slot);
+    }
 }
 
 fn fill_address_input(
@@ -3029,6 +3093,7 @@ fn try_port(
     min_bytes: u64,
     mmio: u64,
 ) -> Result<LiveXhci, UsbBotError> {
+    xhci_note_msc_named(false);
     let sc = reset_port(hw, caps, port)
         .map_err(|e| stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_RESET, e))?;
     let speed = portsc_speed(sc);
@@ -3077,6 +3142,8 @@ fn try_port(
         recover_enum(hw, caps, mem, cmd_ring, ev, slot);
         return Err(UsbBotError::Hub);
     }
+    xhci_note_msc_named(true);
+    let named = true;
     let vid = u16::from_le_bytes([dev[8], dev[9]]);
     let did = u16::from_le_bytes([dev[10], dev[11]]);
     let ep0_mps = usb_ep0_mps_from_desc(speed, dev[7]);
@@ -3093,7 +3160,7 @@ fn try_port(
     ) {
         Ok(eps) => eps,
         Err(e) => {
-            recover_enum(hw, caps, mem, cmd_ring, ev, slot);
+            recover_named_or_drop(hw, caps, mem, cmd_ring, ev, slot, port, named);
             return Err(stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_DESC, e));
         }
     };
@@ -3112,7 +3179,7 @@ fn try_port(
         port,
     )
     .map_err(|e| {
-        recover_enum(hw, caps, mem, cmd_ring, ev, slot);
+        recover_named_or_drop(hw, caps, mem, cmd_ring, ev, slot, port, named);
         stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_SETCFG, e)
     })?;
     serial_xhci_setcfg(port, cfg_val);
@@ -3193,7 +3260,7 @@ fn try_port(
         if toshiba_bot_eps(vid, did).is_some() {
             serial_xhci_toshiba_named(port);
         }
-        recover_enum(hw, caps, mem, cmd_ring, ev, slot);
+        recover_named_or_drop(hw, caps, mem, cmd_ring, ev, slot, port, named);
         return Err(stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_CFG, cfg_err));
     }
     drain_events(hw, caps, ev);
@@ -3313,6 +3380,36 @@ fn try_port(
                 xhci_enum_diag_portsc(sc, port),
                 usb_bot_last_cmpl(),
             );
+            // Iron rstdev COM2: INQUIRY CSW wait then recover_enum + p14/p10.
+            // Guestio reached usb I/O ready on this named slot. Keep DCBAA,
+            // abort, recover bulk pipes, retry BOT once. Do not walk.
+            if named && xhci_keep_slot_after_named_msc() {
+                abort_keep_slot(hw, caps, mem, &mut live.cmd, &mut live.ev);
+                live.recover_pipes();
+                match usb_bot_bring_up(&mut live, min_bytes) {
+                    Ok((bytes, lba)) => {
+                        if lun_is_esp_cruzer(bytes) {
+                            recover_enum(hw, caps, mem, cmd_ring, ev, slot);
+                            return Err(UsbBotError::Cruzer);
+                        }
+                        live.lba = lba;
+                        live.tag = next_bot_tag();
+                        store_usb_bot_ready(bytes, lba);
+                        return Ok(live);
+                    }
+                    Err(e2) => {
+                        serial_xhci_stopwalk(port);
+                        let sc = hw.read32(portsc_off(caps.op, port));
+                        store_usb_bot_diag(
+                            e2,
+                            mmio,
+                            xhci_enum_diag_portsc(sc, port),
+                            usb_bot_last_cmpl(),
+                        );
+                        return Err(e2);
+                    }
+                }
+            }
             recover_enum(hw, caps, mem, cmd_ring, ev, slot);
             Err(e)
         }
@@ -3325,6 +3422,7 @@ fn xhci_bring_up(
     min_bytes: u64,
     mmio: u64,
 ) -> Result<LiveXhci, UsbBotError> {
+    xhci_note_msc_named(false);
     let (caps, mut cmd_ring, mut ev) = xhci_start(hw, mem)?;
     let mut last = UsbBotError::Reset;
     let mut any_ccs = false;
@@ -3354,7 +3452,10 @@ fn xhci_bring_up(
             Err(e) => {
                 // Iron slotretry COM2: p11 GET_DESC EP0 timeout then p14 hub.
                 // Keep the live slot; do not start p14/p10.
-                if xhci_desc_fail_stops_walk(usb_bot_last_cmpl()) {
+                // Iron rstdev COM2: Toshiba named then BOT CSW wait then p14.
+                if xhci_desc_fail_stops_walk(usb_bot_last_cmpl())
+                    || xhci_named_msc_fail_stops_walk(e, xhci_msc_was_named())
+                {
                     store_usb_bot_diag(e, mmio, usb_bot_last_portsc(), usb_bot_last_cmpl());
                     return Err(e);
                 }
@@ -4231,6 +4332,20 @@ mod xhci_pack_test {
             3,
             false
         )));
+        // Iron rstdev COM2: packed p10 ADDR `0x303ff` must not hide a named
+        // p11 BOT fail. Stop the walk on named Xfer/Bot/Enum; Cruzer walks.
+        assert!(xhci_named_msc_fail_stops_walk(UsbBotError::Xfer, true));
+        assert!(xhci_named_msc_fail_stops_walk(UsbBotError::Bot, true));
+        assert!(xhci_named_msc_fail_stops_walk(UsbBotError::Enum, true));
+        assert!(!xhci_named_msc_fail_stops_walk(UsbBotError::Cruzer, true));
+        assert!(!xhci_named_msc_fail_stops_walk(UsbBotError::Hub, true));
+        assert!(!xhci_named_msc_fail_stops_walk(UsbBotError::Xfer, false));
+        assert!(xhci_keep_slot_after_named_msc());
+        xhci_note_msc_named(true);
+        assert!(xhci_msc_was_named());
+        assert!(xhci_named_msc_fail_stops_walk(UsbBotError::Xfer, xhci_msc_was_named()));
+        xhci_note_msc_named(false);
+        assert!(!xhci_msc_was_named());
         assert!(xhci_desc_timeout_is_ep0_xfer(
             XHCI_ENUM_CMD_DESC,
             CMPL_TIMEOUT
