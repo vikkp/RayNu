@@ -154,9 +154,22 @@ fn guest_chunk_is_one_native_lba() {
     assert_eq!(usb_bot_guest_chunk(512, 512), 512);
     assert_eq!(usb_bot_guest_chunk(4096, 4096), 4096);
     assert_eq!(usb_bot_guest_chunk(0, 1024), 512);
-    assert!(usb_bot_sense_after_csw_fail(BOT_STAGE_CSW));
-    assert!(!usb_bot_sense_after_csw_fail(BOT_STAGE_CBW));
-    assert!(!usb_bot_sense_after_csw_fail(BOT_STAGE_DATA));
+    assert!(usb_bot_sense_after_csw_fail(
+        BOT_STAGE_CSW,
+        UsbBotError::Bot
+    ));
+    assert!(!usb_bot_sense_after_csw_fail(
+        BOT_STAGE_CSW,
+        UsbBotError::Xfer
+    ));
+    assert!(!usb_bot_sense_after_csw_fail(
+        BOT_STAGE_CBW,
+        UsbBotError::Bot
+    ));
+    assert!(!usb_bot_sense_after_csw_fail(
+        BOT_STAGE_DATA,
+        UsbBotError::Bot
+    ));
     let ns = vec![0u8; NS_BYTES];
     let mut hw = MockUsb::new(ns);
     let (bytes, lba) = usb_bot_bring_up(&mut hw, 1024 * 1024).expect("bring-up");
@@ -216,6 +229,54 @@ fn csw_fail_sends_request_sense_then_retries() {
     assert_eq!(hw.sense, 1);
     assert_eq!(hw.fail_csw, 0);
     assert_eq!(usb_bot_last_scsi(), SCSI_TAG_READ);
+}
+
+struct CswTimeoutUsb {
+    inner: MockUsb,
+    fail_csw: u32,
+    sense: u32,
+}
+
+impl UsbBulk for CswTimeoutUsb {
+    fn bulk_out(&mut self, data: &[u8]) -> Result<(), UsbBotError> {
+        if data.len() == CBW_LEN && get_le_u32(data, 0) == CBW_SIG && data[15] == SCSI_REQUEST_SENSE
+        {
+            self.sense = self.sense.saturating_add(1);
+        }
+        self.inner.bulk_out(data)
+    }
+
+    fn bulk_in(&mut self, data: &mut [u8]) -> Result<usize, UsbBotError> {
+        let n = self.inner.bulk_in(data)?;
+        if self.fail_csw > 0 && n >= CSW_LEN && get_le_u32(data, 0) == CSW_SIG {
+            self.fail_csw -= 1;
+            store_usb_bot_stage(BOT_STAGE_CSW);
+            store_usb_bot_diag(UsbBotError::Xfer, 0, 0, u64::from(USB_BOT_CMPL_TIMEOUT));
+            return Err(UsbBotError::Xfer);
+        }
+        Ok(n)
+    }
+
+    fn recover_pipes(&mut self) {
+        self.inner.pending_in.clear();
+        self.inner.after_data = false;
+        self.inner.write_off = None;
+    }
+}
+
+#[test]
+fn csw_xfer_timeout_does_not_send_request_sense() {
+    let ns = vec![0u8; NS_BYTES];
+    let mut hw = CswTimeoutUsb {
+        inner: MockUsb::new(ns),
+        fail_csw: 1,
+        sense: 0,
+    };
+    let (bytes, lba) = usb_bot_bring_up(&mut hw, 1024 * 1024).expect("bring-up");
+    assert_eq!(bytes, NS_BYTES as u64);
+    assert_eq!(lba, 512);
+    assert_eq!(hw.sense, 0);
+    assert_eq!(hw.fail_csw, 0);
 }
 
 #[test]

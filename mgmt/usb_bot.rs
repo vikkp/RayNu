@@ -280,19 +280,26 @@ pub fn usb_bot_recover_after_fail(stage: u8) -> bool {
 /// Guest virtio 4K is SCSI `nlb=8`. One native LBA per BOT command
 /// matches the probe that lived. 4Kn (`lba=4096`) stays one command.
 /// Do not restore START STOP on bring-up.
+/// Iron nlb1 COM2 (`920f606b`): sequential `usb rw ok` at
+/// `0x0`/`0x200`/`0x400`/`0x600`/`0x800` (nlb=1 lived) then
+/// `bot=cbw scsi=sense` / `bot=csw scsi=sense` after Xfer timeout.
 pub fn usb_bot_guest_chunk(lba: u32, remaining: usize) -> usize {
     let n = if lba == 0 { 512usize } else { lba as usize };
     remaining.min(n).min(4096)
 }
 
-/// CSW status != 0 leaves sense on the Toshiba. REQUEST SENSE before
-/// retry. Do not send START STOP (iron `73dc4d2e` CSW timeout).
-pub fn usb_bot_sense_after_csw_fail(stage: u8) -> bool {
-    stage == BOT_STAGE_CSW
+/// CSW status != 0 (`UsbBotError::Bot`) leaves sense on the Toshiba.
+/// REQUEST SENSE before retry. Do **not** send SENSE after Xfer timeout
+/// (`cmpl=0xff`) — iron nlb1 COM2 (`920f606b`): nlb=1 512-byte oks then
+/// `bot=cbw scsi=sense cmpl=0x00010303` / `bot=csw scsi=sense cmpl=0xff`
+/// after a READ CBW/DATA/CSW timeout. A wedged IN pipe is not a CHECK
+/// CONDITION. Do not send START STOP (iron `73dc4d2e` CSW timeout).
+pub fn usb_bot_sense_after_csw_fail(stage: u8, err: UsbBotError) -> bool {
+    stage == BOT_STAGE_CSW && err == UsbBotError::Bot
 }
 
-fn usb_bot_clear_sense(hw: &mut impl UsbBulk, tag: &mut u32) {
-    if !usb_bot_sense_after_csw_fail(usb_bot_last_stage()) {
+fn usb_bot_clear_sense(hw: &mut impl UsbBulk, tag: &mut u32, err: UsbBotError) {
+    if !usb_bot_sense_after_csw_fail(usb_bot_last_stage(), err) {
         return;
     }
     *tag = tag.wrapping_add(1);
@@ -385,7 +392,7 @@ fn bot_in_retry(
                 if usb_bot_recover_after_fail(usb_bot_last_stage()) {
                     hw.recover_pipes();
                 }
-                usb_bot_clear_sense(hw, tag);
+                usb_bot_clear_sense(hw, tag, e);
             }
         }
     }
@@ -410,7 +417,7 @@ fn bot_inquiry_retry(
                 if usb_bot_recover_after_fail(usb_bot_last_stage()) {
                     hw.recover_pipes();
                 }
-                usb_bot_clear_sense(hw, tag);
+                usb_bot_clear_sense(hw, tag, e);
             }
         }
     }
@@ -437,7 +444,7 @@ fn bot_cmd_retry(
                 if usb_bot_recover_after_fail(usb_bot_last_stage()) {
                     hw.recover_pipes();
                 }
-                usb_bot_clear_sense(hw, tag);
+                usb_bot_clear_sense(hw, tag, e);
             }
         }
     }
