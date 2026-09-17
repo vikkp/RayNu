@@ -491,6 +491,7 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("fn guest_uefi_virtio_stall_probe")
         && guest.contains("fn virtio_stall_probe_step")
         && guest.contains("fn guest_uefi_virtio_stall_dump_intx")
+        && guest.contains("fn guest_uefi_virtio_stall_dump_hold_for_usb_lun")
         && guest.contains("fn guest_uefi_virtio_stall_dump_reset_on_notify")
         && guest.contains("fn guest_uefi_virtio_stall_dump_pit_hold")
         && guest.contains("fn guest_uefi_virtio_stall_dump_pit_paced")

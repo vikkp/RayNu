@@ -896,6 +896,8 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../vmx/guest_uefi.rs").contains("virtio stall dump PIT hold")
         && include_str!("../vmx/guest_uefi.rs").contains("virtio stall dump PIT paced")
         && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_virtio_stall_dump_intx")
+        && include_str!("../vmx/guest_uefi.rs")
+            .contains("fn guest_uefi_virtio_stall_dump_hold_for_usb_lun")
         && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_virtio_stall_dump_reset_on_notify")
         && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_virtio_stall_dump_pit_hold")
         && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_virtio_stall_dump_pit_paced")

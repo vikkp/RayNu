@@ -225,16 +225,16 @@
                 Today the install disk is leftover DRAM above the precise EPT
                 pool. A <em>guest</em> reset keeps it. A <em>hypervisor</em>
                 Force Off zeros it. Nested File persist is closed; USB/NVMe
-                DurableLun I/O is host-ready; iron COM2 is not. Descabort COM2
+                DurableLun I/O is host-ready; iron COM2 is not. Guestio COM2
                 named Toshiba <code>0480:a004</code>, printed
                 <code>usb I/O ready</code> 298 GiB, skipped leftover DRAM,
-                and attached virtio <code>keep=0</code>. Alpine then mixed
-                <code>vda last_st=0x1</code> (<code>sfdisk</code> I/O error)
-                after guest BOT dropped to <code>BULK_SPINS</code>. ISO
-                <code>vdb</code> stayed <code>last_st=0x0</code>. This EFI:
-                keep <code>FIRST_READ_SPINS</code> for live guest BOT and
-                print <code>usb rw fail bot= scsi=</code>. Keep descabort /
-                nop / slotretry / p11first. Do not Force Off.
+                and attached virtio <code>keep=0</code>. Alpine saw
+                <code>[vda] 298 GiB</code> <code>vda1</code> (3/3 disk
+                completions) then the leftover apk stall dump during ISO
+                mount — queues drained, not <code>last_st=0x1</code>. This
+                EFI: hold that overlay until <code>Installing packages</code>
+                while the USB LUN is live; print <code>usb rw ok</code>.
+                Keep FIRST_READ_SPINS / descabort. Do not Force Off.
                 Leftover 1 GiB DRAM is not persist.
                 The remaining 30% is still
                 <code>RAYNU-V-M8-DISK-PERSIST-OK</code> after Force Off on a
