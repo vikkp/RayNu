@@ -123,7 +123,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 **Product effect.** “Install Linux” without persist is a demo that dies when the operator Force Offs the box — which they will, because that is how you recover a Type-1. Nested File persist (`ce3d8a09`) and DurableLun USB/NVMe I/O are the mechanism. Iron Force Off is still open. USB ≥ 16 GiB (not the ESP Cruzer / 2–8 GiB UDisk) is the Toshiba LUN. Nested QEMU ≠ R640.
 
-**Iron NOW (not a score bump).** Cswsettle COM2 (`5c51c4ea`): `xhci p11first` + `xhci nop` then abort crr=0; p11 ADDR `cmd=3 cmpl=0xff`; p14 hub skip + p10 ADDR timeout; leftover DRAM 1.07 GiB `ISO-INSTALL-OK` → F7 `DISK-BOOT-OK` → login `root=UUID=d43dd928-…` stall dump leftover `last_st=0x0`. **No** Toshiba named. **No** `xhci cswqueue`. **Not persist.** Leftover DRAM Everest is A1 noise, not A2. This EFI: re-prime No-Op after abort (`xhci nopretry`) + retry Address Device (`xhci addrretry`); keep CSW queue / Bot-only SENSE / nlb=1 / stopwalk. Do not Force Off leftover Alpine. Do not setup-disk on leftover. Keep Toshiba. Never flash `/dev/sdc`.
+**Iron NOW (not a score bump).** Addrretry COM2 (`116dbb1f`): `xhci nopretry` + `xhci slotretry p11` then Toshiba `0480:a004` named; eval/setcfg/CONFIG_EP Running; `xhci cswqueue p11`; `usb I/O ready bytes=320072933376`; leftover skip; peek `efi=????????` `gpt_err=2` `usb_err=8` (latched Xfer, not `read-fail`). **No** leftover 1.07 GiB. **No** p14. Paste ends `M1-EBS-OK` — guest Alpine not in this log. **Not persist.** Keep CSW queue / nopretry / addrretry. Do not Force Off. Do not flash a successor until Alpine `[vda]` `last_st`. Keep Toshiba. Never flash `/dev/sdc`.
 
 **Honest remainder.** 30% is iron COM2 `RAYNU-V-M8-DISK-PERSIST-OK`. Do not F11 until `I/O ready` + virtio on the LUN.
 
@@ -171,7 +171,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 |------|-------|------|--------|
 | 2026-09-11 | Everest | Iron ISO → disk → login | **DONE** — HDA 99%, months 0.0 |
 | 2026-09-13 | Persist mechanism | Nested-OK + DurableLun USB/NVMe I/O | **DONE nested / host**; iron Force Off **open** |
-| **NOW** | Bar A A2 | USB/NVMe Force Off on COM2 | **NEXT** (nlb1 COM2 Toshiba 298 GiB ready + peek `usb_err=0` + nlb=1 oks then `scsi=sense`; leftover skipped ≠ persist) |
+| **NOW** | Bar A A2 | USB/NVMe Force Off on COM2 | **NEXT** (addrretry COM2 Toshiba 298 GiB ready + leftover skip + `xhci cswqueue`; peek `usb_err=8` latched; paste ends `M1-EBS-OK`; leftover skipped ≠ persist) |
 | then | Bar A A3+A4 | SKU card + TLS | design overlap OK; do not close TLS before persist COM2 |
 | then | Bar B B2 | Spare PERC VD persist | after A2; census skip is lab safety |
 | later | Auth / console / unmodified ISO | A5, A6, Gen-1 Phase 2 | named residuals, not fake closes |
@@ -203,10 +203,10 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | Field | Value |
 |-------|-------|
 | Commit | m8-usb-bot-addrretry |
-| Summary | **Iron leftover, not persist.** Cswsettle COM2 leftover DRAM 1.07 GiB `ISO-INSTALL-OK` after p11 ADDR timeout. CSW queue never ran. This EFI: `xhci nopretry` + `xhci addrretry`. Never Toshiba `/dev/sdc`. Scores **held**. |
+| Summary | **Iron leftover skipped, not persist.** Addrretry COM2 Toshiba 298 GiB ready + leftover skip + `xhci cswqueue`. Peek `usb_err=8` latched. Guest not in this paste. Never Toshiba `/dev/sdc`. Scores **held**. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Bar A **42% held** / Bar B **18% held** / overall **38% held** / months A **1.5 held**. Persist piece **70% held**. A2 still open. |
-| Gates touched | `xhci.rs` No-Op re-prime + Address Device retry; [m8_persist_iron.md](runbooks/m8_persist_iron.md). `./tools/sync-loihda-site.sh --check`. No MegaRAID. No TLS. No F11. |
+| Gates touched | Lived COM2 on `xhci nopretry` / `xhci slotretry`; [m8_persist_iron.md](runbooks/m8_persist_iron.md). `./tools/sync-loihda-site.sh --check`. No MegaRAID. No TLS. No F11. |
 
 ---
 
@@ -214,7 +214,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
-| 2026-09-17 | m8-usb-bot-addrretry | 42 | 18 | **Iron leftover, not persist.** Cswsettle COM2 leftover DRAM 1.07 GiB `ISO-INSTALL-OK` after p11 ADDR timeout. CSW queue never ran. This EFI: `xhci nopretry` + `xhci addrretry`. Persist 70% held. A2 open. |
+| 2026-09-17 | m8-usb-bot-addrretry | 42 | 18 | **Iron leftover skipped, not persist.** Addrretry COM2 Toshiba 298 GiB ready + leftover skip + `xhci cswqueue`. Peek `usb_err=8` latched. Paste ends `M1-EBS-OK`. Persist 70% held. A2 open. |
 | 2026-09-17 | m8-usb-bot-cswsettle | 42 | 18 | **Iron leftover skipped, not persist.** Sensebot COM2 Toshiba 298 GiB ready + nlb=1 oks then `bot=csw scsi=read cmpl=0xff`; `vda1`; no `scsi=sense`. This EFI: queue CSW IN with DATA + settle between nlb=1 chunks. Persist 70% held. A2 open. |
 | 2026-09-17 | m8-usb-bot-sensebot | 42 | 18 | **Iron leftover skipped, not persist.** Nlb1 COM2 Toshiba 298 GiB ready + peek `usb_err=0` + nlb=1 512-byte oks then `scsi=sense` after Xfer timeout; `vda` no partition table. This EFI: REQUEST SENSE only on Bot, never on Xfer timeout. Persist 70% held. A2 open. |
 | 2026-09-17 | m8-usb-bot-nlb1 | 42 | 18 | **Iron leftover skipped, not persist.** Stopwalk COM2 Toshiba 298 GiB ready + Alpine login; `vda last_st=0x1`; `sfdisk` I/O error. This EFI: nlb=1 BOT + REQUEST SENSE after CSW fail. Persist 70% held. A2 open. |

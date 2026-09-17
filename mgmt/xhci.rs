@@ -490,6 +490,11 @@ pub fn xhci_retry_enable_slot(first_posted: bool) -> bool {
 /// `slotretry`). CSW queue never ran. Leftover DRAM 1.07 GiB
 /// `ISO-INSTALL-OK` is **not** persist. Retry Address Device on the
 /// same Enabled slot after abort; do not walk to p14.
+/// Iron addrretry COM2 (`116dbb1f`): `xhci nopretry` + `xhci slotretry p11`
+/// then Toshiba `0480:a004` named; `xhci cswqueue`; `usb I/O ready`
+/// 298 GiB; leftover skipped. No `xhci addrretry` line (ADDR lived after
+/// slotretry). Peek `efi=????????` `gpt_err=2` `usb_err=8` (latched Xfer).
+/// Paste ended `M1-EBS-OK`. Guest Alpine not persist. Do not revert.
 pub fn xhci_retry_address_device(first_posted: bool) -> bool {
     !first_posted
 }
