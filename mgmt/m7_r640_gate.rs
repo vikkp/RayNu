@@ -78,6 +78,8 @@ pub fn r640_scripts_present() -> bool {
         && include_str!("../tools/flashcruzer.sh").contains("~/projects/raynuv/flashcruzer.sh")
         && include_str!("../tools/flashcruzer.sh").contains("do not git checkout a SHA")
         && include_str!("../tools/flashcruzer.sh").contains("checkout -B")
+        && include_str!("../tools/flashcruzer.sh").contains("kick_logilink_udisk_block")
+        && include_str!("../tools/flashcruzer.sh").contains("never guess /dev/sdc")
 }
 
 /// True when CLOSED GAP and host-limit honesty hold.

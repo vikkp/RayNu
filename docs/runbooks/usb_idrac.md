@@ -110,8 +110,12 @@ PR artifact), verifies size + SHA256, refuses known-bad prefixes, then calls
 `sudo ./tools/flash-cruzer-esp.sh --efi ~/r640-hypervisor.efi --sha256 …`.
 
 Identify the stick by **label `RAYNUV` + USB + Cruzer** (`lsusb` `0781:5151`).
-Never hardcode `/dev/sdc`. Never write PERC `sda`/`sdb`. Never format. Leave
+Never hardcodes `/dev/sdc`. Never write PERC `sda`/`sdb`. Never format. Leave
 `EFI/RayNu/installdisk.bin` and `auth.token` alone.
+
+If `lsusb` shows LogiLink UDisk `abcd:1234` but `lsblk` has no UDisk (common
+after RayNu-V `xhci hcrst`), `flashcruzer.sh --any-cruzer-usb` cycles that
+VID/PID `authorized` only. Do **not** flash `/dev/sdc` (Toshiba 298 GiB).
 
 WANT: `RAYNU-V-CRUZER-FLASH-OK` and `RAYNU-V-FLASHCRUZER-OK`.  
 Next: BIOS boot order stays Ubuntu on PERC; one-time **F11** Cruzer.

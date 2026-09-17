@@ -315,6 +315,8 @@ self_test() {
   grep -qi 'never hardcode' "$SCRIPT_PATH"
   grep -q '0781:5151' "$SCRIPT_PATH"
   grep -q -- '--any-cruzer-usb' "$SCRIPT_PATH"
+  grep -q 'kick_logilink_udisk_block()' "$SCRIPT_PATH"
+  grep -q 'cycling authorized (not Toshiba' "$SCRIPT_PATH"
   grep -q -- '--init-new-cruzer' "$SCRIPT_PATH"
   grep -q 'UDisk' "$ESP"
   grep -q 'abcd:1234' "$ESP"
@@ -1261,6 +1263,51 @@ if [[ "$NO_FLASH" -eq 1 ]]; then
   exit 0
 fi
 
+lsblk_has_lab_esp() {
+  lsblk -o NAME,MODEL,TRAN,SIZE,LABEL,SERIAL,FSTYPE 2>/dev/null | grep -qiE 'cruzer|udisk'
+}
+
+# LogiLink UDisk (abcd:1234) often stays lsusb-only after RayNu-V xHCI HCRST.
+# Cycle authorized on that VID/PID only. Never Toshiba 0480:a004. Never PERC.
+kick_logilink_udisk_block() {
+  echo "==> LogiLink UDisk on USB but no lsblk node — cycling authorized (not Toshiba /dev/sdc)"
+  local d v p n=0 iface drv name
+  local sudo_cmd=()
+  if [[ "$(id -u)" -ne 0 ]]; then
+    sudo_cmd=(sudo)
+  fi
+  for d in /sys/bus/usb/devices/*; do
+    [[ -f "$d/idVendor" && -f "$d/idProduct" ]] || continue
+    v=$(tr -d '[:space:]' <"$d/idVendor")
+    p=$(tr -d '[:space:]' <"$d/idProduct")
+    [[ "$v" == "abcd" && "$p" == "1234" ]] || continue
+    n=$((n + 1))
+    echo "==> kick $d product=$(tr -d '\n' <"$d/product" 2>/dev/null || true)"
+    "${sudo_cmd[@]}" tee "$d/authorized" >/dev/null <<<"0"
+    sleep 2
+    "${sudo_cmd[@]}" tee "$d/authorized" >/dev/null <<<"1"
+    for iface in "$d":*; do
+      [[ -e "$iface/driver" ]] || continue
+      drv=$(basename "$(readlink -f "$iface/driver" 2>/dev/null || true)")
+      name=$(basename "$iface")
+      if [[ "$drv" == "uas" ]]; then
+        echo "==> unbind uas $name (LogiLink UDisk; not Toshiba)"
+        echo "$name" | "${sudo_cmd[@]}" tee /sys/bus/usb/drivers/uas/unbind >/dev/null || true
+        echo "$name" | "${sudo_cmd[@]}" tee /sys/bus/usb/drivers/usb-storage/bind >/dev/null || true
+      fi
+    done
+  done
+  if [[ "$n" -eq 0 ]]; then
+    echo "WARN: no sysfs node for abcd:1234" >&2
+    return 1
+  fi
+  sleep 3
+  if command -v udevadm >/dev/null 2>&1; then
+    "${sudo_cmd[@]}" udevadm settle || true
+  fi
+  return 0
+}
+
 if [[ "$ANY_CRUZER_USB" -eq 1 ]]; then
   if ! lsusb | grep -qiE 'cruzer|udisk|logilink|abcd:1234'; then
     echo "error: lsusb did not show a Cruzer or LogiLink UDisk — plug front USB 2 (--any-cruzer-usb)" >&2
@@ -1277,9 +1324,17 @@ else
   fi
   lsusb | grep -i "$USB_VIDPID" || true
 fi
-if ! lsblk -o NAME,MODEL,TRAN,SIZE,LABEL,SERIAL,FSTYPE | grep -qiE 'cruzer|udisk'; then
+if ! lsblk_has_lab_esp; then
+  if [[ "$ANY_CRUZER_USB" -eq 1 ]] && lsusb | grep -qi 'abcd:1234'; then
+    kick_logilink_udisk_block || true
+  fi
+fi
+if ! lsblk_has_lab_esp; then
   echo "error: lsblk did not show a Cruzer or UDisk — refusing (never guess /dev/sdc)" >&2
+  echo "       LogiLink UDisk is on USB (abcd:1234) but has no block device." >&2
+  echo "       Physically unplug/replug front USB 2. Do not flash /dev/sdc (Toshiba 298G)." >&2
   lsblk -o NAME,MODEL,TRAN,SIZE,LABEL,SERIAL,FSTYPE >&2 || true
+  lsusb >&2 || true
   exit 1
 fi
 lsblk -o NAME,MODEL,TRAN,SIZE,LABEL,SERIAL,FSTYPE | grep -iE 'cruzer|udisk' || true
