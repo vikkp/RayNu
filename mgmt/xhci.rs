@@ -503,6 +503,8 @@ pub fn xhci_keep_slot_after_desc() -> bool {
 /// (`FIRST_READ_SPINS`) then Alpine `vda` 298 GiB mixed `last_st=0x0`
 /// with seek/4K `last_st=0x1`; `sfdisk` I/O error. Guest live BOT must
 /// keep the long wait — `end_first_read` must not drop to `BULK_SPINS`.
+/// Iron guestio COM2 (`f2c55be4`): three `vda` completions then leftover
+/// apk stall dump during ISO mount — not a BOT timeout.
 pub fn xhci_guest_rw_long_wait() -> bool {
     true
 }
@@ -1633,6 +1635,7 @@ fn consume_posted(
             continue;
         }
         spins = spins.saturating_add(1);
+        maybe_serial_xhci_rw_wait(spins, spins_max);
         if spins > spins_max {
             let err = xhci_event_err(want_type);
             store_usb_bot_diag(
@@ -3347,6 +3350,8 @@ static mut LIVE: Option<LiveXhci> = None;
 static LIVE_LOCK: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 static RW_FAIL_N: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+static RW_OK_N: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn xhci_bar(bus: u8, dev: u8, func: u8) -> u64 {
@@ -3453,6 +3458,7 @@ pub fn xhci_live_rw(off: u64, buf: &mut [u8], write: bool) -> bool {
                             if !write {
                                 buf.copy_from_slice(&slice[..buf.len()]);
                             }
+                            serial_xhci_rw_ok(off, write);
                             true
                         }
                         Err(e) => {
@@ -3510,6 +3516,34 @@ fn serial_xhci_rw_busy(off: u64, write: bool) {
     serial_dec_u8(n.min(250) as u8);
     serial::write_line(" (not ISO-INSTALL-OK)");
 }
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_rw_ok(off: u64, write: bool) {
+    let n = RW_OK_N.fetch_add(1, core::sync::atomic::Ordering::AcqRel);
+    if !xhci_rw_fail_should_print(n) {
+        return;
+    }
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 durable LUN usb rw ok off=0x");
+    serial_hex64(off);
+    serial::write_str(if write { " wr=1 n=" } else { " wr=0 n=" });
+    serial_dec_u8(n.min(250) as u8);
+    serial::write_line(" (not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn maybe_serial_xhci_rw_wait(spins: u32, spins_max: u32) {
+    if spins != BULK_SPINS || spins_max <= BULK_SPINS {
+        return;
+    }
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 durable LUN usb rw wait spins=");
+    serial_dec_u32(spins);
+    serial::write_line(" (not ISO-INSTALL-OK)");
+}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn maybe_serial_xhci_rw_wait(_spins: u32, _spins_max: u32) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 pub fn xhci_init_pci(_bus: u8, _dev: u8, _func: u8, _min_bytes: u64) -> Result<u64, UsbBotError> {

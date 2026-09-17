@@ -3288,7 +3288,26 @@ pub fn guest_uefi_virtio_drain_on_isr(is_write: bool) -> bool {
 /// froze at `n=1345` with no second dump. virtio stall dump.
 /// Not `ISO-INSTALL-OK`.
 pub fn guest_uefi_virtio_stall_dump(now: u64, last_mmio: u64, already: bool) -> bool {
-    !already && last_mmio != 0 && now.wrapping_sub(last_mmio) >= 4_000_000_000
+    guest_uefi_virtio_stall_dump_ready(now, last_mmio, already, false)
+}
+
+/// Iron guestio COM2 (`f2c55be4`): leftover apk overlay dumped during
+/// `Mounting boot media` (`disk_last=3` `iso_last=556`, queues drained).
+/// That harvest is for apk jiffies, not USB BOT. Hold it until
+/// `Installing packages` while the Toshiba LUN is live.
+pub fn guest_uefi_virtio_stall_dump_hold_for_usb_lun(usb_ready: bool, packages: bool) -> bool {
+    usb_ready && !packages
+}
+
+/// `hold_usb` skips the leftover-DRAM overlay so COM2 can reach login
+/// and `usb rw fail`/`sfdisk` on the 298 GiB LUN.
+pub fn guest_uefi_virtio_stall_dump_ready(
+    now: u64,
+    last_mmio: u64,
+    already: bool,
+    hold_usb: bool,
+) -> bool {
+    !hold_usb && !already && last_mmio != 0 && now.wrapping_sub(last_mmio) >= 4_000_000_000
 }
 
 /// Further virtio MMIO arms another stall dump. Iron `34968f7` usbdelay
@@ -12053,10 +12072,15 @@ unsafe fn maybe_virtio_stall_dump() {
         maybe_virtio_stall_dump_pit_hold();
         return;
     }
-    if !guest_uefi_virtio_stall_dump(
+    let hold_usb = guest_uefi_virtio_stall_dump_hold_for_usb_lun(
+        crate::mgmt::usb_bot::usb_bot_io_ready(),
+        crate::devices::guest_serial_answer::apk_packages_overlay_active(),
+    );
+    if !guest_uefi_virtio_stall_dump_ready(
         cpu::rdtsc(),
         LAST_VIRTIO_MMIO_TSC.load(Ordering::Acquire),
         VIRTIO_STALL_DUMPED.load(Ordering::Acquire),
+        hold_usb,
     ) {
         return;
     }
