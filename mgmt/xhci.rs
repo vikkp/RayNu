@@ -485,6 +485,15 @@ pub fn xhci_retry_enable_slot(first_posted: bool) -> bool {
     !first_posted
 }
 
+/// Iron cswsettle COM2 (`5c51c4ea`): No-Op timed out (`xhci abort crr=0`)
+/// then p11 Address Device `cmd=3 cmpl=0xff`. Enable Slot lived (no
+/// `slotretry`). CSW queue never ran. Leftover DRAM 1.07 GiB
+/// `ISO-INSTALL-OK` is **not** persist. Retry Address Device on the
+/// same Enabled slot after abort; do not walk to p14.
+pub fn xhci_retry_address_device(first_posted: bool) -> bool {
+    !first_posted
+}
+
 /// Iron slotretry COM2: No-Op + Enable Slot + Address Device lived on p11
 /// (`xhci nop`, no `cmd=2`). GET_DESC retried n=1,n=2 then `cmd=4 cmpl=0xff`
 /// with no Transfer Event — EP0 drain, **not** Evaluate Context (`cmd=7`).
@@ -1252,6 +1261,20 @@ fn serial_xhci_nop() {
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_nopretry() {
+    use crate::boot::serial;
+    serial::write_line("boot: Stage 46 xhci nopretry (not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_addrretry(port: u8) {
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 xhci addrretry p");
+    serial_dec_u8(port);
+    serial::write_line(" (not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn serial_xhci_slotretry(port: u8) {
     use crate::boot::serial;
     serial::write_str("boot: Stage 46 xhci slotretry p");
@@ -1502,6 +1525,12 @@ fn serial_xhci_p11first() {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_nop() {}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_nopretry() {}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_addrretry(_port: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_slotretry(_port: u8) {}
@@ -1910,7 +1939,10 @@ fn abort_cmd_ring(
 /// Prime the command ring with a No-Op after HCRST+RS. Iron p11first COM2:
 /// the first Enable Slot doorbell was lost (`cmd=2 cmpl=0xff`); abort then
 /// p14 enumerated. A failed No-Op aborts so Toshiba is not the lost first
-/// command. Do not stamp BOT diag — this is warmup, not enum fail.
+/// command. Iron cswsettle COM2: No-Op timeout + abort then Address Device
+/// was the first post-abort command and timed out — re-prime with a
+/// second No-Op so Enable Slot / Address Device are not first after abort.
+/// Do not stamp BOT diag — this is warmup, not enum fail.
 fn prime_cmd_ring(
     hw: &mut impl XhciHw,
     caps: &XhciCaps,
@@ -1923,6 +1955,8 @@ fn prime_cmd_ring(
         let extra = trb_ctrl(0, TRB_NO_OP_CMD, 0);
         if cmd_wait(hw, caps, cmd_ring, ev, 0, extra, ADDR_SPINS).is_err() {
             recover_enum(hw, caps, mem, cmd_ring, ev, 0);
+            serial_xhci_nopretry();
+            let _ = cmd_wait(hw, caps, cmd_ring, ev, 0, extra, ADDR_SPINS);
         }
     });
 }
@@ -2032,7 +2066,7 @@ fn fill_address_input(
 }
 
 /// Address Device on an already-enabled slot. Do not Enable Slot again.
-fn address_device(
+fn issue_address_device(
     hw: &mut impl XhciHw,
     caps: &XhciCaps,
     mem: &XhciMem,
@@ -2041,18 +2075,9 @@ fn address_device(
     port: u8,
     slot: u8,
     speed: u8,
-    mmio: u64,
 ) -> Result<(), UsbBotError> {
     let Some(slot_dw0) = slot_ctx_dw0(speed, 1) else {
-        store_usb_bot_diag(UsbBotError::Enum, mmio, xhci_enum_diag_portsc(0, port), 0);
-        return Err(stamp_enum(
-            hw,
-            caps,
-            mmio,
-            port,
-            XHCI_ENUM_CMD_ADDR,
-            UsbBotError::Enum,
-        ));
+        return Err(UsbBotError::Enum);
     };
     zero_page(hw, mem.inctx);
     zero_page(hw, mem.devctx);
@@ -2069,12 +2094,46 @@ fn address_device(
         mem.inctx,
         trb_ctrl(0, TRB_ADDRESS_DEV, u32::from(slot) << 24),
         ADDR_SPINS,
-    )
-    .map_err(|e| {
-        abort_keep_slot(hw, caps, mem, cmd_ring, ev);
-        stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_ADDR, e)
-    })?;
+    )?;
     Ok(())
+}
+
+/// Address Device on an already-enabled slot. Iron cswsettle COM2: first
+/// Address Device after a failed-No-Op abort timed out (`cmd=3 cmpl=0xff`).
+/// Abort, keep DCBAA, retry once (`xhci addrretry`). Do not Enable Slot
+/// again. Do not walk to p14 leftover DRAM.
+fn address_device(
+    hw: &mut impl XhciHw,
+    caps: &XhciCaps,
+    mem: &XhciMem,
+    cmd_ring: &mut Ring,
+    ev: &mut EventRing,
+    port: u8,
+    slot: u8,
+    speed: u8,
+    mmio: u64,
+) -> Result<(), UsbBotError> {
+    match issue_address_device(hw, caps, mem, cmd_ring, ev, port, slot, speed) {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            abort_keep_slot(hw, caps, mem, cmd_ring, ev);
+            if !xhci_retry_address_device(false) {
+                return Err(stamp_enum(
+                    hw,
+                    caps,
+                    mmio,
+                    port,
+                    XHCI_ENUM_CMD_ADDR,
+                    e,
+                ));
+            }
+            serial_xhci_addrretry(port);
+            issue_address_device(hw, caps, mem, cmd_ring, ev, port, slot, speed).map_err(|e2| {
+                abort_keep_slot(hw, caps, mem, cmd_ring, ev);
+                stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_ADDR, e2)
+            })
+        }
+    }
 }
 
 /// xHCI 4.6.11: slot Addressed/Configured → Default. Keep DCBAA.
@@ -4439,6 +4498,11 @@ mod xhci_pack_test {
         assert_eq!(TRB_NO_OP_CMD, 23);
         assert!(xhci_retry_enable_slot(false));
         assert!(!xhci_retry_enable_slot(true));
+        // Iron cswsettle COM2: No-Op timeout + abort then p11 ADDR
+        // `cmd=3 cmpl=0xff`. Retry Address Device on the Enabled slot;
+        // do not Enable Slot again; do not walk to p14 leftover DRAM.
+        assert!(xhci_retry_address_device(false));
+        assert!(!xhci_retry_address_device(true));
         // Iron slotretry COM2: packed fail `cmpl=0x303ff` is p10 ADDR (cmd=3),
         // not the p11 GET_DESC timeout (`cmd=4`). Stop the walk on cmd=4;
         // keep the live slot (no Disable Slot / no p14).
