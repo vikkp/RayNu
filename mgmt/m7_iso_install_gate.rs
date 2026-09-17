@@ -61,6 +61,7 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../tools/flash-cruzer-esp.sh").contains("--linux-iso")
         && include_str!("../tools/flashcruzer.sh").contains("checkout -B")
         && include_str!("../tools/flashcruzer.sh").contains("kick_logilink_udisk_block")
+        && include_str!("../tools/flashcruzer.sh").contains("re-exec after git checkout")
         && include_str!("../tools/flashcruzer.sh").contains("refs/heads/${br}:refs/remotes/origin/${br}")
         && include_str!("../tools/flashcruzer.sh").contains("flashcruzer reject 2d6b109 dest skip")
         && include_str!("../tools/flashcruzer.sh").contains("33389381409")

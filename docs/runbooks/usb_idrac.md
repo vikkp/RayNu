@@ -115,7 +115,8 @@ Never hardcodes `/dev/sdc`. Never write PERC `sda`/`sdb`. Never format. Leave
 
 If `lsusb` shows LogiLink UDisk `abcd:1234` but `lsblk` has no UDisk (common
 after RayNu-V `xhci hcrst`), `flashcruzer.sh --any-cruzer-usb` cycles that
-VID/PID `authorized` only. Do **not** flash `/dev/sdc` (Toshiba 298 GiB).
+VID/PID `authorized` only. `--branch` re-execs the on-disk script after
+checkout so a newer kick actually runs. Do **not** flash `/dev/sdc` (Toshiba 298 GiB).
 
 WANT: `RAYNU-V-CRUZER-FLASH-OK` and `RAYNU-V-FLASHCRUZER-OK`.  
 Next: BIOS boot order stays Ubuntu on PERC; one-time **F11** Cruzer.

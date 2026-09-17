@@ -71,6 +71,7 @@ INIT_NEW=0
 ALLOW_NEW_SERIAL=0
 ANY_CRUZER_USB=0
 RAYNU_F_FLAG=0
+ORIG_ARGS=("$@")
 
 usage() {
   cat <<'EOF'
@@ -317,6 +318,8 @@ self_test() {
   grep -q -- '--any-cruzer-usb' "$SCRIPT_PATH"
   grep -q 'kick_logilink_udisk_block()' "$SCRIPT_PATH"
   grep -q 'cycling authorized (not Toshiba' "$SCRIPT_PATH"
+  grep -q 're-exec after git checkout' "$SCRIPT_PATH"
+  grep -q 'ORIG_ARGS' "$SCRIPT_PATH"
   grep -q -- '--init-new-cruzer' "$SCRIPT_PATH"
   grep -q 'UDisk' "$ESP"
   grep -q 'abcd:1234' "$ESP"
@@ -388,6 +391,7 @@ fi
 cd "$ROOT"
 echo "==> flashcruzer $SCRIPT_PATH"
 echo "==> pre-git $(git rev-parse --abbrev-ref HEAD) $(git rev-parse --short=8 HEAD)"
+PRE_CHECKOUT_SCRIPT_SHA="$(sha256sum "$SCRIPT_PATH" | awk '{print $1}')"
 
 # When the operator `git checkout <sha>`, HEAD is detached. Infer the origin
 # branch that *points at* this commit and stay there (do not pull the tip).
@@ -444,6 +448,16 @@ HEAD="$(git rev-parse HEAD)"
 HEAD_SHORT="$(git rev-parse --short=8 HEAD)"
 REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
 echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
+
+# Iron udiskkick: operator started this script on rstdev; --branch checked
+# out a newer flashcruzer.sh but bash kept running the old file (no kick).
+# Re-exec the on-disk script once when git changed it.
+POST_CHECKOUT_SCRIPT_SHA="$(sha256sum "$SCRIPT_PATH" | awk '{print $1}')"
+if [[ -z "${RAYNU_FLASHCRUZER_REEXEC:-}" && -n "$PRE_CHECKOUT_SCRIPT_SHA" && "$POST_CHECKOUT_SCRIPT_SHA" != "$PRE_CHECKOUT_SCRIPT_SHA" ]]; then
+  echo "==> re-exec after git checkout (on-disk flashcruzer.sh changed; not Toshiba)"
+  export RAYNU_FLASHCRUZER_REEXEC=1
+  exec bash "$SCRIPT_PATH" "${ORIG_ARGS[@]}"
+fi
 
 # 2d6b109 dest skip: IoReadFifo8 still skips dest 0x205f18 inside identity
 # 0x200000. Operator FLASHCRUZER-OK on e5-stage46-iso-a623 / run 33321642509
@@ -1286,6 +1300,11 @@ kick_logilink_udisk_block() {
     "${sudo_cmd[@]}" tee "$d/authorized" >/dev/null <<<"0"
     sleep 2
     "${sudo_cmd[@]}" tee "$d/authorized" >/dev/null <<<"1"
+    if command -v usbreset >/dev/null 2>&1; then
+      echo "==> usbreset abcd:1234 (LogiLink UDisk; not Toshiba)"
+      "${sudo_cmd[@]}" usbreset abcd:1234 || true
+      sleep 2
+    fi
     for iface in "$d":*; do
       [[ -e "$iface/driver" ]] || continue
       drv=$(basename "$(readlink -f "$iface/driver" 2>/dev/null || true)")
