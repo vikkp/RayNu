@@ -54,6 +54,10 @@ pub const TRB_RESET_EP: u32 = 14;
 /// is Halted-only and returns Context State Error (`cmpl=0x13`).
 pub const TRB_STOP_EP: u32 = 15;
 pub const TRB_SET_TR_DEQ: u32 = 16;
+/// Reset Device (xHCI 4.6.11 / 6.4.6 type 17). Port reset does not
+/// change slot state. Address Device on an already-Addressed slot is
+/// Context State Error (`cmpl=0x13`). Keep the slot id.
+pub const TRB_RESET_DEV: u32 = 17;
 pub const TRB_EVENT_TRANSFER: u32 = 32;
 pub const TRB_EVENT_CMD: u32 = 33;
 
@@ -113,6 +117,8 @@ pub const XHCI_ENUM_CMD_CFG: u8 = 5;
 pub const XHCI_ENUM_CMD_SETCFG: u8 = 6;
 /// Evaluate Context EP0 MPS. COM2 `xhci eval` — not packed `cmd=4` (GET_DESC).
 pub const XHCI_ENUM_CMD_EVAL: u8 = 7;
+/// Reset Device before re-Address. COM2 `xhci rstdev` — not packed `cmd=3`.
+pub const XHCI_ENUM_CMD_RSTDEV: u8 = 8;
 
 /// xHCI completion code 17 — Parameter Error (Address Device / Enable Slot).
 pub const CMPL_PARAMETER: u8 = 17;
@@ -497,6 +503,15 @@ pub fn xhci_desc_timeout_is_ep0_xfer(cmd: u8, cmpl: u8) -> bool {
 /// Slot throws away Slotretry's win.
 pub fn xhci_keep_slot_after_desc() -> bool {
     true
+}
+
+/// Iron stallquiet COM2: descabort keep-slot then port-reset + Address
+/// Device printed `cmd=3 cmpl=0x13` (`err=3`). Slot was already Addressed
+/// from the first Address Device; USB reset does not drop xHC slot state.
+/// Reset Device (type 17) returns Default, then Address Device is legal.
+/// Do not Disable Slot. Do not walk p14.
+pub fn xhci_addr_context_state_needs_reset_device(cmd: u8, cmpl: u8) -> bool {
+    cmd == XHCI_ENUM_CMD_ADDR && cmpl == CMPL_CONTEXT_STATE
 }
 
 /// Iron descabort COM2 (`b0c2b678`): bring-up 512-byte READ lived
@@ -1214,6 +1229,14 @@ fn serial_xhci_descabort(port: u8) {
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_rstdev(port: u8) {
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 xhci rstdev p");
+    serial_dec_u8(port);
+    serial::write_line(" (Reset Device; not Disable Slot; not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn serial_xhci_abort(crr: u8) {
     use crate::boot::serial;
     serial::write_str("boot: Stage 46 xhci abort crr=");
@@ -1425,6 +1448,9 @@ fn serial_xhci_slotretry(_port: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_descabort(_port: u8) {}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_rstdev(_port: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_abort(_crr: u8) {}
@@ -1933,10 +1959,39 @@ fn address_device(
     Ok(())
 }
 
+/// xHCI 4.6.11: slot Addressed/Configured → Default. Keep DCBAA.
+fn reset_device(
+    hw: &mut impl XhciHw,
+    caps: &XhciCaps,
+    mem: &XhciMem,
+    cmd_ring: &mut Ring,
+    ev: &mut EventRing,
+    port: u8,
+    slot: u8,
+    mmio: u64,
+) -> Result<(), UsbBotError> {
+    cmd_wait(
+        hw,
+        caps,
+        cmd_ring,
+        ev,
+        0,
+        trb_ctrl(0, TRB_RESET_DEV, u32::from(slot) << 24),
+        ADDR_SPINS,
+    )
+    .map_err(|e| {
+        abort_keep_slot(hw, caps, mem, cmd_ring, ev);
+        stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_RSTDEV, e)
+    })?;
+    Ok(())
+}
+
 /// GET_DEVICE on a live slot. Iron slotretry COM2: no Transfer Event after
 /// Address Device (`cmd=4 cmpl=0xff`) — EP0 drain, not Evaluate Context.
-/// Abort the command ring, keep DCBAA, retry EP0; then port-reset + Address
-/// Device on the **same** slot. Do not Disable Slot. Do not Enable Slot again.
+/// Abort the command ring, keep DCBAA, retry EP0; then port-reset + Reset
+/// Device + Address Device on the **same** slot. Iron stallquiet COM2:
+/// port-reset + Address Device without Reset Device printed `cmd=3
+/// cmpl=0x13`. Do not Disable Slot. Do not Enable Slot again.
 fn get_device_desc(
     hw: &mut impl XhciHw,
     caps: &XhciCaps,
@@ -1972,6 +2027,8 @@ fn get_device_desc(
     let sc = reset_port(hw, caps, port)
         .map_err(|e| stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_RESET, e))?;
     let speed = portsc_speed(sc);
+    serial_xhci_rstdev(port);
+    reset_device(hw, caps, mem, cmd_ring, ev, port, slot, mmio)?;
     address_device(hw, caps, mem, cmd_ring, ev, port, slot, speed, mmio)?;
     *ep0 = Ring::new(mem.ep0);
     serial_xhci_descabort(port);
@@ -4183,8 +4240,24 @@ mod xhci_pack_test {
             CMPL_TIMEOUT
         ));
         assert_eq!(XHCI_ENUM_CMD_EVAL, 7);
+        assert_eq!(XHCI_ENUM_CMD_RSTDEV, 8);
+        assert_eq!(TRB_RESET_DEV, 17);
         assert_ne!(XHCI_ENUM_CMD_DESC, XHCI_ENUM_CMD_EVAL);
         assert!(xhci_keep_slot_after_desc());
+        // Iron stallquiet COM2: `cmd=3 cmpl=0x13` after port-reset Address
+        // Device on an Addressed slot. Reset Device first.
+        assert!(xhci_addr_context_state_needs_reset_device(
+            XHCI_ENUM_CMD_ADDR,
+            CMPL_CONTEXT_STATE
+        ));
+        assert!(!xhci_addr_context_state_needs_reset_device(
+            XHCI_ENUM_CMD_DESC,
+            CMPL_CONTEXT_STATE
+        ));
+        assert!(!xhci_addr_context_state_needs_reset_device(
+            XHCI_ENUM_CMD_ADDR,
+            CMPL_TIMEOUT
+        ));
         assert!(xhci_guest_rw_long_wait());
         assert!(xhci_rw_fail_should_print(0));
         assert!(xhci_rw_fail_should_print(7));
@@ -4319,6 +4392,7 @@ mod xhci_pack_test {
         assert_eq!(TRB_RESET_EP, 14);
         assert_eq!(TRB_STOP_EP, 15);
         assert_eq!(TRB_SET_TR_DEQ, 16);
+        assert_eq!(TRB_RESET_DEV, 17);
         assert_eq!(CMPL_CONTEXT_STATE, 19);
         assert!(!xhci_ep_recover_need_reset(true));
         assert!(xhci_ep_recover_need_reset(false));
