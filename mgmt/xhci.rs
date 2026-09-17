@@ -557,6 +557,8 @@ pub fn xhci_addr_context_state_needs_reset_device(cmd: u8, cmpl: u8) -> bool {
 /// still `last_st=0x1`. Guest chunk is one native LBA (`usb_bot_guest_chunk`).
 /// Iron nlb1 COM2 (`920f606b`): nlb=1 512-byte oks then REQUEST SENSE on
 /// Xfer timeout (`scsi=sense`). SENSE is Bot-only, not `cmpl=0xff`.
+/// Iron sensebot COM2 (`c0a726de`): Bot-only SENSE lived; nlb=1 oks then
+/// sequential CSW `bot=csw scsi=read cmpl=0xff`. Keep FIRST_READ_SPINS.
 pub fn xhci_guest_rw_long_wait() -> bool {
     true
 }
@@ -1376,6 +1378,19 @@ fn serial_xhci_capoverlap(port: u8) {
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_cswqueue(port: u8) {
+    use crate::boot::serial;
+    use core::sync::atomic::{AtomicBool, Ordering};
+    static ONCE: AtomicBool = AtomicBool::new(false);
+    if ONCE.swap(true, Ordering::Relaxed) {
+        return;
+    }
+    serial::write_str("boot: Stage 46 xhci cswqueue p");
+    serial_dec_u8(port);
+    serial::write_line(" (not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn serial_xhci_desc_retry(port: u8, n: u8) {
     use crate::boot::serial;
     serial::write_str("boot: Stage 46 xhci enum p");
@@ -1523,6 +1538,9 @@ fn serial_xhci_firstread(_port: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_capoverlap(_port: u8) {}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_cswqueue(_port: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_eval(_port: u8, _mps: u16, _ok: bool) {}
@@ -1723,9 +1741,18 @@ fn consume_posted(
     }
 }
 
-/// Wait for bulk OUT and bulk IN Transfer Events in either order.
+/// CSW IN DMA lives on the CBW bounce page after the 31-byte wrapper.
+/// Iron sensebot COM2: sequential 13-byte CSW after overlapped DATA
+/// timed out (`bot=csw scsi=read cmpl=0xff`).
+pub const BOT_CSW_BOUNCE_OFF: u64 = 64;
+/// DATA IN + CSW IN Transfer Events on the bulk IN pipe.
+pub const BOT_OVERLAP_NEED_IN: u8 = 2;
+
+/// Wait for bulk OUT and `need_in` bulk IN Transfer Events in either order.
 /// Iron skipmaxlun COM2: sequential CBW wait never posted; some BOT
 /// devices do not complete the CBW TD until the DATA IN pipe is primed.
+/// Iron sensebot COM2: DATA completed then sequential CSW `bulk_in`
+/// timed out — queue CSW on the IN ring (`need_in=2`) with DATA.
 /// Do not require TRB pointer match — leftover EP0 events are skipped
 /// by slot+DCI. Unmatched events are dropped (same as consume_posted).
 fn consume_bulk_pair(
@@ -1735,13 +1762,14 @@ fn consume_bulk_pair(
     slot: u8,
     dci_out: u8,
     dci_in: u8,
+    need_in: u8,
     spins_max: u32,
 ) -> Result<(), UsbBotError> {
     let mut got_out = false;
-    let mut got_in = false;
+    let mut in_events = 0u8;
     let mut spins = 0u32;
     loop {
-        if got_out && got_in {
+        if bulk_bot_done(got_out, in_events, need_in) {
             return Ok(());
         }
         let t = read_trb(hw, ev.base, ev.deq);
@@ -1762,12 +1790,15 @@ fn consume_bulk_pair(
                 );
                 return Err(UsbBotError::Xfer);
             }
-            bulk_pair_take(&mut got_out, &mut got_in, ctrl, slot, dci_out, dci_in);
+            bulk_bot_take(&mut got_out, &mut in_events, ctrl, slot, dci_out, dci_in);
             continue;
         }
         spins = spins.saturating_add(1);
+        maybe_serial_xhci_rw_wait(spins, spins_max);
         if spins > spins_max {
-            if got_out {
+            if got_out && in_events >= 1 {
+                store_usb_bot_stage(BOT_STAGE_CSW);
+            } else if got_out {
                 store_usb_bot_stage(BOT_STAGE_DATA);
             }
             store_usb_bot_diag(
@@ -1781,6 +1812,27 @@ fn consume_bulk_pair(
     }
 }
 
+/// True when overlapped BOT has CBW OUT plus `need_in` IN completions.
+pub fn bulk_bot_done(got_out: bool, in_events: u8, need_in: u8) -> bool {
+    got_out && in_events >= need_in
+}
+
+/// Record a Transfer Event as CBW OUT and/or DATA/CSW IN for overlapped BOT.
+pub fn bulk_bot_take(
+    got_out: &mut bool,
+    in_events: &mut u8,
+    ctrl: u32,
+    slot: u8,
+    dci_out: u8,
+    dci_in: u8,
+) {
+    if xhci_xfer_matches(ctrl, slot, dci_out) {
+        *got_out = true;
+    } else if xhci_xfer_matches(ctrl, slot, dci_in) {
+        *in_events = in_events.saturating_add(1);
+    }
+}
+
 /// Record a Transfer Event as CBW OUT and/or DATA IN for overlapped BOT.
 pub fn bulk_pair_take(
     got_out: &mut bool,
@@ -1790,11 +1842,9 @@ pub fn bulk_pair_take(
     dci_out: u8,
     dci_in: u8,
 ) {
-    if xhci_xfer_matches(ctrl, slot, dci_out) {
-        *got_out = true;
-    } else if xhci_xfer_matches(ctrl, slot, dci_in) {
-        *got_in = true;
-    }
+    let mut n = if *got_in { 1 } else { 0 };
+    bulk_bot_take(got_out, &mut n, ctrl, slot, dci_out, dci_in);
+    *got_in = n >= 1;
 }
 
 fn cmd(
@@ -2920,12 +2970,15 @@ impl UsbBulk for LiveXhci {
         // Iron overlap COM2: INQUIRY overlap lived (`xhci firstcbw overlap`)
         // then sequential CAPACITY CBW `cmpl=0xff`. Overlap every IN BOT
         // command (CAPACITY + READ too). Keep skip GET_MAX_LUN / norearm.
+        // Iron sensebot COM2: nlb=1 512-byte oks then sequential CSW
+        // `bot=csw scsi=read cmpl=0xff`. Queue CSW IN with DATA.
         if buf.is_empty() || buf.len() > 4096 {
             return Err(UsbBotError::Xfer);
         }
         if cdb.first().copied().unwrap_or(0) == SCSI_READ_CAPACITY_10 {
             serial_xhci_capoverlap(self.port);
         }
+        serial_xhci_cswqueue(self.port);
         let data_len = buf.len() as u32;
         let cbw = Cbw::scsi(tag, data_len, true, 0, cdb);
         stamp_scsi_cdb(cdb);
@@ -2947,6 +3000,14 @@ impl UsbBulk for LiveXhci {
             data_len,
             trb_ctrl(0, TRB_NORMAL, TRB_IOC | TRB_ISP),
         );
+        let csw_z = [0u8; CSW_LEN];
+        hw.dma_write(self.bounce + BOT_CSW_BOUNCE_OFF, &csw_z);
+        let _trb_csw = self.bulk_in.place(
+            &mut hw,
+            self.bounce + BOT_CSW_BOUNCE_OFF,
+            CSW_LEN as u32,
+            trb_ctrl(0, TRB_NORMAL, bulk_in_trb_flags(CSW_LEN)),
+        );
         doorbell(&mut hw, self.caps.db, self.slot, self.dci_out);
         doorbell(&mut hw, self.caps.db, self.slot, self.dci_in);
         let spins = self.bulk_wait();
@@ -2957,13 +3018,14 @@ impl UsbBulk for LiveXhci {
             self.slot,
             self.dci_out,
             self.dci_in,
+            BOT_OVERLAP_NEED_IN,
             spins,
         )?;
         hw.dma_read(self.bounce_in, buf);
         store_usb_bot_stage(BOT_STAGE_CSW);
         let mut csw = [0u8; CSW_LEN];
-        let n = UsbBulk::bulk_in(self, &mut csw)?;
-        if n < CSW_LEN || !csw_ok(&csw) {
+        hw.dma_read(self.bounce + BOT_CSW_BOUNCE_OFF, &mut csw);
+        if !csw_ok(&csw) {
             return Err(UsbBotError::Bot);
         }
         Ok(())
@@ -4401,7 +4463,10 @@ mod xhci_pack_test {
         assert!(xhci_keep_slot_after_named_msc());
         xhci_note_msc_named(true);
         assert!(xhci_msc_was_named());
-        assert!(xhci_named_msc_fail_stops_walk(UsbBotError::Xfer, xhci_msc_was_named()));
+        assert!(xhci_named_msc_fail_stops_walk(
+            UsbBotError::Xfer,
+            xhci_msc_was_named()
+        ));
         xhci_note_msc_named(false);
         assert!(!xhci_msc_was_named());
         assert!(xhci_desc_timeout_is_ep0_xfer(
@@ -4470,6 +4535,16 @@ mod xhci_pack_test {
         bulk_pair_take(&mut got_out, &mut got_in, cbw_out, 1, 4, 3);
         bulk_pair_take(&mut got_out, &mut got_in, csw_in, 1, 4, 3);
         assert!(got_out && got_in);
+        // Iron sensebot COM2: DATA + CSW are two IN events (`need_in=2`).
+        let mut in_events = 0u8;
+        got_out = false;
+        bulk_bot_take(&mut got_out, &mut in_events, cbw_out, 1, 4, 3);
+        bulk_bot_take(&mut got_out, &mut in_events, csw_in, 1, 4, 3);
+        bulk_bot_take(&mut got_out, &mut in_events, csw_in, 1, 4, 3);
+        assert!(bulk_bot_done(got_out, in_events, BOT_OVERLAP_NEED_IN));
+        assert!(!bulk_bot_done(true, 1, BOT_OVERLAP_NEED_IN));
+        assert_eq!(BOT_CSW_BOUNCE_OFF, 64);
+        assert_eq!(BOT_OVERLAP_NEED_IN, 2);
         assert_eq!(xhci_event_dci(cbw_out), 4);
         assert_eq!(xhci_xfer_diag_cmpl(0, 4, 1), 0x0001_0400);
         assert_eq!(BOT_SETTLE_SPINS > SPINS, true);
