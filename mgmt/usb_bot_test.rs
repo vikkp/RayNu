@@ -149,6 +149,76 @@ fn mock_bot_write_read_efi_part() {
 }
 
 #[test]
+fn guest_chunk_is_one_native_lba() {
+    assert_eq!(usb_bot_guest_chunk(512, 4096), 512);
+    assert_eq!(usb_bot_guest_chunk(512, 512), 512);
+    assert_eq!(usb_bot_guest_chunk(4096, 4096), 4096);
+    assert_eq!(usb_bot_guest_chunk(0, 1024), 512);
+    assert!(usb_bot_sense_after_csw_fail(BOT_STAGE_CSW));
+    assert!(!usb_bot_sense_after_csw_fail(BOT_STAGE_CBW));
+    assert!(!usb_bot_sense_after_csw_fail(BOT_STAGE_DATA));
+    let ns = vec![0u8; NS_BYTES];
+    let mut hw = MockUsb::new(ns);
+    let (bytes, lba) = usb_bot_bring_up(&mut hw, 1024 * 1024).expect("bring-up");
+    assert_eq!(bytes, NS_BYTES as u64);
+    assert_eq!(lba, 512);
+    let mut fourk = [0u8; 4096];
+    fourk[..8].copy_from_slice(b"EFI PART");
+    let mut tag = 10u32;
+    usb_bot_rw(&mut hw, &mut tag, lba, 0, &mut fourk, true).expect("4k write");
+    let mut back = [0u8; 4096];
+    usb_bot_rw(&mut hw, &mut tag, lba, 0, &mut back, false).expect("4k read");
+    assert_eq!(&back[..8], b"EFI PART");
+}
+
+struct CswFailUsb {
+    inner: MockUsb,
+    fail_csw: u32,
+    sense: u32,
+}
+
+impl UsbBulk for CswFailUsb {
+    fn bulk_out(&mut self, data: &[u8]) -> Result<(), UsbBotError> {
+        if data.len() == CBW_LEN && get_le_u32(data, 0) == CBW_SIG && data[15] == SCSI_REQUEST_SENSE
+        {
+            self.sense = self.sense.saturating_add(1);
+        }
+        self.inner.bulk_out(data)
+    }
+
+    fn bulk_in(&mut self, data: &mut [u8]) -> Result<usize, UsbBotError> {
+        let n = self.inner.bulk_in(data)?;
+        if self.fail_csw > 0 && n >= CSW_LEN && get_le_u32(data, 0) == CSW_SIG && data[12] == 0 {
+            self.fail_csw -= 1;
+            data[12] = 1;
+        }
+        Ok(n)
+    }
+
+    fn recover_pipes(&mut self) {
+        self.inner.pending_in.clear();
+        self.inner.after_data = false;
+        self.inner.write_off = None;
+    }
+}
+
+#[test]
+fn csw_fail_sends_request_sense_then_retries() {
+    let ns = vec![0u8; NS_BYTES];
+    let mut hw = CswFailUsb {
+        inner: MockUsb::new(ns),
+        fail_csw: 1,
+        sense: 0,
+    };
+    let (bytes, lba) = usb_bot_bring_up(&mut hw, 1024 * 1024).expect("bring-up");
+    assert_eq!(bytes, NS_BYTES as u64);
+    assert_eq!(lba, 512);
+    assert_eq!(hw.sense, 1);
+    assert_eq!(hw.fail_csw, 0);
+    assert_eq!(usb_bot_last_scsi(), SCSI_TAG_READ);
+}
+
+#[test]
 fn start_stop_and_read_probe_named() {
     assert_eq!(SCSI_START_STOP, 0x1B);
     assert_eq!(USB_BOT_RW_TRIES, 3);

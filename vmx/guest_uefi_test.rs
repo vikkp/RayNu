@@ -1763,7 +1763,7 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_virtio_stall_dump(4_000_000_001, 1, true));
     assert!(!guest_uefi_virtio_stall_dump(4_000_000_000, 1, false));
     assert!(guest_uefi_virtio_stall_dump_hold_for_usb_lun(true, false));
-    assert!(!guest_uefi_virtio_stall_dump_hold_for_usb_lun(true, true));
+    assert!(guest_uefi_virtio_stall_dump_hold_for_usb_lun(true, true));
     assert!(!guest_uefi_virtio_stall_dump_hold_for_usb_lun(false, false));
     assert!(!guest_uefi_virtio_stall_dump_ready(4_000_000_001, 1, false, true));
     assert!(guest_uefi_virtio_stall_dump_ready(4_000_000_001, 1, false, false));

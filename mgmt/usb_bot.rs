@@ -274,6 +274,35 @@ pub fn usb_bot_recover_after_fail(stage: u8) -> bool {
     c == USB_BOT_CMPL_TIMEOUT || c == USB_BOT_CMPL_CONTEXT_STATE
 }
 
+/// Iron stopwalk COM2 (`90af2c5b`): bring-up 512-byte READ lived
+/// (`usb I/O ready` / `usb rw ok off=0x200`); Alpine `[vda] 298 GiB`
+/// then `last_st=0x1` seek/4K and `sfdisk: cannot open /dev/vda`.
+/// Guest virtio 4K is SCSI `nlb=8`. One native LBA per BOT command
+/// matches the probe that lived. 4Kn (`lba=4096`) stays one command.
+/// Do not restore START STOP on bring-up.
+pub fn usb_bot_guest_chunk(lba: u32, remaining: usize) -> usize {
+    let n = if lba == 0 { 512usize } else { lba as usize };
+    remaining.min(n).min(4096)
+}
+
+/// CSW status != 0 leaves sense on the Toshiba. REQUEST SENSE before
+/// retry. Do not send START STOP (iron `73dc4d2e` CSW timeout).
+pub fn usb_bot_sense_after_csw_fail(stage: u8) -> bool {
+    stage == BOT_STAGE_CSW
+}
+
+fn usb_bot_clear_sense(hw: &mut impl UsbBulk, tag: &mut u32) {
+    if !usb_bot_sense_after_csw_fail(usb_bot_last_stage()) {
+        return;
+    }
+    *tag = tag.wrapping_add(1);
+    if *tag == 0 {
+        *tag = 1;
+    }
+    let mut sense = [0u8; 18];
+    let _ = hw.overlapped_in(*tag, &cdb_request_sense(), &mut sense);
+}
+
 pub fn stamp_scsi_cdb(cdb: &[u8]) {
     let tag = match cdb.first().copied().unwrap_or(0) {
         SCSI_INQUIRY => SCSI_TAG_INQUIRY,
@@ -356,6 +385,7 @@ fn bot_in_retry(
                 if usb_bot_recover_after_fail(usb_bot_last_stage()) {
                     hw.recover_pipes();
                 }
+                usb_bot_clear_sense(hw, tag);
             }
         }
     }
@@ -380,6 +410,7 @@ fn bot_inquiry_retry(
                 if usb_bot_recover_after_fail(usb_bot_last_stage()) {
                     hw.recover_pipes();
                 }
+                usb_bot_clear_sense(hw, tag);
             }
         }
     }
@@ -406,6 +437,7 @@ fn bot_cmd_retry(
                 if usb_bot_recover_after_fail(usb_bot_last_stage()) {
                     hw.recover_pipes();
                 }
+                usb_bot_clear_sense(hw, tag);
             }
         }
     }
@@ -467,7 +499,8 @@ pub fn usb_bot_bring_up(hw: &mut impl UsbBulk, min_bytes: u64) -> Result<(u64, u
 }
 
 /// Read or write `buf` at byte `off`. Length must be a multiple of LBA
-/// and not exceed 4 KiB (one BOT data stage).
+/// and not exceed 4 KiB. Guest I/O is one native LBA per BOT command
+/// ([`usb_bot_guest_chunk`]); bring-up probe stays 512-byte.
 pub fn usb_bot_rw(
     hw: &mut impl UsbBulk,
     tag: &mut u32,
@@ -483,17 +516,28 @@ pub fn usb_bot_rw(
     if buf.len() > 4096 {
         return Err(UsbBotError::Xfer);
     }
-    let slba = off / lba;
-    let nlb = (buf.len() as u64) / lba;
-    if nlb == 0 || nlb > 0xFFFF || slba > u64::from(u32::MAX) {
-        return Err(UsbBotError::Xfer);
+    let mut done = 0usize;
+    while done < buf.len() {
+        let take = usb_bot_guest_chunk(lba_bytes, buf.len() - done);
+        if take == 0 || (take as u64) % lba != 0 {
+            return Err(UsbBotError::Xfer);
+        }
+        let cur = off.saturating_add(done as u64);
+        let slba = cur / lba;
+        let nlb = (take as u64) / lba;
+        if nlb == 0 || nlb > 0xFFFF || slba > u64::from(u32::MAX) {
+            return Err(UsbBotError::Xfer);
+        }
+        let cdb = cdb_rw10(write, slba as u32, nlb as u16);
+        let slice = &mut buf[done..done + take];
+        if write {
+            bot_cmd_retry(hw, tag, false, &cdb, slice)?;
+        } else {
+            bot_in_retry(hw, tag, &cdb, slice)?;
+        }
+        done = done.saturating_add(take);
     }
-    let cdb = cdb_rw10(write, slba as u32, nlb as u16);
-    if write {
-        bot_cmd_retry(hw, tag, false, &cdb, buf)
-    } else {
-        bot_in_retry(hw, tag, &cdb, buf)
-    }
+    Ok(())
 }
 
 static IO_READY: AtomicBool = AtomicBool::new(false);
@@ -616,6 +660,7 @@ pub fn next_bot_tag() -> u32 {
 pub fn host_usb_attach(ns: &'static mut [u8], lba: u32) {
     HOST_NS.store(ns.as_mut_ptr() as u64, Ordering::Release);
     HOST_NS_LEN.store(ns.len() as u64, Ordering::Release);
+    HOST_USB_OPS.store(0, Ordering::Release);
     store_usb_bot_ready(ns.len() as u64, lba);
 }
 
@@ -623,6 +668,18 @@ pub fn host_usb_attach(ns: &'static mut [u8], lba: u32) {
 static HOST_NS: AtomicU64 = AtomicU64::new(0);
 #[cfg(test)]
 static HOST_NS_LEN: AtomicU64 = AtomicU64::new(0);
+#[cfg(test)]
+static HOST_USB_OPS: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
+
+#[cfg(test)]
+pub fn host_usb_ops() -> u32 {
+    HOST_USB_OPS.load(Ordering::Acquire)
+}
+
+#[cfg(test)]
+pub fn host_usb_ops_reset() {
+    HOST_USB_OPS.store(0, Ordering::Release);
+}
 
 #[cfg(test)]
 pub fn host_usb_rw(off: u64, buf: &mut [u8], write: bool) -> bool {
@@ -645,6 +702,7 @@ pub fn host_usb_rw(off: u64, buf: &mut [u8], write: bool) -> bool {
     } else {
         buf.copy_from_slice(&ns[start..start + buf.len()]);
     }
+    HOST_USB_OPS.fetch_add(1, Ordering::AcqRel);
     true
 }
 
