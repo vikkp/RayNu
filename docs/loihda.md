@@ -202,11 +202,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-usb-bot-rstdev |
-| Summary | **Iron leftover, not persist.** Stallquiet COM2: GET_DESC timeout + descabort then `cmd=3 cmpl=0x13` leftover 1 GiB. This EFI: Reset Device before re-Address. Scores **held**. |
+| Commit | m8-usb-bot-udiskkick |
+| Summary | **Host flash, not persist.** UDisk on lsusb but no lsblk. Cycle `abcd:1234` authorized only; never Toshiba `/dev/sdc`. Scores **held**. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Bar A **42% held** / Bar B **18% held** / overall **38% held** / months A **1.5 held**. Persist piece **70% held**. A2 still open. |
-| Gates touched | `xhci.rs` Reset Device (`xhci rstdev`); [loihda.md](loihda.md). `./tools/sync-loihda-site.sh --check`. No MegaRAID. No TLS. No F11. |
+| Gates touched | `flashcruzer.sh` UDisk kick; [usb_idrac.md](runbooks/usb_idrac.md). `./tools/sync-loihda-site.sh --check`. No MegaRAID. No TLS. No F11. |
 
 ---
 
@@ -214,6 +214,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-17 | m8-usb-bot-udiskkick | 42 | 18 | **Host flash, not persist.** lsusb UDisk `abcd:1234` but no lsblk. Authorized cycle that VID/PID only; never Toshiba `/dev/sdc`. Persist 70% held. A2 open. |
 | 2026-09-17 | m8-usb-bot-rstdev | 42 | 18 | **Iron leftover, not persist.** Stallquiet COM2 GET_DESC timeout + descabort then Address Device `cmd=3 cmpl=0x13` leftover 1 GiB. Toshiba not named. This EFI: Reset Device (`xhci rstdev`) before re-Address. Persist 70% held. A2 open. |
 | 2026-09-16 | m8-usb-bot-stallquiet | 42 | 18 | **Iron leftover skipped, not persist.** Guestio COM2 Toshiba 298 GiB ready + vda1; leftover apk stall dump during ISO mount. This EFI: hold stall dump until apk on USB LUN; usb rw ok/wait. Persist 70% held. A2 open. |
 | 2026-09-16 | m8-usb-bot-guestio | 42 | 18 | **Iron leftover skipped, not persist.** Descabort COM2 Toshiba 298 GiB ready + virtio keep=0; Alpine vda last_st=0x1; sfdisk I/O error. ISO vdb last_st=0x0. This EFI: guest BOT FIRST_READ_SPINS + lun rw fail serial. Persist 70% held. A2 open. |

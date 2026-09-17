@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-usb-bot-rstdev |
-| Summary | **Iron leftover, not persist.** Stallquiet COM2: p11 GET_DESC timeout + descabort keep-slot then `cmd=3 cmpl=0x13` leftover 1 GiB. Toshiba not named. This EFI: Reset Device (`xhci rstdev`) before re-Address; keep slot; no p14 walk. Months **0.0 held**. Overall **99 held**. |
+| Commit | m8-usb-bot-udiskkick |
+| Summary | **Iron leftover, not persist.** Host: LogiLink UDisk `abcd:1234` on lsusb but no lsblk after xHCI HCRST. This commit: cycle that VID/PID `authorized` only; never `/dev/sdc` Toshiba. rstdev EFI unchanged. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. No persist gate. LOIHDA persist **70% held** (A2 still open). |
-| Gates touched | `xhci.rs` Reset Device before re-Address; [m8_persist_iron.md](runbooks/m8_persist_iron.md); [loihda.md](loihda.md). `./tools/sync-hda-site.sh --check`. `./tools/sync-loihda-site.sh --check`. |
+| Gates touched | `flashcruzer.sh` UDisk authorized kick; [usb_idrac.md](runbooks/usb_idrac.md). `./tools/sync-hda-site.sh --check`. `./tools/sync-loihda-site.sh --check`. |
 | Months Δ | 0.0 held (Everest closed; iron Force Off still open) |
 
 
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-17 | m8-usb-bot-udiskkick | 0.0 | 99 | **Host flash, not persist:** lsusb LogiLink UDisk `abcd:1234` but no lsblk after xHCI HCRST. This commit: authorized cycle that VID/PID only; never `/dev/sdc` Toshiba. rstdev EFI unchanged. LOIHDA Bar A 42% held. Nested QEMU ≠ R640. Iron persist open. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |
 | 2026-09-17 | m8-usb-bot-rstdev | 0.0 | 99 | **Iron leftover, not persist:** stallquiet COM2 p11 GET_DESC timeout + descabort keep-slot then Address Device `cmd=3 cmpl=0x13` leftover 1 GiB. Toshiba not named. This EFI: Reset Device (`xhci rstdev`) before re-Address. Keep stallquiet/descabort. LOIHDA Bar A 42% held. Nested QEMU ≠ R640. Iron persist open. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |
 | 2026-09-16 | m8-usb-bot-stallquiet | 0.0 | 99 | **Iron leftover skipped, not persist:** guestio COM2 Toshiba 298 GiB ready + virtio keep=0; Alpine vda1; disk 3/3 ISO 556/556; leftover apk stall dump during ISO mount. This EFI: hold stall dump until apk on USB LUN; usb rw ok/wait. Keep FIRST_READ_SPINS. LOIHDA Bar A 42% held. Nested QEMU ≠ R640. Iron persist open. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |
 | 2026-09-16 | m8-usb-bot-guestio | 0.0 | 99 | **Iron leftover skipped, not persist:** descabort COM2 Toshiba named + 298 GiB ready + virtio keep=0; Alpine vda last_st=0x1; sfdisk I/O error. ISO vdb last_st=0x0. This EFI: guest BOT FIRST_READ_SPINS + lun rw fail serial. LOIHDA Bar A 42% held. Nested QEMU ≠ R640. Iron persist open. Never `ISO-INSTALL-OK`. months 0.0 held; overall 99 held |
