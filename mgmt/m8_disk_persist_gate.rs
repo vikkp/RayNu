@@ -314,7 +314,7 @@ pub fn disk_persist_surface_present() -> bool {
         && include_str!("../docs/runbooks/m8_persist_iron.md").contains("stallquiet COM2")
         && include_str!("../docs/runbooks/m8_persist_iron.md").contains("xhci rstdev")
         && include_str!("../docs/runbooks/m8_persist_iron.md").contains("xhci stopwalk")
-        && include_str!("../docs/runbooks/m8_persist_iron.md").contains("rstdev COM2")
+        && include_str!("../docs/runbooks/m8_persist_iron.md").contains("rstdev/udiskkick COM2")
         && include_str!("../docs/runbooks/m8_persist_iron.md").contains("usb rw fail")
         && include_str!("../docs/runbooks/m8_persist_iron.md").contains("usb rw ok")
         && include_str!("../docs/runbooks/m8_persist_iron.md").contains("slotretry COM2")
