@@ -252,6 +252,37 @@ fn usb_4kn_serves_512e_virtio() {
 }
 
 #[test]
+fn usb_512_guest_chunk_splits_4k_virtio() {
+    use crate::devices::guest_virtio_blk::{
+        attach_lun, blk_sector_rw, reset, VIRTIO_BLK_S_OK, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT,
+    };
+    durable_lun_clear();
+    reset();
+    let ns = Box::leak(vec![0u8; 2 * 1024 * 1024].into_boxed_slice());
+    let ns_len = ns.len();
+    crate::mgmt::usb_bot::host_usb_attach(ns, 512);
+    assert!(attach_lun(ns_len, false));
+    crate::mgmt::usb_bot::host_usb_ops_reset();
+    let mut buf = [0u8; 4096];
+    buf[..8].copy_from_slice(b"EFI PART");
+    assert_eq!(
+        blk_sector_rw(&mut [], VIRTIO_BLK_T_OUT, 0, &mut buf),
+        VIRTIO_BLK_S_OK
+    );
+    assert_eq!(crate::mgmt::usb_bot::host_usb_ops(), 8);
+    crate::mgmt::usb_bot::host_usb_ops_reset();
+    let mut back = [0u8; 4096];
+    assert_eq!(
+        blk_sector_rw(&mut [], VIRTIO_BLK_T_IN, 0, &mut back),
+        VIRTIO_BLK_S_OK
+    );
+    assert_eq!(crate::mgmt::usb_bot::host_usb_ops(), 8);
+    assert_eq!(&back[..8], b"EFI PART");
+    reset();
+    durable_lun_clear();
+}
+
+#[test]
 fn iso_queue_ignores_usb_lun() {
     use crate::devices::guest_virtio_blk::{
         attach_lun, process_iso_queue_in, reset, VIRTIO_BLK_S_OK, VIRTIO_BLK_T_IN,

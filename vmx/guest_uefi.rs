@@ -3293,10 +3293,13 @@ pub fn guest_uefi_virtio_stall_dump(now: u64, last_mmio: u64, already: bool) -> 
 
 /// Iron guestio COM2 (`f2c55be4`): leftover apk overlay dumped during
 /// `Mounting boot media` (`disk_last=3` `iso_last=556`, queues drained).
-/// That harvest is for apk jiffies, not USB BOT. Hold it until
-/// `Installing packages` while the Toshiba LUN is live.
-pub fn guest_uefi_virtio_stall_dump_hold_for_usb_lun(usb_ready: bool, packages: bool) -> bool {
-    usb_ready && !packages
+/// That harvest is for apk jiffies, not USB BOT. Hold it while the
+/// Toshiba LUN is live. Iron stopwalk COM2 (`90af2c5b`): hold until
+/// packages reached login, then dumps during mdev/`setup-disk` filled
+/// COM2 (`ring=4096 room=0`) while `vda last_st=0x1`. Keep holding
+/// after apk. `packages` is unused (needle-stable signature).
+pub fn guest_uefi_virtio_stall_dump_hold_for_usb_lun(usb_ready: bool, _packages: bool) -> bool {
+    usb_ready
 }
 
 /// `hold_usb` skips the leftover-DRAM overlay so COM2 can reach login

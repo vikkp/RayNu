@@ -553,6 +553,8 @@ pub fn xhci_addr_context_state_needs_reset_device(cmd: u8, cmpl: u8) -> bool {
 /// keep the long wait — `end_first_read` must not drop to `BULK_SPINS`.
 /// Iron guestio COM2 (`f2c55be4`): three `vda` completions then leftover
 /// apk stall dump during ISO mount — not a BOT timeout.
+/// Iron stopwalk COM2 (`90af2c5b`): FIRST_READ_SPINS lived; 4K/`nlb=8`
+/// still `last_st=0x1`. Guest chunk is one native LBA (`usb_bot_guest_chunk`).
 pub fn xhci_guest_rw_long_wait() -> bool {
     true
 }
@@ -3646,19 +3648,19 @@ fn serial_xhci_rw_fail(off: u64, write: bool, err: UsbBotError) {
         return;
     }
     use crate::boot::serial;
-    serial::write_str("boot: Stage 46 durable LUN usb rw fail off=0x");
-    serial_hex64(off);
-    serial::write_str(if write { " wr=1 err=" } else { " wr=0 err=" });
-    serial_dec_u8(err as u8);
-    serial::write_str(" cmpl=0x");
-    serial_hex32(usb_bot_last_cmpl() as u32);
-    serial::write_str(" bot=");
-    serial::write_str(usb_bot_stage_name(usb_bot_last_stage()));
-    serial::write_str(" scsi=");
-    serial::write_str(usb_bot_scsi_name(usb_bot_last_scsi()));
-    serial::write_str(" n=");
-    serial_dec_u8(n.min(250) as u8);
-    serial::write_line(" (not ISO-INSTALL-OK)");
+    serial::write_str_nowait("boot: Stage 46 durable LUN usb rw fail off=0x");
+    serial_hex64_nowait(off);
+    serial::write_str_nowait(if write { " wr=1 err=" } else { " wr=0 err=" });
+    serial_dec_u8_nowait(err as u8);
+    serial::write_str_nowait(" cmpl=0x");
+    serial_hex32_nowait(usb_bot_last_cmpl() as u32);
+    serial::write_str_nowait(" bot=");
+    serial::write_str_nowait(usb_bot_stage_name(usb_bot_last_stage()));
+    serial::write_str_nowait(" scsi=");
+    serial::write_str_nowait(usb_bot_scsi_name(usb_bot_last_scsi()));
+    serial::write_str_nowait(" n=");
+    serial_dec_u8_nowait(n.min(250) as u8);
+    serial::write_line_nowait(" (not ISO-INSTALL-OK)");
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
@@ -3668,11 +3670,11 @@ fn serial_xhci_rw_busy(off: u64, write: bool) {
         return;
     }
     use crate::boot::serial;
-    serial::write_str("boot: Stage 46 durable LUN usb rw busy off=0x");
-    serial_hex64(off);
-    serial::write_str(if write { " wr=1 n=" } else { " wr=0 n=" });
-    serial_dec_u8(n.min(250) as u8);
-    serial::write_line(" (not ISO-INSTALL-OK)");
+    serial::write_str_nowait("boot: Stage 46 durable LUN usb rw busy off=0x");
+    serial_hex64_nowait(off);
+    serial::write_str_nowait(if write { " wr=1 n=" } else { " wr=0 n=" });
+    serial_dec_u8_nowait(n.min(250) as u8);
+    serial::write_line_nowait(" (not ISO-INSTALL-OK)");
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
@@ -3682,11 +3684,11 @@ fn serial_xhci_rw_ok(off: u64, write: bool) {
         return;
     }
     use crate::boot::serial;
-    serial::write_str("boot: Stage 46 durable LUN usb rw ok off=0x");
-    serial_hex64(off);
-    serial::write_str(if write { " wr=1 n=" } else { " wr=0 n=" });
-    serial_dec_u8(n.min(250) as u8);
-    serial::write_line(" (not ISO-INSTALL-OK)");
+    serial::write_str_nowait("boot: Stage 46 durable LUN usb rw ok off=0x");
+    serial_hex64_nowait(off);
+    serial::write_str_nowait(if write { " wr=1 n=" } else { " wr=0 n=" });
+    serial_dec_u8_nowait(n.min(250) as u8);
+    serial::write_line_nowait(" (not ISO-INSTALL-OK)");
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
@@ -3695,9 +3697,63 @@ fn maybe_serial_xhci_rw_wait(spins: u32, spins_max: u32) {
         return;
     }
     use crate::boot::serial;
-    serial::write_str("boot: Stage 46 durable LUN usb rw wait spins=");
-    serial_dec_u32(spins);
-    serial::write_line(" (not ISO-INSTALL-OK)");
+    serial::write_str_nowait("boot: Stage 46 durable LUN usb rw wait spins=");
+    serial_dec_u32_nowait(spins);
+    serial::write_line_nowait(" (not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_hex32_nowait(v: u32) {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut buf = [0u8; 8];
+    for i in 0..8 {
+        buf[i] = HEX[((v >> (28 - i * 4)) & 0xF) as usize];
+    }
+    crate::boot::serial::write_str_nowait(core::str::from_utf8(&buf).unwrap_or("????????"));
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_hex64_nowait(v: u64) {
+    serial_hex32_nowait((v >> 32) as u32);
+    serial_hex32_nowait(v as u32);
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_dec_u8_nowait(v: u8) {
+    if v >= 100 {
+        crate::boot::serial::write_str_nowait("100+");
+        return;
+    }
+    let mut buf = [0u8; 3];
+    let mut n = 0usize;
+    if v >= 10 {
+        buf[n] = b'0' + (v / 10);
+        n += 1;
+    }
+    buf[n] = b'0' + (v % 10);
+    n += 1;
+    crate::boot::serial::write_str_nowait(core::str::from_utf8(&buf[..n]).unwrap_or("?"));
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_dec_u32_nowait(v: u32) {
+    if v == 0 {
+        crate::boot::serial::write_str_nowait("0");
+        return;
+    }
+    let mut digits = [0u8; 10];
+    let mut n = 0usize;
+    let mut x = v;
+    while x > 0 && n < digits.len() {
+        digits[n] = b'0' + (x % 10) as u8;
+        n += 1;
+        x /= 10;
+    }
+    let mut out = [0u8; 10];
+    for i in 0..n {
+        out[i] = digits[n - 1 - i];
+    }
+    crate::boot::serial::write_str_nowait(core::str::from_utf8(&out[..n]).unwrap_or("?"));
 }
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]

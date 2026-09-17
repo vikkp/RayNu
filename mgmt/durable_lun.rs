@@ -501,7 +501,11 @@ fn lun_backend_rw(cur: u64, slice: &mut [u8], write: bool, nvme: bool) -> bool {
 fn durable_lun_native_rw(off: u64, buf: &mut [u8], write: bool, nvme: bool, lba: u32) -> bool {
     let mut done = 0usize;
     while done < buf.len() {
-        let take = (buf.len() - done).min(4096);
+        let take = if nvme {
+            (buf.len() - done).min(4096)
+        } else {
+            crate::mgmt::usb_bot::usb_bot_guest_chunk(lba, buf.len() - done)
+        };
         let cur = off.saturating_add(done as u64);
         if cur % u64::from(lba) != 0 || (take as u64) % u64::from(lba) != 0 {
             return false;
