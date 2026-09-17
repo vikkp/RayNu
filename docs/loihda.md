@@ -123,7 +123,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 **Product effect.** “Install Linux” without persist is a demo that dies when the operator Force Offs the box — which they will, because that is how you recover a Type-1. Nested File persist (`ce3d8a09`) and DurableLun USB/NVMe I/O are the mechanism. Iron Force Off is still open. USB ≥ 16 GiB (not the ESP Cruzer / 2–8 GiB UDisk) is the Toshiba LUN. Nested QEMU ≠ R640.
 
-**Iron NOW (not a score bump).** Stopwalk COM2 (`90af2c5b`): p11 Toshiba `0480:a004` named; no p14; `usb I/O ready bytes=320072933376`; leftover skip; virtio `keep=0`; Alpine `[vda] 298 GiB` `login: root`; `vda last_st=0x1`; `sfdisk: cannot open /dev/vda: I/O error`. ISO `vdb last_st=0x0`. Peek `gpt_err=2` (blank/exfat). **Not persist.** This EFI: one native LBA per BOT (`usb_bot_guest_chunk`); REQUEST SENSE after CSW fail; stall dump hold while USB live; nowait `usb rw`. Keep stopwalk/rstdev/stallquiet/guestio/descabort. Do not Force Off. Do not setup-disk until `vda` stays `last_st=0x0`.
+**Iron NOW (not a score bump).** Nlb1 COM2 (`920f606b`): p11 Toshiba `0480:a004` named; no p14; `usb I/O ready bytes=320072933376`; leftover skip; virtio `keep=0`; peek `usb_err=0` `gpt_err=2`; nlb=1 `usb rw ok` at `0x0`/`0x200`/`0x400`/`0x600`/`0x800` then `bot=cbw scsi=sense` / `bot=csw scsi=sense`; `vda: unable to read partition table`. ISO `vdb` FAT lived. **Not persist.** This EFI: REQUEST SENSE only on `UsbBotError::Bot`, never on Xfer timeout; keep `usb_bot_guest_chunk`. Keep nlb1/stopwalk/rstdev/stallquiet/guestio/descabort. Do not Force Off. Do not setup-disk until `vda` stays `last_st=0x0`.
 
 **Honest remainder.** 30% is iron COM2 `RAYNU-V-M8-DISK-PERSIST-OK`. Do not F11 until `I/O ready` + virtio on the LUN.
 
@@ -171,7 +171,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 |------|-------|------|--------|
 | 2026-09-11 | Everest | Iron ISO → disk → login | **DONE** — HDA 99%, months 0.0 |
 | 2026-09-13 | Persist mechanism | Nested-OK + DurableLun USB/NVMe I/O | **DONE nested / host**; iron Force Off **open** |
-| **NOW** | Bar A A2 | USB/NVMe Force Off on COM2 | **NEXT** (stopwalk COM2 Toshiba 298 GiB ready + Alpine login then `vda last_st=0x1`; leftover skipped ≠ persist) |
+| **NOW** | Bar A A2 | USB/NVMe Force Off on COM2 | **NEXT** (nlb1 COM2 Toshiba 298 GiB ready + peek `usb_err=0` + nlb=1 oks then `scsi=sense`; leftover skipped ≠ persist) |
 | then | Bar A A3+A4 | SKU card + TLS | design overlap OK; do not close TLS before persist COM2 |
 | then | Bar B B2 | Spare PERC VD persist | after A2; census skip is lab safety |
 | later | Auth / console / unmodified ISO | A5, A6, Gen-1 Phase 2 | named residuals, not fake closes |
@@ -202,11 +202,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-usb-bot-nlb1 |
-| Summary | **Iron leftover skipped, not persist.** Stopwalk COM2 Toshiba 298 GiB ready + Alpine login; `vda last_st=0x1` / `sfdisk` I/O error. One native LBA per BOT + REQUEST SENSE after CSW fail. Never Toshiba `/dev/sdc`. Scores **held**. |
+| Commit | m8-usb-bot-sensebot |
+| Summary | **Iron leftover skipped, not persist.** Nlb1 COM2 Toshiba 298 GiB ready + peek `usb_err=0` + nlb=1 512-byte oks then `scsi=sense` after Xfer timeout; `vda` no partition table. REQUEST SENSE only on Bot, never on Xfer timeout. Never Toshiba `/dev/sdc`. Scores **held**. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Bar A **42% held** / Bar B **18% held** / overall **38% held** / months A **1.5 held**. Persist piece **70% held**. A2 still open. |
-| Gates touched | `usb_bot.rs` nlb=1 guest chunk + REQUEST SENSE after CSW fail; [m8_persist_iron.md](runbooks/m8_persist_iron.md). `./tools/sync-loihda-site.sh --check`. No MegaRAID. No TLS. No F11. |
+| Gates touched | `usb_bot.rs` Bot-only REQUEST SENSE; [m8_persist_iron.md](runbooks/m8_persist_iron.md). `./tools/sync-loihda-site.sh --check`. No MegaRAID. No TLS. No F11. |
 
 ---
 
@@ -214,6 +214,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-17 | m8-usb-bot-sensebot | 42 | 18 | **Iron leftover skipped, not persist.** Nlb1 COM2 Toshiba 298 GiB ready + peek `usb_err=0` + nlb=1 512-byte oks then `scsi=sense` after Xfer timeout; `vda` no partition table. This EFI: REQUEST SENSE only on Bot, never on Xfer timeout. Persist 70% held. A2 open. |
 | 2026-09-17 | m8-usb-bot-nlb1 | 42 | 18 | **Iron leftover skipped, not persist.** Stopwalk COM2 Toshiba 298 GiB ready + Alpine login; `vda last_st=0x1`; `sfdisk` I/O error. This EFI: nlb=1 BOT + REQUEST SENSE after CSW fail. Persist 70% held. A2 open. |
 | 2026-09-17 | m8-usb-bot-stopwalk | 42 | 18 | **Iron leftover, not persist.** rstdev/udiskkick COM2 Toshiba named p11 then p14/p10 leftover 1 GiB — regression vs guestio I/O ready. This EFI: `xhci stopwalk` keep-slot + BOT retry. Persist 70% held. A2 open. |
 | 2026-09-17 | m8-usb-bot-reexec | 42 | 18 | **Host flash, not persist.** `--branch` ran old flashcruzer.sh so UDisk kick never ran. Re-exec after checkout. Never Toshiba `/dev/sdc`. Persist 70% held. A2 open. |

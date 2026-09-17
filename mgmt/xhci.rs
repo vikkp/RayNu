@@ -555,6 +555,8 @@ pub fn xhci_addr_context_state_needs_reset_device(cmd: u8, cmpl: u8) -> bool {
 /// apk stall dump during ISO mount — not a BOT timeout.
 /// Iron stopwalk COM2 (`90af2c5b`): FIRST_READ_SPINS lived; 4K/`nlb=8`
 /// still `last_st=0x1`. Guest chunk is one native LBA (`usb_bot_guest_chunk`).
+/// Iron nlb1 COM2 (`920f606b`): nlb=1 512-byte oks then REQUEST SENSE on
+/// Xfer timeout (`scsi=sense`). SENSE is Bot-only, not `cmpl=0xff`.
 pub fn xhci_guest_rw_long_wait() -> bool {
     true
 }
