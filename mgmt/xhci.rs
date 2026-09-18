@@ -517,6 +517,12 @@ pub fn xhci_retry_address_device(first_posted: bool) -> bool {
 /// revert writequeue / okquiet / CSW queue / nopretry. Abort, re-prime
 /// No-Op, reset EP0, retry SET_CONFIGURATION on the live slot
 /// (`xhci setcfgretry`). Do not Disable Slot. Do not walk p14.
+/// Iron setcfgretry COM2 (`ef7e93ec`): SET_CONFIG first-try
+/// `xhci setcfg p11 val=1` (no `xhci setcfgretry` line); Toshiba
+/// 298 GiB `usb I/O ready`; leftover skip; Alpine `[vda] 298 GiB`
+/// `vda1 vda2`; WRITE `wr=1` then USB `ISO-INSTALL-OK`; UART mash
+/// virtio MMIO overlay + `usb rw ok` every 4096 during setup-disk.
+/// In progress at paste. **Not persist.** Do not Force Off mid-install.
 pub fn xhci_retry_set_config(first_posted: bool) -> bool {
     !first_posted
 }
