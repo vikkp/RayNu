@@ -131,7 +131,7 @@ All must be true (no hand-waving):
 | Phase B SPA → RayNu-F | **DONE on iron** | `RAYNU-V-M7-PHASE-B-SPA-WIRE-OK` + COM2 `f72b4276` / `34552377351`: coexist `HOST-NIC-HTTP-OK` `10.99.99.145:8443` → SPA Start of RayNu-F ISO (no `raynuf.txt`) → `ISO-INSTALL-OK` → `DISK-BOOT-OK`. `iso=0` stays SHELL. [2026-09-11-f72b4276-phase-b-spa-iso-install-disk-boot-ok.md](evidence/r640/2026-09-11-f72b4276-phase-b-spa-iso-install-disk-boot-ok.md) |
 
 ### Summit D — Deploy Linux ISO
-**Status: DONE ON IRON · ~99% · Everest E5 closed; HV-reboot persist evidence-closed (`4af78b43`); upload / catalog / multi-distro / TLS are M8**
+**Status: DONE ON IRON · ~99% · Everest E5 closed; HV-reboot persist evidence-closed (`4af78b43`); M8.4 host upload; catalog / multi-distro / TLS are M8**
 
 | Item | Status | Evidence / gap |
 |------|--------|----------------|
@@ -149,7 +149,7 @@ All must be true (no hand-waving):
 | CD-ROM attach | DONE (firmware StartImage) | GuestVisible PCI IDE/ATAPI + El Torito FAT ESP BOOTX64; not `ISO-INSTALL-OK` |
 | Guest UEFI firmware blob | **DONE on iron — install and reboot-to-disk (RayNu-F ADR-016)** | **Iron UDisk `56a3ffd` / run `34480107961` (2026-09-10): the whole loop.** Third iron `RAYNU-V-M7-ISO-INSTALL-OK` → `reboot` → `guest reset requested src=kbc n=1` → `relaunch after reset` → `GPT ESP lba=2048 sectors=98304 part=1` → `BOOTX64.EFI bytes=139264` → `image=DISK-BOOTX64` → installed GRUB 2.12 countdown `2s → 1s → 0s` (no `RayNu-F stop` line; the wall cap never fired) → `Booting 'Alpine Linux v3.21, with Linux lts'` → `START-IMAGE-OK` → **`RAYNU-V-RAYNU-F-DISK-BOOT-OK`** → `EBS-OK` → second `Linux version 6.12.13-0-lts` `root=UUID=9af18543-…` `modules=sd-mod,usb-storage,ext4` → `EXT4-fs (vda2): mounted filesystem` → `fsck` `vda2`+`vda1` → OpenRC → `login:` → `cat /proc/cmdline` from the installed system. History: `59ac070` (install closed; F7 relaunch VMCLEAR/VMPTRLD — 81 KiB stack temporary over the VMCS), `975f8fc` (relaunch + installed GRUB menu; fixed 1 M exit-cap fired inside GRUB's 2 s menu poll loop), `56a3ffd` (RayNu-F wall cap: time, not exits, bounds the loader phase). Evidence: [2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md](evidence/r640/2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md) |
 | Persistent install + reboot-to-disk | **DONE on iron (distro + HV reboot evidence)** | `56a3ffd` + Phase B `f72b4276` guest F7. **M8.0 host-reboot persist DONE on evidence** (`4af78b43`): Force Off → peek `keep=1` → SPA `DISK-BOOTX64` → same `root=UUID=348005a9-…` → `login: root`. Minted `RAYNU-V-M8-DISK-PERSIST-OK` did not print. Guest virtio is the 8 GiB Toshiba slice. |
-| Upload ISO via API/UI | PARTIAL | REST `/iso/{id}/deploy` + `/install`; blob upload residual |
+| Upload ISO via API/UI | PARTIAL (host-ready) | M8.4 HostReady blob PUT/POST (`RAYNU-V-M8-ISO-UPLOAD-HOST-OK`); firmware ESP-staged `linux.iso` stays valid; iron network PUT open |
 | Multi-OS image types | **WIRED (host)** | REST/SPA `linux_iso` \| `windows_iso` \| `generic_uefi` ([ADR-014](adr/ADR-014.md) Stage 0); Windows install later |
 | Multi-distro matrix | MISSING | — |
 
@@ -354,11 +354,11 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-tls-fw |
-| Summary | **M8.3 host console (HostReady).** Operator keys reach guest COM1 RBR; guest THR echo is captured (`RAYNU-V-M8-CONSOLE-HOST-OK`). Firmware SPA is still `GET /logs/serial` (HV UART). Not VNC. Never print iron CONSOLE-OK from host/CI. Do not flash. Months **0.0 held**. Overall **99 held**. |
-| Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. Iron HTTPS / iron auth / iron console residual. Nested QEMU ≠ R640. |
-| Gates touched | `mgmt/console.rs` + `mgmt/m8_console_gate.rs` + `tools/m8-console-smoke.sh`. Firmware `GET /logs/serial` unchanged. SPA size held. `./tools/sync-hda-site.sh --check`. `./tools/sync-loihda-site.sh --check`. Do not flash. |
-| Months Δ | 0.0 held (Everest closed; HostReady UART ≠ iron SPA keyboard) |
+| Commit | m8-iso-upload-sku |
+| Summary | **A3 SKU card DONE + M8.4 host ISO upload (HostReady).** Dedicated-box page names 8 GiB USB, plaintext HTTP, lab latch, not PERC / cluster / Windows. Host PUT/POST ISO bytes into a datastore blob (`RAYNU-V-M8-ISO-UPLOAD-HOST-OK`). Firmware ESP-staged `linux.iso` stays valid. Never print iron ISO-UPLOAD-OK from host/CI. Do not flash. Months **0.0 held**. Overall **99 held**. |
+| Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. Iron HTTPS / iron auth / iron console / iron ISO PUT residual. Nested QEMU ≠ R640. |
+| Gates touched | `docs/sku.md` + `site/sku.html` + `mgmt/sku_card.rs` + `mgmt/iso_upload.rs` + `mgmt/m8_iso_upload_gate.rs` + `tools/m8-iso-upload-smoke.sh`. Firmware HTTP has no blob PUT. SPA size held. `./tools/sync-hda-site.sh --check`. `./tools/sync-loihda-site.sh --check`. Do not flash. |
+| Months Δ | 0.0 held (Everest closed; HostReady blob ≠ iron network ISO PUT) |
 
 
 ## Blockers & risks (Everest-relevant)
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-18 | m8-iso-upload-sku | 0.0 | 99 | **A3 SKU DONE + M8.4 host ISO upload HostReady.** Dedicated-box card + host blob PUT/POST (`RAYNU-V-M8-ISO-UPLOAD-HOST-OK`). ESP-staged stays valid. Never print iron ISO-UPLOAD-OK. Do not flash. Sit at `localhost:~#`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-18 | m8-console-host | 0.0 | 99 | **M8.3 host console HostReady.** Operator keys reach guest COM1; guest THR echo captured (`RAYNU-V-M8-CONSOLE-HOST-OK`). Firmware SPA is still host serial log. Not VNC. Never print iron CONSOLE-OK. Do not flash. Sit at `localhost:~#`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-18 | m8-auth-host | 0.0 | 99 | **M8.2 host auth HostReady.** Operator token is the product latch; `raynu-v-bringup` is lab-only (`RAYNU-V-M8-AUTH-HOST-OK`). Firmware REST still accepts the lab latch when no ESP `auth.token`. Never print iron AUTH-OK. Do not flash. Sit at `localhost:~#`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-18 | m8-tls-fw | 0.0 | 99 | **M8.1 firmware TLS wrap host-proven.** `PlaintextListen` on coexist + rustls feed/take/wrap SPA (`RAYNU-V-M8-TLS-FW-HOST-OK`). `cargo test --lib -- --test-threads=1`: 768 passed. rustls/ring cannot join `uefi-bin`. CURL NOW stays `http://`. Do not flash. Sit at `localhost:~#`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |

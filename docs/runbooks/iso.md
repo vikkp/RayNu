@@ -19,7 +19,7 @@ M7.3 closes a **documented kernel-extract** deploy path on top of the image libr
 |--------|------|--------|
 | `POST` | `/iso/{id}/deploy` | 201 — register ISO if needed + bind extract-boot + default install disk |
 | `GET` | `/iso/deploy` | 200 — listed count `1` when plan ready |
-| `POST` | `/iso/{id}/attach` or `/iso/{id}/attach/{type}` | 201 — host El Torito CD-ROM attach (mock EFI prefix until blob upload) |
+| `POST` | `/iso/{id}/attach` or `/iso/{id}/attach/{type}` | 201 — host El Torito CD-ROM attach (mock EFI prefix; M8.4 host blob is HostReady) |
 | `GET` | `/iso/attach` | 200 — listed count of host-attached CD-ROMs |
 | `POST` | `/iso/{id}/firmware` | 201 — firmware-facing CD arm (requires host attach first) |
 | `GET` | `/iso/firmware` | 200 — listed count of FirmwareArmed records |
@@ -175,7 +175,7 @@ RAYNU-V-M7-ISO-OK
   Real EDK2 bytes are retained from ESP `EFI/RayNu/OVMF.fd` when present.
   Envelope box / stub load / FV probe / ESP load is not guest
   UEFI VMLAUNCH and not an embedded 4 MiB OVMF.
-- **ISO blob upload** (raw bytes into ESP) is not claimed; metadata register is.
+- **M8.4** host ISO blob (`RAYNU-V-M8-ISO-UPLOAD-HOST-OK`): PUT/POST bytes into a host datastore blob. Firmware coexist has no `/iso/{id}/blob`. SPA has no upload widget. **ESP-staged stays valid**. Never print `RAYNU-V-M8-ISO-UPLOAD-OK` from host/CI. Iron close is a network ISO PUT on coexist after `BOOT-OK`.
 - Outside Proven Core (ADR-009 / ADR-014); size still ADR-003.
 
 ## Next

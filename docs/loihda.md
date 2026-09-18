@@ -9,17 +9,17 @@ months_to_loi_a: 1.0
 months_to_loi_a_prev: 1.5
 months_to_loi_b: 3.5
 months_to_loi_b_prev: 3.5
-overall_pct: 44
+overall_pct: 52
 confidence: medium
 baseline_date: 2026-09-14
 baseline_months: 1.5
 loi_a_eta_month: "2026-10"
 loi_b_eta_month: "2026-12"
-bar_a_pct: 51
+bar_a_pct: 62
 bar_b_pct: 18
 piece_everest_pct: 100
 piece_persist_pct: 95
-piece_sku_pct: 25
+piece_sku_pct: 90
 piece_tls_pct: 22
 piece_auth_pct: 38
 piece_console_pct: 32
@@ -43,17 +43,17 @@ Lived: [`docs/progress.md`](progress.md) · M8: [`docs/m8_plan.md`](m8_plan.md) 
 
 | Metric | Value | Meaning |
 |--------|------:|---------|
-| **Overall LOI readiness** | **44%** | Nearest honest conversation is Bar A. Not Bar B. Not GA. |
-| **Bar A — dedicated-box** | **51%** | One PowerEdge we own or they dedicate. Disk survive HV reboot is evidence-closed. TLS wrap wired; iron HTTPS remains. Host auth HostReady; iron still lab latch. Host console UART keys; SPA still has no keyboard. |
+| **Overall LOI readiness** | **52%** | Nearest honest conversation is Bar A. Not Bar B. Not GA. |
+| **Bar A — dedicated-box** | **62%** | One PowerEdge we own or they dedicate. Disk survive HV reboot is evidence-closed. SKU card names ships vs does-not. TLS wrap wired; iron HTTPS remains. Host auth HostReady; iron still lab latch. Host console UART keys; SPA still has no keyboard. |
 | **Bar B — RAID-fleet** | **18%** | Replace the licensed hypervisor on PERC virtual disks they already paid for. |
 | **Months to Bar A** | **1.0** | Baseline 2026-09-14. ETA **2026-10**. Shrink only with DONE evidence. |
 | **Months to Bar B** | **3.5** | PERC I/O is the long pole. ETA **2026-12**. |
-| **Confidence** | medium | Everest is high-confidence. A2 is evidence-closed; minted persist-OK not on COM2. TLS wrap is not iron HTTPS. HostReady is not iron AUTH-OK. Host UART keys are not iron CONSOLE-OK. |
+| **Confidence** | medium | Everest is high-confidence. A2 is evidence-closed; minted persist-OK not on COM2. A3 SKU is DONE. TLS wrap is not iron HTTPS. HostReady is not iron AUTH-OK. Host UART keys are not iron CONSOLE-OK. Host ISO blob is not iron ISO-UPLOAD-OK. |
 
 ```
-Bar A (dedicated-box)  ██████████░░░░░░░░░░  51%
+Bar A (dedicated-box)  ████████████░░░░░░░░  62%
 Bar B (RAID fleet)      ███░░░░░░░░░░░░░░░░░  18%
-Overall LOI             █████████░░░░░░░░░░░  44%
+Overall LOI             ██████████░░░░░░░░░░  52%
 ```
 
 **How the month number moves:** same honesty as Everest HDA. Closed iron gates shrink `months_to_loi_*`. Nested QEMU, host tests, and design docs do **not**. Stalls or new scope slip the ETA. Prefer under-claiming.
@@ -88,12 +88,12 @@ All must be true:
 |---|-----------|-----------|----------------|
 | A1 | **Everest loop** | Iron `ISO-INSTALL-OK` → `DISK-BOOT-OK` → `login:` | Without this there is no product to intent toward. **DONE** (`f72b4276`). |
 | A2 | **Persist across HV reboot** | Force Off → peek `keep=1` → SPA `DISK-BOOTX64` → same `root=UUID=` → `login:` (**DONE on evidence** `4af78b43`; minted `RAYNU-V-M8-DISK-PERSIST-OK` wired, not COM2) | Guest disk is the 8 GiB Toshiba USB slice, not leftover DRAM. Nested-OK ≠ this. Residual: iron persist-OK print / whole-LUN virtio. |
-| A3 | **SKU card** | One page: what ships, what does not, dedicated-box vs fleet | Stops us promising PERC, Windows, or cluster in a Bar A conversation. |
+| A3 | **SKU card** | One page: what ships, what does not, dedicated-box vs fleet | **DONE** ([`docs/sku.md`](sku.md) / [`site/sku.html`](../site/sku.html)). Stops us promising PERC, Windows, or cluster in a Bar A conversation. |
 | A4 | **TLS** | Browser/`curl --cacert` on `:8443` after `BOOT-OK` | InfoSec will not sign plaintext HTTP + bring-up token. Everest deferred this on purpose. |
 | A5 | **Auth beyond bring-up** | Product default is not `raynu-v-bringup` | A shared lab latch is not an operator credential. HostReady (`RAYNU-V-M8-AUTH-HOST-OK`) is not this close. |
 | A6 | **Operator keyboard** | Type in the guest from the SPA (not only iDRAC SOL) | Soft for the first LOI; still on the polish table. Serial already installed Alpine. HostReady UART keys (`RAYNU-V-M8-CONSOLE-HOST-OK`) are not this close. |
 
-A2 is **DONE on evidence**. A4 TLS **iron** is the **NOW** gate (`RAYNU-V-M8-TLS-HOST-OK` / `RAYNU-V-M8-TLS-FW-HOST-OK` are not that). A5 host-ready (`RAYNU-V-M8-AUTH-HOST-OK`) is not iron ESP-required default. A6 host-ready (`RAYNU-V-M8-CONSOLE-HOST-OK`) is not iron SPA keyboard. A3 can close in docs the same week.
+A2 is **DONE on evidence**. A3 SKU is **DONE**. A4 TLS **iron** is the **NOW** gate (`RAYNU-V-M8-TLS-HOST-OK` / `RAYNU-V-M8-TLS-FW-HOST-OK` are not that). A5 host-ready (`RAYNU-V-M8-AUTH-HOST-OK`) is not iron ESP-required default. A6 host-ready (`RAYNU-V-M8-CONSOLE-HOST-OK`) is not iron SPA keyboard. M8.4 host-ready (`RAYNU-V-M8-ISO-UPLOAD-HOST-OK`) is not iron ISO-UPLOAD-OK.
 
 ### Bar B — RAID-fleet non-prod LOI
 
@@ -127,11 +127,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 **Honest remainder.** 5% is minted persist-OK on COM2 (now wired, not flashed) + whole-Toshiba virtio. Auto-answer SETUP on keep=1 DISK-BOOT is second-boot. Journal recovery no longer takes `ISO-INSTALL-OK`. Do not claim 100%. Do not flash over `localhost:~#`.
 
-### 3. SKU card — 25%
+### 3. SKU card — 90%
 
 **What it is.** A one-page “what you are buying.” Dedicated-box vs fleet. USB vs PERC. Alpine-patched vs unmodified. No cluster. No Windows.
 
-**Product effect.** This page **is** the start of that card. A2 is evidence-closed. Until A4 TLS closes, the card must still say “plaintext HTTP, dedicated-box USB slice.” Overstated copy does not survive diligence.
+**Product effect.** The card exists: [`docs/sku.md`](sku.md) / [`site/sku.html`](../site/sku.html). A3 is **DONE**. It still has to say **plaintext HTTP**, dedicated-box **8 GiB** USB slice, **lab latch** until ESP `auth.token`. Overstated copy does not survive diligence. 10% remainder is keeping the page in lockstep with A4–A6 — not a missing page.
 
 ### 4. TLS — 22%
 
@@ -172,13 +172,14 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | 2026-09-11 | Everest | Iron ISO → disk → login | **DONE** — HDA 99%, months 0.0 |
 | 2026-09-13 | Persist mechanism | Nested-OK + DurableLun USB/NVMe I/O | **DONE nested / host** |
 | 2026-09-18 | Bar A A2 | USB Force Off on COM2 | **DONE on evidence** (`4af78b43` keep=1 DISK-BOOT UUID `348005a9`; minted persist-OK not printed) |
-| **NOW** | Bar A A4 | TLS on `:8443` after `BOOT-OK` | **NEXT** (iron HTTPS; host `TLS-HOST-OK` / firmware wrap `TLS-FW-HOST-OK` / auth `AUTH-HOST-OK` / console `CONSOLE-HOST-OK` are not this) |
+| 2026-09-18 | Bar A A3 | SKU card | **DONE** ([`docs/sku.md`](sku.md) / [`site/sku.html`](../site/sku.html)) |
+| **NOW** | Bar A A4 | TLS on `:8443` after `BOOT-OK` | **NEXT** (iron HTTPS; host `TLS-HOST-OK` / firmware wrap `TLS-FW-HOST-OK` / auth `AUTH-HOST-OK` / console `CONSOLE-HOST-OK` / ISO-upload `ISO-UPLOAD-HOST-OK` are not this) |
 | then | Bar B B2 | Spare PERC VD persist | after A2 evidence-close; census skip is lab safety |
 | later | Auth / console / unmodified ISO | A5, A6, Gen-1 Phase 2 | named residuals, not fake closes |
 
 ```
 2026-09  ████████  Everest closed
-2026-10  ████░░░░  Bar A: A2 evidence-closed; TLS + SKU
+2026-10  ████░░░░  Bar A: A3 SKU DONE; TLS iron next
 2026-11  ░░░░░░░░  Bar A: TLS → first dedicated-box LOI window
 2026-12  ░░░░░░░░  Bar B: PERC VD I/O
 ```
@@ -189,7 +190,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 - Latitude and nested QEMU are not PowerEdge R640 evidence.
 - Leftover DRAM, USB persist, NVMe persist, and PERC persist are distinct closes.
-- Host/CI never print `RAYNU-V-M7-ISO-INSTALL-OK`, `RAYNU-V-M8-DISK-PERSIST-OK`, `RAYNU-V-M8-TLS-OK`, `RAYNU-V-M8-AUTH-OK`, `RAYNU-V-M8-CONSOLE-OK`, or `RAYNU-V-M8-PERC-LUN-OK`.
+- Host/CI never print `RAYNU-V-M7-ISO-INSTALL-OK`, `RAYNU-V-M8-DISK-PERSIST-OK`, `RAYNU-V-M8-TLS-OK`, `RAYNU-V-M8-AUTH-OK`, `RAYNU-V-M8-CONSOLE-OK`, `RAYNU-V-M8-ISO-UPLOAD-OK`, or `RAYNU-V-M8-PERC-LUN-OK`.
 - The Ubuntu PERC on `raynuvsrv1` is not formatted as an LOI strategy.
 - RAID-fleet LOI waits on PERC virtual-disk persist. A USB demonstration is not that close.
 - Everest remains closed. A patched Alpine ISO is a named residual, not a reopened summit.
@@ -202,11 +203,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-console-host |
-| Summary | **M8.3 host console HostReady.** Operator keys reach guest COM1; guest THR echo captured (`RAYNU-V-M8-CONSOLE-HOST-OK`). Firmware SPA is still host serial log. **not VNC.** Never print iron CONSOLE-OK. **Do not flash.** Scores: console 22→32; Bar A 50→51; persist 95 held; TLS 22 held; auth 38 held. |
+| Commit | m8-iso-upload-sku |
+| Summary | **A3 SKU card DONE** + **M8.4 host ISO upload HostReady.** Dedicated-box page names 8 GiB USB, plaintext HTTP, lab latch, not PERC / not cluster / not Windows. Host PUT/POST ISO bytes into a datastore blob (`RAYNU-V-M8-ISO-UPLOAD-HOST-OK`). Firmware ESP-staged `linux.iso` stays valid. Never print iron ISO-UPLOAD-OK. **Do not flash.** Scores: sku 25→90; Bar A 51→62; overall 44→52; persist 95 held; TLS 22 held; auth 38 held; console 32 held. |
 | Everest impact | none — HDA months 0.0 / 99% held |
-| LOI impact | Bar A **50%→51%** / Bar B **18% held** / overall **43%→44%** / months A **1.0 held**. Persist piece **95% held**. TLS **22% held**. Auth **38% held**. Console **22%→32%**. A6 not closed. |
-| Gates touched | `mgmt/console.rs` + `mgmt/m8_console_gate.rs` + `tools/m8-console-smoke.sh`. Firmware `GET /logs/serial` unchanged. `./tools/sync-loihda-site.sh --check`. No MegaRAID. No iron CONSOLE-OK. |
+| LOI impact | Bar A **51%→62%** / Bar B **18% held** / overall **44%→52%** / months A **1.0 held**. Persist piece **95% held**. SKU **25%→90%**. TLS **22% held**. Auth **38% held**. Console **32% held**. A3 DONE. A4 not closed. |
+| Gates touched | `docs/sku.md` + `site/sku.html` + `mgmt/sku_card.rs` + `mgmt/iso_upload.rs` + `mgmt/m8_iso_upload_gate.rs` + `tools/m8-iso-upload-smoke.sh`. Firmware HTTP has no blob PUT. `./tools/sync-loihda-site.sh --check`. No MegaRAID. No iron ISO-UPLOAD-OK. |
 
 ---
 
@@ -214,6 +215,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-18 | m8-iso-upload-sku | 62 | 18 | **A3 SKU DONE + M8.4 host ISO upload HostReady.** Dedicated-box card (`docs/sku.md` / `site/sku.html`). Host blob PUT/POST (`RAYNU-V-M8-ISO-UPLOAD-HOST-OK`). ESP-staged stays valid. Never print iron ISO-UPLOAD-OK. Do not flash. SKU 25→90. Persist 95 held. TLS 22 held. A4 not closed. |
 | 2026-09-18 | m8-console-host | 51 | 18 | **M8.3 host console HostReady.** Operator keys reach guest COM1; guest THR echo captured (`RAYNU-V-M8-CONSOLE-HOST-OK`). Firmware SPA is still host serial log. Not VNC. Never print iron CONSOLE-OK. Do not flash. Console 22→32. Persist 95 held. TLS 22 held. Auth 38 held. A6 not closed. |
 | 2026-09-18 | m8-auth-host | 50 | 18 | **M8.2 host auth HostReady.** Operator token is the product latch; `raynu-v-bringup` is lab-only (`RAYNU-V-M8-AUTH-HOST-OK`). Firmware REST still accepts the lab latch when no ESP `auth.token`. Never print iron AUTH-OK. Do not flash. Auth 28→38. Persist 95 held. TLS 22 held. A5 not closed. |
 | 2026-09-18 | m8-tls-fw | 49 | 18 | **M8.1 firmware TLS wrap host-proven.** Coexist TCP feeds `PlaintextListen`. Host rustls feed/take/wrap SPA (`RAYNU-V-M8-TLS-FW-HOST-OK`). `cargo test --lib -- --test-threads=1`: 768 passed. rustls/ring cannot join `uefi-bin`. CURL NOW stays `http://`. Not iron HTTPS. Do not flash. TLS 18→22. Persist 95 held. |
@@ -267,10 +269,10 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 ```
 LOI:           NOT OPEN. Tracker born 2026-09-14.
-Bar A:         51% · 1.0 months · dedicated-box non-prod
+Bar A:         62% · 1.0 months · dedicated-box non-prod
 Bar B:         18% · 3.5 months · PERC RAID fleet (out of conversation until PERC persist)
-Overall:       44% · confidence medium
-NOW:           M8.1 TLS **iron** on coexist `:8443` (host wrap `TLS-FW-HOST-OK`; firmware plaintext; auth/console HostReady are not A5/A6)
+Overall:       52% · confidence medium
+NOW:           M8.1 TLS **iron** on coexist `:8443` (host wrap `TLS-FW-HOST-OK`; firmware plaintext; auth/console/ISO-upload HostReady are not A5/A6/iron PUT)
 Open:          iron HTTPS · unmodified ISO · cluster · Ubuntu PERC stays standing boot
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
 Sit:           localhost:~#  · do not setup-disk · do not Force Off · do not flash

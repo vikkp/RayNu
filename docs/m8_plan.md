@@ -1,6 +1,6 @@
 # M8 Plan — operator product hardening (post-Everest)
 
-**Status:** **OPEN** (M8.1 iron HTTPS) — M8.1 **host-ready** (`RAYNU-V-M8-TLS-HOST-OK`) + firmware wrap (`RAYNU-V-M8-TLS-FW-HOST-OK`). Firmware session stays plaintext. M8.2 **host-ready** (`RAYNU-V-M8-AUTH-HOST-OK`); firmware REST still accepts lab bring-up when no ESP `auth.token`. M8.3 **host-ready** (`RAYNU-V-M8-CONSOLE-HOST-OK`); firmware SPA is still host serial log (**not VNC**). M7 Mount Everest **CLOSED on iron** (`f72b4276` / `34552377351`, 2026-09-11). M8.0 persist **CLOSED on evidence** (`4af78b43`).  
+**Status:** **OPEN** (M8.1 iron HTTPS) — M8.1 **host-ready** (`RAYNU-V-M8-TLS-HOST-OK`) + firmware wrap (`RAYNU-V-M8-TLS-FW-HOST-OK`). Firmware session stays plaintext. M8.2 **host-ready** (`RAYNU-V-M8-AUTH-HOST-OK`); firmware REST still accepts lab bring-up when no ESP `auth.token`. M8.3 **host-ready** (`RAYNU-V-M8-CONSOLE-HOST-OK`); firmware SPA is still host serial log (**not VNC**). M8.4 **host-ready** (`RAYNU-V-M8-ISO-UPLOAD-HOST-OK`); firmware ESP-staged `linux.iso` stays valid. M7 Mount Everest **CLOSED on iron** (`f72b4276` / `34552377351`, 2026-09-11). M8.0 persist **CLOSED on evidence** (`4af78b43`). A3 SKU card **DONE**.  
 **Parent:** [ADR-018](adr/ADR-018.md) · Everest: [ADR-009](adr/ADR-009.md) · lived: [progress.md](progress.md) · HDA: [hda.md](hda.md)  
 **Prior track:** [m7_plan.md](m7_plan.md) (closed). Cluster / elasticity is **M9**, not this plan.
 
@@ -135,9 +135,11 @@ HDA + `site/hda.html` stay fresh: update `docs/hda.md`, then `./tools/sync-hda-s
 
 ### M8.4 — ISO blob upload via SPA
 
-**Status: open**
+**Status: host-ready** (firmware ESP-staged `linux.iso` stays valid; iron network ISO PUT open)
 
 **Goal:** Operator can PUT/POST an ISO through the network UI. ESP-staged `linux.iso` stays valid.
+
+**Honesty:** [`UploadMode::HostReady`](../mgmt/iso_upload.rs) PUT/POST ISO bytes into a host datastore blob (`RAYNU-V-M8-ISO-UPLOAD-HOST-OK`). Firmware HTTP does not grow a coexist blob PUT. SPA has no upload widget (16 KiB). **ESP-staged stays valid**. Host/CI never print `RAYNU-V-M8-ISO-UPLOAD-OK`. Nested QEMU ≠ R640.
 
 ---
 
@@ -173,4 +175,4 @@ Do not pull M9 into M8 gate lists.
 
 **M8.0 persist-first attach.** Choice remains **file-backed nested / durable LUN on iron / leftover DRAM as fallback**. Attach prefers persist (`attach_disk_keep` / `attach_lun` when the media looks installed). Nested `M8_PERSIST_IMG` backs QEMU RAM (distro OVMF ignores nvdimm/pc-dimm), default off. **NVMe I/O** (`MODE=lun`) Identify + Read/Write backs virtio when Identify succeeds; empty NVMe is not 1 GiB-zeroed. **USB BOT** (`MODE=usb`) is TCG-proven. **`MODE=lunkeep` TCG-proven:** plant GPT+ESP+ext4 at NVMe LUN offset 0, kill HV, second boot `keep=1`. NVMe I/O is post-EBS. **`MODE=usbkeep` TCG-proven:** same on qemu-xhci + usb-storage (header CRC + first ESP + FAT BPB + ext4; not 32 BOT array CRC). Iron marker is `RAYNU-V-M8-DISK-PERSIST-OK` (in-tree `uefi-bin` serial on keep=1 DurableLun DISK-BOOT; not on flashed `4af78b43`). Host marker is `RAYNU-V-M8-DISK-PERSIST-HOST-OK`. Keep ADR-004 exclusive ownership. Do not claim persist from nested QEMU alone. Do not copy 1 GiB through the Cruzer ESP. Do not format the PERC. Keep [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) as the flash rollback. A2 evidence close does not retire that pin.
 
-**Next:** **M8.1 TLS iron.** Host rustls (`RAYNU-V-M8-TLS-HOST-OK`) and firmware wrap (`RAYNU-V-M8-TLS-FW-HOST-OK`) are in-tree. M8.2 host-ready (`RAYNU-V-M8-AUTH-HOST-OK`) is in-tree; firmware still accepts `raynu-v-bringup` when no ESP `auth.token`. M8.3 host-ready (`RAYNU-V-M8-CONSOLE-HOST-OK`) is in-tree; firmware SPA is still host serial log (**not VNC**). GET `/` is the later operator SPA (Overview/Guests/Media, not the firmware-button farm). Firmware coexist session is still plaintext (ring/UEFI libc). Persist honesty is wired for the next Force Off flash — do **not** flash while `localhost:~#` is live. Nested Alpine `MODE=full` is **closed** on `raynuvsrv1` (`ce3d8a09`). QEMU NVMe/USB ≠ R640. Sit at `localhost:~#`. Do not `setup-disk`. Do not flash Toshiba `/dev/sdc`.
+**Next:** **M8.1 TLS iron.** Host rustls (`RAYNU-V-M8-TLS-HOST-OK`) and firmware wrap (`RAYNU-V-M8-TLS-FW-HOST-OK`) are in-tree. M8.2 host-ready (`RAYNU-V-M8-AUTH-HOST-OK`) is in-tree; firmware still accepts `raynu-v-bringup` when no ESP `auth.token`. M8.3 host-ready (`RAYNU-V-M8-CONSOLE-HOST-OK`) is in-tree; firmware SPA is still host serial log (**not VNC**). M8.4 host-ready (`RAYNU-V-M8-ISO-UPLOAD-HOST-OK`) is in-tree; **ESP-staged stays valid**. A3 SKU card is **DONE** ([`docs/sku.md`](sku.md)). GET `/` is the later operator SPA (Overview/Guests/Media, not the firmware-button farm). Firmware coexist session is still plaintext (ring/UEFI libc). Persist honesty is wired for the next Force Off flash — do **not** flash while `localhost:~#` is live. Nested Alpine `MODE=full` is **closed** on `raynuvsrv1` (`ce3d8a09`). QEMU NVMe/USB ≠ R640. Sit at `localhost:~#`. Do not `setup-disk`. Do not flash Toshiba `/dev/sdc`.

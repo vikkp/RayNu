@@ -136,7 +136,7 @@ Operator path for a **4 GB** front-USB2 Cruzer:
   bind (Stage 8), launch-prepare (Stage 9), and size-floor (Stage 10) are
   closed; they are not guest UEFI VMLAUNCH and not an embedded EDK2 image.
   The 80-byte mock and 4 KiB floor are refused for VMLAUNCH.
-- **ISO blob upload** not claimed — REST attach uses the host mock EFI prefix.
+- **M8.4** host ISO blob (`RAYNU-V-M8-ISO-UPLOAD-HOST-OK`) is a host datastore round-trip. REST attach still uses the host mock EFI prefix on firmware. **ESP-staged stays valid**. Never print `RAYNU-V-M8-ISO-UPLOAD-OK` from host/CI.
   Extract-boot uses existing PE/ESP assets first.
 - **QEMU / firmware persist** is ESP `installdisk.bin` (LBA stamps), not a guest
   filesystem. Host synth remains fallback if the ESP write did not land.
