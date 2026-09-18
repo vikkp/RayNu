@@ -9,18 +9,18 @@ months_to_loi_a: 1.0
 months_to_loi_a_prev: 1.5
 months_to_loi_b: 3.5
 months_to_loi_b_prev: 3.5
-overall_pct: 40
+overall_pct: 41
 confidence: medium
 baseline_date: 2026-09-14
 baseline_months: 1.5
 loi_a_eta_month: "2026-10"
 loi_b_eta_month: "2026-12"
-bar_a_pct: 46
+bar_a_pct: 48
 bar_b_pct: 18
 piece_everest_pct: 100
 piece_persist_pct: 95
 piece_sku_pct: 25
-piece_tls_pct: 8
+piece_tls_pct: 18
 piece_auth_pct: 28
 piece_console_pct: 22
 piece_perc_pct: 15
@@ -43,17 +43,17 @@ Lived: [`docs/progress.md`](progress.md) · M8: [`docs/m8_plan.md`](m8_plan.md) 
 
 | Metric | Value | Meaning |
 |--------|------:|---------|
-| **Overall LOI readiness** | **40%** | Nearest honest conversation is Bar A. Not Bar B. Not GA. |
-| **Bar A — dedicated-box** | **46%** | One PowerEdge we own or they dedicate. Disk survive HV reboot is evidence-closed. TLS for InfoSec remains. |
+| **Overall LOI readiness** | **41%** | Nearest honest conversation is Bar A. Not Bar B. Not GA. |
+| **Bar A — dedicated-box** | **48%** | One PowerEdge we own or they dedicate. Disk survive HV reboot is evidence-closed. TLS host-ready; iron HTTPS remains. |
 | **Bar B — RAID-fleet** | **18%** | Replace the licensed hypervisor on PERC virtual disks they already paid for. |
 | **Months to Bar A** | **1.0** | Baseline 2026-09-14. ETA **2026-10**. Shrink only with DONE evidence. |
 | **Months to Bar B** | **3.5** | PERC I/O is the long pole. ETA **2026-12**. |
-| **Confidence** | medium | Everest is high-confidence. A2 is evidence-closed; minted persist-OK not printed. TLS is the InfoSec latch. |
+| **Confidence** | medium | Everest is high-confidence. A2 is evidence-closed; minted persist-OK not on COM2. TLS host-ready is not iron HTTPS. |
 
 ```
-Bar A (dedicated-box)  █████████░░░░░░░░░░░  46%
+Bar A (dedicated-box)  ██████████░░░░░░░░░░  48%
 Bar B (RAID fleet)      ███░░░░░░░░░░░░░░░░░  18%
-Overall LOI             ████████░░░░░░░░░░░░  40%
+Overall LOI             ████████░░░░░░░░░░░░  41%
 ```
 
 **How the month number moves:** same honesty as Everest HDA. Closed iron gates shrink `months_to_loi_*`. Nested QEMU, host tests, and design docs do **not**. Stalls or new scope slip the ETA. Prefer under-claiming.
@@ -87,13 +87,13 @@ All must be true:
 | # | Criterion | Done when | Product effect |
 |---|-----------|-----------|----------------|
 | A1 | **Everest loop** | Iron `ISO-INSTALL-OK` → `DISK-BOOT-OK` → `login:` | Without this there is no product to intent toward. **DONE** (`f72b4276`). |
-| A2 | **Persist across HV reboot** | Force Off → peek `keep=1` → SPA `DISK-BOOTX64` → same `root=UUID=` → `login:` (**DONE on evidence** `4af78b43`; minted `RAYNU-V-M8-DISK-PERSIST-OK` not printed) | Guest disk is the 8 GiB Toshiba USB slice, not leftover DRAM. Nested-OK ≠ this. Residual: marker wiring / whole-LUN virtio / auto-answer. |
+| A2 | **Persist across HV reboot** | Force Off → peek `keep=1` → SPA `DISK-BOOTX64` → same `root=UUID=` → `login:` (**DONE on evidence** `4af78b43`; minted `RAYNU-V-M8-DISK-PERSIST-OK` wired, not COM2) | Guest disk is the 8 GiB Toshiba USB slice, not leftover DRAM. Nested-OK ≠ this. Residual: iron persist-OK print / whole-LUN virtio. |
 | A3 | **SKU card** | One page: what ships, what does not, dedicated-box vs fleet | Stops us promising PERC, Windows, or cluster in a Bar A conversation. |
 | A4 | **TLS** | Browser/`curl --cacert` on `:8443` after `BOOT-OK` | InfoSec will not sign plaintext HTTP + bring-up token. Everest deferred this on purpose. |
 | A5 | **Auth beyond bring-up** | Product default is not `raynu-v-bringup` | A shared lab latch is not an operator credential. |
 | A6 | **Operator keyboard** | Type in the guest from the SPA (not only iDRAC SOL) | Soft for the first LOI; still on the polish table. Serial already installed Alpine. |
 
-A2 is **DONE on evidence**. A4 TLS is the **NOW** gate. A3 can close in docs the same week. A5/A6 may trail a first dedicated-box LOI if named as residuals.
+A2 is **DONE on evidence**. A4 TLS **iron** is the **NOW** gate (`RAYNU-V-M8-TLS-HOST-OK` is not that). A3 can close in docs the same week. A5/A6 may trail a first dedicated-box LOI if named as residuals.
 
 ### Bar B — RAID-fleet non-prod LOI
 
@@ -123,9 +123,9 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 **Product effect.** Without persist, “install Linux” dies when the operator Force Offs the box — which they will, because that is how you recover a Type-1. On the R640 we own, the same Alpine now comes back from a USB-backed disk after Force Off, without running the installer again. The guest sees an **8 GiB** window, not the whole stick. USB is not PERC. Nested QEMU ≠ R640.
 
-**Iron NOW (evidence close).** Guest8g skip-CRC EFI (`4af78b43`) A2 **CLOSED on evidence:** peek `gpt=1 fit=1 installed=1` virtio 8 GiB `keep=1` → SPA `xhci diskprime` `image=DISK-BOOTX64` bytes=139264 → `DISK-BOOT-OK` → `root=UUID=348005a9-…` → `login: root`. Minted `RAYNU-V-M8-DISK-PERSIST-OK` **did not print**. Spurious `ISO-INSTALL-OK` on journal recovery. Auto-answer `No disks found`. Sit at `localhost:~#`. Do not `setup-disk`. Keep Toshiba. Never flash `/dev/sdc`.
+**Iron NOW (evidence close).** Guest8g skip-CRC EFI (`4af78b43`) A2 **CLOSED on evidence.** Next EFI (not flashed) prints persist-OK on keep=1 DurableLun DISK-BOOT, skips SETUP, and does not take `ISO-INSTALL-OK` on journal `wr=1`. Sit at `localhost:~#`. Do not `setup-disk`. Do not Force Off. Never flash `/dev/sdc`.
 
-**Honest remainder.** 5% is minted persist-OK wiring + whole-Toshiba virtio + auto-answer residual. Do not claim 100%.
+**Honest remainder.** 5% is minted persist-OK on COM2 (now wired, not flashed) + whole-Toshiba virtio. Auto-answer SETUP on keep=1 DISK-BOOT is second-boot. Journal recovery no longer takes `ISO-INSTALL-OK`. Do not claim 100%. Do not flash over `localhost:~#`.
 
 ### 3. SKU card — 25%
 
@@ -133,11 +133,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 **Product effect.** This page **is** the start of that card. A2 is evidence-closed. Until A4 TLS closes, the card must still say “plaintext HTTP, dedicated-box USB slice.” Overstated copy does not survive diligence.
 
-### 4. TLS — 8%
+### 4. TLS — 18%
 
-**What it is.** Coexist listen is plaintext HTTP on `10.99.99.x:8443`. That closed Everest (ADR-009 deferred TLS).
+**What it is.** Coexist listen is still plaintext HTTP on `10.99.99.x:8443`. Host rustls now wraps the same HTTP codec (`RAYNU-V-M8-TLS-HOST-OK`). rustls is a **dev-dependency** (ADR-003); it is not in `uefi-bin`.
 
-**Product effect.** A CISO will ask “is management encrypted?” The honest answer today is no. Bar A that skips TLS is a lab handshake, not an InfoSec-safe LOI.
+**Product effect.** A CISO will ask “is management encrypted?” The honest answer today is: **on iron, no**. Host TLS is the first slice, not the InfoSec latch. Bar A that skips iron HTTPS is a lab handshake.
 
 ### 5. Auth — 28%
 
@@ -172,7 +172,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | 2026-09-11 | Everest | Iron ISO → disk → login | **DONE** — HDA 99%, months 0.0 |
 | 2026-09-13 | Persist mechanism | Nested-OK + DurableLun USB/NVMe I/O | **DONE nested / host** |
 | 2026-09-18 | Bar A A2 | USB Force Off on COM2 | **DONE on evidence** (`4af78b43` keep=1 DISK-BOOT UUID `348005a9`; minted persist-OK not printed) |
-| **NOW** | Bar A A4 | TLS on `:8443` after `BOOT-OK` | **NEXT** (InfoSec latch; A3 SKU can close in docs) |
+| **NOW** | Bar A A4 | TLS on `:8443` after `BOOT-OK` | **NEXT** (iron HTTPS; host `RAYNU-V-M8-TLS-HOST-OK` is not this) |
 | then | Bar B B2 | Spare PERC VD persist | after A2 evidence-close; census skip is lab safety |
 | later | Auth / console / unmodified ISO | A5, A6, Gen-1 Phase 2 | named residuals, not fake closes |
 
@@ -202,11 +202,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-usb-bot-guest8g |
-| Summary | **Public copy.** Persist piece on `site/loi.html` rewritten as a buyer explanation (Force Off used to wipe the install; USB-backed Alpine now returns). Scores **held**. |
+| Commit | m8-tls-host |
+| Summary | **M8.1 host TLS.** rustls wraps the HTTP codec (`RAYNU-V-M8-TLS-HOST-OK`) and serves the later operator SPA (menus + status lights), not the old firmware-button copy. Firmware coexist stays plaintext. Persist honesty wired. **Do not flash.** Scores: TLS 8→18; Bar A 46→48; persist 95 held. |
 | Everest impact | none — HDA months 0.0 / 99% held |
-| LOI impact | Bar A **46% held** / Bar B **18% held** / overall **40% held** / months A **1.0 held**. Persist piece **95% held**. |
-| Gates touched | `site/loi.html` persist piece. `./tools/sync-loihda-site.sh --check`. No MegaRAID. No TLS. |
+| LOI impact | Bar A **46%→48%** / Bar B **18% held** / overall **40%→41%** / months A **1.0 held**. Persist piece **95% held**. TLS **8%→18%**. |
+| Gates touched | `mgmt/tls.rs` + `tools/m8-tls-smoke.sh`. Persist-OK serial on `uefi-bin` only. `./tools/sync-loihda-site.sh --check`. No MegaRAID. No iron HTTPS. |
 
 ---
 
@@ -214,6 +214,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-18 | m8-tls-host | 48 | 18 | **M8.1 host TLS.** rustls SPA+REST (`RAYNU-V-M8-TLS-HOST-OK`) serves the later operator SPA (menus + status lights), not the old firmware-button copy. Firmware coexist plaintext. Persist-OK serial wired; keep=1 DISK-BOOT skips SETUP; journal `wr=1` does not take `ISO-INSTALL-OK`. Do not flash. TLS 8→18. Persist 95 held. |
 | 2026-09-18 | m8-usb-bot-guest8g | 46 | 18 | **Public copy.** Persist piece on `site/loi.html` rewritten as a buyer explanation (Force Off used to wipe; USB-backed Alpine now returns after HV reboot). Scores held. Persist 95% held. |
 | 2026-09-18 | m8-usb-bot-guest8g | 46 | 18 | **A2 CLOSED on evidence.** Guest8g skip-CRC EFI (`4af78b43`) Force Off persist: peek `keep=1` → SPA `xhci diskprime` `image=DISK-BOOTX64` bytes=139264 → `DISK-BOOT-OK` → `root=UUID=348005a9-…` → `login: root`. Minted persist-OK did not print. Spurious `ISO-INSTALL-OK` on journal recovery. Auto-answer `No disks found`. Sit at `localhost:~#`. Do not setup-disk. Persist 70→95. Months A 1.5→1.0. |
 | 2026-09-18 | m8-usb-bot-guest8g | 42 | 18 | **Iron leftover skipped, not persist.** Guest8g skip-CRC EFI (`4af78b43`) peek `keep=1` `installed=1` virtio 8 GiB `keep=1`. Coexist `10.99.99.146:8443`. **SPA Start now.** Do not setup-disk. Persist 70% held. A2 open. |
@@ -264,13 +265,13 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 ```
 LOI:           NOT OPEN. Tracker born 2026-09-14.
-Bar A:         46% · 1.0 months · dedicated-box non-prod
+Bar A:         48% · 1.0 months · dedicated-box non-prod
 Bar B:         18% · 3.5 months · PERC RAID fleet (out of conversation until PERC persist)
-Overall:       40% · confidence medium
-NOW:           M8.1 TLS on coexist `:8443` (A2 evidence-closed; minted persist-OK residual)
-Open:          TLS · unmodified ISO · cluster · Ubuntu PERC stays standing boot
+Overall:       41% · confidence medium
+NOW:           M8.1 TLS **iron** on coexist `:8443` (host `TLS-HOST-OK`; firmware plaintext)
+Open:          iron HTTPS · unmodified ISO · cluster · Ubuntu PERC stays standing boot
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
-Sit:           localhost:~#  · do not setup-disk · do not Force Off
+Sit:           localhost:~#  · do not setup-disk · do not Force Off · do not flash
 ```
 
 Public page: [`site/loi.html`](../site/loi.html). Living doc: this file. Sync: `./tools/sync-loihda-site.sh`.

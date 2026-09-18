@@ -179,18 +179,10 @@ pub fn prop_rest_fw_floor() -> bool {
 
 /// SPA + ADR-014 Stage 10 phrases. Floor is not EDK2 / not VMLAUNCH.
 pub fn fw_floor_surface_present() -> bool {
-    let spa = include_str!("../assets/webui.html");
     let adr = include_str!("../docs/adr/ADR-014.md");
     let src = include_str!("guest_fw.rs");
     let launch = include_str!("../vmx/launch.rs");
-    spa.contains("Stage FW floor")
-        && spa.contains("Prep FW launch")
-        && spa.contains("Bind FW guest")
-        && spa.contains("not OVMF")
-        && spa.contains("UEFI-first")
-        && spa.contains("extract-boot is lab")
-        && spa.contains("not guest UEFI")
-        && crate::mgmt::webui::webui_len().saturating_add(256) <= 16384
+    crate::mgmt::webui::spa_operator_surface_present()
         && adr.contains("Stage 10")
         && adr.contains("stage_ovmf_firmware_floor")
         && src.contains("fn stage_ovmf_firmware_floor")

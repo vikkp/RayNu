@@ -272,39 +272,10 @@ pub fn prop_rest_live_apply() -> bool {
 
 /// SPA + ADR-014 Stage 30 phrases. Live ESP apply-attempted; VMLAUNCH insn not issued.
 pub fn live_apply_surface_present() -> bool {
-    let spa = include_str!("../assets/webui.html");
     let adr = include_str!("../docs/adr/ADR-014.md");
     let src = include_str!("guest_fw.rs");
     let launch = include_str!("../vmx/launch.rs");
-    spa.contains("Apply live ESP")
-        && spa.contains("Place live ESP")
-        && spa.contains("Copy live ESP")
-        && spa.contains("Read live ESP")
-        && spa.contains("Admit live ESP")
-        && spa.contains("Present live ESP")
-        && spa.contains("Require live FD")
-        && spa.contains("Probe live bytes")
-        && spa.contains("Arm live issue")
-        && spa.contains("Arm private VMCS")
-        && spa.contains("Require live ESP")
-        && spa.contains("Arm real launch")
-        && spa.contains("Qualify real ESP")
-        && spa.contains("Install FW EPT")
-        && spa.contains("Program alias EPT")
-        && spa.contains("Arm FW alias")
-        && spa.contains("Arm reset vec")
-        && spa.contains("Map live ESP")
-        && spa.contains("Arm ESP launch")
-        && spa.contains("Stage EDK2")
-        && spa.contains("Stage FW floor")
-        && spa.contains("not OVMF")
-        && spa.contains("UEFI-first")
-        && spa.contains("extract-boot is lab")
-        && spa.contains("not guest UEFI")
-        && spa.contains("Host attach")
-        && spa.contains("Firmware arm")
-        && spa.contains("Arm firmware")
-        && crate::mgmt::webui::webui_len().saturating_add(256) <= 16384
+    crate::mgmt::webui::spa_operator_surface_present()
         && adr.contains("Stage 30")
         && adr.contains("apply_ovmf_live_esp")
         && adr.contains("LiveEspApplyAbsent")

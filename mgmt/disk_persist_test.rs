@@ -518,6 +518,21 @@ fn persist_lun_keep_is_sticky_after_usb_io_drops() {
 }
 
 #[test]
+fn persist_ok_ready_is_keep_plus_durable_lun_once() {
+    persist_ok_clear_printed();
+    assert!(!persist_ok_ready(false, true));
+    assert!(!persist_ok_ready(true, false));
+    assert!(persist_ok_ready(true, true));
+    assert!(maybe_print_iron_persist_ok(true, true));
+    assert!(!maybe_print_iron_persist_ok(true, true));
+    persist_ok_clear_printed();
+    assert!(persist_ok_ready(true, true));
+    let src = include_str!("disk_persist.rs");
+    assert!(!src.contains("println!(\"RAYNU-V-M8-DISK-PERSIST-OK\")"));
+    assert!(src.contains("write_line(M8_DISK_PERSIST_OK_MARKER)"));
+}
+
+#[test]
 fn host_never_prints_everest_iso_install_ok() {
     assert!(host_never_prints_iso_install_ok());
     assert_eq!(M8_DISK_PERSIST_OK_MARKER, "RAYNU-V-M8-DISK-PERSIST-OK");

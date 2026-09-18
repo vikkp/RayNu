@@ -9,6 +9,7 @@
 - M7.8 scaffold: `RAYNU-V-M7-HOST-NIC-SCAFFOLD-OK` — `./tools/m7-host-nic-smoke.sh` (ADR-013 Phase 0/C/D/E wiring)
 - M7.8 QEMU: `RAYNU-V-M7-HOST-NIC-QEMU-OK` — post-EBS `GET /` on QEMU `e1000` (`8086:100e`); `./tools/m7-host-nic-qemu-smoke.sh` (also greps PRE-EBS `vid:did=8086:100e`)
 - M7.8 iron: `RAYNU-V-M7-HOST-NIC-HTTP-OK` — **Phase D closed on iron** 2026-08-20 after `BOOT-OK` on BCM5720 `:38`. **Phase F closed on iron** the same day: native `bounded_poll` on a credit-scheduler quantum **while VMX is on** (G0 scheduled; G1–G3 parked). Do not claim from host or QEMU.
+- M8.1 host: `RAYNU-V-M8-TLS-HOST-OK` — `./tools/m8-tls-smoke.sh` (rustls around the HTTP codec). Firmware coexist stays plaintext. Never print `RAYNU-V-M8-TLS-OK` from host/CI. Iron close is `curl --cacert` on `10.99.99.x:8443` after `BOOT-OK`.
 
 ## Story
 
@@ -28,7 +29,7 @@ continues into the guest path when Tcp4 is absent (common on minimal OVMF).
 | **Host / CI (M7.8)** | Bounded poll + e1000 wiring | `m7-host-nic-smoke.sh` |
 | **QEMU (M7.8 Phase C)** | Post-EBS `GET /` on `e1000` | `m7-host-nic-qemu-smoke.sh` |
 | **Firmware** | PRE-EBS Tcp4 listen window (~15s) | Soft-fail → EBS + guests |
-| **Lab** | Plaintext HTTP (TLS deferred — ADR-003/009/012) | QEMU `hostfwd` below |
+| **Lab** | Plaintext HTTP on firmware (M8.1 host TLS; iron HTTPS not claimed — ADR-003/009/018) | QEMU `hostfwd` below |
 
 ## Auth
 

@@ -138,18 +138,10 @@ pub fn prop_rest_fw_bind() -> bool {
 
 /// SPA + ADR-014 Stage 8 phrases. Bind is not VMLAUNCH.
 pub fn fw_bind_surface_present() -> bool {
-    let spa = include_str!("../assets/webui.html");
     let adr = include_str!("../docs/adr/ADR-014.md");
     let src = include_str!("guest_fw.rs");
     let launch = include_str!("../vmx/launch.rs");
-    spa.contains("Bind FW guest")
-        && spa.contains("Arm FW slot")
-        && spa.contains("Load ESP OVMF")
-        && spa.contains("not OVMF")
-        && spa.contains("UEFI-first")
-        && spa.contains("extract-boot is lab")
-        && spa.contains("not guest UEFI")
-        && crate::mgmt::webui::webui_len().saturating_add(256) <= 16384
+    crate::mgmt::webui::spa_operator_surface_present()
         && adr.contains("Stage 8")
         && adr.contains("bind_ovmf_firmware_guest")
         && src.contains("fn bind_ovmf_firmware_guest")
