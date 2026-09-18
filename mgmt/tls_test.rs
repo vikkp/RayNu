@@ -82,7 +82,7 @@ fn tls_get(port: u16, cert: CertificateDer<'static>, req: &[u8]) -> String {
 }
 
 #[test]
-fn firmware_listen_stays_plaintext_lab() {
+fn firmware_listen_is_tls12_in_tree() {
     assert_eq!(FIRMWARE_TLS_MODE, TlsMode::FirmwareTls12);
     assert!(firmware_listen_is_tls12());
     assert!(!firmware_listen_is_plaintext());
