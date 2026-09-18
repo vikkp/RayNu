@@ -523,10 +523,14 @@ pub fn xhci_retry_address_device(first_posted: bool) -> bool {
 /// `vda1 vda2`; WRITE `wr=1` then USB `ISO-INSTALL-OK`; UART mash
 /// recovered; `Installation is complete. Please reboot.`; guest
 /// `reboot` `src=kbc n=1`; F7 `BOOTX64.EFI bytes=139264` /
-/// `image=DISK-BOOTX64`; GNU GRUB 2.12 Alpine lts 2s countdown.
-/// Waiting `DISK-BOOT-OK` + second Linux `root=UUID=` on 298 GiB
-/// `vda`. Guest F7 ≠ Force Off persist. **Not persist.** Do not
-/// Force Off during GRUB.
+/// `image=DISK-BOOTX64`; GNU GRUB 2.12 2s→1s→0s → `DISK-BOOT-OK`
+/// → second Linux `root=UUID=6d549fd4-3907-4382-a3eb-750ee9d52616`
+/// on 298 GiB `vda` (625142448) → `EXT4-fs (vda2): mounted` →
+/// `fsck` `vda2` 6377/19537920 + `vda1` 5 files → `login:` →
+/// `cat /proc/cmdline`. After login COM2 keeps `usb rw ok wr=1`
+/// every 4096 plus virtio MMIO overlay — not a hang. Guest F7 ≠
+/// Force Off persist. **Not persist.** Do not Force Off to stop
+/// the scroll.
 pub fn xhci_retry_set_config(first_posted: bool) -> bool {
     !first_posted
 }
