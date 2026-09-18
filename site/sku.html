@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RayNu-V — Dedicated-box SKU card</title>
+    <meta
+      name="description"
+      content="What a dedicated-box RayNu-V LOI buys: one PowerEdge, 8 GiB USB slice, plaintext HTTP, lab latch. not PERC, not cluster, not Windows."
+    />
+    <meta property="og:title" content="RayNu-V · Dedicated-box SKU card" />
+    <meta
+      property="og:description"
+      content="Bar A SKU: dedicated-box lab. 8 GiB USB persist, plaintext HTTP, lab latch until auth.token. not PERC. not cluster. not Windows."
+    />
+    <meta property="og:type" content="website" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="assets/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="page-hda page-loi">
+    <nav class="site-nav site-nav--solid" aria-label="Site">
+      <a class="site-nav__brand" href="index.html">RayNu-V</a>
+      <div class="site-nav__links">
+        <a href="index.html#status" data-hide-sm>Status</a>
+        <a href="index.html#console" data-hide-sm>Console</a>
+        <a href="loi.html">LOI</a>
+        <a href="sku.html" aria-current="page">SKU</a>
+        <a href="stories.html">Stories</a>
+        <a href="hda.html">Everest</a>
+        <a href="paper.html">Paper</a>
+        <a href="ciospeak.html">CIO View</a>
+        <a href="https://github.com/vikkp/RayNu" data-hide-sm>GitHub</a>
+      </div>
+    </nav>
+    <header class="hda-mast">
+      <div class="hda-mast__inner">
+        <p class="hda-mast__nav">
+          <a href="index.html">RayNu-V</a>
+          <span aria-hidden="true">·</span>
+          <a href="loi.html">LOI</a>
+          <span aria-hidden="true">·</span>
+          <span>Dedicated-box SKU card</span>
+        </p>
+        <p class="brand reveal">RayNu-V</p>
+        <p class="hda-mast__kicker reveal">Bar A · A3 closed</p>
+        <h1 class="hda-mast__title reveal reveal--delay-1">
+          What you are buying on one box
+        </h1>
+        <p class="hda-mast__lede reveal reveal--delay-2">
+          A dedicated-box non-production LOI. One EFI on a PowerEdge you can
+          afford to dedicate. Guest disk is an 8 GiB USB slice. Management is
+          plaintext HTTP. The operator latch is a lab latch until
+          <code>auth.token</code> is on the stick. It is not PERC, not cluster,
+          not Windows.
+        </p>
+      </div>
+    </header>
+
+    <main>
+      <section class="section" id="ships">
+        <div class="section__inner">
+          <p class="milestone-kicker" data-reveal>Ships</p>
+          <h2 data-reveal>Dedicated-box lab</h2>
+          <ul class="loi-locks" data-reveal>
+            <li>Single <code>r640-hypervisor.efi</code>. No OS. No packages.</li>
+            <li>
+              Everest loop on a real R640: network SPA, Alpine ISO, reboot to
+              disk, <code>login:</code>.
+            </li>
+            <li>
+              Guest disk survives Force Off on an <strong>8 GiB</strong> USB
+              window of a larger Toshiba stick. Not leftover DRAM. USB is not
+              the RAID array.
+            </li>
+            <li>
+              Coexist listen on <code>10.99.99.x:8443</code>. CURL NOW is
+              <code>http://</code>. That is <strong>plaintext HTTP</strong>.
+            </li>
+            <li>
+              Shared <strong>lab latch</strong>
+              (<code>raynu-v-bringup</code>) until ESP
+              <code>EFI/RayNu/auth.token</code> is staged. Host tests refuse the
+              latch. The box you own still accepts it.
+            </li>
+            <li>
+              Keyboard is iDRAC SOL / HV UART. The SPA is not a guest console.
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="section" id="does-not">
+        <div class="section__inner">
+          <p class="milestone-kicker" data-reveal>Does not ship</p>
+          <h2 data-reveal>Say this out loud</h2>
+          <ul class="loi-locks" data-reveal>
+            <li>
+              <strong>not PERC.</strong> The mapper skips the Ubuntu H740P
+              virtual disk. USB persist is not fleet persist. Do not format
+              Ubuntu.
+            </li>
+            <li>
+              <strong>not cluster.</strong> vMotion-like, DRS-like, and hot-add
+              are M9.
+            </li>
+            <li>
+              <strong>not Windows.</strong> Alpine-on-virtio is the guest. A
+              typed <code>windows_iso</code> is later.
+            </li>
+            <li>
+              Iron HTTPS is open. A CISO who asks whether management is
+              encrypted on the wire they can reach hears <em>no</em>.
+            </li>
+            <li>
+              Iron ESP-required auth is open. A lab latch is not an operator
+              credential.
+            </li>
+            <li>
+              Iron SPA keyboard / VNC is open. Not VNC.
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="section" id="bars">
+        <div class="section__inner">
+          <p class="milestone-kicker" data-reveal>Two bars</p>
+          <h2 data-reveal>Dedicated-box versus fleet</h2>
+          <p data-reveal>
+            Bar A is one box. Bar B is “keep the iron, replace the licensed
+            hypervisor” on PERC virtual disks they already paid for. Do not
+            skip A to sell B. A USB demonstration is not RAID-fleet evidence.
+          </p>
+          <p data-reveal>
+            A1 Everest is done. A2 persist is done on evidence. A3 is this
+            page. <strong>A4 TLS iron is NOW.</strong> A5 and A6 are named
+            residuals, not fake closes.
+          </p>
+          <div class="cta" data-reveal>
+            <a class="cta__primary" href="loi.html">Path to LOI</a>
+            <a
+              class="cta__secondary"
+              href="https://github.com/vikkp/RayNu/blob/main/docs/sku.md"
+              >Full SKU markdown</a
+            >
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>
+        <span class="brand brand--footer">RayNu-V</span>
+        · Dedicated-box SKU — not a fleet close
+      </p>
+      <p class="footer__meta">
+        <a href="index.html">Home</a>
+        ·
+        <a href="loi.html">LOI</a>
+        ·
+        <a href="hda.html">Everest</a>
+        ·
+        <a href="https://github.com/vikkp/RayNu">GitHub</a>
+        ·
+        <a href="https://github.com/vikkp/RayNu/blob/main/docs/sku.md">docs/sku.md</a>
+      </p>
+    </footer>
+    <script src="main.js" defer></script>
+  </body>
+</html>

@@ -141,6 +141,11 @@ impl ImageTable {
         self.slots.iter().flatten().find(|r| r.id == id)
     }
 
+    /// Mutable record by id (host ISO blob size updates).
+    pub fn get_mut(&mut self, id: u64) -> Option<&mut ImageRecord> {
+        self.slots.iter_mut().flatten().find(|r| r.id == id)
+    }
+
     /// Register an image (ISO / disk / template metadata).
     pub fn register(
         &mut self,

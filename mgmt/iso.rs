@@ -247,7 +247,7 @@ impl IsoDeployPlan {
     }
 }
 
-/// Register an ISO into the datastore (metadata; blob upload residual).
+/// Register an ISO into the datastore (metadata). Blob bytes are M8.4 HostReady.
 pub fn register_iso(
     store: &mut ImageTable,
     id: u64,
@@ -681,7 +681,7 @@ fn iso_err_status(e: IsoError) -> u16 {
 }
 
 /// REST: `POST /iso/{id}/attach[/{type}]` registers ISO if needed, parses the
-/// host mock EFI El Torito prefix (blob upload residual), and records
+/// host mock EFI El Torito prefix (firmware ESP-staged; HostReady blob is M8.4), and records
 /// [`CdromAttachState::AttachedHost`]. `GET /iso/attach` returns attached count.
 /// Does not VMLAUNCH. Does not flip [`attach_cdrom_uefi`].
 pub fn dispatch_iso_attach_rest(
