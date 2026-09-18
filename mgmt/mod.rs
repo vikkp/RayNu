@@ -342,6 +342,8 @@ pub mod xhci;
 pub mod m8_disk_persist_gate;
 pub mod tls;
 pub mod tls_coexist;
+#[cfg(any(test, feature = "uefi-bin"))]
+pub mod tls12;
 pub mod m8_tls_gate;
 pub mod m8_tls_fw_gate;
 pub mod auth;

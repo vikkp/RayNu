@@ -9,7 +9,9 @@
 //! request. Host tests implement the same feed/take/wrap flow with rustls.
 //!
 //! rustls/ring **cannot** join `uefi-bin` today: ring's C build needs
-//! `<assert.h>` on `x86_64-unknown-uefi`. CURL NOW stays `http://`. Iron
+//! `<assert.h>` on `x86_64-unknown-uefi`. Firmware coexist uses the
+//! freestanding [`crate::mgmt::tls12::Tls12Listen`] (TLS 1.2). This module
+//! keeps the plaintext session API as a lab fallback. Iron
 //! `RAYNU-V-M8-TLS-OK` is not this module.
 
 /// Coexist RX accumulator size (must match `host_nic_listen` scratch).
@@ -22,11 +24,11 @@ pub const M8_TLS_FW_HOST_OK_MARKER: &str = "RAYNU-V-M8-TLS-FW-HOST-OK";
 
 /// Honesty: wrap is wired; firmware session is still plaintext.
 pub const TLS_FW_WRAP_NOTE: &str =
-    "firmware coexist TCP is wrapped by PlaintextListen; rustls/ring cannot join uefi-bin (ring C needs assert.h on x86_64-unknown-uefi); host rustls proves the same feed/take/wrap API; CURL NOW stays http://; nested QEMU ≠ R640; do not print RAYNU-V-M8-TLS-OK from host/CI";
+    "firmware coexist TCP is wrapped by Tls12Listen; rustls/ring cannot join uefi-bin (ring C needs assert.h on x86_64-unknown-uefi); PlaintextListen remains a lab fallback; host rustls proves the same feed/take/wrap API; CURL NOW is https:// on the TLS EFI; nested QEMU ≠ R640; do not print RAYNU-V-M8-TLS-OK from host/CI";
 
 /// COM2 / operator: still curl HTTP, not HTTPS.
 pub const TLS_FW_CURL_NOTE: &str =
-    "CURL NOW stays http:// until a freestanding TLS backend compiles for UEFI";
+    "CURL NOW is https:// on the TLS 1.2 EFI; plaintext remains a lab fallback until a freestanding backend was missing";
 
 /// True when buf holds a complete HTTP/1.1 header block.
 pub fn headers_complete(buf: &[u8]) -> bool {
@@ -94,19 +96,21 @@ pub fn prop_tls_fw_wrap_package() -> bool {
         .lines()
         .find(|l| l.contains("uefi-bin = ["))
         .unwrap_or("");
-    TLS_FW_WRAP_NOTE.contains("PlaintextListen")
+    TLS_FW_WRAP_NOTE.contains("Tls12Listen")
         && TLS_FW_WRAP_NOTE.contains("assert.h")
-        && TLS_FW_CURL_NOTE.contains("http://")
+        && TLS_FW_CURL_NOTE.contains("https://")
         && headers_complete(b"GET / HTTP/1.1\r\n\r\n")
         && !headers_complete(b"GET / HTTP/1.1\r\n")
-        && listen.contains("PlaintextListen")
+        && listen.contains("Tls12Listen")
         && listen.contains("feed_tcp")
         && listen.contains("take_http")
-        && listen.contains("wrap_plaintext_http")
+        && listen.contains("drain_tcp")
+        && listen.contains("wrap_http")
+        && listen.contains("https://")
         && !uefi_feat.contains("rustls")
         && cargo.contains("[dev-dependencies]")
         && cargo.contains("rustls")
-        && crate::mgmt::tls::firmware_listen_is_plaintext()
+        && crate::mgmt::tls::firmware_listen_is_tls12()
 }
 
 #[cfg(test)]

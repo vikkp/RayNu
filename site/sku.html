@@ -81,8 +81,10 @@
               the RAID array.
             </li>
             <li>
-              Coexist listen on <code>10.99.99.x:8443</code>. CURL NOW is
+              Coexist listen on <code>10.99.99.x:8443</code>. CURL NOW on
+              flashed <code>4af78b43</code> is
               <code>http://</code>. That is <strong>plaintext HTTP</strong>.
+              In-tree TLS 1.2 is not yet on that stick.
             </li>
             <li>
               Shared <strong>lab latch</strong>
@@ -116,8 +118,9 @@
               typed <code>windows_iso</code> is later.
             </li>
             <li>
-              Iron HTTPS is open. A CISO who asks whether management is
-              encrypted on the wire they can reach hears <em>no</em>.
+              Iron HTTPS is open. In-tree firmware is TLS 1.2. A CISO who asks
+              whether management is encrypted on the flashed stick hears
+              <em>no</em>.
             </li>
             <li>
               Iron ESP-required auth is open. A lab latch is not an operator

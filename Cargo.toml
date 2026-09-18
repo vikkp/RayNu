@@ -43,10 +43,16 @@ smoltcp = { version = "0.13", optional = true, default-features = false, feature
     "auto-icmp-echo-reply",
 ] }
 
-# M8.1 host TLS only (ADR-003). rustls/ring do **not** join uefi-bin:
-# ring's C build needs <assert.h> on x86_64-unknown-uefi. Firmware coexist
-# feeds TCP through `tls_coexist` (plaintext session until a freestanding
-# backend exists). Host tests wrap that same session API with rustls.
+# M8.1 freestanding TLS 1.2 (ADR-003). rustls/ring stay host-only:
+# ring's C build needs <assert.h> on x86_64-unknown-uefi. These crates are
+# pure Rust (no libc) so they can join the firmware listen path.
+aes-gcm = { version = "0.10", default-features = false, features = ["aes"] }
+hmac = { version = "0.12", default-features = false }
+p256 = { version = "0.13", default-features = false, features = ["ecdh", "arithmetic"] }
+rsa = { version = "0.9", default-features = false, features = ["sha2"] }
+sha2 = { version = "0.10", default-features = false }
+
+# Host rustls client proves the firmware TLS 1.2 server (not iron TLS-OK).
 [dev-dependencies]
 rcgen = { version = "0.13", default-features = false, features = ["ring"] }
 rustls = { version = "0.23", default-features = false, features = ["std", "ring", "tls12"] }

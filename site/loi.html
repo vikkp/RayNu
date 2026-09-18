@@ -11,7 +11,7 @@
     <meta property="og:title" content="RayNu-V · Path to LOI" />
     <meta
       property="og:description"
-              content="Two bars: dedicated-box 62%, RAID-fleet 18%. Persist across HV reboot is evidence-closed. SKU card is done. TLS wrap is wired, not iron HTTPS. Host auth/console/ISO-upload HostReady are not iron closes. USB is not PERC."
+              content="Two bars: dedicated-box 66%, RAID-fleet 18%. Persist across HV reboot is evidence-closed. SKU card is done. Firmware TLS 1.2 is in-tree, not iron HTTPS. Host auth/console/ISO-upload HostReady are not iron closes. USB is not PERC."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -239,37 +239,40 @@
             <li data-reveal>
               <header>
                 <span class="loi-pieces__name">SKU card</span>
-                <span class="loi-pieces__pct" data-piece="sku">25%</span>
+                <span class="loi-pieces__pct" data-piece="sku">90%</span>
               </header>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill" data-piece-fill="sku" style="width: 25%"></span>
+                <span class="hda-bar__fill" data-piece-fill="sku" style="width: 90%"></span>
               </div>
               <p>
                 One page: what ships, what does not. Dedicated-box versus fleet.
                 USB versus PERC. Alpine-patched versus unmodified. No cluster.
                 No Windows. The card is written
                 (<a href="sku.html">dedicated-box SKU</a>). Persist is
-                evidence-closed on the 8 GiB USB slice. Until TLS closes, the
-                card still says “plaintext HTTP, dedicated-box USB.” Overstated copy
+                evidence-closed on the 8 GiB USB slice. Until TLS iron
+                prints, the card still says “plaintext HTTP, dedicated-box USB”
+                for the flashed stick. Overstated copy
                 here does not survive a second diligence meeting.
               </p>
             </li>
             <li data-reveal>
               <header>
                 <span class="loi-pieces__name">TLS</span>
-                <span class="loi-pieces__pct" data-piece="tls">22%</span>
+                <span class="loi-pieces__pct" data-piece="tls">40%</span>
               </header>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill" data-piece-fill="tls" style="width: 22%"></span>
+                <span class="hda-bar__fill" data-piece-fill="tls" style="width: 40%"></span>
               </div>
               <p>
-                Everest closed on plaintext HTTP on a bring-up LAN. Firmware
-                TCP now goes through a wrap point, and host tests speak HTTPS
-                with a lab certificate. rustls cannot join the EFI today
-                (it needs a C library the firmware does not have). The box
-                you own still answers in the clear. A CISO will ask whether
-                management is encrypted on the wire they can reach. The
-                answer today is no.
+                Everest closed on plaintext HTTP on a bring-up LAN. The next
+                EFI speaks TLS 1.2 on coexist (a rustls client already got the
+                SPA in host tests). rustls itself cannot join the EFI (it
+                needs a C library the firmware does not have). The box you
+                own still answers in the clear on flashed
+                <code>4af78b43</code>. A CISO will ask whether management is
+                encrypted on the wire they can reach. The answer today is no
+                until that TLS EFI is F11’d and <code>curl --cacert</code>
+                works after <code>BOOT-OK</code>.
               </p>
             </li>
             <li data-reveal>
@@ -351,14 +354,14 @@
             (<code>keep=1</code> + <code>DISK-BOOTX64</code> +
             <code>UUID=348005a9-…</code> after Force Off). The minted persist-OK
             string did not print. Nested QEMU is not a PowerEdge. The next print
-            that moves Bar A is HTTPS on coexist <code>:8443</code> after a
-            planned flash — not a host rustls test.
+            that moves Bar A is <code>curl --cacert</code> on coexist
+            <code>:8443</code> after F11 of this TLS EFI — not a host rustls test.
           </p>
           <pre class="ship-code" data-reveal><code>lived:  4af78b43 keep=1 DISK-BOOT UUID 348005a9 after Force Off
-sit:    localhost:~#   do not setup-disk   do not Force Off   do not flash
-refuse: ESP Cruzer (2–8 GiB) · Ubuntu-on-PERC · leftover DRAM
+sit:    localhost:~#   do not setup-disk   do not flash Toshiba /dev/sdc
+in-tree: RAYNU-V-M8-TLS12-HOST-OK (Tls12Listen; not iron)
 host:   RAYNU-V-M8-TLS-HOST-OK / RAYNU-V-M8-TLS-FW-HOST-OK (not iron)
-next:   TLS on 10.99.99.x:8443 after BOOT-OK
+next:   F11 this TLS EFI → curl --cacert on 10.99.99.x:8443 after BOOT-OK
 never:  host / CI / nested printing RAYNU-V-M8-DISK-PERSIST-OK or RAYNU-V-M8-TLS-OK</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
             Rollback remains GitHub Latest
