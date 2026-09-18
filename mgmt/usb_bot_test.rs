@@ -148,6 +148,56 @@ fn mock_bot_write_read_efi_part() {
     assert_eq!(&back[..8], b"EFI PART");
 }
 
+struct CountOutUsb {
+    inner: MockUsb,
+    outs: u32,
+    settles: u32,
+}
+
+impl UsbBulk for CountOutUsb {
+    fn bulk_out(&mut self, data: &[u8]) -> Result<(), UsbBotError> {
+        self.inner.bulk_out(data)
+    }
+
+    fn bulk_in(&mut self, data: &mut [u8]) -> Result<usize, UsbBotError> {
+        self.inner.bulk_in(data)
+    }
+
+    fn overlapped_out(&mut self, tag: u32, cdb: &[u8], buf: &mut [u8]) -> Result<(), UsbBotError> {
+        self.outs = self.outs.saturating_add(1);
+        bot_cmd(self, tag, false, cdb, buf)
+    }
+
+    fn prepare_first_write(&mut self) {
+        self.settles = self.settles.saturating_add(1);
+    }
+}
+
+#[test]
+fn write_uses_overlapped_out() {
+    let ns = vec![0u8; NS_BYTES];
+    let mut hw = CountOutUsb {
+        inner: MockUsb::new(ns),
+        outs: 0,
+        settles: 0,
+    };
+    let (bytes, lba) = usb_bot_bring_up(&mut hw, 1024 * 1024).expect("bring-up");
+    assert_eq!(bytes, NS_BYTES as u64);
+    assert_eq!(lba, 512);
+    let mut sector = [0u8; 512];
+    sector[..8].copy_from_slice(b"EFI PART");
+    let mut tag = 10u32;
+    usb_bot_rw(&mut hw, &mut tag, lba, 512, &mut sector, true).expect("write");
+    assert_eq!(hw.outs, 1);
+    assert_eq!(hw.settles, 1);
+    usb_bot_rw(&mut hw, &mut tag, lba, 1024, &mut sector, true).expect("write2");
+    assert_eq!(hw.outs, 2);
+    assert_eq!(hw.settles, 1);
+    let mut back = [0u8; 512];
+    usb_bot_rw(&mut hw, &mut tag, lba, 512, &mut back, false).expect("read");
+    assert_eq!(&back[..8], b"EFI PART");
+}
+
 #[test]
 fn guest_chunk_is_one_native_lba() {
     assert_eq!(usb_bot_guest_chunk(512, 4096), 512);

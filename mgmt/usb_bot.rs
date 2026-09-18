@@ -110,10 +110,28 @@ pub trait UsbBulk {
     {
         bot_cmd(self, tag, true, cdb, buf)
     }
+    /// OUT BOT command (SCSI WRITE). Default is sequential CBW then DATA
+    /// (host mocks). Live xHCI queues CBW OUT + DATA OUT + CSW IN before
+    /// waiting — iron addrretry COM2 (`116dbb1f`): CSW-queued READs lived
+    /// through Alpine `[vda] 298 GiB` then sequential WRITE CBW timed out
+    /// (`bot=cbw scsi=write cmpl=0xff` at backup-GPT `off=0x4a85d51200`)
+    /// and `sfdisk: cannot open /dev/vda: I/O error`. Same BOT rule as
+    /// IN: the device does not complete CBW until DATA is primed.
+    fn overlapped_out(&mut self, tag: u32, cdb: &[u8], buf: &mut [u8]) -> Result<(), UsbBotError>
+    where
+        Self: Sized,
+    {
+        bot_cmd(self, tag, false, cdb, buf)
+    }
     /// After CAPACITY CSW, before the first 512-byte READ. Live xHCI:
     /// print EP state, Stop+rearm bulk rings, Clear Halt, long READ wait.
     /// Iron epst COM2: INQUIRY/CAPACITY lived then `bot=cbw scsi=read`.
     fn prepare_first_read(&mut self) {}
+    /// Before the first guest WRITE. Live xHCI: extra settle after the
+    /// READ→WRITE direction switch (spinning HDD seek to backup GPT).
+    /// Do not Stop Endpoint here — iron `96024edc` Reset on Running OUT
+    /// killed the next CBW. Iron addrretry COM2 WRITE died at CBW.
+    fn prepare_first_write(&mut self) {}
     /// After the required 512-byte READ completes. Live xHCI drops the
     /// long first-READ wait so later guest I/O uses `BULK_SPINS`.
     fn end_first_read(&mut self) {}
@@ -286,6 +304,9 @@ pub fn usb_bot_recover_after_fail(stage: u8) -> bool {
 /// Iron sensebot COM2 (`c0a726de`): Bot-only SENSE lived (no `scsi=sense`);
 /// nlb=1 oks then `bot=csw scsi=read cmpl=0xff`. Settle between chunks
 /// so the spinning HDD is not back-to-back CBW'd.
+/// Iron addrretry COM2 (`116dbb1f`): CSW-queued READs through Alpine
+/// login then sequential WRITE CBW `cmpl=0xff` / `cmpl=0x00020404`
+/// (`bot=cbw scsi=write`) at backup-GPT; `sfdisk` I/O error. Not persist.
 pub fn usb_bot_guest_chunk(lba: u32, remaining: usize) -> usize {
     let n = if lba == 0 { 512usize } else { lba as usize };
     remaining.min(n).min(4096)
@@ -435,6 +456,7 @@ fn bot_inquiry_retry(
     Err(last)
 }
 
+#[allow(dead_code)] // persist-gate needle; live OUT uses overlapped_out
 fn bot_cmd_retry(
     hw: &mut impl UsbBulk,
     tag: &mut u32,
@@ -449,6 +471,33 @@ fn bot_cmd_retry(
             *tag = 1;
         }
         match bot_cmd(hw, *tag, dir_in, cdb, buf) {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                last = e;
+                if usb_bot_recover_after_fail(usb_bot_last_stage()) {
+                    hw.recover_pipes();
+                    hw.settle();
+                }
+                usb_bot_clear_sense(hw, tag, e);
+            }
+        }
+    }
+    Err(last)
+}
+
+fn bot_out_retry(
+    hw: &mut impl UsbBulk,
+    tag: &mut u32,
+    cdb: &[u8],
+    buf: &mut [u8],
+) -> Result<(), UsbBotError> {
+    let mut last = UsbBotError::Xfer;
+    for _ in 0..USB_BOT_RW_TRIES {
+        *tag = tag.wrapping_add(1);
+        if *tag == 0 {
+            *tag = 1;
+        }
+        match hw.overlapped_out(*tag, cdb, buf) {
             Ok(()) => return Ok(()),
             Err(e) => {
                 last = e;
@@ -514,6 +563,7 @@ pub fn usb_bot_bring_up(hw: &mut impl UsbBulk, min_bytes: u64) -> Result<(u64, u
     let mut probe = [0u8; 4096];
     usb_bot_rw(hw, &mut tag, lba, 0, &mut probe[..n], false)?;
     hw.end_first_read();
+    usb_bot_arm_write_settle();
     Ok((bytes, lba))
 }
 
@@ -550,7 +600,8 @@ pub fn usb_bot_rw(
         let cdb = cdb_rw10(write, slba as u32, nlb as u16);
         let slice = &mut buf[done..done + take];
         if write {
-            bot_cmd_retry(hw, tag, false, &cdb, slice)?;
+            usb_bot_maybe_prepare_write(hw);
+            bot_out_retry(hw, tag, &cdb, slice)?;
         } else {
             bot_in_retry(hw, tag, &cdb, slice)?;
         }
@@ -566,6 +617,21 @@ static IO_READY: AtomicBool = AtomicBool::new(false);
 static NS_BYTES: AtomicU64 = AtomicU64::new(0);
 static LBA_BYTES: AtomicU64 = AtomicU64::new(0);
 static LUN_RESERVED: AtomicBool = AtomicBool::new(false);
+/// First guest WRITE after bring-up gets an extra settle (READ→WRITE
+/// direction switch). Later nlb=1 WRITEs skip it — 80M spins per LBA
+/// would stall setup-disk.
+static FIRST_WRITE_SETTLE: AtomicBool = AtomicBool::new(true);
+
+pub fn usb_bot_arm_write_settle() {
+    FIRST_WRITE_SETTLE.store(true, Ordering::Release);
+}
+
+fn usb_bot_maybe_prepare_write(hw: &mut impl UsbBulk) {
+    if FIRST_WRITE_SETTLE.swap(false, Ordering::AcqRel) {
+        hw.prepare_first_write();
+    }
+}
+
 static LAST_ERR: core::sync::atomic::AtomicU8 = core::sync::atomic::AtomicU8::new(0);
 static LAST_BAR: AtomicU64 = AtomicU64::new(0);
 static LAST_PORTSC: AtomicU64 = AtomicU64::new(0);
