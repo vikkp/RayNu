@@ -120,7 +120,7 @@ All must be true (no hand-waving):
 | **UEFI NIC HTTP listen** | DONE (M7.6 iron) | `RAYNU-V-M7-UEFI-HTTP-OK` R640 SNP residual; [2026-08-16-uefi-http-ok.md](evidence/r640/2026-08-16-uefi-http-ok.md) |
 | PRE-EBS durable mgmt tables | DONE | `pre_ebs_mgmt` shared across HTTP exchanges |
 | TLS | DEFERRED | firmware wrap=plaintext (ring/UEFI libc); iron HTTPS open (ADR-009) |
-| Guest console / serial log UI | PARTIAL | Host UART ring via `GET /logs/serial` + SPA; guest VNC residual |
+| Guest console / serial log UI | PARTIAL | Host UART ring via `GET /logs/serial` + SPA; HostReady COM1 keys (`RAYNU-V-M8-CONSOLE-HOST-OK`); guest VNC residual (not iron CONSOLE-OK) |
 | Auth beyond bring-up toy | PARTIAL | HostReady rejects bring-up (`RAYNU-V-M8-AUTH-HOST-OK`); firmware still lab latch without ESP `auth.token` (not iron AUTH-OK) |
 | Networking/storage ops UI | MISSING | probes only |
 | Audit/tasks pane | PARTIAL | ring exists; UI thin |
@@ -355,10 +355,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | m8-tls-fw |
-| Summary | **M8.2 host auth (HostReady).** Operator token is the product latch; `raynu-v-bringup` is lab-only (`RAYNU-V-M8-AUTH-HOST-OK`). Firmware HTTP still accepts the lab latch when no ESP `auth.token`. Never print iron AUTH-OK from host/CI. Do not flash. Months **0.0 held**. Overall **99 held**. |
-| Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. Iron HTTPS / iron auth / console residual. Nested QEMU ≠ R640. |
-| Gates touched | `mgmt/auth.rs` + `mgmt/m8_auth_gate.rs` + `tools/m8-auth-smoke.sh`. Firmware `auth_allows` unchanged. `./tools/sync-hda-site.sh --check`. `./tools/sync-loihda-site.sh --check`. Do not flash. |
-| Months Δ | 0.0 held (Everest closed; HostReady ≠ iron AUTH-OK) |
+| Summary | **M8.3 host console (HostReady).** Operator keys reach guest COM1 RBR; guest THR echo is captured (`RAYNU-V-M8-CONSOLE-HOST-OK`). Firmware SPA is still `GET /logs/serial` (HV UART). Not VNC. Never print iron CONSOLE-OK from host/CI. Do not flash. Months **0.0 held**. Overall **99 held**. |
+| Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. Iron HTTPS / iron auth / iron console residual. Nested QEMU ≠ R640. |
+| Gates touched | `mgmt/console.rs` + `mgmt/m8_console_gate.rs` + `tools/m8-console-smoke.sh`. Firmware `GET /logs/serial` unchanged. SPA size held. `./tools/sync-hda-site.sh --check`. `./tools/sync-loihda-site.sh --check`. Do not flash. |
+| Months Δ | 0.0 held (Everest closed; HostReady UART ≠ iron SPA keyboard) |
 
 
 ## Blockers & risks (Everest-relevant)
@@ -366,7 +366,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | ID | Blocker / risk | Severity | Mitigations |
 |----|----------------|----------|-------------|
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
-| H2 | TLS / console polish | MED | **M8.1 / M8.3** ([ADR-018](adr/ADR-018.md)). Plaintext HTTP closed Everest (E3b). Guest VNC residual. M8.2 host-ready (`RAYNU-V-M8-AUTH-HOST-OK`) is not iron AUTH-OK. Not a reopened Everest. |
+| H2 | TLS / console polish | MED | **M8.1 / M8.3** ([ADR-018](adr/ADR-018.md)). Plaintext HTTP closed Everest (E3b). M8.3 host-ready (`RAYNU-V-M8-CONSOLE-HOST-OK`) is not iron CONSOLE-OK / VNC. Guest VNC residual. M8.2 host-ready (`RAYNU-V-M8-AUTH-HOST-OK`) is not iron AUTH-OK. Not a reopened Everest. |
 | H3 | ~~Guest UEFI CD not bootable / no reboot-to-disk on iron~~ | — | **Resolved** 2026-09-10 (`56a3ffd` / run `34480107961`): `RAYNU-V-RAYNU-F-DISK-BOOT-OK` + second Linux `root=UUID=` from `vda` + `login:` on the real R640. Chain: `59ac070` install-to-disk (`ISO-INSTALL-OK`) → F7 VMCLEAR/VMPTRLD (81 KiB `FirmwareState::new()` stack temporary over the VMCS; template reset + 32-page stack guard) → `975f8fc` relaunch into the installed GRUB menu, 1 M exit-cap inside GRUB's 2 s menu poll loop (~2 exits/µs) → `56a3ffd` RayNu-F wall cap (time, not exits, bounds the loader phase). Earlier: `916af96` THRE chain telemetry → UART TX ring room + line-rate pace + COM2 FIFO burst fixed the `apk` console stall. Evidence: [2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md](evidence/r640/2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md). Do not F11 `34474850361` / `34425781629` for Phase A; `34480107961` is the Phase A reference pin. |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
 | H5 | ~~Phase B — iron SPA still launches the SHELL stub~~ | — | **Resolved** 2026-09-11 (`f72b4276` / `34552377351`). Residual polish is **M8**, not Everest. |
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-18 | m8-console-host | 0.0 | 99 | **M8.3 host console HostReady.** Operator keys reach guest COM1; guest THR echo captured (`RAYNU-V-M8-CONSOLE-HOST-OK`). Firmware SPA is still host serial log. Not VNC. Never print iron CONSOLE-OK. Do not flash. Sit at `localhost:~#`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-18 | m8-auth-host | 0.0 | 99 | **M8.2 host auth HostReady.** Operator token is the product latch; `raynu-v-bringup` is lab-only (`RAYNU-V-M8-AUTH-HOST-OK`). Firmware REST still accepts the lab latch when no ESP `auth.token`. Never print iron AUTH-OK. Do not flash. Sit at `localhost:~#`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-18 | m8-tls-fw | 0.0 | 99 | **M8.1 firmware TLS wrap host-proven.** `PlaintextListen` on coexist + rustls feed/take/wrap SPA (`RAYNU-V-M8-TLS-FW-HOST-OK`). `cargo test --lib -- --test-threads=1`: 768 passed. rustls/ring cannot join `uefi-bin`. CURL NOW stays `http://`. Do not flash. Sit at `localhost:~#`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-18 | m8-usb-bot-guest8g | 0.0 | 99 | **Public copy:** persist piece on `site/loi.html` rewritten as a buyer explanation (Force Off used to wipe the install; USB-backed Alpine now returns). Scores held. LOIHDA Bar A 46% held. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
@@ -981,7 +982,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     **M8.1 TLS iron.** Host `RAYNU-V-M8-TLS-HOST-OK` + firmware wrap `RAYNU-V-M8-TLS-FW-HOST-OK` in-tree. M8.2 host-ready `RAYNU-V-M8-AUTH-HOST-OK` (firmware still lab bring-up without ESP `auth.token`). Firmware session plaintext (ring/UEFI libc). CURL NOW `http://`. Persist-OK serial wired (not flashed). Sit at `localhost:~#`. Do not setup-disk. Do not Force Off. Nested-OK closed on `raynuvsrv1` `ce3d8a09`.
+Next move:     **M8.1 TLS iron.** Host `RAYNU-V-M8-TLS-HOST-OK` + firmware wrap `RAYNU-V-M8-TLS-FW-HOST-OK` in-tree. M8.2 host-ready `RAYNU-V-M8-AUTH-HOST-OK` (firmware still lab bring-up without ESP `auth.token`). M8.3 host-ready `RAYNU-V-M8-CONSOLE-HOST-OK` (firmware SPA still host serial log; not VNC). Firmware session plaintext (ring/UEFI libc). CURL NOW `http://`. Persist-OK serial wired (not flashed). Sit at `localhost:~#`. Do not setup-disk. Do not Force Off. Nested-OK closed on `raynuvsrv1` `ce3d8a09`.
 Rollback:      GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351
                EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc
                COM2 build: sha=f72b4276d198. Do not flash a later M8 persist prototype as known-good.
@@ -989,7 +990,7 @@ Do not F11:    `34548550755` / `7f8dc0a9` or earlier Phase B fails
 Tcp4 residual: Floppy publishes PXE/HTTP, not Tcp4 SB (platform limit)
 SNP after EBS: dead — native BCM5720 is the durable mgmt path (E3b closed 2026-08-20)
 Preserve NIC:  releases/v0.1.0-adr013-baseline (pre-native-NIC; not the Everest flash kit)
-Do not claim:  100% product / TLS / iron AUTH-OK / minted `RAYNU-V-M8-DISK-PERSIST-OK` / whole-Toshiba virtio / multi-distro / cluster. Host/CI never print ISO-INSTALL-OK, persist-OK, TLS-OK, or AUTH-OK. Cluster is M9.
+Do not claim:  100% product / TLS / iron AUTH-OK / iron CONSOLE-OK / minted `RAYNU-V-M8-DISK-PERSIST-OK` / whole-Toshiba virtio / multi-distro / cluster. Host/CI never print ISO-INSTALL-OK, persist-OK, TLS-OK, AUTH-OK, or CONSOLE-OK. Cluster is M9.
 ```
 
 Public checklist: [`docs/runbooks/r640_iron_week.md`](runbooks/r640_iron_week.md) ·

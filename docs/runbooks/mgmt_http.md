@@ -12,6 +12,7 @@
 - M8.1 host: `RAYNU-V-M8-TLS-HOST-OK` — `./tools/m8-tls-smoke.sh` (rustls around the HTTP codec). Firmware coexist stays plaintext. Never print `RAYNU-V-M8-TLS-OK` from host/CI. Iron close is `curl --cacert` on `10.99.99.x:8443` after `BOOT-OK`.
 - M8.1 firmware wrap: `RAYNU-V-M8-TLS-FW-HOST-OK` — `./tools/m8-tls-fw-smoke.sh` (coexist TCP feeds `PlaintextListen`; host rustls uses the same feed/take/wrap API). rustls/ring cannot join `uefi-bin` (`assert.h`). CURL NOW stays `http://`.
 - M8.2 host: `RAYNU-V-M8-AUTH-HOST-OK` — `./tools/m8-auth-smoke.sh` (`AuthMode::HostReady` rejects `raynu-v-bringup`; operator token is the product latch). Firmware REST still accepts the lab latch when no ESP `auth.token`. Never print `RAYNU-V-M8-AUTH-OK` from host/CI. Iron close is ESP token required after `BOOT-OK`. `raynu-v-bringup` is **not product default**.
+- M8.3 host: `RAYNU-V-M8-CONSOLE-HOST-OK` — `./tools/m8-console-smoke.sh` (`ConsoleMode::HostReady` injects keys into guest COM1). Firmware SPA is still `GET /logs/serial` (HV UART). Never print `RAYNU-V-M8-CONSOLE-OK` from host/CI. Iron close is typing in the guest from the SPA after `BOOT-OK`. **not VNC**.
 
 ## Story
 

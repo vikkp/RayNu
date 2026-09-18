@@ -11,7 +11,7 @@
     <meta property="og:title" content="RayNu-V · Path to LOI" />
     <meta
       property="og:description"
-              content="Two bars: dedicated-box 50%, RAID-fleet 18%. Persist across HV reboot is evidence-closed. TLS wrap is wired, not iron HTTPS. Host auth HostReady is not iron AUTH-OK. USB is not PERC."
+              content="Two bars: dedicated-box 51%, RAID-fleet 18%. Persist across HV reboot is evidence-closed. TLS wrap is wired, not iron HTTPS. Host auth/console HostReady are not iron closes. USB is not PERC."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -290,16 +290,17 @@
             <li data-reveal>
               <header>
                 <span class="loi-pieces__name">Guest console UI</span>
-                <span class="loi-pieces__pct" data-piece="console">22%</span>
+                <span class="loi-pieces__pct" data-piece="console">32%</span>
               </header>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill" data-piece-fill="console" style="width: 22%"></span>
+                <span class="hda-bar__fill" data-piece-fill="console" style="width: 32%"></span>
               </div>
               <p>
-                Serial already typed the Alpine installer. The SPA shows logs.
-                Nobody has a keyboard in the browser yet. Operators should not
-                need iDRAC SOL to log in. Soft for the first dedicated-box LOI.
-                Hard for anyone who thinks this is vSphere.
+                Host tests can now type into the guest UART the same way
+                serial auto-answer did during install. The page you open
+                still has no keyboard. iDRAC SOL remains how you log into
+                Alpine on the box you own. That is not vSphere. It is not
+                closed until the SPA types.
               </p>
             </li>
             <li data-reveal>
