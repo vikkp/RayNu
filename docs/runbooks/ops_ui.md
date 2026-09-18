@@ -40,7 +40,7 @@ During the M7.6 listen window (`RAYNU-V-M7-UEFI-HTTP-OK` path):
 
 ## Honesty / residuals
 
-- **Guest console / VNC** — not claimed; host serial log only.  
+- **Guest console / VNC** — not claimed on iron. M8.3 host-ready (`RAYNU-V-M8-CONSOLE-HOST-OK`) is a UART keystroke round-trip, **not VNC**. Firmware SPA is still host serial log.  
 - **TLS** — firmware coexist TCP is wrapped by `PlaintextListen` (identity); rustls/ring cannot join `uefi-bin`. CURL NOW stays `http://`. Iron HTTPS not claimed.  
 - **El Torito / CD-ROM** — still stubbed (M7.3).  
 - **NIC attach** — JSON reports `nics:1` default; virtio-net attach residual.  
