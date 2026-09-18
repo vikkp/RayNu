@@ -25,6 +25,23 @@ use super::iso_install::LEFTOVER_DISK_TRY_BYTES;
 /// Minimum LUN size for the Alpine GPT/ESP/ext4 install disk (1 GiB).
 pub const DURABLE_LUN_MIN_BYTES: u64 = 1024 * 1024 * 1024;
 
+/// Guest-visible USB virtio size. Toshiba is ~298 GiB; advertising all of
+/// it made `setup-disk` mkfs + ext4lazyinit take hours at nlb=1. Alpine
+/// sys-install already fit in 1 GiB leftover DRAM. 8 GiB is the product
+/// window. The stick stays the LUN; virtio just does not see the tail.
+pub const DURABLE_LUN_GUEST_USB_BYTES: u64 = 8 * 1024 * 1024 * 1024;
+
+/// GPT peek retries after bounce leftover (`usb_err=0` + `gpt_err=2`).
+pub const LUN_PEEK_TRIES: u8 = 4;
+
+/// Cap USB virtio at [`DURABLE_LUN_GUEST_USB_BYTES`]. NVMe is unchanged.
+pub fn durable_lun_guest_usb_bytes(lun_bytes: u64) -> u64 {
+    if lun_bytes == 0 {
+        return 0;
+    }
+    lun_bytes.min(DURABLE_LUN_GUEST_USB_BYTES)
+}
+
 /// 4 GB Cruzer / UDisk window that already holds alpine-extended on iron.
 pub const ESP_CRUZER_MIN_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 /// Upper bound of that window (marketed 4 GB sticks).
@@ -801,9 +818,25 @@ pub fn durable_lun_install_reserved() -> bool {
 }
 
 /// Take the reserved LUN size for virtio attach (NVMe first).
+/// USB is capped at [`DURABLE_LUN_GUEST_USB_BYTES`].
 pub fn take_durable_lun_install_disk() -> Option<u64> {
-    crate::mgmt::nvme::take_durable_lun_install_disk()
-        .or_else(crate::mgmt::usb_bot::take_durable_lun_usb)
+    crate::mgmt::nvme::take_durable_lun_install_disk().or_else(|| {
+        crate::mgmt::usb_bot::take_durable_lun_usb().map(durable_lun_guest_usb_bytes)
+    })
+}
+
+/// Clear LUN cache + drain/settle BOT before another GPT peek.
+pub fn durable_lun_peek_retry(n: u8) {
+    lun_cache_clear();
+    crate::mgmt::xhci::xhci_live_peek_retry(n);
+}
+
+/// Warm USB BOT after coexist idle so RayNu-F can stage DISK-BOOTX64.
+/// No-op when the LUN is NVMe or BOT is not ready. Not persist-OK.
+pub fn durable_lun_diskprime() {
+    if crate::mgmt::usb_bot::usb_bot_io_ready() {
+        crate::mgmt::xhci::xhci_live_diskprime();
+    }
 }
 
 /// GPT peek + keep-detect after I/O ready (and TCG skip).
@@ -816,8 +849,27 @@ pub fn durable_lun_serial_peek(tag: &str) {
 fn serial_lun_peek(tag: &str) {
     use crate::boot::serial;
     let mut sig = [0u8; 8];
-    let peek = durable_lun_read_any(512, &mut sig);
-    let (gpt, boot, ext4) = crate::mgmt::disk_persist::persist_lun_keep_parts();
+    let mut peek = false;
+    let mut gpt = false;
+    let mut boot = false;
+    let mut ext4 = false;
+    for n in 0..LUN_PEEK_TRIES {
+        if n > 0 {
+            durable_lun_peek_retry(n);
+        } else {
+            lun_cache_clear();
+        }
+        peek = durable_lun_read_any(512, &mut sig);
+        let parts = crate::mgmt::disk_persist::persist_lun_keep_parts();
+        gpt = parts.0;
+        boot = parts.1;
+        ext4 = parts.2;
+        // keep_gpt, or a parsed GPT that does not fit (298 GiB on 8 GiB).
+        // gpt_err=0 with unknown fit is a second-read miss — retry.
+        if gpt || crate::mgmt::disk_persist::persist_lun_gpt_parsed_no_fit() {
+            break;
+        }
+    }
     let inst = (gpt && boot && ext4) || crate::mgmt::disk_persist::persist_lun_sticky_keep();
     serial::write_str("boot: Stage 46 durable LUN peek ");
     serial::write_str(tag);
@@ -838,6 +890,10 @@ fn serial_lun_peek(tag: &str) {
     }
     serial::write_str(" gpt=");
     write_dec(u64::from(gpt));
+    serial::write_str(" fit=");
+    write_dec(u64::from(
+        crate::mgmt::disk_persist::persist_lun_last_gpt_fit(),
+    ));
     serial::write_str(" gpt_err=");
     write_dec(u64::from(
         crate::mgmt::disk_persist::persist_lun_last_gpt_err(),
@@ -846,6 +902,10 @@ fn serial_lun_peek(tag: &str) {
     write_dec(u64::from(crate::mgmt::usb_bot::usb_bot_last_err()));
     serial::write_str(" lba=");
     write_dec(u64::from(crate::mgmt::usb_bot::usb_bot_lba_bytes()));
+    serial::write_str(" guest=");
+    write_dec(durable_lun_guest_usb_bytes(
+        crate::mgmt::usb_bot::usb_bot_ns_bytes(),
+    ));
     serial::write_str(" bootx64=");
     write_dec(u64::from(boot));
     serial::write_str(" ext4=");
@@ -936,6 +996,8 @@ pub fn durable_lun_policy_holds() -> bool {
         && DURABLE_LUN_NEED_MEDIA_NOTE.contains("NVMe class 01:08")
         && DURABLE_LUN_NEED_MEDIA_NOTE.contains("Cruzer 2-8GiB")
         && M8_DISK_PERSIST_OK_MARKER == "RAYNU-V-M8-DISK-PERSIST-OK"
+        && DURABLE_LUN_GUEST_USB_BYTES == 8 * 1024 * 1024 * 1024
+        && LUN_PEEK_TRIES == 4
         && !DURABLE_LUN_IO_RESIDUAL_NOTE.contains("println!")
 }
 

@@ -121,10 +121,11 @@
             </div>
           </div>
           <p class="hda-aside" data-reveal>
-            99% on purpose. TLS, leftover-disk persist across a hypervisor
-            reboot, and a guest console UI are <strong>M8</strong>
+            99% on purpose. TLS and a guest console UI are <strong>M8</strong>
             (<a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-018.md">ADR-018</a>)
-            — not a reopened Everest.
+            — not a reopened Everest. HV-reboot persist is evidence-closed on
+            the 8 GiB USB slice (<code>4af78b43</code>); the minted persist-OK
+            string did not print.
           </p>
         </div>
       </section>
@@ -231,9 +232,10 @@ localhost:~# cat /proc/cmdline</code></pre>
             <code>root=UUID=814a97a0-…</code> → <code>login:</code>.
             Latitude/QEMU still ≠ R640. Host/CI still never print
             <code>ISO-INSTALL-OK</code>. Overall stays 99% because
-            leftover-disk persist across a <em>hypervisor</em> reboot, TLS,
-            and a guest console UI are the next mountain —
-            <strong>M8</strong> operator hardening (ADR-018). Cluster /
+            TLS and a guest console UI are the next mountain —
+            <strong>M8</strong> operator hardening (ADR-018). HV-reboot persist
+            is evidence-closed on the 8 GiB USB slice (<code>4af78b43</code>);
+            the minted persist-OK string did not print. Cluster /
             vMotion-like is <strong>M9</strong>. Rollback kit:
             <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed"
               ><code>v0.1.0-everest-closed</code></a

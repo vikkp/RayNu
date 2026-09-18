@@ -332,6 +332,17 @@ fn csw_xfer_timeout_does_not_send_request_sense() {
 }
 
 #[test]
+fn csw_ok_tag_rejects_leftover_csw() {
+    let mut csw = [0u8; CSW_LEN];
+    put_le_u32(&mut csw, 0, CSW_SIG);
+    put_le_u32(&mut csw, 4, 7);
+    csw[12] = 0;
+    assert!(csw_ok(&csw));
+    assert!(csw_ok_tag(&csw, 7));
+    assert!(!csw_ok_tag(&csw, 8));
+}
+
+#[test]
 fn start_stop_and_read_probe_named() {
     assert_eq!(SCSI_START_STOP, 0x1B);
     assert_eq!(USB_BOT_RW_TRIES, 3);

@@ -379,3 +379,15 @@ fn r640_iron_census_picks_nvme_then_usb_never_perc() {
     assert!(DURABLE_LUN_NEED_MEDIA_NOTE.contains("Cruzer 2-8GiB"));
     assert!(!DURABLE_LUN_NEED_MEDIA_NOTE.contains("RAYNU-V-M8-DISK-PERSIST-OK"));
 }
+
+#[test]
+fn usb_guest_bytes_caps_toshiba_at_8g() {
+    assert_eq!(DURABLE_LUN_GUEST_USB_BYTES, 8 * 1024 * 1024 * 1024);
+    assert_eq!(LUN_PEEK_TRIES, 4);
+    assert_eq!(
+        durable_lun_guest_usb_bytes(320_072_933_376),
+        DURABLE_LUN_GUEST_USB_BYTES
+    );
+    assert_eq!(durable_lun_guest_usb_bytes(1024 * 1024), 1024 * 1024);
+    assert_eq!(durable_lun_guest_usb_bytes(0), 0);
+}

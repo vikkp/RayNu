@@ -103,7 +103,8 @@ pub use tables::{
     IMAGE_BYTES,
 };
 pub use gpt::{
-    disk_has_gpt_esp, find_esp, raynu_f_boot_source, BootSource, EspPartition, ESP_TYPE_GUID,
+    disk_has_gpt_esp, find_esp, find_esp_skip_array_crc, raynu_f_boot_source, BootSource,
+    EspPartition, ESP_TYPE_GUID,
 };
 pub use launch_plan::{plan_f2, LaunchPlan, PlanError};
 pub use pe::{load_pe32plus, parse_pe32plus, Loaded, PeError, PeImage};

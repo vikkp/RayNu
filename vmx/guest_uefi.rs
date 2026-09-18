@@ -7382,15 +7382,21 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
     serial::write_str(" pages=");
     write_dec(crate::raynu_f::memory::BELOW1M_PAGES as u64);
     serial::write_line(" (Linux trampoline; not ISO-INSTALL-OK)");
-    // F7: prefer the install disk's GPT ESP when present (second boot after
-    // setup-disk). First boot the disk is zeros, so El Torito still wins.
+    // F7 / keep=1 SPA: prefer the install disk's GPT ESP when present.
+    // First boot the disk is zeros, so El Torito still wins.
     // `raynu_f_boot_source` is the pure decision; the stager still runs on a
     // written non-GPT disk so it can print one honest F7 line.
+    // Iron guest8g SPA Start (`b661808c`): peek `keep=1` `installed=1`, then
+    // GPT array CRC + cold BOT after coexist idle → `image=ISO-BOOTX64` and
+    // `vda` I/O error. Prime USB, skip array CRC, and honor sticky keep.
     RAYNU_F_STAGED_FROM_DISK.store(false, Ordering::Release);
-    let disk_has = crate::raynu_f::disk_has_gpt_esp(&DiskFatVol { base: 0 });
+    crate::mgmt::durable_lun::durable_lun_diskprime();
+    let disk_has = crate::raynu_f::disk_has_gpt_esp(&DiskFatVol { base: 0 })
+        || crate::mgmt::disk_persist::persist_lun_sticky_keep();
     let try_disk = crate::raynu_f::raynu_f_boot_source(disk_has)
         == crate::raynu_f::BootSource::Disk
-        || crate::devices::guest_virtio_blk::disk_bytes_written() != 0;
+        || crate::devices::guest_virtio_blk::disk_bytes_written() != 0
+        || crate::mgmt::disk_persist::persist_lun_sticky_keep();
     let disk_entry = if try_disk {
         raynu_f_stage_disk_bootloader(&layout, ram_hpa)
     } else {
@@ -8128,8 +8134,9 @@ unsafe fn raynu_f_stage_disk_bootloader(
     ram_hpa: u64,
 ) -> Option<u64> {
     let disk = DiskFatVol { base: 0 };
-    let written = crate::devices::guest_virtio_blk::disk_bytes_written() != 0;
-    let esp = match crate::raynu_f::find_esp(&disk) {
+    let written = crate::devices::guest_virtio_blk::disk_bytes_written() != 0
+        || crate::mgmt::disk_persist::persist_lun_sticky_keep();
+    let esp = match crate::raynu_f::find_esp_skip_array_crc(&disk) {
         Ok(e) => e,
         Err(_) => {
             if written {

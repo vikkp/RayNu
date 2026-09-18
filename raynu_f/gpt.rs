@@ -165,6 +165,24 @@ pub fn gpt_entry_array_crc(lba1: &[u8]) -> u32 {
     u32_at(lba1, 88)
 }
 
+/// Disk size implied by GPT header `alternate_lba` (LBA1 offset 32).
+pub fn gpt_disk_bytes_from_header(lba1: &[u8]) -> Option<u64> {
+    if lba1.len() < 40 || &lba1[0..8] != GPT_SIGNATURE {
+        return None;
+    }
+    let alt = u64_at(lba1, 32);
+    alt.checked_add(1)?.checked_mul(u64::from(GPT_LBA_SIZE))
+}
+
+/// True when the GPT describes a disk that fits in `guest_bytes`.
+/// Iron 298 GiB Toshiba GPT must not keep on an 8 GiB virtio window.
+pub fn gpt_fits_guest_bytes(lba1: &[u8], guest_bytes: u64) -> bool {
+    match gpt_disk_bytes_from_header(lba1) {
+        Some(n) => n > 0 && n <= guest_bytes,
+        None => false,
+    }
+}
+
 fn read_lba<R: VolumeRead>(r: &R, lba: u64, buf: &mut [u8; 512]) -> bool {
     r.read_at(lba.saturating_mul(u64::from(GPT_LBA_SIZE)), buf)
 }
@@ -271,9 +289,16 @@ fn find_esp_opts<R: VolumeRead>(r: &R, verify_array_crc: bool) -> Result<EspPart
     Err(GptError::NoEsp)
 }
 
-/// Convenience: whether `find_esp` succeeds.
+/// Convenience: whether a GPT ESP exists (header CRC + first ESP).
+///
+/// Skips the 16 KiB partition-array CRC. Iron guest8g SPA Start (`b661808c`):
+/// peek `installed=1` `keep=1`, then `find_esp` CRC walked 32 USB BOT READs
+/// after coexist idle and timed out (`usb rw fail … bot=data scsi=read`)
+/// so RayNu-F staged `image=ISO-BOOTX64` instead of `DISK-BOOTX64`. Keep-detect
+/// already uses [`find_esp_skip_array_crc`]. SliceDisk/HPA still call
+/// [`find_esp`] when they need the array CRC.
 pub fn disk_has_gpt_esp<R: VolumeRead>(r: &R) -> bool {
-    find_esp(r).is_ok()
+    find_esp_skip_array_crc(r).is_ok()
 }
 
 #[cfg(test)]

@@ -154,9 +154,46 @@ fn skip_array_crc_finds_esp_when_unused_entry_is_stale() {
     // Unused entry 2 (not the ESP). Array CRC fails; keep-detect still finds ESP.
     disk[(ENTRY_LBA * 512) as usize + 256] ^= 0xFF;
     assert_eq!(find_esp(&SliceDisk(&disk)), Err(GptError::BadEntryArrayCrc));
+    assert!(
+        disk_has_gpt_esp(&SliceDisk(&disk)),
+        "SPA disk-before-ISO must skip array CRC (iron USB BOT)"
+    );
     let esp = find_esp_skip_array_crc(&SliceDisk(&disk)).expect("keep-detect ESP");
     assert_eq!(esp.start_lba, ESP_START);
     assert_eq!(GptError::BadEntryArrayCrc.code(), 7);
+}
+
+#[test]
+fn disk_has_gpt_esp_survives_few_reads_full_crc_does_not() {
+    use core::cell::Cell;
+    struct BudgetDisk<'a> {
+        inner: SliceDisk<'a>,
+        left: Cell<usize>,
+    }
+    impl VolumeRead for BudgetDisk<'_> {
+        fn read_at(&self, off: u64, buf: &mut [u8]) -> bool {
+            let n = self.left.get();
+            if n == 0 {
+                return false;
+            }
+            self.left.set(n - 1);
+            self.inner.read_at(off, buf)
+        }
+    }
+    let disk = synthetic_gpt();
+    let few = BudgetDisk {
+        inner: SliceDisk(&disk),
+        left: Cell::new(8),
+    };
+    assert!(
+        disk_has_gpt_esp(&few),
+        "header + first ESP must not need 32 BOT array-CRC fills"
+    );
+    let crc = BudgetDisk {
+        inner: SliceDisk(&disk),
+        left: Cell::new(8),
+    };
+    assert_eq!(find_esp(&crc), Err(GptError::ShortRead));
 }
 
 #[test]
@@ -169,4 +206,18 @@ fn missing_mbr_signature_is_rejected() {
 #[test]
 fn ieee_crc32_known_answer() {
     assert_eq!(crc32(b"123456789"), 0xCBF4_3926);
+}
+
+#[test]
+fn gpt_fits_guest_rejects_toshiba_298g_on_8g_window() {
+    let mut lba1 = [0u8; 512];
+    lba1[..8].copy_from_slice(GPT_SIGNATURE);
+    lba1[32..40].copy_from_slice(&16_777_215u64.to_le_bytes());
+    assert!(gpt_fits_guest_bytes(&lba1, 8 * 1024 * 1024 * 1024));
+    lba1[32..40].copy_from_slice(&625_142_447u64.to_le_bytes());
+    assert!(!gpt_fits_guest_bytes(&lba1, 8 * 1024 * 1024 * 1024));
+    assert_eq!(
+        gpt_disk_bytes_from_header(&lba1),
+        Some(320_072_933_376)
+    );
 }
