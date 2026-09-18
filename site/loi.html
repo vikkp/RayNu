@@ -11,7 +11,7 @@
     <meta property="og:title" content="RayNu-V · Path to LOI" />
     <meta
       property="og:description"
-      content="Two bars: dedicated-box 48%, RAID-fleet 18%. Persist across HV reboot is evidence-closed. TLS is host-ready, not iron HTTPS. USB is not PERC."
+              content="Two bars: dedicated-box 49%, RAID-fleet 18%. Persist across HV reboot is evidence-closed. TLS wrap is wired, not iron HTTPS. USB is not PERC."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -255,16 +255,19 @@
             <li data-reveal>
               <header>
                 <span class="loi-pieces__name">TLS</span>
-                <span class="loi-pieces__pct" data-piece="tls">18%</span>
+                <span class="loi-pieces__pct" data-piece="tls">22%</span>
               </header>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill" data-piece-fill="tls" style="width: 18%"></span>
+                <span class="hda-bar__fill" data-piece-fill="tls" style="width: 22%"></span>
               </div>
               <p>
-                Everest closed on plaintext HTTP on a bring-up LAN. Host tests
-                now speak HTTPS with a lab certificate. The box you own still
-                answers in the clear. A CISO will ask whether management is
-                encrypted on the wire they can reach. The answer today is no.
+                Everest closed on plaintext HTTP on a bring-up LAN. Firmware
+                TCP now goes through a wrap point, and host tests speak HTTPS
+                with a lab certificate. rustls cannot join the EFI today
+                (it needs a C library the firmware does not have). The box
+                you own still answers in the clear. A CISO will ask whether
+                management is encrypted on the wire they can reach. The
+                answer today is no.
               </p>
             </li>
             <li data-reveal>
@@ -350,7 +353,7 @@
           <pre class="ship-code" data-reveal><code>lived:  4af78b43 keep=1 DISK-BOOT UUID 348005a9 after Force Off
 sit:    localhost:~#   do not setup-disk   do not Force Off   do not flash
 refuse: ESP Cruzer (2–8 GiB) · Ubuntu-on-PERC · leftover DRAM
-host:   RAYNU-V-M8-TLS-HOST-OK (rustls; not iron)
+host:   RAYNU-V-M8-TLS-HOST-OK / RAYNU-V-M8-TLS-FW-HOST-OK (not iron)
 next:   TLS on 10.99.99.x:8443 after BOOT-OK
 never:  host / CI / nested printing RAYNU-V-M8-DISK-PERSIST-OK or RAYNU-V-M8-TLS-OK</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>

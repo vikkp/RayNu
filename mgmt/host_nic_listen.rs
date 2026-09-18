@@ -34,6 +34,9 @@ use crate::mgmt::http::MGMT_HTTP_DEFAULT_PORT;
 use crate::mgmt::mgmt_arena::{MgmtArena, MgmtFatal};
 use crate::mgmt::mgmt_lease;
 use crate::mgmt::pci_census;
+use crate::mgmt::tls_coexist::{
+    wrap_plaintext_http, PlaintextListen, COEXIST_HTTP_OUT_N, COEXIST_RX_ACC_N,
+};
 use core::mem::MaybeUninit;
 use smoltcp::iface::{Config, Interface, SocketHandle, SocketSet, SocketStorage};
 use smoltcp::phy::Device;
@@ -54,22 +57,64 @@ static mut COEXIST_SOCKETS: MaybeUninit<SocketSet<'static>> = MaybeUninit::unini
 static mut COEXIST_TCP_HANDLE: MaybeUninit<SocketHandle> = MaybeUninit::uninit();
 static mut COEXIST_TCP_RX: [u8; TCP_RX_N] = [0; TCP_RX_N];
 static mut COEXIST_TCP_TX: [u8; TCP_TX_N] = [0; TCP_TX_N];
-static mut COEXIST_RX_ACC: [u8; RX_ACC_N] = [0; RX_ACC_N];
+static mut COEXIST_LISTEN: PlaintextListen = PlaintextListen::new();
 static mut COEXIST_HTTP_OUT: [u8; HTTP_OUT_N] = [0; HTTP_OUT_N];
+static mut COEXIST_WRAP_OUT: [u8; WRAP_OUT_N] = [0; WRAP_OUT_N];
 static mut COEXIST_MILLIS: i64 = 0;
 static mut COEXIST_TSC0: u64 = 0;
 static mut COEXIST_ANNOUNCED: bool = false;
 static mut COEXIST_ACCEPT_AT_MS: i64 = 0;
-static mut COEXIST_RX_LEN: usize = 0;
 static mut COEXIST_LAST_DIAG: i64 = 0;
 static mut COEXIST_LAST_RX_DROP: u32 = 0;
 static mut COEXIST_PORT: u16 = MGMT_HTTP_DEFAULT_PORT;
 
 const TCP_RX_N: usize = 8192;
 const TCP_TX_N: usize = 16384;
-const RX_ACC_N: usize = 8192;
-const HTTP_OUT_N: usize = 16384;
-const SCRATCH_N: usize = TCP_RX_N + TCP_TX_N + RX_ACC_N + HTTP_OUT_N;
+const RX_ACC_N: usize = COEXIST_RX_ACC_N;
+const HTTP_OUT_N: usize = COEXIST_HTTP_OUT_N;
+const WRAP_OUT_N: usize = COEXIST_HTTP_OUT_N;
+const SCRATCH_N: usize = TCP_RX_N + TCP_TX_N + HTTP_OUT_N + WRAP_OUT_N;
+const _: [(); COEXIST_RX_ACC_N] = [(); RX_ACC_N];
+
+/// Complete HTTP request → codec → identity TCP wrap. Firmware session is plaintext.
+fn wrap_session_try_exchange(
+    session: &PlaintextListen,
+    sock: &mut tcp::Socket,
+    out: &mut [u8],
+    wrap: &mut [u8],
+) -> bool {
+    let Some(raw_bytes) = session.take_http() else {
+        return false;
+    };
+    if !sock.can_send() {
+        return false;
+    }
+    let raw = core::str::from_utf8(raw_bytes).unwrap_or("");
+    let wn = crate::mgmt::pre_ebs_mgmt::with_pre_ebs_mgmt(|m| {
+        handle_http_request(
+            &mut m.vms,
+            &mut m.images,
+            &mut m.iso_plan,
+            &mut m.iso_install,
+            raw,
+            out,
+        )
+    })
+    .unwrap_or(0);
+    if wn == 0 {
+        return false;
+    }
+    let n = wrap_plaintext_http(&out[..wn], wrap);
+    if n == 0 {
+        return false;
+    }
+    let _ = sock.send_slice(&wrap[..n]);
+    true
+}
+
+fn print_tls_wrap_plaintext_note() {
+    serial::write_line("boot: HOST-NIC TLS wrap=plaintext (ring needs libc; not HTTPS)");
+}
 
 #[derive(Clone, Copy)]
 enum ListenWhen {
@@ -185,7 +230,7 @@ pub fn arm_bcm5720_coexist() -> bool {
         COEXIST_TSC0 = crate::arch::cpu::rdtsc();
         COEXIST_ANNOUNCED = false;
         COEXIST_ACCEPT_AT_MS = 0;
-        COEXIST_RX_LEN = 0;
+        COEXIST_LISTEN.reset();
         COEXIST_LAST_DIAG = 0;
         COEXIST_LAST_RX_DROP = 0;
         COEXIST_PORT = port;
@@ -203,6 +248,7 @@ pub fn arm_bcm5720_coexist() -> bool {
     serial::write_byte(b':');
     write_u16_dec(port);
     serial::write_line("/  (native BCM5720; SNP is dead)");
+    print_tls_wrap_plaintext_note();
     serial::write_line("boot: HINT — COM2 idle after this snapshot (TCP accept / HTTP only)");
     crate::mgmt::bcm5720_mmio::reset_host_nic_frame_dumps();
     print_bcm5720_poll_diag();
@@ -222,8 +268,9 @@ pub fn tick_bcm5720_coexist() {
         let iface = COEXIST_IFACE.assume_init_mut();
         let sockets = COEXIST_SOCKETS.assume_init_mut();
         let tcp_handle = *COEXIST_TCP_HANDLE.assume_init_ref();
-        let rx_acc = &mut *core::ptr::addr_of_mut!(COEXIST_RX_ACC);
+        let session = &mut *core::ptr::addr_of_mut!(COEXIST_LISTEN);
         let out = &mut *core::ptr::addr_of_mut!(COEXIST_HTTP_OUT);
+        let wrap = &mut *core::ptr::addr_of_mut!(COEXIST_WRAP_OUT);
         COEXIST_MILLIS = coexist_millis_from_tsc(
             COEXIST_TSC0,
             crate::arch::cpu::rdtsc(),
@@ -244,7 +291,7 @@ pub fn tick_bcm5720_coexist() {
         {
             let sock = sockets.get_mut::<tcp::Socket>(tcp_handle);
             if !sock.is_open() {
-                COEXIST_RX_LEN = 0;
+                session.reset();
                 COEXIST_ANNOUNCED = false;
                 COEXIST_ACCEPT_AT_MS = 0;
                 let _ = sock.listen(COEXIST_PORT);
@@ -255,36 +302,19 @@ pub fn tick_bcm5720_coexist() {
                 serial::write_line("boot: HOST-NIC TCP accept — client connected");
                 COEXIST_ANNOUNCED = true;
                 COEXIST_ACCEPT_AT_MS = millis;
-                COEXIST_RX_LEN = 0;
+                session.reset();
             }
             if sock.can_recv() {
                 let mut chunk = [0u8; 2048];
                 if let Ok(n) = sock.recv_slice(&mut chunk) {
                     if n > 0 {
-                        let copy = n.min(rx_acc.len().saturating_sub(COEXIST_RX_LEN));
-                        rx_acc[COEXIST_RX_LEN..COEXIST_RX_LEN + copy]
-                            .copy_from_slice(&chunk[..copy]);
-                        COEXIST_RX_LEN += copy;
+                        let _ = session.feed_tcp(&chunk[..n]);
                     }
                 }
             }
-            let rx_len = COEXIST_RX_LEN;
-            let headers_done = rx_len >= 4 && rx_acc[..rx_len].windows(4).any(|w| w == b"\r\n\r\n");
+            let headers_done = session.take_http().is_some();
             if headers_done && sock.can_send() {
-                let raw = core::str::from_utf8(&rx_acc[..rx_len]).unwrap_or("");
-                let wn = crate::mgmt::pre_ebs_mgmt::with_pre_ebs_mgmt(|m| {
-                    handle_http_request(
-                        &mut m.vms,
-                        &mut m.images,
-                        &mut m.iso_plan,
-                        &mut m.iso_install,
-                        raw,
-                        out,
-                    )
-                })
-                .unwrap_or(0);
-                if wn > 0 {
-                    let _ = sock.send_slice(&out[..wn]);
+                if wrap_session_try_exchange(session, sock, out, wrap) {
                     did_exchange = true;
                     do_close = true;
                 }
@@ -295,7 +325,7 @@ pub fn tick_bcm5720_coexist() {
                 HOST_NIC_HTTP_IDLE_MS,
             ) {
                 sock.abort();
-                COEXIST_RX_LEN = 0;
+                session.reset();
                 COEXIST_ANNOUNCED = false;
                 COEXIST_ACCEPT_AT_MS = 0;
                 did_idle_abort = true;
@@ -310,7 +340,7 @@ pub fn tick_bcm5720_coexist() {
             // abort() not close(): FIN_WAIT held the only listen slot so the
             // next curl (spec→start, 31ms) got RST (`curl: (7)`). Iron 2026-08-21.
             sockets.get_mut::<tcp::Socket>(tcp_handle).abort();
-            COEXIST_RX_LEN = 0;
+            session.reset();
             COEXIST_ANNOUNCED = false;
             COEXIST_ACCEPT_AT_MS = 0;
             let _ = iface.poll(Instant::from_millis(millis + 2), device, sockets);
@@ -596,7 +626,8 @@ fn listen_loop<D: Device>(
         .map_err(|_| MgmtFatal::ArenaExhausted)?;
     let (tcp_rx_mem, rest) = scratch.split_at_mut(TCP_RX_N);
     let (tcp_tx_mem, rest) = rest.split_at_mut(TCP_TX_N);
-    let (rx_acc, out) = rest.split_at_mut(RX_ACC_N);
+    let (out, wrap) = rest.split_at_mut(HTTP_OUT_N);
+    let mut session = PlaintextListen::new();
 
     let mut config = Config::new(EthernetAddress(mac).into());
     config.random_seed = mac_seed(mac);
@@ -635,6 +666,7 @@ fn listen_loop<D: Device>(
                 serial::write_byte(b':');
                 write_u16_dec(port);
                 serial::write_line("/  (native BCM5720; SNP is dead)");
+                print_tls_wrap_plaintext_note();
                 serial::write_line(
                     "boot: HINT — COM2 idle after this snapshot (TCP accept / HTTP only)",
                 );
@@ -658,7 +690,6 @@ fn listen_loop<D: Device>(
     let mut served: u32 = 0;
     let mut announced = false;
     let mut accept_at: i64 = 0;
-    let mut rx_len: usize = 0;
     let mut last_diag: i64 = 0;
     let mut last_rx_drop: u32 = 0;
     let deadline = match when {
@@ -685,7 +716,7 @@ fn listen_loop<D: Device>(
         {
             let sock = sockets.get_mut::<tcp::Socket>(tcp_handle);
             if !sock.is_open() {
-                rx_len = 0;
+                session.reset();
                 announced = false;
                 accept_at = 0;
                 let _ = sock.listen(port);
@@ -696,39 +727,19 @@ fn listen_loop<D: Device>(
                 serial::write_line("boot: HOST-NIC TCP accept — client connected");
                 announced = true;
                 accept_at = millis;
-                rx_len = 0;
+                session.reset();
             }
             if sock.can_recv() {
                 let mut chunk = [0u8; 2048];
                 if let Ok(n) = sock.recv_slice(&mut chunk) {
                     if n > 0 {
-                        let copy = n.min(rx_acc.len().saturating_sub(rx_len));
-                        rx_acc[rx_len..rx_len + copy].copy_from_slice(&chunk[..copy]);
-                        rx_len += copy;
+                        let _ = session.feed_tcp(&chunk[..n]);
                     }
                 }
             }
-            let headers_done = rx_len >= 4 && rx_acc[..rx_len].windows(4).any(|w| w == b"\r\n\r\n");
+            let headers_done = session.take_http().is_some();
             if headers_done && sock.can_send() {
-                let raw = core::str::from_utf8(&rx_acc[..rx_len]).unwrap_or("");
-                let wn = unsafe {
-                    // SAFETY: BSP-only HTTP codec; tables are the leaked PRE-EBS
-                    // session (reset at listen start). Not NIC MMIO.
-                    // KANI-TARGET: handle_http_request is covered by host HTTP tests.
-                    crate::mgmt::pre_ebs_mgmt::with_pre_ebs_mgmt(|m| {
-                        handle_http_request(
-                            &mut m.vms,
-                            &mut m.images,
-                            &mut m.iso_plan,
-                            &mut m.iso_install,
-                            raw,
-                            out,
-                        )
-                    })
-                }
-                .unwrap_or(0);
-                if wn > 0 {
-                    let _ = sock.send_slice(&out[..wn]);
+                if wrap_session_try_exchange(&session, sock, out, wrap) {
                     did_exchange = true;
                     do_close = true;
                 }
@@ -739,7 +750,7 @@ fn listen_loop<D: Device>(
                 HOST_NIC_HTTP_IDLE_MS,
             ) {
                 sock.abort();
-                rx_len = 0;
+                session.reset();
                 announced = false;
                 accept_at = 0;
                 did_idle_abort = true;
@@ -755,7 +766,7 @@ fn listen_loop<D: Device>(
             // FIN + drain before qemu_exit. Exiting with an open socket RSTs
             // curl (SPA ~15 KiB; TCG user-net).
             flush_tcp_tx(&mut iface, device, &mut sockets, tcp_handle, &mut millis);
-            rx_len = 0;
+            session.reset();
             announced = false;
             accept_at = 0;
         }

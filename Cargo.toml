@@ -43,8 +43,10 @@ smoltcp = { version = "0.13", optional = true, default-features = false, feature
     "auto-icmp-echo-reply",
 ] }
 
-# M8.1 host TLS only (ADR-003). Do not add rustls to uefi-bin — firmware
-# coexist stay plaintext until an iron HTTPS slice. ring, not aws-lc-rs.
+# M8.1 host TLS only (ADR-003). rustls/ring do **not** join uefi-bin:
+# ring's C build needs <assert.h> on x86_64-unknown-uefi. Firmware coexist
+# feeds TCP through `tls_coexist` (plaintext session until a freestanding
+# backend exists). Host tests wrap that same session API with rustls.
 [dev-dependencies]
 rcgen = { version = "0.13", default-features = false, features = ["ring"] }
 rustls = { version = "0.23", default-features = false, features = ["std", "ring", "tls12"] }
