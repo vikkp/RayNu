@@ -6,7 +6,7 @@
 //! Proves the host rustls package exists, firmware listen is TLS 1.2
 //! (not iron HTTPS), and the iron marker is minted but never printed from
 //! host/CI. Does **not** print `RAYNU-V-M8-TLS-OK`. Nested QEMU is not this
-//! gate. Iron `curl --cacert` after `BOOT-OK` is not this gate.
+//! gate. Iron `curl --cacert` before RayNu-F is not this gate.
 
 use crate::mgmt::tls::{
     firmware_listen_is_plaintext, firmware_listen_is_tls12, host_never_prints_iron_tls_ok,

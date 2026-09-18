@@ -11,7 +11,7 @@
     <meta property="og:title" content="RayNu-V · Path to LOI" />
     <meta
       property="og:description"
-              content="Two bars: dedicated-box 66%, RAID-fleet 18%. Persist across HV reboot is evidence-closed. SKU card is done. Firmware TLS 1.2 is in-tree, not iron HTTPS. Host auth/console/ISO-upload HostReady are not iron closes. USB is not PERC."
+              content="Two bars: dedicated-box 68%, RAID-fleet 18%. Persist across HV reboot is evidence-closed. SKU card is done. Firmware TLS 1.2 listens HTTPS before RayNu-F, not iron HTTPS. Host auth/console/ISO-upload HostReady are not iron closes. USB is not PERC."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -265,14 +265,17 @@
               </div>
               <p>
                 Everest closed on plaintext HTTP on a bring-up LAN. The next
-                EFI speaks TLS 1.2 on coexist (a rustls client already got the
-                SPA in host tests). rustls itself cannot join the EFI (it
-                needs a C library the firmware does not have). The box you
-                own still answers in the clear on flashed
-                <code>4af78b43</code>. A CISO will ask whether management is
-                encrypted on the wire they can reach. The answer today is no
-                until that TLS EFI is F11’d and <code>curl --cacert</code>
-                works after <code>BOOT-OK</code>.
+                EFI speaks TLS 1.2 on a native window
+                <strong>before RayNu-F</strong> (a rustls client already got
+                the SPA in host tests). rustls itself cannot join the EFI
+                (it needs a C library the firmware does not have). COM2
+                <code>1647a8d8</code> launched Alpine with no
+                <code>https://</code> listen. The box you own still answers
+                in the clear on flashed <code>4af78b43</code>. A CISO will
+                ask whether management is encrypted on the wire they can
+                reach. The answer today is no until this TLS EFI is F11’d
+                and <code>curl --cacert</code> works on native
+                <code>CURL NOW → https://</code>.
               </p>
             </li>
             <li data-reveal>
@@ -354,14 +357,17 @@
             (<code>keep=1</code> + <code>DISK-BOOTX64</code> +
             <code>UUID=348005a9-…</code> after Force Off). The minted persist-OK
             string did not print. Nested QEMU is not a PowerEdge. The next print
-            that moves Bar A is <code>curl --cacert</code> on coexist
-            <code>:8443</code> after F11 of this TLS EFI — not a host rustls test.
+            that moves Bar A is <code>curl --cacert</code> on native
+            <code>CURL NOW → https://</code> <strong>before RayNu-F</strong>
+            after F11 of this TLS EFI — not a host rustls test. Ignore
+            PRE-EBS <code>http://</code>. COM2 <code>1647a8d8</code> had no
+            that window.
           </p>
           <pre class="ship-code" data-reveal><code>lived:  4af78b43 keep=1 DISK-BOOT UUID 348005a9 after Force Off
 sit:    localhost:~#   do not setup-disk   do not flash Toshiba /dev/sdc
 in-tree: RAYNU-V-M8-TLS12-HOST-OK (Tls12Listen; not iron)
 host:   RAYNU-V-M8-TLS-HOST-OK / RAYNU-V-M8-TLS-FW-HOST-OK (not iron)
-next:   F11 this TLS EFI → curl --cacert on 10.99.99.x:8443 after BOOT-OK
+next:   F11 this TLS EFI → curl --cacert on native CURL NOW → https:// before RayNu-F
 never:  host / CI / nested printing RAYNU-V-M8-DISK-PERSIST-OK or RAYNU-V-M8-TLS-OK</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
             Rollback remains GitHub Latest

@@ -7,11 +7,12 @@
 //! Firmware coexist `:8443` speaks **TLS 1.2** (`Tls12Listen`, ECDHE-RSA-AES128-GCM).
 //! rustls/ring stay a **dev-dependency** (ADR-003) — they cannot join `uefi-bin`.
 //! Plaintext remains a lab fallback. Iron close is still `curl --cacert` on the
-//! R640 after `BOOT-OK` ([`M8_TLS_OK_MARKER`]). Host/CI never print that marker.
+//! R640 native HTTPS window **before RayNu-F** ([`M8_TLS_OK_MARKER`]). Host/CI
+//! never print that marker.
 
 use core::sync::atomic::{AtomicBool, Ordering};
 
-/// Iron COM2 / operator LAN close: HTTPS on coexist after `BOOT-OK`.
+/// Iron COM2 / operator LAN close: HTTPS on native BCM5720 before RayNu-F.
 /// Host/CI/nested must **never** print this.
 pub const M8_TLS_OK_MARKER: &str = "RAYNU-V-M8-TLS-OK";
 

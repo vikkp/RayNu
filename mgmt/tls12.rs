@@ -106,9 +106,13 @@ impl CryptoRng for MixRng {}
 fn rdrand64() -> Option<u64> {
     #[cfg(target_arch = "x86_64")]
     {
+        if !crate::arch::cpu::rdrand_supported() {
+            return None;
+        }
         let mut v = 0u64;
         for _ in 0..32 {
-            // SAFETY: RDRAND is a user instruction; 0 means retry.
+            // SAFETY: CPUID.1:ECX.RDRAND is set; 0 means retry. TCG qemu64
+            // falls back to rdtsc in MixRng (no #UD).
             // KANI-TARGET: host tests use MixRng; iron Xeon has RDRAND.
             if unsafe { core::arch::x86_64::_rdrand64_step(&mut v) } == 1 {
                 return Some(v);

@@ -6,7 +6,8 @@
 //! Proves coexist TCP feeds [`crate::mgmt::tls12::Tls12Listen`], rustls is
 //! still not in `uefi-bin` (ring C needs libc), and CURL NOW is `https://`.
 //! Does **not** print `RAYNU-V-M8-TLS-OK`. Nested QEMU is not this gate.
-//! Iron `curl --cacert` after `BOOT-OK` is not this gate.
+//! Iron `curl --cacert` is a post-EBS native window **before RayNu-F**.
+//! Nested QEMU is not this gate.
 
 use crate::mgmt::tls::{
     firmware_listen_is_plaintext, firmware_listen_is_tls12, host_never_prints_iron_tls_ok,
@@ -27,6 +28,7 @@ pub fn tls_fw_surface_present() -> bool {
     let cargo = include_str!("../Cargo.toml");
     let plan = include_str!("../docs/m8_plan.md");
     let smoke = include_str!("../tools/m8-tls-fw-smoke.sh");
+    let qemu = include_str!("../tools/m7-host-nic-qemu-smoke.sh");
     let forbidden = concat!("println!(", "\"RAYNU-V-M8-TLS-OK\")");
     coexist.contains("struct PlaintextListen")
         && coexist.contains("fn feed_tcp(")
@@ -42,6 +44,10 @@ pub fn tls_fw_surface_present() -> bool {
         && listen.contains("drain_tcp")
         && listen.contains("wrap_http")
         && listen.contains("https://")
+        && listen.contains("before RayNu-F; SNP is dead")
+        && qemu.contains("https://")
+        && qemu.contains("lab-ca.crt.pem")
+        && qemu.contains("RAYNU-V-M8-TLS-OK")
         && TLS_FW_WRAP_NOTE.contains("assert.h")
         && TLS_FW_CURL_NOTE.contains("https://")
         && cargo.contains("[dev-dependencies]")

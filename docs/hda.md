@@ -119,7 +119,7 @@ All must be true (no hand-waving):
 | Datastore / ISO media buttons | DONE (host) | SPA → `/images`, `/iso/{id}/deploy` + install |
 | **UEFI NIC HTTP listen** | DONE (M7.6 iron) | `RAYNU-V-M7-UEFI-HTTP-OK` R640 SNP residual; [2026-08-16-uefi-http-ok.md](evidence/r640/2026-08-16-uefi-http-ok.md) |
 | PRE-EBS durable mgmt tables | DONE | `pre_ebs_mgmt` shared across HTTP exchanges |
-| TLS | IN PROGRESS | firmware TLS 1.2 in-tree (`Tls12Listen`, ECDHE-RSA-AES128-GCM); rustls/ring not in `uefi-bin`; CURL NOW on this EFI is `https://`; flashed `4af78b43` is still `http://`; iron HTTPS open (`curl --cacert` after `BOOT-OK`) |
+| TLS | IN PROGRESS | firmware TLS 1.2 in-tree (`Tls12Listen`); post-EBS native HTTPS window **before RayNu-F** (`PRE_RAYNUF_HTTPS_MS`); RDRAND CPUID-gated; `1647a8d8` auto-launched Alpine with no `https://` listen; iron HTTPS open (`curl --cacert` on native `CURL NOW → https://`) |
 | Guest console / serial log UI | PARTIAL | Host UART ring via `GET /logs/serial` + SPA; HostReady COM1 keys (`RAYNU-V-M8-CONSOLE-HOST-OK`); guest VNC residual (not iron CONSOLE-OK) |
 | Auth beyond bring-up toy | PARTIAL | HostReady rejects bring-up (`RAYNU-V-M8-AUTH-HOST-OK`); firmware still lab latch without ESP `auth.token` (not iron AUTH-OK) |
 | Networking/storage ops UI | MISSING | probes only |
@@ -355,7 +355,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | m8-tls-iron |
-| Summary | **M8.1 firmware TLS 1.2 in-tree.** Coexist feeds `Tls12Listen` (ECDHE-RSA-AES128-GCM + EMS). rustls TLS 1.2 client got SPA (`RAYNU-V-M8-TLS12-HOST-OK`). rustls/ring stay out of `uefi-bin`. CURL NOW on this EFI is `https://`. Flashed `4af78b43` is still `http://`. Never print iron TLS-OK from host/CI. Iron close is `curl --cacert` after `BOOT-OK`. Months **0.0 held**. Overall **99 held**. |
+| Summary | **M8.1 native HTTPS window before RayNu-F.** `Tls12Listen` after analog (`PRE_RAYNUF_HTTPS_MS`). COM2 `1647a8d8` launched Alpine with no coexist listen (`curl: (28)` on SNP `.150`). RDRAND CPUID-gated (TCG qemu64 must not #UD). rustls/ring stay out of `uefi-bin`. Never print iron TLS-OK from host/CI. Iron close is `curl --cacert` on native `CURL NOW → https://` then COM2 `RAYNU-V-M8-TLS-OK`. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. Iron HTTPS / iron auth / iron console residual. Nested QEMU ≠ R640. |
 | Gates touched | `mgmt/tls12.rs` + `mgmt/tls.rs` + `mgmt/host_nic_listen.rs` + `assets/tls/` + `tools/m8-tls12-smoke.sh`. rustls not in `uefi-bin`. `./tools/sync-hda-site.sh --check`. `./tools/sync-loihda-site.sh --check`. Flash authorized; sit at `localhost:~#` until F11 of this TLS EFI. |
 | Months Δ | 0.0 held (Everest closed; firmware TLS 1.2 ≠ iron `RAYNU-V-M8-TLS-OK`) |
@@ -366,7 +366,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | ID | Blocker / risk | Severity | Mitigations |
 |----|----------------|----------|-------------|
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
-| H2 | TLS / console polish | MED | **M8.1 / M8.3** ([ADR-018](adr/ADR-018.md)). Firmware TLS 1.2 is in-tree (`Tls12Listen`); rustls/ring stay out of `uefi-bin`. Iron HTTPS is still `curl --cacert` after `BOOT-OK` (not host `TLS12-HOST-OK`). Plaintext HTTP closed Everest (E3b) and remains a lab fallback. M8.3 host-ready (`RAYNU-V-M8-CONSOLE-HOST-OK`) is not iron CONSOLE-OK / VNC. M8.2 host-ready (`RAYNU-V-M8-AUTH-HOST-OK`) is not iron AUTH-OK. Not a reopened Everest. |
+| H2 | TLS / console polish | MED | **M8.1 / M8.3** ([ADR-018](adr/ADR-018.md)). Firmware TLS 1.2 is in-tree (`Tls12Listen`); rustls/ring stay out of `uefi-bin`. Iron HTTPS is `curl --cacert` on the post-EBS native window **before RayNu-F** (COM2 `1647a8d8` had no that window). Plaintext HTTP closed Everest (E3b) and remains a lab fallback. M8.3 host-ready (`RAYNU-V-M8-CONSOLE-HOST-OK`) is not iron CONSOLE-OK / VNC. M8.2 host-ready (`RAYNU-V-M8-AUTH-HOST-OK`) is not iron AUTH-OK. Not a reopened Everest. |
 | H3 | ~~Guest UEFI CD not bootable / no reboot-to-disk on iron~~ | — | **Resolved** 2026-09-10 (`56a3ffd` / run `34480107961`): `RAYNU-V-RAYNU-F-DISK-BOOT-OK` + second Linux `root=UUID=` from `vda` + `login:` on the real R640. Chain: `59ac070` install-to-disk (`ISO-INSTALL-OK`) → F7 VMCLEAR/VMPTRLD (81 KiB `FirmwareState::new()` stack temporary over the VMCS; template reset + 32-page stack guard) → `975f8fc` relaunch into the installed GRUB menu, 1 M exit-cap inside GRUB's 2 s menu poll loop (~2 exits/µs) → `56a3ffd` RayNu-F wall cap (time, not exits, bounds the loader phase). Earlier: `916af96` THRE chain telemetry → UART TX ring room + line-rate pace + COM2 FIFO burst fixed the `apk` console stall. Evidence: [2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md](evidence/r640/2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md). Do not F11 `34474850361` / `34425781629` for Phase A; `34480107961` is the Phase A reference pin. |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
 | H5 | ~~Phase B — iron SPA still launches the SHELL stub~~ | — | **Resolved** 2026-09-11 (`f72b4276` / `34552377351`). Residual polish is **M8**, not Everest. |
@@ -381,7 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
-| 2026-09-18 | m8-tls-iron | 0.0 | 99 | **M8.1 firmware TLS 1.2 in-tree.** `Tls12Listen` on coexist (ECDHE-RSA-AES128-GCM + EMS). rustls TLS 1.2 client got SPA (`RAYNU-V-M8-TLS12-HOST-OK`). rustls/ring stay out of `uefi-bin`. CURL NOW on this EFI is `https://`. Flashed `4af78b43` is still `http://`. Never print iron TLS-OK. Iron close is `curl --cacert` after `BOOT-OK`. Sit at `localhost:~#` until F11 of this TLS EFI. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
+| 2026-09-18 | m8-tls-iron | 0.0 | 99 | **M8.1 native HTTPS window before RayNu-F.** Analog then `Tls12Listen` (`PRE_RAYNUF_HTTPS_MS`). COM2 `1647a8d8` launched Alpine with no `https://` (`curl: (28)` on SNP `.150`). RDRAND CPUID-gated (TCG qemu64 must not #UD). rustls/ring stay out of `uefi-bin`. Never print iron TLS-OK. Iron close is `curl --cacert` on native `CURL NOW → https://` then COM2 `RAYNU-V-M8-TLS-OK`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-18 | m8-iso-upload-sku | 0.0 | 99 | **A3 SKU DONE + M8.4 host ISO upload HostReady.** Dedicated-box card + host blob PUT/POST (`RAYNU-V-M8-ISO-UPLOAD-HOST-OK`). ESP-staged stays valid. Never print iron ISO-UPLOAD-OK. Do not flash. Sit at `localhost:~#`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-18 | m8-console-host | 0.0 | 99 | **M8.3 host console HostReady.** Operator keys reach guest COM1; guest THR echo captured (`RAYNU-V-M8-CONSOLE-HOST-OK`). Firmware SPA is still host serial log. Not VNC. Never print iron CONSOLE-OK. Do not flash. Sit at `localhost:~#`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-18 | m8-auth-host | 0.0 | 99 | **M8.2 host auth HostReady.** Operator token is the product latch; `raynu-v-bringup` is lab-only (`RAYNU-V-M8-AUTH-HOST-OK`). Firmware REST still accepts the lab latch when no ESP `auth.token`. Never print iron AUTH-OK. Do not flash. Sit at `localhost:~#`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
@@ -984,7 +984,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     **F11 this TLS EFI** (M8.1 iron). Firmware `Tls12Listen` in-tree (`RAYNU-V-M8-TLS12-HOST-OK`). rustls/ring stay out of `uefi-bin`. CURL NOW on this EFI is `https://`. Flashed `4af78b43` is still `http://`. Iron close is `curl --cacert` after `BOOT-OK` (`RAYNU-V-M8-TLS-OK` on COM2 only). Then console iron, then PERC spare VD. Persist-OK serial wired (rides along on keep=1). Sit at `localhost:~#` until F11. Do not setup-disk. Do not flash Toshiba `/dev/sdc`. Nested-OK closed on `raynuvsrv1` `ce3d8a09`.
+Next move:     **F11 this TLS EFI** (M8.1 iron). Native `CURL NOW → https://` after analog, **before RayNu-F** (`PRE_RAYNUF_HTTPS_MS`). Ignore PRE-EBS `http://`. `curl --cacert` on that line. COM2 `1647a8d8` had no that window. Then console iron, then PERC spare VD. Sit until F11. Do not setup-disk. Do not flash Toshiba `/dev/sdc`. Nested-OK closed on `raynuvsrv1` `ce3d8a09`.
 Rollback:      GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351
                EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc
                COM2 build: sha=f72b4276d198. Do not flash a later M8 persist prototype as known-good.
