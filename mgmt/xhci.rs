@@ -502,7 +502,22 @@ pub fn xhci_retry_enable_slot(first_posted: bool) -> bool {
 /// at `off=0x4a85d54a00` then `RAYNU-V-M7-ISO-INSTALL-OK` on the 298 GiB
 /// USB LUN; `usb rw ok wr=1` every 64 I/Os mashed COM2. Not persist.
 /// Do not Force Off mid-install. Quiet `usb rw ok` (`xhci_rw_ok_should_print`).
+/// Iron okquiet COM2 (`fba9bc49`): Toshiba named then SET_CONFIG
+/// `cmd=6 cmpl=0xff` leftover 1.07 GiB — retry SET_CONFIG after abort.
 pub fn xhci_retry_address_device(first_posted: bool) -> bool {
+    !first_posted
+}
+
+/// Iron okquiet COM2 (`fba9bc49`): Toshiba `0480:a004` named, eval/BOT
+/// parse lived (`xhci bot p11 iface=08/06/50`), then SET_CONFIG
+/// `control_nodata_retry` printed `desc retry n=1,n=2` and timed out
+/// (`cmd=6 cmpl=0xff bot=? scsi=?`). abort+stopwalk leftover DRAM
+/// 1.07 GiB `ISO-INSTALL-OK` → F7 `DISK-BOOT-OK` → `root=UUID=53bb2054-…`
+/// is leftover Everest — **not persist**. Do not Force Off. Do not
+/// revert writequeue / okquiet / CSW queue / nopretry. Abort, re-prime
+/// No-Op, reset EP0, retry SET_CONFIGURATION on the live slot
+/// (`xhci setcfgretry`). Do not Disable Slot. Do not walk p14.
+pub fn xhci_retry_set_config(first_posted: bool) -> bool {
     !first_posted
 }
 
@@ -1301,6 +1316,14 @@ fn serial_xhci_addrretry(port: u8) {
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_setcfgretry(port: u8) {
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 xhci setcfgretry p");
+    serial_dec_u8(port);
+    serial::write_line(" (not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn serial_xhci_slotretry(port: u8) {
     use crate::boot::serial;
     serial::write_str("boot: Stage 46 xhci slotretry p");
@@ -1583,6 +1606,9 @@ fn serial_xhci_nopretry() {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_addrretry(_port: u8) {}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_setcfgretry(_port: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_slotretry(_port: u8) {}
@@ -2701,6 +2727,39 @@ fn control_nodata_retry(
     Err(last)
 }
 
+/// SET_CONFIGURATION on a live named MSC. Iron okquiet COM2 (`fba9bc49`):
+/// Toshiba named + BOT parse lived, then `control_nodata_retry` printed
+/// `desc retry n=1,n=2` and timed out (`cmd=6 cmpl=0xff`). abort+stopwalk
+/// leftover 1.07 GiB is leftover DRAM Everest — **not persist**. Abort,
+/// re-prime No-Op, reset EP0, retry SET_CONFIG (`xhci setcfgretry`).
+/// Do not Disable Slot. Do not walk p14. Keep writequeue / okquiet.
+fn set_configuration(
+    hw: &mut impl XhciHw,
+    caps: &XhciCaps,
+    mem: &XhciMem,
+    cmd_ring: &mut Ring,
+    ep0: &mut Ring,
+    ev: &mut EventRing,
+    slot: u8,
+    cfg_val: u8,
+    port: u8,
+) -> Result<(), UsbBotError> {
+    let setup = setup_set_config(cfg_val);
+    match control_nodata_retry(hw, caps, mem, cmd_ring, ep0, ev, slot, setup, port) {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            abort_keep_slot(hw, caps, mem, cmd_ring, ev);
+            if !xhci_retry_set_config(false) {
+                return Err(e);
+            }
+            prime_cmd_ring(hw, caps, mem, cmd_ring, ev);
+            reset_ep0(hw, caps, mem, cmd_ring, ev, ep0, slot);
+            serial_xhci_setcfgretry(port);
+            control_nodata_retry(hw, caps, mem, cmd_ring, ep0, ev, slot, setup, port)
+        }
+    }
+}
+
 fn setup_get_desc(ty: u8, len: u16) -> [u8; 8] {
     let mut s = [0u8; 8];
     s[0] = 0x80;
@@ -3449,7 +3508,9 @@ fn try_port(
     serial_xhci_bot_eps(port, ep_out, ep_in, cfg_val);
     // xHCI 4.3.5: SET_CONFIGURATION on EP0, then Configure Endpoint.
     // Iron `96024edc`: CONFIG_EP first then SET_CONFIG `cmd=5 cmpl=0 err=8`.
-    control_nodata_retry(
+    // Iron okquiet COM2: SET_CONFIG `cmd=6 cmpl=0xff` after desc retry —
+    // abort + No-Op + EP0 reset + retry (`xhci setcfgretry`) before leftover.
+    set_configuration(
         hw,
         caps,
         mem,
@@ -3457,7 +3518,7 @@ fn try_port(
         &mut ep0,
         ev,
         slot,
-        setup_set_config(cfg_val),
+        cfg_val,
         port,
     )
     .map_err(|e| {
@@ -4663,6 +4724,16 @@ mod xhci_pack_test {
         // do not Enable Slot again; do not walk to p14 leftover DRAM.
         assert!(xhci_retry_address_device(false));
         assert!(!xhci_retry_address_device(true));
+        // Iron okquiet COM2: SET_CONFIG `cmd=6 cmpl=0xff` after Toshiba
+        // named. Retry SET_CONFIGURATION on the live slot after abort;
+        // do not Disable Slot; do not walk to p14 leftover DRAM.
+        assert!(xhci_retry_set_config(false));
+        assert!(!xhci_retry_set_config(true));
+        assert_eq!(
+            xhci_enum_diag_cmpl(CMPL_TIMEOUT, XHCI_ENUM_CMD_SETCFG, 3, false),
+            0x0003_06ff
+        );
+        assert_eq!(xhci_enum_diag_cmd(0x0003_06ff), XHCI_ENUM_CMD_SETCFG);
         // Iron slotretry COM2: packed fail `cmpl=0x303ff` is p10 ADDR (cmd=3),
         // not the p11 GET_DESC timeout (`cmd=4`). Stop the walk on cmd=4;
         // keep the live slot (no Disable Slot / no p14).
