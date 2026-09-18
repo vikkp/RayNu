@@ -123,7 +123,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 **Product effect.** “Install Linux” without persist is a demo that dies when the operator Force Offs the box — which they will, because that is how you recover a Type-1. Nested File persist (`ce3d8a09`) and DurableLun USB/NVMe I/O are the mechanism. Iron Force Off is still open. USB ≥ 16 GiB (not the ESP Cruzer / 2–8 GiB UDisk) is the Toshiba LUN. Nested QEMU ≠ R640.
 
-**Iron NOW (not a score bump).** Setcfgretry COM2 (`ef7e93ec`): Toshiba `0480:a004` named; **`xhci setcfg p11 val=1` first try** (no `xhci setcfgretry` line); `usb I/O ready bytes=320072933376`; leftover skip; virtio `keep=0 (durable LUN usb)`; Alpine `[vda] 298 GiB` `vda1 vda2`; first `wr=1` then `RAYNU-V-M7-ISO-INSTALL-OK` on the 298 GiB USB LUN; UART mash virtio MMIO overlay + `usb rw ok` every 4096 during setup-disk. **In progress. Not persist.** USB `ISO-INSTALL-OK` ≠ leftover DRAM Everest ≠ Force-Off persist. Keep writequeue / okquiet / setcfgretry / CSW queue / nopretry / addrretry. Do not Force Off mid-install. Keep Toshiba. Never flash `/dev/sdc`.
+**Iron NOW (not a score bump).** Setcfgretry COM2 (`ef7e93ec`): Toshiba `0480:a004` named; **`xhci setcfg p11 val=1` first try** (no `xhci setcfgretry` line); `usb I/O ready bytes=320072933376`; leftover skip; virtio `keep=0 (durable LUN usb)`; Alpine `[vda] 298 GiB` `vda1 vda2`; first `wr=1` then `RAYNU-V-M7-ISO-INSTALL-OK` on the 298 GiB USB LUN; UART mash recovered; **`Installation is complete. Please reboot.`** → guest `reboot` `src=kbc n=1` → F7 `BOOTX64.EFI bytes=139264` / `image=DISK-BOOTX64` → GNU GRUB 2.12 Alpine lts 2s countdown. Waiting `DISK-BOOT-OK` + second Linux `root=UUID=` on 298 GiB `vda`. **Not persist.** Guest F7 ≠ Force Off persist. USB `ISO-INSTALL-OK` ≠ leftover DRAM Everest. Keep writequeue / okquiet / setcfgretry / CSW queue / nopretry / addrretry. Do not Force Off during GRUB. Keep Toshiba. Never flash `/dev/sdc`.
 
 **Honest remainder.** 30% is iron COM2 `RAYNU-V-M8-DISK-PERSIST-OK`. Do not F11 until `I/O ready` + virtio on the LUN.
 
@@ -171,7 +171,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 |------|-------|------|--------|
 | 2026-09-11 | Everest | Iron ISO → disk → login | **DONE** — HDA 99%, months 0.0 |
 | 2026-09-13 | Persist mechanism | Nested-OK + DurableLun USB/NVMe I/O | **DONE nested / host**; iron Force Off **open** |
-| **NOW** | Bar A A2 | USB/NVMe Force Off on COM2 | **NEXT** (setcfgretry COM2 SET_CONFIG first-try + 298 GiB USB `ISO-INSTALL-OK` in progress; leftover skipped; do not Force Off; leftover DRAM ≠ persist) |
+| **NOW** | Bar A A2 | USB/NVMe Force Off on COM2 | **NEXT** (setcfgretry COM2 USB install complete + F7 `DISK-BOOTX64` GRUB 2s; leftover skipped; waiting `DISK-BOOT-OK` + `root=UUID=` on 298 GiB `vda`; guest F7 ≠ Force Off persist; do not Force Off during GRUB) |
 | then | Bar A A3+A4 | SKU card + TLS | design overlap OK; do not close TLS before persist COM2 |
 | then | Bar B B2 | Spare PERC VD persist | after A2; census skip is lab safety |
 | later | Auth / console / unmodified ISO | A5, A6, Gen-1 Phase 2 | named residuals, not fake closes |
@@ -203,10 +203,10 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | Field | Value |
 |-------|-------|
 | Commit | m8-usb-bot-setcfgretry |
-| Summary | **Iron leftover skipped, not persist.** Setcfgretry COM2 (`ef7e93ec`) SET_CONFIG first-try + Toshiba 298 GiB USB `ISO-INSTALL-OK` in progress; UART mash during setup-disk. Never Toshiba `/dev/sdc`. Scores **held**. |
+| Summary | **Iron leftover skipped, not persist.** Setcfgretry COM2 (`ef7e93ec`) SET_CONFIG first-try + Toshiba 298 GiB USB `ISO-INSTALL-OK` → `Installation is complete` → F7 `DISK-BOOTX64` GRUB 2s. Waiting `DISK-BOOT-OK` + `root=UUID=`. Guest F7 ≠ A2. Never Toshiba `/dev/sdc`. Scores **held**. |
 | Everest impact | none — HDA months 0.0 / 99% held |
-| LOI impact | Bar A **42% held** / Bar B **18% held** / overall **38% held** / months A **1.5 held**. Persist piece **70% held**. A2 still open. USB `ISO-INSTALL-OK` is not A2. Do not Force Off mid-install. |
-| Gates touched | Lived setcfgretry COM2 leftover skip + USB `ISO-INSTALL-OK`; [m8_persist_iron.md](runbooks/m8_persist_iron.md). `./tools/sync-loihda-site.sh --check`. No MegaRAID. No TLS. No F11. |
+| LOI impact | Bar A **42% held** / Bar B **18% held** / overall **38% held** / months A **1.5 held**. Persist piece **70% held**. A2 still open. Guest F7 on USB LUN is not A2. Do not Force Off during GRUB. |
+| Gates touched | Lived setcfgretry COM2 leftover skip + USB install complete + F7 `DISK-BOOTX64`; [m8_persist_iron.md](runbooks/m8_persist_iron.md). `./tools/sync-loihda-site.sh --check`. No MegaRAID. No TLS. No F11. |
 
 ---
 
@@ -214,7 +214,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
-| 2026-09-18 | m8-usb-bot-setcfgretry | 42 | 18 | **Iron leftover skipped, not persist.** Setcfgretry COM2 (`ef7e93ec`) SET_CONFIG first-try + Toshiba 298 GiB USB `ISO-INSTALL-OK` then UART mash during setup-disk. In progress. Do not Force Off. Keep writequeue / okquiet / setcfgretry. Persist 70% held. A2 open. |
+| 2026-09-18 | m8-usb-bot-setcfgretry | 42 | 18 | **Iron leftover skipped, not persist.** Setcfgretry COM2 (`ef7e93ec`) SET_CONFIG first-try + Toshiba 298 GiB USB `ISO-INSTALL-OK` → `Installation is complete` → F7 `DISK-BOOTX64` GRUB 2s. Waiting `DISK-BOOT-OK` + `root=UUID=` on 298 GiB `vda`. Guest F7 ≠ Force Off persist. Do not Force Off during GRUB. Keep writequeue / okquiet / setcfgretry. Persist 70% held. A2 open. |
 | 2026-09-18 | m8-usb-bot-okquiet | 42 | 18 | **Iron leftover skipped, not persist.** Writequeue COM2 Toshiba 298 GiB + WRITE lived + `ISO-INSTALL-OK` on USB LUN then `usb rw ok` flood mashed COM2. This EFI: quiet oks (`xhci_rw_ok_should_print`). Keep writequeue. Persist 70% held. A2 open. |
 | 2026-09-17 | m8-usb-bot-writequeue | 42 | 18 | **Iron leftover skipped, not persist.** Addrretry COM2 guest Toshiba 298 GiB + Alpine `[vda] 298 GiB` login then WRITE CBW `bot=cbw scsi=write cmpl=0xff` / `sfdisk` I/O error. This EFI: `xhci writequeue` + `xhci writesettle`. Persist 70% held. A2 open. |
 | 2026-09-17 | m8-usb-bot-cswsettle | 42 | 18 | **Iron leftover skipped, not persist.** Sensebot COM2 Toshiba 298 GiB ready + nlb=1 oks then `bot=csw scsi=read cmpl=0xff`; `vda1`; no `scsi=sense`. This EFI: queue CSW IN with DATA + settle between nlb=1 chunks. Persist 70% held. A2 open. |

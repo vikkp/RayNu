@@ -521,8 +521,12 @@ pub fn xhci_retry_address_device(first_posted: bool) -> bool {
 /// `xhci setcfg p11 val=1` (no `xhci setcfgretry` line); Toshiba
 /// 298 GiB `usb I/O ready`; leftover skip; Alpine `[vda] 298 GiB`
 /// `vda1 vda2`; WRITE `wr=1` then USB `ISO-INSTALL-OK`; UART mash
-/// virtio MMIO overlay + `usb rw ok` every 4096 during setup-disk.
-/// In progress at paste. **Not persist.** Do not Force Off mid-install.
+/// recovered; `Installation is complete. Please reboot.`; guest
+/// `reboot` `src=kbc n=1`; F7 `BOOTX64.EFI bytes=139264` /
+/// `image=DISK-BOOTX64`; GNU GRUB 2.12 Alpine lts 2s countdown.
+/// Waiting `DISK-BOOT-OK` + second Linux `root=UUID=` on 298 GiB
+/// `vda`. Guest F7 ≠ Force Off persist. **Not persist.** Do not
+/// Force Off during GRUB.
 pub fn xhci_retry_set_config(first_posted: bool) -> bool {
     !first_posted
 }
