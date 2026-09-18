@@ -14,7 +14,9 @@ use crate::mgmt::VmTable;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, ServerName};
 use rustls::{ClientConfig, ClientConnection, RootCertStore, ServerConfig, ServerConnection};
 use std::io::{Cursor, Read, Write};
+use std::net::{TcpListener, TcpStream};
 use std::sync::Arc;
+use std::thread;
 
 struct LabCert {
     cert: CertificateDer<'static>,
@@ -80,47 +82,69 @@ impl HostTlsListen {
     fn wrap_http_response(&mut self, http: &[u8], tcp_out: &mut [u8]) -> usize {
         let _ = self.conn.writer().write_all(http);
         let _ = self.conn.writer().flush();
-        let mut cur = Cursor::new(tcp_out);
-        self.conn.write_tls(&mut cur).unwrap_or(0)
+        self.drain_handshake(tcp_out)
     }
 
     fn drain_handshake(&mut self, tcp_out: &mut [u8]) -> usize {
-        let mut cur = Cursor::new(tcp_out);
-        self.conn.write_tls(&mut cur).unwrap_or(0)
+        let mut wrote = 0usize;
+        while self.conn.wants_write() && wrote < tcp_out.len() {
+            let mut cur = Cursor::new(&mut tcp_out[wrote..]);
+            match self.conn.write_tls(&mut cur) {
+                Ok(0) => break,
+                Ok(n) => wrote += n,
+                Err(_) => break,
+            }
+        }
+        wrote
     }
 }
 
-fn client_of(cert: CertificateDer<'static>) -> ClientConnection {
+fn tls_get_via_stream(port: u16, cert: CertificateDer<'static>, req: &[u8]) -> String {
     let mut roots = RootCertStore::empty();
     roots.add(cert).expect("tls fw trust");
     let cfg = ClientConfig::builder()
         .with_root_certificates(roots)
         .with_no_client_auth();
+    let mut sock = TcpStream::connect(("127.0.0.1", port)).expect("tls fw connect");
     let name = ServerName::try_from("localhost").expect("tls fw name");
-    ClientConnection::new(Arc::new(cfg), name).expect("tls fw client")
+    let mut conn = ClientConnection::new(Arc::new(cfg), name).expect("tls fw client");
+    let mut tls = rustls::Stream::new(&mut conn, &mut sock);
+    tls.write_all(req).expect("tls fw client write");
+    let _ = tls.flush();
+    let mut resp = Vec::new();
+    let _ = tls.read_to_end(&mut resp);
+    String::from_utf8_lossy(&resp).into_owned()
 }
 
-fn drive(client: &mut ClientConnection, server: &mut HostTlsListen) {
-    for _ in 0..16 {
-        if !client.is_handshaking() && !server.conn.is_handshaking() {
+fn serve_one_coexist_tls(listener: TcpListener, lab: LabCert) {
+    let (mut sock, _) = listener.accept().expect("tls fw accept");
+    let mut listen = HostTlsListen::new(lab);
+    let mut buf = [0u8; 4096];
+    for _ in 0..32 {
+        if listen.take_http().is_some() {
             break;
         }
-        let mut tcp = [0u8; 4096];
-        let n = {
-            let mut cur = Cursor::new(&mut tcp[..]);
-            client.write_tls(&mut cur).unwrap_or(0)
+        let n = match sock.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => n,
+            Err(_) => break,
         };
-        if n > 0 {
-            server.feed_tcp(&tcp[..n]);
-        }
-        let mut stcp = [0u8; 4096];
-        let sn = server.drain_handshake(&mut stcp);
-        if sn > 0 {
-            let mut cur = Cursor::new(&stcp[..sn]);
-            let _ = client.read_tls(&mut cur);
-            let _ = client.process_new_packets();
+        listen.feed_tcp(&buf[..n]);
+        let mut out = [0u8; COEXIST_HTTP_OUT_N];
+        let wn = listen.drain_handshake(&mut out);
+        if wn > 0 {
+            let _ = sock.write_all(&out[..wn]);
         }
     }
+    let raw = listen.take_http().expect("tls plaintext HTTP");
+    assert!(headers_complete(raw));
+    let mut http_out = [0u8; COEXIST_HTTP_OUT_N];
+    let wn = serve_http(raw, &mut http_out);
+    assert!(wn > 0);
+    let mut cipher = [0u8; COEXIST_HTTP_OUT_N];
+    let cn = listen.wrap_http_response(&http_out[..wn], &mut cipher);
+    assert!(cn > 0);
+    sock.write_all(&cipher[..cn]).expect("tls fw send");
 }
 
 fn serve_http(raw: &[u8], out: &mut [u8]) -> usize {
@@ -167,40 +191,20 @@ fn tls_fw_wrap_package_holds() {
 #[test]
 fn host_rustls_coexist_feed_take_wrap_serves_spa() {
     let lab = lab_self_signed();
-    let cert = lab.cert.clone();
-    let mut server = HostTlsListen::new(lab);
-    let mut client = client_of(cert);
-    drive(&mut client, &mut server);
-    assert!(!client.is_handshaking());
-    assert!(!server.conn.is_handshaking());
-
-    let _ = client.writer().write_all(b"GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
-    let _ = client.writer().flush();
-    let mut tcp = [0u8; 4096];
-    let n = {
-        let mut cur = Cursor::new(&mut tcp[..]);
-        client.write_tls(&mut cur).unwrap_or(0)
-    };
-    assert!(n > 0);
-    server.feed_tcp(&tcp[..n]);
-    let raw = server.take_http().expect("tls plaintext HTTP");
-    assert!(headers_complete(raw));
-    let mut http_out = [0u8; COEXIST_HTTP_OUT_N];
-    let wn = serve_http(raw, &mut http_out);
-    assert!(wn > 0);
-    let mut cipher = [0u8; COEXIST_HTTP_OUT_N];
-    let cn = server.wrap_http_response(&http_out[..wn], &mut cipher);
-    assert!(cn > 0);
-    let mut cur = Cursor::new(&cipher[..cn]);
-    let _ = client.read_tls(&mut cur);
-    let _ = client.process_new_packets();
-    let mut resp = [0u8; COEXIST_HTTP_OUT_N];
-    let rn = client.reader().read(&mut resp).unwrap_or(0);
-    let body = core::str::from_utf8(&resp[..rn]).unwrap_or("");
+    let client_cert = lab.cert.clone();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let server = thread::spawn(move || serve_one_coexist_tls(listener, lab));
+    let body = tls_get_via_stream(
+        port,
+        client_cert,
+        b"GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+    );
     assert!(body.contains("HTTP/1.1 200"), "{body}");
     assert!(body.contains("data-go=\"overview\""), "{body}");
     assert!(body.contains("d-host"), "{body}");
     assert!(body.contains("data-raynu-phase-b"), "{body}");
+    assert!(server.join().is_ok());
     assert!(firmware_listen_is_plaintext());
     println!("{M8_TLS_FW_HOST_OK_MARKER}");
 }

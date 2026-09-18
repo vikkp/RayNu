@@ -355,7 +355,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | m8-tls-fw |
-| Summary | **M8.1 firmware TLS wrap.** Coexist TCP feeds `PlaintextListen` (`RAYNU-V-M8-TLS-FW-HOST-OK`). rustls/ring cannot join `uefi-bin` (ring C needs `<assert.h>`). Host rustls proves the same feed/take/wrap API. CURL NOW stays `http://`. Do not flash. Months **0.0 held**. Overall **99 held**. |
+| Summary | **M8.1 firmware TLS wrap (host proven).** Coexist TCP feeds `PlaintextListen`. Host rustls feed/take/wrap serves the operator SPA over a lab TCP socket (`RAYNU-V-M8-TLS-FW-HOST-OK`). rustls/ring cannot join `uefi-bin`. CURL NOW stays `http://`. Do not flash. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. Iron HTTPS / console residual. Nested QEMU ≠ R640. |
 | Gates touched | `mgmt/tls_coexist.rs` + `mgmt/host_nic_listen.rs` wrap + `tools/m8-tls-fw-smoke.sh`. `./tools/sync-hda-site.sh --check`. `./tools/sync-loihda-site.sh --check`. Do not flash. |
 | Months Δ | 0.0 held (Everest closed; firmware wrap ≠ iron HTTPS) |
@@ -381,7 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
-| 2026-09-18 | m8-tls-fw | 0.0 | 99 | **M8.1 firmware TLS wrap.** Coexist TCP feeds `PlaintextListen` (`RAYNU-V-M8-TLS-FW-HOST-OK`). rustls/ring cannot join `uefi-bin` (ring C needs `<assert.h>`). Host rustls proves the same API. CURL NOW stays `http://`. Not iron HTTPS. Do not flash. Sit at `localhost:~#`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
+| 2026-09-18 | m8-tls-fw | 0.0 | 99 | **M8.1 firmware TLS wrap host-proven.** `PlaintextListen` on coexist + rustls feed/take/wrap SPA (`RAYNU-V-M8-TLS-FW-HOST-OK`). `cargo test --lib -- --test-threads=1`: 768 passed. rustls/ring cannot join `uefi-bin`. CURL NOW stays `http://`. Do not flash. Sit at `localhost:~#`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-18 | m8-usb-bot-guest8g | 0.0 | 99 | **Public copy:** persist piece on `site/loi.html` rewritten as a buyer explanation (Force Off used to wipe the install; USB-backed Alpine now returns). Scores held. LOIHDA Bar A 46% held. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-18 | m8-usb-bot-guest8g | 0.0 | 99 | **Iron leftover skipped, not persist:** guest8g skip-CRC EFI (`4af78b43`) A2 COM2 after Force Off of ISO-BOOT hang: Toshiba 298 GiB `usb I/O ready` + leftover skip; peek `efi=EFI PART gpt=1 fit=1 gpt_err=0 usb_err=0 guest=8589934592 bootx64=1 ext4=1 installed=1` virtio 8 GiB `keep=1`; coexist `10.99.99.146:8443`. **SPA Start now.** Want `DISK-BOOTX64` + `UUID=348005a9-…`. Do not setup-disk. LOIHDA Bar A 42% held. Nested QEMU ≠ R640. Iron persist open. months 0.0 held; overall 99 held |
 | 2026-09-18 | m8-usb-bot-guest8g | 0.0 | 99 | **Iron leftover skipped, not persist:** guest8g A2 SPA Start (`b661808c`) after peek `keep=1` `installed=1`: `image=ISO-BOOTX64` (724992, El Torito lba=125) not `DISK-BOOTX64`; Linux `squashfs` not `root=UUID=348005a9-…`; `usb rw fail bot=data scsi=read` then `vda` I/O error / RCU stall. GPT array CRC + cold BOT after idle. This EFI: skip array CRC + sticky keep + `xhci diskprime`. **Force Off.** Do not setup-disk. LOIHDA Bar A 42% held. Nested QEMU ≠ R640. Iron persist open. months 0.0 held; overall 99 held |

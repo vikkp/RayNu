@@ -203,7 +203,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | Field | Value |
 |-------|-------|
 | Commit | m8-tls-fw |
-| Summary | **M8.1 firmware TLS wrap.** Coexist TCP feeds `PlaintextListen` (`RAYNU-V-M8-TLS-FW-HOST-OK`). rustls/ring cannot join `uefi-bin`. Host rustls proves the same API. CURL NOW stays `http://`. **Do not flash.** Scores: TLS 18→22; Bar A 48→49; persist 95 held. |
+| Summary | **M8.1 firmware TLS wrap host-proven.** Coexist TCP feeds `PlaintextListen`. Host rustls feed/take/wrap serves the operator SPA (`RAYNU-V-M8-TLS-FW-HOST-OK`). rustls/ring cannot join `uefi-bin`. CURL NOW stays `http://`. **Do not flash.** Scores: TLS 18→22; Bar A 48→49; persist 95 held. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Bar A **48%→49%** / Bar B **18% held** / overall **41%→42%** / months A **1.0 held**. Persist piece **95% held**. TLS **18%→22%**. |
 | Gates touched | `mgmt/tls_coexist.rs` + `mgmt/host_nic_listen.rs` + `tools/m8-tls-fw-smoke.sh`. `./tools/sync-loihda-site.sh --check`. No MegaRAID. No iron HTTPS. |
@@ -214,7 +214,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
-| 2026-09-18 | m8-tls-fw | 49 | 18 | **M8.1 firmware TLS wrap.** Coexist TCP feeds `PlaintextListen` (`RAYNU-V-M8-TLS-FW-HOST-OK`). rustls/ring cannot join `uefi-bin` (ring C needs `<assert.h>`). Host rustls proves the same feed/take/wrap API. CURL NOW stays `http://`. Not iron HTTPS. Do not flash. TLS 18→22. Persist 95 held. |
+| 2026-09-18 | m8-tls-fw | 49 | 18 | **M8.1 firmware TLS wrap host-proven.** Coexist TCP feeds `PlaintextListen`. Host rustls feed/take/wrap SPA (`RAYNU-V-M8-TLS-FW-HOST-OK`). `cargo test --lib -- --test-threads=1`: 768 passed. rustls/ring cannot join `uefi-bin`. CURL NOW stays `http://`. Not iron HTTPS. Do not flash. TLS 18→22. Persist 95 held. |
 | 2026-09-18 | m8-usb-bot-guest8g | 46 | 18 | **Public copy.** Persist piece on `site/loi.html` rewritten as a buyer explanation (Force Off used to wipe; USB-backed Alpine now returns after HV reboot). Scores held. Persist 95% held. |
 | 2026-09-18 | m8-usb-bot-guest8g | 46 | 18 | **A2 CLOSED on evidence.** Guest8g skip-CRC EFI (`4af78b43`) Force Off persist: peek `keep=1` → SPA `xhci diskprime` `image=DISK-BOOTX64` bytes=139264 → `DISK-BOOT-OK` → `root=UUID=348005a9-…` → `login: root`. Minted persist-OK did not print. Spurious `ISO-INSTALL-OK` on journal recovery. Auto-answer `No disks found`. Sit at `localhost:~#`. Do not setup-disk. Persist 70→95. Months A 1.5→1.0. |
 | 2026-09-18 | m8-usb-bot-guest8g | 42 | 18 | **Iron leftover skipped, not persist.** Guest8g skip-CRC EFI (`4af78b43`) peek `keep=1` `installed=1` virtio 8 GiB `keep=1`. Coexist `10.99.99.146:8443`. **SPA Start now.** Do not setup-disk. Persist 70% held. A2 open. |
