@@ -344,6 +344,8 @@ pub mod tls;
 pub mod tls_coexist;
 pub mod m8_tls_gate;
 pub mod m8_tls_fw_gate;
+pub mod auth;
+pub mod m8_auth_gate;
 pub mod m5_api_gate;
 pub mod m5_life_gate;
 pub mod m5_webui_gate;

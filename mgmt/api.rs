@@ -28,7 +28,7 @@ pub const BRINGUP_AUTH_TOKEN: &str = "raynu-v-bringup";
 
 /// Token source note for operators / CI.
 pub const AUTH_TOKEN_SOURCE_NOTE: &str =
-    "bring-up mock OR ESP EFI/RayNu/auth.token (Cruzer; E4 operator); BRINGUP_AUTH_TOKEN lab fallback";
+    "bring-up mock OR ESP EFI/RayNu/auth.token (Cruzer; E4 operator); BRINGUP_AUTH_TOKEN lab fallback (not product default)";
 
 /// Max UTF-8 bytes for an ESP / operator token.
 pub const OPERATOR_TOKEN_CAP: usize = 64;

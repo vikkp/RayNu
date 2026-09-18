@@ -11,7 +11,7 @@
     <meta property="og:title" content="RayNu-V · Path to LOI" />
     <meta
       property="og:description"
-              content="Two bars: dedicated-box 49%, RAID-fleet 18%. Persist across HV reboot is evidence-closed. TLS wrap is wired, not iron HTTPS. USB is not PERC."
+              content="Two bars: dedicated-box 50%, RAID-fleet 18%. Persist across HV reboot is evidence-closed. TLS wrap is wired, not iron HTTPS. Host auth HostReady is not iron AUTH-OK. USB is not PERC."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -273,17 +273,18 @@
             <li data-reveal>
               <header>
                 <span class="loi-pieces__name">Auth beyond bring-up</span>
-                <span class="loi-pieces__pct" data-piece="auth">28%</span>
+                <span class="loi-pieces__pct" data-piece="auth">38%</span>
               </header>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill" data-piece-fill="auth" style="width: 28%"></span>
+                <span class="hda-bar__fill" data-piece-fill="auth" style="width: 38%"></span>
               </div>
               <p>
-                <code>raynu-v-bringup</code> is a lab latch. ESP
-                <code>auth.token</code> can override it; iron still used the
-                latch. Fine on a box you physically control. Not fine if two
-                people on the LAN can start VMs. Soft for Bar A if named;
-                not silent.
+                A shared lab password is not an operator credential. Host tests
+                now refuse <code>raynu-v-bringup</code> and only accept an
+                ESP-style operator token. The box you own still answers the
+                lab latch when no <code>auth.token</code> file is on the
+                stick. Fine on a dedicated box you physically control. Not
+                closed until the flashed EFI requires that file.
               </p>
             </li>
             <li data-reveal>
