@@ -527,10 +527,13 @@ pub fn xhci_retry_address_device(first_posted: bool) -> bool {
 /// → second Linux `root=UUID=6d549fd4-3907-4382-a3eb-750ee9d52616`
 /// on 298 GiB `vda` (625142448) → `EXT4-fs (vda2): mounted` →
 /// `fsck` `vda2` 6377/19537920 + `vda1` 5 files → `login:` →
-/// `cat /proc/cmdline`. After login COM2 keeps `usb rw ok wr=1`
-/// every 4096 plus virtio MMIO overlay — not a hang. Guest F7 ≠
-/// Force Off persist. **Not persist.** Do not Force Off to stop
-/// the scroll.
+/// `cat /proc/cmdline`. Hours later COM2 still `usb rw ok wr=1`
+/// every 4096 (`n` 3.1M → 10.7M, `off=0x3b03…`/`0x3b84…` ≈ 252 GB
+/// / ~79% of the 320 GB LUN). Payload ≈ 7.6M × 512 B ≈ 3.9 GiB vs
+/// ~245 GiB LBA walk — ext4lazyinit on freshly mkfs'd 298 GiB
+/// `vda2` after remount-rw, not a hang, not a second setup-disk.
+/// USB WRITEs succeeding. Guest F7 ≠ Force Off persist. **Not
+/// persist.** Do not Force Off (dirty ext4). Do not reflash.
 pub fn xhci_retry_set_config(first_posted: bool) -> bool {
     !first_posted
 }

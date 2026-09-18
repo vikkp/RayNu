@@ -123,7 +123,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 **Product effect.** “Install Linux” without persist is a demo that dies when the operator Force Offs the box — which they will, because that is how you recover a Type-1. Nested File persist (`ce3d8a09`) and DurableLun USB/NVMe I/O are the mechanism. Iron Force Off is still open. USB ≥ 16 GiB (not the ESP Cruzer / 2–8 GiB UDisk) is the Toshiba LUN. Nested QEMU ≠ R640.
 
-**Iron NOW (not a score bump).** Setcfgretry COM2 (`ef7e93ec`): Toshiba `0480:a004` named; **`xhci setcfg p11 val=1` first try** (no `xhci setcfgretry` line); `usb I/O ready bytes=320072933376`; leftover skip; virtio `keep=0 (durable LUN usb)`; Alpine `[vda] 298 GiB` `vda1 vda2`; first `wr=1` then `RAYNU-V-M7-ISO-INSTALL-OK` on the 298 GiB USB LUN; UART mash recovered; **`Installation is complete. Please reboot.`** → guest `reboot` `src=kbc n=1` → F7 `BOOTX64.EFI bytes=139264` / `image=DISK-BOOTX64` → GNU GRUB 2.12 2s→1s→0s → `RAYNU-V-RAYNU-F-DISK-BOOT-OK` → second Linux `root=UUID=6d549fd4-3907-4382-a3eb-750ee9d52616` on 298 GiB `vda` (625142448) → `EXT4-fs (vda2): mounted` → `login: root` → `cat /proc/cmdline`. After login COM2 keeps `usb rw ok wr=1` every 4096 (`n` past 3.1 M) plus virtio MMIO overlay — **not a hang**. **Not persist.** Guest F7 ≠ Force Off persist. USB `ISO-INSTALL-OK` ≠ leftover DRAM Everest. Keep writequeue / okquiet / setcfgretry / CSW queue / nopretry / addrretry. Do not Force Off to stop the scroll. Keep Toshiba. Never flash `/dev/sdc`.
+**Iron NOW (not a score bump).** Setcfgretry COM2 (`ef7e93ec`): Toshiba `0480:a004` named; **`xhci setcfg p11 val=1` first try** (no `xhci setcfgretry` line); `usb I/O ready bytes=320072933376`; leftover skip; virtio `keep=0 (durable LUN usb)`; Alpine `[vda] 298 GiB` `vda1 vda2`; first `wr=1` then `RAYNU-V-M7-ISO-INSTALL-OK` on the 298 GiB USB LUN; UART mash recovered; **`Installation is complete. Please reboot.`** → guest `reboot` `src=kbc n=1` → F7 `BOOTX64.EFI bytes=139264` / `image=DISK-BOOTX64` → GNU GRUB 2.12 2s→1s→0s → `RAYNU-V-RAYNU-F-DISK-BOOT-OK` → second Linux `root=UUID=6d549fd4-3907-4382-a3eb-750ee9d52616` on 298 GiB `vda` (625142448) → `EXT4-fs (vda2): mounted` → `login: root` → `cat /proc/cmdline`. Hours later COM2 still `usb rw ok wr=1` every 4096 (`n` 3.1 M → 10.7 M, `off=0x3b03…`/`0x3b84…` ≈ 252 GB / ~79% of the 320 GB LUN). Payload ≈ 7.6 M × 512 B ≈ 3.9 GiB vs ~245 GiB LBA walk — **ext4lazyinit** on freshly mkfs'd 298 GiB `vda2` after remount-rw, **not a hang**, not a second `setup-disk`. USB WRITEs succeeding. **Not persist.** Guest F7 ≠ Force Off persist. USB `ISO-INSTALL-OK` ≠ leftover DRAM Everest. Keep writequeue / okquiet / setcfgretry / CSW queue / nopretry / addrretry. Do not Force Off (dirty ext4). Do not reflash. Keep Toshiba. Never flash `/dev/sdc`.
 
 **Honest remainder.** 30% is iron COM2 `RAYNU-V-M8-DISK-PERSIST-OK`. Do not F11 until `I/O ready` + virtio on the LUN.
 
@@ -171,7 +171,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 |------|-------|------|--------|
 | 2026-09-11 | Everest | Iron ISO → disk → login | **DONE** — HDA 99%, months 0.0 |
 | 2026-09-13 | Persist mechanism | Nested-OK + DurableLun USB/NVMe I/O | **DONE nested / host**; iron Force Off **open** |
-| **NOW** | Bar A A2 | USB/NVMe Force Off on COM2 | **NEXT** (setcfgretry COM2 USB F7 `DISK-BOOT-OK` + `root=UUID=6d549fd4-…` on 298 GiB `vda`; leftover skipped; post-login `usb rw ok wr=1` overlay is not a hang; guest F7 ≠ Force Off persist; do not Force Off to stop the scroll) |
+| **NOW** | Bar A A2 | USB/NVMe Force Off on COM2 | **NEXT** (setcfgretry COM2 USB F7 `DISK-BOOT-OK` + `root=UUID=6d549fd4-…` on 298 GiB `vda`; leftover skipped; hours later `wr=1` `n` 10.7 M `off=0x3b03…` is ext4lazyinit, not a hang, not a second setup-disk; guest F7 ≠ Force Off persist; do not Force Off (dirty ext4); do not reflash) |
 | then | Bar A A3+A4 | SKU card + TLS | design overlap OK; do not close TLS before persist COM2 |
 | then | Bar B B2 | Spare PERC VD persist | after A2; census skip is lab safety |
 | later | Auth / console / unmodified ISO | A5, A6, Gen-1 Phase 2 | named residuals, not fake closes |
@@ -203,10 +203,10 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | Field | Value |
 |-------|-------|
 | Commit | m8-usb-bot-setcfgretry |
-| Summary | **Iron leftover skipped, not persist.** Setcfgretry COM2 (`ef7e93ec`) SET_CONFIG first-try + Toshiba 298 GiB USB `ISO-INSTALL-OK` → `Installation is complete` → F7 `DISK-BOOT-OK` + `root=UUID=6d549fd4-…` on 298 GiB `vda`. Post-login `usb rw ok wr=1` overlay is not a hang. Guest F7 ≠ A2. Never Toshiba `/dev/sdc`. Scores **held**. |
+| Summary | **Iron leftover skipped, not persist.** Setcfgretry COM2 (`ef7e93ec`) hours after USB F7 `DISK-BOOT-OK` / `root=UUID=6d549fd4-…` still `usb rw ok wr=1` (`n` 3.1 M → 10.7 M, `off=0x3b03…` ≈ 252 GB). Payload ≈ 3.9 GiB vs ~245 GiB LBA walk — **ext4lazyinit**, not a hang, not a second `setup-disk`. Guest F7 ≠ A2. Never Toshiba `/dev/sdc`. Scores **held**. |
 | Everest impact | none — HDA months 0.0 / 99% held |
-| LOI impact | Bar A **42% held** / Bar B **18% held** / overall **38% held** / months A **1.5 held**. Persist piece **70% held**. A2 still open. Guest F7 on USB LUN is not A2. Do not Force Off to stop the scroll. |
-| Gates touched | Lived setcfgretry COM2 leftover skip + USB F7 `DISK-BOOT-OK` + `root=UUID=6d549fd4`; [m8_persist_iron.md](runbooks/m8_persist_iron.md). `./tools/sync-loihda-site.sh --check`. No MegaRAID. No TLS. No F11. |
+| LOI impact | Bar A **42% held** / Bar B **18% held** / overall **38% held** / months A **1.5 held**. Persist piece **70% held**. A2 still open. Hours of `wr=1` is ext4lazyinit. Do not Force Off (dirty ext4). Do not reflash. |
+| Gates touched | Lived setcfgretry COM2 leftover skip + USB F7 `DISK-BOOT-OK` + `root=UUID=6d549fd4` + hours of sequential `wr=1` = ext4lazyinit; [m8_persist_iron.md](runbooks/m8_persist_iron.md). `./tools/sync-loihda-site.sh --check`. No MegaRAID. No TLS. No F11. |
 
 ---
 
@@ -214,6 +214,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-18 | m8-usb-bot-setcfgretry | 42 | 18 | **Iron leftover skipped, not persist.** Setcfgretry COM2 (`ef7e93ec`) hours after USB F7 `DISK-BOOT-OK` / `root=UUID=6d549fd4-…` still `usb rw ok wr=1` (`n` 3.1 M → 10.7 M, `off=0x3b03…` ≈ 252 GB / ~79% of 320 GB). Payload ≈ 3.9 GiB vs ~245 GiB LBA walk — ext4lazyinit on 298 GiB `vda2`, not a hang, not a second setup-disk. Do not Force Off (dirty ext4). Do not reflash. Guest F7 ≠ A2. Keep writequeue / okquiet / setcfgretry. Persist 70% held. A2 open. |
 | 2026-09-18 | m8-usb-bot-setcfgretry | 42 | 18 | **Iron leftover skipped, not persist.** Setcfgretry COM2 (`ef7e93ec`) SET_CONFIG first-try + Toshiba 298 GiB USB `ISO-INSTALL-OK` → `Installation is complete` → F7 `DISK-BOOT-OK` + `root=UUID=6d549fd4-…` on 298 GiB `vda`. Post-login `usb rw ok wr=1` overlay is not a hang. Guest F7 ≠ Force Off persist. Do not Force Off to stop the scroll. Keep writequeue / okquiet / setcfgretry. Persist 70% held. A2 open. |
 | 2026-09-18 | m8-usb-bot-okquiet | 42 | 18 | **Iron leftover skipped, not persist.** Writequeue COM2 Toshiba 298 GiB + WRITE lived + `ISO-INSTALL-OK` on USB LUN then `usb rw ok` flood mashed COM2. This EFI: quiet oks (`xhci_rw_ok_should_print`). Keep writequeue. Persist 70% held. A2 open. |
 | 2026-09-17 | m8-usb-bot-writequeue | 42 | 18 | **Iron leftover skipped, not persist.** Addrretry COM2 guest Toshiba 298 GiB + Alpine `[vda] 298 GiB` login then WRITE CBW `bot=cbw scsi=write cmpl=0xff` / `sfdisk` I/O error. This EFI: `xhci writequeue` + `xhci writesettle`. Persist 70% held. A2 open. |
