@@ -170,3 +170,17 @@ fn missing_mbr_signature_is_rejected() {
 fn ieee_crc32_known_answer() {
     assert_eq!(crc32(b"123456789"), 0xCBF4_3926);
 }
+
+#[test]
+fn gpt_fits_guest_rejects_toshiba_298g_on_8g_window() {
+    let mut lba1 = [0u8; 512];
+    lba1[..8].copy_from_slice(GPT_SIGNATURE);
+    lba1[32..40].copy_from_slice(&16_777_215u64.to_le_bytes());
+    assert!(gpt_fits_guest_bytes(&lba1, 8 * 1024 * 1024 * 1024));
+    lba1[32..40].copy_from_slice(&625_142_447u64.to_le_bytes());
+    assert!(!gpt_fits_guest_bytes(&lba1, 8 * 1024 * 1024 * 1024));
+    assert_eq!(
+        gpt_disk_bytes_from_header(&lba1),
+        Some(320_072_933_376)
+    );
+}

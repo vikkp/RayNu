@@ -165,6 +165,24 @@ pub fn gpt_entry_array_crc(lba1: &[u8]) -> u32 {
     u32_at(lba1, 88)
 }
 
+/// Disk size implied by GPT header `alternate_lba` (LBA1 offset 32).
+pub fn gpt_disk_bytes_from_header(lba1: &[u8]) -> Option<u64> {
+    if lba1.len() < 40 || &lba1[0..8] != GPT_SIGNATURE {
+        return None;
+    }
+    let alt = u64_at(lba1, 32);
+    alt.checked_add(1)?.checked_mul(u64::from(GPT_LBA_SIZE))
+}
+
+/// True when the GPT describes a disk that fits in `guest_bytes`.
+/// Iron 298 GiB Toshiba GPT must not keep on an 8 GiB virtio window.
+pub fn gpt_fits_guest_bytes(lba1: &[u8], guest_bytes: u64) -> bool {
+    match gpt_disk_bytes_from_header(lba1) {
+        Some(n) => n > 0 && n <= guest_bytes,
+        None => false,
+    }
+}
+
 fn read_lba<R: VolumeRead>(r: &R, lba: u64, buf: &mut [u8; 512]) -> bool {
     r.read_at(lba.saturating_mul(u64::from(GPT_LBA_SIZE)), buf)
 }

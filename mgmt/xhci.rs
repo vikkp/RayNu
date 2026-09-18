@@ -11,7 +11,7 @@
 //! ADR-004: persist backing is virtio-blk / BlockIo only.
 
 use super::usb_bot::{
-    csw_ok, next_bot_tag, restore_usb_bot_diag, stamp_scsi_cdb, store_usb_bot_diag,
+    csw_ok_tag, next_bot_tag, restore_usb_bot_diag, stamp_scsi_cdb, store_usb_bot_diag,
     store_usb_bot_diag_unless_kept, store_usb_bot_ready, store_usb_bot_stage, usb_bot_bring_up,
     usb_bot_last_bar, usb_bot_last_cmpl, usb_bot_last_err, usb_bot_last_portsc, Cbw, UsbBotError,
     UsbBulk, BOT_STAGE_CBW, BOT_STAGE_CSW, BOT_STAGE_DATA, CBW_LEN, CSW_LEN, SCSI_READ_CAPACITY_10,
@@ -536,9 +536,15 @@ pub fn xhci_retry_address_device(first_posted: bool) -> bool {
 /// persist.** Iron Force Off COM2 (same EFI `ef7e93ec`): Toshiba
 /// named + `usb I/O ready` 298 GiB + leftover skip, then peek
 /// `efi=3?????|? gpt=0 gpt_err=2 usb_err=0 bootx64=0 ext4=0
-/// installed=0` and virtio `keep=0 (durable LUN usb)`. Phase B
-/// coexist idle. **Not persist.** Do not SPA Start (SETUP would
-/// wipe). Dell `EFI Fixed Disk` on back USB is NVRAM, not keep=1.
+/// installed=0` and virtio `keep=0 (durable LUN usb)`. Native Dell
+/// `EFI Fixed Disk` then `EFI stub: Loaded initrd` — install was on
+/// media; HV peek was a false negative. That 298 GiB image is
+/// **disposable** (ext4lazyinit hours, not a product install). This
+/// EFI: virtio USB guest **8 GiB** (`DURABLE_LUN_GUEST_USB_BYTES`);
+/// 298 GiB GPT does not `fit` so first SPA Start SETUP is intended.
+/// CSW tag match + `xhci peekretry`. Iron guest8g: virtio 8 GiB, 298 GiB
+/// GPT does not fit, SPA Start SETUP is intended. Keep setcfgretry /
+/// writequeue / okquiet. Do not send TUR. Do not flash Toshiba.
 pub fn xhci_retry_set_config(first_posted: bool) -> bool {
     !first_posted
 }
@@ -1346,6 +1352,14 @@ fn serial_xhci_setcfgretry(port: u8) {
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_peekretry(n: u8) {
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 xhci peekretry n=");
+    serial_dec_u8(n);
+    serial::write_line(" (not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn serial_xhci_slotretry(port: u8) {
     use crate::boot::serial;
     serial::write_str("boot: Stage 46 xhci slotretry p");
@@ -1631,6 +1645,9 @@ fn serial_xhci_addrretry(_port: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_setcfgretry(_port: u8) {}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_peekretry(_n: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_slotretry(_port: u8) {}
@@ -3247,7 +3264,7 @@ impl UsbBulk for LiveXhci {
         store_usb_bot_stage(BOT_STAGE_CSW);
         let mut csw = [0u8; CSW_LEN];
         hw.dma_read(self.bounce + BOT_CSW_BOUNCE_OFF, &mut csw);
-        if !csw_ok(&csw) {
+        if !csw_ok_tag(&csw, tag) {
             return Err(UsbBotError::Bot);
         }
         Ok(())
@@ -3313,7 +3330,7 @@ impl UsbBulk for LiveXhci {
         store_usb_bot_stage(BOT_STAGE_CSW);
         let mut csw = [0u8; CSW_LEN];
         hw.dma_read(self.bounce + BOT_CSW_BOUNCE_OFF, &mut csw);
-        if !csw_ok(&csw) {
+        if !csw_ok_tag(&csw, tag) {
             return Err(UsbBotError::Bot);
         }
         Ok(())
@@ -3948,6 +3965,27 @@ pub fn xhci_init_pci(bus: u8, dev: u8, func: u8, min_bytes: u64) -> Result<u64, 
         }
     }
 }
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+pub fn xhci_live_peek_retry(n: u8) {
+    serial_xhci_peekretry(n);
+    if LIVE_LOCK.swap(true, core::sync::atomic::Ordering::Acquire) {
+        return;
+    }
+    // SAFETY: lock held; LIVE set by xhci_init_pci. Drain leftover IN
+    // events then settle — do not recover_pipes (Reset on Running).
+    unsafe {
+        if let Some(live) = LIVE.as_mut() {
+            let mut hw = MmioXhci { base: live.mmio };
+            drain_events(&mut hw, &live.caps, &mut live.ev);
+            live.settle();
+        }
+    }
+    LIVE_LOCK.store(false, core::sync::atomic::Ordering::Release);
+}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+pub fn xhci_live_peek_retry(_n: u8) {}
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 pub fn xhci_live_rw(off: u64, buf: &mut [u8], write: bool) -> bool {

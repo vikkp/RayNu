@@ -179,6 +179,14 @@ pub fn csw_ok(csw: &[u8]) -> bool {
     csw.len() >= CSW_LEN && get_le_u32(csw, 0) == CSW_SIG && csw[12] == 0
 }
 
+/// Iron setcfgretry Force Off: peek `gpt_err=2` `usb_err=0` while native
+/// Dell loaded Linux EFI stub+initrd off Toshiba. Overlapped BOT can
+/// retire leftover firstread CSW (IN event count, not dCSWTag) and copy
+/// bounce leftover as LBA0/LBA1. Require the CBW tag. Do not send TUR.
+pub fn csw_ok_tag(csw: &[u8], tag: u32) -> bool {
+    csw_ok(csw) && get_le_u32(csw, 4) == tag
+}
+
 /// SCSI READ/WRITE(10) CDB.
 pub fn cdb_rw10(write: bool, lba: u32, nlb: u16) -> [u8; 16] {
     let mut c = [0u8; 16];
@@ -400,7 +408,7 @@ fn bot_cmd(
     store_usb_bot_stage(BOT_STAGE_CSW);
     let mut csw = [0u8; CSW_LEN];
     let n = hw.bulk_in(&mut csw)?;
-    if n < CSW_LEN || !csw_ok(&csw) {
+    if n < CSW_LEN || !csw_ok_tag(&csw, tag) {
         return Err(UsbBotError::Bot);
     }
     Ok(())
