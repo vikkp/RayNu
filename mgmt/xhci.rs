@@ -498,6 +498,10 @@ pub fn xhci_retry_enable_slot(first_posted: bool) -> bool {
 /// sequential WRITE CBW `bot=cbw scsi=write cmpl=0xff` at backup-GPT
 /// `off=0x4a85d51200` then `sfdisk` I/O error. **Not persist.** Do not
 /// revert CSW queue / nopretry. Queue WRITE DATA OUT + CSW IN.
+/// Iron writequeue COM2 (`f32b9238`): WRITE overlap lived; first `wr=1`
+/// at `off=0x4a85d54a00` then `RAYNU-V-M7-ISO-INSTALL-OK` on the 298 GiB
+/// USB LUN; `usb rw ok wr=1` every 64 I/Os mashed COM2. Not persist.
+/// Do not Force Off mid-install. Quiet `usb rw ok` (`xhci_rw_ok_should_print`).
 pub fn xhci_retry_address_device(first_posted: bool) -> bool {
     !first_posted
 }
@@ -583,6 +587,20 @@ pub fn xhci_guest_rw_long_wait() -> bool {
 /// Rate-limit `lun rw fail` so COM2 names CBW/DATA/CSW without a flood.
 pub fn xhci_rw_fail_should_print(n: u32) -> bool {
     n < 8 || n % 64 == 0
+}
+
+/// Iron writequeue COM2 (`f32b9238`): WRITE overlap lived (`wr=1` then
+/// `RAYNU-V-M7-ISO-INSTALL-OK` on the 298 GiB Toshiba). `usb rw ok`
+/// used the fail printer (`n < 8 || n % 64 == 0`) so setup-disk's
+/// nlb=1 512-byte WRITEs printed every 32 KiB — COM2 mashed
+/// (`write_str_nowait`, `n=100+`). Not persist. Do not Force Off
+/// mid-install. USB `ISO-INSTALL-OK` ≠ leftover DRAM Everest ≠
+/// `RAYNU-V-M8-DISK-PERSIST-OK`. Quiet oks: first 8, first WRITE,
+/// then every 4096. Keep fail prints.
+pub const XHCI_RW_OK_PRINT_EVERY: u32 = 4096;
+
+pub fn xhci_rw_ok_should_print(n: u32, first_write: bool) -> bool {
+    n < 8 || first_write || n % XHCI_RW_OK_PRINT_EVERY == 0
 }
 
 /// SETUP TRB flags: Immediate Data + TRT (IN=3, no-data=0). No Chain —
@@ -3162,6 +3180,9 @@ impl UsbBulk for LiveXhci {
         // at 0 and `sfdisk: cannot open /dev/vda: I/O error`. Queue CBW
         // OUT + DATA OUT + CSW IN (`xhci writequeue`) the same way READs
         // queue CSW with DATA. Keep CSW-queued IN / nopretry / nlb=1.
+        // Iron writequeue COM2 (`f32b9238`): WRITE overlap lived; first
+        // `wr=1` then `ISO-INSTALL-OK` on the 298 GiB LUN; ok-print every
+        // 64 I/Os mashed COM2. Keep writequeue. Quiet `usb rw ok`.
         if buf.is_empty() || buf.len() > 4096 {
             return Err(UsbBotError::Xfer);
         }
@@ -3771,6 +3792,8 @@ static LIVE_LOCK: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBoo
 static RW_FAIL_N: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 static RW_OK_N: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+static RW_OK_WROTE: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn xhci_bar(bus: u8, dev: u8, func: u8) -> u64 {
@@ -3939,14 +3962,15 @@ fn serial_xhci_rw_busy(off: u64, write: bool) {
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn serial_xhci_rw_ok(off: u64, write: bool) {
     let n = RW_OK_N.fetch_add(1, core::sync::atomic::Ordering::AcqRel);
-    if !xhci_rw_fail_should_print(n) {
+    let first_write = write && !RW_OK_WROTE.swap(true, core::sync::atomic::Ordering::AcqRel);
+    if !xhci_rw_ok_should_print(n, first_write) {
         return;
     }
     use crate::boot::serial;
     serial::write_str_nowait("boot: Stage 46 durable LUN usb rw ok off=0x");
     serial_hex64_nowait(off);
     serial::write_str_nowait(if write { " wr=1 n=" } else { " wr=0 n=" });
-    serial_dec_u8_nowait(n.min(250) as u8);
+    serial_dec_u32_nowait(n);
     serial::write_line_nowait(" (not ISO-INSTALL-OK)");
 }
 
@@ -4701,6 +4725,16 @@ mod xhci_pack_test {
         assert!(xhci_rw_fail_should_print(7));
         assert!(!xhci_rw_fail_should_print(8));
         assert!(xhci_rw_fail_should_print(64));
+        assert!(!xhci_rw_fail_should_print(65));
+        assert!(xhci_rw_ok_should_print(0, false));
+        assert!(xhci_rw_ok_should_print(7, false));
+        assert!(!xhci_rw_ok_should_print(8, false));
+        assert!(!xhci_rw_ok_should_print(64, false));
+        assert!(xhci_rw_ok_should_print(6814, true));
+        assert!(!xhci_rw_ok_should_print(6814, false));
+        assert!(xhci_rw_ok_should_print(4096, false));
+        assert!(!xhci_rw_ok_should_print(4097, false));
+        assert_eq!(XHCI_RW_OK_PRINT_EVERY, 4096);
         assert!(cmd_cc_ring_stopped(CMPL_CMD_STOPPED));
         assert!(cmd_cc_ring_stopped(CMPL_CMD_ABORTED));
         assert!(!cmd_cc_ring_stopped(0));

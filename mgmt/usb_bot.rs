@@ -307,6 +307,9 @@ pub fn usb_bot_recover_after_fail(stage: u8) -> bool {
 /// Iron addrretry COM2 (`116dbb1f`): CSW-queued READs through Alpine
 /// login then sequential WRITE CBW `cmpl=0xff` / `cmpl=0x00020404`
 /// (`bot=cbw scsi=write`) at backup-GPT; `sfdisk` I/O error. Not persist.
+/// Iron writequeue COM2 (`f32b9238`): WRITE overlap lived; first `wr=1`
+/// then `ISO-INSTALL-OK` on the 298 GiB Toshiba; `usb rw ok` every 64
+/// I/Os mashed COM2. Keep writequeue. Quiet oks. Not persist.
 pub fn usb_bot_guest_chunk(lba: u32, remaining: usize) -> usize {
     let n = if lba == 0 { 512usize } else { lba as usize };
     remaining.min(n).min(4096)
