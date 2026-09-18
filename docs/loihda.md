@@ -121,7 +121,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 **What it is.** Guest F7 keeps leftover DRAM (ADR-017). A RayNu-V reboot used to zero it. DurableLun USB BOT on the Toshiba 8 GiB virtio slice now survives Force Off.
 
-**Product effect.** “Install Linux” without persist is a demo that dies when the operator Force Offs the box. Nested File persist (`ce3d8a09`) plus iron USB keep=1 DISK-BOOT is the mechanism. Guest virtio is capped at **8 GiB** so `setup-disk` is not a 7-hour ext4lazyinit. Nested QEMU ≠ R640.
+**Product effect.** Without persist, “install Linux” dies when the operator Force Offs the box — which they will, because that is how you recover a Type-1. On the R640 we own, the same Alpine now comes back from a USB-backed disk after Force Off, without running the installer again. The guest sees an **8 GiB** window, not the whole stick. USB is not PERC. Nested QEMU ≠ R640.
 
 **Iron NOW (evidence close).** Guest8g skip-CRC EFI (`4af78b43`) A2 **CLOSED on evidence:** peek `gpt=1 fit=1 installed=1` virtio 8 GiB `keep=1` → SPA `xhci diskprime` `image=DISK-BOOTX64` bytes=139264 → `DISK-BOOT-OK` → `root=UUID=348005a9-…` → `login: root`. Minted `RAYNU-V-M8-DISK-PERSIST-OK` **did not print**. Spurious `ISO-INSTALL-OK` on journal recovery. Auto-answer `No disks found`. Sit at `localhost:~#`. Do not `setup-disk`. Keep Toshiba. Never flash `/dev/sdc`.
 
@@ -203,10 +203,10 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | Field | Value |
 |-------|-------|
 | Commit | m8-usb-bot-guest8g |
-| Summary | **A2 CLOSED on evidence.** Guest8g skip-CRC EFI (`4af78b43`) Force Off persist: peek `keep=1` → SPA `DISK-BOOTX64` → `UUID=348005a9-…` → `login: root`. Minted persist-OK did not print. Never Toshiba `/dev/sdc`. |
+| Summary | **Public copy.** Persist piece on `site/loi.html` rewritten as a buyer explanation (Force Off used to wipe the install; USB-backed Alpine now returns). Scores **held**. |
 | Everest impact | none — HDA months 0.0 / 99% held |
-| LOI impact | Bar A **42%→46%** / Bar B **18% held** / overall **38%→40%** / months A **1.5→1.0**. Persist piece **70%→95%**. A2 DONE on evidence. TLS is NOW. |
-| Gates touched | Lived `4af78b43` keep=1 DISK-BOOT UUID after HV reboot; [m8_persist_iron.md](runbooks/m8_persist_iron.md). `./tools/sync-loihda-site.sh --check`. No MegaRAID. No TLS. |
+| LOI impact | Bar A **46% held** / Bar B **18% held** / overall **40% held** / months A **1.0 held**. Persist piece **95% held**. |
+| Gates touched | `site/loi.html` persist piece. `./tools/sync-loihda-site.sh --check`. No MegaRAID. No TLS. |
 
 ---
 
@@ -214,6 +214,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-18 | m8-usb-bot-guest8g | 46 | 18 | **Public copy.** Persist piece on `site/loi.html` rewritten as a buyer explanation (Force Off used to wipe; USB-backed Alpine now returns after HV reboot). Scores held. Persist 95% held. |
 | 2026-09-18 | m8-usb-bot-guest8g | 46 | 18 | **A2 CLOSED on evidence.** Guest8g skip-CRC EFI (`4af78b43`) Force Off persist: peek `keep=1` → SPA `xhci diskprime` `image=DISK-BOOTX64` bytes=139264 → `DISK-BOOT-OK` → `root=UUID=348005a9-…` → `login: root`. Minted persist-OK did not print. Spurious `ISO-INSTALL-OK` on journal recovery. Auto-answer `No disks found`. Sit at `localhost:~#`. Do not setup-disk. Persist 70→95. Months A 1.5→1.0. |
 | 2026-09-18 | m8-usb-bot-guest8g | 42 | 18 | **Iron leftover skipped, not persist.** Guest8g skip-CRC EFI (`4af78b43`) peek `keep=1` `installed=1` virtio 8 GiB `keep=1`. Coexist `10.99.99.146:8443`. **SPA Start now.** Do not setup-disk. Persist 70% held. A2 open. |
 | 2026-09-18 | m8-usb-bot-guest8g | 42 | 18 | **Iron leftover skipped, not persist.** Guest8g A2 SPA Start (`b661808c`) peek `keep=1` then `image=ISO-BOOTX64` + `vda` I/O error. Skip GPT array CRC + `xhci diskprime`. Force Off. Do not setup-disk. Persist 70% held. A2 open. |

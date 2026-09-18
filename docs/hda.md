@@ -355,10 +355,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | m8-usb-bot-guest8g |
-| Summary | **A2 CLOSED on evidence.** Guest8g skip-CRC EFI (`4af78b43`) Force Off persist: peek `keep=1` → SPA `DISK-BOOTX64` → `root=UUID=348005a9-…` → `login: root`. Minted `RAYNU-V-M8-DISK-PERSIST-OK` did not print. Months **0.0 held**. Overall **99 held**. |
-| Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. TLS / console / minted persist-OK residual. Nested QEMU ≠ R640. |
-| Gates touched | Lived `4af78b43` keep=1 DISK-BOOT UUID after HV reboot; [m8_persist_iron.md](runbooks/m8_persist_iron.md). `./tools/sync-hda-site.sh --check`. `./tools/sync-loihda-site.sh --check`. |
-| Months Δ | 0.0 held (Everest closed; M8.0 evidence close; TLS residual) |
+| Summary | **Public copy.** Persist piece on `site/loi.html` rewritten as a buyer explanation. Months **0.0 held**. Overall **99 held**. |
+| Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. TLS / console residual. Nested QEMU ≠ R640. |
+| Gates touched | `site/loi.html` persist piece. `./tools/sync-hda-site.sh --check`. `./tools/sync-loihda-site.sh --check`. |
+| Months Δ | 0.0 held (Everest closed; copy-only) |
 
 
 ## Blockers & risks (Everest-relevant)
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-18 | m8-usb-bot-guest8g | 0.0 | 99 | **Public copy:** persist piece on `site/loi.html` rewritten as a buyer explanation (Force Off used to wipe the install; USB-backed Alpine now returns). Scores held. LOIHDA Bar A 46% held. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-18 | m8-usb-bot-guest8g | 0.0 | 99 | **A2 CLOSED on evidence:** guest8g skip-CRC EFI (`4af78b43`) Force Off persist: peek `keep=1` `installed=1` virtio 8 GiB `keep=1` → SPA `xhci diskprime` `GPT ESP lba=2048` `BOOTX64.EFI bytes=139264` `image=DISK-BOOTX64` → GRUB 2.12 → `DISK-BOOT-OK` → `root=UUID=348005a9-…` on `[vda] 8.00 GiB` → `login: root`. Minted `RAYNU-V-M8-DISK-PERSIST-OK` did not print. Spurious `ISO-INSTALL-OK` on journal recovery. Auto-answer `No disks found`. Sit at `localhost:~#`; do not setup-disk. LOIHDA persist 70→95; Bar A 42→46. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-18 | m8-usb-bot-guest8g | 0.0 | 99 | **Iron leftover skipped, not persist:** guest8g skip-CRC EFI (`4af78b43`) A2 COM2 after Force Off of ISO-BOOT hang: Toshiba 298 GiB `usb I/O ready` + leftover skip; peek `efi=EFI PART gpt=1 fit=1 gpt_err=0 usb_err=0 guest=8589934592 bootx64=1 ext4=1 installed=1` virtio 8 GiB `keep=1`; coexist `10.99.99.146:8443`. **SPA Start now.** Want `DISK-BOOTX64` + `UUID=348005a9-…`. Do not setup-disk. LOIHDA Bar A 42% held. Nested QEMU ≠ R640. Iron persist open. months 0.0 held; overall 99 held |
 | 2026-09-18 | m8-usb-bot-guest8g | 0.0 | 99 | **Iron leftover skipped, not persist:** guest8g A2 SPA Start (`b661808c`) after peek `keep=1` `installed=1`: `image=ISO-BOOTX64` (724992, El Torito lba=125) not `DISK-BOOTX64`; Linux `squashfs` not `root=UUID=348005a9-…`; `usb rw fail bot=data scsi=read` then `vda` I/O error / RCU stall. GPT array CRC + cold BOT after idle. This EFI: skip array CRC + sticky keep + `xhci diskprime`. **Force Off.** Do not setup-disk. LOIHDA Bar A 42% held. Nested QEMU ≠ R640. Iron persist open. months 0.0 held; overall 99 held |

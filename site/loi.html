@@ -224,17 +224,15 @@
                 <span class="hda-bar__fill" data-piece-fill="persist" style="width: 95%"></span>
               </div>
               <p>
-                Guest F7 keeps leftover DRAM. A hypervisor Force Off used to
-                zero it. Nested File persist is closed. Iron USB persist on the
-                Toshiba 8 GiB virtio slice is <strong>closed on evidence</strong>
-                (<code>4af78b43</code>: peek <code>keep=1</code> → SPA
-                <code>DISK-BOOTX64</code> → <code>root=UUID=348005a9-…</code> →
-                <code>login: root</code>). The minted
-                <code>RAYNU-V-M8-DISK-PERSIST-OK</code> string did not print
-                (const-only). Guest virtio is the 8 GiB window, not the whole
-                298 GiB LUN. Sit at <code>localhost:~#</code>. Do not
-                <code>setup-disk</code>. Do not flash Toshiba
-                <code>/dev/sdc</code>. USB persist is not PERC persist.
+                A guest reboot already kept the install. A hypervisor Force Off
+                used to wipe it — and that is how you recover a Type-1, so a
+                buyer will do it. On the R640 we own, that is no longer true:
+                after Force Off the same Alpine comes back from a USB-backed
+                disk, without running the installer again. The guest sees an
+                8 GiB window on a larger stick, not the whole drive, and USB is
+                not the RAID array. The last 5% is honesty, not a missing
+                reboot: we have not printed a formal persist-OK marker, and this
+                does not mean PERC.
               </p>
             </li>
             <li data-reveal>
