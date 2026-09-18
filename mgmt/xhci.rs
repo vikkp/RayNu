@@ -543,7 +543,9 @@ pub fn xhci_retry_address_device(first_posted: bool) -> bool {
 /// EFI: virtio USB guest **8 GiB** (`DURABLE_LUN_GUEST_USB_BYTES`);
 /// 298 GiB GPT does not `fit` so first SPA Start SETUP is intended.
 /// CSW tag match + `xhci peekretry`. Iron guest8g: virtio 8 GiB, 298 GiB
-/// GPT does not fit, SPA Start SETUP is intended. Keep setcfgretry /
+/// GPT does not fit, SPA Start SETUP is intended; COM2 then 8 GiB
+/// `ISO-INSTALL-OK` → F7 `DISK-BOOT-OK` + `login:` `UUID=348005a9-…`
+/// (not persist; guest F7 ≠ Force Off). Keep setcfgretry /
 /// writequeue / okquiet. Do not send TUR. Do not flash Toshiba.
 pub fn xhci_retry_set_config(first_posted: bool) -> bool {
     !first_posted
