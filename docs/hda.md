@@ -119,7 +119,7 @@ All must be true (no hand-waving):
 | Datastore / ISO media buttons | DONE (host) | SPA → `/images`, `/iso/{id}/deploy` + install |
 | **UEFI NIC HTTP listen** | DONE (M7.6 iron) | `RAYNU-V-M7-UEFI-HTTP-OK` R640 SNP residual; [2026-08-16-uefi-http-ok.md](evidence/r640/2026-08-16-uefi-http-ok.md) |
 | PRE-EBS durable mgmt tables | DONE | `pre_ebs_mgmt` shared across HTTP exchanges |
-| TLS | DEFERRED | plaintext lab HTTP (ADR-009) |
+| TLS | DEFERRED | firmware wrap=plaintext (ring/UEFI libc); iron HTTPS open (ADR-009) |
 | Guest console / serial log UI | PARTIAL | Host UART ring via `GET /logs/serial` + SPA; guest VNC residual |
 | Auth beyond bring-up toy | PARTIAL | ESP `auth.token` overrides bring-up; iron used lab bring-up (`AuthAllowed`) |
 | Networking/storage ops UI | MISSING | probes only |
@@ -354,11 +354,11 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-tls-host |
-| Summary | **M8.1 host TLS + persist honesty + operator SPA.** rustls host `TLS-HOST-OK` serves the later Overview/Guests/Media SPA (PR #232 sea-glass), not the firmware-button farm. Firmware plaintext. Persist-OK serial wired. Months **0.0 held**. Overall **99 held**. |
+| Commit | m8-tls-fw |
+| Summary | **M8.1 firmware TLS wrap.** Coexist TCP feeds `PlaintextListen` (`RAYNU-V-M8-TLS-FW-HOST-OK`). rustls/ring cannot join `uefi-bin` (ring C needs `<assert.h>`). Host rustls proves the same feed/take/wrap API. CURL NOW stays `http://`. Do not flash. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. Iron HTTPS / console residual. Nested QEMU ≠ R640. |
-| Gates touched | `mgmt/tls.rs` + persist-OK COM2 wiring + `assets/webui.html` operator SPA. `./tools/sync-hda-site.sh --check`. `./tools/sync-loihda-site.sh --check`. Do not flash. |
-| Months Δ | 0.0 held (Everest closed; M8.1 host-ready ≠ iron HTTPS) |
+| Gates touched | `mgmt/tls_coexist.rs` + `mgmt/host_nic_listen.rs` wrap + `tools/m8-tls-fw-smoke.sh`. `./tools/sync-hda-site.sh --check`. `./tools/sync-loihda-site.sh --check`. Do not flash. |
+| Months Δ | 0.0 held (Everest closed; firmware wrap ≠ iron HTTPS) |
 
 
 ## Blockers & risks (Everest-relevant)
@@ -381,7 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
-| 2026-09-18 | m8-tls-host | 0.0 | 99 | **M8.1 host TLS + operator SPA.** rustls SPA+REST (`RAYNU-V-M8-TLS-HOST-OK`) serves the later Overview/Guests/Media page (PR #232 sea-glass), not the firmware-button farm. Firmware coexist plaintext (not iron HTTPS). Persist-OK serial wired on keep=1 DurableLun DISK-BOOT; SETUP skipped; journal `ISO-INSTALL-OK` suppressed. Do not flash. Sit at `localhost:~#`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
+| 2026-09-18 | m8-tls-fw | 0.0 | 99 | **M8.1 firmware TLS wrap.** Coexist TCP feeds `PlaintextListen` (`RAYNU-V-M8-TLS-FW-HOST-OK`). rustls/ring cannot join `uefi-bin` (ring C needs `<assert.h>`). Host rustls proves the same API. CURL NOW stays `http://`. Not iron HTTPS. Do not flash. Sit at `localhost:~#`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-18 | m8-usb-bot-guest8g | 0.0 | 99 | **Public copy:** persist piece on `site/loi.html` rewritten as a buyer explanation (Force Off used to wipe the install; USB-backed Alpine now returns). Scores held. LOIHDA Bar A 46% held. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-18 | m8-usb-bot-guest8g | 0.0 | 99 | **Iron leftover skipped, not persist:** guest8g skip-CRC EFI (`4af78b43`) A2 COM2 after Force Off of ISO-BOOT hang: Toshiba 298 GiB `usb I/O ready` + leftover skip; peek `efi=EFI PART gpt=1 fit=1 gpt_err=0 usb_err=0 guest=8589934592 bootx64=1 ext4=1 installed=1` virtio 8 GiB `keep=1`; coexist `10.99.99.146:8443`. **SPA Start now.** Want `DISK-BOOTX64` + `UUID=348005a9-…`. Do not setup-disk. LOIHDA Bar A 42% held. Nested QEMU ≠ R640. Iron persist open. months 0.0 held; overall 99 held |
 | 2026-09-18 | m8-usb-bot-guest8g | 0.0 | 99 | **Iron leftover skipped, not persist:** guest8g A2 SPA Start (`b661808c`) after peek `keep=1` `installed=1`: `image=ISO-BOOTX64` (724992, El Torito lba=125) not `DISK-BOOTX64`; Linux `squashfs` not `root=UUID=348005a9-…`; `usb rw fail bot=data scsi=read` then `vda` I/O error / RCU stall. GPT array CRC + cold BOT after idle. This EFI: skip array CRC + sticky keep + `xhci diskprime`. **Force Off.** Do not setup-disk. LOIHDA Bar A 42% held. Nested QEMU ≠ R640. Iron persist open. months 0.0 held; overall 99 held |
@@ -980,7 +980,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     **M8.1 TLS iron.** Host `RAYNU-V-M8-TLS-HOST-OK` in-tree. GET `/` is the later operator SPA (Overview/Guests/Media). Firmware coexist plaintext. Persist-OK serial wired (not flashed). Sit at `localhost:~#`. Do not setup-disk. Do not Force Off. Nested-OK closed on `raynuvsrv1` `ce3d8a09`.
+Next move:     **M8.1 TLS iron.** Host `RAYNU-V-M8-TLS-HOST-OK` + firmware wrap `RAYNU-V-M8-TLS-FW-HOST-OK` in-tree. Firmware session plaintext (ring/UEFI libc). CURL NOW `http://`. Persist-OK serial wired (not flashed). Sit at `localhost:~#`. Do not setup-disk. Do not Force Off. Nested-OK closed on `raynuvsrv1` `ce3d8a09`.
 Rollback:      GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351
                EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc
                COM2 build: sha=f72b4276d198. Do not flash a later M8 persist prototype as known-good.

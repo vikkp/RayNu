@@ -10,6 +10,7 @@
 - M7.8 QEMU: `RAYNU-V-M7-HOST-NIC-QEMU-OK` — post-EBS `GET /` on QEMU `e1000` (`8086:100e`); `./tools/m7-host-nic-qemu-smoke.sh` (also greps PRE-EBS `vid:did=8086:100e`)
 - M7.8 iron: `RAYNU-V-M7-HOST-NIC-HTTP-OK` — **Phase D closed on iron** 2026-08-20 after `BOOT-OK` on BCM5720 `:38`. **Phase F closed on iron** the same day: native `bounded_poll` on a credit-scheduler quantum **while VMX is on** (G0 scheduled; G1–G3 parked). Do not claim from host or QEMU.
 - M8.1 host: `RAYNU-V-M8-TLS-HOST-OK` — `./tools/m8-tls-smoke.sh` (rustls around the HTTP codec). Firmware coexist stays plaintext. Never print `RAYNU-V-M8-TLS-OK` from host/CI. Iron close is `curl --cacert` on `10.99.99.x:8443` after `BOOT-OK`.
+- M8.1 firmware wrap: `RAYNU-V-M8-TLS-FW-HOST-OK` — `./tools/m8-tls-fw-smoke.sh` (coexist TCP feeds `PlaintextListen`; host rustls uses the same feed/take/wrap API). rustls/ring cannot join `uefi-bin` (`assert.h`). CURL NOW stays `http://`.
 
 ## Story
 
