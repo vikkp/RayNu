@@ -28,9 +28,9 @@ pub const M7_HTTP_OK_MARKER: &str = "RAYNU-V-M7-HTTP-OK";
 /// Network HTTPS/HTTP mgmt GAP closed in M7.1.
 pub const HTTP_GAP_NOTE: &str = "GAP(CLOSED M7.1): Network HTTPS/HTTP mgmt";
 
-/// Lab note: plaintext HTTP allowed; TLS follows (size-boxed).
+/// Lab note: firmware coexist is still plaintext; host TLS is M8.1 (not iron).
 pub const HTTP_LAB_NOTE: &str =
-    "lab MVP: plaintext HTTP (TLS deferred under ADR-003/ADR-009 size budget)";
+    "lab MVP: plaintext HTTP on firmware (TLS host-ready M8.1; iron HTTPS not claimed; ADR-003 size)";
 
 /// Default lab bind (host tests / QEMU user-net docs).
 pub const MGMT_HTTP_DEFAULT_PORT: u16 = 8443;

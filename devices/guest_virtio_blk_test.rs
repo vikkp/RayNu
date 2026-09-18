@@ -730,6 +730,21 @@ fn install_disk_partition_table_gpt_and_mbr() {
 }
 
 #[test]
+fn keep_attach_never_takes_iso_install_ok() {
+    reset();
+    let mut disk = vec![0u8; 4096];
+    disk[512..520].copy_from_slice(b"EFI PART");
+    let hpa = disk.as_mut_ptr() as u64;
+    unsafe {
+        assert!(super::attach_disk_keep(hpa, disk.len()));
+    }
+    assert!(super::disk_attached_keep());
+    assert!(!super::take_iso_install_ok());
+    reset();
+    assert!(!super::disk_attached_keep());
+}
+
+#[test]
 fn decode_mmio_mov_encodings() {
     let r32 = decode_mmio_insn(&[0x8B, 0x01], 2).unwrap();
     assert!(!r32.is_write && r32.size == 4 && r32.reg == 0 && r32.zero_ext);

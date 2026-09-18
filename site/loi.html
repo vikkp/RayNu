@@ -11,7 +11,7 @@
     <meta property="og:title" content="RayNu-V · Path to LOI" />
     <meta
       property="og:description"
-      content="Two bars: dedicated-box 46%, RAID-fleet 18%. Persist across HV reboot is evidence-closed. TLS is the NOW gate. USB is not PERC."
+      content="Two bars: dedicated-box 48%, RAID-fleet 18%. Persist across HV reboot is evidence-closed. TLS is host-ready, not iron HTTPS. USB is not PERC."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -255,17 +255,16 @@
             <li data-reveal>
               <header>
                 <span class="loi-pieces__name">TLS</span>
-                <span class="loi-pieces__pct" data-piece="tls">8%</span>
+                <span class="loi-pieces__pct" data-piece="tls">18%</span>
               </header>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill" data-piece-fill="tls" style="width: 8%"></span>
+                <span class="hda-bar__fill" data-piece-fill="tls" style="width: 18%"></span>
               </div>
               <p>
-                Everest closed on plaintext HTTP on a bring-up LAN. That was
-                an honest deferral, not a product. A CISO will ask whether
-                management is encrypted. The answer today is no. A dedicated-box
-                LOI that skips TLS is a handshake in a lab, not something
-                InfoSec countersigns.
+                Everest closed on plaintext HTTP on a bring-up LAN. Host tests
+                now speak HTTPS with a lab certificate. The box you own still
+                answers in the clear. A CISO will ask whether management is
+                encrypted on the wire they can reach. The answer today is no.
               </p>
             </li>
             <li data-reveal>
@@ -345,13 +344,15 @@
             (<code>keep=1</code> + <code>DISK-BOOTX64</code> +
             <code>UUID=348005a9-…</code> after Force Off). The minted persist-OK
             string did not print. Nested QEMU is not a PowerEdge. The next print
-            that moves Bar A is HTTPS on coexist <code>:8443</code>.
+            that moves Bar A is HTTPS on coexist <code>:8443</code> after a
+            planned flash — not a host rustls test.
           </p>
           <pre class="ship-code" data-reveal><code>lived:  4af78b43 keep=1 DISK-BOOT UUID 348005a9 after Force Off
-sit:    localhost:~#   do not setup-disk   do not Force Off
+sit:    localhost:~#   do not setup-disk   do not Force Off   do not flash
 refuse: ESP Cruzer (2–8 GiB) · Ubuntu-on-PERC · leftover DRAM
+host:   RAYNU-V-M8-TLS-HOST-OK (rustls; not iron)
 next:   TLS on 10.99.99.x:8443 after BOOT-OK
-never:  host / CI / nested printing RAYNU-V-M8-DISK-PERSIST-OK</code></pre>
+never:  host / CI / nested printing RAYNU-V-M8-DISK-PERSIST-OK or RAYNU-V-M8-TLS-OK</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
             Rollback remains GitHub Latest
             <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed"

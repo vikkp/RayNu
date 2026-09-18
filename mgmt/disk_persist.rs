@@ -16,7 +16,9 @@
 //!
 //! Iron close marker [`M8_DISK_PERSIST_OK_MARKER`] is COM2-only. Host/CI
 //! print [`M8_DISK_PERSIST_HOST_OK_MARKER`]. Nested harness may print
-//! [`M8_DISK_PERSIST_NESTED_OK_MARKER`]. Never `ISO-INSTALL-OK`.
+//! [`M8_DISK_PERSIST_NESTED_OK_MARKER`]. Never `ISO-INSTALL-OK`. Firmware
+//! prints the iron marker from [`maybe_print_iron_persist_ok`] on keep=1
+//! DurableLun DISK-BOOT only.
 
 use crate::raynu_f::fat::{self, VolumeRead};
 use crate::raynu_f::gpt::{
@@ -25,7 +27,9 @@ use crate::raynu_f::gpt::{
 use core::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering};
 
 /// Iron COM2 close: Force Off / reboot RayNu-V, installed disk still there.
-/// Host/CI/nested must **never** print this.
+/// Printed only from [`maybe_print_iron_persist_ok`] on `uefi-bin` when virtio
+/// attached keep=1 on a DurableLun and RayNu-F staged DISK-BOOT. Host/CI/nested
+/// must **never** `println!` this. Guest F7 is not this print.
 pub const M8_DISK_PERSIST_OK_MARKER: &str = "RAYNU-V-M8-DISK-PERSIST-OK";
 
 /// Host/CI: file-backed GPT+ESP+ext4 round-trip after an in-process HV reboot.
@@ -392,6 +396,7 @@ pub fn persist_lun_clear_sticky() {
     LAST_LUN_GPT_ERR.store(0, Ordering::Release);
     LAST_LUN_GPT_FIT.store(true, Ordering::Release);
     LAST_LUN_GPT_FIT_KNOWN.store(true, Ordering::Release);
+    persist_ok_clear_printed();
 }
 
 /// GPT / FAT BPB / ext4 on the LUN. FAT dirent walks stay off BOT.
@@ -534,6 +539,36 @@ pub fn choose_install_disk_attach(
 static PERSIST_DISK_HPA: AtomicU64 = AtomicU64::new(0);
 static PERSIST_DISK_BYTES: AtomicU64 = AtomicU64::new(0);
 static INSTALL_DISK_KEEP: AtomicBool = AtomicBool::new(false);
+static PERSIST_OK_PRINTED: AtomicBool = AtomicBool::new(false);
+
+/// True when keep=1 DurableLun DISK-BOOT may print the iron persist marker.
+/// Leftover DRAM keep is guest F7 / leftover, not persist. Host tests use this
+/// predicate; [`maybe_print_iron_persist_ok`] is the COM2 writer.
+pub fn persist_ok_ready(keep: bool, durable_lun: bool) -> bool {
+    keep && durable_lun && !PERSIST_OK_PRINTED.load(Ordering::Acquire)
+}
+
+/// Host tests / handoff reset of the one-shot iron print latch.
+pub fn persist_ok_clear_printed() {
+    PERSIST_OK_PRINTED.store(false, Ordering::Release);
+}
+
+/// Iron COM2: print [`M8_DISK_PERSIST_OK_MARKER`] once when keep=1 DurableLun
+/// DISK-BOOT is live. Host/CI never `println!` the iron string. Returns whether
+/// this call latched the print (firmware writes COM2; host latches only).
+pub fn maybe_print_iron_persist_ok(keep: bool, durable_lun: bool) -> bool {
+    if !persist_ok_ready(keep, durable_lun) {
+        return false;
+    }
+    if PERSIST_OK_PRINTED.swap(true, Ordering::AcqRel) {
+        return false;
+    }
+    #[cfg(feature = "uefi-bin")]
+    {
+        crate::boot::serial::write_line(M8_DISK_PERSIST_OK_MARKER);
+    }
+    true
+}
 
 /// True when handoff reserved a persist region that attach has not taken.
 pub fn persist_install_disk_reserved() -> bool {

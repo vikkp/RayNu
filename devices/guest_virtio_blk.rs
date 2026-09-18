@@ -214,6 +214,7 @@ static QUEUES: AtomicBool = AtomicBool::new(false);
 static DISK_HPA: AtomicU64 = AtomicU64::new(0);
 static DISK_LEN: AtomicU64 = AtomicU64::new(0);
 static LUN_ATTACHED: AtomicBool = AtomicBool::new(false);
+static DISK_ATTACHED_KEEP: AtomicBool = AtomicBool::new(false);
 static BYTES_WRITTEN: AtomicU64 = AtomicU64::new(0);
 static ISO_PTR: AtomicU64 = AtomicU64::new(0);
 static ISO_LEN: AtomicU64 = AtomicU64::new(0);
@@ -388,6 +389,7 @@ pub fn reset() {
     DISK_HPA.store(0, Ordering::Release);
     DISK_LEN.store(0, Ordering::Release);
     LUN_ATTACHED.store(false, Ordering::Release);
+    DISK_ATTACHED_KEEP.store(false, Ordering::Release);
     BYTES_WRITTEN.store(0, Ordering::Release);
     ISO_PTR.store(0, Ordering::Release);
     ISO_LEN.store(0, Ordering::Release);
@@ -491,6 +493,7 @@ unsafe fn attach_disk_inner(hpa: u64, bytes: usize, zero: bool) -> bool {
     DISK_HPA.store(hpa, Ordering::Release);
     DISK_LEN.store(bytes as u64, Ordering::Release);
     LUN_ATTACHED.store(false, Ordering::Release);
+    DISK_ATTACHED_KEEP.store(!zero, Ordering::Release);
     BYTES_WRITTEN.store(0, Ordering::Release);
     true
 }
@@ -509,8 +512,15 @@ pub fn attach_lun(bytes: usize, _zero: bool) -> bool {
     DISK_HPA.store(0, Ordering::Release);
     DISK_LEN.store(bytes as u64, Ordering::Release);
     LUN_ATTACHED.store(true, Ordering::Release);
+    DISK_ATTACHED_KEEP.store(!_zero, Ordering::Release);
     BYTES_WRITTEN.store(0, Ordering::Release);
     true
+}
+
+/// True when virtio attached without zeroing an installed GPT (keep=1).
+/// Journal recovery writes must not take [`take_iso_install_ok`].
+pub fn disk_attached_keep() -> bool {
+    DISK_ATTACHED_KEEP.load(Ordering::Acquire)
 }
 
 pub fn disk_bytes() -> u64 {
@@ -1271,6 +1281,9 @@ pub const ISO_INSTALL_OK_MIN_OUT: u64 = 512;
 /// Caller prints [`crate::mgmt::iso_install::M7_ISO_INSTALL_OK_MARKER`].
 /// Host/CI / nested must not call this print path.
 pub fn take_iso_install_ok() -> bool {
+    if DISK_ATTACHED_KEEP.load(Ordering::Acquire) {
+        return false;
+    }
     if ISO_OK.load(Ordering::Acquire) {
         return false;
     }

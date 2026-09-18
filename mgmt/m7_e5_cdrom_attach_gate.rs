@@ -171,16 +171,9 @@ pub fn prop_rest_cdrom_attach() -> bool {
 
 /// SPA + ADR-014 Stage 1 phrases. Product path is still UEFI-first.
 pub fn cdrom_attach_surface_present() -> bool {
-    let spa = include_str!("../assets/webui.html");
     let adr = include_str!("../docs/adr/ADR-014.md");
     let http = include_str!("http.rs");
-    spa.contains("Attach CD")
-        && spa.contains("Host attach")
-        && spa.contains("not guest UEFI")
-        && spa.contains("UEFI-first")
-        && spa.contains("extract-boot is lab")
-        && spa.contains("/iso/")
-        && crate::mgmt::webui::webui_len().saturating_add(256) <= 16384
+    crate::mgmt::webui::spa_operator_surface_present()
         && http.contains("is_iso_attach_path")
         && adr.contains("Stage 1")
         && adr.contains("host CD-ROM attach")

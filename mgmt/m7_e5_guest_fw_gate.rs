@@ -128,18 +128,12 @@ pub fn prop_rest_guest_fw_box() -> bool {
 
 /// SPA + ADR-014 Stage 3 phrases. Envelope is not OVMF.
 pub fn guest_fw_surface_present() -> bool {
-    let spa = include_str!("../assets/webui.html");
     let adr = include_str!("../docs/adr/ADR-014.md");
     let adr003 = include_str!("../docs/adr/ADR-003.md");
     let http = include_str!("http.rs");
     let src = include_str!("guest_fw.rs");
     let launch = include_str!("../vmx/launch.rs");
-    spa.contains("Box guest FW")
-        && spa.contains("not OVMF")
-        && spa.contains("UEFI-first")
-        && spa.contains("extract-boot is lab")
-        && spa.contains("not guest UEFI")
-        && crate::mgmt::webui::webui_len().saturating_add(256) <= 16384
+    crate::mgmt::webui::spa_operator_surface_present()
         && http.contains("is_guest_fw_path")
         && adr.contains("Stage 3")
         && adr.contains("box_guest_firmware")

@@ -1,6 +1,6 @@
 {
   "bars": {
-    "a": 46,
+    "a": 48,
     "b": 18
   },
   "baseline_date": "2026-09-14",
@@ -27,7 +27,7 @@
   "months_to_loi_a_prev": 1.5,
   "months_to_loi_b": 3.5,
   "months_to_loi_b_prev": 3.5,
-  "overall_pct": 40,
+  "overall_pct": 41,
   "pieces": {
     "auth": 28,
     "console": 22,
@@ -35,7 +35,7 @@
     "perc": 15,
     "persist": 95,
     "sku": 25,
-    "tls": 8,
+    "tls": 18,
     "unmodified": 20
   },
   "source": "docs/loihda.md",

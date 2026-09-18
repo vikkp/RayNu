@@ -131,18 +131,10 @@ pub fn prop_rest_ovmf_slot() -> bool {
 
 /// SPA + ADR-014 Stage 7 phrases. Slot arm is not VMLAUNCH.
 pub fn ovmf_slot_surface_present() -> bool {
-    let spa = include_str!("../assets/webui.html");
     let adr = include_str!("../docs/adr/ADR-014.md");
     let src = include_str!("guest_fw.rs");
     let launch = include_str!("../vmx/launch.rs");
-    spa.contains("Arm FW slot")
-        && spa.contains("Load ESP OVMF")
-        && spa.contains("Probe OVMF")
-        && spa.contains("not OVMF")
-        && spa.contains("UEFI-first")
-        && spa.contains("extract-boot is lab")
-        && spa.contains("not guest UEFI")
-        && crate::mgmt::webui::webui_len().saturating_add(256) <= 16384
+    crate::mgmt::webui::spa_operator_surface_present()
         && adr.contains("Stage 7")
         && adr.contains("arm_ovmf_firmware_slot")
         && src.contains("fn arm_ovmf_firmware_slot")

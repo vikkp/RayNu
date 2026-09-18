@@ -340,6 +340,8 @@ pub mod nvme;
 pub mod usb_bot;
 pub mod xhci;
 pub mod m8_disk_persist_gate;
+pub mod tls;
+pub mod m8_tls_gate;
 pub mod m5_api_gate;
 pub mod m5_life_gate;
 pub mod m5_webui_gate;

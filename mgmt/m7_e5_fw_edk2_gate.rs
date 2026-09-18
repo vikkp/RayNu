@@ -217,19 +217,10 @@ pub fn prop_rest_fw_edk2() -> bool {
 
 /// SPA + ADR-014 Stage 11 phrases. EDK2-sized is not shipped OVMF / not VMLAUNCH.
 pub fn fw_edk2_surface_present() -> bool {
-    let spa = include_str!("../assets/webui.html");
     let adr = include_str!("../docs/adr/ADR-014.md");
     let src = include_str!("guest_fw.rs");
     let launch = include_str!("../vmx/launch.rs");
-    spa.contains("Stage EDK2")
-        && spa.contains("Stage FW floor")
-        && spa.contains("Prep FW launch")
-        && spa.contains("Bind FW guest")
-        && spa.contains("not OVMF")
-        && spa.contains("UEFI-first")
-        && spa.contains("extract-boot is lab")
-        && spa.contains("not guest UEFI")
-        && crate::mgmt::webui::webui_len().saturating_add(256) <= 16384
+    crate::mgmt::webui::spa_operator_surface_present()
         && adr.contains("Stage 11")
         && adr.contains("stage_edk2_ovmf_firmware")
         && src.contains("fn stage_edk2_ovmf_firmware")

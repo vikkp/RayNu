@@ -5,7 +5,9 @@
 
 ## What this gate proves
 
-M7.4 / E4 upgrades the embedded SPA for operator MVP over lab HTTP:
+M7.4 / E4 upgrades the embedded SPA for operator MVP over lab HTTP. The
+operator page is Overview / Guests / Media / Activity plus Host / RayNu-V /
+Guest / ISO lights (PR #232 sea-glass). Firmware-debug `/fw/*` stays REST-only.
 
 1. Form: guest id, CPU, RAM MiB, disk MiB, ISO id, image type (`linux_iso` / `windows_iso` / `generic_uefi`; none = E4 SHELL)  
 2. REST: `POST /vms/{id}/spec/{cpu}/{ram}/{disk}/{iso}` and optional `/{linux_iso|windows_iso|generic_uefi}` (ADR-014 Stage 0; `iso=0` stays SHELL)  
@@ -39,7 +41,7 @@ During the M7.6 listen window (`RAYNU-V-M7-UEFI-HTTP-OK` path):
 ## Honesty / residuals
 
 - **Guest console / VNC** — not claimed; host serial log only.  
-- **TLS** — still plaintext lab HTTP (M7.1 / ADR-012).  
+- **TLS** — firmware coexist stays plaintext (M8.1 host rustls; iron HTTPS not claimed).  
 - **El Torito / CD-ROM** — still stubbed (M7.3).  
 - **NIC attach** — JSON reports `nics:1` default; virtio-net attach residual.  
 - Host package smoke is unit tests; iron proof is live curl/SPA during PRE-EBS.
