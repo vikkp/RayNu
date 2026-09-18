@@ -355,7 +355,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | m8-usb-bot-guest8g |
-| Summary | **Host/EFI, not persist.** Guest8g: virtio USB cap **8 GiB**; 298 GiB GPT `fit=0` so first SPA Start SETUP is **intended**; CSW tag + peek retry for Force Off keep-detect. UUID `6d549fd4` disposable. Months **0.0 held**. Overall **99 held**. |
+| Summary | **Host/EFI, not persist.** Guest8g: virtio USB **8 GiB**; leftover 298 GiB GPT `fit=0` so SPA Start SETUP is **intended**; CSW tag + peek retry. Fit peek LBA1 miss retries (not treated as too-big). UUID `6d549fd4` disposable. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. No persist gate. LOIHDA persist **70% held** (A2 still open). Do not SPA Start setcfgretry `ef7e93ec`. Nested QEMU ≠ R640. |
 | Gates touched | Guest8g EFI (8 GiB virtio + GPT fit + CSW tag + peek retry); [m8_persist_iron.md](runbooks/m8_persist_iron.md). `./tools/sync-hda-site.sh --check`. `./tools/sync-loihda-site.sh --check`. |
 | Months Δ | 0.0 held (Everest closed; iron Force Off still open) |
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-18 | m8-usb-bot-guest8g | 0.0 | 99 | **Host/EFI, not persist:** guest8g fit peek LBA1 miss retries (not treated as too-big). Virtio USB **8 GiB**; leftover 298 GiB GPT `fit=0` cannot keep. **SPA Start intended**. Do not SPA Start setcfgretry `ef7e93ec`. LOIHDA Bar A 42% held. Nested QEMU ≠ R640. Iron persist open. months 0.0 held; overall 99 held |
 | 2026-09-18 | m8-usb-bot-guest8g | 0.0 | 99 | **Host/EFI, not persist:** guest8g virtio USB **8 GiB** + GPT `fit` so leftover 298 GiB image cannot keep; CSW tag + peek retry. UUID `6d549fd4` disposable (ext4lazyinit, not a product install). **SPA Start intended** on this EFI (SETUP wipe). Do not SPA Start setcfgretry `ef7e93ec`. Keep writequeue / okquiet / setcfgretry. LOIHDA Bar A 42% held. Nested QEMU ≠ R640. Iron persist open. months 0.0 held; overall 99 held |
 | 2026-09-18 | m8-usb-bot-setcfgretry | 0.0 | 99 | **Iron leftover skipped, not persist:** setcfgretry Force Off COM2 (`ef7e93ec`) Toshiba 298 GiB `usb I/O ready` + leftover skip, then peek `efi=3?????|? gpt=0 gpt_err=2 usb_err=0 bootx64=0 ext4=0 installed=0` virtio `keep=0`. Guest F7 `DISK-BOOT-OK` / `root=UUID=6d549fd4-…` did not survive HV reboot. Dell back-USB `EFI Fixed Disk` is NVRAM, not keep=1. Do not SPA Start. LOIHDA Bar A 42% held. Nested QEMU ≠ R640. Iron persist open. months 0.0 held; overall 99 held |
 | 2026-09-18 | m8-usb-bot-setcfgretry | 0.0 | 99 | **Iron leftover skipped, not persist:** setcfgretry COM2 (`ef7e93ec`) hours after USB F7 `DISK-BOOT-OK` / `root=UUID=6d549fd4-…` still `usb rw ok wr=1` (`n` 3.1 M → 10.7 M, `off=0x3b03…` ≈ 252 GB / ~79% of 320 GB). Payload ≈ 3.9 GiB vs ~245 GiB LBA walk — ext4lazyinit on 298 GiB `vda2`, not a hang, not a second setup-disk. Do not Force Off (dirty ext4). Do not reflash. Guest F7 ≠ persist. Keep writequeue / okquiet / setcfgretry. LOIHDA Bar A 42% held. Nested QEMU ≠ R640. Iron persist open. months 0.0 held; overall 99 held |

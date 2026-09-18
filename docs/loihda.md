@@ -203,7 +203,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | Field | Value |
 |-------|-------|
 | Commit | m8-usb-bot-guest8g |
-| Summary | **Host/EFI, not persist.** Guest8g: virtio USB **8 GiB**; leftover 298 GiB GPT `fit=0` so SPA Start SETUP is **intended**; CSW tag + peek retry. UUID `6d549fd4` disposable. Never Toshiba `/dev/sdc`. Scores **held**. |
+| Summary | **Host/EFI, not persist.** Guest8g: virtio USB **8 GiB**; leftover 298 GiB GPT `fit=0` so SPA Start SETUP is **intended**; CSW tag + peek retry. Fit peek LBA1 miss retries (not treated as too-big). UUID `6d549fd4` disposable. Never Toshiba `/dev/sdc`. Scores **held**. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Bar A **42% held** / Bar B **18% held** / overall **38% held** / months A **1.5 held**. Persist piece **70% held**. A2 still open. **SPA Start intended** on this EFI only. Do not SPA Start setcfgretry `ef7e93ec`. |
 | Gates touched | Guest8g EFI (8 GiB virtio + GPT fit + CSW tag + peek retry); [m8_persist_iron.md](runbooks/m8_persist_iron.md). `./tools/sync-loihda-site.sh --check`. No MegaRAID. No TLS. |
@@ -214,6 +214,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-18 | m8-usb-bot-guest8g | 42 | 18 | **Host/EFI, not persist.** Guest8g fit peek LBA1 miss retries (not treated as too-big). 8 GiB virtio; leftover 298 GiB GPT `fit=0` so SPA Start SETUP is **intended**. Do not SPA Start setcfgretry `ef7e93ec`. Persist 70% held. A2 open. |
 | 2026-09-18 | m8-usb-bot-guest8g | 42 | 18 | **Host/EFI, not persist.** Guest8g: virtio USB **8 GiB**; leftover 298 GiB GPT `fit=0` so SPA Start SETUP is **intended** (wipes disposable UUID `6d549fd4`). CSW tag + peek retry for Force Off keep-detect. Do not SPA Start setcfgretry `ef7e93ec`. Never Toshiba `/dev/sdc`. Persist 70% held. A2 open. |
 | 2026-09-18 | m8-usb-bot-setcfgretry | 42 | 18 | **Iron leftover skipped, not persist.** Setcfgretry Force Off COM2 (`ef7e93ec`) Toshiba 298 GiB `usb I/O ready` + leftover skip, then peek `gpt_err=2` `installed=0` virtio `keep=0`. Guest F7 `DISK-BOOT-OK` did not survive HV reboot. Do not SPA Start. Persist 70% held. A2 open. |
 | 2026-09-18 | m8-usb-bot-setcfgretry | 42 | 18 | **Iron leftover skipped, not persist.** Setcfgretry COM2 (`ef7e93ec`) hours after USB F7 `DISK-BOOT-OK` / `root=UUID=6d549fd4-…` still `usb rw ok wr=1` (`n` 3.1 M → 10.7 M, `off=0x3b03…` ≈ 252 GB / ~79% of 320 GB). Payload ≈ 3.9 GiB vs ~245 GiB LBA walk — ext4lazyinit on 298 GiB `vda2`, not a hang, not a second setup-disk. Do not Force Off (dirty ext4). Do not reflash. Guest F7 ≠ A2. Keep writequeue / okquiet / setcfgretry. Persist 70% held. A2 open. |

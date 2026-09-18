@@ -96,6 +96,8 @@ pub fn disk_persist_surface_present() -> bool {
         && persist.contains("fn persist_lun_gpt_parsed_no_fit(")
         && persist.contains("fn persist_lun_last_gpt_err(")
         && persist.contains("fn persist_lun_last_gpt_fit(")
+        && persist.contains("fn persist_lun_last_gpt_fit_known(")
+        && persist.contains("LAST_LUN_GPT_FIT_KNOWN")
         && include_str!("../raynu_f/gpt.rs").contains("fn find_esp_skip_array_crc<")
         && include_str!("../raynu_f/gpt.rs").contains("fn gpt_fits_guest_bytes(")
         && lun.contains("fn pick_durable_lun(")

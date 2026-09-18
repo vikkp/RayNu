@@ -857,7 +857,8 @@ fn serial_lun_peek(tag: &str) {
         boot = parts.1;
         ext4 = parts.2;
         // keep_gpt, or a parsed GPT that does not fit (298 GiB on 8 GiB).
-        if gpt || crate::mgmt::disk_persist::persist_lun_last_gpt_err() == 0 {
+        // gpt_err=0 with unknown fit is a second-read miss — retry.
+        if gpt || crate::mgmt::disk_persist::persist_lun_gpt_parsed_no_fit() {
             break;
         }
     }

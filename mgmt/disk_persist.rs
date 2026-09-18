@@ -335,6 +335,7 @@ impl VolumeRead for LunVol {
 static LUN_KEEP_STICKY: AtomicBool = AtomicBool::new(false);
 static LAST_LUN_GPT_ERR: AtomicU8 = AtomicU8::new(0);
 static LAST_LUN_GPT_FIT: AtomicBool = AtomicBool::new(true);
+static LAST_LUN_GPT_FIT_KNOWN: AtomicBool = AtomicBool::new(true);
 
 /// Last [`find_esp_skip_array_crc`] error on the LUN (0 = ESP found).
 pub fn persist_lun_last_gpt_err() -> u8 {
@@ -346,25 +347,31 @@ pub fn persist_lun_last_gpt_fit() -> bool {
     LAST_LUN_GPT_FIT.load(Ordering::Acquire)
 }
 
+/// True when [`persist_lun_last_gpt_fit`] is a size verdict, not a BOT miss.
+pub fn persist_lun_last_gpt_fit_known() -> bool {
+    LAST_LUN_GPT_FIT_KNOWN.load(Ordering::Acquire)
+}
+
 /// USB virtio is capped; a larger on-media GPT must not keep.
-fn lun_gpt_fits_guest() -> bool {
+/// `None` = LBA1 read failed (leftover CSW) — not a size verdict.
+fn lun_gpt_fits_guest() -> Option<bool> {
     if crate::mgmt::nvme::nvme_io_ready() {
-        return true;
+        return Some(true);
     }
     if !crate::mgmt::usb_bot::usb_bot_io_ready() {
-        return true;
+        return Some(true);
     }
     let guest = crate::mgmt::durable_lun::durable_lun_guest_usb_bytes(
         crate::mgmt::usb_bot::usb_bot_ns_bytes(),
     );
     if guest == 0 {
-        return true;
+        return Some(true);
     }
     let mut lba1 = [0u8; 512];
     if !LunVol.read_at(512, &mut lba1) {
-        return false;
+        return None;
     }
-    gpt_fits_guest_bytes(&lba1, guest)
+    Some(gpt_fits_guest_bytes(&lba1, guest))
 }
 
 /// Remember a live GPT+ESP+ext4 probe so TCG skip can keep after USB dies.
@@ -384,6 +391,7 @@ pub fn persist_lun_clear_sticky() {
     LUN_KEEP_STICKY.store(false, Ordering::Release);
     LAST_LUN_GPT_ERR.store(0, Ordering::Release);
     LAST_LUN_GPT_FIT.store(true, Ordering::Release);
+    LAST_LUN_GPT_FIT_KNOWN.store(true, Ordering::Release);
 }
 
 /// GPT / FAT BPB / ext4 on the LUN. FAT dirent walks stay off BOT.
@@ -399,8 +407,16 @@ pub fn persist_lun_keep_parts() -> (bool, bool, bool) {
         },
         Ordering::Release,
     );
-    let fit = gpt.is_ok() && lun_gpt_fits_guest();
+    let (fit, known) = if gpt.is_ok() {
+        match lun_gpt_fits_guest() {
+            Some(f) => (f, true),
+            None => (false, false),
+        }
+    } else {
+        (false, false)
+    };
     LAST_LUN_GPT_FIT.store(fit, Ordering::Release);
+    LAST_LUN_GPT_FIT_KNOWN.store(known, Ordering::Release);
     let keep_gpt = gpt.is_ok() && fit;
     let boot = match gpt {
         Ok(esp) if keep_gpt => disk_has_fat_bpb_from_esp(&LunVol, esp),
@@ -430,8 +446,10 @@ pub fn persist_lun_keep_parts_retry() -> (bool, bool, bool) {
     last
 }
 
-fn persist_lun_gpt_parsed_no_fit() -> bool {
-    persist_lun_last_gpt_err() == 0 && !persist_lun_last_gpt_fit()
+pub fn persist_lun_gpt_parsed_no_fit() -> bool {
+    persist_lun_last_gpt_err() == 0
+        && persist_lun_last_gpt_fit_known()
+        && !persist_lun_last_gpt_fit()
 }
 
 /// Live probe, or a prior successful peek if the LUN path later fails.
