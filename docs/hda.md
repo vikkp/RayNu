@@ -355,9 +355,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | m8-usb-bot-guest8g |
-| Summary | **Iron leftover skipped, not persist.** Guest8g: after F7 login, operator reports **HV is not up** (HTTP dead). That *is* the A2 reboot. Power On → UDisk EFI `b661808c` → paste peek. Do not SPA Start. Months **0.0 held**. Overall **99 held**. |
-| Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. No persist gate until peek `keep=1`. Nested QEMU ≠ R640. |
-| Gates touched | Lived guest8g HV-not-up after SOL drop; [m8_persist_iron.md](runbooks/m8_persist_iron.md). `./tools/sync-hda-site.sh --check`. `./tools/sync-loihda-site.sh --check`. |
+| Summary | **Iron leftover skipped, not persist.** Guest8g A2: **F11 Boot Manager of the existing UDisk** (`b661808c`), paste peek before SPA Start. Not an F11-flash of a new EFI. Months **0.0 held**. Overall **99 held**. |
+| Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. Nested QEMU ≠ R640. |
+| Gates touched | Operator F11=boot existing UDisk; [m8_persist_iron.md](runbooks/m8_persist_iron.md). `./tools/sync-hda-site.sh --check`. `./tools/sync-loihda-site.sh --check`. |
 | Months Δ | 0.0 held (Everest closed; iron Force Off still open) |
 
 
@@ -381,7 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
-| 2026-09-18 | m8-usb-bot-guest8g | 0.0 | 99 | **Iron leftover skipped, not persist:** guest8g after F7 `login:` `UUID=348005a9-…` operator reports **HV is not up** (coexist HTTP dead). SOL had already dropped at `n=1163264`. This *is* the A2 HV reboot. Power On → boot front USB 2 UDisk (same `b661808c`) → paste peek (`fit=1 keep=1` vs `gpt_err=2 keep=0`). Do not SPA Start. Do not reflash. Do not boot Dell `EFI Fixed Disk`. LOIHDA Bar A 42% held. Nested QEMU ≠ R640. Iron persist open. months 0.0 held; overall 99 held |
+| 2026-09-18 | m8-usb-bot-guest8g | 0.0 | 99 | **Iron leftover skipped, not persist:** guest8g A2 operator path is **F11 Boot Manager → existing UDisk** (`b661808c` already on the stick) then paste peek **before SPA Start**. Not an F11-flash of a new EFI. Do not SPA Start. Do not boot Dell `EFI Fixed Disk`. LOIHDA Bar A 42% held. Nested QEMU ≠ R640. Iron persist open. months 0.0 held; overall 99 held |
 | 2026-09-18 | m8-usb-bot-guest8g | 0.0 | 99 | **Iron leftover skipped, not persist:** guest8g COM2 (`b661808c`) iDRAC SOL `closed by remote host` after F7 `login:` at `usb rw ok wr=1 n=1163264 off=0x184f72…` (~6.08 GiB / 8 GiB ext4lazyinit). Blank reconnect is the root shell, not HV death. Smash Enter; curl coexist `:8443`; then Force Off for A2. Do not SPA Start. Do not reflash. LOIHDA Bar A 42% held. Nested QEMU ≠ R640. Iron persist open. months 0.0 held; overall 99 held |
 | 2026-09-18 | m8-usb-bot-guest8g | 0.0 | 99 | **Iron leftover skipped, not persist:** guest8g COM2 (`b661808c`) 8 GiB USB `ISO-INSTALL-OK` → `Installation is complete` → F7 `DISK-BOOTX64` → `DISK-BOOT-OK` + `root=UUID=348005a9-…` on `[vda] 8.00 GiB` → `login: root`. After login `usb rw ok wr=1` `n` 1.16 M `off≈6.08 GiB` is 8 GiB ext4lazyinit. Guest F7 ≠ Force Off. Do not SPA Start. A2 is Force Off then `keep=1`. LOIHDA Bar A 42% held. Nested QEMU ≠ R640. Iron persist open. months 0.0 held; overall 99 held |
 | 2026-09-18 | m8-usb-bot-guest8g | 0.0 | 99 | **Host/EFI, not persist:** guest8g fit peek LBA1 miss retries (not treated as too-big). Virtio USB **8 GiB**; leftover 298 GiB GPT `fit=0` cannot keep. **SPA Start intended**. Do not SPA Start setcfgretry `ef7e93ec`. LOIHDA Bar A 42% held. Nested QEMU ≠ R640. Iron persist open. months 0.0 held; overall 99 held |
@@ -977,7 +977,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     **M8.0 iron A2** HV is not up after guest8g F7 login. Power On → UDisk `b661808c` → COM2 peek `fit=1` `keep=1` / `RAYNU-V-M8-DISK-PERSIST-OK`. Do not SPA Start. Do not boot Dell `EFI Fixed Disk`. Nested-OK closed on `raynuvsrv1` `ce3d8a09`.
+Next move:     **M8.0 iron A2** HV not up. F11 Boot Manager → **existing** front USB 2 UDisk (`b661808c` already on it). Paste COM2 peek **before** SPA Start. Want `fit=1` `keep=1`. Do **not** F11-flash a new EFI. Do **not** boot Dell `EFI Fixed Disk`. Nested-OK closed on `raynuvsrv1` `ce3d8a09`.
 Rollback:      GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351
                EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc
                COM2 build: sha=f72b4276d198. Do not flash a later M8 persist prototype as known-good.
