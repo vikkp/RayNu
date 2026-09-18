@@ -1,6 +1,6 @@
 {
   "bars": {
-    "a": 49,
+    "a": 50,
     "b": 18
   },
   "baseline_date": "2026-09-14",
@@ -27,9 +27,9 @@
   "months_to_loi_a_prev": 1.5,
   "months_to_loi_b": 3.5,
   "months_to_loi_b_prev": 3.5,
-  "overall_pct": 42,
+  "overall_pct": 43,
   "pieces": {
-    "auth": 28,
+    "auth": 38,
     "console": 22,
     "everest": 100,
     "perc": 15,

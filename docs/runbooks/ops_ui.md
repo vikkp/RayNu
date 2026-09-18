@@ -14,7 +14,7 @@ Guest / ISO lights (PR #232 sea-glass). Firmware-debug `/fw/*` stays REST-only.
 3. Media: `GET /images`, `POST /iso/{id}/deploy` (extract-boot), `POST /iso/{id}/install`  
 4. Start / stop  
 5. **Host serial log:** `GET /logs/serial` + SPA panel (HV UART ring — not guest console)  
-6. **Auth:** Bearer token field; ESP `EFI/RayNu/auth.token` overrides bring-up when present  
+6. **Auth:** Bearer token field; ESP `EFI/RayNu/auth.token` overrides bring-up when present (M8.2 HostReady; `raynu-v-bringup` is **not product default**; firmware still accepts the lab latch when no ESP token)  
 
 ## Host smoke
 
