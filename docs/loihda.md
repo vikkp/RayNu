@@ -123,7 +123,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 **Product effect.** “Install Linux” without persist is a demo that dies when the operator Force Offs the box — which they will, because that is how you recover a Type-1. Nested File persist (`ce3d8a09`) and DurableLun USB/NVMe I/O are the mechanism. Iron Force Off is still open. USB ≥ 16 GiB (not the ESP Cruzer / 2–8 GiB UDisk) is the Toshiba LUN; guest virtio is capped at **8 GiB** so `setup-disk` is not a 7-hour ext4lazyinit. Nested QEMU ≠ R640.
 
-**Iron NOW (not a score bump).** Guest8g HV not up after 8 GiB USB F7 `login:` `UUID=348005a9-…`. **F11 Boot Manager → existing front USB 2 UDisk** (EFI `b661808c` already on the stick). Paste COM2 peek **before SPA Start**. Want `fit=1 bootx64=1 ext4=1 installed=1` virtio `keep=1`. **Do not F11-flash a new EFI.** Do not SPA Start. Do not pick Dell `EFI Fixed Disk`. Keep Toshiba. Never flash `/dev/sdc`.
+**Iron NOW (not a score bump).** Guest8g A2 COM2 (`b661808c`) after HV-not-up: leftover skip; peek `gpt=1 fit=1 gpt_err=0 usb_err=0 guest=8589934592 bootx64=1 ext4=1 installed=1`; virtio **8 GiB** `keep=1 (durable LUN usb)`. Coexist `10.99.99.146:8443`. **SPA Start now.** Want F7-style DISK-BOOT + `root=UUID=348005a9-…` and **no** `setup-disk`. That closes A2. Do not reflash. Keep Toshiba. Never flash `/dev/sdc`.
 
 **Honest remainder.** 30% is iron COM2 `RAYNU-V-M8-DISK-PERSIST-OK`. Do not F11 until `I/O ready` + virtio on the LUN.
 
@@ -171,7 +171,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 |------|-------|------|--------|
 | 2026-09-11 | Everest | Iron ISO → disk → login | **DONE** — HDA 99%, months 0.0 |
 | 2026-09-13 | Persist mechanism | Nested-OK + DurableLun USB/NVMe I/O | **DONE nested / host**; iron Force Off **open** |
-| **NOW** | Bar A A2 | USB/NVMe Force Off on COM2 | **NEXT** (F11 existing UDisk `b661808c`; paste peek before SPA Start; do not flash a new EFI) |
+| **NOW** | Bar A A2 | USB/NVMe Force Off on COM2 | **NEXT** (guest8g peek `keep=1` `installed=1`; **SPA Start now**; want DISK-BOOT + `UUID=348005a9-…`, no setup-disk) |
 | then | Bar A A3+A4 | SKU card + TLS | design overlap OK; do not close TLS before persist COM2 |
 | then | Bar B B2 | Spare PERC VD persist | after A2; census skip is lab safety |
 | later | Auth / console / unmodified ISO | A5, A6, Gen-1 Phase 2 | named residuals, not fake closes |
@@ -203,9 +203,9 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | Field | Value |
 |-------|-------|
 | Commit | m8-usb-bot-guest8g |
-| Summary | **Iron leftover skipped, not persist.** Guest8g A2: F11 existing UDisk, paste peek before SPA Start. Never Toshiba `/dev/sdc`. Scores **held**. |
+| Summary | **Iron leftover skipped, keep=1 lived, not persist-OK yet.** Guest8g A2 peek `installed=1` virtio `keep=1`. SPA Start now. Never Toshiba `/dev/sdc`. Scores **held**. |
 | Everest impact | none — HDA months 0.0 / 99% held |
-| LOI impact | Bar A **42% held** / Bar B **18% held** / overall **38% held** / months A **1.5 held**. Persist piece **70% held**. A2 still open until peek `keep=1`. Do not SPA Start. |
+| LOI impact | Bar A **42% held** / Bar B **18% held** / overall **38% held** / months A **1.5 held**. Persist piece **70% held**. A2 still open until DISK-BOOT + `UUID=348005a9-…`. **SPA Start now.** |
 | Gates touched | Lived guest8g HV-not-up; [m8_persist_iron.md](runbooks/m8_persist_iron.md). `./tools/sync-loihda-site.sh --check`. No MegaRAID. No TLS. |
 
 ---
@@ -214,7 +214,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
-| 2026-09-18 | m8-usb-bot-guest8g | 42 | 18 | **Iron leftover skipped, not persist.** Guest8g A2: F11 Boot Manager of the **existing** UDisk, paste peek before SPA Start. Not a new flash. Persist 70% held. A2 open. |
+| 2026-09-18 | m8-usb-bot-guest8g | 42 | 18 | **Iron leftover skipped, keep=1 lived, not persist-OK yet.** Guest8g A2 COM2 (`b661808c`) peek `gpt=1 fit=1 bootx64=1 ext4=1 installed=1` virtio 8 GiB `keep=1 (durable LUN usb)`. SPA Start now. Persist 70% held until DISK-BOOT + same UUID. A2 open. |
 | 2026-09-18 | m8-usb-bot-guest8g | 42 | 18 | **Iron leftover skipped, not persist.** Guest8g iDRAC SOL `closed by remote host` at `usb rw ok wr=1 n=1163264 off=0x184f72…` after F7 `login:`. Blank reconnect ≠ wipe. Smash Enter; curl `:8443`; Force Off for A2. Do not SPA Start. Persist 70% held. A2 open. |
 | 2026-09-18 | m8-usb-bot-guest8g | 42 | 18 | **Iron leftover skipped, not persist.** Guest8g COM2 (`b661808c`) 8 GiB USB `ISO-INSTALL-OK` → F7 `DISK-BOOT-OK` + `login: root` `UUID=348005a9-…` on `[vda] 8.00 GiB`. After login `usb rw ok wr=1` `n` 1.16 M is 8 GiB ext4lazyinit. Guest F7 ≠ A2. Do not SPA Start. Persist 70% held. A2 open. |
 | 2026-09-18 | m8-usb-bot-guest8g | 42 | 18 | **Host/EFI, not persist.** Guest8g fit peek LBA1 miss retries (not treated as too-big). 8 GiB virtio; leftover 298 GiB GPT `fit=0` so SPA Start SETUP is **intended**. Do not SPA Start setcfgretry `ef7e93ec`. Persist 70% held. A2 open. |
