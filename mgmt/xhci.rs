@@ -533,7 +533,12 @@ pub fn xhci_retry_address_device(first_posted: bool) -> bool {
 /// ~245 GiB LBA walk — ext4lazyinit on freshly mkfs'd 298 GiB
 /// `vda2` after remount-rw, not a hang, not a second setup-disk.
 /// USB WRITEs succeeding. Guest F7 ≠ Force Off persist. **Not
-/// persist.** Do not Force Off (dirty ext4). Do not reflash.
+/// persist.** Iron Force Off COM2 (same EFI `ef7e93ec`): Toshiba
+/// named + `usb I/O ready` 298 GiB + leftover skip, then peek
+/// `efi=3?????|? gpt=0 gpt_err=2 usb_err=0 bootx64=0 ext4=0
+/// installed=0` and virtio `keep=0 (durable LUN usb)`. Phase B
+/// coexist idle. **Not persist.** Do not SPA Start (SETUP would
+/// wipe). Dell `EFI Fixed Disk` on back USB is NVRAM, not keep=1.
 pub fn xhci_retry_set_config(first_posted: bool) -> bool {
     !first_posted
 }
