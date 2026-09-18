@@ -831,6 +831,14 @@ pub fn durable_lun_peek_retry(n: u8) {
     crate::mgmt::xhci::xhci_live_peek_retry(n);
 }
 
+/// Warm USB BOT after coexist idle so RayNu-F can stage DISK-BOOTX64.
+/// No-op when the LUN is NVMe or BOT is not ready. Not persist-OK.
+pub fn durable_lun_diskprime() {
+    if crate::mgmt::usb_bot::usb_bot_io_ready() {
+        crate::mgmt::xhci::xhci_live_diskprime();
+    }
+}
+
 /// GPT peek + keep-detect after I/O ready (and TCG skip).
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 pub fn durable_lun_serial_peek(tag: &str) {

@@ -289,9 +289,16 @@ fn find_esp_opts<R: VolumeRead>(r: &R, verify_array_crc: bool) -> Result<EspPart
     Err(GptError::NoEsp)
 }
 
-/// Convenience: whether `find_esp` succeeds.
+/// Convenience: whether a GPT ESP exists (header CRC + first ESP).
+///
+/// Skips the 16 KiB partition-array CRC. Iron guest8g SPA Start (`b661808c`):
+/// peek `installed=1` `keep=1`, then `find_esp` CRC walked 32 USB BOT READs
+/// after coexist idle and timed out (`usb rw fail … bot=data scsi=read`)
+/// so RayNu-F staged `image=ISO-BOOTX64` instead of `DISK-BOOTX64`. Keep-detect
+/// already uses [`find_esp_skip_array_crc`]. SliceDisk/HPA still call
+/// [`find_esp`] when they need the array CRC.
 pub fn disk_has_gpt_esp<R: VolumeRead>(r: &R) -> bool {
-    find_esp(r).is_ok()
+    find_esp_skip_array_crc(r).is_ok()
 }
 
 #[cfg(test)]

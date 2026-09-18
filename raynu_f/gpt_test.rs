@@ -154,9 +154,46 @@ fn skip_array_crc_finds_esp_when_unused_entry_is_stale() {
     // Unused entry 2 (not the ESP). Array CRC fails; keep-detect still finds ESP.
     disk[(ENTRY_LBA * 512) as usize + 256] ^= 0xFF;
     assert_eq!(find_esp(&SliceDisk(&disk)), Err(GptError::BadEntryArrayCrc));
+    assert!(
+        disk_has_gpt_esp(&SliceDisk(&disk)),
+        "SPA disk-before-ISO must skip array CRC (iron USB BOT)"
+    );
     let esp = find_esp_skip_array_crc(&SliceDisk(&disk)).expect("keep-detect ESP");
     assert_eq!(esp.start_lba, ESP_START);
     assert_eq!(GptError::BadEntryArrayCrc.code(), 7);
+}
+
+#[test]
+fn disk_has_gpt_esp_survives_few_reads_full_crc_does_not() {
+    use core::cell::Cell;
+    struct BudgetDisk<'a> {
+        inner: SliceDisk<'a>,
+        left: Cell<usize>,
+    }
+    impl VolumeRead for BudgetDisk<'_> {
+        fn read_at(&self, off: u64, buf: &mut [u8]) -> bool {
+            let n = self.left.get();
+            if n == 0 {
+                return false;
+            }
+            self.left.set(n - 1);
+            self.inner.read_at(off, buf)
+        }
+    }
+    let disk = synthetic_gpt();
+    let few = BudgetDisk {
+        inner: SliceDisk(&disk),
+        left: Cell::new(8),
+    };
+    assert!(
+        disk_has_gpt_esp(&few),
+        "header + first ESP must not need 32 BOT array-CRC fills"
+    );
+    let crc = BudgetDisk {
+        inner: SliceDisk(&disk),
+        left: Cell::new(8),
+    };
+    assert_eq!(find_esp(&crc), Err(GptError::ShortRead));
 }
 
 #[test]

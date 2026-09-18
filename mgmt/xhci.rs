@@ -1362,6 +1362,12 @@ fn serial_xhci_peekretry(n: u8) {
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_diskprime() {
+    use crate::boot::serial;
+    serial::write_line("boot: Stage 46 xhci diskprime (not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn serial_xhci_slotretry(port: u8) {
     use crate::boot::serial;
     serial::write_str("boot: Stage 46 xhci slotretry p");
@@ -1650,6 +1656,9 @@ fn serial_xhci_setcfgretry(_port: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_peekretry(_n: u8) {}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_diskprime() {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_slotretry(_port: u8) {}
@@ -3988,6 +3997,46 @@ pub fn xhci_live_peek_retry(n: u8) {
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 pub fn xhci_live_peek_retry(_n: u8) {}
+
+/// After coexist idle, drain leftover IN then INQUIRY + LBA0 before RayNu-F
+/// GPT. Iron guest8g SPA Start (`b661808c`): peek `keep=1` then
+/// `image=ISO-BOOTX64` and `usb rw fail bot=data scsi=read`. Do not
+/// `recover_pipes` (Reset on Running).
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+pub fn xhci_live_diskprime() {
+    serial_xhci_diskprime();
+    if LIVE_LOCK.swap(true, core::sync::atomic::Ordering::Acquire) {
+        return;
+    }
+    // SAFETY: lock held; LIVE set by xhci_init_pci.
+    unsafe {
+        if let Some(live) = LIVE.as_mut() {
+            let mut hw = MmioXhci { base: live.mmio };
+            drain_events(&mut hw, &live.caps, &mut live.ev);
+            live.settle();
+            live.tag = live.tag.wrapping_add(1);
+            if live.tag == 0 {
+                live.tag = 1;
+            }
+            let mut inq = [0u8; 36];
+            let _ = live.first_inquiry(live.tag, &mut inq);
+            live.settle();
+            let mut lba0 = [0u8; 512];
+            let mut tag = live.tag;
+            let lba = live.lba;
+            live.long_bulk = true;
+            let _ = super::usb_bot::usb_bot_rw(live, &mut tag, lba, 0, &mut lba0, false);
+            live.tag = tag;
+            live.long_bulk = false;
+        }
+    }
+    LIVE_LOCK.store(false, core::sync::atomic::Ordering::Release);
+}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+pub fn xhci_live_diskprime() {
+    serial_xhci_diskprime();
+}
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 pub fn xhci_live_rw(off: u64, buf: &mut [u8], write: bool) -> bool {
