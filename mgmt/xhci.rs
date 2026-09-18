@@ -494,7 +494,10 @@ pub fn xhci_retry_enable_slot(first_posted: bool) -> bool {
 /// then Toshiba `0480:a004` named; `xhci cswqueue`; `usb I/O ready`
 /// 298 GiB; leftover skipped. No `xhci addrretry` line (ADDR lived after
 /// slotretry). Peek `efi=????????` `gpt_err=2` `usb_err=8` (latched Xfer).
-/// Paste ended `M1-EBS-OK`. Guest Alpine not persist. Do not revert.
+/// Guest Alpine `[vda] 298 GiB` `vda1` login; CSW-queued READs lived;
+/// sequential WRITE CBW `bot=cbw scsi=write cmpl=0xff` at backup-GPT
+/// `off=0x4a85d51200` then `sfdisk` I/O error. **Not persist.** Do not
+/// revert CSW queue / nopretry. Queue WRITE DATA OUT + CSW IN.
 pub fn xhci_retry_address_device(first_posted: bool) -> bool {
     !first_posted
 }
@@ -1419,6 +1422,32 @@ fn serial_xhci_cswqueue(port: u8) {
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_writequeue(port: u8) {
+    use crate::boot::serial;
+    use core::sync::atomic::{AtomicBool, Ordering};
+    static ONCE: AtomicBool = AtomicBool::new(false);
+    if ONCE.swap(true, Ordering::Relaxed) {
+        return;
+    }
+    serial::write_str("boot: Stage 46 xhci writequeue p");
+    serial_dec_u8(port);
+    serial::write_line(" (not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_writesettle(port: u8) {
+    use crate::boot::serial;
+    use core::sync::atomic::{AtomicBool, Ordering};
+    static ONCE: AtomicBool = AtomicBool::new(false);
+    if ONCE.swap(true, Ordering::Relaxed) {
+        return;
+    }
+    serial::write_str("boot: Stage 46 xhci writesettle p");
+    serial_dec_u8(port);
+    serial::write_line(" (not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn serial_xhci_desc_retry(port: u8, n: u8) {
     use crate::boot::serial;
     serial::write_str("boot: Stage 46 xhci enum p");
@@ -1575,6 +1604,12 @@ fn serial_xhci_capoverlap(_port: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_cswqueue(_port: u8) {}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_writequeue(_port: u8) {}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_writesettle(_port: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_eval(_port: u8, _mps: u16, _ok: bool) {}
@@ -1781,12 +1816,22 @@ fn consume_posted(
 pub const BOT_CSW_BOUNCE_OFF: u64 = 64;
 /// DATA IN + CSW IN Transfer Events on the bulk IN pipe.
 pub const BOT_OVERLAP_NEED_IN: u8 = 2;
+/// READ overlap: one CBW OUT Transfer Event.
+pub const BOT_OVERLAP_NEED_OUT: u8 = 1;
+/// WRITE overlap: CBW OUT + DATA OUT Transfer Events.
+pub const BOT_OVERLAP_NEED_OUT_WRITE: u8 = 2;
+/// WRITE overlap: CSW IN only (DATA is OUT).
+pub const BOT_OVERLAP_NEED_IN_WRITE: u8 = 1;
 
-/// Wait for bulk OUT and `need_in` bulk IN Transfer Events in either order.
+/// Wait for `need_out` bulk OUT and `need_in` bulk IN Transfer Events
+/// in either order.
 /// Iron skipmaxlun COM2: sequential CBW wait never posted; some BOT
 /// devices do not complete the CBW TD until the DATA IN pipe is primed.
 /// Iron sensebot COM2: DATA completed then sequential CSW `bulk_in`
 /// timed out — queue CSW on the IN ring (`need_in=2`) with DATA.
+/// Iron addrretry COM2: sequential WRITE CBW timed out after overlapped
+/// READs (`bot=cbw scsi=write cmpl=0xff`) — queue CBW OUT + DATA OUT +
+/// CSW IN (`need_out=2` `need_in=1`).
 /// Do not require TRB pointer match — leftover EP0 events are skipped
 /// by slot+DCI. Unmatched events are dropped (same as consume_posted).
 fn consume_bulk_pair(
@@ -1796,14 +1841,15 @@ fn consume_bulk_pair(
     slot: u8,
     dci_out: u8,
     dci_in: u8,
+    need_out: u8,
     need_in: u8,
     spins_max: u32,
 ) -> Result<(), UsbBotError> {
-    let mut got_out = false;
+    let mut out_events = 0u8;
     let mut in_events = 0u8;
     let mut spins = 0u32;
     loop {
-        if bulk_bot_done(got_out, in_events, need_in) {
+        if bulk_bot_xfer_done(out_events, in_events, need_out, need_in) {
             return Ok(());
         }
         let t = read_trb(hw, ev.base, ev.deq);
@@ -1824,15 +1870,15 @@ fn consume_bulk_pair(
                 );
                 return Err(UsbBotError::Xfer);
             }
-            bulk_bot_take(&mut got_out, &mut in_events, ctrl, slot, dci_out, dci_in);
+            bulk_bot_take_n(&mut out_events, &mut in_events, ctrl, slot, dci_out, dci_in);
             continue;
         }
         spins = spins.saturating_add(1);
         maybe_serial_xhci_rw_wait(spins, spins_max);
         if spins > spins_max {
-            if got_out && in_events >= 1 {
+            if out_events >= need_out && in_events >= 1 {
                 store_usb_bot_stage(BOT_STAGE_CSW);
-            } else if got_out {
+            } else if out_events >= 1 {
                 store_usb_bot_stage(BOT_STAGE_DATA);
             }
             store_usb_bot_diag(
@@ -1846,9 +1892,30 @@ fn consume_bulk_pair(
     }
 }
 
+/// True when overlapped BOT has `need_out` OUT plus `need_in` IN completions.
+pub fn bulk_bot_xfer_done(out_events: u8, in_events: u8, need_out: u8, need_in: u8) -> bool {
+    out_events >= need_out && in_events >= need_in
+}
+
 /// True when overlapped BOT has CBW OUT plus `need_in` IN completions.
 pub fn bulk_bot_done(got_out: bool, in_events: u8, need_in: u8) -> bool {
-    got_out && in_events >= need_in
+    bulk_bot_xfer_done(if got_out { 1 } else { 0 }, in_events, 1, need_in)
+}
+
+/// Count a Transfer Event as CBW/DATA OUT and/or DATA/CSW IN.
+pub fn bulk_bot_take_n(
+    out_events: &mut u8,
+    in_events: &mut u8,
+    ctrl: u32,
+    slot: u8,
+    dci_out: u8,
+    dci_in: u8,
+) {
+    if xhci_xfer_matches(ctrl, slot, dci_out) {
+        *out_events = out_events.saturating_add(1);
+    } else if xhci_xfer_matches(ctrl, slot, dci_in) {
+        *in_events = in_events.saturating_add(1);
+    }
 }
 
 /// Record a Transfer Event as CBW OUT and/or DATA/CSW IN for overlapped BOT.
@@ -1860,11 +1927,9 @@ pub fn bulk_bot_take(
     dci_out: u8,
     dci_in: u8,
 ) {
-    if xhci_xfer_matches(ctrl, slot, dci_out) {
-        *got_out = true;
-    } else if xhci_xfer_matches(ctrl, slot, dci_in) {
-        *in_events = in_events.saturating_add(1);
-    }
+    let mut n = if *got_out { 1 } else { 0 };
+    bulk_bot_take_n(&mut n, in_events, ctrl, slot, dci_out, dci_in);
+    *got_out = n >= 1;
 }
 
 /// Record a Transfer Event as CBW OUT and/or DATA IN for overlapped BOT.
@@ -2123,14 +2188,7 @@ fn address_device(
         Err(e) => {
             abort_keep_slot(hw, caps, mem, cmd_ring, ev);
             if !xhci_retry_address_device(false) {
-                return Err(stamp_enum(
-                    hw,
-                    caps,
-                    mmio,
-                    port,
-                    XHCI_ENUM_CMD_ADDR,
-                    e,
-                ));
+                return Err(stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_ADDR, e));
             }
             serial_xhci_addrretry(port);
             issue_address_device(hw, caps, mem, cmd_ring, ev, port, slot, speed).map_err(|e2| {
@@ -3082,6 +3140,7 @@ impl UsbBulk for LiveXhci {
             self.slot,
             self.dci_out,
             self.dci_in,
+            BOT_OVERLAP_NEED_OUT,
             BOT_OVERLAP_NEED_IN,
             spins,
         )?;
@@ -3095,9 +3154,81 @@ impl UsbBulk for LiveXhci {
         Ok(())
     }
 
+    fn overlapped_out(&mut self, tag: u32, cdb: &[u8], buf: &mut [u8]) -> Result<(), UsbBotError> {
+        // Iron addrretry COM2 (`116dbb1f`): CSW-queued READs lived through
+        // Alpine `[vda] 298 GiB` login + setup-disk then sequential WRITE
+        // CBW `bot=cbw scsi=write cmpl=0xff` at backup-GPT
+        // `off=0x4a85d51200`, later `cmpl=0x00020404`, then READ CBW fail
+        // at 0 and `sfdisk: cannot open /dev/vda: I/O error`. Queue CBW
+        // OUT + DATA OUT + CSW IN (`xhci writequeue`) the same way READs
+        // queue CSW with DATA. Keep CSW-queued IN / nopretry / nlb=1.
+        if buf.is_empty() || buf.len() > 4096 {
+            return Err(UsbBotError::Xfer);
+        }
+        serial_xhci_writequeue(self.port);
+        let data_len = buf.len() as u32;
+        let cbw = Cbw::scsi(tag, data_len, false, 0, cdb);
+        stamp_scsi_cdb(cdb);
+        store_usb_bot_stage(BOT_STAGE_CBW);
+        let mut hw = MmioXhci { base: self.mmio };
+        drain_events(&mut hw, &self.caps, &mut self.ev);
+        hw.dma_write(self.bounce, &cbw.bytes);
+        let _trb_cbw = self.bulk_out.place(
+            &mut hw,
+            self.bounce,
+            CBW_LEN as u32,
+            trb_ctrl(0, TRB_NORMAL, TRB_IOC | TRB_ISP),
+        );
+        hw.dma_write(self.bounce_in, buf);
+        let _trb_data = self.bulk_out.place(
+            &mut hw,
+            self.bounce_in,
+            data_len,
+            trb_ctrl(0, TRB_NORMAL, TRB_IOC),
+        );
+        let csw_z = [0u8; CSW_LEN];
+        hw.dma_write(self.bounce + BOT_CSW_BOUNCE_OFF, &csw_z);
+        let _trb_csw = self.bulk_in.place(
+            &mut hw,
+            self.bounce + BOT_CSW_BOUNCE_OFF,
+            CSW_LEN as u32,
+            trb_ctrl(0, TRB_NORMAL, bulk_in_trb_flags(CSW_LEN)),
+        );
+        doorbell(&mut hw, self.caps.db, self.slot, self.dci_out);
+        doorbell(&mut hw, self.caps.db, self.slot, self.dci_in);
+        let spins = self.bulk_wait();
+        consume_bulk_pair(
+            &mut hw,
+            &self.caps,
+            &mut self.ev,
+            self.slot,
+            self.dci_out,
+            self.dci_in,
+            BOT_OVERLAP_NEED_OUT_WRITE,
+            BOT_OVERLAP_NEED_IN_WRITE,
+            spins,
+        )?;
+        store_usb_bot_stage(BOT_STAGE_CSW);
+        let mut csw = [0u8; CSW_LEN];
+        hw.dma_read(self.bounce + BOT_CSW_BOUNCE_OFF, &mut csw);
+        if !csw_ok(&csw) {
+            return Err(UsbBotError::Bot);
+        }
+        Ok(())
+    }
+
     fn prepare_first_read(&mut self) {
         // Iron epst COM2: INQUIRY/CAPACITY lived; READ CBW `cmpl=0xff`.
         self.arm_first_bulk(true);
+    }
+
+    fn prepare_first_write(&mut self) {
+        // Iron addrretry COM2: first WRITE after thousands of overlapped
+        // READs was backup-GPT at end of platter. Settle; do not Stop
+        // unused Running bulk EPs (firstcbw COM2: rearm before unused
+        // CBW still `cmpl=0xff`).
+        serial_xhci_writesettle(self.port);
+        self.settle();
     }
 
     fn end_first_read(&mut self) {
@@ -4614,6 +4745,33 @@ mod xhci_pack_test {
         assert!(!bulk_bot_done(true, 1, BOT_OVERLAP_NEED_IN));
         assert_eq!(BOT_CSW_BOUNCE_OFF, 64);
         assert_eq!(BOT_OVERLAP_NEED_IN, 2);
+        assert_eq!(BOT_OVERLAP_NEED_OUT, 1);
+        assert_eq!(BOT_OVERLAP_NEED_OUT_WRITE, 2);
+        assert_eq!(BOT_OVERLAP_NEED_IN_WRITE, 1);
+        // Iron addrretry COM2 WRITE: CBW OUT + DATA OUT + CSW IN.
+        let mut out_events = 0u8;
+        in_events = 0;
+        bulk_bot_take_n(&mut out_events, &mut in_events, cbw_out, 1, 4, 3);
+        bulk_bot_take_n(&mut out_events, &mut in_events, cbw_out, 1, 4, 3);
+        bulk_bot_take_n(&mut out_events, &mut in_events, csw_in, 1, 4, 3);
+        assert!(bulk_bot_xfer_done(
+            out_events,
+            in_events,
+            BOT_OVERLAP_NEED_OUT_WRITE,
+            BOT_OVERLAP_NEED_IN_WRITE
+        ));
+        assert!(!bulk_bot_xfer_done(
+            1,
+            1,
+            BOT_OVERLAP_NEED_OUT_WRITE,
+            BOT_OVERLAP_NEED_IN_WRITE
+        ));
+        assert!(bulk_bot_xfer_done(
+            1,
+            2,
+            BOT_OVERLAP_NEED_OUT,
+            BOT_OVERLAP_NEED_IN
+        ));
         assert_eq!(xhci_event_dci(cbw_out), 4);
         assert_eq!(xhci_xfer_diag_cmpl(0, 4, 1), 0x0001_0400);
         assert_eq!(BOT_SETTLE_SPINS > SPINS, true);
