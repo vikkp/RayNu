@@ -1,10 +1,8 @@
 use super::{
-    host_rx_ready, inject_sysrq, pio, poll_host_rx, push_host_rx, reassert_irq, reset,
-    take_host_rx,
+    host_rx_pace_due, host_rx_ready, inject_sysrq, pio, poll_host_rx, poll_host_rx_paced,
+    push_host_rx, reassert_irq, reset, take_host_rx, HOST_RX_PACE_HZ_DIV,
 };
-use crate::boot::serial::{
-    guest_tx_clear, set_guest_tx_test_ring_full, set_linux_earlycon_share,
-};
+use crate::boot::serial::{guest_tx_clear, set_guest_tx_test_ring_full, set_linux_earlycon_share};
 
 #[test]
 fn scratch_roundtrip_and_fifo_iir() {
@@ -93,7 +91,11 @@ fn product_iso_thre_waits_for_sol_then_reasserts() {
     let (iir2, _, _) = pio(0x03FA, true, 0);
     assert_eq!(iir2, 0xC2);
     let (lsr2, _, _) = pio(0x03FD, true, 0);
-    assert_eq!(lsr2 & 0x60, 0x60, "IIR and LSR agree so Linux loads tx_loadsz");
+    assert_eq!(
+        lsr2 & 0x60,
+        0x60,
+        "IIR and LSR agree so Linux loads tx_loadsz"
+    );
     let src = include_str!("guest_uart.rs");
     assert!(src.contains("UART THRE level until stop_tx"));
     set_linux_earlycon_share(false);
@@ -205,6 +207,21 @@ fn host_rx_ready_and_take_for_raynu_f_conin() {
 }
 
 #[test]
+fn host_rx_pace_due_is_10ms() {
+    let hz = 2_100_000_000;
+    assert_eq!(HOST_RX_PACE_HZ_DIV, 100);
+    assert!(host_rx_pace_due(1, 0, hz), "cold start is always due");
+    assert!(
+        !host_rx_pace_due(hz / 100 - 1, 1, hz),
+        "must not inb host COM2 inside 10ms"
+    );
+    assert!(host_rx_pace_due(1 + hz / 100, 1, hz));
+    assert!(host_rx_pace_due(1, 0, 0), "uncalibrated TSC uses fallback");
+    poll_host_rx_paced();
+    poll_host_rx_paced();
+}
+
+#[test]
 fn sysrq_break_then_key_follows_8250_rx_loop() {
     reset();
     crate::devices::guest_irq::reset();
@@ -215,7 +232,10 @@ fn sysrq_break_then_key_follows_8250_rx_loop() {
     let _ = pio(0x03F9, false, 0x01);
     assert!(inject_sysrq(b'w'), "UART sysrq break");
     assert_eq!(crate::devices::guest_irq::take_inject_vector(), Some(0x24));
-    assert!(!inject_sysrq(b't'), "second BREAK waits until the first is read");
+    assert!(
+        !inject_sysrq(b't'),
+        "second BREAK waits until the first is read"
+    );
     let (iir, _, _) = pio(0x03FA, true, 0);
     assert_eq!(iir, 0xC4, "RDA while only the BREAK is pending");
     // serial8250_rx_chars: LSR (DR|BI) -> RBR NUL (uart_handle_break) ->
@@ -249,7 +269,11 @@ fn linux_earlycon_lsr_thre_follows_sol() {
     set_linux_earlycon_share(true);
     set_guest_tx_test_ring_full(true);
     let (lsr, _, _) = pio(0x03FD, true, 0);
-    assert_eq!(lsr & 0x60, 0, "THRE/TEMT clear while the shared ring has no room");
+    assert_eq!(
+        lsr & 0x60,
+        0,
+        "THRE/TEMT clear while the shared ring has no room"
+    );
     set_guest_tx_test_ring_full(false);
     let (lsr2, _, _) = pio(0x03FD, true, 0);
     assert_eq!(lsr2 & 0x60, 0x60);
@@ -315,7 +339,11 @@ fn thre_level_follows_ring_room_and_reasserts_after_drain() {
     let (iir2, _, _) = pio(0x03FA, true, 0);
     assert_eq!(iir2 & 0x07, 0x02);
     let (lsr2, _, _) = pio(0x03FD, true, 0);
-    assert_eq!(lsr2 & 0x60, 0x60, "IIR and LSR agree: Linux loads tx_loadsz");
+    assert_eq!(
+        lsr2 & 0x60,
+        0x60,
+        "IIR and LSR agree: Linux loads tx_loadsz"
+    );
     // Guest THR bytes land in the ring (host tests drain at once).
     write_byte_nowait(b'!');
     let src = include_str!("guest_uart.rs");

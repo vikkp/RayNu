@@ -11,7 +11,7 @@
 
 use core::sync::atomic::{AtomicBool, Ordering};
 
-use super::api::{dispatch_rest, BRINGUP_AUTH_TOKEN, RestMethod, RestRequest, RestResponse};
+use super::api::{dispatch_rest, RestMethod, RestRequest, RestResponse, BRINGUP_AUTH_TOKEN};
 use super::{VmLifecycle, VmTable};
 
 /// Host / CI marker when the M5.2 Web UI gate passes.
@@ -159,6 +159,7 @@ pub fn webui_html_wires_api() -> bool {
         && s.contains("/start")
         && s.contains("/stop")
         && s.contains("listVms")
+        && s.contains("listBusy")
         && s.contains("createVm")
         && s.contains("listImages")
         && s.contains("f-cpu")

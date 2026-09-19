@@ -138,7 +138,11 @@ fn read_u16(b: &[u8], i: usize) -> Option<u16> {
 }
 
 fn read_u24(b: &[u8], i: usize) -> Option<usize> {
-    Some(((*b.get(i)? as usize) << 16) | ((*b.get(i + 1)? as usize) << 8) | (*b.get(i + 2)? as usize))
+    Some(
+        ((*b.get(i)? as usize) << 16)
+            | ((*b.get(i + 1)? as usize) << 8)
+            | (*b.get(i + 2)? as usize),
+    )
 }
 
 fn hmac_sha256(key: &[u8], data: &[u8], out: &mut [u8; 32]) -> bool {
@@ -369,6 +373,10 @@ impl Tls12Listen {
 
     pub fn handshake_failed(&self) -> bool {
         self.state == ST_FAIL
+    }
+
+    pub fn handshake_waiting_client_hello(&self) -> bool {
+        self.state == ST_CH
     }
 
     pub fn key_ready(&self) -> bool {

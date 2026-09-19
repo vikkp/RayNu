@@ -26,11 +26,13 @@
 
 use crate::boot::serial;
 use crate::mgmt::bcm5720::Bcm5720Device;
+use crate::mgmt::console::{maybe_print_iron_console_ok, take_spa_keys_injected};
 use crate::mgmt::e1000::E1000Device;
 use crate::mgmt::host_nic::{
-    coexist_millis_from_tsc, host_nic_lab_armed, http_accept_should_idle_abort, HOST_NIC_DHCP_MS,
-    HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS, HOST_NIC_MAX_EXCHANGES, M7_HOST_NIC_QEMU_MARKER,
-    PRE_RAYNUF_HTTPS_MS, QEMU_USERNET_GW, QEMU_USERNET_IPV4, QEMU_USERNET_PREFIX,
+    coexist_millis_from_tsc, host_nic_lab_armed, http_accept_idle_limit_ms,
+    http_accept_should_idle_abort, HOST_NIC_DHCP_MS, HOST_NIC_LISTEN_MS, HOST_NIC_MAX_EXCHANGES,
+    M7_HOST_NIC_QEMU_MARKER, PRE_RAYNUF_HTTPS_MS, QEMU_USERNET_GW, QEMU_USERNET_IPV4,
+    QEMU_USERNET_PREFIX,
 };
 use crate::mgmt::host_nic_poll::{bounded_poll, HOST_NIC_POLL_BUDGET};
 use crate::mgmt::http::handle_http_request;
@@ -38,7 +40,6 @@ use crate::mgmt::http::MGMT_HTTP_DEFAULT_PORT;
 use crate::mgmt::mgmt_arena::{MgmtArena, MgmtFatal};
 use crate::mgmt::mgmt_lease;
 use crate::mgmt::pci_census;
-use crate::mgmt::console::{maybe_print_iron_console_ok, take_spa_keys_injected};
 use crate::mgmt::tls::maybe_print_iron_tls_ok;
 use crate::mgmt::tls12::Tls12Listen;
 use crate::mgmt::tls_coexist::{COEXIST_HTTP_OUT_N, COEXIST_RX_ACC_N};
@@ -405,7 +406,8 @@ pub fn tick_bcm5720_coexist() {
                 COEXIST_ANNOUNCED,
                 headers_done,
                 millis.saturating_sub(COEXIST_ACCEPT_AT_MS),
-                HOST_NIC_HTTP_IDLE_MS,
+                // HOST_NIC_HTTP_IDLE_MS unless TLS ST_CH → HOST_NIC_HTTP_HS_IDLE_MS
+                http_accept_idle_limit_ms(session.handshake_waiting_client_hello()),
             ) {
                 sock.abort();
                 session.reset();
@@ -449,18 +451,17 @@ pub fn tick_bcm5720_coexist() {
         if did_idle_abort {
             serial::write_line("boot: WARN — HOST-NIC TCP idle abort; re-listen");
             let _ = iface.poll(Instant::from_millis(millis + 1), device, sockets);
+            // idle abort then abort()+listen — not gated on !is_open()
+            sockets.get_mut::<tcp::Socket>(tcp_handle).abort();
             let sock = sockets.get_mut::<tcp::Socket>(tcp_handle);
-            if !sock.is_open() {
-                let _ = sock.listen(COEXIST_PORT);
-            }
+            let _ = sock.listen(COEXIST_PORT);
         }
         if did_tls_fail {
             serial::write_line("boot: WARN — HOST-NIC TLS handshake fail; re-listen");
             let _ = iface.poll(Instant::from_millis(millis + 1), device, sockets);
+            sockets.get_mut::<tcp::Socket>(tcp_handle).abort();
             let sock = sockets.get_mut::<tcp::Socket>(tcp_handle);
-            if !sock.is_open() {
-                let _ = sock.listen(COEXIST_PORT);
-            }
+            let _ = sock.listen(COEXIST_PORT);
         }
         if millis - COEXIST_LAST_DIAG >= 5000 {
             COEXIST_LAST_DIAG = millis;
@@ -890,7 +891,8 @@ fn listen_loop<D: Device>(
                 announced,
                 headers_done,
                 millis.saturating_sub(accept_at),
-                HOST_NIC_HTTP_IDLE_MS,
+                // HOST_NIC_HTTP_IDLE_MS unless TLS ST_CH → HOST_NIC_HTTP_HS_IDLE_MS
+                http_accept_idle_limit_ms(session.handshake_waiting_client_hello()),
             ) {
                 sock.abort();
                 session.reset();
@@ -936,19 +938,18 @@ fn listen_loop<D: Device>(
             serial::write_line("boot: WARN — HOST-NIC TCP idle abort; re-listen");
             millis += 1;
             iface.poll(Instant::from_millis(millis), device, &mut sockets);
+            // idle abort then abort()+listen — not gated on !is_open()
+            sockets.get_mut::<tcp::Socket>(tcp_handle).abort();
             let sock = sockets.get_mut::<tcp::Socket>(tcp_handle);
-            if !sock.is_open() {
-                let _ = sock.listen(port);
-            }
+            let _ = sock.listen(port);
         }
         if did_tls_fail {
             serial::write_line("boot: WARN — HOST-NIC TLS handshake fail; re-listen");
             millis += 1;
             iface.poll(Instant::from_millis(millis), device, &mut sockets);
+            sockets.get_mut::<tcp::Socket>(tcp_handle).abort();
             let sock = sockets.get_mut::<tcp::Socket>(tcp_handle);
-            if !sock.is_open() {
-                let _ = sock.listen(port);
-            }
+            let _ = sock.listen(port);
         }
 
         millis += 1;

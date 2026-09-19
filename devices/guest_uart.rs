@@ -49,7 +49,7 @@
 //! whole 16550A FIFO per THRE window. guest UART TX ring room.
 //! Not `ISO-INSTALL-OK`.
 
-use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 
 /// ISA COM1.
 pub const COM1_IRQ: u8 = 4;
@@ -70,6 +70,12 @@ static STAT_IER_ETBEI_OFF: AtomicU32 = AtomicU32::new(0);
 static STAT_REASSERT_RAISE: AtomicU32 = AtomicU32::new(0);
 static STAT_PIO_RAISE: AtomicU32 = AtomicU32::new(0);
 static STAT_PIO_LOWER: AtomicU32 = AtomicU32::new(0);
+/// Last TSC [`poll_host_rx_paced`] actually issued host COM2 `inb`.
+static LAST_HOST_RX_TSC: AtomicU64 = AtomicU64::new(0);
+/// Host COM2 RX at most 100 times/s (10 ms). Iron `b5e290be` polled on
+/// every RayNu-F vmexit (~2M/s at GRUB) and the chassis powered off.
+pub const HOST_RX_PACE_HZ_DIV: u64 = 100;
+const HOST_RX_TSC_HZ_FALLBACK: u64 = 2_100_000_000;
 
 /// One snapshot of the COM1 THRE interrupt chain. UART THRE chain telemetry.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -203,10 +209,13 @@ fn with_uart<R>(f: impl FnOnce(&mut Uarts) -> R) -> R {
 }
 
 pub fn reset() {
-    with_uart(|u| *u = Uarts {
-        com1: Uart::empty(),
-        com2: Uart::empty(),
+    with_uart(|u| {
+        *u = Uarts {
+            com1: Uart::empty(),
+            com2: Uart::empty(),
+        }
     });
+    LAST_HOST_RX_TSC.store(0, Ordering::Release);
     stats_reset();
     crate::devices::guest_serial_answer::reset();
 }
@@ -404,7 +413,8 @@ pub fn inject_sysrq(key: u8) -> bool {
 ///
 /// Product ISO Linux ttyS0 **and** RayNu-F GRUB serial (Alpine
 /// `terminal_input serial console` polls 16550 first; stub LSR never
-/// shows DR so EFI ConIn is never reached at `grub>`).
+/// shows DR so EFI ConIn is never reached at `grub>`). RayNu-F must
+/// call [`poll_host_rx_paced`], never this, on the vmexit hot path.
 pub fn poll_host_rx() {
     for _ in 0..RX_CAP {
         let Some(b) = crate::boot::serial::try_read_byte() else {
@@ -415,6 +425,38 @@ pub fn poll_host_rx() {
         }
     }
     drain_answers();
+}
+
+/// True when a host COM2 RX poll is due (first call, or ≥10 ms of TSC).
+///
+/// INVARIANTS:
+/// - `last == 0` is always due (cold start)
+/// - `hz < 1000` uses [`HOST_RX_TSC_HZ_FALLBACK`] so an uncalibrated TSC
+///   cannot spin `inb` every exit
+pub fn host_rx_pace_due(now: u64, last: u64, hz: u64) -> bool {
+    let rate = if hz < 1_000 {
+        HOST_RX_TSC_HZ_FALLBACK
+    } else {
+        hz
+    };
+    last == 0 || now.wrapping_sub(last) >= rate / HOST_RX_PACE_HZ_DIV
+}
+
+/// Host COM2 RX into guest COM1, at most every 10 ms of TSC.
+///
+/// Iron `b5e290be` called [`poll_host_rx`] on every RayNu-F vmexit
+/// (GRUB ~2 exits/µs) and iDRAC SOL `inb` stormed the BMC until the
+/// chassis powered off. Call this from product 16550 COM1 IN and
+/// RayNu-F ConIn `has_input`. Do not call from `raynu_f_vmexit`.
+pub fn poll_host_rx_paced() {
+    let now = crate::arch::cpu::rdtsc();
+    let hz = crate::boot::raynu_f_flag::tsc_hz();
+    let last = LAST_HOST_RX_TSC.load(Ordering::Acquire);
+    if !host_rx_pace_due(now, last, hz) {
+        return;
+    }
+    LAST_HOST_RX_TSC.store(now, Ordering::Release);
+    poll_host_rx();
 }
 
 /// Guest COM1 RBR has a host/SOL byte (RayNu-F ConIn WaitForKey).

@@ -1,7 +1,7 @@
 use super::{
-    coexist_millis_from_tsc, http_accept_should_idle_abort, prop_http_accept_idle_abort,
-    COEXIST_TSC_HZ_FALLBACK, HOST_NIC_DHCP_MS, HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS,
-    PRE_RAYNUF_HTTPS_MS,
+    coexist_millis_from_tsc, http_accept_idle_limit_ms, http_accept_should_idle_abort,
+    prop_http_accept_idle_abort, COEXIST_TSC_HZ_FALLBACK, HOST_NIC_DHCP_MS,
+    HOST_NIC_HTTP_HS_IDLE_MS, HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS, PRE_RAYNUF_HTTPS_MS,
 };
 
 #[test]
@@ -19,6 +19,25 @@ fn http_idle_abort_at_limit_only() {
         false,
         HOST_NIC_HTTP_IDLE_MS,
         HOST_NIC_HTTP_IDLE_MS
+    ));
+}
+
+#[test]
+fn handshake_idle_reclaim_is_faster_than_header_idle() {
+    assert_eq!(HOST_NIC_HTTP_HS_IDLE_MS, 2_000);
+    assert_eq!(http_accept_idle_limit_ms(true), HOST_NIC_HTTP_HS_IDLE_MS);
+    assert_eq!(http_accept_idle_limit_ms(false), HOST_NIC_HTTP_IDLE_MS);
+    assert!(http_accept_should_idle_abort(
+        true,
+        false,
+        HOST_NIC_HTTP_HS_IDLE_MS,
+        http_accept_idle_limit_ms(true)
+    ));
+    assert!(!http_accept_should_idle_abort(
+        true,
+        false,
+        HOST_NIC_HTTP_HS_IDLE_MS - 1,
+        http_accept_idle_limit_ms(true)
     ));
 }
 
