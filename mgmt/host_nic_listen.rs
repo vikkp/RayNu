@@ -11,11 +11,11 @@
 //! otherwise try func 0 (LOM1) then func 1.
 //! Hardware bring-up runs **immediately after EBS**
 //! so UNDI analog is not left idle through the guest path. Iron BCM5720 then
-//! serves a bounded **HTTPS window before RayNu-F** (`PRE_RAYNUF_HTTPS_MS`)
-//! so `curl --cacert` can close A4 before guest USB I/O steals the BSP
+//! **arms Phase F coexist** as the standing SPA (HTTPS while RayNu-F / Alpine
+//! run). The bounded `PRE_RAYNUF_HTTPS_MS` window is fallback if arm fails
 //! (COM2 `1647a8d8`: `raynuf.txt` launched Alpine with no coexist listen).
-//! Phase F coexist listens **while VMX is on** (`bounded_poll` on a scheduler
-//! quantum).
+//! Phase F coexist listens **while VMX is on** (`bounded_poll` on RayNu-F
+//! vmexit, USB BOT waits, and the credit scheduler).
 //! Phase D fallback (post-`VMXOFF` idle) remains if coexist cannot arm.
 //! TCP/HTTP scratch comes from [`crate::mgmt::mgmt_arena::MgmtArena`] (Phase E)
 //! or coexist `.bss` buffers (still not the Proven Core allocator).
@@ -73,6 +73,8 @@ static mut COEXIST_ACCEPT_AT_MS: i64 = 0;
 static mut COEXIST_LAST_DIAG: i64 = 0;
 static mut COEXIST_LAST_RX_DROP: u32 = 0;
 static mut COEXIST_PORT: u16 = MGMT_HTTP_DEFAULT_PORT;
+/// Last TSC we polled the standing SPA (RayNu-F / USB waits).
+static mut LAST_SPA_TICK_TSC: u64 = 0;
 
 const TCP_RX_N: usize = 8192;
 const TCP_TX_N: usize = COEXIST_HTTP_OUT_N;
@@ -159,8 +161,9 @@ enum ListenWhen {
 }
 
 /// After ExitBootServices: if QEMU e1000 is present, serve GET / then continue.
-/// Iron BCM5720: arm analog/DMA **now**, then a bounded HTTPS window **before
-/// RayNu-F** (`PRE_RAYNUF_HTTPS_MS`). Phase F / BOOT-OK idle remain.
+/// Iron BCM5720: arm analog/DMA **now**, then the standing SPA coexist
+/// (ticks during RayNu-F). Bounded `PRE_RAYNUF_HTTPS_MS` is fallback if arm
+/// fails. Phase F / BOOT-OK idle remain.
 /// Do not take the APE PHY (`ape-nophylock=yes`).
 pub fn run_post_ebs_host_nic_listen() {
     run_listen(ListenWhen::AfterEbs);
@@ -282,12 +285,42 @@ pub fn arm_bcm5720_coexist() -> bool {
     write_ipv4(ip);
     serial::write_byte(b':');
     write_u16_dec(port);
-    serial::write_line("/  (native BCM5720; SNP is dead)");
+    serial::write_line("/  (native BCM5720; standing SPA during RayNu-F; SNP is dead)");
     print_tls_wrap_plaintext_note();
     serial::write_line("boot: HINT — COM2 idle after this snapshot (TCP accept / HTTP only)");
     crate::mgmt::bcm5720_mmio::reset_host_nic_frame_dumps();
     print_bcm5720_poll_diag();
     true
+}
+
+/// Rate-limited coexist poll for RayNu-F vmexit / USB BOT waits.
+///
+/// INVARIANTS:
+/// - No-op unless [`arm_bcm5720_coexist`] succeeded
+/// - At most one [`tick_bcm5720_coexist`] per ~2 ms (TSC)
+pub fn maybe_tick_bcm5720_standing_spa() {
+    // SAFETY: BSP-only coexist latch; same session as [`tick_bcm5720_coexist`].
+    // KANI-TARGET: host gate checks the call sites, not this flag.
+    if !unsafe { COEXIST_ARMED } {
+        return;
+    }
+    let now = crate::arch::cpu::rdtsc();
+    let hz = crate::boot::raynu_f_flag::tsc_hz();
+    let hz = if hz < 1_000 {
+        crate::mgmt::host_nic::COEXIST_TSC_HZ_FALLBACK
+    } else {
+        hz
+    };
+    // SAFETY: BSP-only coexist; same session as [`tick_bcm5720_coexist`].
+    // KANI-TARGET: host gate checks the call sites, not this TSC latch.
+    unsafe {
+        let last = LAST_SPA_TICK_TSC;
+        if last != 0 && now.wrapping_sub(last) < hz / 500 {
+            return;
+        }
+        LAST_SPA_TICK_TSC = now;
+    }
+    tick_bcm5720_coexist();
 }
 
 /// One scheduler-quantum NIC/HTTP step. No-op if not armed. Does not spin.
@@ -420,7 +453,16 @@ fn run_listen(when: ListenWhen) {
         match when {
             ListenWhen::AfterEbs => {
                 bringup_bcm5720_post_ebs();
-                listen_with_retries(when, NicKind::Bcm5720);
+                if arm_bcm5720_coexist() {
+                    serial::write_line(
+                        "boot: HOST-NIC standing SPA armed (ticks during RayNu-F; SNP is dead)",
+                    );
+                } else {
+                    serial::write_line(
+                        "boot: WARN — HOST-NIC standing SPA arm failed; bounded window fallback",
+                    );
+                    listen_with_retries(when, NicKind::Bcm5720);
+                }
             }
             ListenWhen::AfterBootOk => listen_with_retries(when, NicKind::Bcm5720),
         }

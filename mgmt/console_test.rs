@@ -94,6 +94,23 @@ fn spa_post_console_keys_reach_guest_com1() {
     let unauth = core::str::from_utf8(&out[..n]).unwrap_or("");
     assert!(unauth.contains("HTTP/1.1 401"), "{unauth}");
 
+    crate::boot::serial::spa_guest_log_clear();
+    crate::boot::serial::spa_guest_log_push_for_test(b'l');
+    crate::boot::serial::spa_guest_log_push_for_test(b'o');
+    let n = handle_http_request(
+        &mut table,
+        &mut images,
+        &mut iso_plan,
+        &mut iso_install,
+        "GET /logs/guest HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
+        &mut out,
+    )
+    .unwrap_or(0);
+    let guest_log = core::str::from_utf8(&out[..n]).unwrap_or("");
+    assert!(guest_log.contains("HTTP/1.1 200"), "{guest_log}");
+    assert!(guest_log.contains("lo"), "{guest_log}");
+    crate::boot::serial::spa_guest_log_clear();
+
     uart_reset();
     crate::devices::guest_irq::reset();
     println!("{M8_CONSOLE_HOST_OK_MARKER}");

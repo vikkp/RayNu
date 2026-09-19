@@ -231,9 +231,11 @@ pub fn prop_console_host_package() -> bool {
         && plan.contains("not VNC")
         && html.contains("/console/keys")
         && html.contains("g-keys")
+        && html.contains("/logs/guest")
         && html.contains("not VNC")
         && http.contains("/console/keys")
         && http.contains("Not a guest console")
+        && http.contains("/logs/guest")
         && listen.contains("maybe_print_iron_console_ok")
 }
 

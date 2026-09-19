@@ -1046,6 +1046,13 @@ fn wait_set(hw: &mut impl XhciHw, off: u32, mask: u32) -> bool {
     false
 }
 
+/// Poll standing HTTPS while USB BOT waits (BULK_SPINS / FIRST_READ_SPINS).
+fn maybe_tick_spa_during_usb(spins: u32) {
+    if spins % 262_144 == 0 {
+        crate::mgmt::maybe_tick_standing_spa();
+    }
+}
+
 fn handshake_legacy(hw: &mut impl XhciHw) {
     let hcc1 = hw.read32(0x10);
     let mut xecp = ((hcc1 >> 16) & 0xFFFF) * 4;
@@ -1821,6 +1828,7 @@ fn consume_control(
             return Ok(t);
         }
         spins = spins.saturating_add(1);
+        maybe_tick_spa_during_usb(spins);
         if spins > spins_max {
             store_usb_bot_diag(
                 UsbBotError::Xfer,
@@ -1891,6 +1899,7 @@ fn consume_posted(
         }
         spins = spins.saturating_add(1);
         maybe_serial_xhci_rw_wait(spins, spins_max);
+        maybe_tick_spa_during_usb(spins);
         if spins > spins_max {
             let err = xhci_event_err(want_type);
             store_usb_bot_diag(
@@ -1969,6 +1978,7 @@ fn consume_bulk_pair(
         }
         spins = spins.saturating_add(1);
         maybe_serial_xhci_rw_wait(spins, spins_max);
+        maybe_tick_spa_during_usb(spins);
         if spins > spins_max {
             if out_events >= need_out && in_events >= 1 {
                 store_usb_bot_stage(BOT_STAGE_CSW);

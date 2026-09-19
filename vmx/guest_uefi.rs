@@ -6339,8 +6339,10 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     // ADR-016 F2b: the RayNu-F test app owns the VMCS now — none of the OVMF
     // heuristics below apply to a guest whose firmware we authored.
     if RAYNU_F_MODE.load(Ordering::Acquire) {
+        crate::mgmt::maybe_tick_standing_spa();
         raynu_f_vmexit(reason, qual, rip, intr);
     }
+    crate::mgmt::maybe_tick_standing_spa();
     if guest_uefi_linux_earlycon_share_on_bootimg(
         crate::devices::ide_cdrom::product_iso_window_armed(),
         crate::devices::ide_cdrom::eltorito_boot_image_read(),
@@ -8489,6 +8491,7 @@ unsafe fn raynu_f_stop(why: &str) -> ! {
 /// other exit is dumped and stopped. No OVMF heuristics run here.
 #[cfg(target_os = "uefi")]
 unsafe fn raynu_f_vmexit(reason: u32, qual: u64, rip: u64, intr: u64) -> ! {
+    crate::mgmt::maybe_tick_standing_spa();
     let n = RAYNU_F_EXITS.fetch_add(1, Ordering::AcqRel) + 1;
     let basic = reason & 0xFFFF;
     if reason & 0x8000_0000 != 0 {

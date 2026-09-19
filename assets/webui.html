@@ -121,10 +121,10 @@ input.token{min-width:12rem}
 <section class="pg" data-pg="activity">
 <h2>Guest console</h2>
 <div class="toolbar"><input id="g-keys" autocomplete="off"/><button class="pri" id="btn-keys" data-action="keys">Send</button><button class="ghost" id="btn-logs" data-action="logs">Refresh log</button></div>
-<pre id="serial-log" class="empty">No log loaded yet. GET /logs/serial</pre>
+<pre id="serial-log" class="empty">No log loaded yet. GET /logs/guest</pre>
 </section>
 <p id="status"></p>
-<p class="note">Host serial log is HV UART. Guest keys POST /console/keys (not VNC). extract-boot is lab. Host attach is El Torito (not guest UEFI). Firmware arm is not VMLAUNCH. FW box/load is not OVMF. RayNu-F. Auth: ESP or bring-up.</p>
+<p class="note">Guest COM1 is GET /logs/guest (not iDRAC SOL). Host serial log is HV UART. Guest keys POST /console/keys (not VNC). extract-boot is lab. Host attach is El Torito (not guest UEFI). Firmware arm is not VMLAUNCH. FW box/load is not OVMF. RayNu-F. Auth: ESP or bring-up.</p>
 </main>
 <script>
 (function(){
@@ -185,7 +185,7 @@ async function deployIso(){const iso=num("f-iso",1)||1;await isoCall("/iso/"+iso
 async function installIso(){const iso=num("f-iso",1)||1;await isoCall("/iso/"+iso+"/install","ISO "+iso+" installer armed","ISO install failed")}
 async function attachCdrom(){const iso=num("f-iso",1)||1;const typ=(document.getElementById("f-image")||{}).value||"linux_iso";let path="/iso/"+iso+"/attach";if(typ&&typ!=="none")path+="/"+typ;await isoCall(path,"ISO "+iso+" host CD attached (not guest UEFI)","CD attach failed")}
 async function armFirmwareCd(){const iso=num("f-iso",1)||1;await isoCall("/iso/"+iso+"/firmware","ISO "+iso+" firmware CD armed (not guest UEFI)","Firmware arm failed")}
-async function refreshLogs(){setS("Fetching host serial log…");const res=await api("GET","/logs/serial");hostOk=res.ok||hostOk;if(!res.ok){setS("Log failed ("+res.status+")");paint();return}const t=await res.text();G.className="";G.textContent=t.length?t:"(empty log ring)";setS("Host serial log refreshed");paint()}
+async function refreshLogs(){setS("Fetching console…");let g="",h="",ok=0;try{const r=await api("GET","/logs/guest");if(r.ok){ok=1;g=await r.text()}}catch(e){}try{const r=await api("GET","/logs/serial");hostOk=r.ok||hostOk;if(r.ok){ok=1;h=await r.text()}}catch(e){}if(!ok){setS("Log failed");paint();return}G.className="";G.textContent=(g?"=== guest COM1 ===\n"+g+"\n":"")+(h?"=== host UART ===\n"+h:"")||"(empty)";setS("Console refreshed");paint()}
 async function sendKeys(){const el=document.getElementById("g-keys");let k=el.value;if(!k)return;if(k.charCodeAt(k.length-1)!==13)k+="\r";const res=await fetch("/console/keys",{method:"POST",headers:{"Authorization":auth(),"Content-Type":"text/plain"},body:k});hostOk=res.ok||hostOk;setS(res.ok?"Sent keys":"Keys failed ("+res.status+")");if(res.ok)el.value=""}
 function render(v){
 if(!v.length){L.className="empty";L.textContent="No guests.";return}
@@ -213,7 +213,7 @@ document.getElementById("btn-logs").onclick=refreshLogs;
 document.getElementById("btn-keys").onclick=sendKeys;
 document.getElementById("g-keys").onkeydown=function(e){if(e.key==="Enter"){e.preventDefault();sendKeys()}};
 window.raynuWebUi={listVms:listVms,startVm:startVm,stopVm:stopVm,createVm:createVm,listImages:listImages,refreshLogs:refreshLogs,sendKeys:sendKeys};
-dot("hv","ok","Hypervisor is running");listVms();setInterval(listVms,8000);
+dot("hv","ok","Hypervisor is running");listVms();setInterval(listVms,8000);setInterval(function(){if(document.querySelector('.pg.on[data-pg="activity"]'))refreshLogs()},2000);
 })();
 </script>
 </body>

@@ -97,6 +97,7 @@ payload = {
         "persist across HV reboot",
         "SKU honesty",
         "TLS for InfoSec",
+        "standing SPA during Alpine",
         "Bar A dedicated-box LOI",
         "PERC RAID I/O",
         "Bar B fleet LOI",

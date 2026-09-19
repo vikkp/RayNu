@@ -85,7 +85,8 @@
               Coexist listen on <code>https://10.99.99.x:8443/</code>.
               A4 TLS iron printed <code>RAYNU-V-M8-TLS-OK</code> on
               <code>928d6224</code> after
-              <code>curl --cacert</code> returned the SPA. Lab millicert,
+              <code>curl --cacert</code> returned the SPA. Standing HTTPS
+              during Alpine is firmware-in-tree, not iron. Lab millicert,
               TLS 1.2 only. PRE-EBS SNP remains
               <strong>plaintext HTTP</strong>.
             </li>
@@ -130,8 +131,9 @@
               credential.
             </li>
             <li>
-              Iron SPA keyboard / VNC is open. Firmware
-              <code>POST /console/keys</code> is in-tree. Not VNC.
+              Iron SPA keyboard / VNC is open until standing HTTPS is lived.
+              Firmware <code>POST /console/keys</code> and
+              <code>GET /logs/guest</code> are in-tree. Not VNC.
             </li>
           </ul>
         </div>
@@ -148,8 +150,8 @@
           </p>
           <p data-reveal>
             A1 Everest is done. A2 persist is done on evidence. A3 is this
-            page. <strong>A4 TLS iron is DONE.</strong> <strong>A6 console
-            iron is NOW.</strong> A5 is a named residual, not a fake close.
+            page. <strong>A4 TLS iron is DONE.</strong> <strong>Standing SPA
+            is NOW</strong> (then A6). A5 is a named residual, not a fake close.
           </p>
           <div class="cta" data-reveal>
             <a class="cta__primary" href="loi.html">Path to LOI</a>
