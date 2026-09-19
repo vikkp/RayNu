@@ -100,6 +100,7 @@ fn main() -> Status {
     // SNP parked across EBS; do not poll the NIC here (iron hung on immediate
     // post-EBS SNP receive). Guest path continues; after VMXOFF idle is WARN-only.
     let handoff = unsafe { boot::handoff::leave_firmware() };
+    boot::uefi_alloc::mark_post_ebs();
     let mut bump = handoff.frames;
 
     let _ = r640_hypervisor::mgmt::run_post_ebs_mgmt_listen();

@@ -30,7 +30,7 @@ default = []
 uefi-bin = ["dep:uefi", "dep:smoltcp"]
 
 [dependencies]
-uefi = { version = "0.33", optional = true, features = ["panic_handler", "logger", "alloc", "global_allocator"] }
+uefi = { version = "0.33", optional = true, features = ["panic_handler", "logger", "alloc"] }
 # ADR-012 SNP residual: minimal TCP/IP when firmware Tcp4 is absent (size-audited).
 smoltcp = { version = "0.13", optional = true, default-features = false, features = [
     "alloc",

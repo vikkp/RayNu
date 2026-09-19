@@ -139,7 +139,8 @@ RAYNU-V-M7-HOST-NIC-QEMU-OK
 From the host:
 
 ```bash
-curl -sS --cacert assets/tls/lab-ca.crt.pem https://127.0.0.1:18443/ | head
+curl -sS --tlsv1.2 --tls-max 1.2 --ciphers ECDHE-RSA-AES128-GCM-SHA256 \
+  --cacert assets/tls/lab-ca.crt.pem https://127.0.0.1:18443/ | head
 ```
 
 Do **not** print `RAYNU-V-M7-HOST-NIC-HTTP-OK` from this path (iron Phase D).

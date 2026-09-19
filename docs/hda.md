@@ -984,7 +984,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     **F11 this TLS EFI** (M8.1 iron). Native `CURL NOW → https://` after analog, **before RayNu-F** (`PRE_RAYNUF_HTTPS_MS`). Ignore PRE-EBS `http://`. `curl --cacert` on that line. COM2 `1647a8d8` had no that window. Then console iron, then PERC spare VD. Sit until F11. Do not setup-disk. Do not flash Toshiba `/dev/sdc`. Nested-OK closed on `raynuvsrv1` `ce3d8a09`.
+Next move:     **F11 this TLS EFI** (M8.1 iron). Native `CURL NOW → https://` after analog, **before RayNu-F** (`PRE_RAYNUF_HTTPS_MS`). Ignore PRE-EBS `http://`. `curl --tlsv1.2 --tls-max 1.2 --cacert` on that line. COM2 `1647a8d8` had no that window. Then console iron, then PERC spare VD. Do not F11 `1647a8d8`. Do not setup-disk. Do not flash Toshiba `/dev/sdc`. Nested-OK closed on `raynuvsrv1` `ce3d8a09`.
 Rollback:      GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351
                EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc
                COM2 build: sha=f72b4276d198. Do not flash a later M8 persist prototype as known-good.

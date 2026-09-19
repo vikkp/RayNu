@@ -76,7 +76,8 @@ if [[ ! -f "$LAB_CA" ]]; then
   exit 1
 fi
 for _ in $(seq 1 30); do
-  if curl -fsS --max-time 5 --http1.1 --cacert "$LAB_CA" \
+  if curl -fsS --max-time 5 --http1.1 --tlsv1.2 --tls-max 1.2 \
+    --ciphers ECDHE-RSA-AES128-GCM-SHA256 --cacert "$LAB_CA" \
     "https://127.0.0.1:${HOST_NIC_FWD}/" >"$body" 2>/dev/null; then
     if grep -qiE '<html|RayNu|text/html' "$body"; then
       curl_ok=1

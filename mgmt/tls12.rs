@@ -104,23 +104,26 @@ impl RngCore for MixRng {
 impl CryptoRng for MixRng {}
 
 fn rdrand64() -> Option<u64> {
-    #[cfg(target_arch = "x86_64")]
+    // Firmware: never emit RDRAND. TCG qemu64 CPUID can advertise the bit
+    // while TCG still #UDs (`1647a8d8` / `06d37b10` HOST-NIC smoke died
+    // after `HOST-NIC e1000 MAC=` inside `Tls12Listen::new`). MixRng falls
+    // back to rdtsc mix. Host tests keep the CPUID-gated intrinsic.
+    #[cfg(all(target_arch = "x86_64", not(feature = "uefi-bin")))]
     {
         if !crate::arch::cpu::rdrand_supported() {
             return None;
         }
         let mut v = 0u64;
         for _ in 0..32 {
-            // SAFETY: CPUID.1:ECX.RDRAND is set; 0 means retry. TCG qemu64
-            // falls back to rdtsc in MixRng (no #UD).
-            // KANI-TARGET: host tests use MixRng; iron Xeon has RDRAND.
+            // SAFETY: CPUID.1:ECX.RDRAND is set; 0 means retry.
+            // KANI-TARGET: host tests use MixRng; uefi-bin never takes this path.
             if unsafe { core::arch::x86_64::_rdrand64_step(&mut v) } == 1 {
                 return Some(v);
             }
         }
         None
     }
-    #[cfg(not(target_arch = "x86_64"))]
+    #[cfg(not(all(target_arch = "x86_64", not(feature = "uefi-bin"))))]
     {
         None
     }
@@ -251,12 +254,59 @@ impl Tls12Listen {
         s
     }
 
+    pub const fn empty() -> Self {
+        Self {
+            key: None,
+            ecdhe: None,
+            rx: [0; COEXIST_RX_ACC_N],
+            rx_len: 0,
+            tx: [0; COEXIST_HTTP_OUT_N],
+            tx_len: 0,
+            http: [0; COEXIST_RX_ACC_N],
+            http_len: 0,
+            trans: [0; TRANS_N],
+            trans_len: 0,
+            client_random: [0; 32],
+            server_random: [0; 32],
+            master: [0; 48],
+            client_key: [0; 16],
+            server_key: [0; 16],
+            client_iv: [0; 4],
+            server_iv: [0; 4],
+            read_seq: 0,
+            write_seq: 0,
+            ems: false,
+            state: ST_CH,
+        }
+    }
+
+    pub fn load_lab_material(&mut self) {
+        if self.key.is_none() {
+            self.key = RsaPrivateKey::from_pkcs8_der(LAB_KEY).ok();
+        }
+        MixRng.fill_bytes(&mut self.server_random);
+        self.state = ST_CH;
+    }
+
     pub fn reset(&mut self) {
         let key = self.key.take();
-        *self = Self::new();
-        if key.is_some() {
-            self.key = key;
-        }
+        self.ecdhe = None;
+        self.rx_len = 0;
+        self.tx_len = 0;
+        self.http_len = 0;
+        self.trans_len = 0;
+        self.client_random = [0; 32];
+        self.server_random = [0; 32];
+        self.master = [0; 48];
+        self.client_key = [0; 16];
+        self.server_key = [0; 16];
+        self.client_iv = [0; 4];
+        self.server_iv = [0; 4];
+        self.read_seq = 0;
+        self.write_seq = 0;
+        self.ems = false;
+        self.state = ST_CH;
+        self.key = key.or_else(|| RsaPrivateKey::from_pkcs8_der(LAB_KEY).ok());
         MixRng.fill_bytes(&mut self.server_random);
     }
 

@@ -61,7 +61,7 @@ static mut COEXIST_SOCKETS: MaybeUninit<SocketSet<'static>> = MaybeUninit::unini
 static mut COEXIST_TCP_HANDLE: MaybeUninit<SocketHandle> = MaybeUninit::uninit();
 static mut COEXIST_TCP_RX: [u8; TCP_RX_N] = [0; TCP_RX_N];
 static mut COEXIST_TCP_TX: [u8; TCP_TX_N] = [0; TCP_TX_N];
-static mut COEXIST_LISTEN: MaybeUninit<Tls12Listen> = MaybeUninit::uninit();
+static mut COEXIST_LISTEN: Tls12Listen = Tls12Listen::empty();
 static mut COEXIST_LISTEN_READY: bool = false;
 static mut COEXIST_HTTP_OUT: [u8; HTTP_OUT_N] = [0; HTTP_OUT_N];
 static mut COEXIST_WRAP_OUT: [u8; WRAP_OUT_N] = [0; WRAP_OUT_N];
@@ -123,12 +123,14 @@ fn wrap_session_try_exchange(
 
 fn tls_session() -> &'static mut Tls12Listen {
     // SAFETY: BSP-only listen slot; initialized once before ticks.
+    // Session lives in .bss (`Tls12Listen::empty`) — `new()` is ~40 KiB and
+    // blows the UEFI BSP stack (QEMU serial died after e1000 MAC=).
     unsafe {
         if !COEXIST_LISTEN_READY {
-            COEXIST_LISTEN.write(Tls12Listen::new());
+            COEXIST_LISTEN.load_lab_material();
             COEXIST_LISTEN_READY = true;
         }
-        COEXIST_LISTEN.assume_init_mut()
+        &mut COEXIST_LISTEN
     }
 }
 
@@ -663,7 +665,8 @@ fn listen_loop<D: Device>(
     let (tcp_rx_mem, rest) = scratch.split_at_mut(TCP_RX_N);
     let (tcp_tx_mem, rest) = rest.split_at_mut(TCP_TX_N);
     let (out, wrap) = rest.split_at_mut(HTTP_OUT_N);
-    let mut session = Tls12Listen::new();
+    let session = tls_session();
+    session.reset();
 
     let mut config = Config::new(EthernetAddress(mac).into());
     config.random_seed = mac_seed(mac);
@@ -791,10 +794,10 @@ fn listen_loop<D: Device>(
                     }
                 }
             }
-            drain_tls(&mut session, sock, wrap);
+            drain_tls(session, sock, wrap);
             let headers_done = session.take_http().is_some();
             if headers_done && sock.can_send() {
-                if wrap_session_try_exchange(&mut session, sock, out, wrap) {
+                if wrap_session_try_exchange(session, sock, out, wrap) {
                     did_exchange = true;
                     do_close = true;
                 }

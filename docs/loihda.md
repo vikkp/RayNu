@@ -273,7 +273,7 @@ LOI:           NOT OPEN. Tracker born 2026-09-14.
 Bar A:         68% · 1.0 months · dedicated-box non-prod
 Bar B:         18% · 3.5 months · PERC RAID fleet (out of conversation until PERC persist)
 Overall:       56% · confidence medium
-NOW:           F11 this TLS EFI · native `CURL NOW → https://` before RayNu-F · `curl --cacert` · ignore PRE-EBS `http://` · COM2 `1647a8d8` had no that window
+NOW:           F11 this TLS EFI · native `CURL NOW → https://` before RayNu-F · `curl --tlsv1.2 --tls-max 1.2 --cacert` · ignore PRE-EBS `http://` · COM2 `1647a8d8` had no that window
 Open:          iron HTTPS · unmodified ISO · cluster · Ubuntu PERC stays standing boot
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
 Sit:           Force Off first · do not F11 `1647a8d8` · do not setup-disk · do not flash Toshiba /dev/sdc

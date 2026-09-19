@@ -141,3 +141,13 @@ fn rustls_tls12_client_gets_spa_from_freestanding_server() {
     assert!(server.join().is_ok());
     println!("{M8_TLS12_HOST_OK_MARKER}");
 }
+
+#[test]
+fn empty_bss_session_loads_lab_material() {
+    let mut s = Tls12Listen::empty();
+    assert!(!s.key_ready());
+    s.load_lab_material();
+    assert!(s.key_ready(), "bss empty + PKCS#8 must parse");
+    s.reset();
+    assert!(s.key_ready());
+}

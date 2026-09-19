@@ -13,6 +13,8 @@ pub mod ovmf_esp;
 pub mod pe_assets;
 pub mod raynu_f_flag;
 pub mod serial;
+#[cfg(feature = "uefi-bin")]
+pub mod uefi_alloc;
 
 pub use assets_gate::run_assets_gate;
 pub use pe_assets::M3_ASSETS_OK_MARKER;
