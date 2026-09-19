@@ -6,7 +6,7 @@
 #![cfg(feature = "uefi-bin")]
 
 use crate::boot::serial;
-use crate::mgmt::http::handle_http_request;
+use crate::mgmt::http::{handle_http_request, HTTP_RESPONSE_CAP};
 use crate::mgmt::http_listen::{
     MgmtListenError, M7_UEFI_HTTP_OK_MARKER, PRE_EBS_MAX_EXCHANGES, SNP_POST_BIND_LISTEN_MS,
 };
@@ -118,7 +118,7 @@ pub fn uefi_snp_listen(port: u16) -> Result<(), MgmtListenError> {
     crate::mgmt::pre_ebs_mgmt::reset_pre_ebs_mgmt();
 
     let tcp_rx = tcp::SocketBuffer::new(alloc::vec![0u8; 8192]);
-    let tcp_tx = tcp::SocketBuffer::new(alloc::vec![0u8; 16384]);
+    let tcp_tx = tcp::SocketBuffer::new(alloc::vec![0u8; HTTP_RESPONSE_CAP]);
     let tcp_handle = sockets.add(tcp::Socket::new(tcp_rx, tcp_tx));
 
     {
@@ -173,7 +173,7 @@ pub fn uefi_snp_listen(port: u16) -> Result<(), MgmtListenError> {
 
             if headers_done && sock.can_send() {
                 let raw = core::str::from_utf8(&rx_acc[..rx_len]).unwrap_or("");
-                let mut out = [0u8; 16384];
+                let mut out = [0u8; HTTP_RESPONSE_CAP];
                 let wn = unsafe {
                     crate::mgmt::pre_ebs_mgmt::with_pre_ebs_mgmt(|m| {
                         handle_http_request(

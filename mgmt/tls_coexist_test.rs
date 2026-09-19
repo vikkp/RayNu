@@ -1,7 +1,8 @@
 //! Coexist-shaped TLS wrap: rustls session uses feed/take/wrap. Not iron.
 
 use super::{
-    headers_complete, prop_tls_fw_wrap_package, wrap_plaintext_http, PlaintextListen,
+    headers_complete, request_complete, prop_tls_fw_wrap_package, wrap_plaintext_http,
+    PlaintextListen,
     M8_TLS_FW_HOST_OK_MARKER, TLS_FW_CURL_NOTE, TLS_FW_WRAP_NOTE, COEXIST_HTTP_OUT_N,
     COEXIST_RX_ACC_N,
 };
@@ -72,7 +73,7 @@ impl HostTlsListen {
     }
 
     fn take_http(&self) -> Option<&[u8]> {
-        if headers_complete(&self.plain) {
+        if request_complete(&self.plain) {
             Some(&self.plain)
         } else {
             None
@@ -167,12 +168,21 @@ fn serve_http(raw: &[u8], out: &mut [u8]) -> usize {
 #[test]
 fn plaintext_listen_matches_coexist_buffers() {
     assert_eq!(COEXIST_RX_ACC_N, 8192);
-    assert_eq!(COEXIST_HTTP_OUT_N, 16384);
+    assert_eq!(COEXIST_HTTP_OUT_N, crate::mgmt::http::HTTP_RESPONSE_CAP);
+    assert_eq!(COEXIST_HTTP_OUT_N, 20480);
     let mut s = PlaintextListen::new();
     assert!(s.take_http().is_none());
     assert_eq!(s.feed_tcp(b"GET / HTTP/1.1\r\nHost: x\r\n\r\n"), 27);
     let http = s.take_http().expect("headers");
     assert!(headers_complete(http));
+    s.reset();
+    let post = b"POST /console/keys HTTP/1.1\r\nContent-Length: 2\r\n\r\n";
+    assert!(!request_complete(post));
+    assert_eq!(s.feed_tcp(post), post.len());
+    assert!(s.take_http().is_none());
+    assert_eq!(s.feed_tcp(b"hi"), 2);
+    let full = s.take_http().expect("body");
+    assert!(request_complete(full));
     let mut out = [0u8; 64];
     let n = wrap_plaintext_http(b"HTTP/1.1 200 OK\r\n\r\n", &mut out);
     assert_eq!(&out[..n], b"HTTP/1.1 200 OK\r\n\r\n");

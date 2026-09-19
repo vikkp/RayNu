@@ -1,6 +1,6 @@
 # M8 Plan — operator product hardening (post-Everest)
 
-**Status:** **OPEN** (M8.1 iron HTTPS) — firmware coexist is **TLS 1.2** in-tree (`Tls12Listen`, `RAYNU-V-M8-TLS12-HOST-OK`). rustls/ring stay out of `uefi-bin`. Iron `curl --cacert` **OPEN**. M8.2 **host-ready** (`RAYNU-V-M8-AUTH-HOST-OK`); firmware REST still accepts lab bring-up when no ESP `auth.token`. M8.3 **host-ready** (`RAYNU-V-M8-CONSOLE-HOST-OK`); firmware SPA is still host serial log (**not VNC**). M8.4 **host-ready** (`RAYNU-V-M8-ISO-UPLOAD-HOST-OK`); firmware ESP-staged `linux.iso` stays valid. M7 Mount Everest **CLOSED on iron** (`f72b4276` / `34552377351`, 2026-09-11). M8.0 persist **CLOSED on evidence** (`4af78b43`). A3 SKU card **DONE**.  
+**Status:** **OPEN** (M8.3 iron SPA keyboard) — firmware SPA `POST /console/keys` injects guest COM1 (`FirmwareSpaKeys`). `GET /logs/serial` stays HV UART. **not VNC**. Iron `RAYNU-V-M8-CONSOLE-OK` **OPEN**. M8.1 iron HTTPS **CLOSED** (`928d6224`). M8.2 **host-ready** (`RAYNU-V-M8-AUTH-HOST-OK`); firmware REST still accepts lab bring-up when no ESP `auth.token`. M8.4 **host-ready** (`RAYNU-V-M8-ISO-UPLOAD-HOST-OK`); firmware ESP-staged `linux.iso` stays valid. M7 Mount Everest **CLOSED on iron** (`f72b4276` / `34552377351`, 2026-09-11). M8.0 persist **CLOSED on evidence** (`4af78b43`). A3 SKU card **DONE**.  
 **Parent:** [ADR-018](adr/ADR-018.md) · Everest: [ADR-009](adr/ADR-009.md) · lived: [progress.md](progress.md) · HDA: [hda.md](hda.md)  
 **Prior track:** [m7_plan.md](m7_plan.md) (closed). Cluster / elasticity is **M9**, not this plan.
 
@@ -123,11 +123,11 @@ HDA + `site/hda.html` stay fresh: update `docs/hda.md`, then `./tools/sync-hda-s
 
 ### M8.3 — Guest console UI
 
-**Status: host-ready** (firmware SPA is still host serial log; iron SPA keyboard / VNC open)
+**Status: firmware SPA keys in-tree** (iron SPA keyboard / VNC open)
 
 **Goal:** Operator types in the guest from the SPA (web/VNC or equivalent). iDRAC `console com2` remains the evidence channel, not the only keyboard.
 
-**Honesty:** [`ConsoleMode::HostReady`](../mgmt/console.rs) injects keys into guest COM1 RBR (`RAYNU-V-M8-CONSOLE-HOST-OK`). Firmware HTTP still serves `GET /logs/serial` (HV UART — not a guest console). SPA has no keyboard field (16 KiB budget). Host/CI never print `RAYNU-V-M8-CONSOLE-OK`. Nested QEMU ≠ R640. **not VNC**.
+**Honesty:** [`ConsoleMode::FirmwareSpaKeys`](../mgmt/console.rs) serves `POST /console/keys` into guest COM1 RBR. Host tests still print `RAYNU-V-M8-CONSOLE-HOST-OK`. `GET /logs/serial` remains HV UART (not a guest console). SPA Activity has `g-keys`. Host/CI never print `RAYNU-V-M8-CONSOLE-OK`. Nested QEMU ≠ R640. **not VNC**. Iron close is typing in Alpine from the SPA on BCM5720, then COM2.
 
 **Honesty:** Serial auto-answer already installed Alpine on iron. This gate is UX, not E5.
 
@@ -175,4 +175,4 @@ Do not pull M9 into M8 gate lists.
 
 **M8.0 persist-first attach.** Choice remains **file-backed nested / durable LUN on iron / leftover DRAM as fallback**. Attach prefers persist (`attach_disk_keep` / `attach_lun` when the media looks installed). Nested `M8_PERSIST_IMG` backs QEMU RAM (distro OVMF ignores nvdimm/pc-dimm), default off. **NVMe I/O** (`MODE=lun`) Identify + Read/Write backs virtio when Identify succeeds; empty NVMe is not 1 GiB-zeroed. **USB BOT** (`MODE=usb`) is TCG-proven. **`MODE=lunkeep` TCG-proven:** plant GPT+ESP+ext4 at NVMe LUN offset 0, kill HV, second boot `keep=1`. NVMe I/O is post-EBS. **`MODE=usbkeep` TCG-proven:** same on qemu-xhci + usb-storage (header CRC + first ESP + FAT BPB + ext4; not 32 BOT array CRC). Iron marker is `RAYNU-V-M8-DISK-PERSIST-OK` (in-tree `uefi-bin` serial on keep=1 DurableLun DISK-BOOT; not on flashed `4af78b43`). Host marker is `RAYNU-V-M8-DISK-PERSIST-HOST-OK`. Keep ADR-004 exclusive ownership. Do not claim persist from nested QEMU alone. Do not copy 1 GiB through the Cruzer ESP. Do not format the PERC. Keep [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) as the flash rollback. A2 evidence close does not retire that pin.
 
-**Next:** **M8.3 console iron.** A4 TLS is **CLOSED on COM2** (`928d6224` `RAYNU-V-M8-TLS-OK` after native HTTPS GET on `.140`). Persist-OK also printed on keep=1 DISK-BOOT. Host UART keys exist (`RAYNU-V-M8-CONSOLE-HOST-OK`); firmware SPA is still `GET /logs/serial`. Iron close is typing in the guest from the SPA (`RAYNU-V-M8-CONSOLE-OK`). Not VNC. Sit at `localhost:~#`. Do not `setup-disk`. Do not flash Toshiba `/dev/sdc`. Nested QEMU ≠ R640.
+**Next:** **M8.3 console iron.** Firmware SPA `POST /console/keys` is in-tree. A4 TLS is **CLOSED on COM2** (`928d6224` `RAYNU-V-M8-TLS-OK`). Persist-OK also printed on keep=1 DISK-BOOT. Iron close is typing in the guest from the SPA (`RAYNU-V-M8-CONSOLE-OK`). Not VNC. Sit at `localhost:~#`. Do not `setup-disk`. Do not flash Toshiba `/dev/sdc`. Nested QEMU ≠ R640.

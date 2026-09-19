@@ -5,7 +5,7 @@ use super::{
     maybe_print_iron_tls_ok, prop_tls_host_package, tls_ok_clear_printed, TlsMode,
     FIRMWARE_TLS_MODE, M8_TLS_HOST_OK_MARKER, M8_TLS_OK_MARKER, TLS_FIRMWARE_PLAINTEXT_NOTE,
 };
-use crate::mgmt::http::{handle_http_request, MGMT_HTTP_DEFAULT_PORT};
+use crate::mgmt::http::{handle_http_request, HTTP_RESPONSE_CAP, MGMT_HTTP_DEFAULT_PORT};
 use crate::mgmt::datastore::ImageTable;
 use crate::mgmt::iso::IsoDeployPlan;
 use crate::mgmt::iso_install::InstallToDiskPlan;
@@ -50,7 +50,7 @@ fn serve_one_tls_http(listener: TcpListener, cert: LabCert) {
     let mut images = ImageTable::new();
     let mut iso_plan = IsoDeployPlan::empty();
     let mut iso_install = InstallToDiskPlan::empty();
-    let mut out = [0u8; 16384];
+    let mut out = [0u8; HTTP_RESPONSE_CAP];
     let wn = handle_http_request(
         &mut table,
         &mut images,

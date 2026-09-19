@@ -2,16 +2,19 @@
 //!
 //! Pillar: [Z] [A]
 //! Proven Core: **outside** (ADR-002 / ADR-018). Do not touch VMX/EPT.
-//! VERIFICATION: L1 host tests (operator keys → guest COM1 RBR; guest THR echo).
+//! VERIFICATION: L1 host tests (SPA POST `/console/keys` → guest COM1 RBR;
+//! guest THR echo).
 //!
-//! Firmware SPA still shows [`GET /logs/serial`](crate::mgmt::http) — HV UART,
-//! not a guest keyboard. That is **not** the M8.3 product close. This module
-//! is the host-first slice: [`ConsoleMode::HostReady`] injects keystrokes
-//! through the same COM1 RX path iDRAC SOL / serial auto-answer use.
+//! Firmware SPA [`POST /console/keys`](crate::mgmt::http) injects operator
+//! keystrokes through the same COM1 RX path iDRAC SOL / serial auto-answer
+//! use. [`GET /logs/serial`](crate::mgmt::http) remains HV UART (not a guest
+//! console). This is **not VNC**.
 //!
-//! Iron close marker [`M8_CONSOLE_OK_MARKER`] is operator typing in the
-//! guest from the SPA (or equivalent) after `BOOT-OK`. Host/CI print
+//! Iron close marker [`M8_CONSOLE_OK_MARKER`] is operator typing in Alpine
+//! from the SPA after `BOOT-OK` on BCM5720, then COM2. Host/CI print
 //! [`M8_CONSOLE_HOST_OK_MARKER`]. Nested QEMU ≠ R640. Do not flash. Not VNC.
+
+use core::sync::atomic::{AtomicBool, Ordering};
 
 use crate::devices::guest_uart::{pio, push_host_rx, reset as uart_reset};
 
@@ -22,35 +25,45 @@ pub const M8_CONSOLE_OK_MARKER: &str = "RAYNU-V-M8-CONSOLE-OK";
 /// Host/CI: operator keys reach guest COM1; guest echo is captured. Not iron.
 pub const M8_CONSOLE_HOST_OK_MARKER: &str = "RAYNU-V-M8-CONSOLE-HOST-OK";
 
-/// Honesty: host UART round-trip ≠ iron SPA keyboard / VNC.
+/// Honesty: firmware SPA keys ≠ iron CONSOLE-OK until COM2 on BCM5720.
 pub const CONSOLE_HOST_RESIDUAL_NOTE: &str =
-    "residual: HostReady UART keys are not iron RAYNU-V-M8-CONSOLE-OK; firmware SPA is still host serial log (not guest console); not VNC; nested QEMU ≠ R640; do not print iron CONSOLE-OK from host/CI";
+    "residual: firmware SPA POST /console/keys is not iron RAYNU-V-M8-CONSOLE-OK until COM2 on BCM5720; GET /logs/serial is still HV UART (not a guest console); not VNC; nested QEMU ≠ R640; do not print iron CONSOLE-OK from host/CI";
 
-/// Firmware listen today: GET /logs/serial is HV UART, not a guest keyboard.
-pub const CONSOLE_FIRMWARE_SERIAL_LOG_NOTE: &str =
-    "firmware SPA GET /logs/serial is HV UART (M8.3 host-ready; iron guest keyboard not claimed; not VNC)";
+/// Firmware listen: SPA keyboard injects guest COM1. Host serial log stays HV UART.
+pub const CONSOLE_FIRMWARE_SPA_KEYS_NOTE: &str =
+    "firmware SPA POST /console/keys injects guest COM1; GET /logs/serial is HV UART (not a guest console); not VNC; iron CONSOLE-OK is COM2 after SPA keys on BCM5720";
 
 /// How the operator talks to the guest.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConsoleMode {
-    /// Iron / firmware: host serial log only (no SPA keyboard).
+    /// No SPA keyboard (GET /logs/serial only).
     SerialLogOnly,
+    /// Firmware coexist: POST /console/keys → guest COM1 RBR.
+    FirmwareSpaKeys,
     /// Host/`cfg(test)`: keystrokes into guest COM1 RX; THR echo captured.
     HostReady,
 }
 
-/// Product firmware console today. Host tests use [`ConsoleMode::HostReady`].
-pub const FIRMWARE_CONSOLE_MODE: ConsoleMode = ConsoleMode::SerialLogOnly;
+/// Product firmware console today. Host tests also use [`ConsoleMode::HostReady`].
+pub const FIRMWARE_CONSOLE_MODE: ConsoleMode = ConsoleMode::FirmwareSpaKeys;
 
 const CONSOLE_TX_CAP: usize = 256;
 static mut CONSOLE_TX: [u8; CONSOLE_TX_CAP] = [0; CONSOLE_TX_CAP];
 static mut CONSOLE_TX_LEN: usize = 0;
+static CONSOLE_OK_PRINTED: AtomicBool = AtomicBool::new(false);
+static SPA_KEYS_INJECTED: AtomicBool = AtomicBool::new(false);
 
-/// True until coexist serves a guest keyboard after `BOOT-OK`.
+/// True when firmware still has no SPA keyboard (lab residual).
 pub fn firmware_console_is_serial_log_only() -> bool {
     matches!(FIRMWARE_CONSOLE_MODE, ConsoleMode::SerialLogOnly)
-        && CONSOLE_FIRMWARE_SERIAL_LOG_NOTE.contains("HV UART")
-        && CONSOLE_FIRMWARE_SERIAL_LOG_NOTE.contains("not VNC")
+}
+
+/// True when firmware SPA POST /console/keys injects guest COM1.
+pub fn firmware_console_serves_spa_keys() -> bool {
+    matches!(FIRMWARE_CONSOLE_MODE, ConsoleMode::FirmwareSpaKeys)
+        && CONSOLE_FIRMWARE_SPA_KEYS_NOTE.contains("/console/keys")
+        && CONSOLE_FIRMWARE_SPA_KEYS_NOTE.contains("not VNC")
+        && CONSOLE_FIRMWARE_SPA_KEYS_NOTE.contains("HV UART")
 }
 
 /// Host/CI must never print the iron console marker.
@@ -60,6 +73,39 @@ pub fn host_never_prints_iron_console_ok() -> bool {
         && M8_CONSOLE_HOST_OK_MARKER != M8_CONSOLE_OK_MARKER
         && M8_CONSOLE_OK_MARKER != crate::mgmt::tls::M8_TLS_OK_MARKER
         && M8_CONSOLE_OK_MARKER != crate::mgmt::auth::M8_AUTH_OK_MARKER
+}
+
+/// Iron COM2: print [`M8_CONSOLE_OK_MARKER`] once after SPA keys reach guest
+/// COM1 on BCM5720 coexist. Host/CI never `println!` the iron string.
+pub fn maybe_print_iron_console_ok(keys_ok: bool, bcm5720: bool) -> bool {
+    if !(keys_ok && bcm5720) {
+        return false;
+    }
+    if CONSOLE_OK_PRINTED.swap(true, Ordering::AcqRel) {
+        return false;
+    }
+    #[cfg(feature = "uefi-bin")]
+    {
+        crate::boot::serial::write_line(M8_CONSOLE_OK_MARKER);
+    }
+    true
+}
+
+/// Host tests / handoff reset of the one-shot iron print latch.
+pub fn console_ok_clear_printed() {
+    CONSOLE_OK_PRINTED.store(false, Ordering::Release);
+}
+
+/// Latch that a SPA `/console/keys` POST injected at least one byte.
+pub fn note_spa_keys_injected(n: usize) {
+    if n > 0 {
+        SPA_KEYS_INJECTED.store(true, Ordering::Release);
+    }
+}
+
+/// Consume the SPA-keys latch (native coexist print path).
+pub fn take_spa_keys_injected() -> bool {
+    SPA_KEYS_INJECTED.swap(false, Ordering::AcqRel)
 }
 
 /// Clear the HostReady guest-echo ring (tests).
@@ -89,14 +135,32 @@ pub fn console_tx_snapshot(out: &mut [u8]) -> usize {
     }
 }
 
+fn map_key(prev: Option<u8>, b: u8) -> Option<u8> {
+    if b == b'\n' {
+        if prev == Some(b'\r') {
+            None
+        } else {
+            Some(b'\r')
+        }
+    } else {
+        Some(b)
+    }
+}
+
 /// Inject operator keystrokes into guest COM1 RBR. SerialLogOnly is a no-op.
 pub fn inject_operator_keys(mode: ConsoleMode, keys: &[u8]) -> usize {
     match mode {
         ConsoleMode::SerialLogOnly => 0,
-        ConsoleMode::HostReady => {
+        ConsoleMode::FirmwareSpaKeys | ConsoleMode::HostReady => {
             let mut n = 0;
+            let mut prev = None;
             for &b in keys {
-                if !push_host_rx(b) {
+                let Some(k) = map_key(prev, b) else {
+                    prev = Some(b);
+                    continue;
+                };
+                prev = Some(b);
+                if !push_host_rx(k) {
                     break;
                 }
                 n += 1;
@@ -106,19 +170,25 @@ pub fn inject_operator_keys(mode: ConsoleMode, keys: &[u8]) -> usize {
     }
 }
 
-/// Host package: HostReady keys reach RBR; guest THR echo is captured; firmware log-only.
+/// Host package: HostReady + firmware SPA keys reach RBR; GET /logs/serial stays HV UART.
 pub fn prop_console_host_package() -> bool {
     crate::devices::guest_irq::reset();
     uart_reset();
     console_tx_clear();
+    console_ok_clear_printed();
+    let _ = take_spa_keys_injected();
     let plan = include_str!("../docs/m8_plan.md");
     let html = include_str!("../assets/webui.html");
     let http = include_str!("http.rs");
+    let listen = include_str!("host_nic_listen.rs");
     let serial_log_only_refuses = inject_operator_keys(ConsoleMode::SerialLogOnly, b"x") == 0;
     let injected = inject_operator_keys(ConsoleMode::HostReady, b"hi") == 2;
+    let fw_injected = inject_operator_keys(ConsoleMode::FirmwareSpaKeys, b"ab") == 2;
     let (h, _, _) = pio(0x03F8, true, 0);
     let (i, _, _) = pio(0x03F8, true, 0);
-    let rbr_ok = h == b'h' && i == b'i';
+    let (a, _, _) = pio(0x03F8, true, 0);
+    let (b, _, _) = pio(0x03F8, true, 0);
+    let rbr_ok = h == b'h' && i == b'i' && a == b'a' && b == b'b';
     let (_, thr_o, _) = pio(0x03F8, false, b'o');
     if let Some(b) = thr_o {
         console_tx_note(b);
@@ -133,19 +203,38 @@ pub fn prop_console_host_package() -> bool {
     uart_reset();
     crate::devices::guest_irq::reset();
     console_tx_clear();
-    firmware_console_is_serial_log_only()
+    let nl = inject_operator_keys(ConsoleMode::FirmwareSpaKeys, b"z\n") == 2;
+    let (z, _, _) = pio(0x03F8, true, 0);
+    let (cr, _, _) = pio(0x03F8, true, 0);
+    uart_reset();
+    crate::devices::guest_irq::reset();
+    note_spa_keys_injected(1);
+    let latched = take_spa_keys_injected() && !take_spa_keys_injected();
+    firmware_console_serves_spa_keys()
+        && !firmware_console_is_serial_log_only()
         && host_never_prints_iron_console_ok()
         && serial_log_only_refuses
         && injected
+        && fw_injected
         && rbr_ok
         && echo_ok
+        && nl
+        && z == b'z'
+        && cr == b'\r'
+        && latched
+        && maybe_print_iron_console_ok(true, true)
+        && !maybe_print_iron_console_ok(true, true)
         && CONSOLE_HOST_RESIDUAL_NOTE.contains("not iron")
         && CONSOLE_HOST_RESIDUAL_NOTE.contains("not VNC")
+        && CONSOLE_FIRMWARE_SPA_KEYS_NOTE.contains("/console/keys")
         && plan.contains("M8.3")
         && plan.contains("not VNC")
-        && html.contains("not guest console")
+        && html.contains("/console/keys")
+        && html.contains("g-keys")
+        && html.contains("not VNC")
+        && http.contains("/console/keys")
         && http.contains("Not a guest console")
-        && !http.contains("/console/keys")
+        && listen.contains("maybe_print_iron_console_ok")
 }
 
 #[cfg(test)]

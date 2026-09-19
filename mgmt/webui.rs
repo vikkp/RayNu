@@ -169,7 +169,7 @@ pub fn webui_html_wires_api() -> bool {
 
 /// Operator SPA (menus + status lights). Firmware-debug button labels are
 /// not required on the home screen — those POSTs stay on REST `/fw/*`.
-/// Size stays `webui_len()+256 ≤ 16384`.
+/// Size stays `webui_len()+256 ≤ HTTP_RESPONSE_CAP` (20 KiB; TLS 1.2 records still 16 KiB).
 pub fn spa_operator_surface_present() -> bool {
     let Ok(s) = core::str::from_utf8(webui_raw_bytes()) else {
         return false;
@@ -178,6 +178,7 @@ pub fn spa_operator_surface_present() -> bool {
         && s.contains("data-raynu-m7-ui")
         && s.contains("data-raynu-e4")
         && s.contains("data-raynu-phase-b")
+        && s.contains("data-raynu-m8-console")
         && s.contains("data-go=\"overview\"")
         && s.contains("data-go=\"guests\"")
         && s.contains("data-go=\"media\"")
@@ -197,8 +198,11 @@ pub fn spa_operator_surface_present() -> bool {
         && s.contains("not OVMF")
         && s.contains("RayNu-F")
         && s.contains("/iso/")
+        && s.contains("/console/keys")
+        && s.contains("g-keys")
+        && s.contains("not VNC")
         && s.contains("Install media")
-        && webui_len().saturating_add(256) <= 16384
+        && webui_len().saturating_add(256) <= crate::mgmt::http::HTTP_RESPONSE_CAP
 }
 
 /// Host-testable: lazy load + list/start/stop against one guest.

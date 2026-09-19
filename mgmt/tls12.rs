@@ -13,7 +13,7 @@
 
 extern crate alloc;
 
-use crate::mgmt::tls_coexist::{headers_complete, COEXIST_HTTP_OUT_N, COEXIST_RX_ACC_N};
+use crate::mgmt::tls_coexist::{request_complete, COEXIST_HTTP_OUT_N, COEXIST_RX_ACC_N};
 use aes_gcm::aead::{AeadInPlace, KeyInit};
 use aes_gcm::{Aes128Gcm, Key, Nonce};
 use hmac::{Hmac, Mac};
@@ -340,7 +340,7 @@ impl Tls12Listen {
     }
 
     pub fn take_http(&self) -> Option<&[u8]> {
-        if self.state == ST_APP && headers_complete(&self.http[..self.http_len]) {
+        if self.state == ST_APP && request_complete(&self.http[..self.http_len]) {
             Some(&self.http[..self.http_len])
         } else {
             None
@@ -351,8 +351,14 @@ impl Tls12Listen {
         if self.state != ST_APP || http.is_empty() {
             return 0;
         }
-        if !self.seal(CT_APP, http) {
-            return 0;
+        // TLS 1.2 application_data plaintext max is 2^14. Fragment SPA >16KiB.
+        let mut off = 0;
+        while off < http.len() {
+            let n = (http.len() - off).min(16384);
+            if !self.seal(CT_APP, &http[off..off + n]) {
+                return 0;
+            }
+            off += n;
         }
         self.drain_tcp(tcp_out)
     }

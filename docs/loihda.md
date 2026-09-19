@@ -22,7 +22,7 @@ piece_persist_pct: 97
 piece_sku_pct: 92
 piece_tls_pct: 80
 piece_auth_pct: 38
-piece_console_pct: 32
+piece_console_pct: 50
 piece_perc_pct: 15
 piece_unmodified_pct: 20
 ---
@@ -44,7 +44,7 @@ Lived: [`docs/progress.md`](progress.md) · M8: [`docs/m8_plan.md`](m8_plan.md) 
 | Metric | Value | Meaning |
 |--------|------:|---------|
 | **Overall LOI readiness** | **63%** | Nearest honest conversation is Bar A. Not Bar B. Not GA. |
-| **Bar A — dedicated-box** | **78%** | One PowerEdge we own or they dedicate. Disk survive HV reboot is evidence-closed. SKU card names ships vs does-not. **A4 TLS iron CLOSED** (`RAYNU-V-M8-TLS-OK`). Host auth HostReady; iron still lab latch. Host console UART keys; SPA still has no keyboard. |
+| **Bar A — dedicated-box** | **78%** | One PowerEdge we own or they dedicate. Disk survive HV reboot is evidence-closed. SKU card names ships vs does-not. **A4 TLS iron CLOSED** (`RAYNU-V-M8-TLS-OK`). Host auth HostReady; iron still lab latch. Firmware SPA keys in-tree; iron CONSOLE-OK is typing from the SPA. |
 | **Bar B — RAID-fleet** | **18%** | Replace the licensed hypervisor on PERC virtual disks they already paid for. |
 | **Months to Bar A** | **0.75** | Baseline 2026-09-14. ETA **2026-10**. Shrink only with DONE evidence. |
 | **Months to Bar B** | **3.5** | PERC I/O is the long pole. ETA **2026-12**. |
@@ -91,9 +91,9 @@ All must be true:
 | A3 | **SKU card** | One page: what ships, what does not, dedicated-box vs fleet | **DONE** ([`docs/sku.md`](sku.md) / [`site/sku.html`](../site/sku.html)). Stops us promising PERC, Windows, or cluster in a Bar A conversation. |
 | A4 | **TLS** | Browser/`curl --cacert` on native `CURL NOW → https://` **before RayNu-F** | **DONE** (`928d6224` COM2 `RAYNU-V-M8-TLS-OK`; Mac SPA HTML). Lab millicert. PRE-EBS SNP stays `http://`. |
 | A5 | **Auth beyond bring-up** | Product default is not `raynu-v-bringup` | A shared lab latch is not an operator credential. HostReady (`RAYNU-V-M8-AUTH-HOST-OK`) is not this close. |
-| A6 | **Operator keyboard** | Type in the guest from the SPA (not only iDRAC SOL) | Soft for the first LOI; still on the polish table. Serial already installed Alpine. HostReady UART keys (`RAYNU-V-M8-CONSOLE-HOST-OK`) are not this close. **NOW.** |
+| A6 | **Operator keyboard** | Type in the guest from the SPA (not only iDRAC SOL) | Soft for the first LOI; still on the polish table. Serial already installed Alpine. Firmware SPA `POST /console/keys` is in-tree. HostReady UART keys (`RAYNU-V-M8-CONSOLE-HOST-OK`) are not this close. Iron close is COM2 `RAYNU-V-M8-CONSOLE-OK`. **NOW.** |
 
-A2 is **DONE on evidence**. A3 SKU is **DONE**. A4 TLS iron is **DONE** (`928d6224` `RAYNU-V-M8-TLS-OK`). A5 host-ready (`RAYNU-V-M8-AUTH-HOST-OK`) is not iron ESP-required default. A6 host-ready (`RAYNU-V-M8-CONSOLE-HOST-OK`) is not iron SPA keyboard. **NOW is A6 console iron.** M8.4 host-ready (`RAYNU-V-M8-ISO-UPLOAD-HOST-OK`) is not iron ISO-UPLOAD-OK.
+A2 is **DONE on evidence**. A3 SKU is **DONE**. A4 TLS iron is **DONE** (`928d6224` `RAYNU-V-M8-TLS-OK`). A5 host-ready (`RAYNU-V-M8-AUTH-HOST-OK`) is not iron ESP-required default. A6 firmware SPA keys are in-tree; iron SPA keyboard is not closed. **NOW is A6 console iron.** M8.4 host-ready (`RAYNU-V-M8-ISO-UPLOAD-HOST-OK`) is not iron ISO-UPLOAD-OK.
 
 ### Bar B — RAID-fleet non-prod LOI
 
@@ -145,11 +145,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 **Product effect.** Shared lab latch ≠ operator credential. The host package names that. The box you own still answers the lab latch until an ESP token is staged. Soft for a dedicated box you control; not A5 closed.
 
-### 6. Guest console UI — 32%
+### 6. Guest console UI — 50%
 
-**What it is.** HostReady injects operator keys into guest COM1 (`RAYNU-V-M8-CONSOLE-HOST-OK`). Serial auto-answer already typed `setup-disk`. SPA still shows HV serial logs. No in-browser guest keyboard/VNC.
+**What it is.** Firmware SPA `POST /console/keys` injects operator keys into guest COM1. HostReady UART (`RAYNU-V-M8-CONSOLE-HOST-OK`) still round-trips. `GET /logs/serial` remains HV UART. Not VNC.
 
-**Product effect.** Operators should not need iDRAC SOL to log into Alpine. The host package names the UART path. The page you open still has no keyboard. Soft for Bar A if we name it. Hard for anyone who thinks this is vSphere. Not A6 closed.
+**Product effect.** Operators should not need iDRAC SOL to log into Alpine. The page now has a keyboard field. Iron close is typing in Alpine from the SPA on BCM5720, then COM2 `RAYNU-V-M8-CONSOLE-OK`. Soft for Bar A if we name it. Not A6 closed.
 
 ### 7. PERC RAID I/O — 15%
 
@@ -174,13 +174,13 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | 2026-09-18 | Bar A A2 | USB Force Off on COM2 | **DONE on evidence** (`4af78b43` keep=1 DISK-BOOT UUID `348005a9`; minted persist-OK not printed) |
 | 2026-09-18 | Bar A A3 | SKU card | **DONE** ([`docs/sku.md`](sku.md) / [`site/sku.html`](../site/sku.html)) |
 | **2026-09-19** | Bar A A4 | TLS on native `:8443` **before RayNu-F** | **DONE** (`928d6224` COM2 `RAYNU-V-M8-TLS-OK`; Mac `curl --cacert` SPA `.140`) |
-| **NOW** | Bar A A6 | SPA keyboard | **NEXT** (host UART keys exist; firmware SPA is still serial log; not VNC) |
+| **NOW** | Bar A A6 | SPA keyboard | **NEXT** (firmware `POST /console/keys` in-tree; iron CONSOLE-OK is typing from SPA on COM2; not VNC) |
 | then | Bar B B2 | Spare PERC VD persist | after A6; census skip is lab safety |
 | later | Auth / unmodified ISO | A5, Gen-1 Phase 2 | named residuals, not fake closes |
 
 ```
 2026-09  ████████  Everest closed
-2026-10  █████░░░  Bar A: A4 TLS iron DONE; console iron next
+2026-10  █████░░░  Bar A: A4 TLS iron DONE; firmware SPA keys in-tree; console iron next
 2026-11  ░░░░░░░░  Bar A: first dedicated-box LOI window
 2026-12  ░░░░░░░░  Bar B: PERC VD I/O
 ```
@@ -204,11 +204,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-tls-iron |
-| Summary | **A4 CLOSED on COM2.** EFI `928d6224` native HTTPS GET `.140` → SPA → `RAYNU-V-M8-TLS-OK`. Keep=1 DISK-BOOT also printed `RAYNU-V-M8-DISK-PERSIST-OK` (`UUID=dd673a9a`). rustls/ring stay out of `uefi-bin`. Scores: TLS 45→80; persist 95→97; sku 90→92; Bar A 68→78; overall 56→63; months A 1.0→0.75. |
+| Commit | m8-console-iron |
+| Summary | **M8.3 firmware SPA keyboard in-tree.** `POST /console/keys` injects guest COM1; SPA `g-keys`. HTTP out 20 KiB + TLS record fragment. Host/CI never print `RAYNU-V-M8-CONSOLE-OK`. Iron close is typing in Alpine from the SPA on BCM5720 then COM2. Not VNC. Sit at `localhost:~#`. Do not flash. |
 | Everest impact | none — HDA months 0.0 / 99% held |
-| LOI impact | Bar A **68%→78%** / Bar B **18% held** / overall **56%→63%** / months A **1.0→0.75**. Persist piece **95%→97%**. SKU **90%→92%**. TLS **45%→80%**. Auth **38% held**. Console **32% held**. A4 DONE. A6 NOW. |
-| Gates touched | COM2 `RAYNU-V-M8-TLS-OK` + persist-OK print. rustls not in `uefi-bin`. `./tools/sync-loihda-site.sh --check`. No MegaRAID. Sit at `localhost:~#`. |
+| LOI impact | Bar A **78% held** / Bar B **18% held** / overall **63% held** / months A **0.75 held**. Console piece **32%→50%**. Auth **38% held**. A6 not closed. |
+| Gates touched | `RAYNU-V-M8-CONSOLE-HOST-OK` host print. Firmware `FirmwareSpaKeys`. `./tools/sync-loihda-site.sh --check`. No MegaRAID. Sit at `localhost:~#`. |
 
 ---
 
@@ -216,6 +216,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-19 | m8-console-iron | 78 | 18 | **M8.3 firmware SPA keyboard.** `POST /console/keys` → guest COM1; SPA `g-keys`; HTTP out 20 KiB + TLS record fragment. Never print iron CONSOLE-OK. Iron close is typing in Alpine from the SPA on BCM5720 then COM2. Not VNC. Console 32→50. Bar A 78 held. A6 not closed. |
 | 2026-09-19 | m8-tls-iron | 78 | 18 | **A4 CLOSED on COM2.** EFI `928d6224` native HTTPS GET `.140` → SPA → `RAYNU-V-M8-TLS-OK`. Keep=1 DISK-BOOT also printed `RAYNU-V-M8-DISK-PERSIST-OK` (`UUID=dd673a9a`). rustls/ring stay out of `uefi-bin`. TLS 45→80. Persist 95→97. SKU 90→92. Months A 1.0→0.75. A6 NOW. |
 | 2026-09-18 | m8-tls-iron | 68 | 18 | **M8.1 native HTTPS window before RayNu-F.** Analog then `Tls12Listen` (`PRE_RAYNUF_HTTPS_MS`). COM2 `1647a8d8` launched Alpine with no `https://` (`curl: (28)` on SNP `.150`). RDRAND CPUID-gated. rustls/ring stay out of `uefi-bin`. Never print iron TLS-OK. Iron close is `curl --cacert` on native `CURL NOW → https://`. TLS 40→45. Persist 95 held. A4 not closed. |
 | 2026-09-18 | m8-iso-upload-sku | 62 | 18 | **A3 SKU DONE + M8.4 host ISO upload HostReady.** Dedicated-box card (`docs/sku.md` / `site/sku.html`). Host blob PUT/POST (`RAYNU-V-M8-ISO-UPLOAD-HOST-OK`). ESP-staged stays valid. Never print iron ISO-UPLOAD-OK. Do not flash. SKU 25→90. Persist 95 held. TLS 22 held. A4 not closed. |
@@ -275,7 +276,7 @@ LOI:           NOT OPEN. Tracker born 2026-09-14.
 Bar A:         78% · 0.75 months · dedicated-box non-prod
 Bar B:         18% · 3.5 months · PERC RAID fleet (out of conversation until PERC persist)
 Overall:       63% · confidence medium
-NOW:           sit at localhost:~# · A4 TLS-OK printed · next is console iron · do not setup-disk
+NOW:           sit at localhost:~# · firmware SPA keys in-tree · iron CONSOLE-OK is typing from SPA · do not setup-disk
 Open:          iron SPA keyboard · iron AUTH-OK · unmodified ISO · cluster · Ubuntu PERC stays standing boot
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
 Sit:           localhost:~# · do not setup-disk · do not flash Toshiba /dev/sdc

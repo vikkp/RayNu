@@ -33,6 +33,9 @@ pub const HTTP_GAP_NOTE: &str = "GAP(CLOSED M7.1): Network HTTPS/HTTP mgmt";
 pub const HTTP_LAB_NOTE: &str =
     "lab MVP: firmware TLS 1.2 on coexist (M8.1; plaintext HTTP remains a lab fallback; iron HTTPS closed on COM2 928d6224; ADR-003 size)";
 
+/// SPA + HTTP headers must fit this coexist / host serve buffer.
+pub const HTTP_RESPONSE_CAP: usize = 20480;
+
 /// Default lab bind (host tests / QEMU user-net docs).
 pub const MGMT_HTTP_DEFAULT_PORT: u16 = 8443;
 
@@ -81,7 +84,18 @@ pub fn auth_token_from_headers(headers: &str) -> Option<&str> {
     None
 }
 
-/// Parse a complete HTTP/1.1 request (headers ended; body ignored for MVP).
+/// Body after the header block (`\r\n\r\n` or `\n\n`). Empty when missing.
+pub fn http_body(raw: &str) -> &str {
+    if let Some((_, body)) = raw.split_once("\r\n\r\n") {
+        body
+    } else if let Some((_, body)) = raw.split_once("\n\n") {
+        body
+    } else {
+        ""
+    }
+}
+
+/// Parse a complete HTTP/1.1 request (headers ended; body via [`http_body`]).
 pub fn parse_http_request(raw: &str) -> Result<ParsedHttpRequest<'_>, HttpParseError> {
     let raw = raw.trim_start_matches('\u{feff}');
     let (req_line, rest) = raw.split_once("\r\n").or_else(|| raw.split_once('\n')).ok_or(HttpParseError::Truncated)?;
@@ -417,6 +431,28 @@ pub fn handle_http_request(
         let n = crate::boot::serial::serial_log_snapshot(&mut log);
         return format_http_response(200, "text/plain; charset=utf-8", &log[..n], out);
     }
+    // M8.3: SPA keyboard → guest COM1. GET /logs/serial stays HV UART.
+    if parsed.path == "/console/keys" {
+        if !matches!(parsed.method, RestMethod::Post) {
+            return format_http_response(400, "text/plain; charset=utf-8", b"bad request", out);
+        }
+        if !auth_allows(parsed.auth_token) {
+            return format_http_response(401, "text/plain; charset=utf-8", b"unauthorized", out);
+        }
+        let keys = http_body(raw).as_bytes();
+        if keys.is_empty() {
+            return format_http_response(400, "text/plain; charset=utf-8", b"empty keys", out);
+        }
+        let n = crate::mgmt::console::inject_operator_keys(
+            crate::mgmt::console::FIRMWARE_CONSOLE_MODE,
+            keys,
+        );
+        crate::mgmt::console::note_spa_keys_injected(n);
+        if n == 0 {
+            return format_http_response(503, "text/plain; charset=utf-8", b"fifo full", out);
+        }
+        return format_http_response(200, "application/json", b"{\"ok\":true}", out);
+    }
     let req = RestRequest {
         method: parsed.method,
         path: parsed.path,
@@ -480,7 +516,7 @@ pub fn prop_http_mgmt_package() -> bool {
     let mut iso_plan = IsoDeployPlan::empty();
     let mut iso_install = InstallToDiskPlan::empty();
     // SPA HTML can exceed 8 KiB; keep in sync with host/UEFI serve buffers.
-    let mut out = [0u8; 16384];
+    let mut out = [0u8; HTTP_RESPONSE_CAP];
     let n = handle_http_request(
         &mut table,
         &mut images,
