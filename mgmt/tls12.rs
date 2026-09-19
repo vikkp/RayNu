@@ -367,6 +367,10 @@ impl Tls12Listen {
         self.state
     }
 
+    pub fn handshake_failed(&self) -> bool {
+        self.state == ST_FAIL
+    }
+
     pub fn key_ready(&self) -> bool {
         self.key.is_some()
     }
@@ -404,11 +408,15 @@ impl Tls12Listen {
         match typ {
             CT_ALERT => false,
             CT_CCS => {
-                if self.state != ST_CCS || body != [1] {
-                    return false;
+                if self.state == ST_CCS && body == [1] {
+                    self.state = ST_FIN;
+                    return true;
                 }
-                self.state = ST_FIN;
-                true
+                // TLS 1.3 clients (Safari/Chrome) send a dummy CCS after
+                // ClientHello for middlebox compatibility (RFC 8446 D.4).
+                // curl --tlsv1.2 does not. Drop it until we expect the real
+                // TLS 1.2 CCS after ClientKeyExchange.
+                self.state == ST_CH || self.state == ST_CKE
             }
             CT_HS if self.state == ST_FIN || self.state == ST_APP => {
                 let mut plain = [0u8; 16640];

@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-standing-spa |
-| Summary | **Standing SPA during RayNu-F in-tree.** AfterEbs arms BCM5720 coexist; ticks on RayNu-F vmexit + USB BOT waits; `GET /logs/guest` + SPA poll. Host/CI never print `RAYNU-V-M8-CONSOLE-OK`. A4s not closed until a browser stays up after Alpine login. Not VNC. Sit at `localhost:~#`. Months **0.0 held**. Overall **99 held**. |
+| Commit | m8-spa-safari-idle |
+| Summary | **Safari millicert: ignore TLS 1.3 dummy CCS; idle 3 s→15 s; TLS fail re-listens.** `curl --tlsv1.2` already got SPA HTML on `.140`; Safari Can't Connect is either Mac Local Network/Private Relay or a dummy CCS that set `ST_FAIL`. Host rustls default (TLS 1.3+1.2) SPA test green. A4s not closed. Sit at `localhost:~#`. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. Standing SPA / iron console / iron auth residual. Nested QEMU ≠ R640. |
-| Gates touched | `prop_coexist_wired` standing SPA call sites. rustls not in `uefi-bin`. `./tools/sync-hda-site.sh --check`. `./tools/sync-loihda-site.sh --check`. Sit at `localhost:~#`. |
+| Gates touched | `server_ignores_tls13_dummy_ccs_after_client_hello`; `rustls_default_client_negotiates_tls12_spa`; `HOST_NIC_HTTP_IDLE_MS=15000`. rustls not in `uefi-bin`. `./tools/sync-hda-site.sh --check`. Sit at `localhost:~#`. |
 | Months Δ | 0.0 held (Everest closed; A4 iron HTTPS closed; A4s standing SPA not iron) |
 
 
@@ -366,7 +366,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | ID | Blocker / risk | Severity | Mitigations |
 |----|----------------|----------|-------------|
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
-| H2 | TLS / console polish | MED | **M8.1 CLOSED on COM2** (`928d6224` `RAYNU-V-M8-TLS-OK`). **Standing SPA firmware-in-tree** (A4s; coexist ticks during RayNu-F). **M8.3 firmware SPA keys + `GET /logs/guest`**. Iron CONSOLE-OK is typing from the SPA on BCM5720 then COM2 ([ADR-018](adr/ADR-018.md)). rustls/ring stay out of `uefi-bin`. Plaintext HTTP closed Everest (E3b) and remains a lab fallback / PRE-EBS SNP. Host-ready (`RAYNU-V-M8-CONSOLE-HOST-OK`) is not iron CONSOLE-OK / VNC. M8.2 host-ready (`RAYNU-V-M8-AUTH-HOST-OK`) is not iron AUTH-OK. Not a reopened Everest. |
+| H2 | TLS / console polish | MED | **M8.1 CLOSED on COM2** (`928d6224` `RAYNU-V-M8-TLS-OK`). **Standing SPA firmware-in-tree** (A4s; coexist ticks during RayNu-F). Millicert ignores TLS 1.3 dummy CCS; idle 15 s. **M8.3 firmware SPA keys + `GET /logs/guest`**. Iron CONSOLE-OK is typing from the SPA on BCM5720 then COM2 ([ADR-018](adr/ADR-018.md)). rustls/ring stay out of `uefi-bin`. Plaintext HTTP closed Everest (E3b) and remains a lab fallback / PRE-EBS SNP. Host-ready (`RAYNU-V-M8-CONSOLE-HOST-OK`) is not iron CONSOLE-OK / VNC. M8.2 host-ready (`RAYNU-V-M8-AUTH-HOST-OK`) is not iron AUTH-OK. Not a reopened Everest. |
 | H3 | ~~Guest UEFI CD not bootable / no reboot-to-disk on iron~~ | — | **Resolved** 2026-09-10 (`56a3ffd` / run `34480107961`): `RAYNU-V-RAYNU-F-DISK-BOOT-OK` + second Linux `root=UUID=` from `vda` + `login:` on the real R640. Chain: `59ac070` install-to-disk (`ISO-INSTALL-OK`) → F7 VMCLEAR/VMPTRLD (81 KiB `FirmwareState::new()` stack temporary over the VMCS; template reset + 32-page stack guard) → `975f8fc` relaunch into the installed GRUB menu, 1 M exit-cap inside GRUB's 2 s menu poll loop (~2 exits/µs) → `56a3ffd` RayNu-F wall cap (time, not exits, bounds the loader phase). Earlier: `916af96` THRE chain telemetry → UART TX ring room + line-rate pace + COM2 FIFO burst fixed the `apk` console stall. Evidence: [2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md](evidence/r640/2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md). Do not F11 `34474850361` / `34425781629` for Phase A; `34480107961` is the Phase A reference pin. |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
 | H5 | ~~Phase B — iron SPA still launches the SHELL stub~~ | — | **Resolved** 2026-09-11 (`f72b4276` / `34552377351`). Residual polish is **M8**, not Everest. |
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-19 | m8-spa-safari-idle | 0.0 | 99 | **Safari millicert dummy CCS + 15 s idle.** Ignore RFC 8446 D.4 CCS after ClientHello; TLS fail re-listens; `HOST_NIC_HTTP_IDLE_MS` 3 s→15 s. curl SPA on `.140` already worked; Safari Can't Connect not closed. Never print iron CONSOLE-OK. Sit at `localhost:~#`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-19 | m8-standing-spa | 0.0 | 99 | **Standing SPA during RayNu-F in-tree.** AfterEbs arms coexist; ticks on RayNu-F vmexit + USB waits; `GET /logs/guest`. Never print iron CONSOLE-OK. A4s not closed until a browser stays up after Alpine login. Sit at `localhost:~#`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-19 | m8-tls-iron | 0.0 | 99 | **A4 CLOSED on COM2.** EFI `928d6224` native HTTPS GET `10.99.99.140:8443` → SPA → `HOST-NIC HTTP exchange ok` → `RAYNU-V-M8-TLS-OK`. Keep=1 DISK-BOOT also printed `RAYNU-V-M8-DISK-PERSIST-OK` (`UUID=dd673a9a`). rustls/ring stay out of `uefi-bin`. Sit at `localhost:~#`. Next is console iron. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-18 | m8-tls-iron | 0.0 | 99 | **M8.1 native HTTPS window before RayNu-F.** Analog then `Tls12Listen` (`PRE_RAYNUF_HTTPS_MS`). COM2 `1647a8d8` launched Alpine with no `https://` (`curl: (28)` on SNP `.150`). RDRAND CPUID-gated (TCG qemu64 must not #UD). rustls/ring stay out of `uefi-bin`. Never print iron TLS-OK. Iron close is `curl --cacert` on native `CURL NOW → https://` then COM2 `RAYNU-V-M8-TLS-OK`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |

@@ -240,7 +240,9 @@ That guest is SHELL CPUID, not a Linux distro installer. Coexist has **one**
 TCP listen slot: a SPA/browser half-open (`TCP accept` with no `HTTP exchange ok`)
 holds it and `curl` SYN times out. Close tabs to `:8443` or Force Off + F11
 and POST spec+start before opening the SPA. Idle abort (`HOST_NIC_HTTP_IDLE_MS`)
-re-listens after 3 s without headers (next EFI). If coexist
+re-listens after 15 s without headers (next EFI). TLS handshake fail
+re-listens immediately (Safari TLS 1.3 dummy CCS must not hold the slot).
+If coexist
 cannot arm, fallback is Phase D idle after `VMXOFF`.
 Phase F **closed** 2026-08-20 on `0d06297b` / `10.99.99.149:8443`:
 `resume G0 (VMX on; G1–G3 parked)`, repeated `HOST-NIC-HTTP-OK` /
