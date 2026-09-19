@@ -38,6 +38,7 @@ use crate::mgmt::http::MGMT_HTTP_DEFAULT_PORT;
 use crate::mgmt::mgmt_arena::{MgmtArena, MgmtFatal};
 use crate::mgmt::mgmt_lease;
 use crate::mgmt::pci_census;
+use crate::mgmt::console::{maybe_print_iron_console_ok, take_spa_keys_injected};
 use crate::mgmt::tls::maybe_print_iron_tls_ok;
 use crate::mgmt::tls12::Tls12Listen;
 use crate::mgmt::tls_coexist::{COEXIST_HTTP_OUT_N, COEXIST_RX_ACC_N};
@@ -74,12 +75,13 @@ static mut COEXIST_LAST_RX_DROP: u32 = 0;
 static mut COEXIST_PORT: u16 = MGMT_HTTP_DEFAULT_PORT;
 
 const TCP_RX_N: usize = 8192;
-const TCP_TX_N: usize = 16384;
+const TCP_TX_N: usize = COEXIST_HTTP_OUT_N;
 const RX_ACC_N: usize = COEXIST_RX_ACC_N;
 const HTTP_OUT_N: usize = COEXIST_HTTP_OUT_N;
 const WRAP_OUT_N: usize = COEXIST_HTTP_OUT_N;
 const SCRATCH_N: usize = TCP_RX_N + TCP_TX_N + HTTP_OUT_N + WRAP_OUT_N;
 const _: [(); COEXIST_RX_ACC_N] = [(); RX_ACC_N];
+const _: () = assert!(SCRATCH_N + 16 <= crate::mgmt::mgmt_arena::MGMT_ARENA_BYTES);
 
 /// Complete HTTP request → codec → TLS wrap. Not iron TLS-OK by itself.
 fn wrap_session_try_exchange(
@@ -368,6 +370,9 @@ pub fn tick_bcm5720_coexist() {
         if did_exchange {
             serial::write_line("boot: HOST-NIC HTTP exchange ok");
             let _ = maybe_print_iron_tls_ok(true, true);
+            if take_spa_keys_injected() {
+                let _ = maybe_print_iron_console_ok(true, true);
+            }
             let _ = iface.poll(Instant::from_millis(millis + 1), device, sockets);
             pci_census::print_host_nic_exchange_ok_marker();
         }
@@ -819,6 +824,9 @@ fn listen_loop<D: Device>(
             served = served.saturating_add(1);
             serial::write_line("boot: HOST-NIC HTTP exchange ok");
             let _ = maybe_print_iron_tls_ok(true, nic_tag == "BCM5720");
+            if take_spa_keys_injected() {
+                let _ = maybe_print_iron_console_ok(true, nic_tag == "BCM5720");
+            }
         }
         if do_close {
             sockets.get_mut::<tcp::Socket>(tcp_handle).close();

@@ -1,7 +1,7 @@
 use super::{
     auth_token_from_headers, extract_bearer_token, format_http_response, handle_http_request,
     parse_http_request, prop_http_mgmt_package, HttpParseError, HTTP_GAP_NOTE, HTTP_LAB_NOTE,
-    M7_HTTP_OK_MARKER, MGMT_HTTP_DEFAULT_PORT,
+    HTTP_RESPONSE_CAP, M7_HTTP_OK_MARKER, MGMT_HTTP_DEFAULT_PORT,
 };
 use crate::mgmt::api::{RestMethod, BRINGUP_AUTH_TOKEN};
 use crate::mgmt::datastore::ImageTable;
@@ -40,7 +40,7 @@ fn serves_spa_and_rest() {
     let mut images = ImageTable::new();
     let mut iso_plan = IsoDeployPlan::empty();
     let mut iso_install = InstallToDiskPlan::empty();
-    let mut out = [0u8; 16384];
+    let mut out = [0u8; HTTP_RESPONSE_CAP];
     let n = handle_http_request(
         &mut table,
         &mut images,

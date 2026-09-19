@@ -68,7 +68,7 @@ fn host_ready_iso_blob_roundtrip() {
     let mut images = ImageTable::new();
     let mut iso_plan = IsoDeployPlan::empty();
     let mut iso_install = InstallToDiskPlan::empty();
-    let mut http_out = [0u8; 16384];
+    let mut http_out = [0u8; crate::mgmt::http::HTTP_RESPONSE_CAP];
     let hn = handle_http_request(
         &mut table,
         &mut images,

@@ -11,7 +11,7 @@
     <meta property="og:title" content="RayNu-V · Path to LOI" />
     <meta
       property="og:description"
-              content="Two bars: dedicated-box 78%, RAID-fleet 18%. Persist across HV reboot is evidence-closed. SKU card is done. A4 TLS iron is DONE (lab millicert). Host auth/console/ISO-upload HostReady are not iron closes. USB is not PERC."
+              content="Two bars: dedicated-box 78%, RAID-fleet 18%. Persist across HV reboot is evidence-closed. SKU card is done. A4 TLS iron is DONE (lab millicert). Firmware SPA keys are in-tree; iron CONSOLE-OK is typing from the SPA. Host auth/ISO-upload HostReady are not iron closes. USB is not PERC."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -295,10 +295,10 @@
             <li data-reveal>
               <header>
                 <span class="loi-pieces__name">Guest console UI</span>
-                <span class="loi-pieces__pct" data-piece="console">32%</span>
+                <span class="loi-pieces__pct" data-piece="console">50%</span>
               </header>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill" data-piece-fill="console" style="width: 32%"></span>
+                <span class="hda-bar__fill" data-piece-fill="console" style="width: 50%"></span>
               </div>
               <p>
                 Host tests can now type into the guest UART the same way
@@ -361,8 +361,8 @@
           </p>
           <pre class="ship-code" data-reveal><code>lived:  928d6224 RAYNU-V-M8-TLS-OK + RAYNU-V-M8-DISK-PERSIST-OK
 sit:    localhost:~#   do not setup-disk   do not flash Toshiba /dev/sdc
-in-tree: RAYNU-V-M8-CONSOLE-HOST-OK (UART keys; not iron)
-next:   SPA keyboard on the flashed box (RAYNU-V-M8-CONSOLE-OK)
+in-tree: firmware POST /console/keys → guest COM1 (not iron)
+next:   type in Alpine from the SPA (RAYNU-V-M8-CONSOLE-OK)
 never:  host / CI / nested printing RAYNU-V-M8-CONSOLE-OK</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
             Rollback remains GitHub Latest

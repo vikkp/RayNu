@@ -13,7 +13,7 @@
 - M8.1 firmware wrap: `RAYNU-V-M8-TLS-FW-HOST-OK` — `./tools/m8-tls-fw-smoke.sh` (coexist TCP feeds `Tls12Listen`; host rustls uses the same feed/take/wrap API). rustls/ring cannot join `uefi-bin` (`assert.h`). CURL NOW on this EFI is `https://`.
 - M8.1 freestanding TLS 1.2: `RAYNU-V-M8-TLS12-HOST-OK` — `./tools/m8-tls12-smoke.sh` (rustls TLS 1.2 client ↔ `Tls12Listen` SPA). Not iron TLS-OK.
 - M8.2 host: `RAYNU-V-M8-AUTH-HOST-OK` — `./tools/m8-auth-smoke.sh` (`AuthMode::HostReady` rejects `raynu-v-bringup`; operator token is the product latch). Firmware REST still accepts the lab latch when no ESP `auth.token`. Never print `RAYNU-V-M8-AUTH-OK` from host/CI. Iron close is ESP token required after `BOOT-OK`. `raynu-v-bringup` is **not product default**.
-- M8.3 host: `RAYNU-V-M8-CONSOLE-HOST-OK` — `./tools/m8-console-smoke.sh` (`ConsoleMode::HostReady` injects keys into guest COM1). Firmware SPA is still `GET /logs/serial` (HV UART). Never print `RAYNU-V-M8-CONSOLE-OK` from host/CI. Iron close is typing in the guest from the SPA after `BOOT-OK`. **not VNC**.
+- M8.3 host: `RAYNU-V-M8-CONSOLE-HOST-OK` — `./tools/m8-console-smoke.sh` (`ConsoleMode::FirmwareSpaKeys` + HostReady UART). Firmware SPA `POST /console/keys` injects guest COM1. `GET /logs/serial` is HV UART. Never print `RAYNU-V-M8-CONSOLE-OK` from host/CI. Iron close is typing in the guest from the SPA after `BOOT-OK` on BCM5720. **not VNC**.
 - M8.4 host: `RAYNU-V-M8-ISO-UPLOAD-HOST-OK` — `./tools/m8-iso-upload-smoke.sh` (`UploadMode::HostReady` PUT/POST ISO bytes into a host datastore blob). Firmware path is ESP-staged `linux.iso`. Firmware HTTP does not grow a coexist blob PUT. **ESP-staged stays valid**. Never print `RAYNU-V-M8-ISO-UPLOAD-OK` from host/CI. Iron close is a network ISO PUT on coexist after `BOOT-OK`.
 
 ## Story
@@ -273,7 +273,7 @@ Parse path: e1000 `parse_mocked_rx_desc_bytes` + BCM `parse_mocked_rx_bd_bytes`
 
 ### Phase E — mgmt arena
 
-Listen TCP/HTTP scratch comes from a 64 KiB `MgmtArena`, not
+Listen TCP/HTTP scratch comes from an 80 KiB `MgmtArena`, not
 `FrameAllocator`. On `MgmtFatal`: arena `reset`, `AuditEvent::MgmtRestarted`,
 retry. Host observable: `induced_fatals_do_not_touch_frame_allocator`.
 

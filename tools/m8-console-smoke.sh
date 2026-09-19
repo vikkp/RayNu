@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# M8.3 host/CI smoke: operator keys → guest COM1 → RAYNU-V-M8-CONSOLE-HOST-OK.
-# Firmware SPA is still GET /logs/serial (HV UART). Never prints RAYNU-V-M8-CONSOLE-OK.
-# Iron close is typing in the guest from the SPA after BOOT-OK. Not VNC.
+# M8.3 host/CI smoke: SPA POST /console/keys → guest COM1 → RAYNU-V-M8-CONSOLE-HOST-OK.
+# GET /logs/serial stays HV UART. Never prints RAYNU-V-M8-CONSOLE-OK.
+# Iron close is typing in Alpine from the SPA on BCM5720, then COM2. Not VNC.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -17,11 +17,15 @@ if ! grep -q 'fn prop_console_host_package(' "$ROOT/mgmt/console.rs"; then
   echo "error: missing prop_console_host_package" >&2
   exit 1
 fi
-if ! grep -q 'HostReady' "$ROOT/mgmt/console.rs"; then
-  echo "error: ConsoleMode::HostReady required" >&2
+if ! grep -q 'FirmwareSpaKeys' "$ROOT/mgmt/console.rs"; then
+  echo "error: ConsoleMode::FirmwareSpaKeys required" >&2
   exit 1
 fi
-if grep -q 'println!("RAYNU-V-M8-CONSOLE-OK")' "$ROOT/mgmt/console.rs" "$ROOT/mgmt/http.rs"; then
+if ! grep -q '/console/keys' "$ROOT/mgmt/http.rs" "$ROOT/assets/webui.html"; then
+  echo "error: SPA POST /console/keys required" >&2
+  exit 1
+fi
+if grep -q 'println!("RAYNU-V-M8-CONSOLE-OK")' "$ROOT/mgmt/console.rs" "$ROOT/mgmt/http.rs" "$ROOT/mgmt/host_nic_listen.rs"; then
   echo "error: host must never println iron CONSOLE-OK" >&2
   exit 1
 fi

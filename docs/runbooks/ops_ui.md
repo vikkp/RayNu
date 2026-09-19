@@ -14,7 +14,8 @@ Guest / ISO lights (PR #232 sea-glass). Firmware-debug `/fw/*` stays REST-only.
 3. Media: `GET /images`, `POST /iso/{id}/deploy` (extract-boot), `POST /iso/{id}/install`  
 4. Start / stop  
 5. **Host serial log:** `GET /logs/serial` + SPA panel (HV UART ring — not guest console)  
-6. **Auth:** Bearer token field; ESP `EFI/RayNu/auth.token` overrides bring-up when present (M8.2 HostReady; `raynu-v-bringup` is **not product default**; firmware still accepts the lab latch when no ESP token)  
+6. **Guest keys:** `POST /console/keys` + SPA `g-keys` (guest COM1; **not VNC**; iron CONSOLE-OK is COM2 after typing from the SPA)  
+7. **Auth:** Bearer token field; ESP `EFI/RayNu/auth.token` overrides bring-up when present (M8.2 HostReady; `raynu-v-bringup` is **not product default**; firmware still accepts the lab latch when no ESP token)  
 
 ## Host smoke
 
@@ -40,7 +41,7 @@ During the M7.6 listen window (`RAYNU-V-M7-UEFI-HTTP-OK` path):
 
 ## Honesty / residuals
 
-- **Guest console / VNC** — not claimed on iron. M8.3 host-ready (`RAYNU-V-M8-CONSOLE-HOST-OK`) is a UART keystroke round-trip, **not VNC**. Firmware SPA is still host serial log.  
+- **Guest console / VNC** — M8.3 firmware SPA `POST /console/keys` injects guest COM1. Host-ready (`RAYNU-V-M8-CONSOLE-HOST-OK`) is a UART keystroke round-trip, **not VNC**. `GET /logs/serial` is still host serial log. Iron CONSOLE-OK is typing from the SPA on BCM5720 then COM2.  
 - **ISO blob upload** — M8.4 host-ready (`RAYNU-V-M8-ISO-UPLOAD-HOST-OK`) is a host datastore blob. Firmware HTTP has no blob PUT. **ESP-staged stays valid**.  
 - **TLS** — firmware coexist TCP is wrapped by `Tls12Listen` (TLS 1.2 ECDHE-RSA-AES128-GCM); rustls/ring cannot join `uefi-bin`. CURL NOW on this EFI is `https://`. Flashed `4af78b43` is still `http://`. Iron HTTPS not claimed. Plaintext remains a lab fallback.  
 - **El Torito / CD-ROM** — still stubbed (M7.3).  

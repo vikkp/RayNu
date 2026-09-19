@@ -7,7 +7,8 @@
 //! HV-wide `panic = abort` is unchanged. No `catch_unwind`.
 
 /// Fixed mgmt heap (TCP/HTTP scratch). Distinct from `memory::FrameAllocator`.
-pub const MGMT_ARENA_BYTES: usize = 64 * 1024;
+/// 80 KiB so SPA + TLS wrap (>16 KiB HTTP, fragmented TLS records) fits.
+pub const MGMT_ARENA_BYTES: usize = 80 * 1024;
 
 /// Induced-fatal count used by the Phase E observable check.
 pub const MGMT_FATAL_INJECT_N: u32 = 8;

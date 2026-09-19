@@ -71,7 +71,7 @@ fn host_ready_rejects_bringup_and_serves_operator_token() {
     let mut images = ImageTable::new();
     let mut iso_plan = IsoDeployPlan::empty();
     let mut iso_install = InstallToDiskPlan::empty();
-    let mut out = [0u8; 16384];
+    let mut out = [0u8; crate::mgmt::http::HTTP_RESPONSE_CAP];
     let n = handle_http_request(
         &mut table,
         &mut images,
