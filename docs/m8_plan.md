@@ -99,13 +99,13 @@ HDA + `site/hda.html` stay fresh: update `docs/hda.md`, then `./tools/sync-hda-s
 
 ### M8.1 — TLS on the mgmt listen
 
-**Status: firmware TLS 1.2 in-tree** (iron `curl --cacert` open; rustls/ring not in `uefi-bin`)
+**Status: CLOSED on iron** (`RAYNU-V-M8-TLS-OK`, EFI `928d6224`, 2026-09-19)
 
 **Goal:** Coexist HTTP on BCM5720 (`10.99.99.x:8443`) becomes HTTPS. Plaintext remains a lab fallback. Size stays inside ADR-003.
 
-**Acceptance (draft):** Browser or `curl --cacert` on the operator LAN during the post-EBS native HTTPS window **before RayNu-F** (`PRE_RAYNUF_HTTPS_MS`). PRE-EBS SNP `http://` does not count. COM2 `1647a8d8` launched Alpine with no native `https://`.
+**Acceptance:** Browser or `curl --cacert` on the operator LAN during the post-EBS native HTTPS window **before RayNu-F** (`PRE_RAYNUF_HTTPS_MS`). Lived: Mac `curl --tlsv1.2 --tls-max 1.2 --cacert` `--resolve raynu-v.lab` on `10.99.99.140:8443` returned SPA HTML; COM2 `boot: HOST-NIC HTTP exchange ok` then **`RAYNU-V-M8-TLS-OK`**. PRE-EBS SNP `http://` does not count. Evidence: [2026-09-19-928d6224-m8-tls-ok.md](evidence/r640/2026-09-19-928d6224-m8-tls-ok.md).
 
-**Honesty:** ADR-009 already deferred TLS to close Everest. Host rustls (`RAYNU-V-M8-TLS-HOST-OK`) is not iron HTTPS. Firmware coexist now feeds [`Tls12Listen`](../mgmt/tls12.rs) (`RAYNU-V-M8-TLS12-HOST-OK`); rustls/ring cannot join `uefi-bin` (ring C needs `<assert.h>` on `x86_64-unknown-uefi`). CURL NOW on this EFI is `https://`. Flashed `4af78b43` is still plaintext. Closing M8.1 on COM2 does not rewrite Everest history. rustls is a **dev-dependency** (ADR-003); it is not in `uefi-bin`. Plaintext remains a lab fallback.
+**Honesty:** ADR-009 already deferred TLS to close Everest. Host rustls (`RAYNU-V-M8-TLS-HOST-OK`) is not this close. rustls/ring cannot join `uefi-bin` (ring C needs `<assert.h>` on `x86_64-unknown-uefi`). CURL NOW on this EFI is `https://`. Lab millicert, TLS 1.2 ECDHE-RSA-AES128-GCM only. Closing M8.1 on COM2 does not rewrite Everest history. rustls is a **dev-dependency** (ADR-003); it is not in `uefi-bin`. Plaintext remains a lab fallback.
 
 ---
 
@@ -175,4 +175,4 @@ Do not pull M9 into M8 gate lists.
 
 **M8.0 persist-first attach.** Choice remains **file-backed nested / durable LUN on iron / leftover DRAM as fallback**. Attach prefers persist (`attach_disk_keep` / `attach_lun` when the media looks installed). Nested `M8_PERSIST_IMG` backs QEMU RAM (distro OVMF ignores nvdimm/pc-dimm), default off. **NVMe I/O** (`MODE=lun`) Identify + Read/Write backs virtio when Identify succeeds; empty NVMe is not 1 GiB-zeroed. **USB BOT** (`MODE=usb`) is TCG-proven. **`MODE=lunkeep` TCG-proven:** plant GPT+ESP+ext4 at NVMe LUN offset 0, kill HV, second boot `keep=1`. NVMe I/O is post-EBS. **`MODE=usbkeep` TCG-proven:** same on qemu-xhci + usb-storage (header CRC + first ESP + FAT BPB + ext4; not 32 BOT array CRC). Iron marker is `RAYNU-V-M8-DISK-PERSIST-OK` (in-tree `uefi-bin` serial on keep=1 DurableLun DISK-BOOT; not on flashed `4af78b43`). Host marker is `RAYNU-V-M8-DISK-PERSIST-HOST-OK`. Keep ADR-004 exclusive ownership. Do not claim persist from nested QEMU alone. Do not copy 1 GiB through the Cruzer ESP. Do not format the PERC. Keep [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) as the flash rollback. A2 evidence close does not retire that pin.
 
-**Next:** **M8.1 TLS iron.** Freestanding TLS 1.2 is in-tree (`Tls12Listen`, `RAYNU-V-M8-TLS12-HOST-OK`). rustls/ring stay out of `uefi-bin`. Post-EBS native HTTPS window is **before RayNu-F** (`PRE_RAYNUF_HTTPS_MS`, `CURL NOW → https://`). COM2 `1647a8d8` auto-launched Alpine with no coexist listen (`curl: (28)` on SNP `.150`). RDRAND is CPUID-gated (TCG qemu64 must not #UD). Iron close is `curl --cacert` on that native line, then COM2 `RAYNU-V-M8-TLS-OK`. Ignore PRE-EBS `http://`. Do not `setup-disk`. Do not flash Toshiba `/dev/sdc`. Nested QEMU ≠ R640.
+**Next:** **M8.3 console iron.** A4 TLS is **CLOSED on COM2** (`928d6224` `RAYNU-V-M8-TLS-OK` after native HTTPS GET on `.140`). Persist-OK also printed on keep=1 DISK-BOOT. Host UART keys exist (`RAYNU-V-M8-CONSOLE-HOST-OK`); firmware SPA is still `GET /logs/serial`. Iron close is typing in the guest from the SPA (`RAYNU-V-M8-CONSOLE-OK`). Not VNC. Sit at `localhost:~#`. Do not `setup-disk`. Do not flash Toshiba `/dev/sdc`. Nested QEMU ≠ R640.

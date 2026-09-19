@@ -31,7 +31,7 @@ pub const HTTP_GAP_NOTE: &str = "GAP(CLOSED M7.1): Network HTTPS/HTTP mgmt";
 
 /// Lab note: firmware coexist is TLS 1.2 in-tree; iron HTTPS is not claimed.
 pub const HTTP_LAB_NOTE: &str =
-    "lab MVP: firmware TLS 1.2 on coexist (M8.1; plaintext HTTP remains a lab fallback; iron HTTPS not claimed; ADR-003 size)";
+    "lab MVP: firmware TLS 1.2 on coexist (M8.1; plaintext HTTP remains a lab fallback; iron HTTPS closed on COM2 928d6224; ADR-003 size)";
 
 /// Default lab bind (host tests / QEMU user-net docs).
 pub const MGMT_HTTP_DEFAULT_PORT: u16 = 8443;

@@ -1,6 +1,6 @@
 {
   "bars": {
-    "a": 68,
+    "a": 78,
     "b": 18
   },
   "baseline_date": "2026-09-14",
@@ -9,7 +9,7 @@
   "docs_url": "https://github.com/vikkp/RayNu/blob/main/docs/loihda.md",
   "last_commit": "PENDING",
   "last_commit_short": "PENDING",
-  "last_updated": "2026-09-18",
+  "last_updated": "2026-09-19",
   "loi_a_eta_month": "2026-10",
   "loi_b_eta_month": "2026-12",
   "loi_path": [
@@ -23,19 +23,19 @@
   ],
   "loi_target": "Non-prod Letter of Intent. Bar A = dedicated-box lab. Bar B = RAID-fleet replacement. HDA 99% is Everest, not an LOI.",
   "loihda_version": 1,
-  "months_to_loi_a": 1.0,
-  "months_to_loi_a_prev": 1.5,
+  "months_to_loi_a": 0.75,
+  "months_to_loi_a_prev": 1.0,
   "months_to_loi_b": 3.5,
   "months_to_loi_b_prev": 3.5,
-  "overall_pct": 56,
+  "overall_pct": 63,
   "pieces": {
     "auth": 38,
     "console": 32,
     "everest": 100,
     "perc": 15,
-    "persist": 95,
-    "sku": 90,
-    "tls": 45,
+    "persist": 97,
+    "sku": 92,
+    "tls": 80,
     "unmodified": 20
   },
   "source": "docs/loihda.md",

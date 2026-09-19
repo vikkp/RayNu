@@ -19,13 +19,13 @@ pub const M8_TLS_OK_MARKER: &str = "RAYNU-V-M8-TLS-OK";
 /// Host/CI: rustls server served SPA or Bearer REST. Not iron. Not nested.
 pub const M8_TLS_HOST_OK_MARKER: &str = "RAYNU-V-M8-TLS-HOST-OK";
 
-/// Honesty: host TLS ≠ iron HTTPS.
+/// Honesty: host TLS ≠ iron HTTPS. Iron COM2 closed 2026-09-19 (`928d6224`).
 pub const TLS_HOST_RESIDUAL_NOTE: &str =
-    "residual: rustls host handshake is not iron RAYNU-V-M8-TLS-OK; firmware TLS 1.2 is in-tree not COM2; plaintext HTTP remains a lab fallback; PRE-EBS SNP does not count; nested QEMU ≠ R640; rustls stays a dev-dependency (ADR-003); do not print iron TLS-OK from host/CI";
+    "residual: rustls host handshake is not iron RAYNU-V-M8-TLS-OK; iron HTTPS closed on COM2 928d6224 (lab millicert TLS 1.2); plaintext HTTP remains a lab fallback; PRE-EBS SNP does not count; nested QEMU ≠ R640; rustls stays a dev-dependency (ADR-003); do not print iron TLS-OK from host/CI";
 
-/// Firmware listen: TLS 1.2 in-tree. Iron HTTPS is not claimed until COM2.
+/// Firmware listen: TLS 1.2 in-tree. Iron HTTPS closed on COM2 (`928d6224`).
 pub const TLS_FIRMWARE_PLAINTEXT_NOTE: &str =
-    "firmware coexist :8443 is TLS 1.2 ECDHE-RSA-AES128-GCM (plaintext HTTP remains a lab fallback; iron HTTPS not claimed)";
+    "firmware coexist :8443 is TLS 1.2 ECDHE-RSA-AES128-GCM (plaintext HTTP remains a lab fallback; iron HTTPS closed on COM2 928d6224)";
 
 /// How the mgmt listen is encrypted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

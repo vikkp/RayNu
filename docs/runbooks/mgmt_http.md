@@ -9,7 +9,7 @@
 - M7.8 scaffold: `RAYNU-V-M7-HOST-NIC-SCAFFOLD-OK` — `./tools/m7-host-nic-smoke.sh` (ADR-013 Phase 0/C/D/E wiring)
 - M7.8 QEMU: `RAYNU-V-M7-HOST-NIC-QEMU-OK` — post-EBS `GET /` on QEMU `e1000` (`8086:100e`); `./tools/m7-host-nic-qemu-smoke.sh` (also greps PRE-EBS `vid:did=8086:100e`)
 - M7.8 iron: `RAYNU-V-M7-HOST-NIC-HTTP-OK` — **Phase D closed on iron** 2026-08-20 after `BOOT-OK` on BCM5720 `:38`. **Phase F closed on iron** the same day: native `bounded_poll` on a credit-scheduler quantum **while VMX is on** (G0 scheduled; G1–G3 parked). Do not claim from host or QEMU.
-- M8.1 host: `RAYNU-V-M8-TLS-HOST-OK` — `./tools/m8-tls-smoke.sh` (rustls around the HTTP codec). Firmware coexist is TLS 1.2 in-tree. Never print `RAYNU-V-M8-TLS-OK` from host/CI. Iron close is `curl --cacert` on `10.99.99.x:8443` **before RayNu-F** (post-EBS native HTTPS window).
+- M8.1 host: `RAYNU-V-M8-TLS-HOST-OK` — `./tools/m8-tls-smoke.sh` (rustls around the HTTP codec). Firmware coexist is TLS 1.2 in-tree. Never print `RAYNU-V-M8-TLS-OK` from host/CI. Iron **CLOSED** 2026-09-19 (`928d6224` COM2 `RAYNU-V-M8-TLS-OK` after native `curl --cacert` on `10.99.99.140:8443` **before RayNu-F**).
 - M8.1 firmware wrap: `RAYNU-V-M8-TLS-FW-HOST-OK` — `./tools/m8-tls-fw-smoke.sh` (coexist TCP feeds `Tls12Listen`; host rustls uses the same feed/take/wrap API). rustls/ring cannot join `uefi-bin` (`assert.h`). CURL NOW on this EFI is `https://`.
 - M8.1 freestanding TLS 1.2: `RAYNU-V-M8-TLS12-HOST-OK` — `./tools/m8-tls12-smoke.sh` (rustls TLS 1.2 client ↔ `Tls12Listen` SPA). Not iron TLS-OK.
 - M8.2 host: `RAYNU-V-M8-AUTH-HOST-OK` — `./tools/m8-auth-smoke.sh` (`AuthMode::HostReady` rejects `raynu-v-bringup`; operator token is the product latch). Firmware REST still accepts the lab latch when no ESP `auth.token`. Never print `RAYNU-V-M8-AUTH-OK` from host/CI. Iron close is ESP token required after `BOOT-OK`. `raynu-v-bringup` is **not product default**.
@@ -34,7 +34,7 @@ continues into the guest path when Tcp4 is absent (common on minimal OVMF).
 | **Host / CI (M7.8)** | Bounded poll + e1000 wiring | `m7-host-nic-smoke.sh` |
 | **QEMU (M7.8 Phase C)** | Post-EBS `GET /` on `e1000` | `m7-host-nic-qemu-smoke.sh` |
 | **Firmware** | PRE-EBS Tcp4 listen window (~15s) | Soft-fail → EBS + guests |
-| **Lab** | Firmware TLS 1.2 on coexist (`Tls12Listen`); **plaintext HTTP** remains a lab fallback; iron HTTPS not claimed — ADR-003/009/018 | QEMU `hostfwd` below |
+| **Lab** | Firmware TLS 1.2 on coexist (`Tls12Listen`); **plaintext HTTP** remains a lab fallback; iron HTTPS closed on COM2 `928d6224` — ADR-003/009/018 | QEMU `hostfwd` below |
 
 ## Auth
 
