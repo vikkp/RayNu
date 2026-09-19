@@ -121,8 +121,15 @@ fn wrap_session_try_exchange(
     if n == 0 {
         return false;
     }
-    let _ = sock.send_slice(&wrap[..n]);
-    true
+    let mut off = 0;
+    while off < n && sock.can_send() {
+        match sock.send_slice(&wrap[off..n]) {
+            Ok(0) => break,
+            Ok(k) => off += k,
+            Err(_) => break,
+        }
+    }
+    off == n
 }
 
 fn tls_session() -> &'static mut Tls12Listen {
@@ -417,9 +424,30 @@ pub fn tick_bcm5720_coexist() {
             pci_census::print_host_nic_exchange_ok_marker();
         }
         if do_close {
-            // abort() not close(): FIN_WAIT held the only listen slot so the
-            // next curl (spec→start, 31ms) got RST (`curl: (7)`). Iron 2026-08-21.
-            sockets.get_mut::<tcp::Socket>(tcp_handle).abort();
+            // drain TX before reclaim: abort() without drain RSTs Firefox
+            // nssFailure2 "authenticity of the received data could not be
+            // verified". curl tolerated the RST; browsers do not.
+            // close() first so Connection: close gets FIN; abort() only if
+            // FIN_WAIT still holds the one listen slot (iron 2026-08-21).
+            for _ in 0..64 {
+                let _ = iface.poll(Instant::from_millis(millis + 1), device, sockets);
+                if sockets.get::<tcp::Socket>(tcp_handle).send_queue() == 0 {
+                    break;
+                }
+                tsc_spin_ms(1);
+            }
+            tsc_spin_ms(8);
+            sockets.get_mut::<tcp::Socket>(tcp_handle).close();
+            for _ in 0..24 {
+                let _ = iface.poll(Instant::from_millis(millis + 1), device, sockets);
+                tsc_spin_ms(1);
+                if !sockets.get::<tcp::Socket>(tcp_handle).is_open() {
+                    break;
+                }
+            }
+            if sockets.get::<tcp::Socket>(tcp_handle).is_open() {
+                sockets.get_mut::<tcp::Socket>(tcp_handle).abort();
+            }
             session.reset();
             COEXIST_ANNOUNCED = false;
             COEXIST_ACCEPT_AT_MS = 0;
