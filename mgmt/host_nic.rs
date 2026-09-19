@@ -44,7 +44,9 @@ pub const HOST_NIC_MAX_EXCHANGES: u32 = 8;
 /// half-open ESTABLISHED (COM2 `TCP accept` with no `HTTP exchange ok`)
 /// held the slot so `curl` SYN timed out. Abort and re-listen after this
 /// many **real** coexist milliseconds without complete HTTP headers.
-pub const HOST_NIC_HTTP_IDLE_MS: i64 = 3000;
+/// 3 s was enough for `curl --tlsv1.2`; Safari TLS 1.3 ClientHello + dummy
+/// CCS + millicert RSA sign needs a longer reclaim (A4s standing SPA).
+pub const HOST_NIC_HTTP_IDLE_MS: i64 = 15_000;
 
 /// Fallback TSC rate when Stall calibration has not stored [`crate::boot::raynu_f_flag::tsc_hz`].
 pub const COEXIST_TSC_HZ_FALLBACK: u64 = 2_100_000_000;

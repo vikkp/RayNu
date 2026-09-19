@@ -6,7 +6,7 @@ use super::{
 
 #[test]
 fn http_idle_abort_at_limit_only() {
-    assert_eq!(HOST_NIC_HTTP_IDLE_MS, 3000);
+    assert_eq!(HOST_NIC_HTTP_IDLE_MS, 15_000);
     assert!(prop_http_accept_idle_abort());
     assert!(!http_accept_should_idle_abort(
         true,
@@ -39,9 +39,9 @@ fn coexist_millis_from_tsc_hz_zero_uses_fallback() {
 }
 
 #[test]
-fn native_dhcp_budget_is_longer_than_idle_abort() {
+fn native_dhcp_budget_is_independent_of_browser_idle() {
     assert_eq!(HOST_NIC_DHCP_MS, 12_000);
-    assert!(HOST_NIC_DHCP_MS > HOST_NIC_HTTP_IDLE_MS);
+    assert_eq!(HOST_NIC_HTTP_IDLE_MS, 15_000);
 }
 
 #[test]

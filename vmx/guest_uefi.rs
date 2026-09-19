@@ -8492,6 +8492,12 @@ unsafe fn raynu_f_stop(why: &str) -> ! {
 #[cfg(target_os = "uefi")]
 unsafe fn raynu_f_vmexit(reason: u32, qual: u64, rip: u64, intr: u64) -> ! {
     crate::mgmt::maybe_tick_standing_spa();
+    // RayNu-F SOL RX to guest COM1 (GRUB serial). OVMF-leg poll_host_rx
+    // lives in try_inject_guest_irq and never runs here (RAYNU_F_MODE
+    // returns first). Without this, iDRAC console com2 cannot type at
+    // grub>. Alpine ttyS0 later uses the same 16550 FIFO.
+    crate::devices::guest_uart::poll_host_rx();
+    crate::devices::guest_uart::reassert_irq();
     let n = RAYNU_F_EXITS.fetch_add(1, Ordering::AcqRel) + 1;
     let basic = reason & 0xFFFF;
     if reason & 0x8000_0000 != 0 {
@@ -11647,6 +11653,12 @@ unsafe fn handle_raynu_f_service() -> bool {
             if RAYNU_F_PENDING_RX.load(Ordering::Acquire) != 0x100 {
                 return true;
             }
+            // poll_host_rx on every RayNu-F vmexit drains SOL into guest
+            // COM1 first. WaitForKey must see that FIFO or ConIn starves
+            // while GRUB serial already consumed — or never consumed — it.
+            if crate::devices::guest_uart::host_rx_ready() {
+                return true;
+            }
             if let Some(b) = serial::try_read_byte() {
                 RAYNU_F_PENDING_RX.store(u32::from(b), Ordering::Release);
                 return true;
@@ -11654,6 +11666,13 @@ unsafe fn handle_raynu_f_service() -> bool {
             false
         }
         fn read_input(&mut self) -> Option<u8> {
+            if RAYNU_F_PENDING_RX.load(Ordering::Acquire) != 0x100 {
+                let b = RAYNU_F_PENDING_RX.swap(0x100, Ordering::AcqRel);
+                return Some(b as u8);
+            }
+            if let Some(b) = crate::devices::guest_uart::take_host_rx() {
+                return Some(b);
+            }
             if !self.has_input() {
                 return None;
             }
@@ -14581,7 +14600,12 @@ unsafe fn guest_uefi_rip_is_poison_fill(rip: u64) -> bool {
 /// Product ISO uses a scratch/FIFO 16550 so Linux 8250 autoconfig can bind ttyS0.
 #[cfg(target_os = "uefi")]
 unsafe fn handle_uart(port: u16, is_in: bool, size: u64) {
-    if crate::devices::ide_cdrom::product_iso_window_armed() {
+    // RayNu-F GRUB 16550 not stub LSR: Alpine `terminal_input serial
+    // console` blocks on COM1 DR at grub>. Stub LSR is 0x60 (no DR), so
+    // serial getkey never returns and ConIn is never polled.
+    if crate::devices::ide_cdrom::product_iso_window_armed()
+        || RAYNU_F_MODE.load(Ordering::Acquire)
+    {
         handle_uart_product(port, is_in, size);
         return;
     }

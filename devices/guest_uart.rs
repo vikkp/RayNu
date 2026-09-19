@@ -400,7 +400,11 @@ pub fn inject_sysrq(key: u8) -> bool {
     ok
 }
 
-/// Drain host COM2 (iDRAC SOL) then COM1 into guest COM1. Product ISO only.
+/// Drain host COM2 (iDRAC SOL) then COM1 into guest COM1.
+///
+/// Product ISO Linux ttyS0 **and** RayNu-F GRUB serial (Alpine
+/// `terminal_input serial console` polls 16550 first; stub LSR never
+/// shows DR so EFI ConIn is never reached at `grub>`).
 pub fn poll_host_rx() {
     for _ in 0..RX_CAP {
         let Some(b) = crate::boot::serial::try_read_byte() else {
@@ -411,6 +415,23 @@ pub fn poll_host_rx() {
         }
     }
     drain_answers();
+}
+
+/// Guest COM1 RBR has a host/SOL byte (RayNu-F ConIn WaitForKey).
+pub fn host_rx_ready() -> bool {
+    with_uart(|u| u.com1.rx_len > 0)
+}
+
+/// Pop one guest COM1 RBR byte for RayNu-F ConIn ReadKeyStroke.
+/// Serial 16550 PIO uses [`pio`] instead; first consumer wins.
+pub fn take_host_rx() -> Option<u8> {
+    with_uart(|u| {
+        if u.com1.rx_len == 0 {
+            None
+        } else {
+            Some(rx_pop(&mut u.com1))
+        }
+    })
 }
 
 fn rx_free() -> usize {

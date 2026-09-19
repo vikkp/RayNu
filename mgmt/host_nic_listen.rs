@@ -121,8 +121,15 @@ fn wrap_session_try_exchange(
     if n == 0 {
         return false;
     }
-    let _ = sock.send_slice(&wrap[..n]);
-    true
+    let mut off = 0;
+    while off < n && sock.can_send() {
+        match sock.send_slice(&wrap[off..n]) {
+            Ok(0) => break,
+            Ok(k) => off += k,
+            Err(_) => break,
+        }
+    }
+    off == n
 }
 
 fn tls_session() -> &'static mut Tls12Listen {
@@ -356,6 +363,7 @@ pub fn tick_bcm5720_coexist() {
         let mut do_close = false;
         let mut did_exchange = false;
         let mut did_idle_abort = false;
+        let mut did_tls_fail = false;
         {
             let sock = sockets.get_mut::<tcp::Socket>(tcp_handle);
             if !sock.is_open() {
@@ -387,6 +395,12 @@ pub fn tick_bcm5720_coexist() {
                     did_exchange = true;
                     do_close = true;
                 }
+            } else if session.handshake_failed() {
+                sock.abort();
+                session.reset();
+                COEXIST_ANNOUNCED = false;
+                COEXIST_ACCEPT_AT_MS = 0;
+                did_tls_fail = true;
             } else if http_accept_should_idle_abort(
                 COEXIST_ANNOUNCED,
                 headers_done,
@@ -410,21 +424,38 @@ pub fn tick_bcm5720_coexist() {
             pci_census::print_host_nic_exchange_ok_marker();
         }
         if do_close {
-            // abort() not close(): FIN_WAIT held the only listen slot so the
-            // next curl (spec→start, 31ms) got RST (`curl: (7)`). Iron 2026-08-21.
+            // drain TX before reclaim, then abort() — not close().
+            // abort() without drain RSTs Firefox nssFailure2 (MAC of last
+            // TLS record). close() after drain left FIN_WAIT on the only
+            // slot so Firefox refresh is Unable to connect (iron 2026-08-21
+            // curl: (7); lived 2026-09-19 first GET ok, reload fail).
+            for _ in 0..64 {
+                let _ = iface.poll(Instant::from_millis(millis + 1), device, sockets);
+                if sockets.get::<tcp::Socket>(tcp_handle).send_queue() == 0 {
+                    break;
+                }
+                tsc_spin_ms(1);
+            }
+            tsc_spin_ms(8);
             sockets.get_mut::<tcp::Socket>(tcp_handle).abort();
             session.reset();
             COEXIST_ANNOUNCED = false;
             COEXIST_ACCEPT_AT_MS = 0;
             let _ = iface.poll(Instant::from_millis(millis + 2), device, sockets);
             let sock = sockets.get_mut::<tcp::Socket>(tcp_handle);
-            if !sock.is_open() {
-                let _ = sock.listen(COEXIST_PORT);
-            }
+            let _ = sock.listen(COEXIST_PORT);
             serial::write_line("boot: HOST-NIC TCP re-listen after HTTP");
         }
         if did_idle_abort {
             serial::write_line("boot: WARN — HOST-NIC TCP idle abort; re-listen");
+            let _ = iface.poll(Instant::from_millis(millis + 1), device, sockets);
+            let sock = sockets.get_mut::<tcp::Socket>(tcp_handle);
+            if !sock.is_open() {
+                let _ = sock.listen(COEXIST_PORT);
+            }
+        }
+        if did_tls_fail {
+            serial::write_line("boot: WARN — HOST-NIC TLS handshake fail; re-listen");
             let _ = iface.poll(Instant::from_millis(millis + 1), device, sockets);
             let sock = sockets.get_mut::<tcp::Socket>(tcp_handle);
             if !sock.is_open() {
@@ -817,6 +848,7 @@ fn listen_loop<D: Device>(
         let mut do_close = false;
         let mut did_exchange = false;
         let mut did_idle_abort = false;
+        let mut did_tls_fail = false;
         {
             let sock = sockets.get_mut::<tcp::Socket>(tcp_handle);
             if !sock.is_open() {
@@ -848,6 +880,12 @@ fn listen_loop<D: Device>(
                     did_exchange = true;
                     do_close = true;
                 }
+            } else if session.handshake_failed() {
+                sock.abort();
+                session.reset();
+                announced = false;
+                accept_at = 0;
+                did_tls_fail = true;
             } else if http_accept_should_idle_abort(
                 announced,
                 headers_done,
@@ -896,6 +934,15 @@ fn listen_loop<D: Device>(
         }
         if did_idle_abort {
             serial::write_line("boot: WARN — HOST-NIC TCP idle abort; re-listen");
+            millis += 1;
+            iface.poll(Instant::from_millis(millis), device, &mut sockets);
+            let sock = sockets.get_mut::<tcp::Socket>(tcp_handle);
+            if !sock.is_open() {
+                let _ = sock.listen(port);
+            }
+        }
+        if did_tls_fail {
+            serial::write_line("boot: WARN — HOST-NIC TLS handshake fail; re-listen");
             millis += 1;
             iface.poll(Instant::from_millis(millis), device, &mut sockets);
             let sock = sockets.get_mut::<tcp::Socket>(tcp_handle);
