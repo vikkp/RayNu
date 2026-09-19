@@ -424,11 +424,11 @@ pub fn tick_bcm5720_coexist() {
             pci_census::print_host_nic_exchange_ok_marker();
         }
         if do_close {
-            // drain TX before reclaim: abort() without drain RSTs Firefox
-            // nssFailure2 "authenticity of the received data could not be
-            // verified". curl tolerated the RST; browsers do not.
-            // close() first so Connection: close gets FIN; abort() only if
-            // FIN_WAIT still holds the one listen slot (iron 2026-08-21).
+            // drain TX before reclaim, then abort() — not close().
+            // abort() without drain RSTs Firefox nssFailure2 (MAC of last
+            // TLS record). close() after drain left FIN_WAIT on the only
+            // slot so Firefox refresh is Unable to connect (iron 2026-08-21
+            // curl: (7); lived 2026-09-19 first GET ok, reload fail).
             for _ in 0..64 {
                 let _ = iface.poll(Instant::from_millis(millis + 1), device, sockets);
                 if sockets.get::<tcp::Socket>(tcp_handle).send_queue() == 0 {
@@ -437,25 +437,13 @@ pub fn tick_bcm5720_coexist() {
                 tsc_spin_ms(1);
             }
             tsc_spin_ms(8);
-            sockets.get_mut::<tcp::Socket>(tcp_handle).close();
-            for _ in 0..24 {
-                let _ = iface.poll(Instant::from_millis(millis + 1), device, sockets);
-                tsc_spin_ms(1);
-                if !sockets.get::<tcp::Socket>(tcp_handle).is_open() {
-                    break;
-                }
-            }
-            if sockets.get::<tcp::Socket>(tcp_handle).is_open() {
-                sockets.get_mut::<tcp::Socket>(tcp_handle).abort();
-            }
+            sockets.get_mut::<tcp::Socket>(tcp_handle).abort();
             session.reset();
             COEXIST_ANNOUNCED = false;
             COEXIST_ACCEPT_AT_MS = 0;
             let _ = iface.poll(Instant::from_millis(millis + 2), device, sockets);
             let sock = sockets.get_mut::<tcp::Socket>(tcp_handle);
-            if !sock.is_open() {
-                let _ = sock.listen(COEXIST_PORT);
-            }
+            let _ = sock.listen(COEXIST_PORT);
             serial::write_line("boot: HOST-NIC TCP re-listen after HTTP");
         }
         if did_idle_abort {

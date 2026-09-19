@@ -191,6 +191,7 @@ pub fn host_nic_surface_present() -> bool {
         && listen.contains("TLS handshake fail; re-listen")
         && listen.contains("TCP re-listen after HTTP")
         && listen.contains("drain TX before reclaim")
+        && listen.contains("then abort() — not close()")
         && http.contains("run_post_ebs_host_nic_listen")
         && http.contains("run_pre_ebs_pci_census")
         && http.contains("run_post_boot_ok_native_idle")

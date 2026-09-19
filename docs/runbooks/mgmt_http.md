@@ -242,7 +242,7 @@ holds it and `curl` SYN times out. Close tabs to `:8443` or Force Off + F11
 and POST spec+start before opening the SPA. Idle abort (`HOST_NIC_HTTP_IDLE_MS`)
 re-listens after 15 s without headers (next EFI). TLS handshake fail
 re-listens immediately (Safari TLS 1.3 dummy CCS must not hold the slot).
-Standing SPA drain TX then FIN before reclaim so Firefox is not nssFailure2.
+Standing SPA drain TX then abort()+listen so Firefox refresh is not Unable to connect.
 If coexist
 cannot arm, fallback is Phase D idle after `VMXOFF`.
 Phase F **closed** 2026-08-20 on `0d06297b` / `10.99.99.149:8443`:
