@@ -1,4 +1,7 @@
-use super::{inject_sysrq, pio, poll_host_rx, push_host_rx, reassert_irq, reset};
+use super::{
+    host_rx_ready, inject_sysrq, pio, poll_host_rx, push_host_rx, reassert_irq, reset,
+    take_host_rx,
+};
 use crate::boot::serial::{
     guest_tx_clear, set_guest_tx_test_ring_full, set_linux_earlycon_share,
 };
@@ -178,7 +181,27 @@ fn host_rx_raises_irq4_and_iir_is_c4() {
     assert!(crate::devices::guest_irq::take_inject_vector().is_none());
     crate::devices::ide_cdrom::reset();
     reset();
-    crate::devices::guest_irq::    reset();
+    crate::devices::guest_irq::reset();
+}
+
+#[test]
+fn host_rx_ready_and_take_for_raynu_f_conin() {
+    // RayNu-F ConIn WaitForKey must see SOL bytes that poll_host_rx already
+    // parked in guest COM1. First consumer wins vs 16550 PIO.
+    reset();
+    assert!(!host_rx_ready());
+    assert!(take_host_rx().is_none());
+    assert!(push_host_rx(b'n'));
+    assert!(host_rx_ready());
+    let (lsr, _, _) = pio(0x03FD, true, 0);
+    assert_eq!(lsr & 0x01, 0x01, "GRUB serial getkey sees DR");
+    assert_eq!(take_host_rx(), Some(b'n'));
+    assert!(!host_rx_ready());
+    assert!(push_host_rx(b'\r'));
+    let (rbr, _, _) = pio(0x03F8, true, 0);
+    assert_eq!(rbr, b'\r', "16550 PIO consumes before ConIn");
+    assert!(take_host_rx().is_none());
+    reset();
 }
 
 #[test]

@@ -355,9 +355,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | m8-spa-safari-idle |
-| Summary | **Firefox refresh: drain TX then abort(), never close().** First GET showed RayNu-V chrome; reload Unable to connect — `close()` left FIN_WAIT on the one slot. Drain so the SPA records land; abort()+listen so the next SYN is accepted. A4s not closed. Sit at `localhost:~#`. Months **0.0 held**. Overall **99 held**. |
-| Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. Standing SPA / iron console / iron auth residual. Nested QEMU ≠ R640. |
-| Gates touched | drain TX then abort() not close(). Dummy CCS + 15 s idle held. rustls not in `uefi-bin`. `./tools/sync-hda-site.sh --check`. Sit at `localhost:~#`. |
+| Summary | **RayNu-F SOL RX → guest COM1 16550 at GRUB.** Lived `e66d78ca`: persist DISK-BOOTX64 keep=1 then `grub>`; iDRAC com2 keys dead (`poll_host_rx` skipped on RAYNU_F_MODE; stub LSR has no DR so serial getkey never returns). Drain+abort SPA held. A4s not closed. Sit at `localhost:~#`. Months **0.0 held**. Overall **99 held**. |
+| Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. Standing SPA / iron console residual. Nested QEMU ≠ R640. |
+| Gates touched | `RayNu-F SOL RX to guest COM1 (GRUB serial)`. `RayNu-F GRUB 16550 not stub LSR`. `./tools/sync-hda-site.sh --check`. Sit at `localhost:~#`. |
 | Months Δ | 0.0 held (Everest closed; A4 iron HTTPS closed; A4s standing SPA not iron) |
 
 
@@ -381,7 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
-| 2026-09-19 | m8-spa-safari-idle | 0.0 | 99 | **Firefox refresh Unable to connect: drain then abort(), not close().** Lived first GET RayNu-V chrome; reload SYN failed — FIN_WAIT held the one slot. Dummy CCS + 15 s idle held. Never print iron CONSOLE-OK. Sit at `localhost:~#`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
+| 2026-09-19 | m8-spa-safari-idle | 0.0 | 99 | **RayNu-F SOL RX → guest COM1 16550 at GRUB.** Lived `e66d78ca` persist DISK-BOOTX64 keep=1 then `grub>`; com2 keys dead (`poll_host_rx` skipped on RAYNU_F_MODE; stub LSR no DR). Never print iron CONSOLE-OK. Sit at `localhost:~#`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-19 | m8-standing-spa | 0.0 | 99 | **Standing SPA during RayNu-F in-tree.** AfterEbs arms coexist; ticks on RayNu-F vmexit + USB waits; `GET /logs/guest`. Never print iron CONSOLE-OK. A4s not closed until a browser stays up after Alpine login. Sit at `localhost:~#`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-19 | m8-tls-iron | 0.0 | 99 | **A4 CLOSED on COM2.** EFI `928d6224` native HTTPS GET `10.99.99.140:8443` → SPA → `HOST-NIC HTTP exchange ok` → `RAYNU-V-M8-TLS-OK`. Keep=1 DISK-BOOT also printed `RAYNU-V-M8-DISK-PERSIST-OK` (`UUID=dd673a9a`). rustls/ring stay out of `uefi-bin`. Sit at `localhost:~#`. Next is console iron. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-18 | m8-tls-iron | 0.0 | 99 | **M8.1 native HTTPS window before RayNu-F.** Analog then `Tls12Listen` (`PRE_RAYNUF_HTTPS_MS`). COM2 `1647a8d8` launched Alpine with no `https://` (`curl: (28)` on SNP `.150`). RDRAND CPUID-gated (TCG qemu64 must not #UD). rustls/ring stay out of `uefi-bin`. Never print iron TLS-OK. Iron close is `curl --cacert` on native `CURL NOW → https://` then COM2 `RAYNU-V-M8-TLS-OK`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
