@@ -5,8 +5,9 @@
 //! VERIFICATION: N/A
 //!
 //! Parses plaintext HTTP/1.1 into the existing REST shapes and serves the
-//! embedded SPA. TLS is deferred (lab HTTP MVP — ADR-009). Firmware NIC listen
-//! is PRE-EBS Tcp4 (`http_listen` / ADR-012 / M7.6); host `cfg(test)` proves a
+//! embedded SPA. Firmware coexist wraps that codec in TLS 1.2 (M8.1). Iron
+//! HTTPS is not claimed until COM2. Firmware NIC listen is PRE-EBS Tcp4
+//! (`http_listen` / ADR-012 / M7.6); host `cfg(test)` proves a
 //! real TCP listener + browser-shaped exchange.
 
 use super::api::{
@@ -28,9 +29,9 @@ pub const M7_HTTP_OK_MARKER: &str = "RAYNU-V-M7-HTTP-OK";
 /// Network HTTPS/HTTP mgmt GAP closed in M7.1.
 pub const HTTP_GAP_NOTE: &str = "GAP(CLOSED M7.1): Network HTTPS/HTTP mgmt";
 
-/// Lab note: firmware coexist is still plaintext; host TLS is M8.1 (not iron).
+/// Lab note: firmware coexist is TLS 1.2 in-tree; iron HTTPS is not claimed.
 pub const HTTP_LAB_NOTE: &str =
-    "lab MVP: plaintext HTTP on firmware (TLS host-ready M8.1; iron HTTPS not claimed; ADR-003 size)";
+    "lab MVP: firmware TLS 1.2 on coexist (M8.1; plaintext HTTP remains a lab fallback; iron HTTPS closed on COM2 928d6224; ADR-003 size)";
 
 /// Default lab bind (host tests / QEMU user-net docs).
 pub const MGMT_HTTP_DEFAULT_PORT: u16 = 8443;
@@ -497,7 +498,7 @@ pub fn prop_http_mgmt_package() -> bool {
         && s.contains("text/html")
         && HTTP_GAP_NOTE.contains("CLOSED M7.1")
         && M7_HTTP_OK_MARKER == "RAYNU-V-M7-HTTP-OK"
-        && HTTP_LAB_NOTE.contains("plaintext HTTP")
+        && HTTP_LAB_NOTE.contains("plaintext HTTP remains a lab fallback")
 }
 
 #[cfg(test)]

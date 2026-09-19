@@ -9,7 +9,7 @@ use crate::mgmt::http::handle_http_request;
 use crate::mgmt::datastore::ImageTable;
 use crate::mgmt::iso::IsoDeployPlan;
 use crate::mgmt::iso_install::InstallToDiskPlan;
-use crate::mgmt::tls::firmware_listen_is_plaintext;
+use crate::mgmt::tls::firmware_listen_is_tls12;
 use crate::mgmt::VmTable;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, ServerName};
 use rustls::{ClientConfig, ClientConnection, RootCertStore, ServerConfig, ServerConnection};
@@ -182,9 +182,9 @@ fn plaintext_listen_matches_coexist_buffers() {
 
 #[test]
 fn tls_fw_wrap_package_holds() {
-    assert!(firmware_listen_is_plaintext());
-    assert!(TLS_FW_WRAP_NOTE.contains("PlaintextListen"));
-    assert!(TLS_FW_CURL_NOTE.contains("http://"));
+    assert!(firmware_listen_is_tls12());
+    assert!(TLS_FW_WRAP_NOTE.contains("Tls12Listen"));
+    assert!(TLS_FW_CURL_NOTE.contains("https://"));
     assert!(prop_tls_fw_wrap_package());
 }
 
@@ -205,6 +205,6 @@ fn host_rustls_coexist_feed_take_wrap_serves_spa() {
     assert!(body.contains("d-host"), "{body}");
     assert!(body.contains("data-raynu-phase-b"), "{body}");
     assert!(server.join().is_ok());
-    assert!(firmware_listen_is_plaintext());
+    assert!(firmware_listen_is_tls12());
     println!("{M8_TLS_FW_HOST_OK_MARKER}");
 }

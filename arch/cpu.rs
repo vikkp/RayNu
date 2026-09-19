@@ -12,6 +12,9 @@ pub const CPUID_EDX_APIC: u32 = 1 << 9;
 pub const CPUID_ECX_X2APIC: u32 = 1 << 21;
 /// CPUID.1:ECX bit 24 — TSC deadline mode (cleared; classic APIC timer only).
 pub const CPUID_ECX_TSC_DEADLINE: u32 = 1 << 24;
+/// CPUID.1:ECX bit 30 — RDRAND. TCG `-cpu qemu64` clears this; executing
+/// `_rdrand64_step` there is #UD (M7.8 HOST-NIC QEMU GET / on `1647a8d8`).
+pub const CPUID_ECX_RDRAND: u32 = 1 << 30;
 /// CPUID.1:ECX bit 31 — hypervisor present (KVM sets this; bare metal does not).
 pub const CPUID_ECX_HYPERVISOR: u32 = 1 << 31;
 
@@ -115,6 +118,14 @@ pub fn host_hypervisor_present() -> bool {
     // SAFETY: CPUID leaf 1 is architecturally defined.
     let r = unsafe { cpuid(1, 0) };
     (r.ecx & CPUID_ECX_HYPERVISOR) != 0
+}
+
+/// True if CPUID.1:ECX.RDRAND is set. TCG qemu64 is clear — MixRng must not
+/// execute RDRAND there. Iron Xeon sets the bit.
+pub fn rdrand_supported() -> bool {
+    // SAFETY: CPUID leaf 1 is architecturally defined.
+    let r = unsafe { cpuid(1, 0) };
+    (r.ecx & CPUID_ECX_RDRAND) != 0
 }
 
 #[inline]
@@ -510,5 +521,11 @@ mod cpu_test {
         assert_eq!(CPUID_LEAF7_ECX_WAITPKG, 1 << 5);
         assert_eq!(CR4_OSXSAVE, 1 << 18);
         assert_eq!(IA32_EFER, 0xC000_0080);
+        assert_eq!(CPUID_ECX_RDRAND, 1 << 30);
+    }
+
+    #[test]
+    fn rdrand_supported_does_not_panic() {
+        let _ = rdrand_supported();
     }
 }

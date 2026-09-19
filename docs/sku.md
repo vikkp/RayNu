@@ -12,7 +12,7 @@ This card is commercial honesty. Overstated copy does not survive diligence.
 
 ## What you are buying
 
-A **dedicated-box** non-production LOI on **one** PowerEdge we own or they dedicate. One EFI binary. Alpine on virtio. Guest disk on an **8 GiB** USB slice. Management is **plaintext HTTP**.
+A **dedicated-box** non-production LOI on **one** PowerEdge we own or they dedicate. One EFI binary. Alpine on virtio. Guest disk on an **8 GiB** USB slice. Native coexist is **TLS 1.2 HTTPS** with a lab millicert. PRE-EBS SNP remains **plaintext HTTP**.
 
 It is **not** a fleet hypervisor, **not PERC**, **not cluster**, **not Windows**.
 
@@ -24,8 +24,8 @@ It is **not** a fleet hypervisor, **not PERC**, **not cluster**, **not Windows**
 |-------|----------------|
 | Single `r640-hypervisor.efi` | No OS, no packages, no config files (ADR-003). |
 | Everest loop on a real R640 | Network SPA → Alpine ISO → reboot to disk → `login:` (`f72b4276`). |
-| Guest disk survives Force Off | USB BOT on Toshiba `0480:a004`. Guest sees **8 GiB**, not the whole ~298 GiB stick, not leftover DRAM. A2 **DONE on evidence** (`4af78b43`, UUID `348005a9`). Minted persist-OK is wired in-tree, not printed on that flash. |
-| Network SPA + REST | Coexist `10.99.99.x:8443`. CURL NOW stays `http://`. |
+| Guest disk survives Force Off | USB BOT on Toshiba `0480:a004`. Guest sees **8 GiB**, not the whole ~298 GiB stick, not leftover DRAM. A2 **DONE on evidence** (`4af78b43`, UUID `348005a9`). Minted persist-OK **printed** on `928d6224` (`RAYNU-V-M8-DISK-PERSIST-OK`, UUID `dd673a9a`). |
+| Network SPA + REST | Native coexist `https://10.99.99.x:8443/` **before RayNu-F**. A4 **DONE** (`928d6224` COM2 `RAYNU-V-M8-TLS-OK`; Mac `curl --cacert` SPA). Lab millicert, TLS 1.2 ECDHE-RSA-AES128-GCM only. PRE-EBS SNP remains **plaintext HTTP**. |
 | Lab operator latch | `raynu-v-bringup` until ESP `EFI/RayNu/auth.token` is staged. HostReady tests refuse the latch; iron still accepts it. |
 | Serial keyboard | iDRAC `console com2` / HV UART. Host UART keys exist. SPA has no guest keyboard. |
 
@@ -36,7 +36,7 @@ It is **not** a fleet hypervisor, **not PERC**, **not cluster**, **not Windows**
 - **not PERC.** DurableLun **skips** the Ubuntu H740P VD. USB persist is not RAID-fleet persist. Do not format Ubuntu.
 - **not cluster.** vMotion-like / DRS-like / hot-add are **M9**, not Bar A.
 - **not Windows.** Typed `windows_iso` exists; install is M8.6 later. The guest is Alpine-on-virtio (patched ISO + serial auto-answer).
-- **Iron HTTPS (A4) is open.** Firmware wrap is a plaintext session API. rustls cannot join `uefi-bin`. **plaintext HTTP** on the wire the CISO can reach.
+- **Iron HTTPS (A4) is DONE** on COM2 `928d6224`. Residual: lab millicert, one TLS 1.2 cipher, PRE-EBS SNP **plaintext HTTP**. rustls cannot join `uefi-bin`.
 - **Iron ESP-required auth (A5) is open.** Shared **lab latch** ≠ operator credential. Stage `auth.token` on the stick if you want a real secret; the flashed EFI still accepts bring-up without it.
 - **Iron SPA keyboard / VNC (A6) is open.** Not VNC. Type in the guest from iDRAC SOL.
 - **Whole-Toshiba virtio is not the product window.** 8 GiB slice by design.
@@ -51,7 +51,7 @@ It is **not** a fleet hypervisor, **not PERC**, **not cluster**, **not Windows**
 |--|------------------------|---------------------|
 | Who | Lab owner with a spare / dedicated R640 | Someone whose disks already live on PERC |
 | Disk | 8 GiB USB slice (Toshiba), survives Force Off | Spare PERC virtual disk that is **not** Ubuntu |
-| Close | A1–A6. A1/A2/A3 done. **A4 TLS iron is NOW.** | `RAYNU-V-M8-PERC-LUN-OK` on a spare VD |
+| Close | A1–A6. A1/A2/A3/A4 done. **A6 console iron is NOW.** | `RAYNU-V-M8-PERC-LUN-OK` on a spare VD |
 | Do not | Promise PERC, cluster, or Windows | Skip Bar A and sell USB as fleet persist |
 
 Bar B stays **out of commercial conversation** until its close criteria are met. A USB demonstration is the Bar A mechanism. It is not evidence that RayNu-V runs on the customer’s RAID virtual disks.
@@ -63,13 +63,13 @@ Bar B stays **out of commercial conversation** until its close criteria are met.
 | Row | State | Why it is on the card |
 |-----|--------|------------------------|
 | A1 Everest | DONE | There is a product loop to intent toward. |
-| A2 Persist | DONE on evidence | Force Off → same Alpine UUID. 5% remainder: minted persist-OK print / whole-LUN virtio. |
+| A2 Persist | DONE on evidence | Force Off → Alpine from USB. Remainder: 8 GiB slice / USB ≠ PERC. Persist-OK printed on `928d6224`. |
 | A3 This SKU card | **DONE** | This page. |
-| A4 TLS | **NOW** / open on iron | InfoSec will not sign plaintext HTTP + bring-up token. |
+| A4 TLS | **DONE** on COM2 `928d6224` | Native `curl --cacert` SPA + `RAYNU-V-M8-TLS-OK`. Lab millicert. PRE-EBS SNP stays **plaintext HTTP**. |
 | A5 Auth | Host-ready, not iron | Lab latch until ESP `auth.token`. |
-| A6 Console | Host-ready, not iron | Not VNC. SPA is still host serial log. |
+| A6 Console | Host-ready, not iron | Not VNC. SPA is still host serial log. **NOW.** |
 
-**NOW is A4 TLS iron.** Do not flash over `localhost:~#`. Do not `setup-disk`. Do not Force Off. Do not flash Toshiba `/dev/sdc`.
+**NOW is A6 console iron.** Sit at `localhost:~#`. Do not `setup-disk`. Do not flash Toshiba `/dev/sdc`.
 
 ---
 

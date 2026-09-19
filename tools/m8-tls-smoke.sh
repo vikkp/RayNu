@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # M8.1 host/CI smoke: rustls around the HTTP codec → RAYNU-V-M8-TLS-HOST-OK.
-# Firmware coexist stays plaintext. Never prints RAYNU-V-M8-TLS-OK.
+# Firmware coexist is TLS 1.2 in-tree (not iron TLS-OK). Never prints RAYNU-V-M8-TLS-OK.
 # Iron close is curl --cacert on 10.99.99.x:8443 after BOOT-OK (not this script).
 set -euo pipefail
 

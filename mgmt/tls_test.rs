@@ -1,7 +1,8 @@
 //! Host TLS: rustls server wraps the HTTP codec. Never prints iron TLS-OK.
 
 use super::{
-    firmware_listen_is_plaintext, host_never_prints_iron_tls_ok, prop_tls_host_package, TlsMode,
+    firmware_listen_is_plaintext, firmware_listen_is_tls12, host_never_prints_iron_tls_ok,
+    maybe_print_iron_tls_ok, prop_tls_host_package, tls_ok_clear_printed, TlsMode,
     FIRMWARE_TLS_MODE, M8_TLS_HOST_OK_MARKER, M8_TLS_OK_MARKER, TLS_FIRMWARE_PLAINTEXT_NOTE,
 };
 use crate::mgmt::http::{handle_http_request, MGMT_HTTP_DEFAULT_PORT};
@@ -81,15 +82,22 @@ fn tls_get(port: u16, cert: CertificateDer<'static>, req: &[u8]) -> String {
 }
 
 #[test]
-fn firmware_listen_stays_plaintext_lab() {
-    assert_eq!(FIRMWARE_TLS_MODE, TlsMode::PlaintextLab);
-    assert!(firmware_listen_is_plaintext());
-    assert!(TLS_FIRMWARE_PLAINTEXT_NOTE.contains("plaintext HTTP"));
+fn firmware_listen_is_tls12_in_tree() {
+    assert_eq!(FIRMWARE_TLS_MODE, TlsMode::FirmwareTls12);
+    assert!(firmware_listen_is_tls12());
+    assert!(!firmware_listen_is_plaintext());
+    assert!(TLS_FIRMWARE_PLAINTEXT_NOTE.contains("TLS 1.2"));
+    assert!(TLS_FIRMWARE_PLAINTEXT_NOTE.contains("plaintext HTTP remains a lab fallback"));
     assert_eq!(M8_TLS_OK_MARKER, "RAYNU-V-M8-TLS-OK");
     assert_eq!(M8_TLS_HOST_OK_MARKER, "RAYNU-V-M8-TLS-HOST-OK");
     assert_ne!(M8_TLS_OK_MARKER, M8_TLS_HOST_OK_MARKER);
     assert!(host_never_prints_iron_tls_ok());
     assert!(prop_tls_host_package());
+    tls_ok_clear_printed();
+    assert!(maybe_print_iron_tls_ok(true, true));
+    assert!(!maybe_print_iron_tls_ok(true, true));
+    tls_ok_clear_printed();
+    assert!(!maybe_print_iron_tls_ok(true, false));
     let _ = MGMT_HTTP_DEFAULT_PORT;
 }
 

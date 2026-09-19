@@ -9,8 +9,9 @@
 - M7.8 scaffold: `RAYNU-V-M7-HOST-NIC-SCAFFOLD-OK` — `./tools/m7-host-nic-smoke.sh` (ADR-013 Phase 0/C/D/E wiring)
 - M7.8 QEMU: `RAYNU-V-M7-HOST-NIC-QEMU-OK` — post-EBS `GET /` on QEMU `e1000` (`8086:100e`); `./tools/m7-host-nic-qemu-smoke.sh` (also greps PRE-EBS `vid:did=8086:100e`)
 - M7.8 iron: `RAYNU-V-M7-HOST-NIC-HTTP-OK` — **Phase D closed on iron** 2026-08-20 after `BOOT-OK` on BCM5720 `:38`. **Phase F closed on iron** the same day: native `bounded_poll` on a credit-scheduler quantum **while VMX is on** (G0 scheduled; G1–G3 parked). Do not claim from host or QEMU.
-- M8.1 host: `RAYNU-V-M8-TLS-HOST-OK` — `./tools/m8-tls-smoke.sh` (rustls around the HTTP codec). Firmware coexist stays plaintext. Never print `RAYNU-V-M8-TLS-OK` from host/CI. Iron close is `curl --cacert` on `10.99.99.x:8443` after `BOOT-OK`.
-- M8.1 firmware wrap: `RAYNU-V-M8-TLS-FW-HOST-OK` — `./tools/m8-tls-fw-smoke.sh` (coexist TCP feeds `PlaintextListen`; host rustls uses the same feed/take/wrap API). rustls/ring cannot join `uefi-bin` (`assert.h`). CURL NOW stays `http://`.
+- M8.1 host: `RAYNU-V-M8-TLS-HOST-OK` — `./tools/m8-tls-smoke.sh` (rustls around the HTTP codec). Firmware coexist is TLS 1.2 in-tree. Never print `RAYNU-V-M8-TLS-OK` from host/CI. Iron **CLOSED** 2026-09-19 (`928d6224` COM2 `RAYNU-V-M8-TLS-OK` after native `curl --cacert` on `10.99.99.140:8443` **before RayNu-F**).
+- M8.1 firmware wrap: `RAYNU-V-M8-TLS-FW-HOST-OK` — `./tools/m8-tls-fw-smoke.sh` (coexist TCP feeds `Tls12Listen`; host rustls uses the same feed/take/wrap API). rustls/ring cannot join `uefi-bin` (`assert.h`). CURL NOW on this EFI is `https://`.
+- M8.1 freestanding TLS 1.2: `RAYNU-V-M8-TLS12-HOST-OK` — `./tools/m8-tls12-smoke.sh` (rustls TLS 1.2 client ↔ `Tls12Listen` SPA). Not iron TLS-OK.
 - M8.2 host: `RAYNU-V-M8-AUTH-HOST-OK` — `./tools/m8-auth-smoke.sh` (`AuthMode::HostReady` rejects `raynu-v-bringup`; operator token is the product latch). Firmware REST still accepts the lab latch when no ESP `auth.token`. Never print `RAYNU-V-M8-AUTH-OK` from host/CI. Iron close is ESP token required after `BOOT-OK`. `raynu-v-bringup` is **not product default**.
 - M8.3 host: `RAYNU-V-M8-CONSOLE-HOST-OK` — `./tools/m8-console-smoke.sh` (`ConsoleMode::HostReady` injects keys into guest COM1). Firmware SPA is still `GET /logs/serial` (HV UART). Never print `RAYNU-V-M8-CONSOLE-OK` from host/CI. Iron close is typing in the guest from the SPA after `BOOT-OK`. **not VNC**.
 - M8.4 host: `RAYNU-V-M8-ISO-UPLOAD-HOST-OK` — `./tools/m8-iso-upload-smoke.sh` (`UploadMode::HostReady` PUT/POST ISO bytes into a host datastore blob). Firmware path is ESP-staged `linux.iso`. Firmware HTTP does not grow a coexist blob PUT. **ESP-staged stays valid**. Never print `RAYNU-V-M8-ISO-UPLOAD-OK` from host/CI. Iron close is a network ISO PUT on coexist after `BOOT-OK`.
@@ -33,7 +34,7 @@ continues into the guest path when Tcp4 is absent (common on minimal OVMF).
 | **Host / CI (M7.8)** | Bounded poll + e1000 wiring | `m7-host-nic-smoke.sh` |
 | **QEMU (M7.8 Phase C)** | Post-EBS `GET /` on `e1000` | `m7-host-nic-qemu-smoke.sh` |
 | **Firmware** | PRE-EBS Tcp4 listen window (~15s) | Soft-fail → EBS + guests |
-| **Lab** | Plaintext HTTP on firmware (M8.1 host TLS; iron HTTPS not claimed — ADR-003/009/018) | QEMU `hostfwd` below |
+| **Lab** | Firmware TLS 1.2 on coexist (`Tls12Listen`); **plaintext HTTP** remains a lab fallback; iron HTTPS closed on COM2 `928d6224` — ADR-003/009/018 | QEMU `hostfwd` below |
 
 ## Auth
 
@@ -54,7 +55,7 @@ Also available during PRE-EBS:
 | `GET /logs/serial` | Host UART log ring (Bearer); SPA “Host serial log” panel |
 | Durable tables | Shared `pre_ebs_mgmt` across exchanges (create survives Refresh) |
 
-Lab uses **plaintext HTTP** (TLS deferred — ADR-003/009/012).
+Lab uses **plaintext HTTP** as the fallback when TLS 1.2 is not the listen (M7.1 closed on that MVP; M8.1 firmware TLS 1.2 is in-tree — ADR-003/009/012).
 
 ## Host proof (CI)
 
@@ -138,7 +139,8 @@ RAYNU-V-M7-HOST-NIC-QEMU-OK
 From the host:
 
 ```bash
-curl -sS http://127.0.0.1:18443/ | head
+curl -sS --tlsv1.2 --tls-max 1.2 --ciphers ECDHE-RSA-AES128-GCM-SHA256 \
+  --cacert assets/tls/lab-ca.crt.pem https://127.0.0.1:18443/ | head
 ```
 
 Do **not** print `RAYNU-V-M7-HOST-NIC-HTTP-OK` from this path (iron Phase D).
@@ -312,8 +314,7 @@ vMedia. BIOS 2.2.11 → current 14G is a separate window.
 
 ## TLS
 
-**Deferred.** Prefer TLS before any untrusted LAN exposure (ADR-003/009/012).
-M7.1 closed on **plaintext HTTP** lab MVP with an explicit size-budget note.
+**M8.1 firmware TLS 1.2 in-tree** (`Tls12Listen`, ECDHE-RSA-AES128-GCM). rustls/ring stay out of `uefi-bin`. Iron close is `curl --cacert` on the **post-EBS native HTTPS window before RayNu-F** (not host rustls, not PRE-EBS SNP `http://`). **plaintext HTTP** remains a lab fallback. M7.1 closed on plaintext HTTP lab MVP with an explicit size-budget note.
 
 ## Limits
 

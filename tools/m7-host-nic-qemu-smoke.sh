@@ -70,8 +70,15 @@ echo "==> listen banner OK"
 
 curl_ok=0
 body="$(mktemp)"
+LAB_CA="$ROOT/assets/tls/lab-ca.crt.pem"
+if [[ ! -f "$LAB_CA" ]]; then
+  echo "error: missing millicert $LAB_CA" >&2
+  exit 1
+fi
 for _ in $(seq 1 30); do
-  if curl -fsS --max-time 2 "http://127.0.0.1:${HOST_NIC_FWD}/" >"$body" 2>/dev/null; then
+  if curl -fsS --max-time 5 --http1.1 --tlsv1.2 --tls-max 1.2 \
+    --ciphers ECDHE-RSA-AES128-GCM-SHA256 --cacert "$LAB_CA" \
+    "https://127.0.0.1:${HOST_NIC_FWD}/" >"$body" 2>/dev/null; then
     if grep -qiE '<html|RayNu|text/html' "$body"; then
       curl_ok=1
       break
@@ -82,7 +89,7 @@ done
 rm -f "$body"
 
 if [[ "$curl_ok" != "1" ]]; then
-  echo "error: GET / via hostfwd :${HOST_NIC_FWD} failed" >&2
+  echo "error: HTTPS GET / via hostfwd :${HOST_NIC_FWD} failed" >&2
   tail -n 80 "$SERIAL_LOG" >&2 || true
   exit 1
 fi
@@ -118,6 +125,10 @@ if ! grep -qF "$QEMU_OK" "$SERIAL_LOG"; then
 fi
 if grep -qF "$IRON" "$SERIAL_LOG"; then
   echo "error: serial must not claim iron $IRON" >&2
+  exit 1
+fi
+if grep -qF "RAYNU-V-M8-TLS-OK" "$SERIAL_LOG"; then
+  echo "error: serial must not claim iron RAYNU-V-M8-TLS-OK" >&2
   exit 1
 fi
 

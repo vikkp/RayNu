@@ -3,20 +3,21 @@
 //! Pillar: [Z] [A]
 //! Proven Core: **outside** (ADR-018)
 //!
-//! Proves the host rustls package exists, firmware listen is still plaintext,
-//! and the iron marker is minted but never printed from host/CI. Does **not**
-//! print `RAYNU-V-M8-TLS-OK`. Nested QEMU is not this gate. Iron `curl --cacert`
-//! after `BOOT-OK` is not this gate.
+//! Proves the host rustls package exists, firmware listen is TLS 1.2
+//! (not iron HTTPS), and the iron marker is minted but never printed from
+//! host/CI. Does **not** print `RAYNU-V-M8-TLS-OK`. Nested QEMU is not this
+//! gate. Iron `curl --cacert` before RayNu-F is not this gate.
 
 use crate::mgmt::tls::{
-    firmware_listen_is_plaintext, host_never_prints_iron_tls_ok, prop_tls_host_package,
-    M8_TLS_HOST_OK_MARKER, M8_TLS_OK_MARKER, TLS_FIRMWARE_PLAINTEXT_NOTE, TLS_HOST_RESIDUAL_NOTE,
+    firmware_listen_is_plaintext, firmware_listen_is_tls12, host_never_prints_iron_tls_ok,
+    prop_tls_host_package, M8_TLS_HOST_OK_MARKER, M8_TLS_OK_MARKER, TLS_FIRMWARE_PLAINTEXT_NOTE,
+    TLS_HOST_RESIDUAL_NOTE,
 };
 
 /// Host / CI marker when the M8.1 TLS package passes.
 pub const M8_TLS_GATE_MARKER: &str = M8_TLS_HOST_OK_MARKER;
 
-/// True when plan, markers, plaintext firmware, and rustls-as-dev-dep hold.
+/// True when plan, markers, firmware TLS 1.2, and rustls-as-dev-dep hold.
 pub fn tls_surface_present() -> bool {
     let tls = include_str!("tls.rs");
     let plan = include_str!("../docs/m8_plan.md");
@@ -28,8 +29,11 @@ pub fn tls_surface_present() -> bool {
     tls.contains("enum TlsMode")
         && tls.contains("PlaintextLab")
         && tls.contains("HostReady")
+        && tls.contains("FirmwareTls12")
         && tls.contains("fn firmware_listen_is_plaintext(")
+        && tls.contains("fn firmware_listen_is_tls12(")
         && tls.contains("fn host_never_prints_iron_tls_ok(")
+        && tls.contains("fn maybe_print_iron_tls_ok(")
         && tls.contains("fn prop_tls_host_package(")
         && tls.contains(M8_TLS_OK_MARKER)
         && tls.contains(M8_TLS_HOST_OK_MARKER)
@@ -37,16 +41,17 @@ pub fn tls_surface_present() -> bool {
         && !include_str!("http.rs").contains(forbidden)
         && !include_str!("http_listen.rs").contains(forbidden)
         && TLS_HOST_RESIDUAL_NOTE.contains("not iron")
+        && TLS_FIRMWARE_PLAINTEXT_NOTE.contains("TLS 1.2")
         && TLS_FIRMWARE_PLAINTEXT_NOTE.contains("plaintext HTTP")
         && cargo.contains("rustls")
         && cargo.contains("[dev-dependencies]")
+        && cargo.contains("aes-gcm")
         && !cargo.contains("dep:rustls")
         && plan.contains("M8.1")
         && plan.contains("Plaintext remains a lab fallback")
         && smoke.contains(M8_TLS_HOST_OK_MARKER)
         && smoke.contains("m8_tls_host_gate_passes")
         && runbook.contains("M8.1")
-        && runbook.contains("plaintext HTTP")
         && html.contains("data-go=\"overview\"")
         && html.contains("d-host")
         && html.contains("data-raynu-phase-b")
@@ -57,7 +62,8 @@ pub fn tls_surface_present() -> bool {
 pub fn run_m8_tls_host_gate() -> bool {
     tls_surface_present()
         && prop_tls_host_package()
-        && firmware_listen_is_plaintext()
+        && firmware_listen_is_tls12()
+        && !firmware_listen_is_plaintext()
         && host_never_prints_iron_tls_ok()
         && M8_TLS_OK_MARKER == "RAYNU-V-M8-TLS-OK"
         && M8_TLS_GATE_MARKER == "RAYNU-V-M8-TLS-HOST-OK"

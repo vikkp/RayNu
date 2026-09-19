@@ -6,12 +6,12 @@
     <title>RayNu-V — Dedicated-box SKU card</title>
     <meta
       name="description"
-      content="What a dedicated-box RayNu-V LOI buys: one PowerEdge, 8 GiB USB slice, plaintext HTTP, lab latch. not PERC, not cluster, not Windows."
+      content="What a dedicated-box RayNu-V LOI buys: one PowerEdge, 8 GiB USB slice, TLS 1.2 HTTPS (lab millicert), lab latch. PRE-EBS SNP plaintext HTTP. not PERC, not cluster, not Windows."
     />
     <meta property="og:title" content="RayNu-V · Dedicated-box SKU card" />
     <meta
       property="og:description"
-      content="Bar A SKU: dedicated-box lab. 8 GiB USB persist, plaintext HTTP, lab latch until auth.token. not PERC. not cluster. not Windows."
+      content="Bar A SKU: dedicated-box lab. 8 GiB USB persist, HTTPS millicert, lab latch until auth.token. PRE-EBS SNP plaintext HTTP. not PERC. not cluster. not Windows."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -56,7 +56,8 @@
         </h1>
         <p class="hda-mast__lede reveal reveal--delay-2">
           A dedicated-box non-production LOI. One EFI on a PowerEdge you can
-          afford to dedicate. Guest disk is an 8 GiB USB slice. Management is
+          afford to dedicate. Guest disk is an 8 GiB USB slice. Native coexist
+          is TLS 1.2 HTTPS with a lab millicert. PRE-EBS SNP remains
           plaintext HTTP. The operator latch is a lab latch until
           <code>auth.token</code> is on the stick. It is not PERC, not cluster,
           not Windows.
@@ -81,8 +82,12 @@
               the RAID array.
             </li>
             <li>
-              Coexist listen on <code>10.99.99.x:8443</code>. CURL NOW is
-              <code>http://</code>. That is <strong>plaintext HTTP</strong>.
+              Coexist listen on <code>https://10.99.99.x:8443/</code>.
+              A4 TLS iron printed <code>RAYNU-V-M8-TLS-OK</code> on
+              <code>928d6224</code> after
+              <code>curl --cacert</code> returned the SPA. Lab millicert,
+              TLS 1.2 only. PRE-EBS SNP remains
+              <strong>plaintext HTTP</strong>.
             </li>
             <li>
               Shared <strong>lab latch</strong>
@@ -116,8 +121,9 @@
               typed <code>windows_iso</code> is later.
             </li>
             <li>
-              Iron HTTPS is open. A CISO who asks whether management is
-              encrypted on the wire they can reach hears <em>no</em>.
+              Iron HTTPS is DONE on COM2 <code>928d6224</code>
+              (<code>RAYNU-V-M8-TLS-OK</code>). Residual: lab millicert, one
+              TLS 1.2 cipher, PRE-EBS SNP plaintext HTTP.
             </li>
             <li>
               Iron ESP-required auth is open. A lab latch is not an operator
@@ -141,8 +147,8 @@
           </p>
           <p data-reveal>
             A1 Everest is done. A2 persist is done on evidence. A3 is this
-            page. <strong>A4 TLS iron is NOW.</strong> A5 and A6 are named
-            residuals, not fake closes.
+            page. <strong>A4 TLS iron is DONE.</strong> <strong>A6 console
+            iron is NOW.</strong> A5 is a named residual, not a fake close.
           </p>
           <div class="cta" data-reveal>
             <a class="cta__primary" href="loi.html">Path to LOI</a>

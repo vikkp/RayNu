@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # M8.1 firmware-wrap host/CI smoke: coexist feed/take/wrap → RAYNU-V-M8-TLS-FW-HOST-OK.
-# Firmware session stays plaintext (ring/UEFI libc). Never prints RAYNU-V-M8-TLS-OK.
+# Firmware coexist is TLS 1.2 (Tls12Listen). Never prints RAYNU-V-M8-TLS-OK.
 # Iron close is curl --cacert on 10.99.99.x:8443 after BOOT-OK (not this script).
 set -euo pipefail
 
@@ -17,11 +17,11 @@ if ! grep -q 'fn prop_tls_fw_wrap_package(' "$ROOT/mgmt/tls_coexist.rs"; then
   echo "error: missing prop_tls_fw_wrap_package" >&2
   exit 1
 fi
-if ! grep -q 'PlaintextListen' "$ROOT/mgmt/host_nic_listen.rs"; then
-  echo "error: coexist must feed PlaintextListen" >&2
+if ! grep -q 'Tls12Listen' "$ROOT/mgmt/host_nic_listen.rs"; then
+  echo "error: coexist must feed Tls12Listen" >&2
   exit 1
 fi
-if grep -q 'println!("RAYNU-V-M8-TLS-OK")' "$ROOT/mgmt/tls_coexist.rs" "$ROOT/mgmt/host_nic_listen.rs"; then
+if grep -q 'println!("RAYNU-V-M8-TLS-OK")' "$ROOT/mgmt/tls_coexist.rs" "$ROOT/mgmt/host_nic_listen.rs" "$ROOT/mgmt/tls12.rs"; then
   echo "error: host must never println iron TLS-OK" >&2
   exit 1
 fi

@@ -10,8 +10,12 @@
 //! (Dedicated iDRAC + host LOM); otherwise MAC match to that lease;
 //! otherwise try func 0 (LOM1) then func 1.
 //! Hardware bring-up runs **immediately after EBS**
-//! so UNDI analog is not left idle through the guest path. Phase F coexist
-//! listens **while VMX is on** (`bounded_poll` on a scheduler quantum).
+//! so UNDI analog is not left idle through the guest path. Iron BCM5720 then
+//! serves a bounded **HTTPS window before RayNu-F** (`PRE_RAYNUF_HTTPS_MS`)
+//! so `curl --cacert` can close A4 before guest USB I/O steals the BSP
+//! (COM2 `1647a8d8`: `raynuf.txt` launched Alpine with no coexist listen).
+//! Phase F coexist listens **while VMX is on** (`bounded_poll` on a scheduler
+//! quantum).
 //! Phase D fallback (post-`VMXOFF` idle) remains if coexist cannot arm.
 //! TCP/HTTP scratch comes from [`crate::mgmt::mgmt_arena::MgmtArena`] (Phase E)
 //! or coexist `.bss` buffers (still not the Proven Core allocator).
@@ -26,7 +30,7 @@ use crate::mgmt::e1000::E1000Device;
 use crate::mgmt::host_nic::{
     coexist_millis_from_tsc, host_nic_lab_armed, http_accept_should_idle_abort, HOST_NIC_DHCP_MS,
     HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS, HOST_NIC_MAX_EXCHANGES, M7_HOST_NIC_QEMU_MARKER,
-    QEMU_USERNET_GW, QEMU_USERNET_IPV4, QEMU_USERNET_PREFIX,
+    PRE_RAYNUF_HTTPS_MS, QEMU_USERNET_GW, QEMU_USERNET_IPV4, QEMU_USERNET_PREFIX,
 };
 use crate::mgmt::host_nic_poll::{bounded_poll, HOST_NIC_POLL_BUDGET};
 use crate::mgmt::http::handle_http_request;
@@ -34,9 +38,9 @@ use crate::mgmt::http::MGMT_HTTP_DEFAULT_PORT;
 use crate::mgmt::mgmt_arena::{MgmtArena, MgmtFatal};
 use crate::mgmt::mgmt_lease;
 use crate::mgmt::pci_census;
-use crate::mgmt::tls_coexist::{
-    wrap_plaintext_http, PlaintextListen, COEXIST_HTTP_OUT_N, COEXIST_RX_ACC_N,
-};
+use crate::mgmt::tls::maybe_print_iron_tls_ok;
+use crate::mgmt::tls12::Tls12Listen;
+use crate::mgmt::tls_coexist::{COEXIST_HTTP_OUT_N, COEXIST_RX_ACC_N};
 use core::mem::MaybeUninit;
 use smoltcp::iface::{Config, Interface, SocketHandle, SocketSet, SocketStorage};
 use smoltcp::phy::Device;
@@ -57,7 +61,8 @@ static mut COEXIST_SOCKETS: MaybeUninit<SocketSet<'static>> = MaybeUninit::unini
 static mut COEXIST_TCP_HANDLE: MaybeUninit<SocketHandle> = MaybeUninit::uninit();
 static mut COEXIST_TCP_RX: [u8; TCP_RX_N] = [0; TCP_RX_N];
 static mut COEXIST_TCP_TX: [u8; TCP_TX_N] = [0; TCP_TX_N];
-static mut COEXIST_LISTEN: PlaintextListen = PlaintextListen::new();
+static mut COEXIST_LISTEN: Tls12Listen = Tls12Listen::empty();
+static mut COEXIST_LISTEN_READY: bool = false;
 static mut COEXIST_HTTP_OUT: [u8; HTTP_OUT_N] = [0; HTTP_OUT_N];
 static mut COEXIST_WRAP_OUT: [u8; WRAP_OUT_N] = [0; WRAP_OUT_N];
 static mut COEXIST_MILLIS: i64 = 0;
@@ -76,9 +81,9 @@ const WRAP_OUT_N: usize = COEXIST_HTTP_OUT_N;
 const SCRATCH_N: usize = TCP_RX_N + TCP_TX_N + HTTP_OUT_N + WRAP_OUT_N;
 const _: [(); COEXIST_RX_ACC_N] = [(); RX_ACC_N];
 
-/// Complete HTTP request → codec → identity TCP wrap. Firmware session is plaintext.
+/// Complete HTTP request → codec → TLS wrap. Not iron TLS-OK by itself.
 fn wrap_session_try_exchange(
-    session: &PlaintextListen,
+    session: &mut Tls12Listen,
     sock: &mut tcp::Socket,
     out: &mut [u8],
     wrap: &mut [u8],
@@ -90,21 +95,25 @@ fn wrap_session_try_exchange(
         return false;
     }
     let raw = core::str::from_utf8(raw_bytes).unwrap_or("");
-    let wn = crate::mgmt::pre_ebs_mgmt::with_pre_ebs_mgmt(|m| {
-        handle_http_request(
-            &mut m.vms,
-            &mut m.images,
-            &mut m.iso_plan,
-            &mut m.iso_install,
-            raw,
-            out,
-        )
-    })
+    // SAFETY: BSP-only coexist; PRE-EBS tables leaked for the HTTP codec.
+    // KANI-TARGET: host HTTP tests cover the codec; this wrap is firmware-only.
+    let wn = unsafe {
+        crate::mgmt::pre_ebs_mgmt::with_pre_ebs_mgmt(|m| {
+            handle_http_request(
+                &mut m.vms,
+                &mut m.images,
+                &mut m.iso_plan,
+                &mut m.iso_install,
+                raw,
+                out,
+            )
+        })
+    }
     .unwrap_or(0);
     if wn == 0 {
         return false;
     }
-    let n = wrap_plaintext_http(&out[..wn], wrap);
+    let n = session.wrap_http(&out[..wn], wrap);
     if n == 0 {
         return false;
     }
@@ -112,11 +121,34 @@ fn wrap_session_try_exchange(
     true
 }
 
-fn print_tls_wrap_plaintext_note() {
-    serial::write_line("boot: HOST-NIC TLS wrap=plaintext (ring needs libc; not HTTPS)");
+fn tls_session() -> &'static mut Tls12Listen {
+    // SAFETY: BSP-only listen slot; initialized once before ticks.
+    // Session lives in .bss (`Tls12Listen::empty`) — `new()` is ~40 KiB and
+    // blows the UEFI BSP stack (QEMU serial died after e1000 MAC=).
+    unsafe {
+        if !COEXIST_LISTEN_READY {
+            COEXIST_LISTEN.load_lab_material();
+            COEXIST_LISTEN_READY = true;
+        }
+        &mut COEXIST_LISTEN
+    }
 }
 
-#[derive(Clone, Copy)]
+fn drain_tls(session: &mut Tls12Listen, sock: &mut tcp::Socket, wrap: &mut [u8]) {
+    if !sock.can_send() {
+        return;
+    }
+    let n = session.drain_tcp(wrap);
+    if n > 0 {
+        let _ = sock.send_slice(&wrap[..n]);
+    }
+}
+
+fn print_tls_wrap_plaintext_note() {
+    serial::write_line("boot: HOST-NIC TLS wrap=tls12 (ECDHE-RSA-AES128-GCM; not iron TLS-OK)");
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum ListenWhen {
     /// After ExitBootServices, before VMX. Lab may `qemu_exit` after GET /.
     AfterEbs,
@@ -125,7 +157,8 @@ enum ListenWhen {
 }
 
 /// After ExitBootServices: if QEMU e1000 is present, serve GET / then continue.
-/// Iron BCM5720: arm analog/DMA **now** (before VMX/Linux) and listen after BOOT-OK.
+/// Iron BCM5720: arm analog/DMA **now**, then a bounded HTTPS window **before
+/// RayNu-F** (`PRE_RAYNUF_HTTPS_MS`). Phase F / BOOT-OK idle remain.
 /// Do not take the APE PHY (`ape-nophylock=yes`).
 pub fn run_post_ebs_host_nic_listen() {
     run_listen(ListenWhen::AfterEbs);
@@ -230,7 +263,7 @@ pub fn arm_bcm5720_coexist() -> bool {
         COEXIST_TSC0 = crate::arch::cpu::rdtsc();
         COEXIST_ANNOUNCED = false;
         COEXIST_ACCEPT_AT_MS = 0;
-        COEXIST_LISTEN.reset();
+        tls_session().reset();
         COEXIST_LAST_DIAG = 0;
         COEXIST_LAST_RX_DROP = 0;
         COEXIST_PORT = port;
@@ -243,7 +276,7 @@ pub fn arm_bcm5720_coexist() -> bool {
     serial::write_byte(b':');
     write_u16_dec(port);
     serial::write_line(" (VMX on; ADR-013 Phase F)");
-    serial::write_str("boot: CURL NOW → http://");
+    serial::write_str("boot: CURL NOW → https://");
     write_ipv4(ip);
     serial::write_byte(b':');
     write_u16_dec(port);
@@ -268,7 +301,7 @@ pub fn tick_bcm5720_coexist() {
         let iface = COEXIST_IFACE.assume_init_mut();
         let sockets = COEXIST_SOCKETS.assume_init_mut();
         let tcp_handle = *COEXIST_TCP_HANDLE.assume_init_ref();
-        let session = &mut *core::ptr::addr_of_mut!(COEXIST_LISTEN);
+        let session = tls_session();
         let out = &mut *core::ptr::addr_of_mut!(COEXIST_HTTP_OUT);
         let wrap = &mut *core::ptr::addr_of_mut!(COEXIST_WRAP_OUT);
         COEXIST_MILLIS = coexist_millis_from_tsc(
@@ -312,6 +345,7 @@ pub fn tick_bcm5720_coexist() {
                     }
                 }
             }
+            drain_tls(session, sock, wrap);
             let headers_done = session.take_http().is_some();
             if headers_done && sock.can_send() {
                 if wrap_session_try_exchange(session, sock, out, wrap) {
@@ -333,6 +367,7 @@ pub fn tick_bcm5720_coexist() {
         }
         if did_exchange {
             serial::write_line("boot: HOST-NIC HTTP exchange ok");
+            let _ = maybe_print_iron_tls_ok(true, true);
             let _ = iface.poll(Instant::from_millis(millis + 1), device, sockets);
             pci_census::print_host_nic_exchange_ok_marker();
         }
@@ -378,7 +413,10 @@ fn run_listen(when: ListenWhen) {
     }
     if crate::mgmt::bcm5720_mmio::bcm5720_present() {
         match when {
-            ListenWhen::AfterEbs => bringup_bcm5720_post_ebs(),
+            ListenWhen::AfterEbs => {
+                bringup_bcm5720_post_ebs();
+                listen_with_retries(when, NicKind::Bcm5720);
+            }
             ListenWhen::AfterBootOk => listen_with_retries(when, NicKind::Bcm5720),
         }
         return;
@@ -394,10 +432,10 @@ fn run_listen(when: ListenWhen) {
     }
 }
 
-/// Steal BCM5720 analog immediately after EBS. Do **not** HTTP-listen here
-/// (guest path first). Iron 2026-08-19 complete COM2 (`1404f055`): both
-/// funcs `cand bmsr=7949` then `CORECLK_RESET` without BMCR still
-/// `link=timeout`. AfterBootOk listen is skipped without `LSTATUS`.
+/// Steal BCM5720 analog immediately after EBS, then HTTPS-listen before
+/// RayNu-F (guest USB I/O must not run first). Iron 2026-08-19 complete COM2
+/// (`1404f055`): both funcs `cand bmsr=7949` then `CORECLK_RESET` without
+/// BMCR still `link=timeout`. AfterBootOk listen is skipped without `LSTATUS`.
 fn bringup_bcm5720_post_ebs() {
     let prefer = mgmt_lease::prefer_mac();
     serial::write_line("boot: HOST-NIC BCM5720 post-EBS bring-up (keep analog before guest path)");
@@ -405,7 +443,7 @@ fn bringup_bcm5720_post_ebs() {
         Ok(dev) => {
             serial::write_str("boot: HOST-NIC BCM5720 post-EBS Device MAC=");
             write_mac(dev.mac());
-            serial::write_line(" (listen after BOOT-OK)");
+            serial::write_line(" (HTTPS window before RayNu-F)");
         }
         Err(_) => {
             serial::write_line(
@@ -627,7 +665,8 @@ fn listen_loop<D: Device>(
     let (tcp_rx_mem, rest) = scratch.split_at_mut(TCP_RX_N);
     let (tcp_tx_mem, rest) = rest.split_at_mut(TCP_TX_N);
     let (out, wrap) = rest.split_at_mut(HTTP_OUT_N);
-    let mut session = PlaintextListen::new();
+    let session = tls_session();
+    session.reset();
 
     let mut config = Config::new(EthernetAddress(mac).into());
     config.random_seed = mac_seed(mac);
@@ -651,6 +690,21 @@ fn listen_loop<D: Device>(
             serial::write_str(" (post-EBS ");
             serial::write_str(nic_tag);
             serial::write_line(")");
+            if nic_tag == "BCM5720" {
+                serial::write_str("boot: CURL NOW → https://");
+                write_ipv4(ip);
+                serial::write_byte(b':');
+                write_u16_dec(port);
+                serial::write_line("/  (native BCM5720; before RayNu-F; SNP is dead)");
+                print_tls_wrap_plaintext_note();
+                serial::write_str("boot: native HTTPS window_ms=");
+                write_u32_dec(PRE_RAYNUF_HTTPS_MS as u32);
+                serial::write_byte(b'\n');
+                serial::write_line(
+                    "boot: HINT — Mac must be on lease subnet; curl --cacert now; RayNu-F starts after this window",
+                );
+                print_bcm5720_poll_diag();
+            }
         }
         ListenWhen::AfterBootOk => {
             serial::write_str("boot: HOST-NIC idle listening on ");
@@ -661,7 +715,7 @@ fn listen_loop<D: Device>(
             serial::write_str(nic_tag);
             serial::write_line(")");
             if nic_tag == "BCM5720" {
-                serial::write_str("boot: CURL NOW → http://");
+                serial::write_str("boot: CURL NOW → https://");
                 write_ipv4(ip);
                 serial::write_byte(b':');
                 write_u16_dec(port);
@@ -692,13 +746,16 @@ fn listen_loop<D: Device>(
     let mut accept_at: i64 = 0;
     let mut last_diag: i64 = 0;
     let mut last_rx_drop: u32 = 0;
-    let deadline = match when {
-        ListenWhen::AfterEbs => HOST_NIC_LISTEN_MS as i64,
-        ListenWhen::AfterBootOk => i64::MAX / 4,
+    let mut last_remind: i64 = 0;
+    let deadline = match (when, nic_tag) {
+        (ListenWhen::AfterEbs, "BCM5720") => PRE_RAYNUF_HTTPS_MS as i64,
+        (ListenWhen::AfterEbs, _) => HOST_NIC_LISTEN_MS as i64,
+        (ListenWhen::AfterBootOk, _) => i64::MAX / 4,
     };
-    let max_ex = match when {
-        ListenWhen::AfterEbs => HOST_NIC_MAX_EXCHANGES,
-        ListenWhen::AfterBootOk => u32::MAX,
+    let max_ex = match (when, nic_tag) {
+        (ListenWhen::AfterEbs, "BCM5720") => 1,
+        (ListenWhen::AfterEbs, _) => HOST_NIC_MAX_EXCHANGES,
+        (ListenWhen::AfterBootOk, _) => u32::MAX,
     };
 
     while served < max_ex && millis < deadline {
@@ -737,9 +794,10 @@ fn listen_loop<D: Device>(
                     }
                 }
             }
+            drain_tls(session, sock, wrap);
             let headers_done = session.take_http().is_some();
             if headers_done && sock.can_send() {
-                if wrap_session_try_exchange(&session, sock, out, wrap) {
+                if wrap_session_try_exchange(session, sock, out, wrap) {
                     did_exchange = true;
                     do_close = true;
                 }
@@ -760,6 +818,7 @@ fn listen_loop<D: Device>(
         if did_exchange {
             served = served.saturating_add(1);
             serial::write_line("boot: HOST-NIC HTTP exchange ok");
+            let _ = maybe_print_iron_tls_ok(true, nic_tag == "BCM5720");
         }
         if do_close {
             sockets.get_mut::<tcp::Socket>(tcp_handle).close();
@@ -773,9 +832,11 @@ fn listen_loop<D: Device>(
         if did_exchange {
             match when {
                 ListenWhen::AfterEbs => {
-                    serial::write_line(M7_HOST_NIC_QEMU_MARKER);
-                    if host_nic_lab_armed() {
-                        serial::qemu_exit_success();
+                    if nic_tag != "BCM5720" {
+                        serial::write_line(M7_HOST_NIC_QEMU_MARKER);
+                        if host_nic_lab_armed() {
+                            serial::qemu_exit_success();
+                        }
                     }
                 }
                 ListenWhen::AfterBootOk => {
@@ -795,6 +856,17 @@ fn listen_loop<D: Device>(
 
         millis += 1;
         tsc_spin_ms(1);
+        if when == ListenWhen::AfterEbs && nic_tag == "BCM5720" && millis - last_remind >= 5000 {
+            last_remind = millis;
+            let rem = deadline.saturating_sub(millis).max(0) as u32;
+            serial::write_str("boot: waiting curl https://");
+            write_ipv4(ip);
+            serial::write_byte(b':');
+            write_u16_dec(port);
+            serial::write_str("/  remaining_ms=");
+            write_u32_dec(rem);
+            serial::write_line(" (before RayNu-F; SNP is dead)");
+        }
         // E3b closed: do not spam `poll rx_prod=` every 5s. Sample drops only.
         if nic_tag == "BCM5720" && millis - last_diag >= 5000 {
             last_diag = millis;
@@ -809,9 +881,15 @@ fn listen_loop<D: Device>(
     }
 
     if served == 0 {
-        serial::write_line(
-            "boot: WARN — HOST-NIC accept timeout (continuing; native listen did not serve)",
-        );
+        if nic_tag == "BCM5720" && when == ListenWhen::AfterEbs {
+            serial::write_line(
+                "boot: WARN — HOST-NIC accept timeout (continuing to RayNu-F; native listen did not serve)",
+            );
+        } else {
+            serial::write_line(
+                "boot: WARN — HOST-NIC accept timeout (continuing; native listen did not serve)",
+            );
+        }
     }
     Ok(())
 }

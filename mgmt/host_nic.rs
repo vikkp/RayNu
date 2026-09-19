@@ -27,6 +27,11 @@ pub const QEMU_USERNET_PREFIX: u8 = 24;
 /// Post-EBS listen window on the native NIC (ms). Then guest path continues.
 pub const HOST_NIC_LISTEN_MS: u64 = 20_000;
 
+/// Iron BCM5720 HTTPS window after analog, **before** RayNu-F.
+/// COM2 `1647a8d8`: `raynuf.txt` launched Alpine with no coexist listen
+/// (`CURL NOW → https://` never printed; Mac `curl: (28)` on SNP `.150`).
+pub const PRE_RAYNUF_HTTPS_MS: u64 = 45_000;
+
 /// Native BCM5720 DHCP budget when SNP did not park a lease.
 /// Iron `6ba076cc`: SNP DHCP failed; coexist skipped; SPA Start never ran.
 pub const HOST_NIC_DHCP_MS: i64 = 12_000;
