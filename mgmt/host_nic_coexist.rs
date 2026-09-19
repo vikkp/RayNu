@@ -27,11 +27,21 @@ pub fn tick_native_coexist() {
     }
 }
 
+/// Rate-limited standing-SPA poll (RayNu-F vmexit / USB BOT waits).
+pub fn maybe_tick_standing_spa() {
+    #[cfg(feature = "uefi-bin")]
+    {
+        crate::mgmt::host_nic_listen::maybe_tick_bcm5720_standing_spa();
+    }
+}
+
 /// Host/CI: launch + listen wiring for Phase F coexist.
 pub fn prop_coexist_wired() -> bool {
     let launch = include_str!("../vmx/launch.rs");
     let listen = include_str!("host_nic_listen.rs");
     let coexist = include_str!("host_nic_coexist.rs");
+    let guest = include_str!("../vmx/guest_uefi.rs");
+    let xhci = include_str!("xhci.rs");
     launch.contains("tick_native_coexist")
         && launch.contains("try_arm_native_coexist")
         && launch.contains("try_spa_vmlaunch")
@@ -41,9 +51,15 @@ pub fn prop_coexist_wired() -> bool {
         && launch.contains("G1–G3 parked")
         && listen.contains("fn arm_bcm5720_coexist(")
         && listen.contains("fn tick_bcm5720_coexist(")
+        && listen.contains("fn maybe_tick_bcm5720_standing_spa(")
         && listen.contains("HOST-NIC coexist listening")
         && listen.contains("VMX on; ADR-013 Phase F")
+        && listen.contains("standing SPA armed")
+        && listen.contains("standing SPA during RayNu-F")
         && coexist.contains("while guests remain in VMX root")
+        && coexist.contains("fn maybe_tick_standing_spa(")
+        && guest.contains("maybe_tick_standing_spa")
+        && xhci.contains("maybe_tick_standing_spa")
         && !listen.contains("CURL NOW (post-EBS)")
 }
 

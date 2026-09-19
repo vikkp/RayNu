@@ -475,7 +475,9 @@ pub use host_nic::{
     probe_host_nic_lab_flag, M7_HOST_NIC_HTTP_OK_MARKER, M7_HOST_NIC_QEMU_MARKER,
     M7_HOST_NIC_SCAFFOLD_MARKER,
 };
-pub use host_nic_coexist::{prop_coexist_wired, tick_native_coexist, try_arm_native_coexist};
+pub use host_nic_coexist::{
+    maybe_tick_standing_spa, prop_coexist_wired, tick_native_coexist, try_arm_native_coexist,
+};
 pub use http::{prop_http_mgmt_package, HTTP_GAP_NOTE, HTTP_LAB_NOTE, M7_HTTP_OK_MARKER};
 pub use http_listen::{
     run_post_ebs_http_idle, run_post_ebs_http_snp_warn_only, run_post_ebs_mgmt_listen,

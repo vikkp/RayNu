@@ -431,6 +431,18 @@ pub fn handle_http_request(
         let n = crate::boot::serial::serial_log_snapshot(&mut log);
         return format_http_response(200, "text/plain; charset=utf-8", &log[..n], out);
     }
+    // Standing SPA: guest COM1 TX copy (survives SOL drain). Not iDRAC COM2.
+    if parsed.path == "/logs/guest" {
+        if !matches!(parsed.method, RestMethod::Get) {
+            return format_http_response(400, "text/plain; charset=utf-8", b"bad request", out);
+        }
+        if !auth_allows(parsed.auth_token) {
+            return format_http_response(401, "text/plain; charset=utf-8", b"unauthorized", out);
+        }
+        let mut log = [0u8; crate::boot::serial::GUEST_TX_CAP];
+        let n = crate::boot::serial::spa_guest_log_snapshot(&mut log);
+        return format_http_response(200, "text/plain; charset=utf-8", &log[..n], out);
+    }
     // M8.3: SPA keyboard → guest COM1. GET /logs/serial stays HV UART.
     if parsed.path == "/console/keys" {
         if !matches!(parsed.method, RestMethod::Post) {

@@ -11,7 +11,7 @@
     <meta property="og:title" content="RayNu-V · Path to LOI" />
     <meta
       property="og:description"
-              content="Two bars: dedicated-box 78%, RAID-fleet 18%. Persist across HV reboot is evidence-closed. SKU card is done. A4 TLS iron is DONE (lab millicert). Firmware SPA keys are in-tree; iron CONSOLE-OK is typing from the SPA. Host auth/ISO-upload HostReady are not iron closes. USB is not PERC."
+              content="Two bars: dedicated-box 78%, RAID-fleet 18%. Persist across HV reboot is evidence-closed. SKU card is done. A4 TLS iron is DONE (lab millicert). Standing SPA is firmware-in-tree; not iron until a browser stays up after Alpine login. Host auth/ISO-upload HostReady are not iron closes. USB is not PERC."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -64,7 +64,7 @@
           aria-label="Path to LOI"
         >
           Everest loop (closed) → persist across HV reboot (evidence-closed) → SKU card (done) → TLS
-          iron (done) → console iron → Bar A dedicated-box LOI → PERC RAID I/O → Bar B fleet LOI
+          iron (done) → standing SPA → Bar A dedicated-box LOI → PERC RAID I/O → Bar B fleet LOI
         </p>
       </div>
     </header>
@@ -265,12 +265,13 @@
               </div>
               <p>
                 Everest closed on plaintext HTTP on a bring-up LAN. Native
-                coexist now speaks TLS 1.2
-                <strong>before RayNu-F</strong>. COM2
+                coexist now speaks TLS 1.2. COM2
                 <code>928d6224</code> printed
                 <code>RAYNU-V-M8-TLS-OK</code> after
                 <code>curl --cacert</code> returned the SPA on
-                <code>10.99.99.140:8443</code>. rustls cannot join the EFI.
+                <code>10.99.99.140:8443</code> <strong>before RayNu-F</strong>.
+                Standing HTTPS while Alpine runs is firmware-in-tree (A4s), not
+                iron. rustls cannot join the EFI.
                 Residual: lab millicert, one cipher, PRE-EBS SNP still
                 <code>http://</code>.
               </p>
@@ -295,17 +296,17 @@
             <li data-reveal>
               <header>
                 <span class="loi-pieces__name">Guest console UI</span>
-                <span class="loi-pieces__pct" data-piece="console">50%</span>
+                <span class="loi-pieces__pct" data-piece="console">58%</span>
               </header>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill" data-piece-fill="console" style="width: 50%"></span>
+                <span class="hda-bar__fill" data-piece-fill="console" style="width: 58%"></span>
               </div>
               <p>
-                Host tests can now type into the guest UART the same way
-                serial auto-answer did during install. The page you open
-                still has no keyboard. iDRAC SOL remains how you log into
-                Alpine on the box you own. That is not vSphere. It is not
-                closed until the SPA types.
+                The page can type into guest COM1 and show the guest serial
+                copy. Firmware now keeps HTTPS armed during RayNu-F instead of
+                dying at the 45s window. That is not iron until a browser stays
+                up after Alpine login. iDRAC SOL remains the evidence channel.
+                Not VNC.
               </p>
             </li>
             <li data-reveal>

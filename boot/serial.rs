@@ -79,6 +79,10 @@ static mut LOG_LEN: usize = 0;
 static mut GUEST_TX: [u8; GUEST_TX_CAP] = [0; GUEST_TX_CAP];
 static mut GUEST_TX_HEAD: usize = 0;
 static mut GUEST_TX_LEN: usize = 0;
+/// SPA copy of guest COM1 TX (survives SOL drain). Not iDRAC COM2.
+static mut SPA_GUEST_LOG: [u8; GUEST_TX_CAP] = [0; GUEST_TX_CAP];
+static mut SPA_GUEST_LOG_HEAD: usize = 0;
+static mut SPA_GUEST_LOG_LEN: usize = 0;
 /// Iron `202312f`: TX ring made `Linux version` readable, then a blocking HV
 /// `write_byte` (hypervisor-scan bump) interleaved e820 and COM2 cut mid-word.
 /// After Linux `#PF` deliver, HV diagnostics share the guest TX ring.
@@ -167,7 +171,47 @@ fn guest_tx_push(byte: u8) {
         let idx = (GUEST_TX_HEAD + GUEST_TX_LEN) % GUEST_TX_CAP;
         GUEST_TX[idx] = byte;
         GUEST_TX_LEN += 1;
+        spa_guest_log_push(byte);
     }
+}
+
+fn spa_guest_log_push(byte: u8) {
+    // SAFETY: same BSP serial writers as [`guest_tx_push`].
+    unsafe {
+        if SPA_GUEST_LOG_LEN == GUEST_TX_CAP {
+            SPA_GUEST_LOG_HEAD = (SPA_GUEST_LOG_HEAD + 1) % GUEST_TX_CAP;
+            SPA_GUEST_LOG_LEN -= 1;
+        }
+        let idx = (SPA_GUEST_LOG_HEAD + SPA_GUEST_LOG_LEN) % GUEST_TX_CAP;
+        SPA_GUEST_LOG[idx] = byte;
+        SPA_GUEST_LOG_LEN += 1;
+    }
+}
+
+/// Copy the SPA guest COM1 log (oldest → newest). Survives SOL drain.
+/// Not iDRAC `console com2`.
+pub fn spa_guest_log_snapshot(out: &mut [u8]) -> usize {
+    // SAFETY: single-threaded boot / HV; ring only touched from serial writers.
+    unsafe {
+        let n = SPA_GUEST_LOG_LEN.min(out.len());
+        for i in 0..n {
+            out[i] = SPA_GUEST_LOG[(SPA_GUEST_LOG_HEAD + i) % GUEST_TX_CAP];
+        }
+        n
+    }
+}
+
+/// Drop the SPA guest log (tests / guest-UEFI reset).
+pub fn spa_guest_log_clear() {
+    unsafe {
+        SPA_GUEST_LOG_HEAD = 0;
+        SPA_GUEST_LOG_LEN = 0;
+    }
+}
+
+#[cfg(test)]
+pub fn spa_guest_log_push_for_test(byte: u8) {
+    spa_guest_log_push(byte);
 }
 
 /// Bytes waiting in the guest UART TX ring.
@@ -211,6 +255,7 @@ pub fn guest_tx_clear() {
         GUEST_TX_HEAD = 0;
         GUEST_TX_LEN = 0;
     }
+    spa_guest_log_clear();
 }
 
 fn guest_tx_port_thre(live: bool, base: u16) -> bool {
@@ -708,6 +753,21 @@ mod serial_test {
         assert_eq!(n, GUEST_TX_CAP);
         assert_eq!(guest_tx_len(), 0);
         guest_tx_clear();
+    }
+
+    #[test]
+    fn spa_guest_log_survives_sol_drain() {
+        guest_tx_clear();
+        guest_tx_push(b'A');
+        guest_tx_push(b'B');
+        let _ = drain_guest_tx(GUEST_TX_CAP);
+        assert_eq!(guest_tx_len(), 0);
+        let mut buf = [0u8; 8];
+        let n = spa_guest_log_snapshot(&mut buf);
+        assert_eq!(n, 2);
+        assert_eq!(&buf[..2], b"AB");
+        guest_tx_clear();
+        assert_eq!(spa_guest_log_snapshot(&mut buf), 0);
     }
 
     #[test]

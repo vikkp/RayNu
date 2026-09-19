@@ -1,6 +1,6 @@
 # M8 Plan — operator product hardening (post-Everest)
 
-**Status:** **OPEN** (M8.3 iron SPA keyboard) — firmware SPA `POST /console/keys` injects guest COM1 (`FirmwareSpaKeys`). `GET /logs/serial` stays HV UART. **not VNC**. Iron `RAYNU-V-M8-CONSOLE-OK` **OPEN**. M8.1 iron HTTPS **CLOSED** (`928d6224`). M8.2 **host-ready** (`RAYNU-V-M8-AUTH-HOST-OK`); firmware REST still accepts lab bring-up when no ESP `auth.token`. M8.4 **host-ready** (`RAYNU-V-M8-ISO-UPLOAD-HOST-OK`); firmware ESP-staged `linux.iso` stays valid. M7 Mount Everest **CLOSED on iron** (`f72b4276` / `34552377351`, 2026-09-11). M8.0 persist **CLOSED on evidence** (`4af78b43`). A3 SKU card **DONE**.  
+**Status:** **OPEN** (A4s standing SPA) — AfterEbs arms BCM5720 coexist; ticks during RayNu-F / USB waits. `GET /logs/guest` is guest COM1 TX (not iDRAC SOL). Firmware SPA `POST /console/keys` injects guest COM1. `GET /logs/serial` stays HV UART. **not VNC**. Iron standing-SPA / `RAYNU-V-M8-CONSOLE-OK` **OPEN**. M8.1 iron HTTPS **CLOSED** (`928d6224`). M8.2 **host-ready** (`RAYNU-V-M8-AUTH-HOST-OK`); firmware REST still accepts lab bring-up when no ESP `auth.token`. M8.4 **host-ready** (`RAYNU-V-M8-ISO-UPLOAD-HOST-OK`); firmware ESP-staged `linux.iso` stays valid. M7 Mount Everest **CLOSED on iron** (`f72b4276` / `34552377351`, 2026-09-11). M8.0 persist **CLOSED on evidence** (`4af78b43`). A3 SKU card **DONE**.  
 **Parent:** [ADR-018](adr/ADR-018.md) · Everest: [ADR-009](adr/ADR-009.md) · lived: [progress.md](progress.md) · HDA: [hda.md](hda.md)  
 **Prior track:** [m7_plan.md](m7_plan.md) (closed). Cluster / elasticity is **M9**, not this plan.
 
@@ -127,7 +127,7 @@ HDA + `site/hda.html` stay fresh: update `docs/hda.md`, then `./tools/sync-hda-s
 
 **Goal:** Operator types in the guest from the SPA (web/VNC or equivalent). iDRAC `console com2` remains the evidence channel, not the only keyboard.
 
-**Honesty:** [`ConsoleMode::FirmwareSpaKeys`](../mgmt/console.rs) serves `POST /console/keys` into guest COM1 RBR. Host tests still print `RAYNU-V-M8-CONSOLE-HOST-OK`. `GET /logs/serial` remains HV UART (not a guest console). SPA Activity has `g-keys`. Host/CI never print `RAYNU-V-M8-CONSOLE-OK`. Nested QEMU ≠ R640. **not VNC**. Iron close is typing in Alpine from the SPA on BCM5720, then COM2.
+**Honesty:** [`ConsoleMode::FirmwareSpaKeys`](../mgmt/console.rs) serves `POST /console/keys` into guest COM1 RBR. `GET /logs/guest` is the guest COM1 TX copy (not iDRAC SOL). Host tests still print `RAYNU-V-M8-CONSOLE-HOST-OK`. `GET /logs/serial` remains HV UART (not a guest console). SPA Activity has `g-keys` and polls `/logs/guest`. Standing HTTPS during RayNu-F is firmware-in-tree (A4s). Host/CI never print `RAYNU-V-M8-CONSOLE-OK`. Nested QEMU ≠ R640. **not VNC**. Iron close is typing in Alpine from the SPA on BCM5720, then COM2.
 
 **Honesty:** Serial auto-answer already installed Alpine on iron. This gate is UX, not E5.
 

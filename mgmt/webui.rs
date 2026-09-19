@@ -201,6 +201,7 @@ pub fn spa_operator_surface_present() -> bool {
         && s.contains("/console/keys")
         && s.contains("g-keys")
         && s.contains("not VNC")
+        && s.contains("/logs/guest")
         && s.contains("Install media")
         && webui_len().saturating_add(256) <= crate::mgmt::http::HTTP_RESPONSE_CAP
 }
