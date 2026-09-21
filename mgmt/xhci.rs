@@ -4036,6 +4036,16 @@ pub fn xhci_live_peek_retry(_n: u8) {}
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 pub fn xhci_live_diskprime() {
     serial_xhci_diskprime();
+    // Peek already stored LBA1. A fresh BOT read here failed on iron
+    // `08202468` (`lba1=miss err=4`) and recover_pipes ran before GRUB.
+    let mut pinned = [0u8; 8];
+    if crate::mgmt::disk_persist::persist_lun_gpt_pin_read(512, &mut pinned)
+        && &pinned == b"EFI PART"
+    {
+        use crate::boot::serial;
+        serial::write_line("boot: Stage 46 diskprime lba1=pin (not ISO-INSTALL-OK)");
+        return;
+    }
     if LIVE_LOCK.swap(true, core::sync::atomic::Ordering::Acquire) {
         return;
     }

@@ -206,11 +206,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-gpt-pin-stage |
-| Summary | **Pin peek GPT for RayNu-F stage.** Lived `3b388279`: peek keep=1 then `no GPT`, `image=test-app`, `product ISO hold`. Do not F11 `3b388279`. A4s not closed. Sit at `localhost:~#`. |
+| Commit | m8-gpt-pin-hold |
+| Summary | **Hold the peek GPT and skip the ISO.** Lived `08202468`: peek `gpt=1 fit=1` `usb_err=8` then `image=ISO-BOOTX64` and a `vda` RCU stall. Pin stays; ISO stays off. Do not F11 `08202468`. A4s not closed. Sit at `localhost:~#`. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Bar A **78% held** / Bar B **18% held** / overall **63% held** / months A **0.75 held**. Console piece **58% held**. A4s not closed. |
-| Gates touched | `fn persist_lun_gpt_pin_store`. `diskprime lba1=`. `./tools/sync-loihda-site.sh --check`. No MegaRAID. Sit at `localhost:~#`. |
+| Gates touched | `fn persist_lun_gpt_pin_valid`. `fn persist_lun_probe_done`. `diskprime lba1=pin`. `./tools/sync-loihda-site.sh --check`. No MegaRAID. Sit at `localhost:~#`. |
 
 ---
 
@@ -218,6 +218,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-21 | m8-gpt-pin-hold | 78 | 18 | **Hold the peek GPT and skip the ISO.** Lived `08202468` peek `gpt=1` `usb_err=8` then `image=ISO-BOOTX64` / `vda` RCU stall. Do not F11 `08202468`. A4s not closed. Console 58 held. Bar A 78 held. |
 | 2026-09-21 | m8-gpt-pin-stage | 78 | 18 | **Pin peek GPT for RayNu-F stage.** Lived `3b388279` peek keep=1 then `image=test-app` / `product ISO hold`. Do not F11 `3b388279`. A4s not closed. Console 58 held. Bar A 78 held. |
 | 2026-09-21 | m8-spa-safari-idle | 78 | 18 | **Defer standing SPA until RayNu-F launch.** Lived `17d120c5` peek keep=1 then HTTPS during diskprime → `no GPT`, no login. Firefox Unable to connect. A4s not closed. Console 58 held. Bar A 78 held. |
 | 2026-09-19 | m8-spa-safari-idle | 78 | 18 | **Paced SOL RX after host power-off.** Lived `b5e290be` SPA HTTPS then chassis off (per-exit COM2 `inb`). This EFI: `poll_host_rx_paced` ~10 ms; keep=1 skip ISO; `ST_CH` idle 2 s. Do not F11 `b5e290be`. A4s not closed. Console 58 held. Bar A 78 held. |

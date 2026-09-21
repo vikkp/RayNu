@@ -568,6 +568,32 @@ fn gpt_pin_serves_lba0_through_lba33_and_rejects_past_the_prefix() {
     assert!(!persist_lun_gpt_pin_read(512, &mut got));
 }
 
+struct FailDisk;
+
+impl VolumeRead for FailDisk {
+    fn read_at(&self, _off: u64, _buf: &mut [u8]) -> bool {
+        false
+    }
+}
+
+#[test]
+fn gpt_pin_holds_when_reread_fails() {
+    persist_lun_clear_sticky();
+    let mut image = vec![0u8; GPT_PIN_SECTORS * 512];
+    image[512..520].copy_from_slice(b"EFI PART");
+    image[0] = 0xEE;
+    assert!(persist_lun_gpt_pin_store(&PinDisk(&image)));
+    assert!(persist_lun_gpt_pin_valid());
+    assert!(!persist_lun_gpt_pin_store(&FailDisk));
+    let mut got = [0u8; 8];
+    assert!(persist_lun_gpt_pin_read(512, &mut got));
+    assert_eq!(&got, b"EFI PART");
+    assert!(!persist_lun_probe_done((true, false, false)));
+    assert!(persist_lun_probe_done((true, true, true)));
+    persist_lun_gpt_pin_clear();
+    assert!(!persist_lun_gpt_pin_valid());
+}
+
 #[test]
 fn host_never_prints_everest_iso_install_ok() {
     assert!(host_never_prints_iso_install_ok());

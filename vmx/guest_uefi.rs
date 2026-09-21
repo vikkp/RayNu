@@ -7399,11 +7399,16 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
     RAYNU_F_STAGED_FROM_DISK.store(false, Ordering::Release);
     crate::mgmt::durable_lun::durable_lun_diskprime();
     let sticky = crate::mgmt::disk_persist::persist_lun_sticky_keep();
-    let disk_has = crate::raynu_f::disk_has_gpt_esp(&DiskFatVol { base: 0 }) || sticky;
+    // Iron `08202468`: peek `gpt=1 fit=1` then FAT `usb_err=8`. The pin
+    // still holds LBA0–LBA33. Staging the ISO made `vda` I/O errors and
+    // an RCU stall, and the auto-answer can wipe the closed install.
+    let pin = crate::mgmt::disk_persist::persist_lun_gpt_pin_valid();
+    let disk_has = crate::raynu_f::disk_has_gpt_esp(&DiskFatVol { base: 0 }) || sticky || pin;
     let try_disk = crate::raynu_f::raynu_f_boot_source(disk_has)
         == crate::raynu_f::BootSource::Disk
         || crate::devices::guest_virtio_blk::disk_bytes_written() != 0
-        || sticky;
+        || sticky
+        || pin;
     let disk_entry = if try_disk {
         let mut e = None;
         for _ in 0..3 {
@@ -7420,12 +7425,16 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
     // keep=1 BOOTX64 miss; skip ISO (do not wipe persist). Iron b5e290be
     // found DISK BOOTX64 then FAT read failed → image=ISO-BOOTX64; auto-answer
     // setup-disk can wipe the 8 GiB slice.
-    let iso_entry = if disk_entry.is_none() && !sticky {
+    let iso_entry = if disk_entry.is_none() && !sticky && !pin {
         raynu_f_stage_iso_bootloader(&layout, ram_hpa)
     } else {
         if disk_entry.is_none() && sticky {
             serial::write_line(
                 "boot: WARN keep=1 BOOTX64 miss; skip ISO (do not wipe persist)",
+            );
+        } else if disk_entry.is_none() && pin {
+            serial::write_line(
+                "boot: WARN GPT pin holds; skip ISO (do not wipe persist)",
             );
         }
         None
