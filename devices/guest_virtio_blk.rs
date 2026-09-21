@@ -1330,7 +1330,12 @@ pub fn raynu_f_disk_read(off: u64, buf: &mut [u8]) -> bool {
         if buf.is_empty() || end > dlen {
             return false;
         }
-        return crate::mgmt::durable_lun::durable_lun_rw(off, buf, false);
+        // Peek pins LBA0..LBA33 while BOT is hot. Iron `3b388279` re-read
+        // those LBAs after VMX/NIC and parsed `no GPT` (`image=test-app`).
+        if crate::mgmt::disk_persist::persist_lun_gpt_pin_read(off, buf) {
+            return true;
+        }
+        return crate::mgmt::durable_lun::durable_lun_read_any(off, buf);
     }
     let hpa = DISK_HPA.load(Ordering::Acquire);
     let dlen = DISK_LEN.load(Ordering::Acquire);

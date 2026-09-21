@@ -532,6 +532,42 @@ fn persist_ok_ready_is_keep_plus_durable_lun_once() {
     assert!(src.contains("write_line(M8_DISK_PERSIST_OK_MARKER)"));
 }
 
+struct PinDisk<'a>(&'a [u8]);
+
+impl VolumeRead for PinDisk<'_> {
+    fn read_at(&self, off: u64, buf: &mut [u8]) -> bool {
+        let Some(start) = usize::try_from(off).ok() else {
+            return false;
+        };
+        let Some(end) = start.checked_add(buf.len()) else {
+            return false;
+        };
+        if end > self.0.len() {
+            return false;
+        }
+        buf.copy_from_slice(&self.0[start..end]);
+        true
+    }
+}
+
+#[test]
+fn gpt_pin_serves_lba0_through_lba33_and_rejects_past_the_prefix() {
+    persist_lun_clear_sticky();
+    let mut image = vec![0u8; GPT_PIN_SECTORS * 512];
+    image[512..520].copy_from_slice(b"EFI PART");
+    image[0] = 0xEE;
+    assert!(persist_lun_gpt_pin_store(&PinDisk(&image)));
+    let mut got = [0u8; 512];
+    assert!(persist_lun_gpt_pin_read(0, &mut got));
+    assert_eq!(got[0], 0xEE);
+    assert!(persist_lun_gpt_pin_read(512, &mut got));
+    assert_eq!(&got[..8], b"EFI PART");
+    let mut past = [0u8; 512];
+    assert!(!persist_lun_gpt_pin_read((GPT_PIN_SECTORS as u64) * 512, &mut past));
+    persist_lun_gpt_pin_clear();
+    assert!(!persist_lun_gpt_pin_read(512, &mut got));
+}
+
 #[test]
 fn host_never_prints_everest_iso_install_ok() {
     assert!(host_never_prints_iso_install_ok());

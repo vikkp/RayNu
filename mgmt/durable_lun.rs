@@ -473,6 +473,7 @@ pub fn durable_lun_rw(off: u64, buf: &mut [u8], write: bool) -> bool {
     }
     if write {
         lun_cache_clear();
+        crate::mgmt::disk_persist::persist_lun_gpt_pin_clear();
     }
     if !durable_lun_post_ebs_io_ready() {
         return false;

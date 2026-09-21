@@ -1,6 +1,6 @@
 ---
 hda_version: 1
-last_updated: 2026-09-19
+last_updated: 2026-09-21
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
@@ -354,11 +354,11 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-spa-safari-idle |
-| Summary | **Defer standing SPA until RayNu-F launch.** Lived `17d120c5`: peek `keep=1` `EFI PART` then HTTPS inside diskprime → `no GPT` and no Alpine `login:`. Firefox reload Unable to connect (slot held on `TCP accept`). USB BOT waits tick SPA only after `raynu_f_running`. Months **0.0 held**. Overall **99 held**. |
-| Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. Standing SPA / iron console residual. Nested QEMU ≠ R640. |
-| Gates touched | `Standing SPA deferred until RayNu-F launch`. `fn raynu_f_running(`. `./tools/sync-hda-site.sh --check`. Sit at `localhost:~#`. |
-| Months Δ | 0.0 held (Everest closed; A4 iron HTTPS closed; A4s standing SPA not iron; host-power-off regression fixed in-tree) |
+| Commit | m8-gpt-pin-stage |
+| Summary | **Pin peek GPT for RayNu-F stage.** Lived `3b388279`: peek `gpt=1` `bootx64=1` `ext4=1` then three `no GPT` lines, `image=test-app`, HLT, `product ISO hold`. SPA ticks were already after launch. This EFI copies LBA0–LBA33 at peek and serves them to `find_esp`; diskprime must print `lba1=EFI PART`. Do not F11 `3b388279`. Months **0.0 held**. Overall **99 held**. |
+| Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. A4s not iron. Nested QEMU ≠ R640. |
+| Gates touched | `fn persist_lun_gpt_pin_store`. `diskprime lba1=`. `gpt_err=`. `./tools/sync-hda-site.sh --check`. Sit at `localhost:~#`. |
+| Months Δ | 0.0 held (Everest closed; stage fix not lived on R640) |
 
 
 ## Blockers & risks (Everest-relevant)
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-21 | m8-gpt-pin-stage | 0.0 | 99 | **Pin peek GPT for RayNu-F stage.** Lived `3b388279`: peek keep=1 then `no GPT` ×3, `image=test-app`, `product ISO hold` (spin, not a USB wait). Do not F11 `3b388279`. Sit at `localhost:~#`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-21 | m8-spa-safari-idle | 0.0 | 99 | **Defer standing SPA until RayNu-F launch.** Lived `17d120c5` peek keep=1 then HTTPS during diskprime → `no GPT`, no Alpine login. Firefox Unable to connect. USB ticks wait for `raynu_f_running`. Sit at `localhost:~#`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-19 | m8-spa-safari-idle | 0.0 | 99 | **Paced SOL RX after host power-off.** Lived `b5e290be` SPA HTTPS then chassis off (per-exit COM2 `inb`). This EFI: `poll_host_rx_paced` ~10 ms; keep=1 skip ISO; `ST_CH` idle 2 s. Do not F11 `b5e290be`. Never print iron CONSOLE-OK. Sit at `localhost:~#`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-19 | m8-standing-spa | 0.0 | 99 | **Standing SPA during RayNu-F in-tree.** AfterEbs arms coexist; ticks on RayNu-F vmexit + USB waits; `GET /logs/guest`. Never print iron CONSOLE-OK. A4s not closed until a browser stays up after Alpine login. Sit at `localhost:~#`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
