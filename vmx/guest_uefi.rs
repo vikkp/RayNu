@@ -4261,6 +4261,11 @@ static RAYNU_F_CONOUT_LOGGED: AtomicBool = AtomicBool::new(false);
 /// F2b: the private VMCS is running the RayNu-F test app (not OVMF). Routes
 /// `guest_uefi_vmexit` to the small RayNu-F fast path.
 static RAYNU_F_MODE: AtomicBool = AtomicBool::new(false);
+
+/// True after RayNu-F VMLAUNCH. Diskprime / GPT staging run before this.
+pub fn raynu_f_running() -> bool {
+    RAYNU_F_MODE.load(Ordering::Acquire)
+}
 /// F2b one-shot: the RayNu-F launch has been attempted on this boot.
 static RAYNU_F_RAN: AtomicBool = AtomicBool::new(false);
 /// F2b exit counter (cap guards a runaway guest).

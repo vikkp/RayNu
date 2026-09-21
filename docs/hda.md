@@ -355,9 +355,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | m8-spa-safari-idle |
-| Summary | **Paced SOL RX after host power-off regression.** Lived `b5e290be`: SPA HTTPS then Host red then chassis off (per-exit COM2 `inb` at GRUB ~2M/s). This EFI: `poll_host_rx_paced` (~10 ms) from COM1 IN/ConIn; no per-exit poll; keep=1 BOOTX64 miss skips ISO; TLS `ST_CH` idle 2 s then abort()+listen. Do **not** F11 `b5e290be`. A4s not closed. Sit at `localhost:~#`. Months **0.0 held**. Overall **99 held**. |
+| Summary | **Defer standing SPA until RayNu-F launch.** Lived `17d120c5`: peek `keep=1` `EFI PART` then HTTPS inside diskprime → `no GPT` and no Alpine `login:`. Firefox reload Unable to connect (slot held on `TCP accept`). USB BOT waits tick SPA only after `raynu_f_running`. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. Standing SPA / iron console residual. Nested QEMU ≠ R640. |
-| Gates touched | `fn poll_host_rx_paced(`. `keep=1 BOOTX64 miss; skip ISO`. `HOST_NIC_HTTP_HS_IDLE_MS`. `./tools/sync-hda-site.sh --check`. Sit at `localhost:~#`. |
+| Gates touched | `Standing SPA deferred until RayNu-F launch`. `fn raynu_f_running(`. `./tools/sync-hda-site.sh --check`. Sit at `localhost:~#`. |
 | Months Δ | 0.0 held (Everest closed; A4 iron HTTPS closed; A4s standing SPA not iron; host-power-off regression fixed in-tree) |
 
 
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-21 | m8-spa-safari-idle | 0.0 | 99 | **Defer standing SPA until RayNu-F launch.** Lived `17d120c5` peek keep=1 then HTTPS during diskprime → `no GPT`, no Alpine login. Firefox Unable to connect. USB ticks wait for `raynu_f_running`. Sit at `localhost:~#`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-19 | m8-spa-safari-idle | 0.0 | 99 | **Paced SOL RX after host power-off.** Lived `b5e290be` SPA HTTPS then chassis off (per-exit COM2 `inb`). This EFI: `poll_host_rx_paced` ~10 ms; keep=1 skip ISO; `ST_CH` idle 2 s. Do not F11 `b5e290be`. Never print iron CONSOLE-OK. Sit at `localhost:~#`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-19 | m8-standing-spa | 0.0 | 99 | **Standing SPA during RayNu-F in-tree.** AfterEbs arms coexist; ticks on RayNu-F vmexit + USB waits; `GET /logs/guest`. Never print iron CONSOLE-OK. A4s not closed until a browser stays up after Alpine login. Sit at `localhost:~#`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-19 | m8-tls-iron | 0.0 | 99 | **A4 CLOSED on COM2.** EFI `928d6224` native HTTPS GET `10.99.99.140:8443` → SPA → `HOST-NIC HTTP exchange ok` → `RAYNU-V-M8-TLS-OK`. Keep=1 DISK-BOOT also printed `RAYNU-V-M8-DISK-PERSIST-OK` (`UUID=dd673a9a`). rustls/ring stay out of `uefi-bin`. Sit at `localhost:~#`. Next is console iron. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
