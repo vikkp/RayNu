@@ -8147,6 +8147,19 @@ unsafe fn raynu_f_stage_bootloader_from_volume<R: crate::raynu_f::fat::VolumeRea
     Some(loaded.entry)
 }
 
+/// Blocking COM2 line. `gpt_err` 1–9 are [`crate::raynu_f::gpt::GptError`];
+/// 10 is an ESP sector short read; 11 is a FAT BPB that did not parse.
+/// Nowait USB diags are flushed first so they are not stuck behind this line.
+#[cfg(target_os = "uefi")]
+fn raynu_f_disk_gpt_miss(code: u64) {
+    let _ = serial::flush_guest_tx();
+    serial::write_str(
+        "boot: RayNu-F no GPT / no ESP / no FAT on install disk (F7; not ISO-INSTALL-OK) gpt_err=",
+    );
+    write_dec(code);
+    serial::write_byte(b'\n');
+}
+
 /// F7: mount the GPT ESP on the install disk and stage `\EFI\BOOT\BOOTX64.EFI`
 /// (fallback `\EFI\alpine\grubx64.efi`). Publishes a Hardware/Vendor whole-disk
 /// path on `HANDLE_DISK` (not Media/HardDrive — GRUB `efidisk` would skip
@@ -8161,11 +8174,9 @@ unsafe fn raynu_f_stage_disk_bootloader(
         || crate::mgmt::disk_persist::persist_lun_sticky_keep();
     let esp = match crate::raynu_f::find_esp_skip_array_crc(&disk) {
         Ok(e) => e,
-        Err(_) => {
+        Err(e) => {
             if written {
-                serial::write_line(
-                    "boot: RayNu-F no GPT / no ESP / no FAT on install disk (F7; not ISO-INSTALL-OK)",
-                );
+                raynu_f_disk_gpt_miss(u64::from(e.code()));
             }
             return None;
         }
@@ -8181,17 +8192,13 @@ unsafe fn raynu_f_stage_disk_bootloader(
     let vol_reader = DiskFatVol { base: fat_off };
     let mut boot = [0u8; 512];
     if !crate::raynu_f::fat::VolumeRead::read_at(&vol_reader, 0, &mut boot) {
-        serial::write_line(
-            "boot: RayNu-F no GPT / no ESP / no FAT on install disk (F7; not ISO-INSTALL-OK)",
-        );
+        raynu_f_disk_gpt_miss(10);
         return None;
     }
     let vol = match crate::raynu_f::fat::parse_bpb(&boot) {
         Ok(v) => v,
         Err(_) => {
-            serial::write_line(
-                "boot: RayNu-F no GPT / no ESP / no FAT on install disk (F7; not ISO-INSTALL-OK)",
-            );
+            raynu_f_disk_gpt_miss(11);
             return None;
         }
     };

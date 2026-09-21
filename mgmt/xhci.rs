@@ -1383,6 +1383,19 @@ fn serial_xhci_diskprime() {
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_diskprime_lba1(sig_ok: bool, err: u8) {
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 diskprime lba1=");
+    if sig_ok {
+        serial::write_str("EFI PART");
+    } else {
+        serial::write_str("miss err=");
+        serial_dec_u8(err);
+    }
+    serial::write_line(" (not ISO-INSTALL-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn serial_xhci_slotretry(port: u8) {
     use crate::boot::serial;
     serial::write_str("boot: Stage 46 xhci slotretry p");
@@ -4039,13 +4052,29 @@ pub fn xhci_live_diskprime() {
             let mut inq = [0u8; 36];
             let _ = live.first_inquiry(live.tag, &mut inq);
             live.settle();
-            let mut lba0 = [0u8; 512];
+            let mut lba1 = [0u8; 512];
             let mut tag = live.tag;
             let lba = live.lba;
             live.long_bulk = true;
-            let _ = super::usb_bot::usb_bot_rw(live, &mut tag, lba, 0, &mut lba0, false);
+            // LBA1, not a discarded LBA0. Iron `3b388279`: peek saw
+            // `EFI PART`, then this prime plus an uncached GPT walk
+            // printed `no GPT`. Recover only when the READ fails
+            // (Reset on a Running pipe is the firstcbw failure).
+            let mut read = super::usb_bot::usb_bot_rw(live, &mut tag, lba, 512, &mut lba1, false);
+            if read.is_err() {
+                live.recover_pipes();
+                live.settle();
+                tag = tag.wrapping_add(1);
+                if tag == 0 {
+                    tag = 1;
+                }
+                read = super::usb_bot::usb_bot_rw(live, &mut tag, lba, 512, &mut lba1, false);
+            }
             live.tag = tag;
             live.long_bulk = false;
+            let sig_ok = read.is_ok() && &lba1[..8] == b"EFI PART";
+            let err = read.err().map(|e| e as u8).unwrap_or(0);
+            serial_xhci_diskprime_lba1(sig_ok, err);
         }
     }
     LIVE_LOCK.store(false, core::sync::atomic::Ordering::Release);

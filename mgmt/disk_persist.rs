@@ -396,7 +396,74 @@ pub fn persist_lun_clear_sticky() {
     LAST_LUN_GPT_ERR.store(0, Ordering::Release);
     LAST_LUN_GPT_FIT.store(true, Ordering::Release);
     LAST_LUN_GPT_FIT_KNOWN.store(true, Ordering::Release);
+    persist_lun_gpt_pin_clear();
     persist_ok_clear_printed();
+}
+
+/// LBA0 through LBA33. ESP at LBA 2048 shares cache slot 0 with the
+/// protective MBR, so a later FAT BPB read evicts LBA0 from the 64-line
+/// cache. Iron `3b388279`: peek `gpt=1` `bootx64=1` then RayNu-F's
+/// uncached BOT read printed `no GPT` and launched `image=test-app`.
+pub const GPT_PIN_SECTORS: usize = 34;
+const GPT_PIN_BYTES: usize = GPT_PIN_SECTORS * 512;
+
+static GPT_PIN_VALID: AtomicBool = AtomicBool::new(false);
+static mut GPT_PIN: [u8; GPT_PIN_BYTES] = [0; GPT_PIN_BYTES];
+
+/// Drop the pinned GPT prefix (install write, or a peek that is not keep).
+pub fn persist_lun_gpt_pin_clear() {
+    GPT_PIN_VALID.store(false, Ordering::Release);
+}
+
+/// Copy LBA0..LBA33 from a reader that just parsed an ESP. Call before
+/// FAT/ext4 walks. Requires `EFI PART` at LBA1.
+pub fn persist_lun_gpt_pin_store<R: VolumeRead>(r: &R) -> bool {
+    let mut sec = [0u8; 512];
+    let mut sig = [0u8; 8];
+    for i in 0..GPT_PIN_SECTORS {
+        if !r.read_at((i as u64) * 512, &mut sec) {
+            persist_lun_gpt_pin_clear();
+            return false;
+        }
+        if i == 1 {
+            sig.copy_from_slice(&sec[..8]);
+        }
+        // SAFETY: BSP-only; `GPT_PIN_VALID` is published after the copy.
+        // `addr_of_mut` does not create a `static mut` reference.
+        // KANI-TARGET: GPT pin sector copy (outside Proven Core).
+        unsafe {
+            let dst = core::ptr::addr_of_mut!(GPT_PIN) as *mut u8;
+            core::ptr::copy_nonoverlapping(sec.as_ptr(), dst.add(i * 512), 512);
+        }
+    }
+    if &sig != b"EFI PART" {
+        persist_lun_gpt_pin_clear();
+        return false;
+    }
+    GPT_PIN_VALID.store(true, Ordering::Release);
+    true
+}
+
+/// Serve a read that lies entirely inside the pinned GPT prefix.
+pub fn persist_lun_gpt_pin_read(off: u64, buf: &mut [u8]) -> bool {
+    if buf.is_empty() || !GPT_PIN_VALID.load(Ordering::Acquire) {
+        return false;
+    }
+    let Some(end) = off.checked_add(buf.len() as u64) else {
+        return false;
+    };
+    if end > GPT_PIN_BYTES as u64 {
+        return false;
+    }
+    let start = off as usize;
+    // SAFETY: range checked against `GPT_PIN_BYTES`; valid flag is set.
+    // `addr_of` does not create a `static mut` reference. BSP-only.
+    // KANI-TARGET: GPT pin read (outside Proven Core).
+    unsafe {
+        let src = (core::ptr::addr_of!(GPT_PIN) as *const u8).add(start);
+        buf.copy_from_slice(core::slice::from_raw_parts(src, buf.len()));
+    }
+    true
 }
 
 /// GPT / FAT BPB / ext4 on the LUN. FAT dirent walks stay off BOT.
@@ -423,6 +490,12 @@ pub fn persist_lun_keep_parts() -> (bool, bool, bool) {
     LAST_LUN_GPT_FIT.store(fit, Ordering::Release);
     LAST_LUN_GPT_FIT_KNOWN.store(known, Ordering::Release);
     let keep_gpt = gpt.is_ok() && fit;
+    if keep_gpt {
+        // Before FAT/ext4. Those reads evict LBA0 from the direct-mapped cache.
+        let _ = persist_lun_gpt_pin_store(&LunVol);
+    } else {
+        persist_lun_gpt_pin_clear();
+    }
     let boot = match gpt {
         Ok(esp) if keep_gpt => disk_has_fat_bpb_from_esp(&LunVol, esp),
         _ => false,
