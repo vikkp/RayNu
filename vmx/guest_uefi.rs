@@ -4261,6 +4261,11 @@ static RAYNU_F_CONOUT_LOGGED: AtomicBool = AtomicBool::new(false);
 /// F2b: the private VMCS is running the RayNu-F test app (not OVMF). Routes
 /// `guest_uefi_vmexit` to the small RayNu-F fast path.
 static RAYNU_F_MODE: AtomicBool = AtomicBool::new(false);
+
+/// True after RayNu-F VMLAUNCH. Diskprime / GPT staging run before this.
+pub fn raynu_f_running() -> bool {
+    RAYNU_F_MODE.load(Ordering::Acquire)
+}
 /// F2b one-shot: the RayNu-F launch has been attempted on this boot.
 static RAYNU_F_RAN: AtomicBool = AtomicBool::new(false);
 /// F2b exit counter (cap guards a runaway guest).
@@ -7393,20 +7398,36 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
     // `vda` I/O error. Prime USB, skip array CRC, and honor sticky keep.
     RAYNU_F_STAGED_FROM_DISK.store(false, Ordering::Release);
     crate::mgmt::durable_lun::durable_lun_diskprime();
-    let disk_has = crate::raynu_f::disk_has_gpt_esp(&DiskFatVol { base: 0 })
-        || crate::mgmt::disk_persist::persist_lun_sticky_keep();
+    let sticky = crate::mgmt::disk_persist::persist_lun_sticky_keep();
+    let disk_has = crate::raynu_f::disk_has_gpt_esp(&DiskFatVol { base: 0 }) || sticky;
     let try_disk = crate::raynu_f::raynu_f_boot_source(disk_has)
         == crate::raynu_f::BootSource::Disk
         || crate::devices::guest_virtio_blk::disk_bytes_written() != 0
-        || crate::mgmt::disk_persist::persist_lun_sticky_keep();
+        || sticky;
     let disk_entry = if try_disk {
-        raynu_f_stage_disk_bootloader(&layout, ram_hpa)
+        let mut e = None;
+        for _ in 0..3 {
+            crate::mgmt::durable_lun::durable_lun_diskprime();
+            e = raynu_f_stage_disk_bootloader(&layout, ram_hpa);
+            if e.is_some() {
+                break;
+            }
+        }
+        e
     } else {
         None
     };
-    let iso_entry = if disk_entry.is_none() {
+    // keep=1 BOOTX64 miss; skip ISO (do not wipe persist). Iron b5e290be
+    // found DISK BOOTX64 then FAT read failed → image=ISO-BOOTX64; auto-answer
+    // setup-disk can wipe the 8 GiB slice.
+    let iso_entry = if disk_entry.is_none() && !sticky {
         raynu_f_stage_iso_bootloader(&layout, ram_hpa)
     } else {
+        if disk_entry.is_none() && sticky {
+            serial::write_line(
+                "boot: WARN keep=1 BOOTX64 miss; skip ISO (do not wipe persist)",
+            );
+        }
         None
     };
     let (entry, image_handle) = match (disk_entry, iso_entry) {
@@ -8492,6 +8513,10 @@ unsafe fn raynu_f_stop(why: &str) -> ! {
 #[cfg(target_os = "uefi")]
 unsafe fn raynu_f_vmexit(reason: u32, qual: u64, rip: u64, intr: u64) -> ! {
     crate::mgmt::maybe_tick_standing_spa();
+    // Do not poll_host_rx / reassert_irq on every RayNu-F vmexit.
+    // Iron b5e290be did host COM2 LSR+RBR inb at GRUB (~2M exits/s) and
+    // the chassis powered off. RayNu-F SOL RX to guest COM1 (GRUB serial)
+    // is paced (~10ms) from handle_uart_product COM1 IN and ConIn has_input.
     let n = RAYNU_F_EXITS.fetch_add(1, Ordering::AcqRel) + 1;
     let basic = reason & 0xFFFF;
     if reason & 0x8000_0000 != 0 {
@@ -11647,18 +11672,17 @@ unsafe fn handle_raynu_f_service() -> bool {
             if RAYNU_F_PENDING_RX.load(Ordering::Acquire) != 0x100 {
                 return true;
             }
-            if let Some(b) = serial::try_read_byte() {
-                RAYNU_F_PENDING_RX.store(u32::from(b), Ordering::Release);
-                return true;
-            }
-            false
+            // RayNu-F SOL RX to guest COM1 (GRUB serial) — paced (~10ms).
+            // WaitForEvent spins has_input; never unpaced try_read_byte.
+            crate::devices::guest_uart::poll_host_rx_paced();
+            crate::devices::guest_uart::host_rx_ready()
         }
         fn read_input(&mut self) -> Option<u8> {
-            if !self.has_input() {
-                return None;
+            if RAYNU_F_PENDING_RX.load(Ordering::Acquire) != 0x100 {
+                let b = RAYNU_F_PENDING_RX.swap(0x100, Ordering::AcqRel);
+                return Some(b as u8);
             }
-            let b = RAYNU_F_PENDING_RX.swap(0x100, Ordering::AcqRel);
-            Some(b as u8)
+            crate::devices::guest_uart::take_host_rx()
         }
     }
     /// Owned firmware clock: TSC over the pre-EBS calibrated rate.
@@ -14581,7 +14605,12 @@ unsafe fn guest_uefi_rip_is_poison_fill(rip: u64) -> bool {
 /// Product ISO uses a scratch/FIFO 16550 so Linux 8250 autoconfig can bind ttyS0.
 #[cfg(target_os = "uefi")]
 unsafe fn handle_uart(port: u16, is_in: bool, size: u64) {
-    if crate::devices::ide_cdrom::product_iso_window_armed() {
+    // RayNu-F GRUB 16550 not stub LSR: Alpine `terminal_input serial
+    // console` blocks on COM1 DR at grub>. Stub LSR is 0x60 (no DR), so
+    // serial getkey never returns and ConIn is never polled.
+    if crate::devices::ide_cdrom::product_iso_window_armed()
+        || RAYNU_F_MODE.load(Ordering::Acquire)
+    {
         handle_uart_product(port, is_in, size);
         return;
     }
@@ -14611,6 +14640,12 @@ unsafe fn handle_uart(port: u16, is_in: bool, size: u64) {
 
 #[cfg(target_os = "uefi")]
 unsafe fn handle_uart_product(port: u16, is_in: bool, size: u64) {
+    let com1 = (0x03F8..=0x03FF).contains(&port);
+    if is_in && com1 {
+        // RayNu-F GRUB 16550 not stub LSR: serial getkey polls COM1 DR.
+        // Pace host COM2 inb; do not storm iDRAC on every LSR read.
+        crate::devices::guest_uart::poll_host_rx_paced();
+    }
     let mask = if size == 1 {
         0xffu64
     } else if size == 2 {

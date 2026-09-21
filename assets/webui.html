@@ -129,7 +129,7 @@ input.token{min-width:12rem}
 <script>
 (function(){
 const L=document.getElementById("vm-list"),I=document.getElementById("img-list"),G=document.getElementById("serial-log"),S=document.getElementById("status"),T=document.getElementById("f-token"),A="/vms",TK="raynu-v-token",KK="raynu-v-known";
-let known=[],hostOk=0,items=[],isoP="idle",isoN="No ISO yet";
+let known=[],hostOk=0,items=[],isoP="idle",isoN="No ISO yet",listBusy=0;
 function def(){return"raynu-v-bringup"}
 function loadT(){try{const t=sessionStorage.getItem(TK);return t&&t.length?t:def()}catch(e){return def()}}
 function saveT(t){try{sessionStorage.setItem(TK,t)}catch(e){}}
@@ -164,7 +164,10 @@ document.getElementById("story").textContent=s.join(" ");
 function show(p){document.querySelectorAll("[data-pg]").forEach(function(el){el.classList.toggle("on",el.getAttribute("data-pg")===p)});document.querySelectorAll("nav [data-go]").forEach(function(el){el.classList.toggle("on",el.getAttribute("data-go")===p)})}
 document.querySelectorAll("nav [data-go]").forEach(function(el){el.onclick=function(){show(el.getAttribute("data-go"))}});
 async function listVms(){
+if(listBusy)return;
+listBusy=1;
 setS("Listing…");
+try{
 let res;try{res=await api("GET",A)}catch(e){hostOk=false;setS("List failed");paint();return}
 hostOk=res.ok;
 if(!res.ok){setS("List failed ("+res.status+")");paint();return}
@@ -175,6 +178,7 @@ let b=null;try{b=await g.json()}catch(e){}
 out.push({guest_id:id,state:(b&&b.state)?b.state:(b&&b.record?"defined":"?"),cpu:b&&b.cpu,ram_mib:b&&b.ram_mib,disk_mib:b&&b.disk_mib,iso_id:b&&b.iso_id,nics:b&&b.nics,image_type:b&&b.image_type,firmware:b&&b.firmware});
 }
 items=out;render(out);paint();setS(out.length?out.length+" guest(s)":"Empty (create one)");
+}finally{listBusy=0}
 }
 async function createVm(){const id=num("f-id",1),cpu=num("f-cpu",1),ram=num("f-ram",512),disk=num("f-disk",1024),iso=num("f-iso",0),typ=(document.getElementById("f-image")||{}).value||"none";let path=A+"/"+id+"/spec/"+cpu+"/"+ram+"/"+disk+"/"+iso;if(iso!==0&&typ&&typ!=="none")path+="/"+typ;setS("Creating "+id+"…");const res=await api("POST",path);if(res.ok)remember(id);setS(res.ok?("Created "+id):("Create failed ("+res.status+")"));await listVms()}
 async function startVm(id){setS("Starting "+id+"…");const res=await api("POST",A+"/"+id+"/start");setS(res.ok?("Started "+id):("Start failed ("+res.status+")"));await listVms()}

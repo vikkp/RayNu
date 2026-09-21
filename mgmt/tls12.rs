@@ -138,7 +138,11 @@ fn read_u16(b: &[u8], i: usize) -> Option<u16> {
 }
 
 fn read_u24(b: &[u8], i: usize) -> Option<usize> {
-    Some(((*b.get(i)? as usize) << 16) | ((*b.get(i + 1)? as usize) << 8) | (*b.get(i + 2)? as usize))
+    Some(
+        ((*b.get(i)? as usize) << 16)
+            | ((*b.get(i + 1)? as usize) << 8)
+            | (*b.get(i + 2)? as usize),
+    )
 }
 
 fn hmac_sha256(key: &[u8], data: &[u8], out: &mut [u8; 32]) -> bool {
@@ -367,6 +371,14 @@ impl Tls12Listen {
         self.state
     }
 
+    pub fn handshake_failed(&self) -> bool {
+        self.state == ST_FAIL
+    }
+
+    pub fn handshake_waiting_client_hello(&self) -> bool {
+        self.state == ST_CH
+    }
+
     pub fn key_ready(&self) -> bool {
         self.key.is_some()
     }
@@ -404,11 +416,15 @@ impl Tls12Listen {
         match typ {
             CT_ALERT => false,
             CT_CCS => {
-                if self.state != ST_CCS || body != [1] {
-                    return false;
+                if self.state == ST_CCS && body == [1] {
+                    self.state = ST_FIN;
+                    return true;
                 }
-                self.state = ST_FIN;
-                true
+                // TLS 1.3 clients (Safari/Chrome) send a dummy CCS after
+                // ClientHello for middlebox compatibility (RFC 8446 D.4).
+                // curl --tlsv1.2 does not. Drop it until we expect the real
+                // TLS 1.2 CCS after ClientKeyExchange.
+                self.state == ST_CH || self.state == ST_CKE
             }
             CT_HS if self.state == ST_FIN || self.state == ST_APP => {
                 let mut plain = [0u8; 16640];

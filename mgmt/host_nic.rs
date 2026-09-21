@@ -44,7 +44,15 @@ pub const HOST_NIC_MAX_EXCHANGES: u32 = 8;
 /// half-open ESTABLISHED (COM2 `TCP accept` with no `HTTP exchange ok`)
 /// held the slot so `curl` SYN timed out. Abort and re-listen after this
 /// many **real** coexist milliseconds without complete HTTP headers.
-pub const HOST_NIC_HTTP_IDLE_MS: i64 = 3000;
+/// 3 s was enough for `curl --tlsv1.2`; Safari TLS 1.3 ClientHello + dummy
+/// CCS + millicert RSA sign needs a longer reclaim (A4s standing SPA).
+pub const HOST_NIC_HTTP_IDLE_MS: i64 = 15_000;
+
+/// Half-open TCP (TLS still waiting ClientHello / `ST_CH`) reclaims the
+/// one coexist slot faster than a mid-handshake browser. Lived sixth
+/// `TCP accept` with no headers held the slot for 15 s while SPA Host
+/// went red. Dummy-CCS Safari is `ST_CKE`, so it still gets 15 s.
+pub const HOST_NIC_HTTP_HS_IDLE_MS: i64 = 2_000;
 
 /// Fallback TSC rate when Stall calibration has not stored [`crate::boot::raynu_f_flag::tsc_hz`].
 pub const COEXIST_TSC_HZ_FALLBACK: u64 = 2_100_000_000;
@@ -81,6 +89,15 @@ pub fn http_accept_should_idle_abort(
     limit_ms: i64,
 ) -> bool {
     announced && !headers_done && limit_ms > 0 && elapsed_since_accept_ms >= limit_ms
+}
+
+/// Idle-abort budget: 2 s while TLS waits for ClientHello, else 15 s.
+pub fn http_accept_idle_limit_ms(handshake_waiting: bool) -> i64 {
+    if handshake_waiting {
+        HOST_NIC_HTTP_HS_IDLE_MS
+    } else {
+        HOST_NIC_HTTP_IDLE_MS
+    }
 }
 
 /// Host/CI: idle abort fires at the limit and never on complete headers.

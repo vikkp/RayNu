@@ -1047,7 +1047,15 @@ fn wait_set(hw: &mut impl XhciHw, off: u32, mask: u32) -> bool {
 }
 
 /// Poll standing HTTPS while USB BOT waits (BULK_SPINS / FIRST_READ_SPINS).
+///
+/// Iron `17d120c5`: ticks during diskprime (peek `keep=1` `EFI PART`, then
+/// curl/Firefox) printed `no GPT` and Alpine never reached `login:`.
+/// Standing SPA deferred until RayNu-F launch. Vmexit ticks resume after
+/// VMLAUNCH.
 fn maybe_tick_spa_during_usb(spins: u32) {
+    if !crate::vmx::guest_uefi::raynu_f_running() {
+        return;
+    }
     if spins % 262_144 == 0 {
         crate::mgmt::maybe_tick_standing_spa();
     }

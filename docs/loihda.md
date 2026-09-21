@@ -206,11 +206,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-standing-spa |
-| Summary | **Standing SPA during RayNu-F in-tree.** AfterEbs arms BCM5720 coexist (bounded 45s window is fallback). Ticks on RayNu-F vmexit + USB BOT waits. `GET /logs/guest` + SPA Activity poll. Host/CI never print iron CONSOLE-OK. A4s not closed until a browser stays up after Alpine login. Not VNC. Sit at `localhost:~#`. |
+| Commit | m8-spa-safari-idle |
+| Summary | **Defer standing SPA until RayNu-F launch.** Lived `17d120c5`: peek keep=1 then HTTPS inside diskprime → `no GPT`, no Alpine login. Firefox Unable to connect. USB BOT SPA ticks wait for `raynu_f_running`. A4s not closed. Sit at `localhost:~#`. |
 | Everest impact | none — HDA months 0.0 / 99% held |
-| LOI impact | Bar A **78% held** / Bar B **18% held** / overall **63% held** / months A **0.75 held**. Console piece **50%→58%**. Auth **38% held**. A4s not closed. |
-| Gates touched | `prop_coexist_wired` standing SPA call sites. `GET /logs/guest`. `./tools/sync-loihda-site.sh --check`. No MegaRAID. Sit at `localhost:~#`. |
+| LOI impact | Bar A **78% held** / Bar B **18% held** / overall **63% held** / months A **0.75 held**. Console piece **58% held**. A4s not closed. |
+| Gates touched | Standing SPA deferred until RayNu-F launch. `./tools/sync-loihda-site.sh --check`. No MegaRAID. Sit at `localhost:~#`. |
 
 ---
 
@@ -218,6 +218,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-21 | m8-spa-safari-idle | 78 | 18 | **Defer standing SPA until RayNu-F launch.** Lived `17d120c5` peek keep=1 then HTTPS during diskprime → `no GPT`, no login. Firefox Unable to connect. A4s not closed. Console 58 held. Bar A 78 held. |
+| 2026-09-19 | m8-spa-safari-idle | 78 | 18 | **Paced SOL RX after host power-off.** Lived `b5e290be` SPA HTTPS then chassis off (per-exit COM2 `inb`). This EFI: `poll_host_rx_paced` ~10 ms; keep=1 skip ISO; `ST_CH` idle 2 s. Do not F11 `b5e290be`. A4s not closed. Console 58 held. Bar A 78 held. |
 | 2026-09-19 | m8-standing-spa | 78 | 18 | **Standing SPA during RayNu-F in-tree.** AfterEbs arms coexist; ticks on RayNu-F vmexit + USB waits; `GET /logs/guest`. Never print iron CONSOLE-OK. A4s not closed until a browser stays up after Alpine login. Console 50→58. Bar A 78 held. |
 | 2026-09-19 | m8-tls-iron | 78 | 18 | **A4 CLOSED on COM2.** EFI `928d6224` native HTTPS GET `.140` → SPA → `RAYNU-V-M8-TLS-OK`. Keep=1 DISK-BOOT also printed `RAYNU-V-M8-DISK-PERSIST-OK` (`UUID=dd673a9a`). rustls/ring stay out of `uefi-bin`. TLS 45→80. Persist 95→97. SKU 90→92. Months A 1.0→0.75. A6 NOW. |
 | 2026-09-18 | m8-tls-iron | 68 | 18 | **M8.1 native HTTPS window before RayNu-F.** Analog then `Tls12Listen` (`PRE_RAYNUF_HTTPS_MS`). COM2 `1647a8d8` launched Alpine with no `https://` (`curl: (28)` on SNP `.150`). RDRAND CPUID-gated. rustls/ring stay out of `uefi-bin`. Never print iron TLS-OK. Iron close is `curl --cacert` on native `CURL NOW → https://`. TLS 40→45. Persist 95 held. A4 not closed. |
