@@ -175,7 +175,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | 2026-09-18 | Bar A A2 | USB Force Off on COM2 | **DONE on evidence** (`4af78b43` keep=1 DISK-BOOT UUID `348005a9`; minted persist-OK not printed) |
 | 2026-09-18 | Bar A A3 | SKU card | **DONE** ([`docs/sku.md`](sku.md) / [`site/sku.html`](../site/sku.html)) |
 | **2026-09-19** | Bar A A4 | TLS on native `:8443` **before RayNu-F** | **DONE** (`928d6224` COM2 `RAYNU-V-M8-TLS-OK`; Mac `curl --cacert` SPA `.140`) |
-| **NOW** | Bar A at installed GRUB | `d60431ee` DISK-BOOTX64 → `grub>` | **NEXT** — type `normal` on COM2. Peek `installed=1` `keep=1` `lba1=pin` `BOOTX64` 139264. Not ISO. Not `login:` yet. Then standing SPA |
+| **NOW** | Bar A wall-cap at `grub>` | `d60431ee` DISK-BOOTX64 then 180s stop | **NEXT** — Force Off. Do not curl `/vms/1/start`. `wall_ms=180005` `exits=308551680` `blk_rd=33` `blk_wr=0` then `product ISO hold`. Will not proceed. Same EFI repeats. Then standing SPA |
 | then | Bar A A6 | SPA keyboard | after A4s; firmware `POST /console/keys` in-tree; not VNC |
 | then | Bar B B2 | Spare PERC VD persist | after A6; census skip is lab safety |
 | later | Auth / unmodified ISO | A5, Gen-1 Phase 2 | named residuals, not fake closes |
@@ -207,7 +207,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | Field | Value |
 |-------|-------|
 | Commit | m8-gpt-pin-hold |
-| Summary | **Pin-hold lived.** COM2 `d60431ee`: `installed=1` `keep=1` `lba1=pin` `image=DISK-BOOTX64` `BOOTX64.EFI bytes=139264` → GNU GRUB 2.12 `grub>`. Type `normal`. Do not Force Off. Scores held. |
+| Summary | **Wall-cap at `grub>`.** COM2 `d60431ee`: `installed=1` `keep=1` `lba1=pin` `image=DISK-BOOTX64` `BOOTX64.EFI bytes=139264` → GNU GRUB 2.12 `grub>` → `RayNu-F stop wall-cap exits=308551680 wall_ms=180005 blk_rd=33 blk_wr=0` → `product ISO hold`. Will not proceed. Do not curl the `linux_iso` Start. Force Off. Scores held. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Bar A **78% held** / Bar B **18% held** / overall **63% held** / months A **0.75 held**. Console piece **58% held**. A4s not closed. |
 | Gates touched | `fn persist_lun_gpt_pin_valid`. `fn persist_lun_probe_done`. `diskprime lba1=pin`. `./tools/sync-loihda-site.sh --check`. No MegaRAID. Sit at `localhost:~#`. |
@@ -218,7 +218,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
-| 2026-09-22 | m8-gpt-pin-hold | 78 | 18 | **Pin-hold lived on COM2.** `d60431ee` peek `installed=1` `keep=1` `lba1=pin` `BOOTX64` 139264 `image=DISK-BOOTX64` → GRUB 2.12 `grub>`. Not ISO. Not `login:`. Type `normal`. Do not Force Off. Bar A 78 held. |
+| 2026-09-22 | m8-gpt-pin-hold | 78 | 18 | **Wall-cap at `grub>`.** `d60431ee` `DISK-BOOTX64` → GRUB 2.12 `grub>` (keys did not land) → `RayNu-F stop wall-cap exits=308551680 wall_ms=180005 blk_rd=33 blk_wr=0` → `product ISO hold`. Will not proceed. Do not curl `/vms/1/spec/.../linux_iso` then `/vms/1/start`. Force Off. Same EFI repeats. Bar A 78 held. |
+| 2026-09-22 | m8-gpt-pin-hold | 78 | 18 | **Pin-hold lived on COM2.** `d60431ee` peek `installed=1` `keep=1` `lba1=pin` `BOOTX64` 139264 `image=DISK-BOOTX64` → GRUB 2.12 `grub>`. Not ISO. Not `login:`. Type `normal` was the instruction before the wall-cap. Bar A 78 held. |
 | 2026-09-22 | m8-gpt-pin-hold | 78 | 18 | **Public copy.** `site/loi.html` / HDA aside / homepage status now say persist-OK printed on `928d6224`, and NOW is recover `DISK-BOOTX64` then standing SPA. Scores held. Do not F11 `08202468`. Bar A 78 held. |
 | 2026-09-21 | m8-gpt-pin-hold | 78 | 18 | **Hold the peek GPT and skip the ISO.** Lived `08202468` peek `gpt=1` `usb_err=8` then `image=ISO-BOOTX64` / `vda` RCU stall. Do not F11 `08202468`. A4s not closed. Console 58 held. Bar A 78 held. |
 | 2026-09-21 | m8-gpt-pin-stage | 78 | 18 | **Pin peek GPT for RayNu-F stage.** Lived `3b388279` peek keep=1 then `image=test-app` / `product ISO hold`. Do not F11 `3b388279`. A4s not closed. Console 58 held. Bar A 78 held. |
@@ -284,7 +285,7 @@ LOI:           NOT OPEN. Tracker born 2026-09-14.
 Bar A:         78% · 0.75 months · dedicated-box non-prod
 Bar B:         18% · 3.5 months · PERC RAID fleet (out of conversation until PERC persist)
 Overall:       63% · confidence medium
-NOW:           d60431ee at grub> · type normal · then login: · do not setup-disk · do not Force Off
+NOW:           d60431ee wall-cap at grub> · Force Off · do not curl Start · do not setup-disk
 Open:          iron SPA keyboard · iron AUTH-OK · unmodified ISO · cluster · Ubuntu PERC stays standing boot
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
 Sit:           localhost:~# · do not setup-disk · do not flash Toshiba /dev/sdc

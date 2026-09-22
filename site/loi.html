@@ -348,24 +348,26 @@
 
       <section class="section section--hda-com2" id="now">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>NOW · installed GRUB on COM2</p>
-          <h2 class="section__title">The closed disk reached GRUB</h2>
+          <p class="milestone-kicker" data-reveal>NOW · wall-cap at grub&gt;</p>
+          <h2 class="section__title">GRUB stopped at 180 seconds</h2>
           <p class="section__lede">
             EFI <code>d60431ee</code> peeked <code>installed=1</code>, attached
-            the 8 GiB slice <code>keep=1</code>, served
-            <code>diskprime lba1=pin</code>, and launched
+            the 8 GiB slice <code>keep=1</code>, and launched
             <code>image=DISK-BOOTX64</code> (<code>BOOTX64.EFI</code> 139264
-            bytes, ESP at LBA 2048). GNU GRUB 2.12 is sitting at
-            <code>grub&gt;</code>. That is the installed disk, not the live
-            ISO. Linux has not printed <code>login:</code> yet. Type
-            <code>normal</code> on COM2 and leave the menu. Do not Force Off.
-            Do not run <code>setup-disk</code>.
+            bytes). GNU GRUB 2.12 reached <code>grub&gt;</code>. COM2 keys did
+            not land. After <code>wall_ms=180005</code> and
+            <code>exits=308551680</code> the firmware printed
+            <code>RayNu-F stop wall-cap</code> (<code>blk_rd=33</code>
+            <code>blk_wr=0</code>) and then
+            <code>product ISO hold</code>. That hold does not proceed, does
+            not listen, and does not take keys. Force Off. Do not POST
+            <code>/vms/1/start</code>. Do not run <code>setup-disk</code>.
           </p>
           <pre class="ship-code" data-reveal><code>lived:  d60431ee installed=1 keep=1 lba1=pin image=DISK-BOOTX64
-grub:   GNU GRUB 2.12 at grub&gt;   type: normal
-then:   login:   sit there   do not setup-disk
-after:  browser stays on https:// (standing SPA)
-never:  F11 08202468   flash Toshiba /dev/sdc   Force Off at grub&gt;</code></pre>
+stop:   wall-cap exits=308551680 wall_ms=180005 blk_wr=0
+then:   product ISO hold   will not proceed
+now:    Force Off   do not curl Start   do not setup-disk
+never:  F11 08202468   flash Toshiba /dev/sdc</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
             Rollback remains GitHub Latest
             <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed"
