@@ -7403,12 +7403,25 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
     // still holds LBA0–LBA33. Staging the ISO made `vda` I/O errors and
     // an RCU stall, and the auto-answer can wipe the closed install.
     let pin = crate::mgmt::disk_persist::persist_lun_gpt_pin_valid();
-    let disk_has = crate::raynu_f::disk_has_gpt_esp(&DiskFatVol { base: 0 }) || sticky || pin;
+    // Phase 0 fail-safe (iron `15e3d665`): the peek read `EFI PART` at LBA1
+    // but FAT/ext4 and the 34-sector pin store timed out on USB, so pin
+    // and sticky were both false and RayNu-F staged the installer ISO over
+    // the closed install. One good `EFI PART` on a serving LUN is enough
+    // to forbid the ISO for this boot, whatever the other probes said.
+    let iso_forbidden = crate::mgmt::disk_persist::persist_lun_iso_forbidden(
+        crate::mgmt::durable_lun::durable_lun_serving(),
+        crate::mgmt::disk_persist::persist_lun_efi_part_seen(),
+    );
+    let disk_has = crate::raynu_f::disk_has_gpt_esp(&DiskFatVol { base: 0 })
+        || sticky
+        || pin
+        || iso_forbidden;
     let try_disk = crate::raynu_f::raynu_f_boot_source(disk_has)
         == crate::raynu_f::BootSource::Disk
         || crate::devices::guest_virtio_blk::disk_bytes_written() != 0
         || sticky
-        || pin;
+        || pin
+        || iso_forbidden;
     let disk_entry = if try_disk {
         let mut e = None;
         for _ in 0..3 {
@@ -7425,7 +7438,7 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
     // keep=1 BOOTX64 miss; skip ISO (do not wipe persist). Iron b5e290be
     // found DISK BOOTX64 then FAT read failed → image=ISO-BOOTX64; auto-answer
     // setup-disk can wipe the 8 GiB slice.
-    let iso_entry = if disk_entry.is_none() && !sticky && !pin {
+    let iso_entry = if disk_entry.is_none() && !sticky && !pin && !iso_forbidden {
         raynu_f_stage_iso_bootloader(&layout, ram_hpa)
     } else {
         if disk_entry.is_none() && sticky {
@@ -7435,6 +7448,15 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
         } else if disk_entry.is_none() && pin {
             serial::write_line(
                 "boot: WARN GPT pin holds; skip ISO (do not wipe persist)",
+            );
+        } else if disk_entry.is_none() && iso_forbidden {
+            serial::write_line(
+                "boot: WARN LUN saw EFI PART; skip ISO (do not wipe persist)",
+            );
+        }
+        if disk_entry.is_none() {
+            serial::write_line(
+                "boot: HINT — installed LUN unreadable this boot; RayNu-F holds with the SPA alive; Force Off to retry; do not setup-disk",
             );
         }
         None
@@ -13572,6 +13594,9 @@ unsafe fn try_inject_guest_irq() {
         let virtio_need = crate::devices::guest_virtio_blk::virtio_needs_pit_over_uart();
         let probe = crate::devices::guest_virtio_blk::virtio_linux_probe_started();
         let both_ok = crate::devices::guest_virtio_blk::virtio_both_driver_ok();
+        if crate::devices::guest_serial_answer::take_setup_withheld_log() {
+            serial::write_line_nowait(crate::devices::guest_serial_answer::SETUP_WITHHELD_NOTE);
+        }
         if crate::devices::guest_serial_answer::take_media_mounted_log() {
             serial::write_line_nowait(
                 "boot: guest-UEFI linux PIC IRQ11 yield until mount (apk; not ISO-INSTALL-OK)",

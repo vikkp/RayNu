@@ -185,6 +185,7 @@ pub fn reset() {
     HOLD_TSC.store(0, Ordering::Release);
     MOUNT_LOG.store(false, Ordering::Release);
     REBOOT_SENT.store(false, Ordering::Release);
+    SETUP_WITHHELD_LOG.store(false, Ordering::Release);
     // SECOND_BOOT is sticky on UEFI so a uart reset after `begin_second_boot`
     // cannot re-arm SETUP. Host tests start from a clean first-boot flag.
     #[cfg(test)]
@@ -233,6 +234,58 @@ fn is_yes_prompt(win: &[u8], wlen: usize) -> bool {
 fn is_shell_prompt(win: &[u8], wlen: usize) -> bool {
     ends_with(win, wlen, SHELL) || ends_with(win, wlen, SHELL_ROOT)
 }
+
+/// One-shot COM2 note: `SETUP` was withheld by [`setup_wipe_allowed`].
+static SETUP_WITHHELD_LOG: AtomicBool = AtomicBool::new(false);
+
+/// Phase 0 (M8 recovery) wipe policy for the installer auto-answer.
+///
+/// `SETUP` carries `ERASE_DISKS=/dev/vda … setup-disk`. When the virtio
+/// disk is backed by a durable LUN (Toshiba USB / NVMe), that line can
+/// destroy a closed install if RayNu-F staged the ISO on a probe miss
+/// (iron `15e3d665`, `08202468`). Rules:
+///
+/// - No durable LUN serving (leftover DRAM / nested file): allowed, as before.
+/// - LUN serving and any LBA1 read this boot was `EFI PART`: **never**.
+/// - LUN serving, no `EFI PART` seen: only after an explicit SPA Start
+///   (`request_from_spa`), not after the `raynuf.txt` flag file.
+pub fn setup_wipe_allowed(lun_serving: bool, spa_started: bool, efi_part_seen: bool) -> bool {
+    if !lun_serving {
+        return true;
+    }
+    spa_started && !efi_part_seen
+}
+
+fn wipe_allowed_now() -> bool {
+    setup_wipe_allowed(
+        crate::mgmt::durable_lun::durable_lun_serving(),
+        crate::boot::raynu_f_flag::spa_started(),
+        crate::mgmt::disk_persist::persist_lun_efi_part_seen(),
+    )
+}
+
+/// Enqueue `SETUP` if the wipe policy allows; otherwise park in `PHASE_DONE`
+/// and arm the one-shot COM2 note. Returns whether `SETUP` was queued.
+fn enqueue_setup_or_withhold(a: &mut Answer) -> bool {
+    if wipe_allowed_now() {
+        enqueue(a, SETUP);
+        PHASE.store(PHASE_CONFIRM, Ordering::Release);
+        true
+    } else {
+        SETUP_WITHHELD_LOG.store(true, Ordering::Release);
+        PHASE.store(PHASE_DONE, Ordering::Release);
+        false
+    }
+}
+
+/// One-shot: the caller prints the withheld note on COM2.
+pub fn take_setup_withheld_log() -> bool {
+    SETUP_WITHHELD_LOG.swap(false, Ordering::AcqRel)
+}
+
+/// COM2 text for the withheld note.
+pub const SETUP_WITHHELD_NOTE: &str =
+    "boot: auto-answer setup-disk WITHHELD (durable LUN attached; no SPA Start or EFI PART seen; do not wipe persist; not ISO-INSTALL-OK)";
 
 fn enqueue(a: &mut Answer, bytes: &[u8]) {
     for &b in bytes {
@@ -288,16 +341,14 @@ pub fn note_tx(b: u8) {
                 // Stay PHASE_LOGIN so later getty `login:` still matches.
             }
             PHASE_LOGIN if !second && ends_with(&a.win, a.wlen, SHELL) => {
-                enqueue(a, SETUP);
-                PHASE.store(PHASE_CONFIRM, Ordering::Release);
+                enqueue_setup_or_withhold(a);
             }
             PHASE_SHELL if second && is_shell_prompt(&a.win, a.wlen) => {
                 enqueue(a, PROVE);
                 PHASE.store(PHASE_DONE, Ordering::Release);
             }
             PHASE_SHELL if !second && is_shell_prompt(&a.win, a.wlen) => {
-                enqueue(a, SETUP);
-                PHASE.store(PHASE_CONFIRM, Ordering::Release);
+                enqueue_setup_or_withhold(a);
             }
             PHASE_CONFIRM | PHASE_DONE if ends_with(&a.win, a.wlen, PLEASE_REBOOT) => {
                 PHASE.store(PHASE_INSTALLED, Ordering::Release);

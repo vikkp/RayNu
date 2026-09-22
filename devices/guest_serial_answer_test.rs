@@ -1,6 +1,8 @@
 use super::{
-    apk_media_mounted, apk_overlay_needs_pit, apk_packages_overlay_active, begin_second_boot, note_tx, queued, reset, second_boot, take_rx,
-    BOOTLOADER, DISK, GRUB_ENTER, MOUNT_EXIT, NO, PROVE, REBOOT, ROOT, SETUP, SYS, YES,
+    apk_media_mounted, apk_overlay_needs_pit, apk_packages_overlay_active, begin_second_boot,
+    note_tx, queued, reset, second_boot, setup_wipe_allowed, take_rx, take_setup_withheld_log,
+    BOOTLOADER, DISK, GRUB_ENTER, MOUNT_EXIT, NO, PROVE, REBOOT, ROOT, SETUP,
+    SETUP_WITHHELD_NOTE, SYS, YES,
 };
 
 #[test]
@@ -506,4 +508,40 @@ fn never_prints_iso_install_ok() {
     assert!(!s.contains("RAYNU-V-M7-ISO-INSTALL-OK"));
     assert!(s.contains("fn note_tx("));
     let _ = YES;
+}
+
+/// Phase 0 wipe policy (iron `15e3d665`): a durable LUN never gets
+/// `setup-disk` from a flag-file boot, and never once `EFI PART` was read.
+#[test]
+fn setup_wipe_policy_fails_safe_on_a_durable_lun() {
+    // Leftover DRAM / nested file: unchanged.
+    assert!(setup_wipe_allowed(false, false, false));
+    assert!(setup_wipe_allowed(false, true, true));
+    // LUN serving, flag-file boot: withheld.
+    assert!(!setup_wipe_allowed(true, false, false));
+    // LUN serving, explicit SPA Start, blank media: allowed (first install).
+    assert!(setup_wipe_allowed(true, true, false));
+    // LUN serving and EFI PART seen this boot: never, even after Start.
+    assert!(!setup_wipe_allowed(true, true, true));
+    assert!(!setup_wipe_allowed(true, false, true));
+    assert!(SETUP_WITHHELD_NOTE.contains("WITHHELD"));
+    assert!(!SETUP_WITHHELD_NOTE.contains("RAYNU-V-M7-ISO-INSTALL-OK"));
+}
+
+/// Host has no durable LUN, so the live shell still queues SETUP and the
+/// withheld note is not armed.
+#[test]
+fn shell_prompt_still_queues_setup_without_a_lun() {
+    reset();
+    crate::mgmt::durable_lun::durable_lun_clear();
+    for &b in b"localhost:~# " {
+        note_tx(b);
+    }
+    let mut got = Vec::new();
+    while let Some(b) = take_rx() {
+        got.push(b);
+    }
+    assert_eq!(got, SETUP);
+    assert!(!take_setup_withheld_log());
+    reset();
 }

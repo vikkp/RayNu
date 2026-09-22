@@ -13,6 +13,7 @@ pub mod ovmf_esp;
 pub mod pe_assets;
 pub mod raynu_f_flag;
 pub mod serial;
+pub mod usb_soak_flag;
 #[cfg(feature = "uefi-bin")]
 pub mod uefi_alloc;
 

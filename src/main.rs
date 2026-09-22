@@ -193,9 +193,8 @@ fn run_m1_vmx(alloc: &mut memory::FrameAllocator) {
 extern "C" fn resume_e4_shell() -> ! {
     if r640_hypervisor::mgmt::stage46_hold_e4_shell() {
         boot::serial::write_line(r640_hypervisor::mgmt::M7_STAGE46_HOLD_E4_NOTE);
-        loop {
-            core::hint::spin_loop();
-        }
+        // Phase 0: live hold (SPA ticks + heartbeat), not a dead spin.
+        r640_hypervisor::mgmt::stage46_live_hold();
     }
     if r640_hypervisor::mgmt::phase_b_e4_for_spa() {
         boot::serial::write_line(r640_hypervisor::mgmt::M7_PHASE_B_E4_CONTINUE_OK_MARKER);
@@ -243,9 +242,8 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
     }
     if r640_hypervisor::mgmt::stage46_hold_e4_shell() {
         boot::serial::write_line(r640_hypervisor::mgmt::M7_STAGE46_HOLD_E4_NOTE);
-        loop {
-            core::hint::spin_loop();
-        }
+        // Phase 0: live hold (SPA ticks + heartbeat), not a dead spin.
+        r640_hypervisor::mgmt::stage46_live_hold();
     }
     run_m2_ept_launch_e4(alloc, life);
 }

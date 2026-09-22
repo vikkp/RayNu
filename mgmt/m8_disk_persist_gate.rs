@@ -507,11 +507,60 @@ pub fn disk_persist_surface_present() -> bool {
         && !nested.contains("echo \"RAYNU-V-M8-DISK-PERSIST-OK\"")
 }
 
+/// M8 recovery Phase 0/1 (after iron `15e3d665` ISO miss): fail-safe boot
+/// source, wipe policy, time-bounded USB waits with heartbeat, live hold,
+/// xHCI timeout dump, and the `usbsoak.txt` bench are all wired and none
+/// of them mints an iron marker.
+pub fn phase0_failsafe_surface_present() -> bool {
+    let guest = include_str!("../vmx/guest_uefi.rs");
+    let persist = include_str!("disk_persist.rs");
+    let answer = include_str!("../devices/guest_serial_answer.rs");
+    let xhci = include_str!("xhci.rs");
+    let iso = include_str!("iso_install.rs");
+    let flag = include_str!("../boot/raynu_f_flag.rs");
+    let main = include_str!("../src/main.rs");
+    // Fail-safe boot source.
+    persist.contains("fn persist_lun_note_efi_part(")
+        && persist.contains("fn persist_lun_efi_part_seen(")
+        && persist.contains("fn persist_lun_iso_forbidden(")
+        && guest.contains("persist_lun_iso_forbidden(")
+        && guest.contains("LUN saw EFI PART; skip ISO (do not wipe persist)")
+        && guest.contains("installed LUN unreadable this boot")
+        && include_str!("durable_lun.rs").contains("persist_lun_note_efi_part(&sig)")
+        && xhci.contains("persist_lun_note_efi_part(&lba1[..8])")
+        // Wipe policy.
+        && answer.contains("fn setup_wipe_allowed(")
+        && answer.contains("fn enqueue_setup_or_withhold(")
+        && answer.contains("setup-disk WITHHELD")
+        && !answer.contains("=> {\n                enqueue(a, SETUP);")
+        && flag.contains("fn spa_started(")
+        && guest.contains("take_setup_withheld_log()")
+        // Time-bounded waits + heartbeat + dump.
+        && xhci.contains("pub const USB_RW_DEADLINE_MS")
+        && xhci.contains("pub const BOT_SETTLE_MS")
+        && xhci.contains("fn usb_wait_expired(")
+        && xhci.contains("fn xhci_arm_rw_deadline(")
+        && xhci.contains("fn xhci_wait_expired(")
+        && xhci.contains("usb rw waiting ms=")
+        && xhci.contains("fn serial_xhci_timeout_dump(")
+        && xhci.contains("xhci timeout ")
+        && !xhci.contains("if spins > spins_max {\n            store_usb_bot_diag")
+        // Live hold.
+        && iso.contains("pub fn stage46_live_hold() -> !")
+        && iso.contains("Stage 46 hold alive")
+        && main.contains("stage46_live_hold()")
+        && !main.contains("M7_STAGE46_HOLD_E4_NOTE);\n        loop {")
+        // Soak bench.
+        && crate::boot::usb_soak_flag::prop_usb_soak_wired()
+        && !xhci.contains("println!(\"RAYNU-V-M8")
+}
+
 /// Host package: backend choice + leftover fallback + never ISO-INSTALL-OK.
 pub fn run_m8_disk_persist_host_gate() -> bool {
     M8_DISK_PERSIST_GATE_MARKER == "RAYNU-V-M8-DISK-PERSIST-HOST-OK"
         && M8_DISK_PERSIST_OK_MARKER == "RAYNU-V-M8-DISK-PERSIST-OK"
         && host_never_prints_iso_install_ok()
+        && phase0_failsafe_surface_present()
         && select_persist_kind(true, true) == PersistKind::File
         && select_persist_kind(false, true) == PersistKind::DurableLun
         && select_persist_kind(true, false) == PersistKind::LeftoverDram
