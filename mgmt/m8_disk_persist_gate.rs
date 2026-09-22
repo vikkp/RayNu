@@ -282,7 +282,7 @@ pub fn disk_persist_surface_present() -> bool {
         && include_str!("disk_persist.rs").contains("fn persist_lun_gpt_pin_valid(")
         && include_str!("disk_persist.rs").contains("fn persist_lun_probe_done(")
         && include_str!("../devices/guest_virtio_blk.rs").contains("persist_lun_gpt_pin_read")
-        && include_str!("xhci.rs").contains("diskprime lba1=pin")
+        && include_str!("xhci.rs").contains("diskprime lba1=pin warm=1")
         && include_str!("durable_lun.rs").contains("persist_lun_probe_done")
         && include_str!("durable_lun.rs").contains("fn durable_lun_diskprime(")
         && attach.contains("durable_lun_diskprime")
