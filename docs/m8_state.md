@@ -1,7 +1,7 @@
 # M8 state — START HERE (persist / LOI Bar A recovery)
 
 > **Read this before touching `mgmt/xhci.rs`, `mgmt/durable_lun.rs`, `mgmt/disk_persist.rs`, `vmx/guest_uefi.rs` (RayNu-F boot source), or the trackers.**  
-> Last rewrite: 2026-09-22 (Phase 0 EFI `5c32bd06` lived: soak flag seen, USB never enumerated, RAM install reached `login:`). Trackers: [`hda.md`](hda.md) (Everest, closed) · [`loihda.md`](loihda.md) (LOI, open). Plan: [`m8_plan.md`](m8_plan.md). ADR: [ADR-018](adr/ADR-018.md). Evidence: [`2026-09-22-5c32bd06-soak-enum-timeout.md`](evidence/r640/2026-09-22-5c32bd06-soak-enum-timeout.md).
+> Last rewrite: 2026-09-22 (Phase 0 EFI `5c32bd06` lived: soak flag seen, USB never enumerated, RAM install reached `login:`; enumeration fix + soak halt built, **not yet lived**). Trackers: [`hda.md`](hda.md) (Everest, closed) · [`loihda.md`](loihda.md) (LOI, open). Plan: [`m8_plan.md`](m8_plan.md). ADR: [ADR-018](adr/ADR-018.md). Evidence: [`2026-09-22-5c32bd06-soak-enum-timeout.md`](evidence/r640/2026-09-22-5c32bd06-soak-enum-timeout.md).
 
 ## One paragraph
 
@@ -51,7 +51,20 @@ Every EFI after `928d6224` is a **prototype**. Do not treat a later tip as known
 | Guest-path USB waits bounded by **time** (8 s/attempt), settle 2 s, heartbeat every 2 s; GRUB gets `EFI_DEVICE_ERROR` instead of a frozen box | `xhci.rs` `USB_RW_DEADLINE_MS`, `BOT_SETTLE_MS`, `xhci_wait_expired` | `durable LUN usb rw waiting ms=N of 8000 bot=…` |
 | Stage 46 hold is live: coexist SPA ticks, heartbeat every 60 s | `iso_install::stage46_live_hold` | `Stage 46 hold alive t_s=N (SPA ticking …)` |
 
-### Phase 1 — make USB deterministic from evidence (bench in this EFI; driver fix after)
+### Phase 1a — enumeration (built after `5c32bd06`; **not yet lived**)
+
+`5c32bd06` COM2, read closely: the No-Op posted, three Enable Slots posted, the p14 hub's Address Device and GET_DESCRIPTOR posted. The only commands that never posted were **SET_ADDRESS on the two external HS devices** (Toshiba p11, UDisk p10). Two spec gaps fit that exactly and are fixed in this EFI:
+
+| Gap | Fix | COM2 line |
+|-----|-----|-----------|
+| `reset_port` returned the instant PED=1 and Address Device went on the wire microseconds later. USB 2.0 §9.2.6.2 says no request for 10 ms after reset (TRSTRCY); Linux waits 50 ms. A device still in recovery NAKs the STATUS stage and the xHC retries NAKs forever = `cmd=3 cmpl=0xff`. The hub is a different silicon and happened to be ready. | `USB_PORT_RESET_RECOVERY_MS = 50` after every port reset and before the Address Device retry; 1 ms after HCRST (Intel). | none (silent) |
+| `handshake_legacy` set OS-owned and hoped. It never disabled BIOS SMIs in USBLEGCTLSTS, never forced a BIOS that keeps the controller, and RayNu-V writes the PCI command register (an SMI source) before the handoff. Dell legacy USB (iDRAC keyboard behind the p14 hub) can keep driving the controller from SMM. | Force ownership after the wait; clear every SMI enable; ack pending SMI events (same mask as Linux `quirk_usb_handoff_xhci`). | `xhci legacy pre sup=0x… ctl=0x… -> sup=0x… ctl=0x… forced=0/1` and `xhci legacy post …` |
+| A command timeout printed only `cmpl=0xff`. | `xhci cmd timeout nop/slot/addr/addr2 p… cmd= sts= crcr= iman= erdp= cmdenq= cmdcyc= evdeq= evcyc= evtrb= portsc= pmsc= slotst= ep0st= ep0deq=` before every abort. | that line |
+| A soak boot whose USB failed to enumerate fell through to the ISO on leftover DRAM and printed a RAM `login:`. | `usbsoak.txt` + enumeration failure → `USBSOAK abort — USB enumeration failed err=N` and halt. No guest. | that line, then `USBSOAK halt alive` |
+
+Reading the next `xhci cmd timeout addr` line if it still appears: `sts` bit 12 (HCE) or bit 2 (HSE) set = the controller stopped; `iman` bit 0 set with `evtrb` cycle ≠ `evcyc` = an event was posted that we are not seeing; `slotst=1` (Enabled) with `ep0st=0` = the xHC never ran the command; `slotst=2` (Default) with `ep0st=1` (Running) = SET_ADDRESS is on the wire and the device is NAKing; `portsc` PLS ≠ 0 = the link left U0 mid-command. `ctl` on the `legacy pre` line with bit 0 / 13 / 14 / 15 set = the BIOS had SMIs armed on this controller.
+
+### Phase 1b — make USB deterministic from evidence (bench in this EFI; driver fix after)
 
 | Change | Where | COM2 line |
 |--------|-------|-----------|
@@ -72,10 +85,11 @@ PERC H740P = MegaRAID SAS 3.5 (MPT3 Fusion) post-EBS driver on a **spare** VD (n
 
 ## Next iron step (operator)
 
-1. **Force Off** the live `localhost:~#`. It is the 1 GiB RAM disk from this boot (`vda` = 2097152 sectors, UUID `4c27e121`). It is not the Toshiba. Do not open Firefox. Do not stay for A4s.
-2. Leave `usbsoak.txt` on the Cruzer. **Do not F11 `5c32bd06` again.** The soak never starts unless `usb I/O ready` prints, and this boot dies at Address Device and then launches the RAM installer.
-3. Next EFI (not this one): on `usbsoak.txt`, an Address Device timeout must dump the controller and **halt**. No guest, no ISO, no `setup-disk`.
-4. Do not curl `POST /vms/1/start`. Do not run `setup-disk`. Do not flash Toshiba `/dev/sdc`. Do not F11 any EFI in the prototype table above.
+1. **Force Off** the live `localhost:~#` if it is still up. It is the 1 GiB RAM disk from `5c32bd06` (`vda` = 2097152 sectors, UUID `4c27e121`). It is not the Toshiba. Tell: the Toshiba slice is `[vda] 16777216 512-byte logical blocks (8.59 GB/8.00 GiB)`; RAM is `2097152 … 1.00 GiB`.
+2. Flash this branch's EFI (`flashcruzer.sh --branch cursor/m8-phase0-failsafe-8366 --wait --any-cruzer-usb --allow-new-serial --raynu-f --linux-iso …`). Never `--init-new-cruzer`. Never Toshiba `/dev/sdc`. **Leave `usbsoak.txt` on the Cruzer** (it is still there).
+3. **Boot 1 — soak:** F11. Expect `xhci legacy pre …` and `xhci legacy post …` (paste both), then either `usb I/O ready` → `USBSOAK gap_s=…` ×4 → `RAYNU-V-USBSOAK-DONE` (~17 min), **or** `xhci cmd timeout addr …` → `USBSOAK abort — USB enumeration failed` → halt. Either way no guest runs. Paste the whole COM2.
+4. **Boot 2 — product path:** only after boot 1 printed `RAYNU-V-USBSOAK-DONE`. Remove `usbsoak.txt`. Expect the installed menu → `login:` with `[vda] 16777216` (sit there; A4s Firefox), or `WARN LUN saw EFI PART; skip ISO` → `Stage 46 hold alive`. **No** `image=ISO-BOOTX64` on the Toshiba.
+5. Do not curl `POST /vms/1/start`. Do not run `setup-disk`. Do not F11 any EFI in the prototype table above.
 
 ## Rules that stay true
 
