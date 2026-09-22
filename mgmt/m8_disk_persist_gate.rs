@@ -555,6 +555,32 @@ pub fn phase0_failsafe_surface_present() -> bool {
         // Soak bench.
         && crate::boot::usb_soak_flag::prop_usb_soak_wired()
         && !xhci.contains("println!(\"RAYNU-V-M8")
+        && usb_enum_evidence_surface_present()
+}
+
+/// After iron `5c32bd06` (soak flag seen, Address Device `cmpl=0xff` on
+/// p11 and p10, RAM `login:`): the legacy handoff disables BIOS SMIs and
+/// forces ownership, port reset honours TRSTRCY, every enumeration command
+/// timeout dumps controller state, and a soak boot halts on enumeration
+/// failure instead of launching a guest.
+pub fn usb_enum_evidence_surface_present() -> bool {
+    let xhci = include_str!("xhci.rs");
+    let lun = include_str!("durable_lun.rs");
+    xhci.contains("fn legctlsts_disable_smi(")
+        && xhci.contains("fn legsup_force_os_owned(")
+        && xhci.contains("pub const USBLEGCTLSTS_SMI_ENABLES")
+        && xhci.contains("hw.write32(xecp + USBLEGCTLSTS_OFF, legctlsts_disable_smi(ctl));")
+        && xhci.contains("pub const USB_PORT_RESET_RECOVERY_MS: u64 = 50;")
+        && xhci.contains("xhci_delay_ms(USB_PORT_RESET_RECOVERY_MS);")
+        && xhci.contains("xhci_delay_ms(XHCI_INTEL_HCRST_DELAY_MS);")
+        && xhci.contains("fn serial_xhci_cmd_timeout_dump(")
+        && xhci.contains("xhci cmd timeout ")
+        && xhci.contains("serial_xhci_cmd_timeout_dump(hw, caps, mem, cmd_ring, ev, port, \"addr\");")
+        && xhci.contains("serial_xhci_cmd_timeout_dump(hw, caps, mem, cmd_ring, ev, 0, \"nop\");")
+        && xhci.contains("xhci legacy ")
+        && xhci.contains("pub fn xhci_usb_soak_halt_enum_fail(err: u8) -> !")
+        && lun.contains("xhci_usb_soak_halt_enum_fail(")
+        && !xhci.contains("USBSOAK abort — USB enumeration failed err=\");\n    serial::write_line(USB_SOAK_DONE_MARKER)")
 }
 
 /// Host package: backend choice + leftover fallback + never ISO-INSTALL-OK.

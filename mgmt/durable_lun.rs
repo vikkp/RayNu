@@ -847,6 +847,12 @@ pub fn init_durable_lun_usb_io() {
                     serial::write_str("boot: Stage 46 durable LUN ");
                     serial::write_str(DURABLE_LUN_NEED_MEDIA_NOTE);
                     serial::write_line(" (not ISO-INSTALL-OK)");
+                    // Phase 1 bench: a soak boot never falls through to a guest.
+                    if crate::boot::usb_soak_flag::requested() {
+                        crate::mgmt::xhci::xhci_usb_soak_halt_enum_fail(
+                            crate::mgmt::usb_bot::usb_bot_last_err(),
+                        );
+                    }
                 }
             }
         }

@@ -228,6 +228,50 @@ pub const USB_DID_TOSHIBA_LUN: u16 = 0xa004;
 pub const USBLEGSUP_ID: u8 = 1;
 pub const USBLEGSUP_BIOS_OWNED: u32 = 1 << 16;
 pub const USBLEGSUP_OS_OWNED: u32 = 1 << 24;
+/// USBLEGCTLSTS = USBLEGSUP + 4 (xHCI 1.2 §7.1.2). SMI enables: bit 0 USB
+/// SMI Enable, bit 4 SMI on Host System Error, bit 13 SMI on OS Ownership,
+/// bit 14 SMI on PCI Command, bit 15 SMI on BAR. Bits 29–31 are RW1C SMI
+/// events. Iron `5c32bd06`: only the two external HS devices lost
+/// SET_ADDRESS while the iDRAC hub on p14 (legacy keyboard path) enumerated;
+/// BIOS SMM keeps servicing the controller unless these are cleared.
+pub const USBLEGCTLSTS_OFF: u32 = 4;
+pub const USBLEGCTLSTS_KEEP: u32 = (0x7 << 1) | (0xff << 5) | (0x7 << 17);
+pub const USBLEGCTLSTS_SMI_ENABLES: u32 = 1 | (1 << 4) | (1 << 13) | (1 << 14) | (1 << 15);
+pub const USBLEGCTLSTS_SMI_EVENTS: u32 = 0x7 << 29;
+
+/// USBLEGCTLSTS value that disables every BIOS SMI source and acknowledges
+/// the pending RW1C events (same mask Linux `quirk_usb_handoff_xhci` uses).
+pub fn legctlsts_disable_smi(val: u32) -> u32 {
+    (val & USBLEGCTLSTS_KEEP) | USBLEGCTLSTS_SMI_EVENTS
+}
+
+/// USBLEGSUP with BIOS Owned forced clear and OS Owned set — used when the
+/// BIOS never released within the wait (Linux does the same after 1 s).
+pub fn legsup_force_os_owned(val: u32) -> u32 {
+    (val & !USBLEGSUP_BIOS_OWNED) | USBLEGSUP_OS_OWNED
+}
+
+/// Legacy handoff outcome for the COM2 line (`xhci legacy …`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct LegacyHandoff {
+    pub found: bool,
+    pub sup_before: u32,
+    pub ctl_before: u32,
+    pub sup_after: u32,
+    pub ctl_after: u32,
+    pub forced: bool,
+}
+
+/// USB 2.0 §9.2.6.2 TRSTRCY: after a port reset completes, no request may be
+/// sent to the device for 10 ms. Linux `hub_port_finish_reset` waits 10+40 ms.
+/// Iron `5c32bd06`: Address Device (SET_ADDRESS) followed PED=1 by
+/// microseconds and never posted on p11 and p10, while the p14 hub posted.
+/// A device still in reset recovery NAKs the STATUS stage and the xHC
+/// retries NAKs forever — that is `cmd=3 cmpl=0xff`.
+pub const USB_PORT_RESET_RECOVERY_MS: u64 = 50;
+/// Intel xHCI: wait 1 ms after setting HCRST before touching any register
+/// (Linux `XHCI_INTEL_HOST` in `xhci_reset`).
+pub const XHCI_INTEL_HCRST_DELAY_MS: u64 = 1;
 
 /// HCSPARAMS2 Max Scratchpad Bufs = Hi[25:21] << 5 | Lo[31:27].
 pub fn xhci_scratchpad_bufs(hcs2: u32) -> u32 {
@@ -1154,7 +1198,13 @@ fn maybe_tick_spa_during_usb(spins: u32) {
     }
 }
 
-fn handshake_legacy(hw: &mut impl XhciHw) {
+/// xHCI §4.22.1 BIOS→OS handoff: request OS ownership, wait for the BIOS to
+/// release, force it if it never does, then disable every BIOS SMI source
+/// and acknowledge pending SMI events (USBLEGCTLSTS). Without the last step
+/// the BIOS SMM USB driver keeps getting SMIs for our events and PCI writes
+/// and can keep driving a controller we think we own.
+fn handshake_legacy(hw: &mut impl XhciHw) -> LegacyHandoff {
+    let mut out = LegacyHandoff::default();
     let hcc1 = hw.read32(0x10);
     let mut xecp = ((hcc1 >> 16) & 0xFFFF) * 4;
     for _ in 0..32 {
@@ -1163,13 +1213,27 @@ fn handshake_legacy(hw: &mut impl XhciHw) {
         }
         let cap = hw.read32(xecp);
         if cap as u8 == USBLEGSUP_ID {
+            out.found = true;
+            out.sup_before = cap;
+            out.ctl_before = hw.read32(xecp + USBLEGCTLSTS_OFF);
             hw.write32(xecp, cap | USBLEGSUP_OS_OWNED);
+            let mut released = false;
             for _ in 0..SPINS {
                 if hw.read32(xecp) & USBLEGSUP_BIOS_OWNED == 0 {
+                    released = true;
                     break;
                 }
             }
-            return;
+            if !released {
+                out.forced = true;
+                let cur = hw.read32(xecp);
+                hw.write32(xecp, legsup_force_os_owned(cur));
+            }
+            let ctl = hw.read32(xecp + USBLEGCTLSTS_OFF);
+            hw.write32(xecp + USBLEGCTLSTS_OFF, legctlsts_disable_smi(ctl));
+            out.sup_after = hw.read32(xecp);
+            out.ctl_after = hw.read32(xecp + USBLEGCTLSTS_OFF);
+            return out;
         }
         let next = ((cap >> 8) & 0xFF) * 4;
         if next == 0 {
@@ -1177,7 +1241,21 @@ fn handshake_legacy(hw: &mut impl XhciHw) {
         }
         xecp = xecp.saturating_add(next);
     }
+    out
 }
+
+/// Busy-wait `ms` on the TSC (post-EBS; no firmware Stall). Host tests: no-op.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn xhci_delay_ms(ms: u64) {
+    let start = crate::arch::cpu::rdtsc();
+    let ticks = usb_tsc_ticks_for_ms(xhci_tsc_hz(), ms);
+    while crate::arch::cpu::rdtsc().wrapping_sub(start) < ticks {
+        core::hint::spin_loop();
+    }
+}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn xhci_delay_ms(_ms: u64) {}
 
 /// xHCI §7.2 USB Supported Protocol: DWORD0 = ID/next/minor/major,
 /// DWORD2 = Compatible Port Offset (7:0) + Count (15:8).
@@ -1443,6 +1521,107 @@ fn serial_xhci_nop() {
 fn serial_xhci_nopretry() {
     use crate::boot::serial;
     serial::write_line("boot: Stage 46 xhci nopretry (not ISO-INSTALL-OK)");
+}
+
+/// One line per handoff: USBLEGSUP / USBLEGCTLSTS before and after, and
+/// whether BIOS ownership had to be forced. `none` = no USBLEGSUP cap.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_legacy(tag: &str, h: LegacyHandoff) {
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 xhci legacy ");
+    serial::write_str(tag);
+    if !h.found {
+        serial::write_line(" none (not ISO-INSTALL-OK)");
+        return;
+    }
+    serial::write_str(" sup=0x");
+    serial_hex32(h.sup_before);
+    serial::write_str(" ctl=0x");
+    serial_hex32(h.ctl_before);
+    serial::write_str(" -> sup=0x");
+    serial_hex32(h.sup_after);
+    serial::write_str(" ctl=0x");
+    serial_hex32(h.ctl_after);
+    serial::write_str(" forced=");
+    serial_dec_u8(u8::from(h.forced));
+    serial::write_line(" (not ISO-INSTALL-OK)");
+}
+
+/// Controller / ring / context snapshot when an enumeration **command**
+/// never posted (`cmpl=0xff`). Blocking serial: no guest is running.
+/// `sts` bit 2 HSE / bit 12 HCE say the xHC stopped; `iman` bit 0 IP says
+/// an event was posted; `evtrb` cycle vs `evcyc` says whether it sits at
+/// our dequeue with the wrong cycle; `slot`/`ep0st` from the output
+/// context say whether Address Device ever ran; PORTSC says whether the
+/// port dropped out of U0 while SET_ADDRESS was on the wire.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_cmd_timeout_dump(
+    hw: &mut impl XhciHw,
+    caps: &XhciCaps,
+    mem: &XhciMem,
+    cmd_ring: &Ring,
+    ev: &EventRing,
+    port: u8,
+    tag: &str,
+) {
+    use crate::boot::serial;
+    let op = caps.op;
+    let rt = caps.rt;
+    let usbcmd = hw.read32(op);
+    let usbsts = hw.read32(op + 0x04);
+    let crcr = read64(hw, op + 0x18);
+    let iman = hw.read32(rt + 0x20);
+    let erdp = read64(hw, rt + 0x38);
+    let psc = portsc_off(op, port);
+    let portsc = hw.read32(psc);
+    let portpmsc = hw.read32(psc + 4);
+    let ev_trb = read_trb(hw, ev.base, ev.deq);
+    let ev_ctrl = get_u32(&ev_trb, 12);
+    let ev_status = get_u32(&ev_trb, 8);
+    let mut outctx = [0u8; 256];
+    hw.dma_read(mem.devctx, &mut outctx);
+    let cs = ctx_size(caps.csz);
+    let slot_dw3 = get_u32(&outctx, 12);
+    let ep0_off = output_ep_ctx_off(cs, XHCI_EP0_DCI).min(outctx.len() - 16);
+    let ep0_dw0 = get_u32(&outctx, ep0_off);
+    let ep0_deq = get_u64(&outctx, ep0_off + 8);
+    serial::write_str("boot: Stage 46 xhci cmd timeout ");
+    serial::write_str(tag);
+    serial::write_str(" p");
+    serial_dec_u8(port);
+    serial::write_str(" cmd=0x");
+    serial_hex32(usbcmd);
+    serial::write_str(" sts=0x");
+    serial_hex32(usbsts);
+    serial::write_str(" crcr=0x");
+    serial_hex64(crcr);
+    serial::write_str(" iman=0x");
+    serial_hex32(iman);
+    serial::write_str(" erdp=0x");
+    serial_hex64(erdp);
+    serial::write_str(" cmdenq=");
+    serial_dec_u32(u32::from(cmd_ring.enq));
+    serial::write_str(" cmdcyc=");
+    serial_dec_u32(cmd_ring.cycle & 1);
+    serial::write_str(" evdeq=");
+    serial_dec_u32(u32::from(ev.deq));
+    serial::write_str(" evcyc=");
+    serial_dec_u32(ev.cycle & 1);
+    serial::write_str(" evtrb=0x");
+    serial_hex32(ev_ctrl);
+    serial::write_str("/0x");
+    serial_hex32(ev_status);
+    serial::write_str(" portsc=0x");
+    serial_hex32(portsc);
+    serial::write_str(" pmsc=0x");
+    serial_hex32(portpmsc);
+    serial::write_str(" slotst=");
+    serial_dec_u8(((slot_dw3 >> 27) & 0x1F) as u8);
+    serial::write_str(" ep0st=");
+    serial_dec_u8(ep_ctx_state(ep0_dw0));
+    serial::write_str(" ep0deq=0x");
+    serial_hex64(ep0_deq);
+    serial::write_line(" (not ISO-INSTALL-OK)");
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
@@ -1768,6 +1947,19 @@ fn serial_xhci_nop() {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_nopretry() {}
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_legacy(_tag: &str, _h: LegacyHandoff) {}
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_cmd_timeout_dump(
+    _hw: &mut impl XhciHw,
+    _caps: &XhciCaps,
+    _mem: &XhciMem,
+    _cmd_ring: &Ring,
+    _ev: &EventRing,
+    _port: u8,
+    _tag: &str,
+) {
+}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_addrretry(_port: u8) {}
@@ -2242,6 +2434,7 @@ fn prime_cmd_ring(
     hold_bot_diag(|| {
         let extra = trb_ctrl(0, TRB_NO_OP_CMD, 0);
         if cmd_wait(hw, caps, cmd_ring, ev, 0, extra, ADDR_SPINS).is_err() {
+            serial_xhci_cmd_timeout_dump(hw, caps, mem, cmd_ring, ev, 0, "nop");
             recover_enum(hw, caps, mem, cmd_ring, ev, 0);
             serial_xhci_nopretry();
             let _ = cmd_wait(hw, caps, cmd_ring, ev, 0, extra, ADDR_SPINS);
@@ -2264,9 +2457,11 @@ fn enable_slot(
     match cmd_wait(hw, caps, cmd_ring, ev, 0, extra, ADDR_SPINS) {
         Ok(ev_en) => Ok(ev_en),
         Err(_) => {
+            serial_xhci_cmd_timeout_dump(hw, caps, mem, cmd_ring, ev, port, "slot");
             recover_enum(hw, caps, mem, cmd_ring, ev, 0);
             serial_xhci_slotretry(port);
             cmd_wait(hw, caps, cmd_ring, ev, 0, extra, ADDR_SPINS).map_err(|e2| {
+                serial_xhci_cmd_timeout_dump(hw, caps, mem, cmd_ring, ev, port, "slot2");
                 recover_enum(hw, caps, mem, cmd_ring, ev, 0);
                 e2
             })
@@ -2404,12 +2599,18 @@ fn address_device(
     match issue_address_device(hw, caps, mem, cmd_ring, ev, port, slot, speed) {
         Ok(()) => Ok(()),
         Err(e) => {
+            serial_xhci_cmd_timeout_dump(hw, caps, mem, cmd_ring, ev, port, "addr");
             abort_keep_slot(hw, caps, mem, cmd_ring, ev);
             if !xhci_retry_address_device(false) {
                 return Err(stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_ADDR, e));
             }
+            // Iron `5c32bd06`: the retry followed the abort by microseconds
+            // and timed out the same way. Give the device its recovery
+            // interval again before the second SET_ADDRESS.
+            xhci_delay_ms(USB_PORT_RESET_RECOVERY_MS);
             serial_xhci_addrretry(port);
             issue_address_device(hw, caps, mem, cmd_ring, ev, port, slot, speed).map_err(|e2| {
+                serial_xhci_cmd_timeout_dump(hw, caps, mem, cmd_ring, ev, port, "addr2");
                 abort_keep_slot(hw, caps, mem, cmd_ring, ev);
                 stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_ADDR, e2)
             })
@@ -2529,7 +2730,7 @@ fn xhci_start(
     hw: &mut impl XhciHw,
     mem: &XhciMem,
 ) -> Result<(XhciCaps, Ring, EventRing), UsbBotError> {
-    handshake_legacy(hw);
+    serial_xhci_legacy("pre", handshake_legacy(hw));
     let snap = xhci_read_cap_snap(hw);
     store_usb_bot_diag(
         UsbBotError::Cap,
@@ -2554,6 +2755,7 @@ fn xhci_start(
         }
     }
     hw.write32(usbcmd, USBCMD_HCRST);
+    xhci_delay_ms(XHCI_INTEL_HCRST_DELAY_MS);
     if !wait_clear(hw, usbcmd, USBCMD_HCRST) {
         return Err(UsbBotError::Reset);
     }
@@ -2561,7 +2763,7 @@ fn xhci_start(
         return Err(UsbBotError::Reset);
     }
     serial_xhci_hcrst();
-    handshake_legacy(hw);
+    serial_xhci_legacy("post", handshake_legacy(hw));
     let slots = xhci_config_slots(caps.max_slots);
     hw.write32(caps.op + 0x38, u32::from(slots));
     zero_page(hw, mem.dcbaa);
@@ -2730,6 +2932,8 @@ fn reset_port(hw: &mut impl XhciHw, caps: &XhciCaps, port: u8) -> Result<u32, Us
         );
         return Err(UsbBotError::Reset);
     }
+    // TRSTRCY: the device may not be addressed for 10 ms after reset.
+    xhci_delay_ms(USB_PORT_RESET_RECOVERY_MS);
     sc = hw.read32(off);
     store_usb_bot_diag_unless_kept(
         UsbBotError::Reset,
@@ -4355,6 +4559,28 @@ pub fn xhci_usb_soak() -> ! {
     serial_dec_u32(total_fail);
     serial::write_line(" (not ISO-INSTALL-OK)");
     serial::write_line(USB_SOAK_DONE_MARKER);
+    usb_soak_halt(hz)
+}
+
+/// Soak boot whose USB never enumerated (iron `5c32bd06`: Address Device
+/// `cmd=3 cmpl=0xff` on p11 and p10, then the boot fell through to the ISO
+/// on leftover DRAM and printed a RAM `login:`). With `usbsoak.txt` set,
+/// halt here instead: no guest, no ISO, no `setup-disk`. Does **not** print
+/// [`USB_SOAK_DONE_MARKER`] — nothing was soaked.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+pub fn xhci_usb_soak_halt_enum_fail(err: u8) -> ! {
+    use crate::boot::serial;
+    serial::write_str("boot: USBSOAK abort — USB enumeration failed err=");
+    serial_dec_u8(err);
+    serial::write_line(
+        "; no guest this boot; read the xhci legacy / cmd timeout lines above (not ISO-INSTALL-OK)",
+    );
+    usb_soak_halt(xhci_tsc_hz())
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn usb_soak_halt(hz: u64) -> ! {
+    use crate::boot::serial;
     serial::write_line("boot: USBSOAK halt — Force Off when done reading COM2 (not ISO-INSTALL-OK)");
     let mut last = crate::arch::cpu::rdtsc();
     let beat = usb_tsc_ticks_for_ms(hz, 60_000);
@@ -4851,8 +5077,85 @@ mod xhci_pack_test {
             hcc1: (0x20 / 4) << 16,
             leg: u32::from(USBLEGSUP_ID) | USBLEGSUP_BIOS_OWNED,
         };
-        handshake_legacy(&mut hw);
+        let h = handshake_legacy(&mut hw);
         assert_ne!(hw.leg & USBLEGSUP_OS_OWNED, 0);
+        assert!(h.found);
+        assert!(!h.forced);
+    }
+
+    /// Iron `5c32bd06`: BIOS SMIs were never disabled and a BIOS that keeps
+    /// the controller was never forced out. xHCI §4.22.1 / §7.1.2.
+    #[test]
+    fn legacy_handoff_disables_bios_smis_and_forces_a_stubborn_bios() {
+        struct StubbornBios {
+            sup: u32,
+            ctl: u32,
+        }
+        impl XhciHw for StubbornBios {
+            fn read32(&mut self, off: u32) -> u32 {
+                match off {
+                    0x10 => (0x20 / 4) << 16,
+                    0x20 => self.sup,
+                    0x24 => self.ctl,
+                    _ => 0,
+                }
+            }
+            fn write32(&mut self, off: u32, val: u32) {
+                match off {
+                    // The BIOS never clears its own bit; only an explicit
+                    // write with bit 16 = 0 (the forced handoff) clears it.
+                    0x20 => self.sup = val,
+                    // RW1C event bits: writing 1 clears them.
+                    0x24 => {
+                        let events = self.ctl & USBLEGCTLSTS_SMI_EVENTS & !val;
+                        self.ctl = (val & !USBLEGCTLSTS_SMI_EVENTS) | events;
+                    }
+                    _ => {}
+                }
+            }
+            fn dma_read(&mut self, _hpa: u64, buf: &mut [u8]) {
+                buf.fill(0);
+            }
+            fn dma_write(&mut self, _hpa: u64, _buf: &[u8]) {}
+        }
+        // BIOS owned; every SMI source enabled; two events pending;
+        // a reserved bit set that must survive.
+        let reserved = 1 << 7;
+        let mut hw = StubbornBios {
+            sup: u32::from(USBLEGSUP_ID) | USBLEGSUP_BIOS_OWNED,
+            ctl: USBLEGCTLSTS_SMI_ENABLES | (1 << 29) | (1 << 31) | reserved,
+        };
+        let h = handshake_legacy(&mut hw);
+        assert!(h.found);
+        assert!(h.forced, "BIOS never released; ownership must be forced");
+        assert_eq!(hw.sup & USBLEGSUP_BIOS_OWNED, 0);
+        assert_ne!(hw.sup & USBLEGSUP_OS_OWNED, 0);
+        assert_eq!(hw.ctl & USBLEGCTLSTS_SMI_ENABLES, 0, "all BIOS SMIs off");
+        assert_eq!(hw.ctl & USBLEGCTLSTS_SMI_EVENTS, 0, "pending SMI events acked");
+        assert_ne!(hw.ctl & reserved, 0, "reserved bits preserved");
+        assert_eq!(h.sup_after, hw.sup);
+        assert_eq!(h.ctl_after, hw.ctl);
+
+        // Pure masks (Linux quirk_usb_handoff_xhci equivalents).
+        assert_eq!(legctlsts_disable_smi(0xFFFF_FFFF) & USBLEGCTLSTS_SMI_ENABLES, 0);
+        assert_eq!(
+            legctlsts_disable_smi(0) & USBLEGCTLSTS_SMI_EVENTS,
+            USBLEGCTLSTS_SMI_EVENTS
+        );
+        assert_eq!(USBLEGCTLSTS_KEEP & USBLEGCTLSTS_SMI_ENABLES, 0);
+        assert_eq!(USBLEGCTLSTS_KEEP & USBLEGCTLSTS_SMI_EVENTS, 0);
+        let forced = legsup_force_os_owned(u32::from(USBLEGSUP_ID) | USBLEGSUP_BIOS_OWNED);
+        assert_eq!(forced & USBLEGSUP_BIOS_OWNED, 0);
+        assert_ne!(forced & USBLEGSUP_OS_OWNED, 0);
+        assert_eq!(forced as u8, USBLEGSUP_ID);
+
+        // USB 2.0 §9.2.6.2 TRSTRCY is 10 ms; Linux uses 50. Intel HCRST 1 ms.
+        assert!(USB_PORT_RESET_RECOVERY_MS >= 10);
+        assert_eq!(USB_PORT_RESET_RECOVERY_MS, 50);
+        assert_eq!(XHCI_INTEL_HCRST_DELAY_MS, 1);
+        // Recovery delays must stay far under the RayNu-F wall cap even for
+        // 26 ports and two Address Device attempts each.
+        assert!(26 * 2 * USB_PORT_RESET_RECOVERY_MS < 10_000);
     }
 
     #[test]
