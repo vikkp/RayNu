@@ -44,7 +44,7 @@ Lived: [`docs/progress.md`](progress.md) · M8: [`docs/m8_plan.md`](m8_plan.md) 
 | Metric | Value | Meaning |
 |--------|------:|---------|
 | **Overall LOI readiness** | **63%** | Nearest honest conversation is Bar A. Not Bar B. Not GA. |
-| **Bar A — dedicated-box** | **78%** | One PowerEdge we own or they dedicate. Disk survive HV reboot is evidence-closed. SKU card names ships vs does-not. **A4 TLS iron CLOSED** (`RAYNU-V-M8-TLS-OK`). **Standing SPA is NOW** (HTTPS during RayNu-F, firmware-in-tree). Host auth HostReady; iron still lab latch. Firmware SPA keys + guest log in-tree; iron CONSOLE-OK is typing from the SPA. |
+| **Bar A — dedicated-box** | **78%** | One PowerEdge we own or they dedicate. Disk survive HV reboot is evidence-closed. SKU card names ships vs does-not. **A4 TLS iron CLOSED** (`RAYNU-V-M8-TLS-OK`). **NOW** is the installed GRUB menu: `28cd4ff1` printed `warm=1` and still stopped at `grub>`. Standing SPA stays firmware until `login:`. Host auth HostReady; iron still lab latch. Firmware SPA keys + guest log in-tree; iron CONSOLE-OK is typing from the SPA. |
 | **Bar B — RAID-fleet** | **18%** | Replace the licensed hypervisor on PERC virtual disks they already paid for. |
 | **Months to Bar A** | **0.75** | Baseline 2026-09-14. ETA **2026-10**. Shrink only with DONE evidence. |
 | **Months to Bar B** | **3.5** | PERC I/O is the long pole. ETA **2026-12**. |
@@ -90,11 +90,11 @@ All must be true:
 | A2 | **Persist across HV reboot** | Force Off → peek `keep=1` → SPA `DISK-BOOTX64` → `root=UUID=` → `login:` (**DONE on evidence** `4af78b43`; minted `RAYNU-V-M8-DISK-PERSIST-OK` **printed** on `928d6224`) | Guest disk is the 8 GiB Toshiba USB slice, not leftover DRAM. Nested-OK ≠ this. Residual: whole-LUN virtio / USB ≠ PERC. |
 | A3 | **SKU card** | One page: what ships, what does not, dedicated-box vs fleet | **DONE** ([`docs/sku.md`](sku.md) / [`site/sku.html`](../site/sku.html)). Stops us promising PERC, Windows, or cluster in a Bar A conversation. |
 | A4 | **TLS** | Browser/`curl --cacert` on native `CURL NOW → https://` **before RayNu-F** | **DONE** (`928d6224` COM2 `RAYNU-V-M8-TLS-OK`; Mac SPA HTML). Lab millicert. PRE-EBS SNP stays `http://`. |
-| A4s | **Standing SPA** | Browser HTTPS **after** RayNu-F / Alpine `login:`; SPA stays; guest COM1 in the page | Investor can watch a product without iDRAC. Firmware-in-tree (coexist ticks on RayNu-F vmexit + USB waits; `GET /logs/guest`). **NOW.** Not closed until COM2 + a lived browser. |
+| A4s | **Standing SPA** | Browser HTTPS **after** RayNu-F / Alpine `login:`; SPA stays; guest COM1 in the page | Investor can watch a product without iDRAC. Firmware-in-tree (coexist ticks on RayNu-F vmexit + USB waits; `GET /logs/guest`). After `login:`. Not closed until COM2 + a lived browser. |
 | A5 | **Auth beyond bring-up** | Product default is not `raynu-v-bringup` | A shared lab latch is not an operator credential. HostReady (`RAYNU-V-M8-AUTH-HOST-OK`) is not this close. |
 | A6 | **Operator keyboard** | Type in the guest from the SPA (not only iDRAC SOL) | Soft for the first LOI; still on the polish table. Serial already installed Alpine. Firmware SPA `POST /console/keys` is in-tree. Depends on A4s. Iron close is COM2 `RAYNU-V-M8-CONSOLE-OK`. |
 
-A2 is **DONE on evidence**. A3 SKU is **DONE**. A4 TLS iron is **DONE** (`928d6224` `RAYNU-V-M8-TLS-OK`). **NOW is A4s standing SPA.** A5 host-ready is not iron ESP-required default. A6 firmware SPA keys are in-tree; iron SPA keyboard is not closed. M8.4 host-ready is not iron ISO-UPLOAD-OK.
+A2 is **DONE on evidence**. A3 SKU is **DONE**. A4 TLS iron is **DONE** (`928d6224` `RAYNU-V-M8-TLS-OK`). **NOW is the installed GRUB menu** (`diskprime past pin` after lived `28cd4ff1` `grub>`). A4s standing SPA is next after `login:`. A5 host-ready is not iron ESP-required default. A6 firmware SPA keys are in-tree; iron SPA keyboard is not closed. M8.4 host-ready is not iron ISO-UPLOAD-OK.
 
 ### Bar B — RAID-fleet non-prod LOI
 
@@ -175,7 +175,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | 2026-09-18 | Bar A A2 | USB Force Off on COM2 | **DONE on evidence** (`4af78b43` keep=1 DISK-BOOT UUID `348005a9`; minted persist-OK not printed) |
 | 2026-09-18 | Bar A A3 | SKU card | **DONE** ([`docs/sku.md`](sku.md) / [`site/sku.html`](../site/sku.html)) |
 | **2026-09-19** | Bar A A4 | TLS on native `:8443` **before RayNu-F** | **DONE** (`928d6224` COM2 `RAYNU-V-M8-TLS-OK`; Mac `curl --cacert` SPA `.140`) |
-| **NOW** | Bar A restore the USB warm | `928d6224` reached `login:`; `d60431ee` stopped at `grub>` | **NEXT** — Force Off, then F11 the warm EFI. `928d6224` diskprime READ LBA0, menu, `login:`. `d60431ee` `lba1=pin` returned with no USB touch; `blk_rd=33` is the RAM GPT only. Not lived yet. Do not curl Start |
+| **NOW** | Bar A open `grub.cfg` | `28cd4ff1` `warm=1` still `grub>` | **NEXT** — Force Off, then F11 the EFI that prints `diskprime past pin`. The pin still serves LBA0–LBA33, so the early warm never reached `grub.cfg`. Not lived. Do not curl Start |
 | then | Bar A A6 | SPA keyboard | after A4s; firmware `POST /console/keys` in-tree; not VNC |
 | then | Bar B B2 | Spare PERC VD persist | after A6; census skip is lab safety |
 | later | Auth / unmodified ISO | A5, Gen-1 Phase 2 | named residuals, not fake closes |
@@ -206,11 +206,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-gpt-pin-hold |
-| Summary | **Pin skipped the USB warm.** Persist-close `928d6224` diskprime drained, inquired, and READ LBA0, then the GRUB menu reached `login:`. `d60431ee` returns on `lba1=pin` with no USB touch. GRUB BlockIo completed 33 pin reads (`blk_rd=33`) and never opened `grub.cfg`, so it sat at `grub>` until `wall_ms=180005`. This EFI warms the pipe again (`warm=1`) and does not `recover_pipes`. Not lived. Scores held. |
+| Commit | m8-grub-past-pin |
+| Summary | **Warm lived, menu did not.** `28cd4ff1` printed `warm=1`, staged `DISK-BOOTX64`, and stopped at GRUB `grub>`. The pin still answers LBA0–LBA33, so that warm never covered `grub.cfg`. This EFI warms once on the first read past the pin (`diskprime past pin`). Not lived. Scores held. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Bar A **78% held** / Bar B **18% held** / overall **63% held** / months A **0.75 held**. Console piece **58% held**. A4s not closed. |
-| Gates touched | `fn persist_lun_gpt_pin_valid`. `fn persist_lun_probe_done`. `diskprime lba1=pin`. `./tools/sync-loihda-site.sh --check`. No MegaRAID. Sit at `localhost:~#`. |
+| Gates touched | `fn durable_lun_arm_past_pin_warm`. `fn xhci_live_warm_past_pin`. `diskprime past pin`. `./tools/sync-loihda-site.sh --check`. No MegaRAID. Sit at `localhost:~#`. |
 
 ---
 
@@ -218,6 +218,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-22 | m8-grub-past-pin | 78 | 18 | **Warm lived, still `grub>`.** `28cd4ff1` `warm=1` ×2 then `DISK-BOOTX64` then the GRUB command line. Pin served LBA0–LBA33, so `grub.cfg` stayed cold. This EFI prints `diskprime past pin` on that read. Not lived. Do not F11 `28cd4ff1`. Bar A 78 held. |
 | 2026-09-22 | m8-grub-stay | 78 | 18 | **Restore the USB warm `928d6224` used.** That EFI diskprime READ LBA0 and the menu reached `login:`. `d60431ee` `lba1=pin` skipped the warm; `blk_rd=33` is the RAM GPT; GRUB never loaded `grub.cfg` and the 180 s cap fired. This EFI prints `warm=1` and READ LBA0, no `recover_pipes`. Not lived. Bar A 78 held. |
 | 2026-09-22 | m8-gpt-pin-hold | 78 | 18 | **Wall-cap at `grub>`.** `d60431ee` `DISK-BOOTX64` → GRUB 2.12 `grub>` → `RayNu-F stop wall-cap exits=308551680 wall_ms=180005 blk_rd=33 blk_wr=0` → `product ISO hold`. Same EFI repeats. Bar A 78 held. |
 | 2026-09-22 | m8-gpt-pin-hold | 78 | 18 | **Pin-hold lived on COM2.** `d60431ee` peek `installed=1` `keep=1` `lba1=pin` `BOOTX64` 139264 `image=DISK-BOOTX64` → GRUB 2.12 `grub>`. Not ISO. Not `login:`. Type `normal` was the instruction before the wall-cap. Bar A 78 held. |
@@ -286,7 +287,7 @@ LOI:           NOT OPEN. Tracker born 2026-09-14.
 Bar A:         78% · 0.75 months · dedicated-box non-prod
 Bar B:         18% · 3.5 months · PERC RAID fleet (out of conversation until PERC persist)
 Overall:       63% · confidence medium
-NOW:           d60431ee skipped USB warm · Force Off · F11 warm=1 EFI · do not curl Start · do not setup-disk
+NOW:           28cd4ff1 warm=1 still grub> · Force Off · F11 diskprime past pin · do not curl Start · do not setup-disk
 Open:          iron SPA keyboard · iron AUTH-OK · unmodified ISO · cluster · Ubuntu PERC stays standing boot
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
 Sit:           localhost:~# · do not setup-disk · do not flash Toshiba /dev/sdc

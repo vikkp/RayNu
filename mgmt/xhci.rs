@@ -4041,7 +4041,10 @@ pub fn xhci_live_diskprime() {
     // Iron `d60431ee` returned on a valid pin with no USB touch. GRUB's
     // BlockIo served LBA0–LBA33 from the RAM pin (`blk_rd=33`) and the
     // ESP/ext4 read never landed, so GRUB stayed at `grub>` until the
-    // 180 s wall cap. Warm the pipe the same way. Do not `recover_pipes`
+    // 180 s wall cap. Iron `28cd4ff1` printed `warm=1` and still stopped at
+    // `grub>`: this warm is before GRUB, and the pin serves LBA0–LBA33, so
+    // the `grub.cfg` read stayed cold. The past-pin warm is armed after
+    // staging. Do not `recover_pipes`
     // (iron `08202468` Reset on a Running pipe, then `image=ISO-BOOTX64`).
     let mut pinned = [0u8; 8];
     let pin_holds = crate::mgmt::disk_persist::persist_lun_gpt_pin_read(512, &mut pinned)
@@ -4049,31 +4052,7 @@ pub fn xhci_live_diskprime() {
     if pin_holds {
         use crate::boot::serial;
         serial::write_line("boot: Stage 46 diskprime lba1=pin warm=1 (not ISO-INSTALL-OK)");
-        if LIVE_LOCK.swap(true, core::sync::atomic::Ordering::Acquire) {
-            return;
-        }
-        unsafe {
-            if let Some(live) = LIVE.as_mut() {
-                let mut hw = MmioXhci { base: live.mmio };
-                drain_events(&mut hw, &live.caps, &mut live.ev);
-                live.settle();
-                live.tag = live.tag.wrapping_add(1);
-                if live.tag == 0 {
-                    live.tag = 1;
-                }
-                let mut inq = [0u8; 36];
-                let _ = live.first_inquiry(live.tag, &mut inq);
-                live.settle();
-                let mut lba0 = [0u8; 512];
-                let mut tag = live.tag;
-                let lba = live.lba;
-                live.long_bulk = true;
-                let _ = super::usb_bot::usb_bot_rw(live, &mut tag, lba, 0, &mut lba0, false);
-                live.tag = tag;
-                live.long_bulk = false;
-            }
-        }
-        LIVE_LOCK.store(false, core::sync::atomic::Ordering::Release);
+        let _ = xhci_warm_bot_lba0();
         return;
     }
     if LIVE_LOCK.swap(true, core::sync::atomic::Ordering::Acquire) {
@@ -4123,6 +4102,54 @@ pub fn xhci_live_diskprime() {
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 pub fn xhci_live_diskprime() {
     serial_xhci_diskprime();
+}
+
+/// Drain, INQUIRY, READ LBA0. `false` when the live lock is already held
+/// (caller retries). Does not `recover_pipes`.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn xhci_warm_bot_lba0() -> bool {
+    if LIVE_LOCK.swap(true, core::sync::atomic::Ordering::Acquire) {
+        return false;
+    }
+    unsafe {
+        if let Some(live) = LIVE.as_mut() {
+            let mut hw = MmioXhci { base: live.mmio };
+            drain_events(&mut hw, &live.caps, &mut live.ev);
+            live.settle();
+            live.tag = live.tag.wrapping_add(1);
+            if live.tag == 0 {
+                live.tag = 1;
+            }
+            let mut inq = [0u8; 36];
+            let _ = live.first_inquiry(live.tag, &mut inq);
+            live.settle();
+            let mut lba0 = [0u8; 512];
+            let mut tag = live.tag;
+            let lba = live.lba;
+            live.long_bulk = true;
+            let _ = super::usb_bot::usb_bot_rw(live, &mut tag, lba, 0, &mut lba0, false);
+            live.tag = tag;
+            live.long_bulk = false;
+        }
+    }
+    LIVE_LOCK.store(false, core::sync::atomic::Ordering::Release);
+    true
+}
+
+/// First BlockIo read past the GPT pin, after the disk bootloader is staged.
+/// Iron `28cd4ff1`: `warm=1` ran before staging, then GRUB served LBA0–LBA33
+/// from the pin and the first ESP/ext4 read was cold, so the menu never
+/// opened. Do not `recover_pipes`.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+pub fn xhci_live_warm_past_pin() -> bool {
+    use crate::boot::serial;
+    serial::write_line("boot: Stage 46 diskprime past pin (not ISO-INSTALL-OK)");
+    xhci_warm_bot_lba0()
+}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+pub fn xhci_live_warm_past_pin() -> bool {
+    true
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]

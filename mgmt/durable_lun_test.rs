@@ -381,6 +381,21 @@ fn r640_iron_census_picks_nvme_then_usb_never_perc() {
 }
 
 #[test]
+fn past_pin_warm_is_once_after_arm() {
+    durable_lun_clear_past_pin_warm();
+    assert!(!durable_lun_past_pin_warm_due());
+    durable_lun_arm_past_pin_warm();
+    assert!(durable_lun_past_pin_warm_due());
+    durable_lun_warm_past_pin();
+    assert!(!durable_lun_past_pin_warm_due());
+    durable_lun_warm_past_pin();
+    assert!(!durable_lun_past_pin_warm_due());
+    durable_lun_arm_past_pin_warm();
+    assert!(durable_lun_past_pin_warm_due());
+    durable_lun_clear_past_pin_warm();
+}
+
+#[test]
 fn usb_guest_bytes_caps_toshiba_at_8g() {
     assert_eq!(DURABLE_LUN_GUEST_USB_BYTES, 8 * 1024 * 1024 * 1024);
     assert_eq!(LUN_PEEK_TRIES, 4);

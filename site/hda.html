@@ -127,7 +127,9 @@
             — not a reopened Everest. HV-reboot persist is evidence-closed on
             the 8 GiB USB slice, and <code>928d6224</code> printed
             <code>RAYNU-V-M8-DISK-PERSIST-OK</code> and
-            <code>RAYNU-V-M8-TLS-OK</code>.
+            <code>RAYNU-V-M8-TLS-OK</code>. Latest keep=1 COM2
+            (<code>28cd4ff1</code>) still stops at the GRUB command line;
+            the next EFI warms USB on the first read past the GPT pin.
           </p>
         </div>
       </section>
@@ -233,7 +235,8 @@ localhost:~# cat /proc/cmdline</code></pre>
             <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code> →
             <code>root=UUID=814a97a0-…</code> → <code>login:</code>.
             Latitude/QEMU still ≠ R640. Host/CI still never print
-            <code>ISO-INSTALL-OK</code>. Overall stays 99% because
+            <code>ISO-INSTALL-OK</code>. Overall stays 99% because the
+            latest keep=1 boot still stops at the GRUB command line, and
             Standing SPA and a guest console UI are the next mountain —
             <strong>M8</strong> operator hardening (ADR-018). TLS iron and
             HV-reboot persist are closed on COM2

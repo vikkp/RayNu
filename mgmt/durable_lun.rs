@@ -15,7 +15,7 @@
 //!
 //! ADR-004: persist backing is virtio-blk / BlockIo only.
 
-use core::sync::atomic::{AtomicU32, AtomicU64, AtomicU8, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, Ordering};
 
 use super::disk_persist::{
     M8_DISK_PERSIST_OK_MARKER, PERC_UBUNTU_UNTOUCHED_NOTE, UDISK_TOO_SMALL_NOTE,
@@ -684,6 +684,43 @@ pub fn durable_lun_read_any(off: u64, buf: &mut [u8]) -> bool {
         copied = copied.saturating_add(n);
     }
     true
+}
+
+static PAST_PIN_ARM: AtomicBool = AtomicBool::new(false);
+static PAST_PIN_DONE: AtomicBool = AtomicBool::new(false);
+
+/// Arm the one USB warm that runs on the first BlockIo read past the GPT
+/// pin. Called after the installed `BOOTX64.EFI` is staged, so peek and
+/// the FAT walk do not consume it. Iron `28cd4ff1` warmed only at diskprime;
+/// GRUB then read LBA0–LBA33 from the pin and the `grub.cfg` read was cold.
+pub fn durable_lun_arm_past_pin_warm() {
+    PAST_PIN_ARM.store(true, Ordering::Release);
+    PAST_PIN_DONE.store(false, Ordering::Release);
+}
+
+/// Host tests / a new boot stage.
+pub fn durable_lun_clear_past_pin_warm() {
+    PAST_PIN_ARM.store(false, Ordering::Release);
+    PAST_PIN_DONE.store(false, Ordering::Release);
+}
+
+/// True when the next past-pin read should warm the BOT pipe.
+pub fn durable_lun_past_pin_warm_due() -> bool {
+    PAST_PIN_ARM.load(Ordering::Acquire) && !PAST_PIN_DONE.load(Ordering::Acquire)
+}
+
+/// Once, after [`durable_lun_arm_past_pin_warm`]: drain + INQUIRY + READ LBA0.
+/// `false` from the xHCI helper (lock busy) leaves the warm due.
+pub fn durable_lun_warm_past_pin() {
+    if !durable_lun_past_pin_warm_due() {
+        return;
+    }
+    if PAST_PIN_DONE.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    if !crate::mgmt::xhci::xhci_live_warm_past_pin() {
+        PAST_PIN_DONE.store(false, Ordering::Release);
+    }
 }
 
 /// Bring up NVMe I/O on the census pick. USB waits until after EBS.
