@@ -336,6 +336,19 @@ impl VolumeRead for LunVol {
     }
 }
 
+/// GPT prefix from the peek pin, then the live LUN. A later BOT miss must
+/// not hide the ESP header the first probe already stored.
+struct PinThenLun;
+
+impl VolumeRead for PinThenLun {
+    fn read_at(&self, off: u64, buf: &mut [u8]) -> bool {
+        if persist_lun_gpt_pin_read(off, buf) {
+            return true;
+        }
+        LunVol.read_at(off, buf)
+    }
+}
+
 static LUN_KEEP_STICKY: AtomicBool = AtomicBool::new(false);
 static LAST_LUN_GPT_ERR: AtomicU8 = AtomicU8::new(0);
 static LAST_LUN_GPT_FIT: AtomicBool = AtomicBool::new(true);
@@ -372,7 +385,7 @@ fn lun_gpt_fits_guest() -> Option<bool> {
         return Some(true);
     }
     let mut lba1 = [0u8; 512];
-    if !LunVol.read_at(512, &mut lba1) {
+    if !PinThenLun.read_at(512, &mut lba1) {
         return None;
     }
     Some(gpt_fits_guest_bytes(&lba1, guest))
@@ -415,30 +428,45 @@ pub fn persist_lun_gpt_pin_clear() {
     GPT_PIN_VALID.store(false, Ordering::Release);
 }
 
+/// True after a fitting GPT prefix was stored. A later BOT miss must not
+/// clear it (iron `08202468`: peek `gpt=1` then `persist_lun_keep` wiped
+/// the pin and RayNu-F launched `image=ISO-BOOTX64`).
+pub fn persist_lun_gpt_pin_valid() -> bool {
+    GPT_PIN_VALID.load(Ordering::Acquire)
+}
+
+static mut GPT_PIN_SCRATCH: [u8; GPT_PIN_BYTES] = [0; GPT_PIN_BYTES];
+
 /// Copy LBA0..LBA33 from a reader that just parsed an ESP. Call before
-/// FAT/ext4 walks. Requires `EFI PART` at LBA1.
+/// FAT/ext4 walks. Requires `EFI PART` at LBA1. A failed reread leaves a
+/// pin that is already valid untouched.
 pub fn persist_lun_gpt_pin_store<R: VolumeRead>(r: &R) -> bool {
     let mut sec = [0u8; 512];
     let mut sig = [0u8; 8];
     for i in 0..GPT_PIN_SECTORS {
         if !r.read_at((i as u64) * 512, &mut sec) {
-            persist_lun_gpt_pin_clear();
             return false;
         }
         if i == 1 {
             sig.copy_from_slice(&sec[..8]);
         }
-        // SAFETY: BSP-only; `GPT_PIN_VALID` is published after the copy.
-        // `addr_of_mut` does not create a `static mut` reference.
+        // SAFETY: BSP-only scratch; published to `GPT_PIN` only after the
+        // signature check. `addr_of_mut` does not create a `static mut` reference.
         // KANI-TARGET: GPT pin sector copy (outside Proven Core).
         unsafe {
-            let dst = core::ptr::addr_of_mut!(GPT_PIN) as *mut u8;
+            let dst = core::ptr::addr_of_mut!(GPT_PIN_SCRATCH) as *mut u8;
             core::ptr::copy_nonoverlapping(sec.as_ptr(), dst.add(i * 512), 512);
         }
     }
     if &sig != b"EFI PART" {
-        persist_lun_gpt_pin_clear();
         return false;
+    }
+    // SAFETY: scratch holds a full prefix with `EFI PART` at LBA1.
+    // KANI-TARGET: GPT pin publish (outside Proven Core).
+    unsafe {
+        let src = core::ptr::addr_of!(GPT_PIN_SCRATCH) as *const u8;
+        let dst = core::ptr::addr_of_mut!(GPT_PIN) as *mut u8;
+        core::ptr::copy_nonoverlapping(src, dst, GPT_PIN_BYTES);
     }
     GPT_PIN_VALID.store(true, Ordering::Release);
     true
@@ -466,12 +494,24 @@ pub fn persist_lun_gpt_pin_read(off: u64, buf: &mut [u8]) -> bool {
     true
 }
 
+/// Stop peeking once the disk is installed, or the GPT is a known no-fit
+/// (298 GiB image on the 8 GiB window). `gpt=1` with a USB miss on FAT/ext4
+/// is not done — iron `08202468` stopped there and then booted the ISO.
+pub fn persist_lun_probe_done(parts: (bool, bool, bool)) -> bool {
+    let (gpt, boot, ext4) = parts;
+    (gpt && boot && ext4) || persist_lun_gpt_parsed_no_fit()
+}
+
+fn persist_lun_probe_rank(parts: (bool, bool, bool)) -> u8 {
+    u8::from(parts.0) + u8::from(parts.1) + u8::from(parts.2)
+}
+
 /// GPT / FAT BPB / ext4 on the LUN. FAT dirent walks stay off BOT.
 /// Array CRC is skipped so keep-detect is not 32 USB BOT fills.
 /// Remembers keep. SliceDisk/HPA still require BOOTX64 via
 /// [`persist_media_looks_installed`].
 pub fn persist_lun_keep_parts() -> (bool, bool, bool) {
-    let gpt = find_esp_skip_array_crc(&LunVol);
+    let gpt = find_esp_skip_array_crc(&PinThenLun);
     LAST_LUN_GPT_ERR.store(
         match gpt {
             Ok(_) => 0,
@@ -492,15 +532,18 @@ pub fn persist_lun_keep_parts() -> (bool, bool, bool) {
     let keep_gpt = gpt.is_ok() && fit;
     if keep_gpt {
         // Before FAT/ext4. Those reads evict LBA0 from the direct-mapped cache.
-        let _ = persist_lun_gpt_pin_store(&LunVol);
-    } else {
+        // A pin already published stays; a failed reread must not clear it.
+        if !persist_lun_gpt_pin_valid() {
+            let _ = persist_lun_gpt_pin_store(&LunVol);
+        }
+    } else if !persist_lun_gpt_pin_valid() {
         persist_lun_gpt_pin_clear();
     }
     let boot = match gpt {
-        Ok(esp) if keep_gpt => disk_has_fat_bpb_from_esp(&LunVol, esp),
+        Ok(esp) if keep_gpt => disk_has_fat_bpb_from_esp(&PinThenLun, esp),
         _ => false,
     };
-    let ext4 = keep_gpt && disk_has_ext4_vol(&LunVol);
+    let ext4 = keep_gpt && disk_has_ext4_vol(&PinThenLun);
     persist_lun_remember_keep(keep_gpt && boot && ext4);
     (keep_gpt, boot, ext4)
 }
@@ -510,18 +553,21 @@ pub fn persist_lun_keep_parts() -> (bool, bool, bool) {
 /// A parsed GPT that does not fit the guest window (`gpt_err=0` `fit=0`)
 /// is not leftover CSW — do not spend more BOT I/O on a 298 GiB image.
 pub fn persist_lun_keep_parts_retry() -> (bool, bool, bool) {
-    let mut last = persist_lun_keep_parts();
-    if last.0 || persist_lun_gpt_parsed_no_fit() {
-        return last;
+    let mut best = persist_lun_keep_parts();
+    if persist_lun_probe_done(best) {
+        return best;
     }
     for n in 1..crate::mgmt::durable_lun::LUN_PEEK_TRIES {
         crate::mgmt::durable_lun::durable_lun_peek_retry(n);
-        last = persist_lun_keep_parts();
-        if last.0 || persist_lun_gpt_parsed_no_fit() {
-            return last;
+        let last = persist_lun_keep_parts();
+        if persist_lun_probe_rank(last) >= persist_lun_probe_rank(best) {
+            best = last;
+        }
+        if persist_lun_probe_done(best) {
+            return best;
         }
     }
-    last
+    best
 }
 
 pub fn persist_lun_gpt_parsed_no_fit() -> bool {

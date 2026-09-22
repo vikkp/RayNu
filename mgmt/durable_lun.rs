@@ -851,26 +851,36 @@ fn serial_lun_peek(tag: &str) {
     use crate::boot::serial;
     let mut sig = [0u8; 8];
     let mut peek = false;
-    let mut gpt = false;
-    let mut boot = false;
-    let mut ext4 = false;
+    let mut best = (false, false, false);
+    let mut best_sig = [0u8; 8];
     for n in 0..LUN_PEEK_TRIES {
         if n > 0 {
             durable_lun_peek_retry(n);
         } else {
             lun_cache_clear();
         }
-        peek = durable_lun_read_any(512, &mut sig);
+        let try_peek = durable_lun_read_any(512, &mut sig);
         let parts = crate::mgmt::disk_persist::persist_lun_keep_parts();
-        gpt = parts.0;
-        boot = parts.1;
-        ext4 = parts.2;
-        // keep_gpt, or a parsed GPT that does not fit (298 GiB on 8 GiB).
-        // gpt_err=0 with unknown fit is a second-read miss — retry.
-        if gpt || crate::mgmt::disk_persist::persist_lun_gpt_parsed_no_fit() {
+        let rank = u8::from(parts.0) + u8::from(parts.1) + u8::from(parts.2);
+        let best_rank = u8::from(best.0) + u8::from(best.1) + u8::from(best.2);
+        // Installed (GPT+FAT+ext4), or a parsed GPT that does not fit
+        // (298 GiB on 8 GiB). gpt=1 with bootx64=0 is a USB miss on the
+        // closed Toshiba — keep the better probe and retry. Iron
+        // `08202468` stopped on the miss, cleared the pin, and launched
+        // `image=ISO-BOOTX64`.
+        if rank > best_rank || (rank == best_rank && try_peek) {
+            best = parts;
+            if try_peek {
+                peek = true;
+                best_sig = sig;
+            }
+        }
+        if crate::mgmt::disk_persist::persist_lun_probe_done(best) {
             break;
         }
     }
+    sig = best_sig;
+    let (gpt, boot, ext4) = best;
     let inst = (gpt && boot && ext4) || crate::mgmt::disk_persist::persist_lun_sticky_keep();
     serial::write_str("boot: Stage 46 durable LUN peek ");
     serial::write_str(tag);

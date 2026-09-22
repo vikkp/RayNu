@@ -78,13 +78,13 @@
           <div class="hda-tracker" data-reveal>
             <div class="hda-tracker__hero">
               <p class="hda-tracker__label" id="loi-tracker-label">Months to Bar A</p>
-              <p class="hda-tracker__months" id="loi-months">1.0 mo</p>
-              <p class="hda-tracker__delta" id="loi-delta">Bar A · was 1.5 · Bar B 3.5 mo</p>
+              <p class="hda-tracker__months" id="loi-months">0.75 mo</p>
+              <p class="hda-tracker__delta" id="loi-delta">Bar A · was 1.0 · Bar B 3.5 mo</p>
             </div>
             <dl class="hda-tracker__meta">
               <div>
                 <dt>Overall LOI readiness</dt>
-                <dd id="loi-overall">40%</dd>
+                <dd id="loi-overall">63%</dd>
               </div>
               <div>
                 <dt>Bar A ETA</dt>
@@ -100,7 +100,7 @@
               </div>
               <div>
                 <dt>Updated</dt>
-                <dd id="loi-updated">2026-09-15</dd>
+                <dd id="loi-updated">2026-09-22</dd>
               </div>
             </dl>
           </div>
@@ -108,10 +108,10 @@
             <div class="hda-bar">
               <div class="hda-bar__head">
                 <span>Bar A · dedicated-box</span>
-                <span id="loi-bar-a-label">46%</span>
+                <span id="loi-bar-a-label">78%</span>
               </div>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill" id="loi-bar-a" style="width: 46%"></span>
+                <span class="hda-bar__fill" id="loi-bar-a" style="width: 78%"></span>
               </div>
             </div>
             <div class="hda-bar">
@@ -126,20 +126,20 @@
             <div class="hda-bar">
               <div class="hda-bar__head">
                 <span>Overall LOI readiness</span>
-                <span id="loi-bar-overall-label">40%</span>
+                <span id="loi-bar-overall-label">63%</span>
               </div>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill" id="loi-bar-overall" style="width: 40%"></span>
+                <span class="hda-bar__fill" id="loi-bar-overall" style="width: 63%"></span>
               </div>
             </div>
           </div>
           <p class="hda-aside" data-reveal>
-            These numbers are a <strong>baseline</strong>, not a close. They
-            shrink only when TLS is reachable, or
-            a spare PERC virtual disk actually holds a guest. Nested QEMU and
-            host tests do not move the month count. A2 persist is evidence-closed
-            (<code>keep=1</code> + <code>DISK-BOOTX64</code> + same UUID after Force Off);
-            the minted persist-OK string did not print.
+            These numbers move only with COM2 evidence. Nested QEMU and host
+            tests do not. A2 persist is evidence-closed, and
+            <code>928d6224</code> printed <code>RAYNU-V-M8-DISK-PERSIST-OK</code>.
+            A later boot (<code>08202468</code>) saw that GPT and launched the
+            live ISO. Scores stay until the installed disk boots again and a
+            browser stays up after <code>login:</code>. PERC is still Bar B.
           </p>
         </div>
       </section>
@@ -157,7 +157,7 @@
           </p>
           <div class="loi-cards" data-reveal>
             <article class="loi-card">
-              <p class="loi-card__kicker">Bar A · 46%</p>
+              <p class="loi-card__kicker">Bar A · 78%</p>
               <h3>Dedicated box</h3>
               <p>
                 One PowerEdge we own, or they can afford to dedicate. The guest
@@ -219,30 +219,30 @@
             <li data-reveal>
               <header>
                 <span class="loi-pieces__name">Persist across HV reboot</span>
-                <span class="loi-pieces__pct" data-piece="persist">95%</span>
+                <span class="loi-pieces__pct" data-piece="persist">97%</span>
               </header>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill" data-piece-fill="persist" style="width: 95%"></span>
+                <span class="hda-bar__fill" data-piece-fill="persist" style="width: 97%"></span>
               </div>
               <p>
                 A guest reboot already kept the install. A hypervisor Force Off
                 used to wipe it — and that is how you recover a Type-1, so a
                 buyer will do it. On the R640 we own, that is no longer true:
-                after Force Off the same Alpine comes back from a USB-backed
-                disk, without running the installer again. The guest sees an
-                8 GiB window on a larger stick, not the whole drive, and USB is
-                not the RAID array. The last 5% is honesty, not a missing
-                reboot: we have not printed a formal persist-OK marker, and this
-                does not mean PERC.
+                after Force Off the same Alpine comes back from the 8 GiB USB
+                slice, and COM2 <code>928d6224</code> printed
+                <code>RAYNU-V-M8-DISK-PERSIST-OK</code>. The last 3% is the
+                whole stick and USB versus PERC. A later boot
+                (<code>08202468</code>) still saw the GPT, then launched the
+                live ISO. That is a boot-order miss, not a wiped disk.
               </p>
             </li>
             <li data-reveal>
               <header>
                 <span class="loi-pieces__name">SKU card</span>
-                <span class="loi-pieces__pct" data-piece="sku">90%</span>
+                <span class="loi-pieces__pct" data-piece="sku">92%</span>
               </header>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill" data-piece-fill="sku" style="width: 90%"></span>
+                <span class="hda-bar__fill" data-piece-fill="sku" style="width: 92%"></span>
               </div>
               <p>
                 One page: what ships, what does not. Dedicated-box versus fleet.
@@ -348,23 +348,26 @@
 
       <section class="section section--hda-com2" id="now">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>NOW · M8.3 console</p>
-          <h2 class="section__title">Type in the guest from the SPA</h2>
+          <p class="milestone-kicker" data-reveal>NOW · wall-cap at grub&gt;</p>
+          <h2 class="section__title">GRUB stopped at 180 seconds</h2>
           <p class="section__lede">
-            A2 persist is evidence-closed on the Toshiba 8 GiB USB slice.
-            A4 TLS iron printed <code>RAYNU-V-M8-TLS-OK</code> on
-            <code>928d6224</code> after native
-            <code>curl --cacert</code> on
-            <code>10.99.99.140:8443</code>. Keep=1 DISK-BOOT also printed
-            persist-OK (<code>UUID=dd673a9a</code>). Nested QEMU is not a
-            PowerEdge. The next print that moves Bar A is typing in Alpine
-            from the SPA — not iDRAC SOL alone, not VNC.
+            EFI <code>d60431ee</code> peeked <code>installed=1</code>, attached
+            the 8 GiB slice <code>keep=1</code>, and launched
+            <code>image=DISK-BOOTX64</code> (<code>BOOTX64.EFI</code> 139264
+            bytes). GNU GRUB 2.12 reached <code>grub&gt;</code>. COM2 keys did
+            not land. After <code>wall_ms=180005</code> and
+            <code>exits=308551680</code> the firmware printed
+            <code>RayNu-F stop wall-cap</code> (<code>blk_rd=33</code>
+            <code>blk_wr=0</code>) and then
+            <code>product ISO hold</code>. That hold does not proceed, does
+            not listen, and does not take keys. Force Off. Do not POST
+            <code>/vms/1/start</code>. Do not run <code>setup-disk</code>.
           </p>
-          <pre class="ship-code" data-reveal><code>lived:  928d6224 RAYNU-V-M8-TLS-OK + RAYNU-V-M8-DISK-PERSIST-OK
-sit:    localhost:~#   do not setup-disk   do not flash Toshiba /dev/sdc
-in-tree: firmware POST /console/keys → guest COM1 (not iron)
-next:   type in Alpine from the SPA (RAYNU-V-M8-CONSOLE-OK)
-never:  host / CI / nested printing RAYNU-V-M8-CONSOLE-OK</code></pre>
+          <pre class="ship-code" data-reveal><code>lived:  d60431ee installed=1 keep=1 lba1=pin image=DISK-BOOTX64
+stop:   wall-cap exits=308551680 wall_ms=180005 blk_wr=0
+then:   product ISO hold   will not proceed
+now:    Force Off   do not curl Start   do not setup-disk
+never:  F11 08202468   flash Toshiba /dev/sdc</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
             Rollback remains GitHub Latest
             <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed"
