@@ -348,25 +348,24 @@
 
       <section class="section section--hda-com2" id="now">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>NOW · installed disk, then standing SPA</p>
-          <h2 class="section__title">Boot the closed install again</h2>
+          <p class="milestone-kicker" data-reveal>NOW · installed GRUB on COM2</p>
+          <h2 class="section__title">The closed disk reached GRUB</h2>
           <p class="section__lede">
-            Persist and TLS already closed on COM2
-            (<code>928d6224</code> printed
-            <code>RAYNU-V-M8-DISK-PERSIST-OK</code> and
-            <code>RAYNU-V-M8-TLS-OK</code>). The latest iron boot
-            (<code>08202468</code>) saw that GPT and then launched the live
-            ISO, which stalled on <code>vda</code>. The next EFI holds the GPT
-            and skips the ISO. After <code>login:</code>, the step that moves
-            Bar A is a browser that stays on HTTPS, then typing from the SPA.
-            Nested QEMU is not a PowerEdge. Not VNC.
+            EFI <code>d60431ee</code> peeked <code>installed=1</code>, attached
+            the 8 GiB slice <code>keep=1</code>, served
+            <code>diskprime lba1=pin</code>, and launched
+            <code>image=DISK-BOOTX64</code> (<code>BOOTX64.EFI</code> 139264
+            bytes, ESP at LBA 2048). GNU GRUB 2.12 is sitting at
+            <code>grub&gt;</code>. That is the installed disk, not the live
+            ISO. Linux has not printed <code>login:</code> yet. Type
+            <code>normal</code> on COM2 and leave the menu. Do not Force Off.
+            Do not run <code>setup-disk</code>.
           </p>
-          <pre class="ship-code" data-reveal><code>closed: 928d6224 RAYNU-V-M8-TLS-OK + RAYNU-V-M8-DISK-PERSIST-OK
-lived:  08202468 peek gpt=1 then image=ISO-BOOTX64 (do not F11)
-next:   diskprime lba1=pin → image=DISK-BOOTX64 → login:
-then:   browser stays on https:// after login (standing SPA)
-sit:    localhost:~#   do not setup-disk   do not flash Toshiba /dev/sdc
-never:  host / CI / nested printing iron CONSOLE-OK</code></pre>
+          <pre class="ship-code" data-reveal><code>lived:  d60431ee installed=1 keep=1 lba1=pin image=DISK-BOOTX64
+grub:   GNU GRUB 2.12 at grub&gt;   type: normal
+then:   login:   sit there   do not setup-disk
+after:  browser stays on https:// (standing SPA)
+never:  F11 08202468   flash Toshiba /dev/sdc   Force Off at grub&gt;</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
             Rollback remains GitHub Latest
             <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed"

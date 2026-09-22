@@ -1,6 +1,6 @@
 ---
 hda_version: 1
-last_updated: 2026-09-21
+last_updated: 2026-09-22
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
@@ -355,7 +355,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | m8-gpt-pin-hold |
-| Summary | **Hold the peek GPT and skip the ISO.** Lived `08202468`: peek `gpt=1 fit=1` `usb_err=8` `bootx64=0` `ext4=0` `installed=0`, then `diskprime lba1=miss err=4`, `image=ISO-BOOTX64`, `vda` I/O errors, `blkid` RCU stall. The closed Toshiba install was still there. A later probe cleared the pin. This EFI keeps that pin, retries FAT/ext4, serves `diskprime lba1=pin` without another BOT read, and skips ISO while the pin holds. Do not F11 `08202468`. Do not F11 `3b388279`. Months **0.0 held**. Overall **99 held**. |
+| Summary | **Pin-hold lived on COM2.** EFI `d60431ee`: peek `gpt=1 fit=1 bootx64=1 ext4=1 installed=1` (`usb_err=8` latched), virtio `keep=1`, `diskprime lba1=pin`, `GPT ESP lba=2048`, `BOOTX64.EFI bytes=139264`, `image=DISK-BOOTX64`, GNU GRUB 2.12 at `grub>`. Not the ISO. Not `login:` yet. Type `normal` on COM2. Do not Force Off. Do not F11 `08202468`. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. A4s not iron. Nested QEMU ≠ R640. |
 | Gates touched | `fn persist_lun_gpt_pin_valid`. `fn persist_lun_probe_done`. `diskprime lba1=pin`. `./tools/sync-hda-site.sh --check`. Sit at `localhost:~#`. |
 | Months Δ | 0.0 held (Everest closed; stage fix not lived on R640) |
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-22 | m8-gpt-pin-hold | 0.0 | 99 | **Pin-hold lived on COM2.** EFI `d60431ee`: `installed=1` `keep=1` `lba1=pin` `BOOTX64.EFI bytes=139264` `image=DISK-BOOTX64` → GNU GRUB 2.12 `grub>`. Not ISO. Not `login:` yet. Type `normal`. Do not Force Off. Do not F11 `08202468`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-21 | m8-gpt-pin-hold | 0.0 | 99 | **Hold the peek GPT and skip the ISO.** Lived `08202468`: peek `gpt=1 fit=1` `usb_err=8` `installed=0` then `image=ISO-BOOTX64` and `vda` I/O error / RCU stall. Pin survives the miss; diskprime prints `lba1=pin`; ISO stays off. Do not F11 `08202468`. Sit at `localhost:~#`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-21 | m8-gpt-pin-stage | 0.0 | 99 | **Pin peek GPT for RayNu-F stage.** Lived `3b388279`: peek keep=1 then `no GPT` ×3, `image=test-app`, `product ISO hold` (spin, not a USB wait). Do not F11 `3b388279`. Sit at `localhost:~#`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-21 | m8-spa-safari-idle | 0.0 | 99 | **Defer standing SPA until RayNu-F launch.** Lived `17d120c5` peek keep=1 then HTTPS during diskprime → `no GPT`, no Alpine login. Firefox Unable to connect. USB ticks wait for `raynu_f_running`. Sit at `localhost:~#`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
