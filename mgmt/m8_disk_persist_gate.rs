@@ -541,6 +541,8 @@ pub fn phase0_failsafe_surface_present() -> bool {
         && xhci.contains("fn usb_wait_expired(")
         && xhci.contains("fn xhci_arm_rw_deadline(")
         && xhci.contains("fn xhci_wait_expired(")
+        && xhci.contains("fn without_rw_deadline<")
+        && xhci.contains("without_rw_deadline(|| {\n        hold_bot_diag(|| {")
         && xhci.contains("usb rw waiting ms=")
         && xhci.contains("fn serial_xhci_timeout_dump(")
         && xhci.contains("xhci timeout ")

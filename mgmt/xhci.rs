@@ -706,6 +706,15 @@ fn xhci_clear_rw_deadline() {
     RW_DEADLINE_TSC.store(0, core::sync::atomic::Ordering::Release);
 }
 
+/// Run `f` with the guest deadline suspended (restored afterwards). Used by
+/// endpoint recovery so its xHCI commands keep the short `SPINS` cap.
+fn without_rw_deadline<R>(f: impl FnOnce() -> R) -> R {
+    let saved = RW_DEADLINE_TSC.swap(0, core::sync::atomic::Ordering::AcqRel);
+    let r = f();
+    RW_DEADLINE_TSC.store(saved, core::sync::atomic::Ordering::Release);
+    r
+}
+
 /// Spin cap or armed deadline (see [`usb_wait_expired`]).
 fn xhci_wait_expired(spins: u32, spins_max: u32) -> bool {
     let d = RW_DEADLINE_TSC.load(core::sync::atomic::Ordering::Acquire);
@@ -2741,26 +2750,31 @@ fn recover_ep(
     slot: u8,
     dci: u8,
 ) {
-    hold_bot_diag(|| {
-        drain_events(hw, caps, ev);
-        let extra = xhci_ep_cmd_extra(slot, dci);
-        // Timeout: EP is Running. Stop Endpoint then Set TR Dequeue.
-        // Reset Endpoint is Halted-only (iron first-cbw `cmpl=0x13`).
-        let stop_ok = cmd(hw, caps, cmd_ring, ev, 0, trb_ctrl(0, TRB_STOP_EP, extra)).is_ok();
-        if xhci_ep_recover_need_reset(stop_ok) {
-            let _ = cmd(hw, caps, cmd_ring, ev, 0, trb_ctrl(0, TRB_RESET_EP, extra));
-        }
-        zero_page(hw, hpa);
-        *ring = Ring::new(hpa);
-        let _ = cmd(
-            hw,
-            caps,
-            cmd_ring,
-            ev,
-            hpa | 1,
-            trb_ctrl(0, TRB_SET_TR_DEQ, extra),
-        );
-        drain_events(hw, caps, ev);
+    // Recovery commands run on their own `SPINS` cap, never on the guest
+    // deadline: an already-expired deadline would fail the Stop Endpoint
+    // wait instantly and fall into Reset Endpoint on a Running pipe.
+    without_rw_deadline(|| {
+        hold_bot_diag(|| {
+            drain_events(hw, caps, ev);
+            let extra = xhci_ep_cmd_extra(slot, dci);
+            // Timeout: EP is Running. Stop Endpoint then Set TR Dequeue.
+            // Reset Endpoint is Halted-only (iron first-cbw `cmpl=0x13`).
+            let stop_ok = cmd(hw, caps, cmd_ring, ev, 0, trb_ctrl(0, TRB_STOP_EP, extra)).is_ok();
+            if xhci_ep_recover_need_reset(stop_ok) {
+                let _ = cmd(hw, caps, cmd_ring, ev, 0, trb_ctrl(0, TRB_RESET_EP, extra));
+            }
+            zero_page(hw, hpa);
+            *ring = Ring::new(hpa);
+            let _ = cmd(
+                hw,
+                caps,
+                cmd_ring,
+                ev,
+                hpa | 1,
+                trb_ctrl(0, TRB_SET_TR_DEQ, extra),
+            );
+            drain_events(hw, caps, ev);
+        })
     });
 }
 
