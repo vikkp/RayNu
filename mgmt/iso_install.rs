@@ -134,6 +134,69 @@ pub const M7_STAGE46_PRODUCT_ISO_MISSING_NOTE: &str =
 pub const M7_STAGE46_HOLD_E4_NOTE: &str =
     "boot: Stage 46 product ISO hold (not ISO-INSTALL-OK); not E4 SHELL";
 
+/// Heartbeat period for [`stage46_live_hold`] (ms).
+pub const STAGE46_HOLD_BEAT_MS: u64 = 60_000;
+
+/// Phase 0 (M8 recovery): the Stage 46 hold used to be a dead
+/// `spin_loop` — no HTTP, no COM2, nothing an operator could tell apart
+/// from a hang (iron `d60431ee` after the 180 s wall cap, `3b388279` after
+/// `image=test-app`). This hold keeps the native coexist SPA ticking so the
+/// browser stays up, and prints one nowait heartbeat a minute so COM2 shows
+/// "held", not "hung". Nothing else runs: no guest, no USB, no retries —
+/// the operator decides (Force Off) with the SPA and COM2 still alive.
+/// Never prints a persist / ISO marker.
+pub fn stage46_live_hold() -> ! {
+    #[cfg(feature = "uefi-bin")]
+    {
+        use crate::boot::serial;
+        let hz = {
+            let h = crate::boot::raynu_f_flag::tsc_hz();
+            if h == 0 {
+                crate::mgmt::xhci::USB_TSC_HZ_FALLBACK
+            } else {
+                h
+            }
+        };
+        let beat = crate::mgmt::xhci::usb_tsc_ticks_for_ms(hz, STAGE46_HOLD_BEAT_MS);
+        let mut last = crate::arch::cpu::rdtsc();
+        let mut t_s: u32 = 0;
+        serial::write_line(
+            "boot: Stage 46 hold alive — SPA ticking; Force Off to retry (not ISO-INSTALL-OK)",
+        );
+        loop {
+            crate::mgmt::maybe_tick_standing_spa();
+            core::hint::spin_loop();
+            let now = crate::arch::cpu::rdtsc();
+            if now.wrapping_sub(last) >= beat {
+                last = now;
+                t_s = t_s.saturating_add((STAGE46_HOLD_BEAT_MS / 1_000) as u32);
+                serial::write_str_nowait("boot: Stage 46 hold alive t_s=");
+                let mut buf = [0u8; 10];
+                let mut n = 0usize;
+                let mut x = t_s;
+                if x == 0 {
+                    buf[0] = b'0';
+                    n = 1;
+                }
+                while x > 0 && n < buf.len() {
+                    buf[n] = b'0' + (x % 10) as u8;
+                    n += 1;
+                    x /= 10;
+                }
+                buf[..n].reverse();
+                serial::write_str_nowait(core::str::from_utf8(&buf[..n]).unwrap_or("?"));
+                serial::write_line_nowait(" (SPA ticking; not ISO-INSTALL-OK)");
+            }
+        }
+    }
+    #[cfg(not(feature = "uefi-bin"))]
+    {
+        loop {
+            core::hint::spin_loop();
+        }
+    }
+}
+
 static mut PRODUCT_ISO_PTR: *const u8 = core::ptr::null();
 static mut PRODUCT_ISO_LEN: usize = 0;
 

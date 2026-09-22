@@ -348,23 +348,24 @@
 
       <section class="section section--hda-com2" id="now">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>NOW · warm lived, still grub&gt;</p>
-          <h2 class="section__title">The pin still hides the read GRUB needs</h2>
+          <p class="milestone-kicker" data-reveal>NOW · enumeration fix built · not lived</p>
+          <h2 class="section__title">Two spec gaps, one COM2</h2>
           <p class="section__lede">
-            EFI <code>928d6224</code> reached <code>login:</code>. EFI
-            <code>28cd4ff1</code> printed <code>diskprime lba1=pin warm=1</code>,
-            staged <code>BOOTX64.EFI</code>, and stopped at the GRUB command
-            line. LBA0–LBA33 still come from the RAM pin, so that warm never
-            reached <code>grub.cfg</code>. Force Off, then flash the EFI that
-            prints <code>diskprime past pin</code> on the first read past the
-            pin. Do not POST <code>/vms/1/start</code>. Do not run
-            <code>setup-disk</code>.
+            On EFI <code>5c32bd06</code> every controller command posted except
+            SET_ADDRESS to the two external USB devices; the iDRAC hub
+            enumerated fine, and the boot ended at a <code>login:</code> on a
+            1&nbsp;GiB RAM disk, not the Toshiba. The driver addressed a device
+            microseconds after its port reset (USB requires 10&nbsp;ms of
+            silence; Linux waits 50) and never told the BIOS to stop
+            servicing the controller from SMM. The next EFI fixes both, prints
+            the controller state on every command timeout, and halts a soak
+            boot instead of installing to RAM.
           </p>
-          <pre class="ship-code" data-reveal><code>closed: 928d6224 diskprime READ LBA0 → menu → login:
-lived:  28cd4ff1 warm=1 → DISK-BOOTX64 → grub&gt;
-next:   diskprime past pin   no recover_pipes
-now:    Force Off   then F11 that EFI   do not curl Start
-never:  F11 28cd4ff1   F11 d60431ee   flash Toshiba /dev/sdc</code></pre>
+          <pre class="ship-code" data-reveal><code>closed: 928d6224 persist-OK + TLS-OK → login: on the Toshiba
+lived:  5c32bd06 USB soak requested → SET_ADDRESS never posted → ISO onto 1 GiB RAM → login:
+next:   boot 1 with usbsoak.txt → xhci legacy pre/post → USBSOAK ×4 → RAYNU-V-USBSOAK-DONE, or cmd timeout → abort halt
+never:  treat a 1 GiB vda as persist · setup-disk · curl Start · Toshiba /dev/sdc
+read:   docs/m8_state.md</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
             Rollback remains GitHub Latest
             <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed"

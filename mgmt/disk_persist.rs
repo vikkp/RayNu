@@ -388,6 +388,7 @@ fn lun_gpt_fits_guest() -> Option<bool> {
     if !PinThenLun.read_at(512, &mut lba1) {
         return None;
     }
+    persist_lun_note_efi_part(&lba1[..8]);
     Some(gpt_fits_guest_bytes(&lba1, guest))
 }
 
@@ -403,9 +404,39 @@ pub fn persist_lun_sticky_keep() -> bool {
     LUN_KEEP_STICKY.load(Ordering::Acquire)
 }
 
+/// Phase 0 fail-safe latch: some read of the LUN's LBA1 **this boot**
+/// returned `EFI PART`. Unlike the pin (34 good sectors) or sticky keep
+/// (GPT + FAT + ext4 all read), one good sector is enough to prove the
+/// media is not blank, so RayNu-F must never stage the installer ISO and
+/// the auto-answer must never send `setup-disk`. Iron `15e3d665`: peek
+/// printed `efi=EFI PART` and `installed=0` (FAT/ext4 reads timed out),
+/// then `image=ISO-BOOTX64` booted the live installer over the closed
+/// install. A flaky sensor must fail safe, not destructive.
+static LUN_EFI_PART_SEEN: AtomicBool = AtomicBool::new(false);
+
+/// Record an LBA1 signature read from the LUN (any path: peek, pin store,
+/// fit check, diskprime).
+pub fn persist_lun_note_efi_part(sig: &[u8]) {
+    if sig.len() >= 8 && &sig[..8] == b"EFI PART" {
+        LUN_EFI_PART_SEEN.store(true, Ordering::Release);
+    }
+}
+
+/// True once any LBA1 read this boot was `EFI PART`.
+pub fn persist_lun_efi_part_seen() -> bool {
+    LUN_EFI_PART_SEEN.load(Ordering::Acquire)
+}
+
+/// Pure boot-source guard: with a serving LUN that showed `EFI PART`,
+/// the ISO is never staged even when pin/sticky/FAT probes all missed.
+pub fn persist_lun_iso_forbidden(lun_serving: bool, efi_part_seen: bool) -> bool {
+    lun_serving && efi_part_seen
+}
+
 /// Host tests / handoff reset.
 pub fn persist_lun_clear_sticky() {
     LUN_KEEP_STICKY.store(false, Ordering::Release);
+    LUN_EFI_PART_SEEN.store(false, Ordering::Release);
     LAST_LUN_GPT_ERR.store(0, Ordering::Release);
     LAST_LUN_GPT_FIT.store(true, Ordering::Release);
     LAST_LUN_GPT_FIT_KNOWN.store(true, Ordering::Release);
@@ -461,6 +492,7 @@ pub fn persist_lun_gpt_pin_store<R: VolumeRead>(r: &R) -> bool {
     if &sig != b"EFI PART" {
         return false;
     }
+    persist_lun_note_efi_part(&sig);
     // SAFETY: scratch holds a full prefix with `EFI PART` at LBA1.
     // KANI-TARGET: GPT pin publish (outside Proven Core).
     unsafe {

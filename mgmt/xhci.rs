@@ -161,6 +161,52 @@ pub const BULK_SPINS: u32 = 100_000_000;
 /// Toshiba spinning HDD can NAK the first bulk CBW for seconds.
 pub const FIRST_READ_SPINS: u32 = 800_000_000;
 
+/// Phase 0 (M8 recovery): guest-path USB BOT work is bounded by **time**,
+/// not only spins. A spin is one 16-byte event-ring read (~30 ns), so
+/// `FIRST_READ_SPINS` alone was ~25 s per stage and a failed 4 KiB read
+/// with the built-in retries was minutes of frozen guest, dead SPA, and a
+/// silent COM2. Iron `15e3d665` and `d60431ee` looked "hung" for exactly
+/// that reason. A 2.5" USB HDD spins up in 3–5 s; 8 s per attempt covers
+/// that and still hands GRUB `EFI_DEVICE_ERROR` in well under the
+/// 180 s wall cap. Bring-up/enumeration keeps the spin caps only
+/// (deadline 0 = unbounded); the deadline is armed by the guest-path
+/// entry points ([`xhci_live_rw`], diskprime, warm, soak).
+pub const USB_RW_DEADLINE_MS: u64 = 8_000;
+/// BOT settle used to be `BOT_SETTLE_SPINS` `pause`s (~5 s on a 2.1 GHz
+/// Skylake-SP where `pause` is ~140 cycles). Two settles per warm and one
+/// per retry were most of the COM2 "crawl". Bounded to this many ms.
+pub const BOT_SETTLE_MS: u64 = 2_000;
+/// Heartbeat while a guest-path BOT wait is running (nowait COM2 line),
+/// so a long wait is visible as "waiting", not "hung".
+pub const USB_WAIT_HEARTBEAT_MS: u64 = 2_000;
+/// TSC fallback when the pre-EBS Stall calibration did not run.
+pub const USB_TSC_HZ_FALLBACK: u64 = 2_100_000_000;
+
+/// TSC ticks for `ms` at `tsc_hz` (0 Hz → [`USB_TSC_HZ_FALLBACK`]).
+pub fn usb_tsc_ticks_for_ms(tsc_hz: u64, ms: u64) -> u64 {
+    let hz = if tsc_hz == 0 { USB_TSC_HZ_FALLBACK } else { tsc_hz };
+    hz.saturating_mul(ms) / 1_000
+}
+
+/// Elapsed ms between two TSC stamps at `tsc_hz`.
+pub fn usb_tsc_elapsed_ms(tsc_hz: u64, start: u64, now: u64) -> u64 {
+    let hz = if tsc_hz == 0 { USB_TSC_HZ_FALLBACK } else { tsc_hz };
+    now.wrapping_sub(start).saturating_mul(1_000) / hz
+}
+
+/// Pure wait-expiry rule: the spin cap **or** an armed deadline
+/// (`deadline_tsc != 0`) that `now_tsc` has reached. Checked every 4096
+/// spins so the hot loop stays one event-ring read.
+pub fn usb_wait_expired(spins: u32, spins_max: u32, deadline_tsc: u64, now_tsc: u64) -> bool {
+    if spins > spins_max {
+        return true;
+    }
+    if spins % 4096 != 0 || deadline_tsc == 0 {
+        return false;
+    }
+    now_tsc >= deadline_tsc
+}
+
 /// MSC BOT / UAS interface protocol (USB Mass Storage).
 pub const USB_MSC_BOT: u8 = 0x50;
 pub const USB_MSC_UAS: u8 = 0x62;
@@ -182,6 +228,50 @@ pub const USB_DID_TOSHIBA_LUN: u16 = 0xa004;
 pub const USBLEGSUP_ID: u8 = 1;
 pub const USBLEGSUP_BIOS_OWNED: u32 = 1 << 16;
 pub const USBLEGSUP_OS_OWNED: u32 = 1 << 24;
+/// USBLEGCTLSTS = USBLEGSUP + 4 (xHCI 1.2 §7.1.2). SMI enables: bit 0 USB
+/// SMI Enable, bit 4 SMI on Host System Error, bit 13 SMI on OS Ownership,
+/// bit 14 SMI on PCI Command, bit 15 SMI on BAR. Bits 29–31 are RW1C SMI
+/// events. Iron `5c32bd06`: only the two external HS devices lost
+/// SET_ADDRESS while the iDRAC hub on p14 (legacy keyboard path) enumerated;
+/// BIOS SMM keeps servicing the controller unless these are cleared.
+pub const USBLEGCTLSTS_OFF: u32 = 4;
+pub const USBLEGCTLSTS_KEEP: u32 = (0x7 << 1) | (0xff << 5) | (0x7 << 17);
+pub const USBLEGCTLSTS_SMI_ENABLES: u32 = 1 | (1 << 4) | (1 << 13) | (1 << 14) | (1 << 15);
+pub const USBLEGCTLSTS_SMI_EVENTS: u32 = 0x7 << 29;
+
+/// USBLEGCTLSTS value that disables every BIOS SMI source and acknowledges
+/// the pending RW1C events (same mask Linux `quirk_usb_handoff_xhci` uses).
+pub fn legctlsts_disable_smi(val: u32) -> u32 {
+    (val & USBLEGCTLSTS_KEEP) | USBLEGCTLSTS_SMI_EVENTS
+}
+
+/// USBLEGSUP with BIOS Owned forced clear and OS Owned set — used when the
+/// BIOS never released within the wait (Linux does the same after 1 s).
+pub fn legsup_force_os_owned(val: u32) -> u32 {
+    (val & !USBLEGSUP_BIOS_OWNED) | USBLEGSUP_OS_OWNED
+}
+
+/// Legacy handoff outcome for the COM2 line (`xhci legacy …`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct LegacyHandoff {
+    pub found: bool,
+    pub sup_before: u32,
+    pub ctl_before: u32,
+    pub sup_after: u32,
+    pub ctl_after: u32,
+    pub forced: bool,
+}
+
+/// USB 2.0 §9.2.6.2 TRSTRCY: after a port reset completes, no request may be
+/// sent to the device for 10 ms. Linux `hub_port_finish_reset` waits 10+40 ms.
+/// Iron `5c32bd06`: Address Device (SET_ADDRESS) followed PED=1 by
+/// microseconds and never posted on p11 and p10, while the p14 hub posted.
+/// A device still in reset recovery NAKs the STATUS stage and the xHC
+/// retries NAKs forever — that is `cmd=3 cmpl=0xff`.
+pub const USB_PORT_RESET_RECOVERY_MS: u64 = 50;
+/// Intel xHCI: wait 1 ms after setting HCRST before touching any register
+/// (Linux `XHCI_INTEL_HOST` in `xhci_reset`).
+pub const XHCI_INTEL_HCRST_DELAY_MS: u64 = 1;
 
 /// HCSPARAMS2 Max Scratchpad Bufs = Hi[25:21] << 5 | Lo[31:27].
 pub fn xhci_scratchpad_bufs(hcs2: u32) -> u32 {
@@ -634,6 +724,53 @@ pub fn xhci_rw_fail_should_print(n: u32) -> bool {
     n < 8 || n % 64 == 0
 }
 
+/// Guest-path BOT deadline (TSC; 0 = unbounded). Armed by [`xhci_live_rw`],
+/// diskprime, warm, and the soak; cleared on return. Enumeration never arms
+/// it, so bring-up behaviour is unchanged.
+static RW_DEADLINE_TSC: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+/// Last heartbeat stamp for the current guest-path wait.
+static RW_WAIT_BEAT_TSC: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+/// TSC when the current guest-path attempt started (for `ms=` in the beat).
+static RW_WAIT_START_TSC: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+
+fn xhci_tsc_hz() -> u64 {
+    crate::boot::raynu_f_flag::tsc_hz()
+}
+
+/// Arm one attempt's deadline ([`USB_RW_DEADLINE_MS`]) from now.
+fn xhci_arm_rw_deadline() {
+    let now = crate::arch::cpu::rdtsc();
+    let d = now.wrapping_add(usb_tsc_ticks_for_ms(xhci_tsc_hz(), USB_RW_DEADLINE_MS));
+    RW_DEADLINE_TSC.store(d.max(1), core::sync::atomic::Ordering::Release);
+    RW_WAIT_START_TSC.store(now, core::sync::atomic::Ordering::Release);
+    RW_WAIT_BEAT_TSC.store(now, core::sync::atomic::Ordering::Release);
+}
+
+fn xhci_clear_rw_deadline() {
+    RW_DEADLINE_TSC.store(0, core::sync::atomic::Ordering::Release);
+}
+
+/// Run `f` with the guest deadline suspended (restored afterwards). Used by
+/// endpoint recovery so its xHCI commands keep the short `SPINS` cap.
+fn without_rw_deadline<R>(f: impl FnOnce() -> R) -> R {
+    let saved = RW_DEADLINE_TSC.swap(0, core::sync::atomic::Ordering::AcqRel);
+    let r = f();
+    RW_DEADLINE_TSC.store(saved, core::sync::atomic::Ordering::Release);
+    r
+}
+
+/// Spin cap or armed deadline (see [`usb_wait_expired`]).
+fn xhci_wait_expired(spins: u32, spins_max: u32) -> bool {
+    let d = RW_DEADLINE_TSC.load(core::sync::atomic::Ordering::Acquire);
+    if spins > spins_max {
+        return true;
+    }
+    if spins % 4096 != 0 || d == 0 {
+        return false;
+    }
+    usb_wait_expired(spins, spins_max, d, crate::arch::cpu::rdtsc())
+}
+
 /// Iron writequeue COM2 (`f32b9238`): WRITE overlap lived (`wr=1` then
 /// `RAYNU-V-M7-ISO-INSTALL-OK` on the 298 GiB Toshiba). `usb rw ok`
 /// used the fail printer (`n < 8 || n % 64 == 0`) so setup-disk's
@@ -1061,7 +1198,13 @@ fn maybe_tick_spa_during_usb(spins: u32) {
     }
 }
 
-fn handshake_legacy(hw: &mut impl XhciHw) {
+/// xHCI §4.22.1 BIOS→OS handoff: request OS ownership, wait for the BIOS to
+/// release, force it if it never does, then disable every BIOS SMI source
+/// and acknowledge pending SMI events (USBLEGCTLSTS). Without the last step
+/// the BIOS SMM USB driver keeps getting SMIs for our events and PCI writes
+/// and can keep driving a controller we think we own.
+fn handshake_legacy(hw: &mut impl XhciHw) -> LegacyHandoff {
+    let mut out = LegacyHandoff::default();
     let hcc1 = hw.read32(0x10);
     let mut xecp = ((hcc1 >> 16) & 0xFFFF) * 4;
     for _ in 0..32 {
@@ -1070,13 +1213,27 @@ fn handshake_legacy(hw: &mut impl XhciHw) {
         }
         let cap = hw.read32(xecp);
         if cap as u8 == USBLEGSUP_ID {
+            out.found = true;
+            out.sup_before = cap;
+            out.ctl_before = hw.read32(xecp + USBLEGCTLSTS_OFF);
             hw.write32(xecp, cap | USBLEGSUP_OS_OWNED);
+            let mut released = false;
             for _ in 0..SPINS {
                 if hw.read32(xecp) & USBLEGSUP_BIOS_OWNED == 0 {
+                    released = true;
                     break;
                 }
             }
-            return;
+            if !released {
+                out.forced = true;
+                let cur = hw.read32(xecp);
+                hw.write32(xecp, legsup_force_os_owned(cur));
+            }
+            let ctl = hw.read32(xecp + USBLEGCTLSTS_OFF);
+            hw.write32(xecp + USBLEGCTLSTS_OFF, legctlsts_disable_smi(ctl));
+            out.sup_after = hw.read32(xecp);
+            out.ctl_after = hw.read32(xecp + USBLEGCTLSTS_OFF);
+            return out;
         }
         let next = ((cap >> 8) & 0xFF) * 4;
         if next == 0 {
@@ -1084,7 +1241,21 @@ fn handshake_legacy(hw: &mut impl XhciHw) {
         }
         xecp = xecp.saturating_add(next);
     }
+    out
 }
+
+/// Busy-wait `ms` on the TSC (post-EBS; no firmware Stall). Host tests: no-op.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn xhci_delay_ms(ms: u64) {
+    let start = crate::arch::cpu::rdtsc();
+    let ticks = usb_tsc_ticks_for_ms(xhci_tsc_hz(), ms);
+    while crate::arch::cpu::rdtsc().wrapping_sub(start) < ticks {
+        core::hint::spin_loop();
+    }
+}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn xhci_delay_ms(_ms: u64) {}
 
 /// xHCI §7.2 USB Supported Protocol: DWORD0 = ID/next/minor/major,
 /// DWORD2 = Compatible Port Offset (7:0) + Count (15:8).
@@ -1350,6 +1521,107 @@ fn serial_xhci_nop() {
 fn serial_xhci_nopretry() {
     use crate::boot::serial;
     serial::write_line("boot: Stage 46 xhci nopretry (not ISO-INSTALL-OK)");
+}
+
+/// One line per handoff: USBLEGSUP / USBLEGCTLSTS before and after, and
+/// whether BIOS ownership had to be forced. `none` = no USBLEGSUP cap.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_legacy(tag: &str, h: LegacyHandoff) {
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 xhci legacy ");
+    serial::write_str(tag);
+    if !h.found {
+        serial::write_line(" none (not ISO-INSTALL-OK)");
+        return;
+    }
+    serial::write_str(" sup=0x");
+    serial_hex32(h.sup_before);
+    serial::write_str(" ctl=0x");
+    serial_hex32(h.ctl_before);
+    serial::write_str(" -> sup=0x");
+    serial_hex32(h.sup_after);
+    serial::write_str(" ctl=0x");
+    serial_hex32(h.ctl_after);
+    serial::write_str(" forced=");
+    serial_dec_u8(u8::from(h.forced));
+    serial::write_line(" (not ISO-INSTALL-OK)");
+}
+
+/// Controller / ring / context snapshot when an enumeration **command**
+/// never posted (`cmpl=0xff`). Blocking serial: no guest is running.
+/// `sts` bit 2 HSE / bit 12 HCE say the xHC stopped; `iman` bit 0 IP says
+/// an event was posted; `evtrb` cycle vs `evcyc` says whether it sits at
+/// our dequeue with the wrong cycle; `slot`/`ep0st` from the output
+/// context say whether Address Device ever ran; PORTSC says whether the
+/// port dropped out of U0 while SET_ADDRESS was on the wire.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_cmd_timeout_dump(
+    hw: &mut impl XhciHw,
+    caps: &XhciCaps,
+    mem: &XhciMem,
+    cmd_ring: &Ring,
+    ev: &EventRing,
+    port: u8,
+    tag: &str,
+) {
+    use crate::boot::serial;
+    let op = caps.op;
+    let rt = caps.rt;
+    let usbcmd = hw.read32(op);
+    let usbsts = hw.read32(op + 0x04);
+    let crcr = read64(hw, op + 0x18);
+    let iman = hw.read32(rt + 0x20);
+    let erdp = read64(hw, rt + 0x38);
+    let psc = portsc_off(op, port);
+    let portsc = hw.read32(psc);
+    let portpmsc = hw.read32(psc + 4);
+    let ev_trb = read_trb(hw, ev.base, ev.deq);
+    let ev_ctrl = get_u32(&ev_trb, 12);
+    let ev_status = get_u32(&ev_trb, 8);
+    let mut outctx = [0u8; 256];
+    hw.dma_read(mem.devctx, &mut outctx);
+    let cs = ctx_size(caps.csz);
+    let slot_dw3 = get_u32(&outctx, 12);
+    let ep0_off = output_ep_ctx_off(cs, XHCI_EP0_DCI).min(outctx.len() - 16);
+    let ep0_dw0 = get_u32(&outctx, ep0_off);
+    let ep0_deq = get_u64(&outctx, ep0_off + 8);
+    serial::write_str("boot: Stage 46 xhci cmd timeout ");
+    serial::write_str(tag);
+    serial::write_str(" p");
+    serial_dec_u8(port);
+    serial::write_str(" cmd=0x");
+    serial_hex32(usbcmd);
+    serial::write_str(" sts=0x");
+    serial_hex32(usbsts);
+    serial::write_str(" crcr=0x");
+    serial_hex64(crcr);
+    serial::write_str(" iman=0x");
+    serial_hex32(iman);
+    serial::write_str(" erdp=0x");
+    serial_hex64(erdp);
+    serial::write_str(" cmdenq=");
+    serial_dec_u32(u32::from(cmd_ring.enq));
+    serial::write_str(" cmdcyc=");
+    serial_dec_u32(cmd_ring.cycle & 1);
+    serial::write_str(" evdeq=");
+    serial_dec_u32(u32::from(ev.deq));
+    serial::write_str(" evcyc=");
+    serial_dec_u32(ev.cycle & 1);
+    serial::write_str(" evtrb=0x");
+    serial_hex32(ev_ctrl);
+    serial::write_str("/0x");
+    serial_hex32(ev_status);
+    serial::write_str(" portsc=0x");
+    serial_hex32(portsc);
+    serial::write_str(" pmsc=0x");
+    serial_hex32(portpmsc);
+    serial::write_str(" slotst=");
+    serial_dec_u8(((slot_dw3 >> 27) & 0x1F) as u8);
+    serial::write_str(" ep0st=");
+    serial_dec_u8(ep_ctx_state(ep0_dw0));
+    serial::write_str(" ep0deq=0x");
+    serial_hex64(ep0_deq);
+    serial::write_line(" (not ISO-INSTALL-OK)");
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
@@ -1675,6 +1947,19 @@ fn serial_xhci_nop() {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_nopretry() {}
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_legacy(_tag: &str, _h: LegacyHandoff) {}
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_cmd_timeout_dump(
+    _hw: &mut impl XhciHw,
+    _caps: &XhciCaps,
+    _mem: &XhciMem,
+    _cmd_ring: &Ring,
+    _ev: &EventRing,
+    _port: u8,
+    _tag: &str,
+) {
+}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_addrretry(_port: u8) {}
@@ -1850,7 +2135,7 @@ fn consume_control(
         }
         spins = spins.saturating_add(1);
         maybe_tick_spa_during_usb(spins);
-        if spins > spins_max {
+        if xhci_wait_expired(spins, spins_max) {
             store_usb_bot_diag(
                 UsbBotError::Xfer,
                 usb_bot_last_bar(),
@@ -1921,7 +2206,7 @@ fn consume_posted(
         spins = spins.saturating_add(1);
         maybe_serial_xhci_rw_wait(spins, spins_max);
         maybe_tick_spa_during_usb(spins);
-        if spins > spins_max {
+        if xhci_wait_expired(spins, spins_max) {
             let err = xhci_event_err(want_type);
             store_usb_bot_diag(
                 err,
@@ -2000,7 +2285,7 @@ fn consume_bulk_pair(
         spins = spins.saturating_add(1);
         maybe_serial_xhci_rw_wait(spins, spins_max);
         maybe_tick_spa_during_usb(spins);
-        if spins > spins_max {
+        if xhci_wait_expired(spins, spins_max) {
             if out_events >= need_out && in_events >= 1 {
                 store_usb_bot_stage(BOT_STAGE_CSW);
             } else if out_events >= 1 {
@@ -2149,6 +2434,7 @@ fn prime_cmd_ring(
     hold_bot_diag(|| {
         let extra = trb_ctrl(0, TRB_NO_OP_CMD, 0);
         if cmd_wait(hw, caps, cmd_ring, ev, 0, extra, ADDR_SPINS).is_err() {
+            serial_xhci_cmd_timeout_dump(hw, caps, mem, cmd_ring, ev, 0, "nop");
             recover_enum(hw, caps, mem, cmd_ring, ev, 0);
             serial_xhci_nopretry();
             let _ = cmd_wait(hw, caps, cmd_ring, ev, 0, extra, ADDR_SPINS);
@@ -2171,9 +2457,11 @@ fn enable_slot(
     match cmd_wait(hw, caps, cmd_ring, ev, 0, extra, ADDR_SPINS) {
         Ok(ev_en) => Ok(ev_en),
         Err(_) => {
+            serial_xhci_cmd_timeout_dump(hw, caps, mem, cmd_ring, ev, port, "slot");
             recover_enum(hw, caps, mem, cmd_ring, ev, 0);
             serial_xhci_slotretry(port);
             cmd_wait(hw, caps, cmd_ring, ev, 0, extra, ADDR_SPINS).map_err(|e2| {
+                serial_xhci_cmd_timeout_dump(hw, caps, mem, cmd_ring, ev, port, "slot2");
                 recover_enum(hw, caps, mem, cmd_ring, ev, 0);
                 e2
             })
@@ -2311,12 +2599,18 @@ fn address_device(
     match issue_address_device(hw, caps, mem, cmd_ring, ev, port, slot, speed) {
         Ok(()) => Ok(()),
         Err(e) => {
+            serial_xhci_cmd_timeout_dump(hw, caps, mem, cmd_ring, ev, port, "addr");
             abort_keep_slot(hw, caps, mem, cmd_ring, ev);
             if !xhci_retry_address_device(false) {
                 return Err(stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_ADDR, e));
             }
+            // Iron `5c32bd06`: the retry followed the abort by microseconds
+            // and timed out the same way. Give the device its recovery
+            // interval again before the second SET_ADDRESS.
+            xhci_delay_ms(USB_PORT_RESET_RECOVERY_MS);
             serial_xhci_addrretry(port);
             issue_address_device(hw, caps, mem, cmd_ring, ev, port, slot, speed).map_err(|e2| {
+                serial_xhci_cmd_timeout_dump(hw, caps, mem, cmd_ring, ev, port, "addr2");
                 abort_keep_slot(hw, caps, mem, cmd_ring, ev);
                 stamp_enum(hw, caps, mmio, port, XHCI_ENUM_CMD_ADDR, e2)
             })
@@ -2436,7 +2730,7 @@ fn xhci_start(
     hw: &mut impl XhciHw,
     mem: &XhciMem,
 ) -> Result<(XhciCaps, Ring, EventRing), UsbBotError> {
-    handshake_legacy(hw);
+    serial_xhci_legacy("pre", handshake_legacy(hw));
     let snap = xhci_read_cap_snap(hw);
     store_usb_bot_diag(
         UsbBotError::Cap,
@@ -2461,6 +2755,7 @@ fn xhci_start(
         }
     }
     hw.write32(usbcmd, USBCMD_HCRST);
+    xhci_delay_ms(XHCI_INTEL_HCRST_DELAY_MS);
     if !wait_clear(hw, usbcmd, USBCMD_HCRST) {
         return Err(UsbBotError::Reset);
     }
@@ -2468,7 +2763,7 @@ fn xhci_start(
         return Err(UsbBotError::Reset);
     }
     serial_xhci_hcrst();
-    handshake_legacy(hw);
+    serial_xhci_legacy("post", handshake_legacy(hw));
     let slots = xhci_config_slots(caps.max_slots);
     hw.write32(caps.op + 0x38, u32::from(slots));
     zero_page(hw, mem.dcbaa);
@@ -2637,6 +2932,8 @@ fn reset_port(hw: &mut impl XhciHw, caps: &XhciCaps, port: u8) -> Result<u32, Us
         );
         return Err(UsbBotError::Reset);
     }
+    // TRSTRCY: the device may not be addressed for 10 ms after reset.
+    xhci_delay_ms(USB_PORT_RESET_RECOVERY_MS);
     sc = hw.read32(off);
     store_usb_bot_diag_unless_kept(
         UsbBotError::Reset,
@@ -2657,26 +2954,31 @@ fn recover_ep(
     slot: u8,
     dci: u8,
 ) {
-    hold_bot_diag(|| {
-        drain_events(hw, caps, ev);
-        let extra = xhci_ep_cmd_extra(slot, dci);
-        // Timeout: EP is Running. Stop Endpoint then Set TR Dequeue.
-        // Reset Endpoint is Halted-only (iron first-cbw `cmpl=0x13`).
-        let stop_ok = cmd(hw, caps, cmd_ring, ev, 0, trb_ctrl(0, TRB_STOP_EP, extra)).is_ok();
-        if xhci_ep_recover_need_reset(stop_ok) {
-            let _ = cmd(hw, caps, cmd_ring, ev, 0, trb_ctrl(0, TRB_RESET_EP, extra));
-        }
-        zero_page(hw, hpa);
-        *ring = Ring::new(hpa);
-        let _ = cmd(
-            hw,
-            caps,
-            cmd_ring,
-            ev,
-            hpa | 1,
-            trb_ctrl(0, TRB_SET_TR_DEQ, extra),
-        );
-        drain_events(hw, caps, ev);
+    // Recovery commands run on their own `SPINS` cap, never on the guest
+    // deadline: an already-expired deadline would fail the Stop Endpoint
+    // wait instantly and fall into Reset Endpoint on a Running pipe.
+    without_rw_deadline(|| {
+        hold_bot_diag(|| {
+            drain_events(hw, caps, ev);
+            let extra = xhci_ep_cmd_extra(slot, dci);
+            // Timeout: EP is Running. Stop Endpoint then Set TR Dequeue.
+            // Reset Endpoint is Halted-only (iron first-cbw `cmpl=0x13`).
+            let stop_ok = cmd(hw, caps, cmd_ring, ev, 0, trb_ctrl(0, TRB_STOP_EP, extra)).is_ok();
+            if xhci_ep_recover_need_reset(stop_ok) {
+                let _ = cmd(hw, caps, cmd_ring, ev, 0, trb_ctrl(0, TRB_RESET_EP, extra));
+            }
+            zero_page(hw, hpa);
+            *ring = Ring::new(hpa);
+            let _ = cmd(
+                hw,
+                caps,
+                cmd_ring,
+                ev,
+                hpa | 1,
+                trb_ctrl(0, TRB_SET_TR_DEQ, extra),
+            );
+            drain_events(hw, caps, ev);
+        })
     });
 }
 
@@ -3233,8 +3535,16 @@ impl UsbBulk for LiveXhci {
     }
 
     fn settle(&mut self) {
-        for _ in 0..BOT_SETTLE_SPINS {
+        // Bounded by time ([`BOT_SETTLE_MS`]) as well as by spins: 80 M
+        // `pause`s is ~5 s on Skylake-SP and this ran up to four times per
+        // failed guest read.
+        let start = crate::arch::cpu::rdtsc();
+        let ticks = usb_tsc_ticks_for_ms(xhci_tsc_hz(), BOT_SETTLE_MS);
+        for i in 0..BOT_SETTLE_SPINS {
             core::hint::spin_loop();
+            if i % 1024 == 0 && crate::arch::cpu::rdtsc().wrapping_sub(start) >= ticks {
+                break;
+            }
         }
     }
 
@@ -4069,6 +4379,7 @@ pub fn xhci_live_diskprime() {
                 live.tag = 1;
             }
             let mut inq = [0u8; 36];
+            xhci_arm_rw_deadline();
             let _ = live.first_inquiry(live.tag, &mut inq);
             live.settle();
             let mut lba1 = [0u8; 512];
@@ -4079,19 +4390,26 @@ pub fn xhci_live_diskprime() {
             // `EFI PART`, then this prime plus an uncached GPT walk
             // printed `no GPT`. Recover only when the READ fails
             // (Reset on a Running pipe is the firstcbw failure).
+            xhci_arm_rw_deadline();
             let mut read = super::usb_bot::usb_bot_rw(live, &mut tag, lba, 512, &mut lba1, false);
             if read.is_err() {
+                serial_xhci_timeout_dump(live, "diskprime");
                 live.recover_pipes();
                 live.settle();
                 tag = tag.wrapping_add(1);
                 if tag == 0 {
                     tag = 1;
                 }
+                xhci_arm_rw_deadline();
                 read = super::usb_bot::usb_bot_rw(live, &mut tag, lba, 512, &mut lba1, false);
             }
+            xhci_clear_rw_deadline();
             live.tag = tag;
             live.long_bulk = false;
             let sig_ok = read.is_ok() && &lba1[..8] == b"EFI PART";
+            if sig_ok {
+                crate::mgmt::disk_persist::persist_lun_note_efi_part(&lba1[..8]);
+            }
             let err = read.err().map(|e| e as u8).unwrap_or(0);
             serial_xhci_diskprime_lba1(sig_ok, err);
         }
@@ -4121,19 +4439,163 @@ fn xhci_warm_bot_lba0() -> bool {
                 live.tag = 1;
             }
             let mut inq = [0u8; 36];
+            xhci_arm_rw_deadline();
             let _ = live.first_inquiry(live.tag, &mut inq);
             live.settle();
             let mut lba0 = [0u8; 512];
             let mut tag = live.tag;
             let lba = live.lba;
             live.long_bulk = true;
-            let _ = super::usb_bot::usb_bot_rw(live, &mut tag, lba, 0, &mut lba0, false);
+            xhci_arm_rw_deadline();
+            let warm = super::usb_bot::usb_bot_rw(live, &mut tag, lba, 0, &mut lba0, false);
+            xhci_clear_rw_deadline();
+            if warm.is_err() {
+                serial_xhci_timeout_dump(live, "warm");
+            }
             live.tag = tag;
             live.long_bulk = false;
         }
     }
     LIVE_LOCK.store(false, core::sync::atomic::Ordering::Release);
     true
+}
+
+/// USB soak (Phase 1 bench): idle gaps between single-sector READs, in
+/// seconds. Reproduces "first command after idle is lost" without a guest,
+/// a NIC, or a flash per data point. Selected by ESP `EFI/RayNu/usbsoak.txt`.
+pub const USB_SOAK_GAPS_S: [u32; 4] = [0, 5, 30, 120];
+/// READs per gap. ~17 min total when everything succeeds.
+pub const USB_SOAK_READS: [u32; 4] = [200, 24, 10, 5];
+/// LBAs cycled by the soak: MBR, GPT header, ESP start, first ESP data.
+pub const USB_SOAK_LBAS: [u64; 4] = [0, 1, 2048, 4096];
+/// Printed when the soak finished (iron only; never host/CI/nested).
+pub const USB_SOAK_DONE_MARKER: &str = "RAYNU-V-USBSOAK-DONE";
+
+/// Which LBA the soak reads on iteration `i`.
+pub fn usb_soak_lba(i: u32) -> u64 {
+    USB_SOAK_LBAS[(i % 4) as usize]
+}
+
+/// Pure soak schedule: total READs and total idle seconds.
+pub fn usb_soak_budget() -> (u32, u32) {
+    let mut reads = 0u32;
+    let mut idle = 0u32;
+    for (g, n) in USB_SOAK_GAPS_S.iter().zip(USB_SOAK_READS.iter()) {
+        reads = reads.saturating_add(*n);
+        idle = idle.saturating_add(g.saturating_mul(*n));
+    }
+    (reads, idle)
+}
+
+/// Run the USB soak and halt. Post-EBS, after `usb I/O ready` and the peek.
+/// Every READ goes through [`xhci_live_rw`] so the deadline, heartbeat, and
+/// timeout dump are the same code the guest path runs. Does not print any
+/// persist / ISO marker.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+pub fn xhci_usb_soak() -> ! {
+    use crate::boot::serial;
+    let hz = xhci_tsc_hz();
+    let (reads, idle) = usb_soak_budget();
+    serial::write_str("boot: USBSOAK start reads=");
+    serial_dec_u32(reads);
+    serial::write_str(" idle_s=");
+    serial_dec_u32(idle);
+    serial::write_line(" (ESP usbsoak.txt; no guest; not ISO-INSTALL-OK)");
+    let mut total_ok = 0u32;
+    let mut total_fail = 0u32;
+    for (gi, gap_s) in USB_SOAK_GAPS_S.iter().enumerate() {
+        let n = USB_SOAK_READS[gi];
+        let mut ok = 0u32;
+        let mut fail = 0u32;
+        let mut max_ms = 0u64;
+        let mut first_fail_i = u32::MAX;
+        for i in 0..n {
+            if *gap_s > 0 {
+                let start = crate::arch::cpu::rdtsc();
+                let ticks = usb_tsc_ticks_for_ms(hz, u64::from(*gap_s) * 1_000);
+                while crate::arch::cpu::rdtsc().wrapping_sub(start) < ticks {
+                    core::hint::spin_loop();
+                }
+            }
+            let mut sec = [0u8; 512];
+            let t0 = crate::arch::cpu::rdtsc();
+            let r = xhci_live_rw(usb_soak_lba(i) * 512, &mut sec, false);
+            let ms = usb_tsc_elapsed_ms(hz, t0, crate::arch::cpu::rdtsc());
+            if ms > max_ms {
+                max_ms = ms;
+            }
+            if r {
+                ok += 1;
+            } else {
+                fail += 1;
+                if first_fail_i == u32::MAX {
+                    first_fail_i = i;
+                }
+            }
+        }
+        total_ok = total_ok.saturating_add(ok);
+        total_fail = total_fail.saturating_add(fail);
+        serial::write_str("boot: USBSOAK gap_s=");
+        serial_dec_u32(*gap_s);
+        serial::write_str(" n=");
+        serial_dec_u32(n);
+        serial::write_str(" ok=");
+        serial_dec_u32(ok);
+        serial::write_str(" fail=");
+        serial_dec_u32(fail);
+        serial::write_str(" max_ms=");
+        serial_dec_u32(max_ms.min(u64::from(u32::MAX)) as u32);
+        serial::write_str(" first_fail=");
+        if first_fail_i == u32::MAX {
+            serial::write_str("none");
+        } else {
+            serial_dec_u32(first_fail_i);
+        }
+        serial::write_line(" (not ISO-INSTALL-OK)");
+    }
+    serial::write_str("boot: USBSOAK total ok=");
+    serial_dec_u32(total_ok);
+    serial::write_str(" fail=");
+    serial_dec_u32(total_fail);
+    serial::write_line(" (not ISO-INSTALL-OK)");
+    serial::write_line(USB_SOAK_DONE_MARKER);
+    usb_soak_halt(hz)
+}
+
+/// Soak boot whose USB never enumerated (iron `5c32bd06`: Address Device
+/// `cmd=3 cmpl=0xff` on p11 and p10, then the boot fell through to the ISO
+/// on leftover DRAM and printed a RAM `login:`). With `usbsoak.txt` set,
+/// halt here instead: no guest, no ISO, no `setup-disk`. Does **not** print
+/// [`USB_SOAK_DONE_MARKER`] — nothing was soaked.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+pub fn xhci_usb_soak_halt_enum_fail(err: u8) -> ! {
+    use crate::boot::serial;
+    serial::write_str("boot: USBSOAK abort — USB enumeration failed err=");
+    serial_dec_u8(err);
+    serial::write_line(
+        "; no guest this boot; read the xhci legacy / cmd timeout lines above (not ISO-INSTALL-OK)",
+    );
+    usb_soak_halt(xhci_tsc_hz())
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn usb_soak_halt(hz: u64) -> ! {
+    use crate::boot::serial;
+    serial::write_line("boot: USBSOAK halt — Force Off when done reading COM2 (not ISO-INSTALL-OK)");
+    let mut last = crate::arch::cpu::rdtsc();
+    let beat = usb_tsc_ticks_for_ms(hz, 60_000);
+    let mut t_s = 0u32;
+    loop {
+        core::hint::spin_loop();
+        let now = crate::arch::cpu::rdtsc();
+        if now.wrapping_sub(last) >= beat {
+            last = now;
+            t_s = t_s.saturating_add(60);
+            serial::write_str_nowait("boot: USBSOAK halt alive t_s=");
+            serial_dec_u32_nowait(t_s);
+            serial::write_line_nowait(" (not ISO-INSTALL-OK)");
+        }
+    }
 }
 
 /// First BlockIo read past the GPT pin, after the disk bootloader is staged.
@@ -4172,6 +4634,7 @@ pub fn xhci_live_rw(off: u64, buf: &mut [u8], write: bool) -> bool {
                     }
                     let mut tag = live.tag;
                     let lba = live.lba;
+                    xhci_arm_rw_deadline();
                     let r = super::usb_bot::usb_bot_rw(
                         live,
                         &mut tag,
@@ -4186,6 +4649,11 @@ pub fn xhci_live_rw(off: u64, buf: &mut [u8], write: bool) -> bool {
                             // Stale event after the pin settle, not a Reset
                             // of a Running pipe (iron `08202468`). One
                             // drain+settle retry, then the original error.
+                            if xhci_rw_fail_should_print(
+                                RW_FAIL_N.load(core::sync::atomic::Ordering::Acquire),
+                            ) {
+                                serial_xhci_timeout_dump(live, "rw");
+                            }
                             let mut hw = MmioXhci { base: live.mmio };
                             drain_events(&mut hw, &live.caps, &mut live.ev);
                             live.settle();
@@ -4193,6 +4661,7 @@ pub fn xhci_live_rw(off: u64, buf: &mut [u8], write: bool) -> bool {
                             if tag2 == 0 {
                                 tag2 = 1;
                             }
+                            xhci_arm_rw_deadline();
                             let retry = super::usb_bot::usb_bot_rw(
                                 live,
                                 &mut tag2,
@@ -4206,6 +4675,7 @@ pub fn xhci_live_rw(off: u64, buf: &mut [u8], write: bool) -> bool {
                         }
                     };
                     live.tag = tag;
+                    xhci_clear_rw_deadline();
                     match r {
                         Ok(()) => {
                             if !write {
@@ -4287,13 +4757,120 @@ fn serial_xhci_rw_ok(off: u64, write: bool) {
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn maybe_serial_xhci_rw_wait(spins: u32, spins_max: u32) {
-    if spins != BULK_SPINS || spins_max <= BULK_SPINS {
+    use crate::boot::serial;
+    if spins == BULK_SPINS && spins_max > BULK_SPINS {
+        serial::write_str_nowait("boot: Stage 46 durable LUN usb rw wait spins=");
+        serial_dec_u32_nowait(spins);
+        serial::write_line_nowait(" (not ISO-INSTALL-OK)");
+    }
+    // Heartbeat every USB_WAIT_HEARTBEAT_MS while a guest-path deadline is
+    // armed. Nowait so it cannot stall on COM2.
+    if spins % 65_536 != 0
+        || RW_DEADLINE_TSC.load(core::sync::atomic::Ordering::Acquire) == 0
+    {
         return;
     }
+    let now = crate::arch::cpu::rdtsc();
+    let hz = xhci_tsc_hz();
+    let last = RW_WAIT_BEAT_TSC.load(core::sync::atomic::Ordering::Acquire);
+    if now.wrapping_sub(last) < usb_tsc_ticks_for_ms(hz, USB_WAIT_HEARTBEAT_MS) {
+        return;
+    }
+    RW_WAIT_BEAT_TSC.store(now, core::sync::atomic::Ordering::Release);
+    let start = RW_WAIT_START_TSC.load(core::sync::atomic::Ordering::Acquire);
+    serial::write_str_nowait("boot: Stage 46 durable LUN usb rw waiting ms=");
+    serial_dec_u32_nowait(usb_tsc_elapsed_ms(hz, start, now).min(u64::from(u32::MAX)) as u32);
+    serial::write_str_nowait(" of ");
+    serial_dec_u32_nowait(USB_RW_DEADLINE_MS as u32);
+    serial::write_str_nowait(" bot=");
+    serial::write_str_nowait(usb_bot_stage_name(usb_bot_last_stage()));
+    serial::write_line_nowait(" (SPA ticking; not ISO-INSTALL-OK)");
+}
+
+/// One nowait COM2 line with the controller/ring/endpoint state at the
+/// moment a guest-path BOT command failed. `cmpl=0xff` alone says "no
+/// Transfer Event"; this says whether the xHC ever consumed our TRB
+/// (EP TR Dequeue vs our enqueue), whether an event is sitting at our
+/// dequeue with the wrong cycle bit (`evtrb` vs `evcyc`), whether the
+/// command ring is running, and what the port/link is doing (PORTSC PLS,
+/// PORTPMSC L1/HLE). xHCI 1.2 §5.4 / §5.5.2 / §6.2.3.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_timeout_dump(live: &mut LiveXhci, tag: &str) {
     use crate::boot::serial;
-    serial::write_str_nowait("boot: Stage 46 durable LUN usb rw wait spins=");
-    serial_dec_u32_nowait(spins);
-    serial::write_line_nowait(" (not ISO-INSTALL-OK)");
+    let mut hw = MmioXhci { base: live.mmio };
+    let op = live.caps.op;
+    let rt = live.caps.rt;
+    let usbcmd = hw.read32(op);
+    let usbsts = hw.read32(op + 0x04);
+    let crcr = read64(&mut hw, op + 0x18);
+    let iman = hw.read32(rt + 0x20);
+    let imod = hw.read32(rt + 0x24);
+    let erdp = read64(&mut hw, rt + 0x38);
+    let psc = portsc_off(op, live.port);
+    let portsc = hw.read32(psc);
+    let portpmsc = hw.read32(psc + 4);
+    let ev_trb = read_trb(&mut hw, live.ev.base, live.ev.deq);
+    let ev_ctrl = get_u32(&ev_trb, 12);
+    let mut outctx = [0u8; 4096];
+    hw.dma_read(live.mem.devctx, &mut outctx);
+    let cs = live.cs;
+    let ep0_off = output_ep_ctx_off(cs, XHCI_EP0_DCI);
+    let out_off = output_ep_ctx_off(cs, live.dci_out);
+    let in_off = output_ep_ctx_off(cs, live.dci_in);
+    let ep0_st = ep_ctx_state(get_u32(&outctx, ep0_off));
+    let out_st = ep_ctx_state(get_u32(&outctx, out_off));
+    let in_st = ep_ctx_state(get_u32(&outctx, in_off));
+    let out_deq = get_u64(&outctx, out_off + 8);
+    let in_deq = get_u64(&outctx, in_off + 8);
+    serial::write_str_nowait("boot: Stage 46 xhci timeout ");
+    serial::write_str_nowait(tag);
+    serial::write_str_nowait(" p");
+    serial_dec_u8_nowait(live.port);
+    serial::write_str_nowait(" cmd=0x");
+    serial_hex32_nowait(usbcmd);
+    serial::write_str_nowait(" sts=0x");
+    serial_hex32_nowait(usbsts);
+    serial::write_str_nowait(" crcr=0x");
+    serial_hex64_nowait(crcr);
+    serial::write_str_nowait(" iman=0x");
+    serial_hex32_nowait(iman);
+    serial::write_str_nowait(" imod=0x");
+    serial_hex32_nowait(imod);
+    serial::write_str_nowait(" erdp=0x");
+    serial_hex64_nowait(erdp);
+    serial::write_str_nowait(" evdeq=");
+    serial_dec_u32_nowait(u32::from(live.ev.deq));
+    serial::write_str_nowait(" evcyc=");
+    serial_dec_u32_nowait(live.ev.cycle & 1);
+    serial::write_str_nowait(" evtrb=0x");
+    serial_hex32_nowait(ev_ctrl);
+    serial::write_str_nowait(" portsc=0x");
+    serial_hex32_nowait(portsc);
+    serial::write_str_nowait(" pmsc=0x");
+    serial_hex32_nowait(portpmsc);
+    serial::write_str_nowait(" ep0st=");
+    serial_dec_u8_nowait(ep0_st);
+    serial::write_str_nowait(" out(st=");
+    serial_dec_u8_nowait(out_st);
+    serial::write_str_nowait(" enq=");
+    serial_dec_u32_nowait(u32::from(live.bulk_out.enq));
+    serial::write_str_nowait(" cyc=");
+    serial_dec_u32_nowait(live.bulk_out.cycle & 1);
+    serial::write_str_nowait(" deq=0x");
+    serial_hex64_nowait(out_deq);
+    serial::write_str_nowait(" base=0x");
+    serial_hex64_nowait(live.bulk_out.base);
+    serial::write_str_nowait(") in(st=");
+    serial_dec_u8_nowait(in_st);
+    serial::write_str_nowait(" enq=");
+    serial_dec_u32_nowait(u32::from(live.bulk_in.enq));
+    serial::write_str_nowait(" cyc=");
+    serial_dec_u32_nowait(live.bulk_in.cycle & 1);
+    serial::write_str_nowait(" deq=0x");
+    serial_hex64_nowait(in_deq);
+    serial::write_str_nowait(" base=0x");
+    serial_hex64_nowait(live.bulk_in.base);
+    serial::write_line_nowait(") (not ISO-INSTALL-OK)");
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
@@ -4371,6 +4948,49 @@ mod xhci_pack_test {
         usb_bot_last_portsc, usb_bot_last_scsi, usb_bot_last_stage, usb_bot_scsi_name,
         usb_bot_stage_name,
     };
+
+    /// Phase 0: guest-path waits are bounded by time as well as spins.
+    #[test]
+    fn usb_wait_expiry_is_spins_or_armed_deadline() {
+        // Spin cap still ends the wait.
+        assert!(usb_wait_expired(BULK_SPINS + 1, BULK_SPINS, 0, 0));
+        // Deadline 0 = unbounded (enumeration path unchanged).
+        assert!(!usb_wait_expired(4096, FIRST_READ_SPINS, 0, u64::MAX));
+        // Armed deadline is only sampled every 4096 spins.
+        assert!(!usb_wait_expired(4095, FIRST_READ_SPINS, 100, 200));
+        assert!(usb_wait_expired(4096, FIRST_READ_SPINS, 100, 200));
+        assert!(!usb_wait_expired(4096, FIRST_READ_SPINS, 300, 200));
+        assert!(usb_wait_expired(8192, FIRST_READ_SPINS, 200, 200));
+    }
+
+    #[test]
+    fn usb_tsc_helpers_use_fallback_hz() {
+        assert_eq!(usb_tsc_ticks_for_ms(2_000_000_000, 8_000), 16_000_000_000);
+        assert_eq!(usb_tsc_ticks_for_ms(0, 1_000), USB_TSC_HZ_FALLBACK);
+        assert_eq!(usb_tsc_elapsed_ms(2_000_000_000, 1_000, 1_000 + 4_000_000_000), 2_000);
+        assert_eq!(usb_tsc_elapsed_ms(0, 0, USB_TSC_HZ_FALLBACK), 1_000);
+        // 8 s per attempt is under the 180 s RayNu-F wall cap even with the
+        // built-in retry, settle, and second attempt.
+        assert!(USB_RW_DEADLINE_MS * 2 + BOT_SETTLE_MS * 3 < 180_000);
+        assert!(USB_WAIT_HEARTBEAT_MS < USB_RW_DEADLINE_MS);
+    }
+
+    /// Phase 1 bench schedule stays bounded (~17 min idle) and cycles the
+    /// four LBAs GRUB and the peek actually read.
+    #[test]
+    fn usb_soak_schedule_is_bounded() {
+        let (reads, idle) = usb_soak_budget();
+        assert_eq!(reads, 239);
+        assert_eq!(idle, 0 + 5 * 24 + 30 * 10 + 120 * 5);
+        assert!(idle <= 20 * 60);
+        assert_eq!(usb_soak_lba(0), 0);
+        assert_eq!(usb_soak_lba(1), 1);
+        assert_eq!(usb_soak_lba(2), 2048);
+        assert_eq!(usb_soak_lba(3), 4096);
+        assert_eq!(usb_soak_lba(4), 0);
+        assert_eq!(USB_SOAK_DONE_MARKER, "RAYNU-V-USBSOAK-DONE");
+        assert!(!USB_SOAK_DONE_MARKER.contains("PERSIST"));
+    }
 
     #[test]
     fn trb_ctrl_packs_type_and_cycle() {
@@ -4457,8 +5077,85 @@ mod xhci_pack_test {
             hcc1: (0x20 / 4) << 16,
             leg: u32::from(USBLEGSUP_ID) | USBLEGSUP_BIOS_OWNED,
         };
-        handshake_legacy(&mut hw);
+        let h = handshake_legacy(&mut hw);
         assert_ne!(hw.leg & USBLEGSUP_OS_OWNED, 0);
+        assert!(h.found);
+        assert!(!h.forced);
+    }
+
+    /// Iron `5c32bd06`: BIOS SMIs were never disabled and a BIOS that keeps
+    /// the controller was never forced out. xHCI §4.22.1 / §7.1.2.
+    #[test]
+    fn legacy_handoff_disables_bios_smis_and_forces_a_stubborn_bios() {
+        struct StubbornBios {
+            sup: u32,
+            ctl: u32,
+        }
+        impl XhciHw for StubbornBios {
+            fn read32(&mut self, off: u32) -> u32 {
+                match off {
+                    0x10 => (0x20 / 4) << 16,
+                    0x20 => self.sup,
+                    0x24 => self.ctl,
+                    _ => 0,
+                }
+            }
+            fn write32(&mut self, off: u32, val: u32) {
+                match off {
+                    // The BIOS never clears its own bit; only an explicit
+                    // write with bit 16 = 0 (the forced handoff) clears it.
+                    0x20 => self.sup = val,
+                    // RW1C event bits: writing 1 clears them.
+                    0x24 => {
+                        let events = self.ctl & USBLEGCTLSTS_SMI_EVENTS & !val;
+                        self.ctl = (val & !USBLEGCTLSTS_SMI_EVENTS) | events;
+                    }
+                    _ => {}
+                }
+            }
+            fn dma_read(&mut self, _hpa: u64, buf: &mut [u8]) {
+                buf.fill(0);
+            }
+            fn dma_write(&mut self, _hpa: u64, _buf: &[u8]) {}
+        }
+        // BIOS owned; every SMI source enabled; two events pending;
+        // a reserved bit set that must survive.
+        let reserved = 1 << 7;
+        let mut hw = StubbornBios {
+            sup: u32::from(USBLEGSUP_ID) | USBLEGSUP_BIOS_OWNED,
+            ctl: USBLEGCTLSTS_SMI_ENABLES | (1 << 29) | (1 << 31) | reserved,
+        };
+        let h = handshake_legacy(&mut hw);
+        assert!(h.found);
+        assert!(h.forced, "BIOS never released; ownership must be forced");
+        assert_eq!(hw.sup & USBLEGSUP_BIOS_OWNED, 0);
+        assert_ne!(hw.sup & USBLEGSUP_OS_OWNED, 0);
+        assert_eq!(hw.ctl & USBLEGCTLSTS_SMI_ENABLES, 0, "all BIOS SMIs off");
+        assert_eq!(hw.ctl & USBLEGCTLSTS_SMI_EVENTS, 0, "pending SMI events acked");
+        assert_ne!(hw.ctl & reserved, 0, "reserved bits preserved");
+        assert_eq!(h.sup_after, hw.sup);
+        assert_eq!(h.ctl_after, hw.ctl);
+
+        // Pure masks (Linux quirk_usb_handoff_xhci equivalents).
+        assert_eq!(legctlsts_disable_smi(0xFFFF_FFFF) & USBLEGCTLSTS_SMI_ENABLES, 0);
+        assert_eq!(
+            legctlsts_disable_smi(0) & USBLEGCTLSTS_SMI_EVENTS,
+            USBLEGCTLSTS_SMI_EVENTS
+        );
+        assert_eq!(USBLEGCTLSTS_KEEP & USBLEGCTLSTS_SMI_ENABLES, 0);
+        assert_eq!(USBLEGCTLSTS_KEEP & USBLEGCTLSTS_SMI_EVENTS, 0);
+        let forced = legsup_force_os_owned(u32::from(USBLEGSUP_ID) | USBLEGSUP_BIOS_OWNED);
+        assert_eq!(forced & USBLEGSUP_BIOS_OWNED, 0);
+        assert_ne!(forced & USBLEGSUP_OS_OWNED, 0);
+        assert_eq!(forced as u8, USBLEGSUP_ID);
+
+        // USB 2.0 §9.2.6.2 TRSTRCY is 10 ms; Linux uses 50. Intel HCRST 1 ms.
+        assert!(USB_PORT_RESET_RECOVERY_MS >= 10);
+        assert_eq!(USB_PORT_RESET_RECOVERY_MS, 50);
+        assert_eq!(XHCI_INTEL_HCRST_DELAY_MS, 1);
+        // Recovery delays must stay far under the RayNu-F wall cap even for
+        // 26 ports and two Address Device attempts each.
+        assert!(26 * 2 * USB_PORT_RESET_RECOVERY_MS < 10_000);
     }
 
     #[test]

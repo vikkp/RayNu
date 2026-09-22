@@ -94,6 +94,8 @@ pub fn probe_bzimage() {
     }
     // ADR-016 F2b: raynuf.txt opts into the RayNu-F test-app launch.
     crate::boot::raynu_f_flag::probe();
+    // M8 Phase 1 bench: usbsoak.txt runs the post-EBS USB soak instead of a guest.
+    crate::boot::usb_soak_flag::probe();
 
     let image = boot::image_handle();
     let Ok(sfs) = boot::get_image_file_system(image) else {

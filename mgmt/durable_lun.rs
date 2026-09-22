@@ -814,6 +814,10 @@ pub fn init_durable_lun_usb_io() {
                     write_dec(u64::from(crate::mgmt::usb_bot::usb_bot_lba_bytes()));
                     serial::write_line(" (not ISO-INSTALL-OK)");
                     serial_lun_peek("usb");
+                    // Phase 1 bench: never returns; no guest this boot.
+                    if crate::boot::usb_soak_flag::requested() {
+                        crate::mgmt::xhci::xhci_usb_soak();
+                    }
                 }
                 return;
             }
@@ -843,6 +847,12 @@ pub fn init_durable_lun_usb_io() {
                     serial::write_str("boot: Stage 46 durable LUN ");
                     serial::write_str(DURABLE_LUN_NEED_MEDIA_NOTE);
                     serial::write_line(" (not ISO-INSTALL-OK)");
+                    // Phase 1 bench: a soak boot never falls through to a guest.
+                    if crate::boot::usb_soak_flag::requested() {
+                        crate::mgmt::xhci::xhci_usb_soak_halt_enum_fail(
+                            crate::mgmt::usb_bot::usb_bot_last_err(),
+                        );
+                    }
                 }
             }
         }
@@ -897,6 +907,9 @@ fn serial_lun_peek(tag: &str) {
             lun_cache_clear();
         }
         let try_peek = durable_lun_read_any(512, &mut sig);
+        if try_peek {
+            crate::mgmt::disk_persist::persist_lun_note_efi_part(&sig);
+        }
         let parts = crate::mgmt::disk_persist::persist_lun_keep_parts();
         let rank = u8::from(parts.0) + u8::from(parts.1) + u8::from(parts.2);
         let best_rank = u8::from(best.0) + u8::from(best.1) + u8::from(best.2);

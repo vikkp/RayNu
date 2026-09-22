@@ -608,3 +608,37 @@ fn host_never_prints_everest_iso_install_ok() {
         "RAYNU-V-M8-DISK-PERSIST-HOST-OK"
     );
 }
+
+/// Phase 0 fail-safe latch (iron `15e3d665`): one `EFI PART` read forbids
+/// the ISO on a serving LUN even when pin and sticky both missed.
+#[test]
+fn efi_part_seen_forbids_iso_on_a_serving_lun() {
+    persist_lun_clear_sticky();
+    assert!(!persist_lun_efi_part_seen());
+    persist_lun_note_efi_part(b"EFI PARX");
+    assert!(!persist_lun_efi_part_seen(), "wrong signature must not latch");
+    persist_lun_note_efi_part(b"EFI");
+    assert!(!persist_lun_efi_part_seen(), "short buffer must not latch");
+    persist_lun_note_efi_part(b"EFI PART\x00\x00\x01\x00");
+    assert!(persist_lun_efi_part_seen());
+    assert!(!persist_lun_gpt_pin_valid(), "latch is independent of the pin");
+    assert!(!persist_lun_sticky_keep(), "latch is independent of sticky keep");
+    assert!(persist_lun_iso_forbidden(true, persist_lun_efi_part_seen()));
+    assert!(
+        !persist_lun_iso_forbidden(false, true),
+        "leftover DRAM / nested file disk is not guarded by the LUN latch"
+    );
+    assert!(!persist_lun_iso_forbidden(true, false));
+    persist_lun_clear_sticky();
+    assert!(!persist_lun_efi_part_seen(), "clear resets the latch");
+}
+
+/// The pin store notes the signature it verified.
+#[test]
+fn pin_store_notes_efi_part() {
+    persist_lun_clear_sticky();
+    let fixture = build_gpt_esp_ext4_image();
+    assert!(persist_lun_gpt_pin_store(&SliceDisk(&fixture)));
+    assert!(persist_lun_efi_part_seen());
+    persist_lun_clear_sticky();
+}

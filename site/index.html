@@ -154,11 +154,12 @@
             <code>root=UUID=814a97a0-…</code> → <code>login:</code>.
             That is M7 / ADR-009. M8 has since closed TLS
             (<code>RAYNU-V-M8-TLS-OK</code>) and HV-reboot persist
-            (<code>RAYNU-V-M8-DISK-PERSIST-OK</code>) on COM2. The latest
-            keep=1 boot (<code>28cd4ff1</code>) still stops at the GRUB
-            command line; the next EFI warms USB on the first read past the
-            GPT pin. A standing SPA and a guest console UI are still open —
-            not a reopened Everest.
+            (<code>RAYNU-V-M8-DISK-PERSIST-OK</code>) on COM2. Persist is not yet
+            repeatable: <code>5c32bd06</code> saw the soak flag, lost
+            SET_ADDRESS to the two external USB devices, and reached
+            <code>login:</code> on a 1&nbsp;GiB RAM disk. The next EFI adds the
+            USB reset-recovery interval and a proper BIOS handoff. A standing
+            SPA and a guest console UI are still open — not a reopened Everest.
             Iron rollback:
             <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed"
               ><code>v0.1.0-everest-closed</code></a

@@ -70,15 +70,27 @@ pub fn requested() -> bool {
     REQUESTED.load(Ordering::Acquire)
 }
 
+/// Distinguishes an operator SPA Start from the `raynuf.txt` flag file.
+/// Phase 0: only an explicit Start may let the installer auto-answer wipe
+/// a virtio disk that is backed by a durable LUN.
+static SPA_STARTED: AtomicBool = AtomicBool::new(false);
+
 /// SPA/REST product-ISO start (Phase B / P0-63). Same latch as `raynuf.txt`.
 /// Does not print `ISO-INSTALL-OK`. Firmware serial is the SPA start note.
 pub fn request_from_spa() {
     REQUESTED.store(true, Ordering::Release);
+    SPA_STARTED.store(true, Ordering::Release);
+}
+
+/// True only after [`request_from_spa`] (not after the ESP flag file).
+pub fn spa_started() -> bool {
+    SPA_STARTED.load(Ordering::Acquire)
 }
 
 /// Clear the RayNu-F request latch (host tests).
 pub fn clear_request() {
     REQUESTED.store(false, Ordering::Release);
+    SPA_STARTED.store(false, Ordering::Release);
 }
 
 /// Host tests only.
