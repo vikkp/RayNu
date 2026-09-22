@@ -348,26 +348,26 @@
 
       <section class="section section--hda-com2" id="now">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>NOW · wall-cap at grub&gt;</p>
-          <h2 class="section__title">GRUB stopped at 180 seconds</h2>
+          <p class="milestone-kicker" data-reveal>NOW · USB warm skipped</p>
+          <h2 class="section__title">The pin skipped the read GRUB needs</h2>
           <p class="section__lede">
-            EFI <code>d60431ee</code> peeked <code>installed=1</code>, attached
-            the 8 GiB slice <code>keep=1</code>, and launched
-            <code>image=DISK-BOOTX64</code> (<code>BOOTX64.EFI</code> 139264
-            bytes). GNU GRUB 2.12 reached <code>grub&gt;</code>. COM2 keys did
-            not land. After <code>wall_ms=180005</code> and
-            <code>exits=308551680</code> the firmware printed
-            <code>RayNu-F stop wall-cap</code> (<code>blk_rd=33</code>
-            <code>blk_wr=0</code>) and then
-            <code>product ISO hold</code>. That hold does not proceed, does
-            not listen, and does not take keys. Force Off. Do not POST
-            <code>/vms/1/start</code>. Do not run <code>setup-disk</code>.
+            EFI <code>928d6224</code> warmed the USB pipe (drain, inquiry,
+            READ LBA0) and the installed GRUB menu reached
+            <code>login:</code>. EFI <code>d60431ee</code> still launched
+            <code>image=DISK-BOOTX64</code>, then
+            <code>diskprime lba1=pin</code> returned without touching USB.
+            GRUB finished 33 reads of the RAM GPT
+            (<code>blk_rd=33</code>) and never opened
+            <code>grub.cfg</code>, so it sat at <code>grub&gt;</code> until
+            the 180 s cap. Force Off, then flash the EFI that prints
+            <code>warm=1</code>. Do not POST <code>/vms/1/start</code>. Do
+            not run <code>setup-disk</code>.
           </p>
-          <pre class="ship-code" data-reveal><code>lived:  d60431ee installed=1 keep=1 lba1=pin image=DISK-BOOTX64
-stop:   wall-cap exits=308551680 wall_ms=180005 blk_wr=0
-then:   product ISO hold   will not proceed
-now:    Force Off   do not curl Start   do not setup-disk
-never:  F11 08202468   flash Toshiba /dev/sdc</code></pre>
+          <pre class="ship-code" data-reveal><code>closed: 928d6224 diskprime READ LBA0 → menu → login:
+lived:  d60431ee lba1=pin (no USB) blk_rd=33 → grub&gt; → wall-cap
+next:   warm=1 READ LBA0   no recover_pipes
+now:    Force Off   then F11 the warm EFI   do not curl Start
+never:  F11 d60431ee   F11 08202468   flash Toshiba /dev/sdc</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
             Rollback remains GitHub Latest
             <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed"

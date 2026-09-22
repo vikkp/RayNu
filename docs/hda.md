@@ -355,7 +355,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | m8-gpt-pin-hold |
-| Summary | **Wall-cap at `grub>`.** EFI `d60431ee`: peek `installed=1`, virtio `keep=1`, `diskprime lba1=pin`, `BOOTX64.EFI bytes=139264`, `image=DISK-BOOTX64`, GNU GRUB 2.12 at `grub>` (COM2 keys did not land), then `RayNu-F stop wall-cap exits=308551680 wall_ms=180005 blk_rd=33 blk_wr=0` and `product ISO hold`. Will not proceed. Do not curl the `linux_iso` Start. Force Off. Do not F11 `08202468`. Months **0.0 held**. Overall **99 held**. |
+| Summary | **Pin skipped the USB warm.** Persist-close `928d6224` diskprime READ LBA0 and the installed GRUB menu reached `login:`. `d60431ee` `lba1=pin` returned with no USB touch. `blk_rd=33` is the RAM GPT prefix. GRUB never opened `grub.cfg`, sat at `grub>`, then `wall_ms=180005`. This EFI warms the pipe (`warm=1`, READ LBA0, no `recover_pipes`). Not lived. Do not curl Start. Do not F11 `08202468` or `d60431ee`. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | months **0.0 held**; overall **99 held**; ETA 2026-09 held. Not 100%. A4s not iron. Nested QEMU ≠ R640. |
 | Gates touched | `fn persist_lun_gpt_pin_valid`. `fn persist_lun_probe_done`. `diskprime lba1=pin`. `./tools/sync-hda-site.sh --check`. Sit at `localhost:~#`. |
 | Months Δ | 0.0 held (Everest closed; stage fix not lived on R640) |
@@ -381,7 +381,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
-| 2026-09-22 | m8-gpt-pin-hold | 0.0 | 99 | **Wall-cap at `grub>`.** EFI `d60431ee`: `DISK-BOOTX64` `BOOTX64.EFI bytes=139264` → GRUB 2.12 `grub>` → `RayNu-F stop wall-cap exits=308551680 wall_ms=180005 blk_rd=33 blk_wr=0` → `product ISO hold`. Will not proceed. Do not curl `/vms/1/start`. Force Off. Do not F11 `08202468`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
+| 2026-09-22 | m8-grub-stay | 0.0 | 99 | **Restore the USB warm.** `928d6224` diskprime READ LBA0 → GRUB menu → `login:`. `d60431ee` `lba1=pin` skipped that warm; `blk_rd=33` then `grub>` then `wall_ms=180005`. This EFI `warm=1` READ LBA0, no `recover_pipes`. Not lived. Do not F11 `d60431ee`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
+| 2026-09-22 | m8-gpt-pin-hold | 0.0 | 99 | **Wall-cap at `grub>`.** EFI `d60431ee`: `DISK-BOOTX64` → GRUB `grub>` → `RayNu-F stop wall-cap exits=308551680 wall_ms=180005 blk_rd=33 blk_wr=0` → `product ISO hold`. Do not F11 `08202468`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-22 | m8-gpt-pin-hold | 0.0 | 99 | **Pin-hold lived on COM2.** EFI `d60431ee`: `installed=1` `keep=1` `lba1=pin` `BOOTX64.EFI bytes=139264` `image=DISK-BOOTX64` → GNU GRUB 2.12 `grub>`. Not ISO. Not `login:` yet. Type `normal` was the instruction before the wall-cap. Do not F11 `08202468`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-21 | m8-gpt-pin-hold | 0.0 | 99 | **Hold the peek GPT and skip the ISO.** Lived `08202468`: peek `gpt=1 fit=1` `usb_err=8` `installed=0` then `image=ISO-BOOTX64` and `vda` I/O error / RCU stall. Pin survives the miss; diskprime prints `lba1=pin`; ISO stays off. Do not F11 `08202468`. Sit at `localhost:~#`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
 | 2026-09-21 | m8-gpt-pin-stage | 0.0 | 99 | **Pin peek GPT for RayNu-F stage.** Lived `3b388279`: peek keep=1 then `no GPT` ×3, `image=test-app`, `product ISO hold` (spin, not a USB wait). Do not F11 `3b388279`. Sit at `localhost:~#`. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |

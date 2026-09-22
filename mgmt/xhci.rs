@@ -4036,14 +4036,44 @@ pub fn xhci_live_peek_retry(_n: u8) {}
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 pub fn xhci_live_diskprime() {
     serial_xhci_diskprime();
-    // Peek already stored LBA1. A fresh BOT read here failed on iron
-    // `08202468` (`lba1=miss err=4`) and recover_pipes ran before GRUB.
+    // Persist-close EFI `928d6224` always drained, inquired, and READ LBA0
+    // here. GRUB then loaded `grub.cfg` and the 2 s menu reached `login:`.
+    // Iron `d60431ee` returned on a valid pin with no USB touch. GRUB's
+    // BlockIo served LBA0–LBA33 from the RAM pin (`blk_rd=33`) and the
+    // ESP/ext4 read never landed, so GRUB stayed at `grub>` until the
+    // 180 s wall cap. Warm the pipe the same way. Do not `recover_pipes`
+    // (iron `08202468` Reset on a Running pipe, then `image=ISO-BOOTX64`).
     let mut pinned = [0u8; 8];
-    if crate::mgmt::disk_persist::persist_lun_gpt_pin_read(512, &mut pinned)
-        && &pinned == b"EFI PART"
-    {
+    let pin_holds = crate::mgmt::disk_persist::persist_lun_gpt_pin_read(512, &mut pinned)
+        && &pinned == b"EFI PART";
+    if pin_holds {
         use crate::boot::serial;
-        serial::write_line("boot: Stage 46 diskprime lba1=pin (not ISO-INSTALL-OK)");
+        serial::write_line("boot: Stage 46 diskprime lba1=pin warm=1 (not ISO-INSTALL-OK)");
+        if LIVE_LOCK.swap(true, core::sync::atomic::Ordering::Acquire) {
+            return;
+        }
+        unsafe {
+            if let Some(live) = LIVE.as_mut() {
+                let mut hw = MmioXhci { base: live.mmio };
+                drain_events(&mut hw, &live.caps, &mut live.ev);
+                live.settle();
+                live.tag = live.tag.wrapping_add(1);
+                if live.tag == 0 {
+                    live.tag = 1;
+                }
+                let mut inq = [0u8; 36];
+                let _ = live.first_inquiry(live.tag, &mut inq);
+                live.settle();
+                let mut lba0 = [0u8; 512];
+                let mut tag = live.tag;
+                let lba = live.lba;
+                live.long_bulk = true;
+                let _ = super::usb_bot::usb_bot_rw(live, &mut tag, lba, 0, &mut lba0, false);
+                live.tag = tag;
+                live.long_bulk = false;
+            }
+        }
+        LIVE_LOCK.store(false, core::sync::atomic::Ordering::Release);
         return;
     }
     if LIVE_LOCK.swap(true, core::sync::atomic::Ordering::Acquire) {
@@ -4123,6 +4153,31 @@ pub fn xhci_live_rw(off: u64, buf: &mut [u8], write: bool) -> bool {
                         &mut slice[..buf.len()],
                         write,
                     );
+                    let r = match r {
+                        Ok(()) => Ok(()),
+                        Err(_) => {
+                            // Stale event after the pin settle, not a Reset
+                            // of a Running pipe (iron `08202468`). One
+                            // drain+settle retry, then the original error.
+                            let mut hw = MmioXhci { base: live.mmio };
+                            drain_events(&mut hw, &live.caps, &mut live.ev);
+                            live.settle();
+                            let mut tag2 = tag.wrapping_add(1);
+                            if tag2 == 0 {
+                                tag2 = 1;
+                            }
+                            let retry = super::usb_bot::usb_bot_rw(
+                                live,
+                                &mut tag2,
+                                lba,
+                                off,
+                                &mut slice[..buf.len()],
+                                write,
+                            );
+                            tag = tag2;
+                            retry
+                        }
+                    };
                     live.tag = tag;
                     match r {
                         Ok(()) => {
