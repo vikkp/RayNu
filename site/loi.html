@@ -348,23 +348,25 @@
 
       <section class="section section--hda-com2" id="now">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>NOW · warm lived, still grub&gt;</p>
-          <h2 class="section__title">The pin still hides the read GRUB needs</h2>
+          <p class="milestone-kicker" data-reveal>NOW · recovery Phase 0/1 · not lived</p>
+          <h2 class="section__title">Make a miss safe, then fix USB from evidence</h2>
           <p class="section__lede">
-            EFI <code>928d6224</code> reached <code>login:</code>. EFI
-            <code>28cd4ff1</code> printed <code>diskprime lba1=pin warm=1</code>,
-            staged <code>BOOTX64.EFI</code>, and stopped at the GRUB command
-            line. LBA0–LBA33 still come from the RAM pin, so that warm never
-            reached <code>grub.cfg</code>. Force Off, then flash the EFI that
-            prints <code>diskprime past pin</code> on the first read past the
-            pin. Do not POST <code>/vms/1/start</code>. Do not run
-            <code>setup-disk</code>.
+            EFI <code>928d6224</code> reached <code>login:</code> and printed the
+            persist and TLS markers. Seven builds since did not: each lost a USB
+            command to the Toshiba after idle (<code>cmpl=0xff</code>), and the
+            latest (<code>15e3d665</code>) fell through to the installer ISO over
+            the closed install. The next EFI changes the rules instead of the
+            timing: one <code>EFI PART</code> read forbids the ISO for the boot,
+            <code>setup-disk</code> is withheld on a durable disk, USB waits are
+            bounded to 8&nbsp;s with a heartbeat, the hold keeps the SPA alive,
+            every timeout dumps controller state, and an ESP flag runs a 17-minute
+            USB soak so the driver fix comes from data, not one COM2 per flash.
           </p>
-          <pre class="ship-code" data-reveal><code>closed: 928d6224 diskprime READ LBA0 → menu → login:
-lived:  28cd4ff1 warm=1 → DISK-BOOTX64 → grub&gt;
-next:   diskprime past pin   no recover_pipes
-now:    Force Off   then F11 that EFI   do not curl Start
-never:  F11 28cd4ff1   F11 d60431ee   flash Toshiba /dev/sdc</code></pre>
+          <pre class="ship-code" data-reveal><code>closed: 928d6224 persist-OK + TLS-OK → login:
+lived:  15e3d665 peek EFI PART usb_err=8 → image=ISO-BOOTX64 (Force Off)
+next:   boot 1 usbsoak.txt bench · boot 2 product path (menu → login: or safe hold)
+never:  image=ISO-BOOTX64 on an installed disk · setup-disk · curl Start · Toshiba /dev/sdc
+read:   docs/m8_state.md</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
             Rollback remains GitHub Latest
             <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed"

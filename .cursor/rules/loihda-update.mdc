@@ -20,6 +20,8 @@ Public page: **`site/loi.html`** (reads **`site/loi.json`**). Sync: `./tools/syn
 
 Keep LOIHDA on the **working persist/TLS/PERC branch**, not only `cursor/loi-hda-page-8366`. Every iron USB/xHCI/BOT step is Bar A A2 work.
 
+**Start at `docs/m8_state.md`** (known-good `928d6224`, prototype do-not-F11 table, diagnosis, Phase 0–3). One changelog row per iron boot; one scoreboard sentence per gate. Scores go **down** on regression evidence and **up** only on a repeated iron close.
+
 ## Two bars (do not mix)
 
 | Bar | Meaning | Close |

@@ -74,6 +74,36 @@ or `… (durable LUN usb)`.
 
 Force Off / reboot RayNu-V (not guest F7) is the iron close. Lived `4af78b43`: keep=1 + `DISK-BOOTX64` + `UUID=348005a9-…` after HV reboot. Minted `RAYNU-V-M8-DISK-PERSIST-OK` did not print. If the prototype misbehaves, re-flash [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed).
 
+## Recovery Phase 0/1 (2026-09-22; see [m8_state.md](../m8_state.md))
+
+**Boot 1 — USB soak bench.** Put an empty `EFI/RayNu/usbsoak.txt` on the Cruzer ESP next to `raynuf.txt`. Expect:
+
+```
+boot: USB soak requested (EFI/RayNu/usbsoak.txt; no guest this boot; not ISO-INSTALL-OK)
+boot: Stage 46 durable LUN usb I/O ready bytes=… lba=512 (not ISO-INSTALL-OK)
+boot: Stage 46 durable LUN peek usb …
+boot: USBSOAK start reads=239 idle_s=720 (ESP usbsoak.txt; no guest; not ISO-INSTALL-OK)
+boot: USBSOAK gap_s=0 n=200 ok=… fail=… max_ms=… first_fail=… (not ISO-INSTALL-OK)
+boot: USBSOAK gap_s=5 n=24 …
+boot: USBSOAK gap_s=30 n=10 …
+boot: USBSOAK gap_s=120 n=5 …
+boot: USBSOAK total ok=… fail=… (not ISO-INSTALL-OK)
+RAYNU-V-USBSOAK-DONE
+boot: USBSOAK halt — Force Off when done reading COM2 (not ISO-INSTALL-OK)
+```
+
+Every miss prints `boot: Stage 46 durable LUN usb rw fail …` **and** one
+`boot: Stage 46 xhci timeout rw p11 cmd=… sts=… crcr=… iman=… imod=… erdp=… evdeq=… evcyc=… evtrb=… portsc=… pmsc=… ep0st=… out(st= enq= cyc= deq= base=) in(…)`
+line. Paste all of them. No guest runs; the install is not touched. ~17 min.
+
+**Boot 2 — product path.** Remove `usbsoak.txt`. One of:
+
+- Installed menu → `login:` → **sit there**; do A4s (Firefox on `https://raynu-v.lab:8443`, reload).
+- `boot: WARN LUN saw EFI PART; skip ISO (do not wipe persist)` → `boot: HINT — installed LUN unreadable this boot …` → `boot: Stage 46 hold alive …` every 60 s with the SPA reachable. Paste COM2, Force Off.
+- While GRUB reads: `boot: Stage 46 durable LUN usb rw waiting ms=N of 8000 bot=…` every 2 s is a bounded wait, not a hang.
+
+**Must not appear on an installed LUN:** `image=ISO-BOOTX64`, `setup-disk` in the guest. If the guest ever reaches a live shell anyway, COM2 prints `auto-answer setup-disk WITHHELD …` and nothing is erased.
+
 ## Not this
 
 - Nested `MODE=full` / File RAM

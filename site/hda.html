@@ -127,9 +127,12 @@
             — not a reopened Everest. HV-reboot persist is evidence-closed on
             the 8 GiB USB slice, and <code>928d6224</code> printed
             <code>RAYNU-V-M8-DISK-PERSIST-OK</code> and
-            <code>RAYNU-V-M8-TLS-OK</code>. Latest keep=1 COM2
-            (<code>28cd4ff1</code>) still stops at the GRUB command line;
-            the next EFI warms USB on the first read past the GPT pin.
+            <code>RAYNU-V-M8-TLS-OK</code>. Seven builds since did not reach the
+            installed login (USB command lost after idle); the latest
+            (<code>15e3d665</code>) fell through to the installer ISO. The next
+            EFI is M8 recovery Phase 0/1: a probe miss can no longer stage the
+            ISO or wipe, USB waits are bounded, and a USB soak bench replaces
+            guess-and-flash.
           </p>
         </div>
       </section>

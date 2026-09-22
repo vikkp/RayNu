@@ -154,11 +154,12 @@
             <code>root=UUID=814a97a0-…</code> → <code>login:</code>.
             That is M7 / ADR-009. M8 has since closed TLS
             (<code>RAYNU-V-M8-TLS-OK</code>) and HV-reboot persist
-            (<code>RAYNU-V-M8-DISK-PERSIST-OK</code>) on COM2. The latest
-            keep=1 boot (<code>28cd4ff1</code>) still stops at the GRUB
-            command line; the next EFI warms USB on the first read past the
-            GPT pin. A standing SPA and a guest console UI are still open —
-            not a reopened Everest.
+            (<code>RAYNU-V-M8-DISK-PERSIST-OK</code>) on COM2. Persist is not yet
+            repeatable: the latest boot (<code>15e3d665</code>) lost USB after
+            idle and fell through to the installer ISO, so the next EFI makes a
+            miss safe (never ISO after <code>EFI PART</code>, bounded USB waits)
+            and adds a USB soak bench. A standing SPA and a guest console UI
+            are still open — not a reopened Everest.
             Iron rollback:
             <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed"
               ><code>v0.1.0-everest-closed</code></a
