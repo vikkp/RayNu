@@ -348,24 +348,20 @@
 
       <section class="section section--hda-com2" id="now">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>NOW · recovery Phase 0/1 · not lived</p>
-          <h2 class="section__title">Make a miss safe, then fix USB from evidence</h2>
+          <p class="milestone-kicker" data-reveal>NOW · 5c32bd06 lived · RAM login, not the soak</p>
+          <h2 class="section__title">Force Off. The login is leftover DRAM</h2>
           <p class="section__lede">
-            EFI <code>928d6224</code> reached <code>login:</code> and printed the
-            persist and TLS markers. Seven builds since did not: each lost a USB
-            command to the Toshiba after idle (<code>cmpl=0xff</code>), and the
-            latest (<code>15e3d665</code>) fell through to the installer ISO over
-            the closed install. The next EFI changes the rules instead of the
-            timing: one <code>EFI PART</code> read forbids the ISO for the boot,
-            <code>setup-disk</code> is withheld on a durable disk, USB waits are
-            bounded to 8&nbsp;s with a heartbeat, the hold keeps the SPA alive,
-            every timeout dumps controller state, and an ESP flag runs a 17-minute
-            USB soak so the driver fix comes from data, not one COM2 per flash.
+            EFI <code>5c32bd06</code> saw the soak flag, then Address Device
+            timed out on the two USB ports (<code>cmd=3 cmpl=0xff</code>) before
+            any sector read. The 17-minute bench never started. With no disk
+            attached, the installer ran onto a 1&nbsp;GiB RAM disk and a guest
+            reboot reached <code>login:</code> (UUID <code>4c27e121</code>).
+            That disk disappears on Force Off. The Toshiba was not opened.
           </p>
-          <pre class="ship-code" data-reveal><code>closed: 928d6224 persist-OK + TLS-OK → login:
-lived:  15e3d665 peek EFI PART usb_err=8 → image=ISO-BOOTX64 (Force Off)
-next:   boot 1 usbsoak.txt bench · boot 2 product path (menu → login: or safe hold)
-never:  image=ISO-BOOTX64 on an installed disk · setup-disk · curl Start · Toshiba /dev/sdc
+          <pre class="ship-code" data-reveal><code>closed: 928d6224 persist-OK + TLS-OK → login: on the Toshiba
+lived:  5c32bd06 USB soak requested → Address Device timeout → ISO onto 1 GiB RAM → login:
+now:    Force Off. Do not F11 5c32bd06 again. The soak never starts if enumeration fails
+never:  treat this login as persist · setup-disk · curl Start · Toshiba /dev/sdc
 read:   docs/m8_state.md</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
             Rollback remains GitHub Latest

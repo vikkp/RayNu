@@ -76,7 +76,9 @@ Force Off / reboot RayNu-V (not guest F7) is the iron close. Lived `4af78b43`: k
 
 ## Recovery Phase 0/1 (2026-09-22; see [m8_state.md](../m8_state.md))
 
-**Boot 1 — USB soak bench.** Put an empty `EFI/RayNu/usbsoak.txt` on the Cruzer ESP next to `raynuf.txt`. Expect:
+**Lived `5c32bd06` (2026-09-22).** The flag printed `USB soak requested`, then Address Device timed out on p11 and p10 (`cmd=3 cmpl=0xff`, `err=3`). No `usb I/O ready`, no `USBSOAK`. The boot installed onto 1 GiB leftover DRAM and a guest reboot reached `login:` (UUID `4c27e121`). Force Off. Do not F11 this EFI again expecting the bench. Evidence: [2026-09-22-5c32bd06-soak-enum-timeout.md](../evidence/r640/2026-09-22-5c32bd06-soak-enum-timeout.md).
+
+**Boot 1 — USB soak bench** (only after an EFI that halts when enumeration fails). Put an empty `EFI/RayNu/usbsoak.txt` on the Cruzer ESP next to `raynuf.txt`. Expect:
 
 ```
 boot: USB soak requested (EFI/RayNu/usbsoak.txt; no guest this boot; not ISO-INSTALL-OK)

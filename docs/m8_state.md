@@ -1,7 +1,7 @@
 # M8 state — START HERE (persist / LOI Bar A recovery)
 
 > **Read this before touching `mgmt/xhci.rs`, `mgmt/durable_lun.rs`, `mgmt/disk_persist.rs`, `vmx/guest_uefi.rs` (RayNu-F boot source), or the trackers.**  
-> Last rewrite: 2026-09-22 (Phase 0 EFI built, not yet flashed). Trackers: [`hda.md`](hda.md) (Everest, closed) · [`loihda.md`](loihda.md) (LOI, open). Plan: [`m8_plan.md`](m8_plan.md). ADR: [ADR-018](adr/ADR-018.md).
+> Last rewrite: 2026-09-22 (Phase 0 EFI `5c32bd06` lived: soak flag seen, USB never enumerated, RAM install reached `login:`). Trackers: [`hda.md`](hda.md) (Everest, closed) · [`loihda.md`](loihda.md) (LOI, open). Plan: [`m8_plan.md`](m8_plan.md). ADR: [ADR-018](adr/ADR-018.md). Evidence: [`2026-09-22-5c32bd06-soak-enum-timeout.md`](evidence/r640/2026-09-22-5c32bd06-soak-enum-timeout.md).
 
 ## One paragraph
 
@@ -27,6 +27,7 @@ Every EFI after `928d6224` is a **prototype**. Do not treat a later tip as known
 | `d60431ee` | `lba1=pin` → `DISK-BOOTX64` → `grub>` → wall cap 180 s → dead hold | pin skipped the warm; GRUB reads cold |
 | `28cd4ff1` | `warm=1` ×2 → `DISK-BOOTX64` → `grub>` | warm before GRUB, `grub.cfg` read cold |
 | `15e3d665` | peek `efi=EFI PART … usb_err=8 installed=0` → `diskprime lba1=miss err=8` → `image=ISO-BOOTX64` → live installer | **ISO fall-through on a probe miss** (worse USB) |
+| `5c32bd06` | `USB soak requested` then p11 and p10 Address Device `cmd=3 cmpl=0xff` (`err=3` Enum). No `USBSOAK`. `image=ISO-BOOTX64` onto **1 GiB leftover DRAM**; F7 `DISK-BOOTX64` → `login:` UUID `4c27e121`. Toshiba never opened | **enumeration timeout before the soak**; RAM login is not persist |
 
 ## Why it kept failing (diagnosis, 2026-09-22)
 
@@ -39,7 +40,9 @@ Every EFI after `928d6224` is a **prototype**. Do not treat a later tip as known
 
 ## The plan
 
-### Phase 0 — make a miss safe and visible (in this EFI; **not yet lived**)
+### Phase 0 — make a miss safe and visible (lived on `5c32bd06`; the guard did not arm)
+
+`5c32bd06` saw `usbsoak.txt` and then failed **Address Device** on p11 and p10 (`cmd=3 cmpl=0xff`, `err=3` Enum, PORTSC already HS U0). The soak, the ISO skip, and the `setup-disk` withhold all require a serving LUN. None of them ran. The boot installed Alpine onto 1 GiB leftover DRAM and a guest reboot reached `login:`. That disk is RAM. Force Off drops it. The Toshiba was not read or written.
 
 | Change | Where | COM2 line |
 |--------|-------|-----------|
@@ -69,11 +72,10 @@ PERC H740P = MegaRAID SAS 3.5 (MPT3 Fusion) post-EBS driver on a **spare** VD (n
 
 ## Next iron step (operator)
 
-1. **Force Off** whatever is live.
-2. Flash this branch's EFI (`flashcruzer.sh --any-cruzer-usb --allow-new-serial --raynu-f --linux-iso …`). Never `--init-new-cruzer` on the live persist UDisk. Never Toshiba `/dev/sdc`.
-3. **Boot 1 — soak:** put an empty `EFI/RayNu/usbsoak.txt` on the Cruzer ESP. Expect `USB soak requested`, then `USBSOAK gap_s=…` lines for ~17 min, `RAYNU-V-USBSOAK-DONE`, halt heartbeat. Paste the whole COM2. Every `xhci timeout` line is the evidence Phase 1 needs.
-4. **Boot 2 — product path:** remove `usbsoak.txt`. Expect either the installed menu → `login:` (sit there; do A4s Firefox), or `WARN LUN saw EFI PART; skip ISO` → `Stage 46 hold alive` with the SPA reachable. **No** `image=ISO-BOOTX64`, **no** `setup-disk` on an installed disk.
-5. Do not curl `POST /vms/1/start`. Do not run `setup-disk`. Do not F11 any EFI in the prototype table above.
+1. **Force Off** the live `localhost:~#`. It is the 1 GiB RAM disk from this boot (`vda` = 2097152 sectors, UUID `4c27e121`). It is not the Toshiba. Do not open Firefox. Do not stay for A4s.
+2. Leave `usbsoak.txt` on the Cruzer. **Do not F11 `5c32bd06` again.** The soak never starts unless `usb I/O ready` prints, and this boot dies at Address Device and then launches the RAM installer.
+3. Next EFI (not this one): on `usbsoak.txt`, an Address Device timeout must dump the controller and **halt**. No guest, no ISO, no `setup-disk`.
+4. Do not curl `POST /vms/1/start`. Do not run `setup-disk`. Do not flash Toshiba `/dev/sdc`. Do not F11 any EFI in the prototype table above.
 
 ## Rules that stay true
 
