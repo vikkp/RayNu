@@ -348,26 +348,23 @@
 
       <section class="section section--hda-com2" id="now">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>NOW · USB warm skipped</p>
-          <h2 class="section__title">The pin skipped the read GRUB needs</h2>
+          <p class="milestone-kicker" data-reveal>NOW · warm lived, still grub&gt;</p>
+          <h2 class="section__title">The pin still hides the read GRUB needs</h2>
           <p class="section__lede">
-            EFI <code>928d6224</code> warmed the USB pipe (drain, inquiry,
-            READ LBA0) and the installed GRUB menu reached
-            <code>login:</code>. EFI <code>d60431ee</code> still launched
-            <code>image=DISK-BOOTX64</code>, then
-            <code>diskprime lba1=pin</code> returned without touching USB.
-            GRUB finished 33 reads of the RAM GPT
-            (<code>blk_rd=33</code>) and never opened
-            <code>grub.cfg</code>, so it sat at <code>grub&gt;</code> until
-            the 180 s cap. Force Off, then flash the EFI that prints
-            <code>warm=1</code>. Do not POST <code>/vms/1/start</code>. Do
-            not run <code>setup-disk</code>.
+            EFI <code>928d6224</code> reached <code>login:</code>. EFI
+            <code>28cd4ff1</code> printed <code>diskprime lba1=pin warm=1</code>,
+            staged <code>BOOTX64.EFI</code>, and stopped at the GRUB command
+            line. LBA0–LBA33 still come from the RAM pin, so that warm never
+            reached <code>grub.cfg</code>. Force Off, then flash the EFI that
+            prints <code>diskprime past pin</code> on the first read past the
+            pin. Do not POST <code>/vms/1/start</code>. Do not run
+            <code>setup-disk</code>.
           </p>
           <pre class="ship-code" data-reveal><code>closed: 928d6224 diskprime READ LBA0 → menu → login:
-lived:  d60431ee lba1=pin (no USB) blk_rd=33 → grub&gt; → wall-cap
-next:   warm=1 READ LBA0   no recover_pipes
-now:    Force Off   then F11 the warm EFI   do not curl Start
-never:  F11 d60431ee   F11 08202468   flash Toshiba /dev/sdc</code></pre>
+lived:  28cd4ff1 warm=1 → DISK-BOOTX64 → grub&gt;
+next:   diskprime past pin   no recover_pipes
+now:    Force Off   then F11 that EFI   do not curl Start
+never:  F11 28cd4ff1   F11 d60431ee   flash Toshiba /dev/sdc</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
             Rollback remains GitHub Latest
             <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed"
