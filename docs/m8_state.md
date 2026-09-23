@@ -1,7 +1,7 @@
 # M8 state — START HERE (persist / LOI Bar A recovery)
 
 > **Read this before touching `mgmt/xhci.rs`, `mgmt/durable_lun.rs`, `mgmt/disk_persist.rs`, `vmx/guest_uefi.rs` (RayNu-F boot source), or the trackers.**  
-> Last rewrite: 2026-09-23 (soak EFI `1fa231df` lived: soak halted on `err=3`, no guest; the dumps show the commands **completed** and the driver lost their completion events — torn 16-byte event read. Fix built (`poll_event` cycle-first, `write_trb` cycle-last), **not yet lived**). Trackers: [`hda.md`](hda.md) (Everest, closed) · [`loihda.md`](loihda.md) (LOI, open). Plan: [`m8_plan.md`](m8_plan.md). ADR: [ADR-018](adr/ADR-018.md). Evidence: [`2026-09-23-1fa231df-soak-torn-event-read.md`](evidence/r640/2026-09-23-1fa231df-soak-torn-event-read.md) · [`2026-09-22-5c32bd06-soak-enum-timeout.md`](evidence/r640/2026-09-22-5c32bd06-soak-enum-timeout.md).
+> Last rewrite: 2026-09-23 (`e5cca2e0` lived: `RAYNU-V-USBSOAK-DONE`, 239/239 reads including a 120 s idle, Toshiba `0480:a004` still `installed=1` on the 8 GiB slice. No guest. Boot 2 is this same EFI with `usbsoak.txt` removed). Trackers: [`hda.md`](hda.md) (Everest, closed) · [`loihda.md`](loihda.md) (LOI, open). Plan: [`m8_plan.md`](m8_plan.md). ADR: [ADR-018](adr/ADR-018.md). Evidence: [`2026-09-23-e5cca2e0-usbsoak-done.md`](evidence/r640/2026-09-23-e5cca2e0-usbsoak-done.md) · [`2026-09-23-1fa231df-soak-torn-event-read.md`](evidence/r640/2026-09-23-1fa231df-soak-torn-event-read.md).
 
 ## One paragraph
 
@@ -15,6 +15,12 @@ Everest (M7) is closed on iron. M8 is operator hardening. Bar A of the LOI needs
 | Persist + TLS close | `928d6224` | Force Off → `keep=1` → `DISK-BOOTX64` → menu → `root=UUID=dd673a9a` → `login:`; `RAYNU-V-M8-DISK-PERSIST-OK`; `RAYNU-V-M8-TLS-OK` on `10.99.99.140:8443` | standing SPA after login, console keys |
 
 Every EFI after `928d6224` is a **prototype**. Do not treat a later tip as known-good until it reaches the installed `login:` on COM2 **more than once**.
+
+## USB bench passed (F11 this EFI for boot 2)
+
+| EFI | What lived | Next |
+|-----|-----------|------|
+| `e5cca2e0` | `xhci trb order …` then Toshiba `0480:a004`, peek `efi=EFI PART installed=1 guest=8589934592 usb_err=0`, `USBSOAK` 239/239 (`gap_s` 0/5/30/120, `fail=0`), `RAYNU-V-USBSOAK-DONE`, halt, **no guest** | **Same stick, no reflash.** Remove `usbsoak.txt`, leave `raynuf.txt`, F11. |
 
 ## Prototypes that did not reach the installed login (do not F11 again expecting the menu)
 
@@ -52,7 +58,7 @@ Every EFI after `928d6224` is a **prototype**. Do not treat a later tip as known
 | Guest-path USB waits bounded by **time** (8 s/attempt), settle 2 s, heartbeat every 2 s; GRUB gets `EFI_DEVICE_ERROR` instead of a frozen box | `xhci.rs` `USB_RW_DEADLINE_MS`, `BOT_SETTLE_MS`, `xhci_wait_expired` | `durable LUN usb rw waiting ms=N of 8000 bot=…` |
 | Stage 46 hold is live: coexist SPA ticks, heartbeat every 60 s | `iso_install::stage46_live_hold` | `Stage 46 hold alive t_s=N (SPA ticking …)` |
 
-### Phase 1a — enumeration (two EFIs lived; root cause found on `1fa231df`; fix built, **not yet lived**)
+### Phase 1a — enumeration (root cause found on `1fa231df`; fix **lived** on `e5cca2e0`)
 
 **Lived on `1fa231df` (soak boot, no guest).** The dump lines built after `5c32bd06` did their job. Every command that "timed out" left `cmd=0x1 sts=0x18 crcr=0x8` — controller running, no error, command ring idle — and the first p11 Address Device left the output Slot Context **Addressed** (`slotst=2`, xHCI Table 6-7: 0 Disabled/Enabled, 1 Default, 2 Addressed, 3 Configured) with EP0 Running and its TR Dequeue written. The retry returned `cmpl=0x13` Context State Error, which is Address Device on an already-Addressed slot. The No-Op "timeout" showed `evdeq=4` when only three Port Status Change Events precede it. So: **the commands completed and the driver consumed and discarded their completion events.** The No-Op and Enable Slot failing too rules out the device.
 
@@ -76,14 +82,14 @@ Kept from the `5c32bd06` fix (correct, not the cause): `USB_PORT_RESET_RECOVERY_
 
 Reading the next `xhci cmd timeout` line if one still appears **with** the `trb order` line present: `slotst=2 ep0st=1` again would mean the event is being written somewhere other than our dequeue (check `erdp` vs `evdeq`, ERST base); `slotst=0 ep0st=0` with `crcr=0x8` idle would mean the xHC never fetched the command TRB (check the command ring page and CRCR pointer); `sts` bit 12 (HCE) or bit 2 (HSE) = the controller stopped.
 
-### Phase 1b — make USB deterministic from evidence (bench in this EFI; driver fix after)
+### Phase 1b — USB soak (**lived** on `e5cca2e0`: 239/239, including 120 s idle)
 
 | Change | Where | COM2 line |
 |--------|-------|-----------|
 | Register/ring/endpoint dump on every guest-path timeout: USBCMD/USBSTS/CRCR/IMAN/IMOD/ERDP, event dequeue + cycle + the TRB sitting there, PORTSC/PORTPMSC, EP0/OUT/IN state and TR Dequeue vs our enqueue | `xhci.rs` `serial_xhci_timeout_dump` | `xhci timeout rw p11 cmd=… sts=… crcr=… erdp=… evdeq=… evtrb=… portsc=… pmsc=… out(st= enq= deq=) in(…)` |
 | **USB soak bench**: ESP `EFI/RayNu/usbsoak.txt` → after `usb I/O ready` read LBA0/1/2048/4096 with idle gaps 0/5/30/120 s (200/24/10/5 reads), print ok/fail/max_ms per gap, dump on every miss, then halt with a heartbeat. No guest. ~17 min. | `boot/usb_soak_flag.rs`, `xhci::xhci_usb_soak` | `USBSOAK gap_s=30 n=10 ok=… fail=… max_ms=… first_fail=…` then `RAYNU-V-USBSOAK-DONE` |
 | Hypotheses the dump decides: (a) event ring bookkeeping (`evtrb` cycle ≠ `evcyc` with `erdp` behind), (b) xHC never consumed the TRB (`deq` == ring base + old index, EP `st=1`), (c) device/bridge idle (EP Running, TRB consumed, no event: bridge NAK/spin-up), (d) link state (`portsc` PLS not U0, `pmsc` L1/HLE) | read the dump | — |
-| Then: one mechanism replaces `warm`/`diskprime`/`past pin`/`peekretry` (keepalive TUR on idle, or Stop EP + Set TR Deq on the exact stale TRB, or ERDP fix) | after soak evidence | — |
+| The mechanism the bench was going to choose is the cycle-first poll from Phase 1a. Idle reads no longer miss. `warm` / `diskprime` / `peekretry` stay until boot 2 reaches `login:` | `xhci::poll_event` | `RAYNU-V-USBSOAK-DONE` on `e5cca2e0` |
 
 **p1c note:** the Toshiba sits on a **USB 2 (HS)** port (`PORTSC` speed field = HS, `mps=64`). USB3 U1/U2 timeouts do not apply; USB2 L1 needs `HLE`=1, which the driver never sets. LPM is therefore **not** a leading hypothesis; `pmsc` is in the dump to confirm, not to act on.
 
@@ -97,11 +103,14 @@ PERC H740P = MegaRAID SAS 3.5 (MPT3 Fusion) post-EBS driver on a **spare** VD (n
 
 ## Next iron step (operator)
 
-1. **Force Off** the `1fa231df` soak halt (`USBSOAK halt alive t_s=…`). Nothing is on the Toshiba from that boot. Tell for a RAM guest on any future boot: `[vda] 2097152 … 1.00 GiB`; the Toshiba slice is `[vda] 16777216 512-byte logical blocks (8.59 GB/8.00 GiB)`.
-2. Flash this branch's EFI (`flashcruzer.sh --branch cursor/m8-evring-cycle-first-8366 --wait --any-cruzer-usb --allow-new-serial --raynu-f --linux-iso …`). Never `--init-new-cruzer`. Never Toshiba `/dev/sdc`. **Leave `usbsoak.txt` on the Cruzer** (it is still there).
-3. **Boot 1 — soak:** F11. Expect `xhci legacy pre/post`, then **`xhci trb order event cycle-first, write cycle-last`** (that line names this fix), then `xhci nop` with **no** `cmd timeout nop`, Toshiba named, `usb I/O ready` → `USBSOAK gap_s=…` ×4 → `RAYNU-V-USBSOAK-DONE` (~17 min). If instead `xhci cmd timeout …` → `USBSOAK abort` → halt, paste the whole COM2 and read the dump against the Phase 1a table above. Either way no guest runs.
-4. **Boot 2 — product path:** only after boot 1 printed `RAYNU-V-USBSOAK-DONE`. Remove `usbsoak.txt`. Expect the installed menu → `login:` with `[vda] 16777216` (sit there; A4s Firefox), or `WARN LUN saw EFI PART; skip ISO` → `Stage 46 hold alive`. **No** `image=ISO-BOOTX64` on the Toshiba.
-5. Do not curl `POST /vms/1/start`. Do not run `setup-disk`. Do not F11 any EFI in the prototype table above.
+Boot 1 is done (`e5cca2e0`, `RAYNU-V-USBSOAK-DONE`, 239/239). **Do not reflash.**
+
+1. **Force Off** the soak halt (`USBSOAK halt — Force Off when done reading COM2`). The Toshiba was only read.
+2. Pull the Cruzer (front USB, label `RAYNUV`). On raynuvsrv1: `findfs LABEL=RAYNUV`, mount it, `rm EFI/RayNu/usbsoak.txt`, leave `EFI/RayNu/raynuf.txt`. Unmount. Never touch Toshiba `/dev/sdc`. Never `--init-new-cruzer`.
+3. Put the Cruzer back in the R640 front USB. Toshiba stays seated. **Boot 2:** F11 the same stick. COM2 must show `build: sha=e5cca2e0d7a8` and must **not** show `USB soak requested`.
+4. Expect Toshiba `0480:a004`, `usb I/O ready`, peek `efi=EFI PART installed=1`, then `image=DISK-BOOTX64` and the installed menu through `login:` with `[vda] 16777216 512-byte logical blocks (8.59 GB/8.00 GiB)`. Sit there. A 1 GiB disk is `[vda] 2097152 … 1.00 GiB` and is RAM: Force Off and paste COM2.
+5. If the disk cannot be staged, the acceptable halt is `WARN LUN saw EFI PART; skip ISO (do not wipe persist)` and `Stage 46 hold alive`. **`image=ISO-BOOTX64` must not appear.** If it does, Force Off before the guest shell and paste COM2.
+6. Do not curl `POST /vms/1/start`. Do not run `setup-disk`. Do not F11 any EFI in the prototype table above. After `login:`, Firefox to `https://raynu-v.lab:8443` (the name is on the millicert; a raw `10.99.99.147` URL is not).
 
 ## Rules that stay true
 

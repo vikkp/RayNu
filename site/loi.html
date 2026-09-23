@@ -348,23 +348,19 @@
 
       <section class="section section--hda-com2" id="now">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>NOW · torn event read fixed · not lived</p>
-          <h2 class="section__title">The commands completed. The driver dropped their events.</h2>
+          <p class="milestone-kicker" data-reveal>NOW · USB soak passed · boot 2</p>
+          <h2 class="section__title">239 reads, zero misses, including two minutes of idle.</h2>
           <p class="section__lede">
-            EFI <code>1fa231df</code> ran the USB soak boot and halted cleanly on
-            enumeration failure — no guest, no RAM install. Its controller dumps
-            showed why every retry since <code>928d6224</code> was a coin toss:
-            the "timed-out" Address Device had left the slot <em>Addressed</em>,
-            the retry answered Context State Error, and the No-Op's completion
-            had already been consumed. The poll read the 16-byte event TRB
-            pointer-first and cycle-last; when the controller's write landed
-            mid-read, the event looked like someone else's and was skipped.
-            The next EFI reads the control word first as one 32-bit load and
-            writes TRB control words last as one 32-bit store.
+            EFI <code>e5cca2e0</code> enumerated the Toshiba, found the installed
+            8&nbsp;GiB slice still intact, and finished the USB soak:
+            <code>RAYNU-V-USBSOAK-DONE</code>, 239 of 239 reads, idle gaps of
+            0, 5, 30 and 120 seconds, no guest. The next boot is this same EFI
+            with <code>usbsoak.txt</code> removed. The pass is the installed
+            menu through <code>login:</code> on a disk of 16777216 sectors.
           </p>
           <pre class="ship-code" data-reveal><code>closed: 928d6224 persist-OK + TLS-OK → login: on the Toshiba
-lived:  1fa231df USB soak → cmd timeout (slotst=2 Addressed, retry 0x13) → USBSOAK abort → halt, no guest
-next:   boot 1 with usbsoak.txt → xhci trb order cycle-first → USBSOAK ×4 → RAYNU-V-USBSOAK-DONE
+lived:  e5cca2e0 USBSOAK 239/239 fail=0 → RAYNU-V-USBSOAK-DONE → halt, no guest
+next:   remove usbsoak.txt · F11 the same stick · image=DISK-BOOTX64 · [vda] 16777216 · login:
 never:  treat a 1 GiB vda as persist · setup-disk · curl Start · Toshiba /dev/sdc
 read:   docs/m8_state.md</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>

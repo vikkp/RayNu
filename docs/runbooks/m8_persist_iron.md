@@ -80,6 +80,8 @@ Force Off / reboot RayNu-V (not guest F7) is the iron close. Lived `4af78b43`: k
 
 **Lived `1fa231df` (2026-09-23).** The soak halt worked: `USBSOAK abort — USB enumeration failed err=3`, no guest, no RAM install. The `cmd timeout` dumps showed `crcr=0x8` idle and `slotst=2 ep0st=1` (slot **Addressed**) on a "timed-out" Address Device, and `evdeq=4` on a No-Op "timeout" after only three port events: the commands completed and the driver consumed their completion events as garbage. Root cause is a torn 16-byte event read (pointer read before the cycle bit). Fixed by `poll_event` (control word first, one 32-bit load) and `write_trb` (control word last, one 32-bit store). Evidence: [2026-09-23-1fa231df-soak-torn-event-read.md](../evidence/r640/2026-09-23-1fa231df-soak-torn-event-read.md).
 
+**Lived `e5cca2e0` (2026-09-23) — soak passed.** `xhci trb order event cycle-first, write cycle-last`, Toshiba `0480:a004`, `usb I/O ready bytes=320072933376`, peek `efi=EFI PART installed=1 guest=8589934592 usb_err=0`. `USBSOAK` gaps 0/5/30/120 all `fail=0` (200+24+10+5 = 239, `idle_s=1020`), then `RAYNU-V-USBSOAK-DONE` and the halt. No guest. Evidence: [2026-09-23-e5cca2e0-usbsoak-done.md](../evidence/r640/2026-09-23-e5cca2e0-usbsoak-done.md). Next is boot 2 on this same EFI with `usbsoak.txt` removed. Do not reflash.
+
 **Boot 1 — USB soak bench.** Put an empty `EFI/RayNu/usbsoak.txt` on the Cruzer ESP next to `raynuf.txt`. Expect:
 
 ```
@@ -91,7 +93,7 @@ boot: Stage 46 xhci trb order event cycle-first, write cycle-last (not ISO-INSTA
 boot: Stage 46 xhci nop (not ISO-INSTALL-OK)            ← no "cmd timeout nop" after it
 boot: Stage 46 durable LUN usb I/O ready bytes=… lba=512 (not ISO-INSTALL-OK)
 boot: Stage 46 durable LUN peek usb …
-boot: USBSOAK start reads=239 idle_s=720 (ESP usbsoak.txt; no guest; not ISO-INSTALL-OK)
+boot: USBSOAK start reads=239 idle_s=1020 (ESP usbsoak.txt; no guest; not ISO-INSTALL-OK)
 boot: USBSOAK gap_s=0 n=200 ok=… fail=… max_ms=… first_fail=… (not ISO-INSTALL-OK)
 boot: USBSOAK gap_s=5 n=24 …
 boot: USBSOAK gap_s=30 n=10 …
