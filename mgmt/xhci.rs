@@ -1040,6 +1040,23 @@ pub trait XhciHw {
     fn write32(&mut self, off: u32, val: u32);
     fn dma_read(&mut self, hpa: u64, buf: &mut [u8]);
     fn dma_write(&mut self, hpa: u64, buf: &[u8]);
+
+    /// One aligned 32-bit DMA-memory load. The xHC writes a 16-byte Event
+    /// TRB as one transaction; a byte loop can observe half of it. The
+    /// cycle bit must be read as a single word (xHCI 4.9.4 / Linux `rmb()`
+    /// after `TRB_CYCLE`). Default is the byte loop for host mocks.
+    fn dma_read32(&mut self, hpa: u64) -> u32 {
+        let mut b = [0u8; 4];
+        self.dma_read(hpa, &mut b);
+        u32::from_le_bytes(b)
+    }
+
+    /// One aligned 32-bit DMA-memory store. The TRB control word carries
+    /// the cycle bit and the TRB type; the xHC must never fetch one without
+    /// the other (xHCI 4.9.2: cycle written last).
+    fn dma_write32(&mut self, hpa: u64, val: u32) {
+        self.dma_write(hpa, &val.to_le_bytes());
+    }
 }
 
 fn write64(hw: &mut impl XhciHw, off: u32, val: u64) {
@@ -1051,18 +1068,54 @@ fn read64(hw: &mut impl XhciHw, off: u32) -> u64 {
     u64::from(hw.read32(off)) | (u64::from(hw.read32(off + 4)) << 32)
 }
 
+/// Offset of the TRB control word (cycle bit 0, type bits 15:10).
+pub const TRB_CTRL_OFF: u64 = 12;
+
+/// Write a TRB parameter + status first, then the control word as one
+/// aligned 32-bit store (xHCI 4.9.2: the Cycle bit is written last, and
+/// the xHC may fetch a Running transfer ring ahead of the doorbell).
+/// Iron `1fa231df`: a byte loop wrote byte 12 (cycle) before bytes 13–15
+/// (type); a prefetching xHC could see cycle=ours with type=0.
 fn write_trb(hw: &mut impl XhciHw, base: u64, idx: u16, ptr: u64, status: u32, ctrl: u32) {
-    let mut t = [0u8; 16];
+    let hpa = base + u64::from(idx) * 16;
+    let mut t = [0u8; 12];
     put_u64(&mut t, 0, ptr);
     put_u32(&mut t, 8, status);
-    put_u32(&mut t, 12, ctrl);
-    hw.dma_write(base + u64::from(idx) * 16, &t);
+    hw.dma_write(hpa, &t);
+    core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+    hw.dma_write32(hpa + TRB_CTRL_OFF, ctrl);
 }
 
 fn read_trb(hw: &mut impl XhciHw, base: u64, idx: u16) -> [u8; 16] {
     let mut t = [0u8; 16];
     hw.dma_read(base + u64::from(idx) * 16, &mut t);
     t
+}
+
+/// Event TRB at the software dequeue, or `None` while the xHC still owns
+/// it. Reads the control word first as one 32-bit load, compares the
+/// cycle bit, then reads the whole TRB behind an acquire fence.
+///
+/// Iron `1fa231df` (soak boot): No-Op, Enable Slot and Address Device all
+/// "timed out" (`cmpl=0xff`) with CRR=1 while the output Slot Context
+/// already read Addressed (`slotst=2 ep0st=1`) and the retry returned
+/// Context State Error (`cmpl=0x13`). The commands had completed. The
+/// old poll read bytes 0–15 in order, cycle last; when the xHC's 16-byte
+/// completion landed between byte 0 and byte 12 the loop saw a fresh cycle
+/// + type with a stale Command TRB Pointer (0) and stale code (0), skipped
+/// it as "not ours", and waited for an event that had already been eaten.
+/// The earlier iron "Command TRB Pointer 0 on Success" and "leftover
+/// CC=0 Invalid" completions were the same torn read one byte boundary
+/// apart; an xHC never emits either. Linux: `rmb()` after `TRB_CYCLE`.
+fn poll_event(hw: &mut impl XhciHw, ev: &EventRing) -> Option<[u8; 16]> {
+    let hpa = ev.base + u64::from(ev.deq) * 16;
+    let ctrl = hw.dma_read32(hpa + TRB_CTRL_OFF);
+    if (ctrl & 1) != (ev.cycle & 1) {
+        return None;
+    }
+    core::sync::atomic::fence(core::sync::atomic::Ordering::Acquire);
+    let t = read_trb(hw, ev.base, ev.deq);
+    Some(t)
 }
 
 #[derive(Clone, Copy)]
@@ -1444,6 +1497,14 @@ fn serial_xhci_hub(port: u8) {
 fn serial_xhci_hcrst() {
     crate::boot::serial::write_line(
         "boot: Stage 46 xhci hcrst (own rings; leftover DRAM; not ISO-INSTALL-OK)",
+    );
+}
+
+/// One COM2 line so an iron log names the ring discipline of the build.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_xhci_trb_order() {
+    crate::boot::serial::write_line(
+        "boot: Stage 46 xhci trb order event cycle-first, write cycle-last (not ISO-INSTALL-OK)",
     );
 }
 
@@ -1922,6 +1983,9 @@ fn serial_xhci_hub(_port: u8) {}
 fn serial_xhci_hcrst() {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+fn serial_xhci_trb_order() {}
+
+#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 fn serial_xhci_bot_eps(_port: u8, _ep_out: u8, _ep_in: u8, _cfg: u8) {}
 
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
@@ -2042,9 +2106,7 @@ fn advance_event(hw: &mut impl XhciHw, caps: &XhciCaps, ev: &mut EventRing) {
 /// BOT round-trip does not retire a stale Transfer Event as success.
 fn drain_events(hw: &mut impl XhciHw, caps: &XhciCaps, ev: &mut EventRing) {
     for _ in 0..RING_TRBS {
-        let t = read_trb(hw, ev.base, ev.deq);
-        let ctrl = get_u32(&t, 12);
-        if (ctrl & 1) != (ev.cycle & 1) {
+        if poll_event(hw, ev).is_none() {
             break;
         }
         advance_event(hw, caps, ev);
@@ -2097,9 +2159,8 @@ fn consume_control(
     let status = status_ptr & !0xF;
     let mut spins = 0u32;
     loop {
-        let t = read_trb(hw, ev.base, ev.deq);
-        let ctrl = get_u32(&t, 12);
-        if (ctrl & 1) == (ev.cycle & 1) {
+        if let Some(t) = poll_event(hw, ev) {
+            let ctrl = get_u32(&t, 12);
             let ty = trb_type(ctrl);
             advance_event(hw, caps, ev);
             if ty != TRB_EVENT_TRANSFER || !xhci_xfer_matches(ctrl, slot, XHCI_EP0_DCI) {
@@ -2159,9 +2220,8 @@ fn consume_posted(
 ) -> Result<[u8; 16], UsbBotError> {
     let mut spins = 0u32;
     loop {
-        let t = read_trb(hw, ev.base, ev.deq);
-        let ctrl = get_u32(&t, 12);
-        if (ctrl & 1) == (ev.cycle & 1) {
+        if let Some(t) = poll_event(hw, ev) {
+            let ctrl = get_u32(&t, 12);
             let ty = trb_type(ctrl);
             advance_event(hw, caps, ev);
             if ty == want_type {
@@ -2261,9 +2321,8 @@ fn consume_bulk_pair(
         if bulk_bot_xfer_done(out_events, in_events, need_out, need_in) {
             return Ok(());
         }
-        let t = read_trb(hw, ev.base, ev.deq);
-        let ctrl = get_u32(&t, 12);
-        if (ctrl & 1) == (ev.cycle & 1) {
+        if let Some(t) = poll_event(hw, ev) {
+            let ctrl = get_u32(&t, 12);
             let ty = trb_type(ctrl);
             advance_event(hw, caps, ev);
             if ty != TRB_EVENT_TRANSFER {
@@ -2399,9 +2458,8 @@ fn abort_cmd_ring(
         if !crcr_is_running(read64(hw, off)) {
             break;
         }
-        let t = read_trb(hw, ev.base, ev.deq);
-        let ctrl = get_u32(&t, 12);
-        if (ctrl & 1) == (ev.cycle & 1) {
+        if let Some(t) = poll_event(hw, ev) {
+            let ctrl = get_u32(&t, 12);
             advance_event(hw, caps, ev);
             if trb_type(ctrl) == TRB_EVENT_CMD && cmd_cc_ring_stopped(trb_cmpl_code(get_u32(&t, 8)))
             {
@@ -2764,6 +2822,7 @@ fn xhci_start(
     }
     serial_xhci_hcrst();
     serial_xhci_legacy("post", handshake_legacy(hw));
+    serial_xhci_trb_order();
     let slots = xhci_config_slots(caps.max_slots);
     hw.write32(caps.op + 0x38, u32::from(slots));
     zero_page(hw, mem.dcbaa);
@@ -3781,6 +3840,25 @@ impl XhciHw for MmioXhci {
             for (i, b) in buf.iter().enumerate() {
                 core::ptr::write_volatile((hpa as *mut u8).add(i), *b);
             }
+        }
+        core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+    }
+
+    fn dma_read32(&mut self, hpa: u64) -> u32 {
+        debug_assert_eq!(hpa & 3, 0);
+        // SAFETY: 4-byte aligned word inside a ring page this EFI image
+        // owns; one load so the xHC's 16-byte event write cannot tear it.
+        // KANI-TARGET: host tests pack TRBs, not this DMA memory.
+        unsafe { core::ptr::read_volatile(hpa as *const u32) }
+    }
+
+    fn dma_write32(&mut self, hpa: u64, val: u32) {
+        debug_assert_eq!(hpa & 3, 0);
+        // SAFETY: 4-byte aligned word inside a ring page this EFI image
+        // owns; one store so cycle bit and TRB type land together.
+        // KANI-TARGET: host tests pack TRBs, not this DMA memory.
+        unsafe {
+            core::ptr::write_volatile(hpa as *mut u32, val);
         }
         core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
     }
@@ -5470,6 +5548,159 @@ mod xhci_pack_test {
         assert_eq!(ring.enq, 1);
         assert_eq!(ring.cycle, 0);
         assert_eq!(USBCMD_INTE, 1 << 2);
+    }
+
+    /// DMA memory where one pending 16-byte xHC event lands after
+    /// `land_after` further byte reads — the CPU byte loop racing the
+    /// controller's single-transaction write.
+    struct TornDma {
+        mem: [u8; 4096],
+        pending: Option<(usize, [u8; 16])>,
+        land_after: usize,
+        writes: Vec<(usize, usize)>,
+    }
+
+    impl TornDma {
+        fn tick(&mut self) {
+            if let Some((off, trb)) = self.pending {
+                if self.land_after == 0 {
+                    self.mem[off..off + 16].copy_from_slice(&trb);
+                    self.pending = None;
+                } else {
+                    self.land_after -= 1;
+                }
+            }
+        }
+    }
+
+    impl XhciHw for TornDma {
+        fn read32(&mut self, _off: u32) -> u32 {
+            0
+        }
+        fn write32(&mut self, _off: u32, _val: u32) {}
+        fn dma_read(&mut self, hpa: u64, buf: &mut [u8]) {
+            let o = hpa as usize;
+            for (i, b) in buf.iter_mut().enumerate() {
+                self.tick();
+                *b = self.mem[o + i];
+            }
+        }
+        fn dma_write(&mut self, hpa: u64, buf: &[u8]) {
+            let o = hpa as usize;
+            self.writes.push((o, buf.len()));
+            self.mem[o..o + buf.len()].copy_from_slice(buf);
+        }
+        fn dma_read32(&mut self, hpa: u64) -> u32 {
+            // Hardware: one aligned load, never torn within the word.
+            self.tick();
+            let o = hpa as usize;
+            u32::from_le_bytes(self.mem[o..o + 4].try_into().unwrap())
+        }
+    }
+
+    fn cmd_completion_trb(cmd_ptr: u64) -> [u8; 16] {
+        let mut t = [0u8; 16];
+        put_u64(&mut t, 0, cmd_ptr);
+        put_u32(&mut t, 8, u32::from(CMPL_SUCCESS) << 24);
+        put_u32(&mut t, 12, trb_ctrl(1, TRB_EVENT_CMD, 0));
+        t
+    }
+
+    /// The pre-`1fa231df` poll: 16 bytes in order, cycle last.
+    fn legacy_poll(hw: &mut TornDma, ring: &EventRing) -> Option<[u8; 16]> {
+        let t = read_trb(hw, ring.base, ring.deq);
+        let ctrl = get_u32(&t, 12);
+        if (ctrl & 1) == (ring.cycle & 1) {
+            Some(t)
+        } else {
+            None
+        }
+    }
+
+    #[test]
+    fn event_poll_never_tears_the_completion_it_waits_for() {
+        // Iron `1fa231df`: No-Op / Enable Slot / Address Device `cmpl=0xff`
+        // with the slot already Addressed. The completion landed mid-read;
+        // ctrl was fresh, Command TRB Pointer and code were stale zeros, and
+        // consume_posted skipped its own event. Every landing offset must
+        // retire the command now.
+        let caps = XhciCaps {
+            op: 0,
+            rt: 0,
+            db: 0,
+            max_slots: 64,
+            max_ports: 26,
+            csz: false,
+        };
+        let cmd_ptr = 0x2000u64;
+        let mut torn_legacy = 0usize;
+        for land_after in 0..48usize {
+            let mut hw = TornDma {
+                mem: [0; 4096],
+                pending: Some((0, cmd_completion_trb(cmd_ptr))),
+                land_after,
+                writes: Vec::new(),
+            };
+            let ev = EventRing::new(0);
+            if let Some(t) = legacy_poll(&mut hw, &ev) {
+                if xhci_event_trb_ptr(&t) != cmd_ptr
+                    || trb_cmpl_code(get_u32(&t, 8)) != CMPL_SUCCESS
+                {
+                    torn_legacy += 1;
+                }
+            }
+
+            let mut hw = TornDma {
+                mem: [0; 4096],
+                pending: Some((0, cmd_completion_trb(cmd_ptr))),
+                land_after,
+                writes: Vec::new(),
+            };
+            let mut ev = EventRing::new(0);
+            let got = consume_posted(&mut hw, &caps, &mut ev, TRB_EVENT_CMD, 0, 0, cmd_ptr, 64)
+                .unwrap_or_else(|e| panic!("land_after={land_after} lost completion: {e:?}"));
+            assert_eq!(xhci_event_trb_ptr(&got), cmd_ptr, "land_after={land_after}");
+            assert_eq!(trb_cmpl_code(get_u32(&got, 8)), CMPL_SUCCESS);
+            assert_eq!(ev.deq, 1, "exactly one event consumed land_after={land_after}");
+        }
+        assert!(
+            torn_legacy > 0,
+            "byte-order poll must reproduce the iron torn read for some landing offset"
+        );
+
+        // drain_events shares poll_event: an event the xHC still owns stays
+        // for the next wait; a landed one is dropped.
+        for (land_after, want_deq) in [(3usize, 0u16), (0, 1)] {
+            let mut hw = TornDma {
+                mem: [0; 4096],
+                pending: Some((0, cmd_completion_trb(cmd_ptr))),
+                land_after,
+                writes: Vec::new(),
+            };
+            let mut ev = EventRing::new(0);
+            drain_events(&mut hw, &caps, &mut ev);
+            assert_eq!(ev.deq, want_deq, "drain land_after={land_after}");
+        }
+    }
+
+    #[test]
+    fn trb_write_puts_the_control_word_last_as_one_store() {
+        // xHCI 4.9.2: parameter + status first, then cycle + type together.
+        let mut hw = TornDma {
+            mem: [0; 4096],
+            pending: None,
+            land_after: 0,
+            writes: Vec::new(),
+        };
+        let mut ring = Ring::new(0x100);
+        ring.place(&mut hw, 0x2000, 8, trb_ctrl(0, TRB_NORMAL, TRB_IOC));
+        assert_eq!(hw.writes, vec![(0x100, 12), (0x100 + 12, 4)]);
+        let t = read_trb(&mut hw, 0x100, 0);
+        assert_eq!(get_u64(&t, 0), 0x2000);
+        assert_eq!(get_u32(&t, 8), 8);
+        assert_eq!(get_u32(&t, 12) & 1, 1);
+        assert_eq!(trb_type(get_u32(&t, 12)), TRB_NORMAL);
+        assert_eq!(TRB_CTRL_OFF, 12);
     }
 
     #[test]
