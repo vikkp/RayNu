@@ -78,6 +78,8 @@ Force Off / reboot RayNu-V (not guest F7) is the iron close. Lived `4af78b43`: k
 
 **Lived `5c32bd06` (2026-09-22).** The flag printed `USB soak requested`, then Address Device timed out on p11 and p10 (`cmd=3 cmpl=0xff`, `err=3`). No `usb I/O ready`, no `USBSOAK`. The boot installed onto 1 GiB leftover DRAM and a guest reboot reached `login:` (UUID `4c27e121`). Force Off. Do not F11 this EFI again expecting the bench. Evidence: [2026-09-22-5c32bd06-soak-enum-timeout.md](../evidence/r640/2026-09-22-5c32bd06-soak-enum-timeout.md).
 
+**Lived `1fa231df` (2026-09-23).** The soak halt worked: `USBSOAK abort — USB enumeration failed err=3`, no guest, no RAM install. The `cmd timeout` dumps showed `crcr=0x8` idle and `slotst=2 ep0st=1` (slot **Addressed**) on a "timed-out" Address Device, and `evdeq=4` on a No-Op "timeout" after only three port events: the commands completed and the driver consumed their completion events as garbage. Root cause is a torn 16-byte event read (pointer read before the cycle bit). Fixed by `poll_event` (control word first, one 32-bit load) and `write_trb` (control word last, one 32-bit store). Evidence: [2026-09-23-1fa231df-soak-torn-event-read.md](../evidence/r640/2026-09-23-1fa231df-soak-torn-event-read.md).
+
 **Boot 1 — USB soak bench.** Put an empty `EFI/RayNu/usbsoak.txt` on the Cruzer ESP next to `raynuf.txt`. Expect:
 
 ```
@@ -85,6 +87,8 @@ boot: USB soak requested (EFI/RayNu/usbsoak.txt; no guest this boot; not ISO-INS
 boot: Stage 46 xhci legacy pre sup=0x… ctl=0x… -> sup=0x… ctl=0x… forced=0 (not ISO-INSTALL-OK)
 boot: Stage 46 xhci hcrst …
 boot: Stage 46 xhci legacy post sup=0x… ctl=0x… -> sup=0x… ctl=0x… forced=0 (not ISO-INSTALL-OK)
+boot: Stage 46 xhci trb order event cycle-first, write cycle-last (not ISO-INSTALL-OK)
+boot: Stage 46 xhci nop (not ISO-INSTALL-OK)            ← no "cmd timeout nop" after it
 boot: Stage 46 durable LUN usb I/O ready bytes=… lba=512 (not ISO-INSTALL-OK)
 boot: Stage 46 durable LUN peek usb …
 boot: USBSOAK start reads=239 idle_s=720 (ESP usbsoak.txt; no guest; not ISO-INSTALL-OK)
@@ -103,7 +107,7 @@ line. Paste all of them. No guest runs; the install is not touched. ~17 min.
 
 If enumeration fails again (`xhci enum p11 … cmd=3 cmpl=0xff`), the soak boot now prints one
 `boot: Stage 46 xhci cmd timeout addr p11 cmd=… sts=… crcr=… iman=… erdp=… cmdenq=… cmdcyc=… evdeq=… evcyc=… evtrb=… portsc=… pmsc=… slotst=… ep0st=… ep0deq=…`
-line per attempt, then `boot: USBSOAK abort — USB enumeration failed err=3 …` and halts. No guest, no ISO, no RAM install. Paste the `legacy` and `cmd timeout` lines; they decide the next fix.
+line per attempt, then `boot: USBSOAK abort — USB enumeration failed err=3 …` and halts. No guest, no ISO, no RAM install. Paste the `legacy`, `trb order` and `cmd timeout` lines; they decide the next fix. With the `trb order` line present, `slotst=2 ep0st=1` on a timed-out Address Device would mean the event lands somewhere other than our dequeue (compare `erdp` with `evdeq`), and `slotst=0 ep0st=0` with `crcr=0x8` would mean the xHC never fetched the command TRB.
 
 **Boot 2 — product path.** Remove `usbsoak.txt`. One of:
 

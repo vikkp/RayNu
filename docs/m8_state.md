@@ -1,7 +1,7 @@
 # M8 state — START HERE (persist / LOI Bar A recovery)
 
 > **Read this before touching `mgmt/xhci.rs`, `mgmt/durable_lun.rs`, `mgmt/disk_persist.rs`, `vmx/guest_uefi.rs` (RayNu-F boot source), or the trackers.**  
-> Last rewrite: 2026-09-22 (Phase 0 EFI `5c32bd06` lived: soak flag seen, USB never enumerated, RAM install reached `login:`; enumeration fix + soak halt built, **not yet lived**). Trackers: [`hda.md`](hda.md) (Everest, closed) · [`loihda.md`](loihda.md) (LOI, open). Plan: [`m8_plan.md`](m8_plan.md). ADR: [ADR-018](adr/ADR-018.md). Evidence: [`2026-09-22-5c32bd06-soak-enum-timeout.md`](evidence/r640/2026-09-22-5c32bd06-soak-enum-timeout.md).
+> Last rewrite: 2026-09-23 (soak EFI `1fa231df` lived: soak halted on `err=3`, no guest; the dumps show the commands **completed** and the driver lost their completion events — torn 16-byte event read. Fix built (`poll_event` cycle-first, `write_trb` cycle-last), **not yet lived**). Trackers: [`hda.md`](hda.md) (Everest, closed) · [`loihda.md`](loihda.md) (LOI, open). Plan: [`m8_plan.md`](m8_plan.md). ADR: [ADR-018](adr/ADR-018.md). Evidence: [`2026-09-23-1fa231df-soak-torn-event-read.md`](evidence/r640/2026-09-23-1fa231df-soak-torn-event-read.md) · [`2026-09-22-5c32bd06-soak-enum-timeout.md`](evidence/r640/2026-09-22-5c32bd06-soak-enum-timeout.md).
 
 ## One paragraph
 
@@ -28,6 +28,7 @@ Every EFI after `928d6224` is a **prototype**. Do not treat a later tip as known
 | `28cd4ff1` | `warm=1` ×2 → `DISK-BOOTX64` → `grub>` | warm before GRUB, `grub.cfg` read cold |
 | `15e3d665` | peek `efi=EFI PART … usb_err=8 installed=0` → `diskprime lba1=miss err=8` → `image=ISO-BOOTX64` → live installer | **ISO fall-through on a probe miss** (worse USB) |
 | `5c32bd06` | `USB soak requested` then p11 and p10 Address Device `cmd=3 cmpl=0xff` (`err=3` Enum). No `USBSOAK`. `image=ISO-BOOTX64` onto **1 GiB leftover DRAM**; F7 `DISK-BOOTX64` → `login:` UUID `4c27e121`. Toshiba never opened | **enumeration timeout before the soak**; RAM login is not persist |
+| `1fa231df` | `legacy pre/post forced=0` (no BIOS SMIs armed); No-Op, p11 Address Device, p10 Enable Slot all `cmpl=0xff` with `crcr=0x8` idle and **`slotst=2 ep0st=1`** (Addressed) on p11; retry `cmpl=0x13`. `USBSOAK abort err=3` → halt, **no guest** | **completion events lost to a torn 16-byte event read**; the soak halt worked (no RAM install) |
 
 ## Why it kept failing (diagnosis, 2026-09-22)
 
@@ -51,18 +52,29 @@ Every EFI after `928d6224` is a **prototype**. Do not treat a later tip as known
 | Guest-path USB waits bounded by **time** (8 s/attempt), settle 2 s, heartbeat every 2 s; GRUB gets `EFI_DEVICE_ERROR` instead of a frozen box | `xhci.rs` `USB_RW_DEADLINE_MS`, `BOT_SETTLE_MS`, `xhci_wait_expired` | `durable LUN usb rw waiting ms=N of 8000 bot=…` |
 | Stage 46 hold is live: coexist SPA ticks, heartbeat every 60 s | `iso_install::stage46_live_hold` | `Stage 46 hold alive t_s=N (SPA ticking …)` |
 
-### Phase 1a — enumeration (built after `5c32bd06`; **not yet lived**)
+### Phase 1a — enumeration (two EFIs lived; root cause found on `1fa231df`; fix built, **not yet lived**)
 
-`5c32bd06` COM2, read closely: the No-Op posted, three Enable Slots posted, the p14 hub's Address Device and GET_DESCRIPTOR posted. The only commands that never posted were **SET_ADDRESS on the two external HS devices** (Toshiba p11, UDisk p10). Two spec gaps fit that exactly and are fixed in this EFI:
+**Lived on `1fa231df` (soak boot, no guest).** The dump lines built after `5c32bd06` did their job. Every command that "timed out" left `cmd=0x1 sts=0x18 crcr=0x8` — controller running, no error, command ring idle — and the first p11 Address Device left the output Slot Context **Addressed** (`slotst=2`, xHCI Table 6-7: 0 Disabled/Enabled, 1 Default, 2 Addressed, 3 Configured) with EP0 Running and its TR Dequeue written. The retry returned `cmpl=0x13` Context State Error, which is Address Device on an already-Addressed slot. The No-Op "timeout" showed `evdeq=4` when only three Port Status Change Events precede it. So: **the commands completed and the driver consumed and discarded their completion events.** The No-Op and Enable Slot failing too rules out the device.
 
-| Gap | Fix | COM2 line |
-|-----|-----|-----------|
-| `reset_port` returned the instant PED=1 and Address Device went on the wire microseconds later. USB 2.0 §9.2.6.2 says no request for 10 ms after reset (TRSTRCY); Linux waits 50 ms. A device still in recovery NAKs the STATUS stage and the xHC retries NAKs forever = `cmd=3 cmpl=0xff`. The hub is a different silicon and happened to be ready. | `USB_PORT_RESET_RECOVERY_MS = 50` after every port reset and before the Address Device retry; 1 ms after HCRST (Intel). | none (silent) |
-| `handshake_legacy` set OS-owned and hoped. It never disabled BIOS SMIs in USBLEGCTLSTS, never forced a BIOS that keeps the controller, and RayNu-V writes the PCI command register (an SMI source) before the handoff. Dell legacy USB (iDRAC keyboard behind the p14 hub) can keep driving the controller from SMM. | Force ownership after the wait; clear every SMI enable; ack pending SMI events (same mask as Linux `quirk_usb_handoff_xhci`). | `xhci legacy pre sup=0x… ctl=0x… -> sup=0x… ctl=0x… forced=0/1` and `xhci legacy post …` |
-| A command timeout printed only `cmpl=0xff`. | `xhci cmd timeout nop/slot/addr/addr2 p… cmd= sts= crcr= iman= erdp= cmdenq= cmdcyc= evdeq= evcyc= evtrb= portsc= pmsc= slotst= ep0st= ep0deq=` before every abort. | that line |
-| A soak boot whose USB failed to enumerate fell through to the ISO on leftover DRAM and printed a RAM `login:`. | `usbsoak.txt` + enumeration failure → `USBSOAK abort — USB enumeration failed err=N` and halt. No guest. | that line, then `USBSOAK halt alive` |
+| Finding on `1fa231df` | Meaning |
+|-----------------------|---------|
+| `legacy pre ctl=0xe0010000 forced=0`, `sup=0x01002201` already OS-owned | BIOS SMIs were never armed; the SMI hypothesis is falsified. Handoff code stays (correct practice). |
+| Address Device still `cmpl=0xff` after 50 ms TRSTRCY; No-Op and Enable Slot also `cmpl=0xff` | The reset-recovery hypothesis is falsified. Delay stays (spec). |
+| `slotst=2 ep0st=1 ep0deq=0x1406fe001` then retry `cmpl=0x13` | SET_ADDRESS succeeded; its event was lost. |
+| `evdeq=4` at the No-Op timeout | The fourth event (the No-Op completion) was consumed as "not ours". |
 
-Reading the next `xhci cmd timeout addr` line if it still appears: `sts` bit 12 (HCE) or bit 2 (HSE) set = the controller stopped; `iman` bit 0 set with `evtrb` cycle ≠ `evcyc` = an event was posted that we are not seeing; `slotst=1` (Enabled) with `ep0st=0` = the xHC never ran the command; `slotst=2` (Default) with `ep0st=1` (Running) = SET_ADDRESS is on the wire and the device is NAKing; `portsc` PLS ≠ 0 = the link left U0 mid-command. `ctl` on the `legacy pre` line with bit 0 / 13 / 14 / 15 set = the BIOS had SMIs armed on this controller.
+**Root cause.** `consume_posted` / `consume_control` / `consume_bulk_pair` / `drain_events` / `abort_cmd_ring` read the 16-byte Event TRB with a byte loop, pointer first, control word (cycle bit) **last**. The xHC writes the event as one 16-byte transaction. Land it between our byte 0 and byte 12 and the loop sees a fresh cycle + type with a stale zero Command TRB Pointer and a stale zero completion code; `xhci_cmd_event_matches` rejects it, the loop skips it, and the wait spins to `cmpl=0xff`. The iron "Command TRB Pointer 0 on Success" and "leftover CC=0 Invalid" completions recorded in `xhci.rs` comments were the same tear one byte boundary apart — an xHC emits neither. Linux: `rmb()` after `TRB_CYCLE`. Every retry heuristic since `928d6224` (`nopretry`, `slotretry`, `addrretry`, `cmdptr`, `warm`, `diskprime`, `peekretry`) was written against this race.
+
+| Fix (this EFI) | Where | COM2 line |
+|----------------|-------|-----------|
+| Event poll reads the control word first as one aligned 32-bit load, checks the cycle bit, acquire fence, then reads the TRB | `xhci::poll_event`, `XhciHw::dma_read32`, all five wait loops | `xhci trb order event cycle-first, write cycle-last` after `xhci legacy post` |
+| TRB write stores parameter + status, fence, then the control word as one aligned 32-bit store (xHCI 4.9.2 cycle-last) | `xhci::write_trb`, `XhciHw::dma_write32` | same line |
+| Host regression: a DMA mock lands the completion after N byte reads, N in 0..48; old order tears for 12, new order retires all 48 | `xhci_pack_test::event_poll_never_tears_the_completion_it_waits_for` | — |
+| Gate needle: every event wait goes through `poll_event`; only the cmd-timeout dump reads a raw TRB at the dequeue | `m8_disk_persist_gate::event_poll_cycle_first_surface_present` | — |
+
+Kept from the `5c32bd06` fix (correct, not the cause): `USB_PORT_RESET_RECOVERY_MS = 50`, 1 ms after HCRST, BIOS SMI handoff + `xhci legacy pre/post` lines, `xhci cmd timeout …` dumps, `USBSOAK abort` halt on enumeration failure.
+
+Reading the next `xhci cmd timeout` line if one still appears **with** the `trb order` line present: `slotst=2 ep0st=1` again would mean the event is being written somewhere other than our dequeue (check `erdp` vs `evdeq`, ERST base); `slotst=0 ep0st=0` with `crcr=0x8` idle would mean the xHC never fetched the command TRB (check the command ring page and CRCR pointer); `sts` bit 12 (HCE) or bit 2 (HSE) = the controller stopped.
 
 ### Phase 1b — make USB deterministic from evidence (bench in this EFI; driver fix after)
 
@@ -85,9 +97,9 @@ PERC H740P = MegaRAID SAS 3.5 (MPT3 Fusion) post-EBS driver on a **spare** VD (n
 
 ## Next iron step (operator)
 
-1. **Force Off** the live `localhost:~#` if it is still up. It is the 1 GiB RAM disk from `5c32bd06` (`vda` = 2097152 sectors, UUID `4c27e121`). It is not the Toshiba. Tell: the Toshiba slice is `[vda] 16777216 512-byte logical blocks (8.59 GB/8.00 GiB)`; RAM is `2097152 … 1.00 GiB`.
-2. Flash this branch's EFI (`flashcruzer.sh --branch cursor/m8-phase0-failsafe-8366 --wait --any-cruzer-usb --allow-new-serial --raynu-f --linux-iso …`). Never `--init-new-cruzer`. Never Toshiba `/dev/sdc`. **Leave `usbsoak.txt` on the Cruzer** (it is still there).
-3. **Boot 1 — soak:** F11. Expect `xhci legacy pre …` and `xhci legacy post …` (paste both), then either `usb I/O ready` → `USBSOAK gap_s=…` ×4 → `RAYNU-V-USBSOAK-DONE` (~17 min), **or** `xhci cmd timeout addr …` → `USBSOAK abort — USB enumeration failed` → halt. Either way no guest runs. Paste the whole COM2.
+1. **Force Off** the `1fa231df` soak halt (`USBSOAK halt alive t_s=…`). Nothing is on the Toshiba from that boot. Tell for a RAM guest on any future boot: `[vda] 2097152 … 1.00 GiB`; the Toshiba slice is `[vda] 16777216 512-byte logical blocks (8.59 GB/8.00 GiB)`.
+2. Flash this branch's EFI (`flashcruzer.sh --branch cursor/m8-evring-cycle-first-8366 --wait --any-cruzer-usb --allow-new-serial --raynu-f --linux-iso …`). Never `--init-new-cruzer`. Never Toshiba `/dev/sdc`. **Leave `usbsoak.txt` on the Cruzer** (it is still there).
+3. **Boot 1 — soak:** F11. Expect `xhci legacy pre/post`, then **`xhci trb order event cycle-first, write cycle-last`** (that line names this fix), then `xhci nop` with **no** `cmd timeout nop`, Toshiba named, `usb I/O ready` → `USBSOAK gap_s=…` ×4 → `RAYNU-V-USBSOAK-DONE` (~17 min). If instead `xhci cmd timeout …` → `USBSOAK abort` → halt, paste the whole COM2 and read the dump against the Phase 1a table above. Either way no guest runs.
 4. **Boot 2 — product path:** only after boot 1 printed `RAYNU-V-USBSOAK-DONE`. Remove `usbsoak.txt`. Expect the installed menu → `login:` with `[vda] 16777216` (sit there; A4s Firefox), or `WARN LUN saw EFI PART; skip ISO` → `Stage 46 hold alive`. **No** `image=ISO-BOOTX64` on the Toshiba.
 5. Do not curl `POST /vms/1/start`. Do not run `setup-disk`. Do not F11 any EFI in the prototype table above.
 

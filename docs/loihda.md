@@ -1,6 +1,6 @@
 ---
 loihda_version: 1
-last_updated: 2026-09-22
+last_updated: 2026-09-23
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
@@ -44,7 +44,7 @@ Lived: [`docs/progress.md`](progress.md) · M8: [`docs/m8_plan.md`](m8_plan.md) 
 | Metric | Value | Meaning |
 |--------|------:|---------|
 | **Overall LOI readiness** | **60%** | Nearest honest conversation is Bar A. Not Bar B. Not GA. Down from 63: the persist mechanism closed twice and then failed seven flashes in a row. |
-| **Bar A — dedicated-box** | **74%** | One PowerEdge we own or they dedicate. A1 Everest, A3 SKU, A4 TLS **DONE**. A2 persist **closed on evidence** (`4af78b43`, `928d6224` `RAYNU-V-M8-DISK-PERSIST-OK`) but **not reliable**. `5c32bd06` saw `usbsoak.txt` and died at Address Device (`cmd=3 cmpl=0xff`) before any sector read, then reached `login:` on **1 GiB leftover DRAM** (UUID `4c27e121`). That is not the Toshiba. A4s / A6 / A5 wait on a repeatable installed `login:`. |
+| **Bar A — dedicated-box** | **74%** | One PowerEdge we own or they dedicate. A1 Everest, A3 SKU, A4 TLS **DONE**. A2 persist **closed on evidence** (`4af78b43`, `928d6224` `RAYNU-V-M8-DISK-PERSIST-OK`) but **not reliable**. `1fa231df` soak boot halted with **no guest** and its dumps show the xHCI commands completed (`slotst=2` Addressed, retry `cmpl=0x13`) while the driver lost their completion events — the 16-byte event TRB was read pointer-first, cycle-last. Fixed (`poll_event`), not lived. A4s / A6 / A5 wait on a repeatable installed `login:`. |
 | **Bar B — RAID-fleet** | **18%** | Replace the licensed hypervisor on PERC virtual disks they already paid for. |
 | **Months to Bar A** | **1.0** | Baseline 2026-09-14. ETA **2026-10**. Up from 0.75: scope grew (deterministic USB driver from soak evidence) after 7 failed prototypes. Shrink only with a **repeated** installed `login:` on COM2. |
 | **Months to Bar B** | **3.5** | PERC I/O is the long pole. ETA **2026-12**. |
@@ -94,7 +94,7 @@ All must be true:
 | A5 | **Auth beyond bring-up** | Product default is not `raynu-v-bringup` | A shared lab latch is not an operator credential. HostReady (`RAYNU-V-M8-AUTH-HOST-OK`) is not this close. |
 | A6 | **Operator keyboard** | Type in the guest from the SPA (not only iDRAC SOL) | Soft for the first LOI; still on the polish table. Serial already installed Alpine. Firmware SPA `POST /console/keys` is in-tree. Depends on A4s. Iron close is COM2 `RAYNU-V-M8-CONSOLE-OK`. |
 
-A2 is **DONE on evidence** but **not repeatable yet**. `5c32bd06` (2026-09-22) saw `usbsoak.txt`, timed out Address Device on p11 and p10 (`err=3`), and never started the soak. With no LUN attached it installed onto 1 GiB leftover DRAM and a guest reboot reached `login:` (UUID `4c27e121`). Force Off drops that disk. The Toshiba was not opened. A3 SKU is **DONE**. A4 TLS iron is **DONE** (`928d6224` `RAYNU-V-M8-TLS-OK`). **NOW:** the next EFI (built, not lived) waits the USB reset-recovery interval before SET_ADDRESS, takes the controller from BIOS SMM properly, dumps controller state on every command timeout, and halts a soak boot on enumeration failure ([m8_state.md](m8_state.md)). A4s waits on a repeatable installed `login:`. A5 host-ready is not iron ESP-required default. A6 firmware SPA keys are in-tree; iron SPA keyboard is not closed. M8.4 host-ready is not iron ISO-UPLOAD-OK.
+A2 is **DONE on evidence** but **not repeatable yet**. `5c32bd06` (2026-09-22) saw `usbsoak.txt`, timed out Address Device on p11 and p10 (`err=3`), and never started the soak. With no LUN attached it installed onto 1 GiB leftover DRAM and a guest reboot reached `login:` (UUID `4c27e121`). Force Off drops that disk. The Toshiba was not opened. A3 SKU is **DONE**. A4 TLS iron is **DONE** (`928d6224` `RAYNU-V-M8-TLS-OK`). `1fa231df` (2026-09-23) then halted the soak on `err=3` with no guest — the fail-safe worked — and its `cmd timeout` dumps proved the commands had completed (`slotst=2` Addressed, `cmpl=0x13` on retry, No-Op at `evdeq=4`): the driver was tearing the 16-byte completion event (pointer read before the cycle bit) and skipping its own event. **NOW:** the next EFI (built, not lived) reads the event control word first as one 32-bit load and writes TRB control words last as one 32-bit store ([m8_state.md](m8_state.md)). A4s waits on a repeatable installed `login:`. A5 host-ready is not iron ESP-required default. A6 firmware SPA keys are in-tree; iron SPA keyboard is not closed. M8.4 host-ready is not iron ISO-UPLOAD-OK.
 
 ### Bar B — RAID-fleet non-prod LOI
 
@@ -124,7 +124,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 **Product effect.** Without persist, “install Linux” dies when the operator Force Offs the box — which they will, because that is how you recover a Type-1. On the R640 we own, the same Alpine came back from a USB-backed disk after Force Off without running the installer again (`4af78b43`, then `928d6224` with the minted marker).
 
-**Why 85, not 97.** Since `928d6224` the Toshiba path has not repeated. `5c32bd06` died earlier than a sector read: Address Device timed out on p11 and p10, the soak never started, and `login:` was a 1 GiB RAM disk (UUID `4c27e121`). The ISO skip only arms after a serving LUN has shown `EFI PART`, so it did not arm. Score goes back up only on a **repeated** installed `login:` from the Toshiba after Force Off.
+**Why 85, not 97.** Since `928d6224` the Toshiba path has not repeated. `5c32bd06` died before a sector read and installed onto 1 GiB RAM. `1fa231df` halted the soak cleanly and finally named the fault: every event wait read the 16-byte Event TRB pointer-first and cycle-last, so a completion landing mid-read looked like someone else's event and was skipped (`cmpl=0xff` with the slot already Addressed). Every retry heuristic since `928d6224` was written against that race. The cycle-first poll is built, not lived. Score goes back up only on a **repeated** installed `login:` from the Toshiba after Force Off.
 
 **Honest remainder.** 8 GiB slice, USB ≠ PERC, reliability not yet shown. Do not claim 100%. Never flash Toshiba `/dev/sdc`.
 
@@ -175,14 +175,14 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | 2026-09-18 | Bar A A2 | USB Force Off on COM2 | **DONE on evidence** (`4af78b43` keep=1 DISK-BOOT UUID `348005a9`; minted persist-OK not printed) |
 | 2026-09-18 | Bar A A3 | SKU card | **DONE** ([`docs/sku.md`](sku.md) / [`site/sku.html`](../site/sku.html)) |
 | **2026-09-19** | Bar A A4 | TLS on native `:8443` **before RayNu-F** | **DONE** (`928d6224` COM2 `RAYNU-V-M8-TLS-OK`; Mac `curl --cacert` SPA `.140`) |
-| **NOW** | Bar A persist **reliability** | `5c32bd06`: soak flag seen, SET_ADDRESS lost on the two external devices, RAM `login:` | **Enumeration fix built, not lived** (TRSTRCY recovery, BIOS SMI handoff, cmd-timeout dump, soak halt). Force Off the RAM login; flash; boot 1 with `usbsoak.txt`. See [m8_state.md](m8_state.md) |
+| **NOW** | Bar A persist **reliability** | `1fa231df`: soak halted, no guest; dumps show commands completed and completion events torn by the byte-order read | **Cycle-first event poll built, not lived** (`poll_event`, `write_trb` cycle-last, `xhci trb order` COM2 line). Force Off the halt; flash; boot 1 with `usbsoak.txt`. See [m8_state.md](m8_state.md) |
 | then | Bar A A6 | SPA keyboard | after A4s; firmware `POST /console/keys` in-tree; not VNC |
 | then | Bar B B2 | Spare PERC VD persist | after A6; census skip is lab safety |
 | later | Auth / unmodified ISO | A5, Gen-1 Phase 2 | named residuals, not fake closes |
 
 ```
 2026-09  ████████  Everest closed
-2026-10  ████░░░░  Bar A: A4 TLS iron DONE; `5c32bd06` RAM login is not persist → Address Device dump-and-halt → repeatable login → A4s
+2026-10  ████░░░░  Bar A: A4 TLS iron DONE; `1fa231df` dumps named the torn event read → cycle-first poll → soak → repeatable login → A4s
 2026-11  ░░░░░░░░  Bar A: first dedicated-box LOI window
 2026-12  ░░░░░░░░  Bar B: PERC VD I/O
 ```
@@ -206,8 +206,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-usb-enum-recovery |
-| Summary | **Enumeration fix from `5c32bd06` evidence; soak halts on enum failure.** Only SET_ADDRESS on the two external HS devices failed to post. This EFI: 50 ms TRSTRCY after port reset and before the Address Device retry; 1 ms after HCRST; legacy handoff forces BIOS ownership out and disables every USBLEGCTLSTS SMI (`xhci legacy pre/post`); `xhci cmd timeout` dump before every abort; `usbsoak.txt` + enum failure → `USBSOAK abort` halt, never the RAM installer. Not lived. |
+| Commit | m8-evring-cycle-first |
+| Summary | **`1fa231df` lived; root cause found.** Soak halted on `err=3`, no guest (Phase 0 fail-safe worked). `crcr=0x8` idle and `slotst=2 ep0st=1` on a "timed-out" Address Device, retry `cmpl=0x13`, No-Op at `evdeq=4`: the commands completed and the driver skipped their completion events. The 16-byte Event TRB was read pointer-first / cycle-last; a mid-read landing gave a fresh cycle with ptr 0 / CC 0. Both `5c32bd06` hypotheses falsified (`legacy pre forced=0`, no SMI enables; 50 ms did nothing); code kept. This EFI: `poll_event` control-word-first one 32-bit load + acquire fence in all five waits; `write_trb` control word last as one 32-bit store; COM2 `xhci trb order …`; 48-offset host test; gate needle. Not lived. Scores held. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Scores **held** (Bar A 74, persist 85, overall 60, months A 1.0, Bar B 18). Up only on a repeated Toshiba `login:`. |
 | Gates touched | `usb_enum_evidence_surface_present`. `legacy_handoff_disables_bios_smis_and_forces_a_stubborn_bios`. `./tools/sync-loihda-site.sh --check`. `./tools/check-site-chrome.sh`. No MegaRAID. |
@@ -218,6 +218,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-23 | m8-evring-cycle-first | 74 | 18 | **Torn event read fixed, not lived.** `poll_event` reads the control word first (one 32-bit load, acquire fence) in every wait; `write_trb` stores it last (one 32-bit store); COM2 `xhci trb order event cycle-first, write cycle-last`; host test lands the completion at 48 offsets. Boot 1 again with `usbsoak.txt`. Scores held. |
+| 2026-09-23 | m8-usb-enum-iron | 74 | 18 | **`1fa231df` COM2: soak halted, no guest.** `legacy pre forced=0`; No-Op / p11 Address Device / p10 Enable Slot `cmpl=0xff` with `crcr=0x8` idle; p11 `slotst=2 ep0st=1` (Addressed), retry `cmpl=0x13`; No-Op at `evdeq=4`. Commands completed, events lost. Both Phase 1a hypotheses falsified. Evidence `docs/evidence/r640/2026-09-23-1fa231df-soak-torn-event-read.md`. Scores held. |
 | 2026-09-22 | m8-usb-enum-recovery | 74 | 18 | **Enumeration fix built, not lived.** TRSTRCY 50 ms after port reset; 1 ms after HCRST; legacy handoff forces ownership + disables BIOS SMIs; `xhci cmd timeout` dump; soak halts on enum failure. Boot 1 again with `usbsoak.txt`. Scores held. |
 | 2026-09-22 | m8-phase0-iron | 74 | 18 | **`5c32bd06` COM2: soak never started.** Address Device timeout on p11 and p10 (`cmd=3 cmpl=0xff`, `err=3`). `image=ISO-BOOTX64` onto 1 GiB leftover DRAM; F7 `login:` UUID `4c27e121`. Not the Toshiba. Force Off. Do not F11 this EFI again. Scores held. |
 | 2026-09-22 | m8-phase0-failsafe | 74 | 18 | **Lived `15e3d665` ISO miss → recovery Phase 0/1.** Peek `EFI PART` `usb_err=8` `installed=0`, `diskprime lba1=miss err=8`, `image=ISO-BOOTX64`, live installer over the closed install. This EFI: `EFI PART` forbids ISO; `setup-disk` withheld on a durable LUN; 8 s USB deadline + heartbeat; live hold; `xhci timeout` dump; `usbsoak.txt` bench. START HERE `docs/m8_state.md`. Persist 97→85, Bar A 78→74, overall 63→60, months A 0.75→1.0. Not lived. |
@@ -290,7 +292,7 @@ LOI:           NOT OPEN. Tracker born 2026-09-14.
 Bar A:         74% · 1.0 months · dedicated-box non-prod
 Bar B:         18% · 3.5 months · PERC RAID fleet (out of conversation until PERC persist)
 Overall:       60% · confidence medium
-NOW:           5c32bd06 login was 1 GiB RAM · Force Off · flash the enumeration-fix EFI · boot 1 with usbsoak.txt (legacy pre/post + USBSOAK or cmd timeout + abort halt) · do not curl Start · do not setup-disk · docs/m8_state.md
+NOW:           1fa231df soak halted, no guest · commands completed, events torn by the byte-order read · Force Off · flash cursor/m8-evring-cycle-first-8366 · boot 1 with usbsoak.txt (expect `xhci trb order …`, no `cmd timeout`, USBSOAK ×4, RAYNU-V-USBSOAK-DONE) · do not curl Start · do not setup-disk · docs/m8_state.md
 Open:          iron SPA keyboard · iron AUTH-OK · unmodified ISO · cluster · Ubuntu PERC stays standing boot
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
 Sit:           localhost:~# · do not setup-disk · do not flash Toshiba /dev/sdc
