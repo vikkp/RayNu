@@ -581,6 +581,32 @@ pub fn usb_enum_evidence_surface_present() -> bool {
         && xhci.contains("pub fn xhci_usb_soak_halt_enum_fail(err: u8) -> !")
         && lun.contains("xhci_usb_soak_halt_enum_fail(")
         && !xhci.contains("USBSOAK abort — USB enumeration failed err=\");\n    serial::write_line(USB_SOAK_DONE_MARKER)")
+        && event_poll_cycle_first_surface_present()
+}
+
+/// Iron `1fa231df`: the event poll read the 16-byte TRB pointer-first and
+/// cycle-last; the xHC's completion landing mid-read produced a fresh cycle
+/// with a stale Command TRB Pointer / code, and the wait skipped its own
+/// completion (`cmpl=0xff`, CRR=1, slot already Addressed). Every event
+/// poll must go through `poll_event` (control word first, one 32-bit load,
+/// acquire fence, then the TRB), and `write_trb` must store the control
+/// word last as one 32-bit store.
+pub fn event_poll_cycle_first_surface_present() -> bool {
+    let xhci = include_str!("xhci.rs");
+    let poll_sites = xhci.matches("poll_event(hw, ev)").count();
+    let raw_event_reads = xhci.matches("read_trb(hw, ev.base, ev.deq)").count();
+    xhci.contains("fn poll_event(hw: &mut impl XhciHw, ev: &EventRing) -> Option<[u8; 16]>")
+        && xhci.contains("let ctrl = hw.dma_read32(hpa + TRB_CTRL_OFF);")
+        && xhci.contains("fn dma_read32(&mut self, hpa: u64) -> u32")
+        && xhci.contains("fn dma_write32(&mut self, hpa: u64, val: u32)")
+        && xhci.contains("hw.dma_write32(hpa + TRB_CTRL_OFF, ctrl);")
+        && xhci.contains("unsafe { core::ptr::read_volatile(hpa as *const u32) }")
+        && xhci.contains("core::ptr::write_volatile(hpa as *mut u32, val);")
+        && xhci.contains("xhci trb order event cycle-first, write cycle-last")
+        && poll_sites >= 5
+        // Only the cmd-timeout dump and poll_event itself read the raw TRB
+        // at the dequeue; no wait loop may.
+        && raw_event_reads <= 2
 }
 
 /// Host package: backend choice + leftover fallback + never ISO-INSTALL-OK.

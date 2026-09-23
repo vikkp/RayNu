@@ -1,6 +1,6 @@
 ---
 hda_version: 1
-last_updated: 2026-09-22
+last_updated: 2026-09-23
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
@@ -38,7 +38,7 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 
 | Metric | Value | Δ vs previous HDA |
 |--------|------:|-------------------|
-| **Overall product readiness** | **99%** | **held** — Everest **CLOSED** (`f72b4276`). M8 known-good: `928d6224` printed `RAYNU-V-M8-DISK-PERSIST-OK` and `RAYNU-V-M8-TLS-OK`. `5c32bd06` saw `usbsoak.txt`, timed out Address Device on p11 and p10 (`cmd=3 cmpl=0xff`), and reached `login:` on **1 GiB leftover DRAM** (UUID `4c27e121`). That is not the Toshiba. The soak never started. Do not F11 `5c32bd06` again. Not 100%: A4s / console / auth are M8. |
+| **Overall product readiness** | **99%** | **held** — Everest **CLOSED** (`f72b4276`). M8 known-good: `928d6224` printed `RAYNU-V-M8-DISK-PERSIST-OK` and `RAYNU-V-M8-TLS-OK`. `e5cca2e0` printed `RAYNU-V-USBSOAK-DONE`: Toshiba `0480:a004`, peek `installed=1` on the 8 GiB slice, 239/239 reads across idle gaps 0/5/30/120 s, no guest. The cycle-first poll lived. Not a repeated `login:` yet. Do not F11 `5c32bd06` or `1fa231df` again. Boot 2 is this same EFI with `usbsoak.txt` removed. Not 100%: A4s / console / auth are M8. |
 | **Months to Mount Everest** | **0.0** | **held** (summit reached 2026-09-11; `f72b4276` SPA ISO loop) |
 | **ETA month** | **2026-09** | **closed this month on iron**; next work is M8, not a slipped Everest |
 | **Confidence** | high | E1–E6 on COM2. M8 named separately so polish cannot reopen the summit |
@@ -167,7 +167,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 | M+2 | 2026-09 | E3b native NIC lab (QEMU e1000) + ISO residual | ADR-013 Phase C | **Phase C DONE (QEMU)** |
 | M+3 | 2026-08 | E3b iron HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | **DONE (M7.8 iron)** |
 | M+4 | 2026-09 | Phase B (SPA → installed disk) | remaining Everest | **DONE — EVEREST CLOSED** (`f72b4276` / `34552377351`) |
-| M+5 | 2026-10 | **M8.0** persist (file nested / LUN iron / leftover fallback) | keep=1 + `DISK-BOOTX64` + `root=UUID=` after Force Off | **DONE on evidence** (`4af78b43`); persist-OK **printed** on `928d6224`. `5c32bd06` reached `login:` on 1 GiB RAM after an Address Device timeout. Not persist. See [m8_state.md](m8_state.md). |
+| M+5 | 2026-10 | **M8.0** persist (file nested / LUN iron / leftover fallback) | keep=1 + `DISK-BOOTX64` + `root=UUID=` after Force Off | **DONE on evidence** (`4af78b43`); persist-OK **printed** on `928d6224`. `5c32bd06` reached `login:` on 1 GiB RAM after an Address Device timeout. `e5cca2e0` soak 239/239 (`RAYNU-V-USBSOAK-DONE`), install still on the Toshiba. Product `login:` is boot 2. Not persist-OK yet. See [m8_state.md](m8_state.md). |
 
 ### Timeline burn-down
 
@@ -175,7 +175,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 2026-07 ████████  HDA + M6 closed (Latitude)
 2026-08 ████████  R640 boot (E2) + E3b HTTP-OK
 2026-09 ████████  E5 + Phase B — **Mount Everest CLOSED** (`f72b4276`)  ← months_to_everest = 0.0
-2026-10 ████░░░░  M8.0 persist **DONE on evidence**; A4 TLS iron **CLOSED** (`928d6224`); `5c32bd06` RAM login is not persist → dump-and-halt on Address Device timeout → A4s
+2026-10 ████░░░░  M8.0 persist **DONE on evidence**; A4 TLS iron **CLOSED** (`928d6224`); `5c32bd06` RAM login is not persist → `e5cca2e0` soak 239/239 → boot 2 installed `login:` → A4s
 2026-11 ░░░░░░░░  M8.3 console iron → PERC spare VD
 ```
 
@@ -245,7 +245,7 @@ Ordered for critical path (parallelize B with D design):
 | P0-9 | M6.9 external audit + spec review | E6 | **DONE** | proofs green | `docs/`, `ept_model/`, `mgmt/ext` |
 | P0-10 | R640 soak / hardware confidence | E2 | 0.5 | P0-2 | `tools/`, `mgmt/soak` — post M7.5 |
 | P0-11 | **M9 sketch** vMotion-like / DRS-like / hot-add | — | — | M8 | deferred — was M8 in ADR-009; **M9** after operator hardening (ADR-018) |
-| P0-64 | **M8** operator product hardening | — | IN PROGRESS | Everest closed | [ADR-018](adr/ADR-018.md) / [m8_plan.md](m8_plan.md) / **[m8_state.md](m8_state.md) (START HERE)**. Persist-OK printed on `928d6224`. `5c32bd06` (2026-09-22): soak flag seen, Address Device timeout, `login:` on 1 GiB RAM (UUID `4c27e121`). Not persist. Force Off. Do not F11 that EFI again. Narrative: [evidence](evidence/r640/2026-09-22-5c32bd06-soak-enum-timeout.md). Nested QEMU ≠ R640. |
+| P0-64 | **M8** operator product hardening | — | IN PROGRESS | Everest closed | [ADR-018](adr/ADR-018.md) / [m8_plan.md](m8_plan.md) / **[m8_state.md](m8_state.md) (START HERE)**. Persist-OK printed on `928d6224`. `5c32bd06` (2026-09-22): soak flag seen, Address Device timeout, `login:` on 1 GiB RAM (UUID `4c27e121`). `e5cca2e0` (2026-09-23): `RAYNU-V-USBSOAK-DONE`, 239/239 including 120 s idle, Toshiba still `installed=1`. No guest. Boot 2 is the same EFI without `usbsoak.txt`. Narrative: [evidence](evidence/r640/2026-09-23-e5cca2e0-usbsoak-done.md). Nested QEMU ≠ R640. |
 
 ---
 
@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-usb-enum-recovery |
-| Summary | **Fix the two enumeration gaps `5c32bd06` exposed; soak halts on enum failure.** On that COM2 the No-Op, three Enable Slots, and the p14 hub's Address Device + GET_DESCRIPTOR all posted; only SET_ADDRESS on the two external HS devices never posted. This EFI: (1) 50 ms reset recovery after every port reset and before the Address Device retry (USB 2.0 §9.2.6.2 TRSTRCY; was microseconds), 1 ms after HCRST (Intel); (2) legacy handoff forces BIOS ownership out, clears every USBLEGCTLSTS SMI enable, acks pending SMI events (`xhci legacy pre/post` lines); (3) `xhci cmd timeout nop/slot/addr/addr2` dump before every abort; (4) `usbsoak.txt` + enumeration failure → `USBSOAK abort` halt, never the RAM installer. Host: 18 xhci tests, persist gate green. **Not lived.** Months **0.0 held**. Overall **99 held**. |
+| Commit | m8-usbsoak-done |
+| Summary | **`e5cca2e0` lived: `RAYNU-V-USBSOAK-DONE`.** Toshiba `0480:a004` enumerated with no `cmd timeout` after `xhci nop`. Peek `efi=EFI PART gpt=1 installed=1 guest=8589934592 usb_err=0` (8 GiB slice still holds the `928d6224` install; whole disk `bytes=320072933376`). Soak gaps 0/5/30/120 s: `ok` 200/24/10/5, `fail=0` on every line, `USBSOAK total ok=239 fail=0`. The idle-miss shape since `928d6224` did not recur. No guest, so this is the bench, not persist-OK. Next: Force Off, remove `usbsoak.txt`, F11 the same stick. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. A4s / console / auth are M8. Nested QEMU ≠ R640. |
 | Gates touched | `usb_enum_evidence_surface_present` in `m8_disk_persist_gate.rs`; `legacy_handoff_disables_bios_smis_and_forces_a_stubborn_bios`; `./tools/sync-hda-site.sh --check`; `./tools/check-site-chrome.sh`. |
 | Months Δ | 0.0 held (Everest closed; recovery EFI not lived on R640) |
@@ -370,7 +370,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | H3 | ~~Guest UEFI CD not bootable / no reboot-to-disk on iron~~ | — | **Resolved** 2026-09-10 (`56a3ffd` / run `34480107961`): `RAYNU-V-RAYNU-F-DISK-BOOT-OK` + second Linux `root=UUID=` from `vda` + `login:` on the real R640. Chain: `59ac070` install-to-disk (`ISO-INSTALL-OK`) → F7 VMCLEAR/VMPTRLD (81 KiB `FirmwareState::new()` stack temporary over the VMCS; template reset + 32-page stack guard) → `975f8fc` relaunch into the installed GRUB menu, 1 M exit-cap inside GRUB's 2 s menu poll loop (~2 exits/µs) → `56a3ffd` RayNu-F wall cap (time, not exits, bounds the loader phase). Earlier: `916af96` THRE chain telemetry → UART TX ring room + line-rate pace + COM2 FIFO burst fixed the `apk` console stall. Evidence: [2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md](evidence/r640/2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md). Do not F11 `34474850361` / `34425781629` for Phase A; `34480107961` is the Phase A reference pin. |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
 | H5 | ~~Phase B — iron SPA still launches the SHELL stub~~ | — | **Resolved** 2026-09-11 (`f72b4276` / `34552377351`). Residual polish is **M8**, not Everest. |
-| H10 | Persist disk must be **reliable**, not once | **HIGH** | Mechanism closed (`4af78b43`, `928d6224` persist-OK). `5c32bd06` (2026-09-22) saw `usbsoak.txt` and lost SET_ADDRESS on p11 and p10 (`cmd=3 cmpl=0xff`) while every other command posted, then installed onto 1 GiB leftover DRAM and reached `login:` (UUID `4c27e121`). That is not persist. This EFI closes the two spec gaps that fit (no TRSTRCY recovery after port reset; BIOS SMIs never disabled), dumps controller state on every command timeout, and halts a soak boot on enumeration failure. Not lived. Plan: [m8_state.md](m8_state.md). Evidence: [2026-09-22-5c32bd06-soak-enum-timeout.md](evidence/r640/2026-09-22-5c32bd06-soak-enum-timeout.md). |
+| H10 | Persist disk must be **reliable**, not once | **HIGH** | Mechanism closed (`4af78b43`, `928d6224` persist-OK). `e5cca2e0` (2026-09-23) ran the cycle-first poll on iron: `RAYNU-V-USBSOAK-DONE`, 239/239 reads, idle gaps through 120 s, Toshiba peek `installed=1`. The torn-read fix lived. Persist-OK still needs the installed `login:` on boot 2 (same EFI, `usbsoak.txt` removed). Plan: [m8_state.md](m8_state.md). Evidence: [2026-09-23-e5cca2e0-usbsoak-done.md](evidence/r640/2026-09-23-e5cca2e0-usbsoak-done.md). |
 | H11 | Truncated `site/` on feature branches | LOW | **This commit (main catch-up):** keep Kimi updater chrome from `origin/main` (nav / Status / CIO View / Stories / Please reboot); patch lived Everest-closed strings in place; `./tools/check-site-chrome.sh` + CI `site-chrome`; always-on `.cursor/rules/site-chrome.mdc`. Do not replace `site/index.html` wholesale on HDA/Everest work. |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
@@ -381,6 +381,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-23 | m8-usbsoak-done | 0.0 | 99 | **`e5cca2e0` COM2: `RAYNU-V-USBSOAK-DONE`.** Toshiba `0480:a004`, peek `installed=1 guest=8589934592`, gaps 0/5/30/120 all `fail=0`, total 239/239. No guest. Boot 2 is this EFI with `usbsoak.txt` removed. months 0.0 held; overall 99 held |
+| 2026-09-23 | m8-evring-cycle-first | 0.0 | 99 | **Torn event read found and fixed, not lived.** Every event wait read the 16-byte Event TRB pointer-first / cycle-last; a completion landing mid-read looked like a fresh event with ptr 0 / CC 0 and was skipped. `poll_event` (control word first, one 32-bit load, acquire fence) in all five waits; `write_trb` control word last as one 32-bit store; COM2 `xhci trb order …`; 48-offset host test; gate needle. Boot 1 again with `usbsoak.txt`. months 0.0 held; overall 99 held |
+| 2026-09-23 | m8-usb-enum-iron | 0.0 | 99 | **`1fa231df` COM2: soak halted, no guest.** `legacy pre forced=0` (no BIOS SMIs); No-Op, p11 Address Device, p10 Enable Slot `cmpl=0xff` with `crcr=0x8` idle; p11 `slotst=2 ep0st=1` (Addressed), retry `cmpl=0x13`; No-Op at `evdeq=4`. Commands completed, events lost. `USBSOAK abort err=3` → halt. Both Phase 1a hypotheses falsified. Evidence: `docs/evidence/r640/2026-09-23-1fa231df-soak-torn-event-read.md`. months 0.0 held; overall 99 held |
 | 2026-09-22 | m8-usb-enum-recovery | 0.0 | 99 | **Enumeration fix built, not lived.** `5c32bd06` lost only SET_ADDRESS on the two external HS devices. This EFI: 50 ms TRSTRCY after port reset + before the Address Device retry; 1 ms after HCRST; legacy handoff forces ownership + disables BIOS SMIs (`xhci legacy pre/post`); `xhci cmd timeout` dump before every abort; soak boot halts on enum failure (`USBSOAK abort`). Boot 1 again with `usbsoak.txt`. months 0.0 held; overall 99 held |
 | 2026-09-22 | m8-phase0-iron | 0.0 | 99 | **`5c32bd06` COM2: soak never started.** `USB soak requested`, then p11+p10 Address Device `cmd=3 cmpl=0xff` (`err=3` Enum). No `USBSOAK`. `image=ISO-BOOTX64` onto 1 GiB leftover DRAM; F7 `login:` UUID `4c27e121`. RAM, not Toshiba. Force Off. Do not F11 this EFI again for the soak. Evidence: `docs/evidence/r640/2026-09-22-5c32bd06-soak-enum-timeout.md`. months 0.0 held; overall 99 held |
 | 2026-09-22 | m8-phase0-failsafe | 0.0 | 99 | **Lived `15e3d665` ISO miss → recovery Phase 0/1.** Peek `efi=EFI PART` `usb_err=8` `installed=0`, `diskprime lba1=miss err=8`, `image=ISO-BOOTX64`, live installer. This EFI: `EFI PART` forbids ISO; `setup-disk` withheld on a durable LUN; 8 s USB deadline + heartbeat + `EFI_DEVICE_ERROR`; live hold; `xhci timeout` dump; `usbsoak.txt` bench. START HERE: `docs/m8_state.md`. Not lived. Nested QEMU ≠ R640. months 0.0 held; overall 99 held |
@@ -997,11 +1000,11 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     **Force Off the `5c32bd06` RAM login. Flash this EFI. Boot 1 with `usbsoak.txt` still on the Cruzer.** Paste `xhci legacy pre/post`, then either `USBSOAK gap_s=` ×4 → `RAYNU-V-USBSOAK-DONE`, or `xhci cmd timeout addr` → `USBSOAK abort` halt. No guest either way. Boot 2 only after DONE. Do not setup-disk. Do not curl Start. Do not flash Toshiba `/dev/sdc`. See docs/m8_state.md.
+Next move:     **Force Off the `e5cca2e0` soak halt. Do not reflash. Remove `EFI/RayNu/usbsoak.txt` from the Cruzer (leave `raynuf.txt`). F11 the same stick.** Expect `build: sha=e5cca2e0d7a8`, no `USB soak requested`, `image=DISK-BOOTX64`, `[vda] 16777216`, `login:`. A `WARN LUN saw EFI PART; skip ISO` hold is the other acceptable end. `image=ISO-BOOTX64` means Force Off and paste COM2. Do not setup-disk. Do not curl Start. Do not flash Toshiba `/dev/sdc`. See docs/m8_state.md.
 Rollback:      GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351
                EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc
                COM2 build: sha=f72b4276d198. Do not flash a later M8 persist prototype as known-good.
-Do not F11:    M8 prototypes `b5e290be` `17d120c5` `3b388279` `08202468` `d60431ee` `28cd4ff1` `15e3d665` `5c32bd06` (table in docs/m8_state.md); Phase B fails `34548550755` / `7f8dc0a9`
+Do not F11:    M8 prototypes `b5e290be` `17d120c5` `3b388279` `08202468` `d60431ee` `28cd4ff1` `15e3d665` `5c32bd06` `1fa231df` (table in docs/m8_state.md); Phase B fails `34548550755` / `7f8dc0a9`
 Tcp4 residual: Floppy publishes PXE/HTTP, not Tcp4 SB (platform limit)
 SNP after EBS: dead — native BCM5720 is the durable mgmt path (E3b closed 2026-08-20)
 Preserve NIC:  releases/v0.1.0-adr013-baseline (pre-native-NIC; not the Everest flash kit)
