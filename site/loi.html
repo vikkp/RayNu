@@ -349,19 +349,18 @@
       <section class="section section--hda-com2" id="now">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>NOW · installed GRUB · then grub&gt;</p>
-          <h2 class="section__title">The soak passed. The product boot stopped at the GRUB prompt.</h2>
+          <h2 class="section__title">The product boot reached GRUB. The menu file is the open question.</h2>
           <p class="section__lede">
-            EFI <code>e5cca2e0</code> finished the USB soak, then on the next
-            boot staged the installed GRUB from the 8&nbsp;GiB slice and stopped
-            at <code>grub&gt;</code> with <code>blk_rd=33</code>. The warm on
-            that read fetched LBA 0. The next EFI drops that warm. The first
-            sector GRUB asks for outside the pin is a plain USB read, and COM2
-            prints it once.
+            EFI <code>c4a41a17</code> staged the installed GRUB from the
+            8&nbsp;GiB slice and stopped at <code>grub&gt;</code>. The one-shot
+            USB line was the firmware reading the ESP boot sector, before GRUB.
+            The next EFI uses that same walk and prints whether
+            <code>grub.cfg</code> is on the ESP.
           </p>
           <pre class="ship-code" data-reveal><code>closed: 928d6224 persist-OK + TLS-OK → login: on the Toshiba
-lived:  e5cca2e0 boot 2 → DISK-BOOTX64 → GRUB 2.12 → grub&gt; → blk_rd=33
-next:   flash cursor/m8-unpin-read-8366 · one "disk past pin lba=" line · [vda] 16777216 · login:
-never:  F11 e5cca2e0 again · setup-disk · curl Start · Toshiba /dev/sdc
+lived:  c4a41a17 → DISK-BOOTX64 → ESP BPB lba=2048 → GRUB 2.12 → grub&gt;
+next:   flash cursor/m8-grubcfg-esp-8366 · one grubcfg=yes or grubcfg=no · [vda] 16777216 · login:
+never:  F11 c4a41a17 again · setup-disk · curl Start · Toshiba /dev/sdc
 read:   docs/m8_state.md</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
             Rollback remains GitHub Latest

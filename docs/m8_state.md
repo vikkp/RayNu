@@ -1,7 +1,7 @@
 # M8 state — START HERE (persist / LOI Bar A recovery)
 
 > **Read this before touching `mgmt/xhci.rs`, `mgmt/durable_lun.rs`, `mgmt/disk_persist.rs`, `vmx/guest_uefi.rs` (RayNu-F boot source), or the trackers.**  
-> Last rewrite: 2026-09-24 (`e5cca2e0` boot 2: `image=DISK-BOOTX64`, GRUB 2.12, `grub>`, wall cap `blk_rd=33`. The in-GRUB “past pin” warm read LBA 0. This EFI deletes that warm. The first unpinned `BlockIo` is `xhci_live_rw`, with one COM2 line). Trackers: [`hda.md`](hda.md) (Everest, closed) · [`loihda.md`](loihda.md) (LOI, open). Plan: [`m8_plan.md`](m8_plan.md). ADR: [ADR-018](adr/ADR-018.md). Evidence: [`2026-09-24-e5cca2e0-grub-wallcap.md`](evidence/r640/2026-09-24-e5cca2e0-grub-wallcap.md) · [`2026-09-23-e5cca2e0-usbsoak-done.md`](evidence/r640/2026-09-23-e5cca2e0-usbsoak-done.md).
+> Last rewrite: 2026-09-24 (`c4a41a17`: `image=DISK-BOOTX64`, GRUB 2.12, `grub>`. The one-shot `disk past pin lba=2048 n=512 ok` was the firmware ESP BPB, before GRUB. This EFI asks that same FAT walk whether `grub.cfg` is on the ESP). Trackers: [`hda.md`](hda.md) (Everest, closed) · [`loihda.md`](loihda.md) (LOI, open). Plan: [`m8_plan.md`](m8_plan.md). ADR: [ADR-018](adr/ADR-018.md). Evidence: [`2026-09-24-c4a41a17-grub-staging-oneshot.md`](evidence/r640/2026-09-24-c4a41a17-grub-staging-oneshot.md) · [`2026-09-24-e5cca2e0-grub-wallcap.md`](evidence/r640/2026-09-24-e5cca2e0-grub-wallcap.md).
 
 ## One paragraph
 
@@ -37,6 +37,7 @@ Every EFI after `928d6224` is a **prototype**. Do not treat a later tip as known
 | `5c32bd06` | `USB soak requested` then p11 and p10 Address Device `cmd=3 cmpl=0xff` (`err=3` Enum). No `USBSOAK`. `image=ISO-BOOTX64` onto **1 GiB leftover DRAM**; F7 `DISK-BOOTX64` → `login:` UUID `4c27e121`. Toshiba never opened | **enumeration timeout before the soak**; RAM login is not persist |
 | `1fa231df` | `legacy pre/post forced=0` (no BIOS SMIs armed); No-Op, p11 Address Device, p10 Enable Slot all `cmpl=0xff` with `crcr=0x8` idle and **`slotst=2 ep0st=1`** (Addressed) on p11; retry `cmpl=0x13`. `USBSOAK abort err=3` → halt, **no guest** | **completion events lost to a torn 16-byte event read**; the soak halt worked (no RAM install) |
 | `e5cca2e0` boot 2 | No `USB soak requested`. Peek `installed=1`, `keep=1`, `image=DISK-BOOTX64`, GRUB 2.12 `grub>`, `diskprime past pin`, wall cap `blk_rd=33 blk_wr=0 wall_ms=180005`, then `Stage 46 hold alive` | **in-GRUB warm read LBA 0**; same `blk_rd` as the pin-only `grub>` on `d60431ee`. Evidence: [2026-09-24-e5cca2e0-grub-wallcap.md](evidence/r640/2026-09-24-e5cca2e0-grub-wallcap.md) |
+| `c4a41a17` | No soak. No `diskprime past pin`. `keep=1`, `image=DISK-BOOTX64`, `BOOTX64.EFI bytes=139264`, `disk past pin lba=2048 n=512 ok` during the ESP BPB read, then GRUB 2.12 `grub>`. Force Off before the wall cap | **one-shot consumed by firmware staging**, not by GRUB. Evidence: [2026-09-24-c4a41a17-grub-staging-oneshot.md](evidence/r640/2026-09-24-c4a41a17-grub-staging-oneshot.md) |
 
 ## Why it kept failing (diagnosis, 2026-09-22)
 
@@ -105,27 +106,33 @@ PERC H740P = MegaRAID SAS 3.5 (MPT3 Fusion) post-EBS driver on a **spare** VD (n
 
 ## Next iron step (operator)
 
-Boot 2 of `e5cca2e0` is done: installed GRUB, then `grub>`, `blk_rd=33`. **Do not F11 `e5cca2e0` again.** Force Off if `Stage 46 hold alive` is still printing.
+`c4a41a17` is done: installed GRUB, then `grub>`. The one-shot `disk past pin lba=2048 n=512 ok` printed while RayNu-F read the ESP BPB, before GRUB. **Do not F11 `c4a41a17` again.** Force Off if the prompt is still up.
 
-`usbsoak.txt` stays deleted. `raynuf.txt` stays. Toshiba stays seated. After CI is green for `cursor/m8-unpin-read-8366`:
+`usbsoak.txt` stays deleted. `raynuf.txt` stays. Toshiba stays seated. After CI is green for `cursor/m8-grubcfg-esp-8366`:
 
 ```
-~/projects/raynuv/flashcruzer.sh --branch cursor/m8-unpin-read-8366 --wait \
+~/projects/raynuv/flashcruzer.sh --branch cursor/m8-grubcfg-esp-8366 --wait \
   --any-cruzer-usb --allow-new-serial --raynu-f \
   --linux-iso ~/projects/raynuv/alpine-extended-3.21.3-x86_64.iso
 ```
 
-F11 that stick. COM2 must show the new `build: sha=` and must not show `USB soak requested` or `diskprime past pin`. One line, once:
+F11 that stick. COM2 must show the new `build: sha=` and must not show `USB soak requested` or `diskprime past pin`. Before the GRUB banner, one line:
 
 ```
-boot: Stage 46 disk past pin lba=N n=BYTES ok (not ISO-INSTALL-OK)
+boot: RayNu-F grubcfg=yes path=\EFI\BOOT\grub.cfg bytes=N (F7 disk; not ISO-INSTALL-OK)
 ```
 
-or the same line with `err=N`. That `lba` is the first sector GRUB asked for outside LBA 0–33. The read is `xhci_live_rw`, the function the soak ran 239 times. No extra INQUIRY on that call.
+or the same line with `path=\EFI\alpine\grub.cfg`, or:
 
-- `ok` and the GRUB menu, then `[vda] 16777216` and `login:`: sit there. Firefox `https://raynu-v.lab:8443` after that.
-- `ok` and `grub>` again: the pipe delivered the sector. The next change is the file GRUB opens.
-- `err=N`: the guest path failed on that LBA. Paste the line.
+```
+boot: RayNu-F grubcfg=no (F7 disk; not ISO-INSTALL-OK)
+```
+
+`disk past pin lba=2048 n=512 ok` may still print once, during that firmware walk. That line is the ESP BPB. The new line is the directory lookup of the menu file. It does not read the file body.
+
+- `grubcfg=yes` and the GRUB menu, then `[vda] 16777216` and `login:`: sit there. Firefox `https://raynu-v.lab:8443` after that.
+- `grubcfg=yes` and `grub>` again: the menu file is on the ESP and GRUB did not open it. Paste COM2.
+- `grubcfg=no` and `grub>`: the menu file is not on that ESP. Paste COM2.
 - `image=ISO-BOOTX64` or `[vda] 2097152` (1.00 GiB): that is RAM. Force Off and paste COM2.
 - `WARN LUN saw EFI PART; skip ISO` and `Stage 46 hold alive` is the other acceptable halt.
 

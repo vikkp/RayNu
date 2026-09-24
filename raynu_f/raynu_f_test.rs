@@ -2444,3 +2444,148 @@ fn raynu_f_real_iso_bootloader_path() {
     assert_eq!(back, img, "slice loader and guest-memory loader agree byte for byte");
     println!("RAYNU-V-RAYNU-F-REAL-ISO-PATH-OK");
 }
+
+/// FAT12 whose directory entries name the ESP menu files. File bodies are empty;
+/// `resolve_path` only reads directory entries.
+fn build_fat12_menu(boot_bytes: Option<u32>, alpine_bytes: Option<u32>) -> Vec<u8> {
+    const SEC: usize = 512;
+    const TOTAL: usize = 32;
+    const RESERVED: usize = 1;
+    const FAT_SECS: usize = 1;
+    const ROOT_ENTS: usize = 16;
+    let root_secs = ROOT_ENTS * 32 / SEC;
+    let mut v = vec![0u8; TOTAL * SEC];
+    v[0] = 0xEB;
+    v[1] = 0x3C;
+    v[2] = 0x90;
+    v[3..11].copy_from_slice(b"RAYNUF  ");
+    v[11..13].copy_from_slice(&(SEC as u16).to_le_bytes());
+    v[13] = 1;
+    v[14..16].copy_from_slice(&(RESERVED as u16).to_le_bytes());
+    v[16] = 1;
+    v[17..19].copy_from_slice(&(ROOT_ENTS as u16).to_le_bytes());
+    v[19..21].copy_from_slice(&(TOTAL as u16).to_le_bytes());
+    v[21] = 0xF8;
+    v[22..24].copy_from_slice(&(FAT_SECS as u16).to_le_bytes());
+    v[510] = 0x55;
+    v[511] = 0xAA;
+    let fat_start = RESERVED;
+    let root_start = fat_start + FAT_SECS;
+    let data_start = root_start + root_secs;
+    let set_fat = |v: &mut Vec<u8>, cl: usize, val: u16| {
+        let off = fat_start * SEC + cl * 3 / 2;
+        let cur = u16::from_le_bytes([v[off], v[off + 1]]);
+        let new = if cl & 1 == 0 {
+            (cur & 0xF000) | (val & 0x0FFF)
+        } else {
+            (cur & 0x000F) | (val << 4)
+        };
+        v[off..off + 2].copy_from_slice(&new.to_le_bytes());
+    };
+    set_fat(&mut v, 0, 0xFF8);
+    set_fat(&mut v, 1, 0xFFF);
+    let mk_ent = |name: &[u8; 11], attr: u8, cluster: u16, size: u32| {
+        let mut e = [0u8; 32];
+        e[..11].copy_from_slice(name);
+        e[11] = attr;
+        e[26..28].copy_from_slice(&cluster.to_le_bytes());
+        e[28..32].copy_from_slice(&size.to_le_bytes());
+        e
+    };
+    let cl_efi = 2u16;
+    let cl_boot = 3u16;
+    let cl_alpine = 4u16;
+    set_fat(&mut v, cl_efi as usize, 0xFFF);
+    set_fat(&mut v, cl_boot as usize, 0xFFF);
+    let root_off = root_start * SEC;
+    v[root_off..root_off + 32].copy_from_slice(&mk_ent(b"EFI        ", 0x10, cl_efi, 0));
+    let efi_off = (data_start + cl_efi as usize - 2) * SEC;
+    v[efi_off..efi_off + 32].copy_from_slice(&mk_ent(b".          ", 0x10, cl_efi, 0));
+    v[efi_off + 32..efi_off + 64].copy_from_slice(&mk_ent(b"..         ", 0x10, 0, 0));
+    v[efi_off + 64..efi_off + 96].copy_from_slice(&mk_ent(b"BOOT       ", 0x10, cl_boot, 0));
+    let boot_off = (data_start + cl_boot as usize - 2) * SEC;
+    v[boot_off..boot_off + 32].copy_from_slice(&mk_ent(b".          ", 0x10, cl_boot, 0));
+    v[boot_off + 32..boot_off + 64].copy_from_slice(&mk_ent(b"..         ", 0x10, cl_efi, 0));
+    if let Some(n) = boot_bytes {
+        v[boot_off + 64..boot_off + 96].copy_from_slice(&mk_ent(b"GRUB    CFG", 0x20, 5, n));
+    }
+    if let Some(n) = alpine_bytes {
+        set_fat(&mut v, cl_alpine as usize, 0xFFF);
+        v[efi_off + 96..efi_off + 128].copy_from_slice(&mk_ent(b"ALPINE     ", 0x10, cl_alpine, 0));
+        let alpine_off = (data_start + cl_alpine as usize - 2) * SEC;
+        v[alpine_off..alpine_off + 32].copy_from_slice(&mk_ent(b".          ", 0x10, cl_alpine, 0));
+        v[alpine_off + 32..alpine_off + 64].copy_from_slice(&mk_ent(b"..         ", 0x10, cl_efi, 0));
+        v[alpine_off + 64..alpine_off + 96].copy_from_slice(&mk_ent(b"GRUB    CFG", 0x20, 6, n));
+    }
+    v
+}
+
+#[test]
+fn esp_grub_cfg_prefers_boot_path_and_reports_size() {
+    use super::fat::{
+        parse_bpb, pick_grub_cfg, resolve_path, FatEntry, FatError, ATTR_ARCHIVE, ATTR_DIRECTORY,
+        GRUB_CFG_PATH_ALPINE, GRUB_CFG_PATH_BOOT,
+    };
+
+    let file = |size: u32, dir: bool| FatEntry {
+        name: [0; 12],
+        name_len: 0,
+        attr: if dir { ATTR_DIRECTORY } else { ATTR_ARCHIVE },
+        first_cluster: 2,
+        size,
+    };
+    assert_eq!(
+        pick_grub_cfg(Some(&file(4321, false)), Some(&file(99, false))),
+        Some((GRUB_CFG_PATH_BOOT, 4321))
+    );
+    assert_eq!(
+        pick_grub_cfg(None, Some(&file(99, false))),
+        Some((GRUB_CFG_PATH_ALPINE, 99))
+    );
+    assert_eq!(
+        pick_grub_cfg(Some(&file(0, true)), Some(&file(99, false))),
+        Some((GRUB_CFG_PATH_ALPINE, 99))
+    );
+    assert_eq!(pick_grub_cfg(None, None), None);
+    assert_eq!(pick_grub_cfg(Some(&file(0, true)), None), None);
+    assert_eq!(GRUB_CFG_PATH_BOOT, b"\\EFI\\BOOT\\grub.cfg");
+    assert_eq!(GRUB_CFG_PATH_ALPINE, b"\\EFI\\alpine\\grub.cfg");
+
+    let both = VecVol(build_fat12_menu(Some(4321), Some(99)));
+    let mut boot = [0u8; 512];
+    assert!(super::fat::VolumeRead::read_at(&both, 0, &mut boot));
+    let vol = parse_bpb(&boot).expect("BPB");
+    let boot_ent = resolve_path(&vol, &both, GRUB_CFG_PATH_BOOT).expect("boot cfg");
+    let alpine_ent = resolve_path(&vol, &both, GRUB_CFG_PATH_ALPINE).expect("alpine cfg");
+    assert!(!boot_ent.is_dir() && boot_ent.size == 4321);
+    assert!(!alpine_ent.is_dir() && alpine_ent.size == 99);
+    assert_eq!(
+        pick_grub_cfg(Some(&boot_ent), Some(&alpine_ent)),
+        Some((GRUB_CFG_PATH_BOOT, 4321))
+    );
+
+    let alpine_only = VecVol(build_fat12_menu(None, Some(77)));
+    assert!(super::fat::VolumeRead::read_at(&alpine_only, 0, &mut boot));
+    let vol = parse_bpb(&boot).expect("BPB");
+    assert_eq!(
+        resolve_path(&vol, &alpine_only, GRUB_CFG_PATH_BOOT),
+        Err(FatError::NotFound)
+    );
+    let alpine_ent = resolve_path(&vol, &alpine_only, GRUB_CFG_PATH_ALPINE).unwrap();
+    assert_eq!(
+        pick_grub_cfg(None, Some(&alpine_ent)),
+        Some((GRUB_CFG_PATH_ALPINE, 77))
+    );
+
+    let neither = VecVol(build_fat12_menu(None, None));
+    assert!(super::fat::VolumeRead::read_at(&neither, 0, &mut boot));
+    let vol = parse_bpb(&boot).expect("BPB");
+    assert_eq!(
+        resolve_path(&vol, &neither, GRUB_CFG_PATH_BOOT),
+        Err(FatError::NotFound)
+    );
+    assert_eq!(
+        resolve_path(&vol, &neither, GRUB_CFG_PATH_ALPINE),
+        Err(FatError::NotFound)
+    );
+}
