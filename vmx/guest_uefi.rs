@@ -8306,9 +8306,6 @@ unsafe fn raynu_f_stage_disk_bootloader(
     )?;
     RAYNU_F_STAGED_FROM_DISK.store(true, Ordering::Release);
     crate::devices::guest_serial_answer::begin_second_boot();
-    // GRUB's next USB touch is past the pin (ESP / ext4). Arm that warm
-    // here so the staging FAT walk does not consume it.
-    crate::mgmt::durable_lun::durable_lun_arm_past_pin_warm();
     Some(loaded)
 }
 

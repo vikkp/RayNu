@@ -686,41 +686,45 @@ pub fn durable_lun_read_any(off: u64, buf: &mut [u8]) -> bool {
     true
 }
 
-static PAST_PIN_ARM: AtomicBool = AtomicBool::new(false);
-static PAST_PIN_DONE: AtomicBool = AtomicBool::new(false);
+static PAST_PIN_LINE: AtomicBool = AtomicBool::new(false);
 
-/// Arm the one USB warm that runs on the first BlockIo read past the GPT
-/// pin. Called after the installed `BOOTX64.EFI` is staged, so peek and
-/// the FAT walk do not consume it. Iron `28cd4ff1` warmed only at diskprime;
-/// GRUB then read LBA0–LBA33 from the pin and the `grub.cfg` read was cold.
-pub fn durable_lun_arm_past_pin_warm() {
-    PAST_PIN_ARM.store(true, Ordering::Release);
-    PAST_PIN_DONE.store(false, Ordering::Release);
+/// Host tests reset the one-line latch.
+pub fn durable_lun_clear_past_pin_line() {
+    PAST_PIN_LINE.store(false, Ordering::Release);
 }
 
-/// Host tests / a new boot stage.
-pub fn durable_lun_clear_past_pin_warm() {
-    PAST_PIN_ARM.store(false, Ordering::Release);
-    PAST_PIN_DONE.store(false, Ordering::Release);
+/// True until the first unpinned BlockIo read has been recorded.
+pub fn durable_lun_past_pin_line_pending() -> bool {
+    !PAST_PIN_LINE.load(Ordering::Acquire)
 }
 
-/// True when the next past-pin read should warm the BOT pipe.
-pub fn durable_lun_past_pin_warm_due() -> bool {
-    PAST_PIN_ARM.load(Ordering::Acquire) && !PAST_PIN_DONE.load(Ordering::Acquire)
+/// First BlockIo read the GPT pin does not serve. Returns true only for
+/// that call. Iron prints one COM2 line (`lba`, `n`, `ok` or `err`).
+/// Later reads stay quiet. No INQUIRY and no extra LBA0 READ.
+pub fn durable_lun_note_past_pin_read(off: u64, len: usize, ok: bool) -> bool {
+    if PAST_PIN_LINE.swap(true, Ordering::AcqRel) {
+        return false;
+    }
+    #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+    serial_past_pin_read(off, len, ok);
+    let _ = (off, len, ok);
+    true
 }
 
-/// Once, after [`durable_lun_arm_past_pin_warm`]: drain + INQUIRY + READ LBA0.
-/// `false` from the xHCI helper (lock busy) leaves the warm due.
-pub fn durable_lun_warm_past_pin() {
-    if !durable_lun_past_pin_warm_due() {
-        return;
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn serial_past_pin_read(off: u64, len: usize, ok: bool) {
+    use crate::boot::serial;
+    serial::write_str("boot: Stage 46 disk past pin lba=");
+    write_dec(off / 512);
+    serial::write_str(" n=");
+    write_dec(len as u64);
+    if ok {
+        serial::write_str(" ok");
+    } else {
+        serial::write_str(" err=");
+        write_dec(u64::from(crate::mgmt::usb_bot::usb_bot_last_err()));
     }
-    if PAST_PIN_DONE.swap(true, Ordering::AcqRel) {
-        return;
-    }
-    if !crate::mgmt::xhci::xhci_live_warm_past_pin() {
-        PAST_PIN_DONE.store(false, Ordering::Release);
-    }
+    serial::write_line(" (not ISO-INSTALL-OK)");
 }
 
 /// Bring up NVMe I/O on the census pick. USB waits until after EBS.

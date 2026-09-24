@@ -80,7 +80,9 @@ Force Off / reboot RayNu-V (not guest F7) is the iron close. Lived `4af78b43`: k
 
 **Lived `1fa231df` (2026-09-23).** The soak halt worked: `USBSOAK abort — USB enumeration failed err=3`, no guest, no RAM install. The `cmd timeout` dumps showed `crcr=0x8` idle and `slotst=2 ep0st=1` (slot **Addressed**) on a "timed-out" Address Device, and `evdeq=4` on a No-Op "timeout" after only three port events: the commands completed and the driver consumed their completion events as garbage. Root cause is a torn 16-byte event read (pointer read before the cycle bit). Fixed by `poll_event` (control word first, one 32-bit load) and `write_trb` (control word last, one 32-bit store). Evidence: [2026-09-23-1fa231df-soak-torn-event-read.md](../evidence/r640/2026-09-23-1fa231df-soak-torn-event-read.md).
 
-**Lived `e5cca2e0` (2026-09-23) — soak passed.** `xhci trb order event cycle-first, write cycle-last`, Toshiba `0480:a004`, `usb I/O ready bytes=320072933376`, peek `efi=EFI PART installed=1 guest=8589934592 usb_err=0`. `USBSOAK` gaps 0/5/30/120 all `fail=0` (200+24+10+5 = 239, `idle_s=1020`), then `RAYNU-V-USBSOAK-DONE` and the halt. No guest. Evidence: [2026-09-23-e5cca2e0-usbsoak-done.md](../evidence/r640/2026-09-23-e5cca2e0-usbsoak-done.md). Next is boot 2 on this same EFI with `usbsoak.txt` removed. Do not reflash.
+**Lived `e5cca2e0` (2026-09-23) — soak passed.** `xhci trb order event cycle-first, write cycle-last`, Toshiba `0480:a004`, `usb I/O ready bytes=320072933376`, peek `efi=EFI PART installed=1 guest=8589934592 usb_err=0`. `USBSOAK` gaps 0/5/30/120 all `fail=0` (200+24+10+5 = 239, `idle_s=1020`), then `RAYNU-V-USBSOAK-DONE` and the halt. No guest. Evidence: [2026-09-23-e5cca2e0-usbsoak-done.md](../evidence/r640/2026-09-23-e5cca2e0-usbsoak-done.md).
+
+**Lived `e5cca2e0` (2026-09-24) — product boot stopped at `grub>`.** No soak flag. `image=DISK-BOOTX64`, GRUB 2.12, `diskprime past pin` (READ LBA 0), wall cap `blk_rd=33 blk_wr=0`. Evidence: [2026-09-24-e5cca2e0-grub-wallcap.md](../evidence/r640/2026-09-24-e5cca2e0-grub-wallcap.md). Do not F11 this EFI again. The next stick is `cursor/m8-unpin-read-8366`.
 
 **Boot 1 — USB soak bench.** Put an empty `EFI/RayNu/usbsoak.txt` on the Cruzer ESP next to `raynuf.txt`. Expect:
 
@@ -111,11 +113,15 @@ If enumeration fails again (`xhci enum p11 … cmd=3 cmpl=0xff`), the soak boot 
 `boot: Stage 46 xhci cmd timeout addr p11 cmd=… sts=… crcr=… iman=… erdp=… cmdenq=… cmdcyc=… evdeq=… evcyc=… evtrb=… portsc=… pmsc=… slotst=… ep0st=… ep0deq=…`
 line per attempt, then `boot: USBSOAK abort — USB enumeration failed err=3 …` and halts. No guest, no ISO, no RAM install. Paste the `legacy`, `trb order` and `cmd timeout` lines; they decide the next fix. With the `trb order` line present, `slotst=2 ep0st=1` on a timed-out Address Device would mean the event lands somewhere other than our dequeue (compare `erdp` with `evdeq`), and `slotst=0 ep0st=0` with `crcr=0x8` would mean the xHC never fetched the command TRB.
 
-**Boot 2 — product path.** Remove `usbsoak.txt`. One of:
+**Product path after `e5cca2e0`.** `usbsoak.txt` stays off. Flash `cursor/m8-unpin-read-8366` once CI is green. One of:
 
-- Installed menu → `login:` → **sit there**; do A4s (Firefox on `https://raynu-v.lab:8443`, reload).
-- `boot: WARN LUN saw EFI PART; skip ISO (do not wipe persist)` → `boot: HINT — installed LUN unreadable this boot …` → `boot: Stage 46 hold alive …` every 60 s with the SPA reachable. Paste COM2, Force Off.
+- `boot: Stage 46 disk past pin lba=N n=BYTES ok` once, then the installed menu → `login:` → **sit there**; do A4s (Firefox on `https://raynu-v.lab:8443`, reload). `[vda]` must be `16777216` sectors.
+- The same line with `err=N`. Paste it. That LBA is the first sector GRUB asked for outside the pin.
+- `ok` and `grub>` again: the sector arrived. Paste COM2.
+- `boot: WARN LUN saw EFI PART; skip ISO (do not wipe persist)` → `boot: HINT — installed LUN unreadable this boot …` → `boot: Stage 46 hold alive …` every 60 s. Paste COM2, Force Off.
 - While GRUB reads: `boot: Stage 46 durable LUN usb rw waiting ms=N of 8000 bot=…` every 2 s is a bounded wait, not a hang.
+
+`diskprime past pin` must not appear. That line was the LBA 0 warm this EFI removed.
 
 **Must not appear on an installed LUN:** `image=ISO-BOOTX64`, `setup-disk` in the guest. If the guest ever reaches a live shell anyway, COM2 prints `auto-answer setup-disk WITHHELD …` and nothing is erased.
 
