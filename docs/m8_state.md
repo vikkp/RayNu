@@ -107,13 +107,9 @@ PERC H740P = MegaRAID SAS 3.5 (MPT3 Fusion) post-EBS driver on a **spare** VD (n
 
 ## Next iron step (operator)
 
-`36d3b559` boot 2 is at `localhost:~#`. Leave it. Do not type `setup-alpine` or `setup-disk`. Do not curl. Do not Force Off. Do not reflash.
+`36d3b559` boot 3 is at `localhost:~#` after iDRAC `SYS1001` (system turning off) at 20:14:54. Same UUID `a0ad99ac-…`. `/dev/vda2` file counts match boot 2. Leave the shell. Do not type `setup-alpine` or `setup-disk`. Do not curl. Do not reflash.
 
-A4s is one Firefox tab to `https://raynu-v.lab:8443`. Mac hosts is already `10.99.99.148 raynu-v.lab`. Lab CA is `/tmp/raynu-lab-ca.crt.pem` (public file `assets/tls/lab-ca.crt.pem`). Import or accept that CA. One tab only — the host has one TCP slot.
-
-Success: the page stays up, COM2 prints `TCP accept` then `HTTP exchange ok`, and the guest is still at `localhost:~#`. Paste that COM2 tail. Do not POST `/vms/1/start`.
-
-If the page fails and COM2 stays on `TCP accept` with no `HTTP exchange ok`, quit Firefox completely. If `idle abort` prints, one Firefox tab only. If it does not print within 15 s, the slot will not free; do not Force Off this login to clear it.
+Firefox stays closed. The previous SPA render was the same minute as `SYS1003` then `SYS1001`. This lease is `10.99.99.150`. The Mac hosts line for `raynu-v.lab` has to become `10.99.99.150` before any later browser attempt. The millicert does not list `.150`. Lab CA remains `/tmp/raynu-lab-ca.crt.pem`.
 
 `grubcfg=no` on this disk is expected. Alpine keeps `grub.cfg` on ext4 `/boot/grub`, not on the ESP. The menu still auto-booted.
 

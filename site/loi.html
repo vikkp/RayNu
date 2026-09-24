@@ -347,19 +347,20 @@
 
       <section class="section section--hda-com2" id="now">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>NOW · installed login, twice · A4s</p>
-          <h2 class="section__title">The installed Alpine came back after two Force Offs.</h2>
+          <p class="milestone-kicker" data-reveal>NOW · third login · Firefox stays closed</p>
+          <h2 class="section__title">The installed Alpine came back after the chassis turned off.</h2>
           <p class="section__lede">
-            EFI <code>36d3b559</code> installed Alpine on the 8&nbsp;GiB slice,
-            then booted that disk to <code>localhost login:</code> twice.
-            <code>grub.cfg</code> is not on the ESP; GRUB loaded the menu from
-            ext4. The open step is one browser tab on the standing SPA while
-            that shell stays up.
+            EFI <code>36d3b559</code> reached <code>localhost login:</code> a
+            third time, after iDRAC logged the server turning off. The same
+            UUID and the same <code>vda2</code> file counts came back. The
+            browser stays closed on this boot. The new lease is
+            <code>10.99.99.150</code>.
           </p>
-          <pre class="ship-code" data-reveal><code>closed: 36d3b559 → DISK-BOOTX64 → menu → UUID a0ad99ac → login: ×2
-lived:  boot 2 still at localhost:~# · ext4 journal recovered · vfat dirty bit cleared
-next:   one Firefox tab https://raynu-v.lab:8443 · hosts 10.99.99.148 · no curl
-never:  reflash · setup-disk · curl Start · Force Off this login · flash the Toshiba
+          <pre class="ship-code" data-reveal><code>closed: 36d3b559 → DISK-BOOTX64 → menu → UUID a0ad99ac → login: ×3
+lived:  boot 3 at localhost:~# · journal recovered · vda2 counts match boot 2
+power:  SYS1003 then SYS1001 at 20:14, same minute as the boot 2 SPA
+next:   hosts 10.99.99.150 raynu-v.lab · Firefox stays closed · no curl
+never:  reflash · setup-disk · curl Start · flash the Toshiba
 read:   docs/m8_state.md</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
             Rollback remains GitHub Latest

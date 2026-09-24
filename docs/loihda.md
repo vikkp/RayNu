@@ -175,7 +175,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | 2026-09-18 | Bar A A2 | USB Force Off on COM2 | **DONE on evidence** (`4af78b43` keep=1 DISK-BOOT UUID `348005a9`; minted persist-OK not printed) |
 | 2026-09-18 | Bar A A3 | SKU card | **DONE** ([`docs/sku.md`](sku.md) / [`site/sku.html`](../site/sku.html)) |
 | **2026-09-19** | Bar A A4 | TLS on native `:8443` **before RayNu-F** | **DONE** (`928d6224` COM2 `RAYNU-V-M8-TLS-OK`; Mac `curl --cacert` SPA `.140`) |
-| **NOW** | Bar A **A4s** | `36d3b559` boot 2 is at `localhost:~#` (UUID `a0ad99ac-…`) | One Firefox tab on `https://raynu-v.lab:8443`. Do not curl. Do not Force Off. See [m8_state.md](m8_state.md) |
+| **NOW** | Bar A **A4s held** | `36d3b559` boot 3 is at `localhost:~#` after iDRAC `SYS1001` | Lease `10.99.99.150`. Firefox stays closed. Same UUID, same vda2 counts as boot 2. See [m8_state.md](m8_state.md) |
 | then | Bar A A6 | SPA keyboard | after A4s; firmware `POST /console/keys` in-tree; not VNC |
 | then | Bar B B2 | Spare PERC VD persist | after A6; census skip is lab safety |
 | later | Auth / unmodified ISO | A5, Gen-1 Phase 2 | named residuals, not fake closes |
@@ -207,10 +207,10 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | Field | Value |
 |-------|-------|
 | Commit | m8-grubcfg-esp |
-| Summary | **`36d3b559`: installed `login:` twice.** Fresh Alpine on the 8 GiB slice, then two Force Offs to `DISK-BOOTX64`, GRUB menu, UUID `a0ad99ac-…`. `grubcfg=no` (menu is on ext4). Boot 2 recovered the ext4 journal and cleared a vfat dirty bit. |
+| Summary | **`36d3b559` boot 3: login after `SYS1001`.** Lease `10.99.99.150`. Same UUID `a0ad99ac-…`. vda2 `6380/521216` files, `102908/2084352` blocks, matching boot 2. Ext4 journal recovered. vfat dirty bit cleared again. Firefox stays closed. |
 | Everest impact | none — HDA months 0.0 / 99% held |
-| LOI impact | Bar A 74→82, persist 85→93, overall 60→64, months A 1.0→0.75. Bar B 18 held. A4s still open. |
-| Gates touched | Lived `RAYNU-V-M8-DISK-PERSIST-OK` ×2. `./tools/sync-loihda-site.sh --check`. `./tools/check-site-chrome.sh`. No MegaRAID. |
+| LOI impact | Scores **held** (Bar A 82, persist 93, overall 64, months A 0.75, Bar B 18). A4s still open: the SPA render on boot 2 was the same minute as `SYS1003`/`SYS1001`. |
+| Gates touched | Lived `RAYNU-V-M8-DISK-PERSIST-OK` on boot 3. `./tools/sync-loihda-site.sh --check`. `./tools/check-site-chrome.sh`. No MegaRAID. |
 
 ---
 
@@ -218,6 +218,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-24 | m8-grubcfg-esp | 82 | 18 | **`36d3b559` boot 3: login after chassis off.** iDRAC `SYS1003` then `SYS1001` at 20:14 while the SPA was on screen (lease `.148`). Boot 3 leased `.150`, `DISK-BOOTX64`, same UUID, vda2 counts unchanged from boot 2. Firefox stays closed. Scores held. |
 | 2026-09-24 | m8-grubcfg-esp | 82 | 18 | **`36d3b559` boot 2: installed `login:` again.** Same UUID `a0ad99ac-…`. Ext4 journal recovery, vfat dirty bit cleared, menu still auto-booted. `grubcfg=no` (menu on ext4). Bar A 74→82, persist 85→93, overall 60→64, months A 1.0→0.75. A4s open. |
 | 2026-09-24 | m8-grubcfg-esp | 74 | 18 | **`36d3b559` boot 1: installed `login:`.** Blank-disk SPA install, then Force Off → `keep=1` `DISK-BOOTX64` GRUB menu → `root=UUID=a0ad99ac-…`. Scores held on this row; the repeat is the row above. |
 | 2026-09-24 | m8-grubcfg-esp | 74 | 18 | **`c4a41a17`: `grub>` after the ESP walk.** One-shot `lba=2048 n=512 ok` was the BPB. This EFI prints `grubcfg=yes` or `grubcfg=no` before GRUB. Not lived. Scores held. |
@@ -297,7 +298,7 @@ LOI:           NOT OPEN. Tracker born 2026-09-14.
 Bar A:         82% · 0.75 months · dedicated-box non-prod
 Bar B:         18% · 3.5 months · PERC RAID fleet (out of conversation until PERC persist)
 Overall:       64% · confidence medium
-NOW:           36d3b559 boot 2 at localhost:~# · UUID a0ad99ac · leave it up · one Firefox tab https://raynu-v.lab:8443 · hosts already 10.99.99.148 · do not curl · do not Force Off · do not setup-disk · do not reflash · docs/m8_state.md
+NOW:           36d3b559 boot 3 at localhost:~# · UUID a0ad99ac · lease 10.99.99.150 · Firefox stays closed (boot 2 SPA was the same minute as SYS1001) · hosts must be 10.99.99.150 before any later browser · do not curl · do not setup-disk · do not reflash · docs/m8_state.md
 Open:          iron SPA keyboard · iron AUTH-OK · unmodified ISO · cluster · Ubuntu PERC stays standing boot
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
 Sit:           localhost:~# · do not setup-disk · do not flash Toshiba /dev/sdc
