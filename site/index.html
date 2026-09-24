@@ -154,11 +154,11 @@
             <code>root=UUID=814a97a0-…</code> → <code>login:</code>.
             That is M7 / ADR-009. M8 has since closed TLS
             (<code>RAYNU-V-M8-TLS-OK</code>) and HV-reboot persist
-            (<code>RAYNU-V-M8-DISK-PERSIST-OK</code>) on COM2. Persist is not yet
+            (<code>RAYNU-V-M8-DISK-PERSIST-OK</code>) on COM2.             Persist is not yet
             repeatable: <code>e5cca2e0</code> finished the USB soak
-            (<code>RAYNU-V-USBSOAK-DONE</code>, 239 of 239 reads, idle through
-            120 seconds) with the installed slice still on the Toshiba. The next
-            boot is that same EFI with the soak flag removed. A standing
+            (239 of 239 reads), then reached installed GRUB and stopped at
+            <code>grub&gt;</code> with <code>blk_rd=33</code>. Do not F11 that
+            EFI again. A standing
             SPA and a guest console UI are still open — not a reopened Everest.
             Iron rollback:
             <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed"

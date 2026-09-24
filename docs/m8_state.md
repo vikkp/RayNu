@@ -1,7 +1,7 @@
 # M8 state — START HERE (persist / LOI Bar A recovery)
 
 > **Read this before touching `mgmt/xhci.rs`, `mgmt/durable_lun.rs`, `mgmt/disk_persist.rs`, `vmx/guest_uefi.rs` (RayNu-F boot source), or the trackers.**  
-> Last rewrite: 2026-09-23 (`e5cca2e0` lived: `RAYNU-V-USBSOAK-DONE`, 239/239 reads including a 120 s idle, Toshiba `0480:a004` still `installed=1` on the 8 GiB slice. No guest. Boot 2 is this same EFI with `usbsoak.txt` removed). Trackers: [`hda.md`](hda.md) (Everest, closed) · [`loihda.md`](loihda.md) (LOI, open). Plan: [`m8_plan.md`](m8_plan.md). ADR: [ADR-018](adr/ADR-018.md). Evidence: [`2026-09-23-e5cca2e0-usbsoak-done.md`](evidence/r640/2026-09-23-e5cca2e0-usbsoak-done.md) · [`2026-09-23-1fa231df-soak-torn-event-read.md`](evidence/r640/2026-09-23-1fa231df-soak-torn-event-read.md).
+> Last rewrite: 2026-09-24 (`e5cca2e0` boot 2: `image=DISK-BOOTX64`, GRUB 2.12, `grub>`, wall cap `blk_rd=33`. The in-GRUB “past pin” warm read LBA 0. This EFI deletes that warm. The first unpinned `BlockIo` is `xhci_live_rw`, with one COM2 line). Trackers: [`hda.md`](hda.md) (Everest, closed) · [`loihda.md`](loihda.md) (LOI, open). Plan: [`m8_plan.md`](m8_plan.md). ADR: [ADR-018](adr/ADR-018.md). Evidence: [`2026-09-24-e5cca2e0-grub-wallcap.md`](evidence/r640/2026-09-24-e5cca2e0-grub-wallcap.md) · [`2026-09-23-e5cca2e0-usbsoak-done.md`](evidence/r640/2026-09-23-e5cca2e0-usbsoak-done.md).
 
 ## One paragraph
 
@@ -16,11 +16,12 @@ Everest (M7) is closed on iron. M8 is operator hardening. Bar A of the LOI needs
 
 Every EFI after `928d6224` is a **prototype**. Do not treat a later tip as known-good until it reaches the installed `login:` on COM2 **more than once**.
 
-## USB bench passed (F11 this EFI for boot 2)
+## USB bench passed (do not F11 this EFI again for `login:`)
 
 | EFI | What lived | Next |
 |-----|-----------|------|
-| `e5cca2e0` | `xhci trb order …` then Toshiba `0480:a004`, peek `efi=EFI PART installed=1 guest=8589934592 usb_err=0`, `USBSOAK` 239/239 (`gap_s` 0/5/30/120, `fail=0`), `RAYNU-V-USBSOAK-DONE`, halt, **no guest** | **Same stick, no reflash.** Remove `usbsoak.txt`, leave `raynuf.txt`, F11. |
+| `e5cca2e0` soak | `xhci trb order …` then Toshiba `0480:a004`, peek `installed=1 guest=8589934592`, `USBSOAK` 239/239, `RAYNU-V-USBSOAK-DONE`, halt, **no guest** | Bench is closed. |
+| `e5cca2e0` boot 2 | No soak flag. `keep=1`, `image=DISK-BOOTX64`, `BOOTX64.EFI bytes=139264`, GRUB 2.12 `grub>`, `diskprime past pin` (that function READ LBA 0), wall cap `blk_rd=33 blk_wr=0` | **Do not F11 again.** See the prototype row. |
 
 ## Prototypes that did not reach the installed login (do not F11 again expecting the menu)
 
@@ -35,6 +36,7 @@ Every EFI after `928d6224` is a **prototype**. Do not treat a later tip as known
 | `15e3d665` | peek `efi=EFI PART … usb_err=8 installed=0` → `diskprime lba1=miss err=8` → `image=ISO-BOOTX64` → live installer | **ISO fall-through on a probe miss** (worse USB) |
 | `5c32bd06` | `USB soak requested` then p11 and p10 Address Device `cmd=3 cmpl=0xff` (`err=3` Enum). No `USBSOAK`. `image=ISO-BOOTX64` onto **1 GiB leftover DRAM**; F7 `DISK-BOOTX64` → `login:` UUID `4c27e121`. Toshiba never opened | **enumeration timeout before the soak**; RAM login is not persist |
 | `1fa231df` | `legacy pre/post forced=0` (no BIOS SMIs armed); No-Op, p11 Address Device, p10 Enable Slot all `cmpl=0xff` with `crcr=0x8` idle and **`slotst=2 ep0st=1`** (Addressed) on p11; retry `cmpl=0x13`. `USBSOAK abort err=3` → halt, **no guest** | **completion events lost to a torn 16-byte event read**; the soak halt worked (no RAM install) |
+| `e5cca2e0` boot 2 | No `USB soak requested`. Peek `installed=1`, `keep=1`, `image=DISK-BOOTX64`, GRUB 2.12 `grub>`, `diskprime past pin`, wall cap `blk_rd=33 blk_wr=0 wall_ms=180005`, then `Stage 46 hold alive` | **in-GRUB warm read LBA 0**; same `blk_rd` as the pin-only `grub>` on `d60431ee`. Evidence: [2026-09-24-e5cca2e0-grub-wallcap.md](evidence/r640/2026-09-24-e5cca2e0-grub-wallcap.md) |
 
 ## Why it kept failing (diagnosis, 2026-09-22)
 
@@ -89,7 +91,7 @@ Reading the next `xhci cmd timeout` line if one still appears **with** the `trb 
 | Register/ring/endpoint dump on every guest-path timeout: USBCMD/USBSTS/CRCR/IMAN/IMOD/ERDP, event dequeue + cycle + the TRB sitting there, PORTSC/PORTPMSC, EP0/OUT/IN state and TR Dequeue vs our enqueue | `xhci.rs` `serial_xhci_timeout_dump` | `xhci timeout rw p11 cmd=… sts=… crcr=… erdp=… evdeq=… evtrb=… portsc=… pmsc=… out(st= enq= deq=) in(…)` |
 | **USB soak bench**: ESP `EFI/RayNu/usbsoak.txt` → after `usb I/O ready` read LBA0/1/2048/4096 with idle gaps 0/5/30/120 s (200/24/10/5 reads), print ok/fail/max_ms per gap, dump on every miss, then halt with a heartbeat. No guest. ~17 min. | `boot/usb_soak_flag.rs`, `xhci::xhci_usb_soak` | `USBSOAK gap_s=30 n=10 ok=… fail=… max_ms=… first_fail=…` then `RAYNU-V-USBSOAK-DONE` |
 | Hypotheses the dump decides: (a) event ring bookkeeping (`evtrb` cycle ≠ `evcyc` with `erdp` behind), (b) xHC never consumed the TRB (`deq` == ring base + old index, EP `st=1`), (c) device/bridge idle (EP Running, TRB consumed, no event: bridge NAK/spin-up), (d) link state (`portsc` PLS not U0, `pmsc` L1/HLE) | read the dump | — |
-| The mechanism the bench was going to choose is the cycle-first poll from Phase 1a. Idle reads no longer miss. `warm` / `diskprime` / `peekretry` stay until boot 2 reaches `login:` | `xhci::poll_event` | `RAYNU-V-USBSOAK-DONE` on `e5cca2e0` |
+| The mechanism the bench was going to choose is the cycle-first poll from Phase 1a. Idle reads no longer miss. The pre-GRUB `diskprime` LBA0 warm stays (that is what `928d6224` did). The in-GRUB “past pin” warm is deleted: it READ LBA 0 inside the first unpinned `BlockIo` | `xhci::poll_event`, `raynu_f_disk_read` | `RAYNU-V-USBSOAK-DONE` on `e5cca2e0`; boot 2 `blk_rd=33` |
 
 **p1c note:** the Toshiba sits on a **USB 2 (HS)** port (`PORTSC` speed field = HS, `mps=64`). USB3 U1/U2 timeouts do not apply; USB2 L1 needs `HLE`=1, which the driver never sets. LPM is therefore **not** a leading hypothesis; `pmsc` is in the dump to confirm, not to act on.
 
@@ -103,14 +105,31 @@ PERC H740P = MegaRAID SAS 3.5 (MPT3 Fusion) post-EBS driver on a **spare** VD (n
 
 ## Next iron step (operator)
 
-Boot 1 is done (`e5cca2e0`, `RAYNU-V-USBSOAK-DONE`, 239/239). **Do not reflash.**
+Boot 2 of `e5cca2e0` is done: installed GRUB, then `grub>`, `blk_rd=33`. **Do not F11 `e5cca2e0` again.** Force Off if `Stage 46 hold alive` is still printing.
 
-1. **Force Off** the soak halt (`USBSOAK halt — Force Off when done reading COM2`). The Toshiba was only read.
-2. Pull the Cruzer (front USB, label `RAYNUV`). On raynuvsrv1: `findfs LABEL=RAYNUV`, mount it, `rm EFI/RayNu/usbsoak.txt`, leave `EFI/RayNu/raynuf.txt`. Unmount. Never touch Toshiba `/dev/sdc`. Never `--init-new-cruzer`.
-3. Put the Cruzer back in the R640 front USB. Toshiba stays seated. **Boot 2:** F11 the same stick. COM2 must show `build: sha=e5cca2e0d7a8` and must **not** show `USB soak requested`.
-4. Expect Toshiba `0480:a004`, `usb I/O ready`, peek `efi=EFI PART installed=1`, then `image=DISK-BOOTX64` and the installed menu through `login:` with `[vda] 16777216 512-byte logical blocks (8.59 GB/8.00 GiB)`. Sit there. A 1 GiB disk is `[vda] 2097152 … 1.00 GiB` and is RAM: Force Off and paste COM2.
-5. If the disk cannot be staged, the acceptable halt is `WARN LUN saw EFI PART; skip ISO (do not wipe persist)` and `Stage 46 hold alive`. **`image=ISO-BOOTX64` must not appear.** If it does, Force Off before the guest shell and paste COM2.
-6. Do not curl `POST /vms/1/start`. Do not run `setup-disk`. Do not F11 any EFI in the prototype table above. After `login:`, Firefox to `https://raynu-v.lab:8443` (the name is on the millicert; a raw `10.99.99.147` URL is not).
+`usbsoak.txt` stays deleted. `raynuf.txt` stays. Toshiba stays seated. After CI is green for `cursor/m8-unpin-read-8366`:
+
+```
+~/projects/raynuv/flashcruzer.sh --branch cursor/m8-unpin-read-8366 --wait \
+  --any-cruzer-usb --allow-new-serial --raynu-f \
+  --linux-iso ~/projects/raynuv/alpine-extended-3.21.3-x86_64.iso
+```
+
+F11 that stick. COM2 must show the new `build: sha=` and must not show `USB soak requested` or `diskprime past pin`. One line, once:
+
+```
+boot: Stage 46 disk past pin lba=N n=BYTES ok (not ISO-INSTALL-OK)
+```
+
+or the same line with `err=N`. That `lba` is the first sector GRUB asked for outside LBA 0–33. The read is `xhci_live_rw`, the function the soak ran 239 times. No extra INQUIRY on that call.
+
+- `ok` and the GRUB menu, then `[vda] 16777216` and `login:`: sit there. Firefox `https://raynu-v.lab:8443` after that.
+- `ok` and `grub>` again: the pipe delivered the sector. The next change is the file GRUB opens.
+- `err=N`: the guest path failed on that LBA. Paste the line.
+- `image=ISO-BOOTX64` or `[vda] 2097152` (1.00 GiB): that is RAM. Force Off and paste COM2.
+- `WARN LUN saw EFI PART; skip ISO` and `Stage 46 hold alive` is the other acceptable halt.
+
+Do not curl `POST /vms/1/start`. Do not run `setup-disk`. Do not type at `grub>`. Do not flash Toshiba `/dev/sdc`.
 
 ## Rules that stay true
 

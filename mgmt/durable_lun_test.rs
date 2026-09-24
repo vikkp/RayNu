@@ -381,18 +381,15 @@ fn r640_iron_census_picks_nvme_then_usb_never_perc() {
 }
 
 #[test]
-fn past_pin_warm_is_once_after_arm() {
-    durable_lun_clear_past_pin_warm();
-    assert!(!durable_lun_past_pin_warm_due());
-    durable_lun_arm_past_pin_warm();
-    assert!(durable_lun_past_pin_warm_due());
-    durable_lun_warm_past_pin();
-    assert!(!durable_lun_past_pin_warm_due());
-    durable_lun_warm_past_pin();
-    assert!(!durable_lun_past_pin_warm_due());
-    durable_lun_arm_past_pin_warm();
-    assert!(durable_lun_past_pin_warm_due());
-    durable_lun_clear_past_pin_warm();
+fn past_pin_read_line_prints_once() {
+    durable_lun_clear_past_pin_line();
+    assert!(durable_lun_past_pin_line_pending());
+    assert!(durable_lun_note_past_pin_read(2048 * 512, 512, true));
+    assert!(!durable_lun_past_pin_line_pending());
+    assert!(!durable_lun_note_past_pin_read(4096 * 512, 4096, false));
+    durable_lun_clear_past_pin_line();
+    assert!(durable_lun_note_past_pin_read(16777215 * 512, 4096, false));
+    durable_lun_clear_past_pin_line();
 }
 
 #[test]

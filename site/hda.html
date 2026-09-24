@@ -126,10 +126,10 @@
             (<a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-018.md">ADR-018</a>)
             — not a reopened Everest. HV-reboot persist is evidence-closed on
             the 8 GiB USB slice (<code>928d6224</code>). EFI
-            <code>e5cca2e0</code> finished the USB soak on iron:
-            <code>RAYNU-V-USBSOAK-DONE</code>, 239 of 239 reads, idle through
-            120 seconds, and the Toshiba still shows the installed 8 GiB slice.
-            The next boot is that same EFI with the soak flag removed.
+            <code>e5cca2e0</code> finished the USB soak (239 of 239 reads),
+            then the same EFI reached installed GRUB and stopped at
+            <code>grub&gt;</code> with <code>blk_rd=33</code>. Do not F11 that
+            EFI again. The next flash drops the extra LBA 0 read inside GRUB.
           </p>
         </div>
       </section>

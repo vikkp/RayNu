@@ -1330,16 +1330,14 @@ pub fn raynu_f_disk_read(off: u64, buf: &mut [u8]) -> bool {
         if buf.is_empty() || end > dlen {
             return false;
         }
-        // Peek pins LBA0..LBA33 while BOT is hot. Iron `3b388279` re-read
-        // those LBAs after VMX/NIC and parsed `no GPT` (`image=test-app`).
-        // Keep the pin first so GRUB's GPT walk stays in RAM. Iron
-        // `28cd4ff1`: that walk never touched USB, and the first read past
-        // the pin (`grub.cfg` / backup GPT) was cold, so GRUB sat at `grub>`.
+        // LBA0..LBA33 stay in the RAM pin. Anything else is the sector
+        // GRUB asked for, through the same USB read the soak used.
         if crate::mgmt::disk_persist::persist_lun_gpt_pin_read(off, buf) {
             return true;
         }
-        crate::mgmt::durable_lun::durable_lun_warm_past_pin();
-        return crate::mgmt::durable_lun::durable_lun_read_any(off, buf);
+        let ok = crate::mgmt::durable_lun::durable_lun_read_any(off, buf);
+        crate::mgmt::durable_lun::durable_lun_note_past_pin_read(off, buf.len(), ok);
+        return ok;
     }
     let hpa = DISK_HPA.load(Ordering::Acquire);
     let dlen = DISK_LEN.load(Ordering::Acquire);

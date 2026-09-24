@@ -4429,10 +4429,9 @@ pub fn xhci_live_diskprime() {
     // Iron `d60431ee` returned on a valid pin with no USB touch. GRUB's
     // BlockIo served LBA0–LBA33 from the RAM pin (`blk_rd=33`) and the
     // ESP/ext4 read never landed, so GRUB stayed at `grub>` until the
-    // 180 s wall cap. Iron `28cd4ff1` printed `warm=1` and still stopped at
-    // `grub>`: this warm is before GRUB, and the pin serves LBA0–LBA33, so
-    // the `grub.cfg` read stayed cold. The past-pin warm is armed after
-    // staging. Do not `recover_pipes`
+    // 180 s wall cap. This LBA0 warm stays here, before GRUB. A read the
+    // pin does not cover goes through `durable_lun_read_any` with no
+    // extra INQUIRY. Do not `recover_pipes`
     // (iron `08202468` Reset on a Running pipe, then `image=ISO-BOOTX64`).
     let mut pinned = [0u8; 8];
     let pin_holds = crate::mgmt::disk_persist::persist_lun_gpt_pin_read(512, &mut pinned)
@@ -4674,22 +4673,6 @@ fn usb_soak_halt(hz: u64) -> ! {
             serial::write_line_nowait(" (not ISO-INSTALL-OK)");
         }
     }
-}
-
-/// First BlockIo read past the GPT pin, after the disk bootloader is staged.
-/// Iron `28cd4ff1`: `warm=1` ran before staging, then GRUB served LBA0–LBA33
-/// from the pin and the first ESP/ext4 read was cold, so the menu never
-/// opened. Do not `recover_pipes`.
-#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
-pub fn xhci_live_warm_past_pin() -> bool {
-    use crate::boot::serial;
-    serial::write_line("boot: Stage 46 diskprime past pin (not ISO-INSTALL-OK)");
-    xhci_warm_bot_lba0()
-}
-
-#[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
-pub fn xhci_live_warm_past_pin() -> bool {
-    true
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
