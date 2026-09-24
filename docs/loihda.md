@@ -5,20 +5,20 @@ last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
 loi_target: "Non-prod Letter of Intent. Bar A = dedicated-box lab. Bar B = RAID-fleet replacement. HDA 99% is Everest, not an LOI."
-months_to_loi_a: 1.0
-months_to_loi_a_prev: 0.75
+months_to_loi_a: 0.75
+months_to_loi_a_prev: 1.0
 months_to_loi_b: 3.5
 months_to_loi_b_prev: 3.5
-overall_pct: 60
+overall_pct: 64
 confidence: medium
 baseline_date: 2026-09-14
 baseline_months: 1.5
 loi_a_eta_month: "2026-10"
 loi_b_eta_month: "2026-12"
-bar_a_pct: 74
+bar_a_pct: 82
 bar_b_pct: 18
 piece_everest_pct: 100
-piece_persist_pct: 85
+piece_persist_pct: 93
 piece_sku_pct: 92
 piece_tls_pct: 80
 piece_auth_pct: 38
@@ -43,17 +43,17 @@ Lived: [`docs/progress.md`](progress.md) · M8: [`docs/m8_plan.md`](m8_plan.md) 
 
 | Metric | Value | Meaning |
 |--------|------:|---------|
-| **Overall LOI readiness** | **60%** | Nearest honest conversation is Bar A. Not Bar B. Not GA. Down from 63: the persist mechanism closed twice and then failed seven flashes in a row. |
-| **Bar A — dedicated-box** | **74%** | One PowerEdge we own or they dedicate. A1 Everest, A3 SKU, A4 TLS **DONE**. A2 persist **closed on evidence** (`4af78b43`, `928d6224` `RAYNU-V-M8-DISK-PERSIST-OK`) but **not reliable**. `e5cca2e0` soak was 239/239. `c4a41a17` reached installed GRUB and stopped at `grub>`; the one-shot read was the ESP BPB. A4s / A6 / A5 wait on a repeatable installed `login:`. |
+| **Overall LOI readiness** | **64%** | Nearest honest conversation is Bar A. Not Bar B. Not GA. Up from 60: `36d3b559` reached the installed `login:` after two Force Offs. A4s is still open. |
+| **Bar A — dedicated-box** | **82%** | One PowerEdge we own or they dedicate. A1 Everest, A3 SKU, A4 TLS **DONE**. A2 persist **repeated** on `36d3b559` (UUID `a0ad99ac-…`, `RAYNU-V-M8-DISK-PERSIST-OK`, two `login:`). A4s / A6 / A5 still open. USB ≠ PERC. |
 | **Bar B — RAID-fleet** | **18%** | Replace the licensed hypervisor on PERC virtual disks they already paid for. |
-| **Months to Bar A** | **1.0** | Baseline 2026-09-14. ETA **2026-10**. Up from 0.75: scope grew (deterministic USB driver from soak evidence) after 7 failed prototypes. Shrink only with a **repeated** installed `login:` on COM2. |
+| **Months to Bar A** | **0.75** | Baseline 2026-09-14. ETA **2026-10**. Down from 1.0: the same EFI reached the installed `login:` after two Force Offs. Do not go below 0.75 until A4s. |
 | **Months to Bar B** | **3.5** | PERC I/O is the long pole. ETA **2026-12**. |
-| **Confidence** | medium | Everest is high-confidence. A2 closed twice on COM2, then regressed; the failure class is one USB BOT symptom (`cmpl=0xff` after idle) that is now instrumented. A4/A3 DONE. A4s / A5 / A6 firmware-in-tree, not iron. |
+| **Confidence** | medium | Everest is high-confidence. A2 repeated twice on `36d3b559` the same day. Force Off still needs ext4 journal recovery and clears a vfat dirty bit. A4/A3 DONE. A4s / A5 / A6 firmware-in-tree, not iron. |
 
 ```
-Bar A (dedicated-box)  ███████████████░░░░░  74%
+Bar A (dedicated-box)  ████████████████░░░░  82%
 Bar B (RAID fleet)      ███░░░░░░░░░░░░░░░░░  18%
-Overall LOI             ████████████░░░░░░░░  60%
+Overall LOI             █████████████░░░░░░░  64%
 ```
 
 **How the month number moves:** same honesty as Everest HDA. Closed iron gates shrink `months_to_loi_*`. Nested QEMU, host tests, and design docs do **not**. Stalls or new scope slip the ETA. Prefer under-claiming.
@@ -87,14 +87,14 @@ All must be true:
 | # | Criterion | Done when | Product effect |
 |---|-----------|-----------|----------------|
 | A1 | **Everest loop** | Iron `ISO-INSTALL-OK` → `DISK-BOOT-OK` → `login:` | Without this there is no product to intent toward. **DONE** (`f72b4276`). |
-| A2 | **Persist across HV reboot** | Force Off → peek `keep=1` → SPA `DISK-BOOTX64` → `root=UUID=` → `login:` (**DONE on evidence** `4af78b43`; minted `RAYNU-V-M8-DISK-PERSIST-OK` **printed** on `928d6224`) | Guest disk is the 8 GiB Toshiba USB slice, not leftover DRAM. Nested-OK ≠ this. Residual: whole-LUN virtio / USB ≠ PERC. |
+| A2 | **Persist across HV reboot** | Force Off → peek `keep=1` → `DISK-BOOTX64` → `root=UUID=` → `login:` (**repeated** on `36d3b559`, UUID `a0ad99ac-…`; earlier closes `4af78b43`, `928d6224`) | Guest disk is the 8 GiB Toshiba USB slice, not leftover DRAM. Nested-OK ≠ this. Residual: unclean Force Off (ext4 journal, vfat dirty bit) / whole-LUN virtio / USB ≠ PERC. |
 | A3 | **SKU card** | One page: what ships, what does not, dedicated-box vs fleet | **DONE** ([`docs/sku.md`](sku.md) / [`site/sku.html`](../site/sku.html)). Stops us promising PERC, Windows, or cluster in a Bar A conversation. |
 | A4 | **TLS** | Browser/`curl --cacert` on native `CURL NOW → https://` **before RayNu-F** | **DONE** (`928d6224` COM2 `RAYNU-V-M8-TLS-OK`; Mac SPA HTML). Lab millicert. PRE-EBS SNP stays `http://`. |
 | A4s | **Standing SPA** | Browser HTTPS **after** RayNu-F / Alpine `login:`; SPA stays; guest COM1 in the page | Investor can watch a product without iDRAC. Firmware-in-tree (coexist ticks on RayNu-F vmexit + USB waits; `GET /logs/guest`). After `login:`. Not closed until COM2 + a lived browser. |
 | A5 | **Auth beyond bring-up** | Product default is not `raynu-v-bringup` | A shared lab latch is not an operator credential. HostReady (`RAYNU-V-M8-AUTH-HOST-OK`) is not this close. |
 | A6 | **Operator keyboard** | Type in the guest from the SPA (not only iDRAC SOL) | Soft for the first LOI; still on the polish table. Serial already installed Alpine. Firmware SPA `POST /console/keys` is in-tree. Depends on A4s. Iron close is COM2 `RAYNU-V-M8-CONSOLE-OK`. |
 
-A2 is **DONE on evidence** but **not repeatable yet**. `5c32bd06` (2026-09-22) saw `usbsoak.txt`, timed out Address Device on p11 and p10 (`err=3`), and never started the soak. With no LUN attached it installed onto 1 GiB leftover DRAM and a guest reboot reached `login:` (UUID `4c27e121`). Force Off drops that disk. The Toshiba was not opened. A3 SKU is **DONE**. A4 TLS iron is **DONE** (`928d6224` `RAYNU-V-M8-TLS-OK`). `1fa231df` (2026-09-23) then halted the soak on `err=3` with no guest — the fail-safe worked — and its `cmd timeout` dumps proved the commands had completed (`slotst=2` Addressed, `cmpl=0x13` on retry, No-Op at `evdeq=4`): the driver was tearing the 16-byte completion event (pointer read before the cycle bit) and skipping its own event. `e5cca2e0` then finished the soak: `RAYNU-V-USBSOAK-DONE`, 239/239 reads, Toshiba still `installed=1`. Boot 2 of that EFI reached `image=DISK-BOOTX64` and GRUB 2.12, then `grub>` with `blk_rd=33` (`diskprime past pin` READ LBA 0). `c4a41a17` deleted that warm, staged the same GRUB, and stopped at `grub>`; `disk past pin lba=2048 n=512 ok` was the firmware ESP BPB. **NOW:** flash `cursor/m8-grubcfg-esp-8366` after CI is green. That walk prints `grubcfg=yes` or `grubcfg=no` ([m8_state.md](m8_state.md)). A4s waits on a repeatable installed `login:`. A5 host-ready is not iron ESP-required default. A6 firmware SPA keys are in-tree; iron SPA keyboard is not closed. M8.4 host-ready is not iron ISO-UPLOAD-OK.
+A2 is **repeated on iron** (`36d3b559`, two Force Offs, same UUID). History: it was **DONE on evidence** and then **not repeatable**. `5c32bd06` (2026-09-22) saw `usbsoak.txt`, timed out Address Device on p11 and p10 (`err=3`), and never started the soak. With no LUN attached it installed onto 1 GiB leftover DRAM and a guest reboot reached `login:` (UUID `4c27e121`). Force Off drops that disk. The Toshiba was not opened. A3 SKU is **DONE**. A4 TLS iron is **DONE** (`928d6224` `RAYNU-V-M8-TLS-OK`). `1fa231df` (2026-09-23) then halted the soak on `err=3` with no guest — the fail-safe worked — and its `cmd timeout` dumps proved the commands had completed (`slotst=2` Addressed, `cmpl=0x13` on retry, No-Op at `evdeq=4`): the driver was tearing the 16-byte completion event (pointer read before the cycle bit) and skipping its own event. `e5cca2e0` then finished the soak: `RAYNU-V-USBSOAK-DONE`, 239/239 reads, Toshiba still `installed=1`. Boot 2 of that EFI reached `image=DISK-BOOTX64` and GRUB 2.12, then `grub>` with `blk_rd=33` (`diskprime past pin` READ LBA 0). `c4a41a17` deleted that warm, staged the same GRUB, and stopped at `grub>`; `disk past pin lba=2048 n=512 ok` was the firmware ESP BPB. **NOW:** leave the second `36d3b559` shell up. `grubcfg=no` is correct (the menu is on ext4). A4s is one Firefox tab on `https://raynu-v.lab:8443`. Do not curl Start. Do not reflash. Evidence: [2026-09-24-36d3b559-persist-login.md](evidence/r640/2026-09-24-36d3b559-persist-login.md). A5 host-ready is not iron ESP-required default. A6 firmware SPA keys are in-tree; iron SPA keyboard is not closed. M8.4 host-ready is not iron ISO-UPLOAD-OK.
 
 ### Bar B — RAID-fleet non-prod LOI
 
@@ -118,15 +118,15 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 **Not this.** Disks that survive a **hypervisor** reboot. HTTPS. RAID. Unmodified Ubuntu.
 
-### 2. Disk persist (M8.0-mech) — 85%
+### 2. Disk persist (M8.0-mech) — 93%
 
 **What it is.** Guest F7 keeps leftover DRAM (ADR-017). A RayNu-V reboot used to zero it. DurableLun USB BOT on the Toshiba 8 GiB virtio slice survives Force Off.
 
 **Product effect.** Without persist, “install Linux” dies when the operator Force Offs the box — which they will, because that is how you recover a Type-1. On the R640 we own, the same Alpine came back from a USB-backed disk after Force Off without running the installer again (`4af78b43`, then `928d6224` with the minted marker).
 
-**Why 85, not 97.** Since `928d6224` the installed `login:` has not repeated. `e5cca2e0` proved idle USB reads (239/239) and then, on the product path, reached installed GRUB and stopped at `grub>` with `blk_rd=33`. Score goes back up only on a **repeated** installed `login:` from the Toshiba after Force Off.
+**Why 93, not 97.** `36d3b559` reached `localhost login:` twice the same day (UUID `a0ad99ac-…`) after a fresh install. The old `grub>` disk was a missing `/boot/grub/grub.cfg` and was wiped. Two boots of one EFI are not a week of Force Offs. Boot 2 still needed ext4 journal recovery and cleared a vfat dirty bit. GRUB still prints `unable to determine partition UUID of boot device` and still boots.
 
-**Honest remainder.** 8 GiB slice, USB ≠ PERC, reliability not yet shown. Do not claim 100%. Never flash Toshiba `/dev/sdc`.
+**Honest remainder.** 8 GiB slice, USB ≠ PERC, unclean shutdown still dirties the FAT. Do not claim 100%. Never flash the Toshiba.
 
 ### 3. SKU card — 92%
 
@@ -175,14 +175,14 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | 2026-09-18 | Bar A A2 | USB Force Off on COM2 | **DONE on evidence** (`4af78b43` keep=1 DISK-BOOT UUID `348005a9`; minted persist-OK not printed) |
 | 2026-09-18 | Bar A A3 | SKU card | **DONE** ([`docs/sku.md`](sku.md) / [`site/sku.html`](../site/sku.html)) |
 | **2026-09-19** | Bar A A4 | TLS on native `:8443` **before RayNu-F** | **DONE** (`928d6224` COM2 `RAYNU-V-M8-TLS-OK`; Mac `curl --cacert` SPA `.140`) |
-| **NOW** | Bar A persist **reliability** | `c4a41a17`: `DISK-BOOTX64`, GRUB 2.12, `grub>`; one-shot was the ESP BPB | Flash `cursor/m8-grubcfg-esp-8366`. One `grubcfg=yes` or `grubcfg=no` line, then `[vda] 16777216` through `login:`. See [m8_state.md](m8_state.md) |
+| **NOW** | Bar A **A4s** | `36d3b559` boot 2 is at `localhost:~#` (UUID `a0ad99ac-…`) | One Firefox tab on `https://raynu-v.lab:8443`. Do not curl. Do not Force Off. See [m8_state.md](m8_state.md) |
 | then | Bar A A6 | SPA keyboard | after A4s; firmware `POST /console/keys` in-tree; not VNC |
 | then | Bar B B2 | Spare PERC VD persist | after A6; census skip is lab safety |
 | later | Auth / unmodified ISO | A5, Gen-1 Phase 2 | named residuals, not fake closes |
 
 ```
 2026-09  ████████  Everest closed
-2026-10  ████░░░░  Bar A: A4 TLS iron DONE; `c4a41a17` `grub>` after ESP BPB → grubcfg line → installed login → A4s
+2026-10  ████░░░░  Bar A: `36d3b559` repeated installed login → A4s Firefox stay-up → A6
 2026-11  ░░░░░░░░  Bar A: first dedicated-box LOI window
 2026-12  ░░░░░░░░  Bar B: PERC VD I/O
 ```
@@ -207,10 +207,10 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | Field | Value |
 |-------|-------|
 | Commit | m8-grubcfg-esp |
-| Summary | **`c4a41a17`: installed GRUB, then `grub>`.** The one-shot `disk past pin lba=2048 n=512 ok` was the firmware ESP BPB. This EFI prints `grubcfg=yes path=… bytes=N` or `grubcfg=no` on that walk. Scores held. |
+| Summary | **`36d3b559`: installed `login:` twice.** Fresh Alpine on the 8 GiB slice, then two Force Offs to `DISK-BOOTX64`, GRUB menu, UUID `a0ad99ac-…`. `grubcfg=no` (menu is on ext4). Boot 2 recovered the ext4 journal and cleared a vfat dirty bit. |
 | Everest impact | none — HDA months 0.0 / 99% held |
-| LOI impact | Scores **held** (Bar A 74, persist 85, overall 60, months A 1.0, Bar B 18). Up only on a repeated Toshiba `login:`. |
-| Gates touched | `m8_disk_persist_host_gate_passes`. `esp_grub_cfg_prefers_boot_path_and_reports_size`. `./tools/sync-loihda-site.sh --check`. `./tools/check-site-chrome.sh`. No MegaRAID. |
+| LOI impact | Bar A 74→82, persist 85→93, overall 60→64, months A 1.0→0.75. Bar B 18 held. A4s still open. |
+| Gates touched | Lived `RAYNU-V-M8-DISK-PERSIST-OK` ×2. `./tools/sync-loihda-site.sh --check`. `./tools/check-site-chrome.sh`. No MegaRAID. |
 
 ---
 
@@ -218,6 +218,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-24 | m8-grubcfg-esp | 82 | 18 | **`36d3b559` boot 2: installed `login:` again.** Same UUID `a0ad99ac-…`. Ext4 journal recovery, vfat dirty bit cleared, menu still auto-booted. `grubcfg=no` (menu on ext4). Bar A 74→82, persist 85→93, overall 60→64, months A 1.0→0.75. A4s open. |
+| 2026-09-24 | m8-grubcfg-esp | 74 | 18 | **`36d3b559` boot 1: installed `login:`.** Blank-disk SPA install, then Force Off → `keep=1` `DISK-BOOTX64` GRUB menu → `root=UUID=a0ad99ac-…`. Scores held on this row; the repeat is the row above. |
 | 2026-09-24 | m8-grubcfg-esp | 74 | 18 | **`c4a41a17`: `grub>` after the ESP walk.** One-shot `lba=2048 n=512 ok` was the BPB. This EFI prints `grubcfg=yes` or `grubcfg=no` before GRUB. Not lived. Scores held. |
 | 2026-09-24 | m8-unpin-read | 74 | 18 | **`e5cca2e0` boot 2: `grub>` `blk_rd=33`.** In-GRUB warm READ LBA 0. This EFI deletes it and prints one `disk past pin lba=` line for the sector GRUB asked for. Not lived. Scores held. |
 | 2026-09-23 | m8-usbsoak-done | 74 | 18 | **`e5cca2e0` COM2: `RAYNU-V-USBSOAK-DONE`.** 239/239 including 120 s idle. Toshiba peek `installed=1`. No guest. Boot 2: remove `usbsoak.txt`, F11 the same stick. Scores held. |
@@ -292,10 +294,10 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 ```
 LOI:           NOT OPEN. Tracker born 2026-09-14.
-Bar A:         74% · 1.0 months · dedicated-box non-prod
+Bar A:         82% · 0.75 months · dedicated-box non-prod
 Bar B:         18% · 3.5 months · PERC RAID fleet (out of conversation until PERC persist)
-Overall:       60% · confidence medium
-NOW:           c4a41a17 grub> after ESP BPB lba=2048 · Force Off · do not F11 c4a41a17 again · usbsoak.txt stays off · flash cursor/m8-grubcfg-esp-8366 after CI · one grubcfg=yes or grubcfg=no line · want [vda] 16777216 through login: · ISO-BOOTX64 means Force Off · do not curl Start · do not setup-disk · docs/m8_state.md
+Overall:       64% · confidence medium
+NOW:           36d3b559 boot 2 at localhost:~# · UUID a0ad99ac · leave it up · one Firefox tab https://raynu-v.lab:8443 · hosts already 10.99.99.148 · do not curl · do not Force Off · do not setup-disk · do not reflash · docs/m8_state.md
 Open:          iron SPA keyboard · iron AUTH-OK · unmodified ISO · cluster · Ubuntu PERC stays standing boot
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
 Sit:           localhost:~# · do not setup-disk · do not flash Toshiba /dev/sdc

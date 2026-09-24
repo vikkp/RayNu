@@ -1,20 +1,21 @@
 # M8 state — START HERE (persist / LOI Bar A recovery)
 
 > **Read this before touching `mgmt/xhci.rs`, `mgmt/durable_lun.rs`, `mgmt/disk_persist.rs`, `vmx/guest_uefi.rs` (RayNu-F boot source), or the trackers.**  
-> Last rewrite: 2026-09-24 (`c4a41a17`: `image=DISK-BOOTX64`, GRUB 2.12, `grub>`. The one-shot `disk past pin lba=2048 n=512 ok` was the firmware ESP BPB, before GRUB. This EFI asks that same FAT walk whether `grub.cfg` is on the ESP). Trackers: [`hda.md`](hda.md) (Everest, closed) · [`loihda.md`](loihda.md) (LOI, open). Plan: [`m8_plan.md`](m8_plan.md). ADR: [ADR-018](adr/ADR-018.md). Evidence: [`2026-09-24-c4a41a17-grub-staging-oneshot.md`](evidence/r640/2026-09-24-c4a41a17-grub-staging-oneshot.md) · [`2026-09-24-e5cca2e0-grub-wallcap.md`](evidence/r640/2026-09-24-e5cca2e0-grub-wallcap.md).
+> Last rewrite: 2026-09-24 (`36d3b559`: installed `login:` twice, UUID `a0ad99ac-…`. `grubcfg=no` because the menu is on ext4. Leave boot 2 up for A4s). Trackers: [`hda.md`](hda.md) (Everest, closed) · [`loihda.md`](loihda.md) (LOI, open). Plan: [`m8_plan.md`](m8_plan.md). ADR: [ADR-018](adr/ADR-018.md). Evidence: [`2026-09-24-36d3b559-persist-login.md`](evidence/r640/2026-09-24-36d3b559-persist-login.md).
 
 ## One paragraph
 
-Everest (M7) is closed on iron. M8 is operator hardening. Bar A of the LOI needs one R640 to boot the **installed** Alpine from the persist disk (Toshiba USB, 8 GiB virtio slice) after Force Off and sit at `localhost:~#`, then a browser stays on HTTPS (A4s) and types into the guest (A6). That worked on `4af78b43` and `928d6224` (`RAYNU-V-M8-DISK-PERSIST-OK`, `RAYNU-V-M8-TLS-OK`). Seven flashes since have **not** reached the installed login. Every failure has the same shape: a USB BOT command on the Toshiba gets no Transfer Event (`cmpl=0xff` / `err=8`), usually after tens of seconds of idle. The fixes since have been scheduling heuristics (`warm`, `diskprime`, `peekretry`, `pin`) written against one COM2 each. Phase 0 makes a miss **safe and visible**; Phase 1 makes the USB driver **deterministic from evidence** instead of guesses.
+Everest (M7) is closed on iron. M8 is operator hardening. Bar A of the LOI needs one R640 to boot the **installed** Alpine from the persist disk (Toshiba USB, 8 GiB virtio slice) after Force Off and sit at `localhost:~#`, then a browser stays on HTTPS (A4s) and types into the guest (A6). `36d3b559` did the login twice on 2026-09-24 (UUID `a0ad99ac-ca25-4458-ade1-cd8599ca4928`) after a fresh install. The earlier `grub>` boots were a missing `/boot/grub/grub.cfg` on a partial disk, which was wiped. The `cmpl=0xff` tear is closed (`e5cca2e0` soak 239/239). A4s is the open step. Do not reflash this guest.
 
 ## Known-good iron builds (flash these, nothing else, for a demo)
 
 | Purpose | EFI | What it proved | Not this |
 |---------|-----|----------------|----------|
 | Everest rollback | `f72b4276` (GitHub Latest `v0.1.0-everest-closed`) | SPA Start → ISO install → disk boot → `login:` on leftover DRAM | persist across HV reboot, TLS |
-| Persist + TLS close | `928d6224` | Force Off → `keep=1` → `DISK-BOOTX64` → menu → `root=UUID=dd673a9a` → `login:`; `RAYNU-V-M8-DISK-PERSIST-OK`; `RAYNU-V-M8-TLS-OK` on `10.99.99.140:8443` | standing SPA after login, console keys |
+| Persist + TLS close | `928d6224` | Force Off → `keep=1` → `DISK-BOOTX64` → menu → `root=UUID=dd673a9a` → `login:`; `RAYNU-V-M8-DISK-PERSIST-OK`; `RAYNU-V-M8-TLS-OK` on `10.99.99.140:8443` | that filesystem was wiped; standing SPA after login |
+| Persist repeat (this disk) | `36d3b559` | Fresh install, then two Force Offs → menu → `root=UUID=a0ad99ac-…` → `login:`; lease `10.99.99.148`; `grubcfg=no` (menu on ext4) | A4s, A6, production PKI, PERC |
 
-Every EFI after `928d6224` is a **prototype**. Do not treat a later tip as known-good until it reaches the installed `login:` on COM2 **more than once**.
+`36d3b559` is the stick that is booted. Do not F11 a newer EFI over this login. The rows below are prototypes that did not reach a repeated login.
 
 ## USB bench passed (do not F11 this EFI again for `login:`)
 
@@ -106,37 +107,15 @@ PERC H740P = MegaRAID SAS 3.5 (MPT3 Fusion) post-EBS driver on a **spare** VD (n
 
 ## Next iron step (operator)
 
-`c4a41a17` is done: installed GRUB, then `grub>`. The one-shot `disk past pin lba=2048 n=512 ok` printed while RayNu-F read the ESP BPB, before GRUB. **Do not F11 `c4a41a17` again.** Force Off if the prompt is still up.
+`36d3b559` boot 2 is at `localhost:~#`. Leave it. Do not type `setup-alpine` or `setup-disk`. Do not curl. Do not Force Off. Do not reflash.
 
-`usbsoak.txt` stays deleted. `raynuf.txt` stays. Toshiba stays seated. After CI is green for `cursor/m8-grubcfg-esp-8366`:
+A4s is one Firefox tab to `https://raynu-v.lab:8443`. Mac hosts is already `10.99.99.148 raynu-v.lab`. Lab CA is `/tmp/raynu-lab-ca.crt.pem` (public file `assets/tls/lab-ca.crt.pem`). Import or accept that CA. One tab only — the host has one TCP slot.
 
-```
-~/projects/raynuv/flashcruzer.sh --branch cursor/m8-grubcfg-esp-8366 --wait \
-  --any-cruzer-usb --allow-new-serial --raynu-f \
-  --linux-iso ~/projects/raynuv/alpine-extended-3.21.3-x86_64.iso
-```
+Success: the page stays up, COM2 prints `TCP accept` then `HTTP exchange ok`, and the guest is still at `localhost:~#`. Paste that COM2 tail. Do not POST `/vms/1/start`.
 
-F11 that stick. COM2 must show the new `build: sha=` and must not show `USB soak requested` or `diskprime past pin`. Before the GRUB banner, one line:
+If the page fails and COM2 stays on `TCP accept` with no `HTTP exchange ok`, quit Firefox completely. If `idle abort` prints, one Firefox tab only. If it does not print within 15 s, the slot will not free; do not Force Off this login to clear it.
 
-```
-boot: RayNu-F grubcfg=yes path=\EFI\BOOT\grub.cfg bytes=N (F7 disk; not ISO-INSTALL-OK)
-```
-
-or the same line with `path=\EFI\alpine\grub.cfg`, or:
-
-```
-boot: RayNu-F grubcfg=no (F7 disk; not ISO-INSTALL-OK)
-```
-
-`disk past pin lba=2048 n=512 ok` may still print once, during that firmware walk. That line is the ESP BPB. The new line is the directory lookup of the menu file. It does not read the file body.
-
-- `grubcfg=yes` and the GRUB menu, then `[vda] 16777216` and `login:`: sit there. Firefox `https://raynu-v.lab:8443` after that.
-- `grubcfg=yes` and `grub>` again: the menu file is on the ESP and GRUB did not open it. Paste COM2.
-- `grubcfg=no` and `grub>`: the menu file is not on that ESP. Paste COM2.
-- `image=ISO-BOOTX64` or `[vda] 2097152` (1.00 GiB): that is RAM. Force Off and paste COM2.
-- `WARN LUN saw EFI PART; skip ISO` and `Stage 46 hold alive` is the other acceptable halt.
-
-Do not curl `POST /vms/1/start`. Do not run `setup-disk`. Do not type at `grub>`. Do not flash Toshiba `/dev/sdc`.
+`grubcfg=no` on this disk is expected. Alpine keeps `grub.cfg` on ext4 `/boot/grub`, not on the ESP. The menu still auto-booted.
 
 ## Rules that stay true
 

@@ -38,7 +38,7 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 
 | Metric | Value | Δ vs previous HDA |
 |--------|------:|-------------------|
-| **Overall product readiness** | **99%** | **held** — Everest **CLOSED** (`f72b4276`). M8 known-good: `928d6224` printed `RAYNU-V-M8-DISK-PERSIST-OK` and `RAYNU-V-M8-TLS-OK`. `e5cca2e0` soak printed `RAYNU-V-USBSOAK-DONE` (239/239). `c4a41a17` reached `image=DISK-BOOTX64` and GRUB 2.12, then `grub>`; the one-shot read was the ESP BPB (`lba=2048 n=512 ok`). Not a repeated `login:`. Do not F11 `c4a41a17`. Not 100%: A4s / console / auth are M8. |
+| **Overall product readiness** | **99%** | **held** — Everest **CLOSED** (`f72b4276`). `36d3b559` repeated the installed Toshiba `login:` (UUID `a0ad99ac-…`, `RAYNU-V-M8-DISK-PERSIST-OK` twice). Not 100%: A4s / console / auth are M8. |
 | **Months to Mount Everest** | **0.0** | **held** (summit reached 2026-09-11; `f72b4276` SPA ISO loop) |
 | **ETA month** | **2026-09** | **closed this month on iron**; next work is M8, not a slipped Everest |
 | **Confidence** | high | E1–E6 on COM2. M8 named separately so polish cannot reopen the summit |
@@ -148,7 +148,7 @@ All must be true (no hand-waving):
 | ISO parse / El Torito / EFI boot img | DONE (guest CD EFI) | Iron COM2 `0be7283` `OVMF-ELTORITO-OK` `RN-ELT` n=197992; not distro installer |
 | CD-ROM attach | DONE (firmware StartImage) | GuestVisible PCI IDE/ATAPI + El Torito FAT ESP BOOTX64; not `ISO-INSTALL-OK` |
 | Guest UEFI firmware blob | **DONE on iron — install and reboot-to-disk (RayNu-F ADR-016)** | **Iron UDisk `56a3ffd` / run `34480107961` (2026-09-10): the whole loop.** Third iron `RAYNU-V-M7-ISO-INSTALL-OK` → `reboot` → `guest reset requested src=kbc n=1` → `relaunch after reset` → `GPT ESP lba=2048 sectors=98304 part=1` → `BOOTX64.EFI bytes=139264` → `image=DISK-BOOTX64` → installed GRUB 2.12 countdown `2s → 1s → 0s` (no `RayNu-F stop` line; the wall cap never fired) → `Booting 'Alpine Linux v3.21, with Linux lts'` → `START-IMAGE-OK` → **`RAYNU-V-RAYNU-F-DISK-BOOT-OK`** → `EBS-OK` → second `Linux version 6.12.13-0-lts` `root=UUID=9af18543-…` `modules=sd-mod,usb-storage,ext4` → `EXT4-fs (vda2): mounted filesystem` → `fsck` `vda2`+`vda1` → OpenRC → `login:` → `cat /proc/cmdline` from the installed system. History: `59ac070` (install closed; F7 relaunch VMCLEAR/VMPTRLD — 81 KiB stack temporary over the VMCS), `975f8fc` (relaunch + installed GRUB menu; fixed 1 M exit-cap fired inside GRUB's 2 s menu poll loop), `56a3ffd` (RayNu-F wall cap: time, not exits, bounds the loader phase). Evidence: [2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md](evidence/r640/2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md) |
-| Persistent install + reboot-to-disk | **DONE on iron (distro + HV reboot evidence)** | `56a3ffd` + Phase B `f72b4276` guest F7. **M8.0 host-reboot persist DONE on evidence** (`4af78b43` UUID `348005a9`). **Minted `RAYNU-V-M8-DISK-PERSIST-OK` printed** on `928d6224` keep=1 DISK-BOOT UUID `dd673a9a`. `c4a41a17` reached that GRUB and stopped at `grub>` (one-shot `lba=2048 n=512` was the ESP BPB). Guest virtio is the 8 GiB Toshiba slice. USB ≠ PERC. |
+| Persistent install + reboot-to-disk | **DONE on iron (repeated)** | `56a3ffd` + Phase B `f72b4276` guest F7. **M8.0 host-reboot persist repeated** on `36d3b559` (UUID `a0ad99ac-…`, two Force Offs, `RAYNU-V-M8-DISK-PERSIST-OK`). Earlier closes: `4af78b43` UUID `348005a9`, `928d6224` UUID `dd673a9a` (that filesystem was wiped). Guest virtio is the 8 GiB Toshiba slice. USB ≠ PERC. |
 | Upload ISO via API/UI | PARTIAL (host-ready) | M8.4 HostReady blob PUT/POST (`RAYNU-V-M8-ISO-UPLOAD-HOST-OK`); firmware ESP-staged `linux.iso` stays valid; iron network PUT open |
 | Multi-OS image types | **WIRED (host)** | REST/SPA `linux_iso` \| `windows_iso` \| `generic_uefi` ([ADR-014](adr/ADR-014.md) Stage 0); Windows install later |
 | Multi-distro matrix | MISSING | — |
@@ -167,7 +167,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 | M+2 | 2026-09 | E3b native NIC lab (QEMU e1000) + ISO residual | ADR-013 Phase C | **Phase C DONE (QEMU)** |
 | M+3 | 2026-08 | E3b iron HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | **DONE (M7.8 iron)** |
 | M+4 | 2026-09 | Phase B (SPA → installed disk) | remaining Everest | **DONE — EVEREST CLOSED** (`f72b4276` / `34552377351`) |
-| M+5 | 2026-10 | **M8.0** persist (file nested / LUN iron / leftover fallback) | keep=1 + `DISK-BOOTX64` + `root=UUID=` after Force Off | **DONE on evidence** (`4af78b43`); persist-OK **printed** on `928d6224`. `c4a41a17` stopped at `grub>` after the ESP walk. Next EFI prints `grubcfg=yes` or `grubcfg=no`. Not persist-OK yet. See [m8_state.md](m8_state.md). |
+| M+5 | 2026-10 | **M8.0** persist (file nested / LUN iron / leftover fallback) | keep=1 + `DISK-BOOTX64` + `root=UUID=` after Force Off | **Repeated** on `36d3b559` (UUID `a0ad99ac-…`). Next is A4s (Firefox stay-up), not another flash. See [m8_state.md](m8_state.md). |
 
 ### Timeline burn-down
 
@@ -175,7 +175,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 2026-07 ████████  HDA + M6 closed (Latitude)
 2026-08 ████████  R640 boot (E2) + E3b HTTP-OK
 2026-09 ████████  E5 + Phase B — **Mount Everest CLOSED** (`f72b4276`)  ← months_to_everest = 0.0
-2026-10 ████░░░░  M8.0 persist **DONE on evidence**; A4 TLS iron **CLOSED** (`928d6224`); `c4a41a17` `grub>` after ESP BPB → `grubcfg=` EFI → installed `login:` → A4s
+2026-10 ████░░░░  M8.0 persist **repeated** on `36d3b559`; A4 TLS iron **CLOSED**; next is A4s Firefox stay-up
 2026-11 ░░░░░░░░  M8.3 console iron → PERC spare VD
 ```
 
@@ -245,7 +245,7 @@ Ordered for critical path (parallelize B with D design):
 | P0-9 | M6.9 external audit + spec review | E6 | **DONE** | proofs green | `docs/`, `ept_model/`, `mgmt/ext` |
 | P0-10 | R640 soak / hardware confidence | E2 | 0.5 | P0-2 | `tools/`, `mgmt/soak` — post M7.5 |
 | P0-11 | **M9 sketch** vMotion-like / DRS-like / hot-add | — | — | M8 | deferred — was M8 in ADR-009; **M9** after operator hardening (ADR-018) |
-| P0-64 | **M8** operator product hardening | — | IN PROGRESS | Everest closed | [ADR-018](adr/ADR-018.md) / [m8_plan.md](m8_plan.md) / **[m8_state.md](m8_state.md) (START HERE)**. Persist-OK printed on `928d6224`. `c4a41a17`: `DISK-BOOTX64` then `grub>`; one-shot `lba=2048 n=512 ok` was the ESP BPB. This EFI prints `grubcfg=yes` or `grubcfg=no` on that walk. Narrative: [c4a41a17](evidence/r640/2026-09-24-c4a41a17-grub-staging-oneshot.md). Nested QEMU ≠ R640. |
+| P0-64 | **M8** operator product hardening | — | IN PROGRESS | Everest closed | [ADR-018](adr/ADR-018.md) / [m8_plan.md](m8_plan.md) / **[m8_state.md](m8_state.md) (START HERE)**. `36d3b559` repeated installed `login:` (UUID `a0ad99ac-…`). A4s is one Firefox tab while that shell stays up. Narrative: [36d3b559](evidence/r640/2026-09-24-36d3b559-persist-login.md). Nested QEMU ≠ R640. |
 
 ---
 
@@ -355,10 +355,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | m8-grubcfg-esp |
-| Summary | **`c4a41a17` lived: GRUB, then `grub>`.** `image=DISK-BOOTX64`, `BOOTX64.EFI bytes=139264`, `keep=1`, `guest=8589934592`. `disk past pin lba=2048 n=512 ok` was the firmware ESP BPB, before GRUB. This EFI uses that FAT walk to print `grubcfg=yes path=… bytes=N` or `grubcfg=no`. It does not read the file body. Months **0.0 held**. Overall **99 held**. |
+| Summary | **`36d3b559` lived: installed `login:` twice.** Fresh Alpine on the 8 GiB slice, then two Force Offs to the GRUB menu and `root=UUID=a0ad99ac-…`. `grubcfg=no` because the menu is on ext4. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. A4s / console / auth are M8. Nested QEMU ≠ R640. |
 | Gates touched | `m8_disk_persist_host_gate_passes`; `esp_grub_cfg_prefers_boot_path_and_reports_size`; `./tools/sync-hda-site.sh --check`; `./tools/check-site-chrome.sh`. |
-| Months Δ | 0.0 held (Everest closed; this EFI is not a repeated `login:`) |
+| Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA months A 1.0→0.75. |
 
 
 ## Blockers & risks (Everest-relevant)
@@ -366,11 +366,11 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | ID | Blocker / risk | Severity | Mitigations |
 |----|----------------|----------|-------------|
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
-| H2 | TLS / console polish | MED | **M8.1 CLOSED on COM2** (`928d6224` `RAYNU-V-M8-TLS-OK`). Standing SPA (A4s), SPA keyboard (A6, `RAYNU-V-M8-CONSOLE-OK`), ESP-token auth (A5) are firmware-in-tree and **blocked only on reaching the installed `login:` reliably** (H10). rustls/ring stay out of `uefi-bin`. Never per-exit SOL poll (`b5e290be` powered the host off). Not a reopened Everest. |
+| H2 | TLS / console polish | MED | **M8.1 CLOSED on COM2** (`928d6224` `RAYNU-V-M8-TLS-OK`). The installed `login:` is up on `36d3b559` boot 2. Standing SPA (A4s) is the open step: one Firefox tab, no second client. SPA keyboard (A6) and ESP-token auth (A5) stay firmware-in-tree. rustls/ring stay out of `uefi-bin`. Not a reopened Everest. |
 | H3 | ~~Guest UEFI CD not bootable / no reboot-to-disk on iron~~ | — | **Resolved** 2026-09-10 (`56a3ffd` / run `34480107961`): `RAYNU-V-RAYNU-F-DISK-BOOT-OK` + second Linux `root=UUID=` from `vda` + `login:` on the real R640. Chain: `59ac070` install-to-disk (`ISO-INSTALL-OK`) → F7 VMCLEAR/VMPTRLD (81 KiB `FirmwareState::new()` stack temporary over the VMCS; template reset + 32-page stack guard) → `975f8fc` relaunch into the installed GRUB menu, 1 M exit-cap inside GRUB's 2 s menu poll loop (~2 exits/µs) → `56a3ffd` RayNu-F wall cap (time, not exits, bounds the loader phase). Earlier: `916af96` THRE chain telemetry → UART TX ring room + line-rate pace + COM2 FIFO burst fixed the `apk` console stall. Evidence: [2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md](evidence/r640/2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md). Do not F11 `34474850361` / `34425781629` for Phase A; `34480107961` is the Phase A reference pin. |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
 | H5 | ~~Phase B — iron SPA still launches the SHELL stub~~ | — | **Resolved** 2026-09-11 (`f72b4276` / `34552377351`). Residual polish is **M8**, not Everest. |
-| H10 | Persist disk must be **reliable**, not once | **HIGH** | Mechanism closed (`4af78b43`, `928d6224` persist-OK). `e5cca2e0` soak: `RAYNU-V-USBSOAK-DONE`, 239/239. `c4a41a17`: installed GRUB then `grub>`; the one-shot line was the ESP BPB. This EFI prints whether `grub.cfg` is on that ESP. Plan: [m8_state.md](m8_state.md). Evidence: [2026-09-24-c4a41a17-grub-staging-oneshot.md](evidence/r640/2026-09-24-c4a41a17-grub-staging-oneshot.md). |
+| H10 | Persist disk must be **reliable**, not once | **HIGH** | `36d3b559` reached the installed `login:` twice the same day (UUID `a0ad99ac-…`). Residual: Force Off still needs ext4 journal recovery and clears a vfat dirty bit. Next product step is A4s, not another flash. Plan: [m8_state.md](m8_state.md). Evidence: [2026-09-24-36d3b559-persist-login.md](evidence/r640/2026-09-24-36d3b559-persist-login.md). |
 | H11 | Truncated `site/` on feature branches | LOW | **This commit (main catch-up):** keep Kimi updater chrome from `origin/main` (nav / Status / CIO View / Stories / Please reboot); patch lived Everest-closed strings in place; `./tools/check-site-chrome.sh` + CI `site-chrome`; always-on `.cursor/rules/site-chrome.mdc`. Do not replace `site/index.html` wholesale on HDA/Everest work. |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-24 | m8-grubcfg-esp | 0.0 | 99 | **`36d3b559`: installed `login:` twice.** UUID `a0ad99ac-…`, `[vda] 16777216`, `grubcfg=no` (menu on ext4). Boot 2 recovered the journal. months 0.0 held; overall 99 held. A4s still open |
 | 2026-09-24 | m8-grubcfg-esp | 0.0 | 99 | **`c4a41a17`: `DISK-BOOTX64` then `grub>`.** One-shot `lba=2048 n=512 ok` was the ESP BPB, before GRUB. This EFI prints `grubcfg=yes` (path + bytes) or `grubcfg=no` on that walk. Not lived. months 0.0 held; overall 99 held |
 | 2026-09-24 | m8-unpin-read | 0.0 | 99 | **`e5cca2e0` boot 2: `DISK-BOOTX64` then `grub>` `blk_rd=33`.** In-GRUB warm READ LBA 0. This EFI deletes it. First unpinned `BlockIo` is `xhci_live_rw` plus one `disk past pin lba=` line. Not lived. months 0.0 held; overall 99 held |
 | 2026-09-23 | m8-usbsoak-done | 0.0 | 99 | **`e5cca2e0` COM2: `RAYNU-V-USBSOAK-DONE`.** Toshiba `0480:a004`, peek `installed=1 guest=8589934592`, gaps 0/5/30/120 all `fail=0`, total 239/239. No guest. Boot 2 is this EFI with `usbsoak.txt` removed. months 0.0 held; overall 99 held |
@@ -1002,7 +1003,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     **Force Off the `c4a41a17` prompt. Do not F11 it again.** `usbsoak.txt` stays off. After CI is green, flash `cursor/m8-grubcfg-esp-8366` (`flashcruzer.sh --branch cursor/m8-grubcfg-esp-8366 --wait --any-cruzer-usb --allow-new-serial --raynu-f`). COM2: new sha, no `USB soak requested`, no `diskprime past pin`, one `grubcfg=yes path=… bytes=N` or `grubcfg=no` before the GRUB banner, then `image=DISK-BOOTX64` and `[vda] 16777216` through `login:`. `grubcfg=yes` plus `grub>` means the file is on the ESP. `image=ISO-BOOTX64` means Force Off. Do not setup-disk. Do not curl Start. Do not flash Toshiba `/dev/sdc`. See docs/m8_state.md.
+Next move:     **Leave `36d3b559` boot 2 at `localhost:~#`.** One Firefox tab to `https://raynu-v.lab:8443` (hosts already `10.99.99.148`). Do not curl. Do not Force Off. Do not setup-disk. Do not reflash. Do not flash the Toshiba. See docs/m8_state.md.
 Rollback:      GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351
                EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc
                COM2 build: sha=f72b4276d198. Do not flash a later M8 persist prototype as known-good.

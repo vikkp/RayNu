@@ -219,21 +219,20 @@
             <li data-reveal>
               <header>
                 <span class="loi-pieces__name">Persist across HV reboot</span>
-                <span class="loi-pieces__pct" data-piece="persist">97%</span>
+                <span class="loi-pieces__pct" data-piece="persist">93%</span>
               </header>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill" data-piece-fill="persist" style="width: 97%"></span>
+                <span class="hda-bar__fill" data-piece-fill="persist" style="width: 93%"></span>
               </div>
               <p>
                 A guest reboot already kept the install. A hypervisor Force Off
                 used to wipe it — and that is how you recover a Type-1, so a
-                buyer will do it. On the R640 we own, that is no longer true:
-                after Force Off the same Alpine comes back from the 8 GiB USB
-                slice, and COM2 <code>928d6224</code> printed
-                <code>RAYNU-V-M8-DISK-PERSIST-OK</code>. The last 3% is the
-                whole stick and USB versus PERC. A later boot
-                (<code>08202468</code>) still saw the GPT, then launched the
-                live ISO. That is a boot-order miss, not a wiped disk.
+                buyer will do it. On the R640 we own, EFI
+                <code>36d3b559</code> brought the same Alpine back twice
+                (UUID <code>a0ad99ac-…</code>, 8 GiB USB slice,
+                <code>RAYNU-V-M8-DISK-PERSIST-OK</code>). The remainder is
+                an unclean shutdown (ext4 journal, vfat dirty bit), the
+                8 GiB cap, and USB versus PERC.
               </p>
             </li>
             <li data-reveal>
@@ -348,19 +347,19 @@
 
       <section class="section section--hda-com2" id="now">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>NOW · installed GRUB · then grub&gt;</p>
-          <h2 class="section__title">The product boot reached GRUB. The menu file is the open question.</h2>
+          <p class="milestone-kicker" data-reveal>NOW · installed login, twice · A4s</p>
+          <h2 class="section__title">The installed Alpine came back after two Force Offs.</h2>
           <p class="section__lede">
-            EFI <code>c4a41a17</code> staged the installed GRUB from the
-            8&nbsp;GiB slice and stopped at <code>grub&gt;</code>. The one-shot
-            USB line was the firmware reading the ESP boot sector, before GRUB.
-            The next EFI uses that same walk and prints whether
-            <code>grub.cfg</code> is on the ESP.
+            EFI <code>36d3b559</code> installed Alpine on the 8&nbsp;GiB slice,
+            then booted that disk to <code>localhost login:</code> twice.
+            <code>grub.cfg</code> is not on the ESP; GRUB loaded the menu from
+            ext4. The open step is one browser tab on the standing SPA while
+            that shell stays up.
           </p>
-          <pre class="ship-code" data-reveal><code>closed: 928d6224 persist-OK + TLS-OK → login: on the Toshiba
-lived:  c4a41a17 → DISK-BOOTX64 → ESP BPB lba=2048 → GRUB 2.12 → grub&gt;
-next:   flash cursor/m8-grubcfg-esp-8366 · one grubcfg=yes or grubcfg=no · [vda] 16777216 · login:
-never:  F11 c4a41a17 again · setup-disk · curl Start · Toshiba /dev/sdc
+          <pre class="ship-code" data-reveal><code>closed: 36d3b559 → DISK-BOOTX64 → menu → UUID a0ad99ac → login: ×2
+lived:  boot 2 still at localhost:~# · ext4 journal recovered · vfat dirty bit cleared
+next:   one Firefox tab https://raynu-v.lab:8443 · hosts 10.99.99.148 · no curl
+never:  reflash · setup-disk · curl Start · Force Off this login · flash the Toshiba
 read:   docs/m8_state.md</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
             Rollback remains GitHub Latest

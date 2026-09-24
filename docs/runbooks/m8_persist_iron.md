@@ -115,11 +115,12 @@ If enumeration fails again (`xhci enum p11 … cmd=3 cmpl=0xff`), the soak boot 
 `boot: Stage 46 xhci cmd timeout addr p11 cmd=… sts=… crcr=… iman=… erdp=… cmdenq=… cmdcyc=… evdeq=… evcyc=… evtrb=… portsc=… pmsc=… slotst=… ep0st=… ep0deq=…`
 line per attempt, then `boot: USBSOAK abort — USB enumeration failed err=3 …` and halts. No guest, no ISO, no RAM install. Paste the `legacy`, `trb order` and `cmd timeout` lines; they decide the next fix. With the `trb order` line present, `slotst=2 ep0st=1` on a timed-out Address Device would mean the event lands somewhere other than our dequeue (compare `erdp` with `evdeq`), and `slotst=0 ep0st=0` with `crcr=0x8` would mean the xHC never fetched the command TRB.
 
-**Product path after `c4a41a17`.** `usbsoak.txt` stays off. Flash `cursor/m8-grubcfg-esp-8366` once CI is green. Before the GRUB banner, one of:
+**Product path on `36d3b559` (lived).** Two Force Offs reached the GRUB menu and `localhost login:` (UUID `a0ad99ac-…`, `[vda] 16777216`). `grubcfg=no` is the ESP lookup; the menu file is on ext4. Leave boot 2 up. A4s is one Firefox tab on `https://raynu-v.lab:8443`. Do not curl. Do not reflash. Do not setup-disk.
 
-- `boot: RayNu-F grubcfg=yes path=\EFI\BOOT\grub.cfg bytes=N` (or `\EFI\alpine\grub.cfg`), then the installed menu → `login:` → **sit there**; do A4s (Firefox on `https://raynu-v.lab:8443`, reload). `[vda]` must be `16777216` sectors.
-- `grubcfg=yes` and `grub>` again: the menu file is on the ESP and GRUB did not open it. Paste COM2.
-- `boot: RayNu-F grubcfg=no`: the menu file is not on that ESP. Paste COM2.
+Historical `grubcfg=` meanings, if a later disk stops at `grub>`:
+
+- `boot: RayNu-F grubcfg=yes path=\EFI\BOOT\grub.cfg bytes=N` (or `\EFI\alpine\grub.cfg`) and `grub>`: the menu file is on the ESP and GRUB did not open it.
+- `grubcfg=no` and `grub>`: the menu file is not on that ESP and not on ext4 `/boot/grub`. That was the wiped partial install.
 - `boot: WARN LUN saw EFI PART; skip ISO (do not wipe persist)` → `boot: HINT — installed LUN unreadable this boot …` → `boot: Stage 46 hold alive …` every 60 s. Paste COM2, Force Off.
 - While GRUB reads: `boot: Stage 46 durable LUN usb rw waiting ms=N of 8000 bot=…` every 2 s is a bounded wait, not a hang.
 

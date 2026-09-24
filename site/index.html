@@ -153,12 +153,12 @@
             <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code> → second Linux
             <code>root=UUID=814a97a0-…</code> → <code>login:</code>.
             That is M7 / ADR-009. M8 has since closed TLS
-            (<code>RAYNU-V-M8-TLS-OK</code>) and HV-reboot persist
-            (<code>RAYNU-V-M8-DISK-PERSIST-OK</code>) on COM2.             Persist is not yet
-            repeatable: <code>c4a41a17</code> reached installed GRUB and stopped
-            at <code>grub&gt;</code>. The one-shot read was the ESP boot sector.
-            Do not F11 that EFI again. A standing
-            SPA and a guest console UI are still open — not a reopened Everest.
+            (<code>RAYNU-V-M8-TLS-OK</code>) and repeated HV-reboot persist
+            on <code>36d3b559</code>
+            (<code>RAYNU-V-M8-DISK-PERSIST-OK</code>, UUID
+            <code>a0ad99ac-…</code>, two Force Offs to
+            <code>login:</code>). A standing SPA and a guest console UI are
+            still open — not a reopened Everest.
             Iron rollback:
             <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed"
               ><code>v0.1.0-everest-closed</code></a
