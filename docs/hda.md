@@ -355,7 +355,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | m8-grubcfg-esp |
-| Summary | **`3e9ce45e` fifth login, then the fourth SPA power-off.** Host red, then green, then red. Seq 22543/22544 at 12:21:23, no `RAC1195`. The 30 s re-listen was the second session. This EFI does not re-listen. Months **0.0 held**. Overall **99 held**. |
+| Summary | **No-relisten is a probe, not the product.** `3f80abd0` stays unflashed. Standing SPA is one TLS session with HTTP keep-alive. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. A4s / console / auth are M8. Nested QEMU ≠ R640. |
 | Gates touched | `m8_disk_persist_host_gate_passes`; `esp_grub_cfg_prefers_boot_path_and_reports_size`; `./tools/sync-hda-site.sh --check`; `./tools/check-site-chrome.sh`. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA months A 1.0→0.75. |
@@ -366,7 +366,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | ID | Blocker / risk | Severity | Mitigations |
 |----|----------------|----------|-------------|
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
-| H2 | TLS / console polish | MED | **M8.1 CLOSED on COM2** (`928d6224` `RAYNU-V-M8-TLS-OK`). Four Firefox renders were each followed by `SYS1003` then `SYS1001` with no `RAC1195` (20:14, 23:45, 00:30, 12:21). `3e9ce45e` held listen for 30 s: Host went red, then green on the re-listen, then red, then the chassis turned off. This EFI does not re-listen after one exchange, and those COM2 lines use `write_line_nowait` (Linux hushes `write_line`). A4s stays open. A6 and A5 stay firmware-in-tree. rustls/ring stay out of `uefi-bin`. Not a reopened Everest. |
+| H2 | TLS / console polish | MED | **M8.1 CLOSED on COM2** (`928d6224` `RAYNU-V-M8-TLS-OK`). Four Firefox renders were each followed by `SYS1003` then `SYS1001` with no `RAC1195` (20:14, 23:45, 00:30, 12:21). `3e9ce45e` held listen for 30 s: Host went red, then green on the re-listen, then red, then the chassis turned off. `3f80abd0` (no re-listen) is a probe and stays unflashed. The product session keeps that TLS connection and serves the next poll on it. Linux hushes `write_line`; operator lines use `write_line_nowait`. A4s stays open. A6 and A5 stay firmware-in-tree. rustls/ring stay out of `uefi-bin`. Not a reopened Everest. |
 | H3 | ~~Guest UEFI CD not bootable / no reboot-to-disk on iron~~ | — | **Resolved** 2026-09-10 (`56a3ffd` / run `34480107961`): `RAYNU-V-RAYNU-F-DISK-BOOT-OK` + second Linux `root=UUID=` from `vda` + `login:` on the real R640. Chain: `59ac070` install-to-disk (`ISO-INSTALL-OK`) → F7 VMCLEAR/VMPTRLD (81 KiB `FirmwareState::new()` stack temporary over the VMCS; template reset + 32-page stack guard) → `975f8fc` relaunch into the installed GRUB menu, 1 M exit-cap inside GRUB's 2 s menu poll loop (~2 exits/µs) → `56a3ffd` RayNu-F wall cap (time, not exits, bounds the loader phase). Earlier: `916af96` THRE chain telemetry → UART TX ring room + line-rate pace + COM2 FIFO burst fixed the `apk` console stall. Evidence: [2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md](evidence/r640/2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md). Do not F11 `34474850361` / `34425781629` for Phase A; `34480107961` is the Phase A reference pin. |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
 | H5 | ~~Phase B — iron SPA still launches the SHELL stub~~ | — | **Resolved** 2026-09-11 (`f72b4276` / `34552377351`). Residual polish is **M8**, not Everest. |
@@ -381,7 +381,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
-| 2026-09-25 | m8-grubcfg-esp | 0.0 | 99 | **`3e9ce45e` fifth login, fourth SPA power-off.** Lease `.151`. Host red, then green, then red. Seq 22543 `SYS1003` and seq 22544 `SYS1001` at 12:21:23, no `RAC1195`. 30 s re-listen was the second session. This EFI does not re-listen. `write_line_nowait` so the hold line shows after login. months 0.0 held; overall 99 held |
+| 2026-09-25 | m8-grubcfg-esp | 0.0 | 99 | **No-relisten is a probe.** Do not flash `3f80abd0`. Product session is one TLS handshake and HTTP keep-alive on the one socket. LOI waits on a page that stays up beside the guest. months 0.0 held; overall 99 held |
+| 2026-09-25 | m8-grubcfg-esp | 0.0 | 99 | **`3e9ce45e` fifth login, fourth SPA power-off.** Lease `.151`. Host red, then green, then red. Seq 22543 `SYS1003` and seq 22544 `SYS1001` at 12:21:23, no `RAC1195`. 30 s re-listen was the second session. months 0.0 held; overall 99 held |
 | 2026-09-25 | m8-grubcfg-esp | 0.0 | 99 | **`fa6ce771` SPA then chassis off.** Fourth login, same UUID and vda2 counts, lease `.150`. Page went green. Dashboard Power State OFF. Paced SOL RX was not sufficient. Listen hold 30 s was the next EFI. months 0.0 held; overall 99 held |
 | 2026-09-25 | m8-grubcfg-esp | 0.0 | 99 | **`fa6ce771` fourth login.** Lease `.150`. `DISK-BOOTX64`, UUID `a0ad99ac-…`, vda2 `6380/521216` `102908/2084352` matching boots 2 and 3 after the 23:45 off. Journal recovered. The page trial is the row above. months 0.0 held; overall 99 held |
 | 2026-09-24 | m8-grubcfg-esp | 0.0 | 99 | **Second SPA power-off.** `36d3b559` boot 3 page-up then seq 22501 `SYS1003` 23:45:21 and seq 22502 `SYS1001` 23:45:22. No `RAC1195` (GUI Power On at 23:26 and hard reset at 19:52 both have it). Linux resume `poll_host_rx` is now paced. Quit Firefox. Do not retry the page on `36d3b559`. months 0.0 held; overall 99 held |
@@ -1008,7 +1009,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     **Chassis is off.** Quit Firefox. Do not Power On `3e9ce45e` to open the page. Next EFI does not re-listen after one exchange. Host stays red. COM2 `listen hold after HTTP` uses `write_line_nowait`. Do not refresh. Do not curl. Do not setup-disk. See docs/m8_state.md.
+Next move:     **Chassis is off.** Quit Firefox. Do not flash `3f80abd0` (no re-listen, Host stays red). That EFI is a probe. The product session is one TLS handshake and HTTP keep-alive on the same socket. It is not built yet. Do not curl. Do not setup-disk. See docs/m8_state.md.
 Rollback:      GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351
                EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc
                COM2 build: sha=f72b4276d198. Do not flash a later M8 persist prototype as known-good.

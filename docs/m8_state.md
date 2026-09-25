@@ -107,11 +107,28 @@ A2 again (several Force Offs, not one) → A4s Firefox load/reload on `https://r
 
 PERC H740P = MegaRAID SAS 3.5 (MPT3 Fusion) post-EBS driver on a **spare** VD (never Ubuntu). Interim: an NVMe in the lab R640 uses the already host-proven NVMe DurableLun and is a stronger dedicated-box story than a USB stick.
 
+## Product vs probe
+
+The standing page is the product (ADR-013 Stage 1, ADR-018 M8.3, LOI Bar A A4s). One browser session stays up beside the running guest: the Host card stays green, and later the guest console is in that same page. A page that goes red and never answers again is a failed A4s, and it is not something to put in front of an LOI.
+
+`3f80abd0` (no re-listen, Host stays red) is a probe already on this branch. It exists because `3e9ce45e` showed the first exchange leave the chassis up and the second handshake (Host green) precede seq 22543/22544. Do not flash `3f80abd0` for a demo or an LOI. Do not Power On to open Firefox on it.
+
+The product session, still one smoltcp socket on the shared BCM5720:
+
+- One TCP accept and one TLS handshake per browser session.
+- HTTP/1.1 `Connection: keep-alive`. The next `/vms` or console poll is another request on that session, not a new ClientHello.
+- Re-listen only after the browser closes the connection, or after a multi-minute idle. Draining the reply stays on later ticks. No NIC spin inside the vmexit.
+- The SPA does not open a second connection while that session is live. Overview lists sequentially. The Activity log poll waits its turn on the same socket.
+- Shared LOM stays as lived: keep the APE PHY, no phylock, no BMCR reset.
+- Lines the operator must see after `login:` use `write_line_nowait`. Linux hushes `write_line`.
+
+Still lab, and labeled as lab until each one has its own iron close: millicert, the bring-up bearer, the 8 GiB USB slice, and any probe that refuses the second request. PERC persist is Bar B and is a different disk. An LOI conversation waits until a dedicated R640 can leave the page open beside the guest without the chassis turning off.
+
 ## Next iron step (operator)
 
-`3e9ce45e3c58` reached `localhost:~#` (lease `10.99.99.151`, same UUID, vda2 one block higher). Firefox painted the SPA. Host went red, then green, then red. Seq 22543 `SYS1003` and seq 22544 `SYS1001` at 12:21:23, same second, no `RAC1195`. COM2 hid the HTTP lines: `write_line` is dropped once Linux shares the UART. Quit Firefox. Do not Power On this EFI to open the page.
+The chassis is off. Quit Firefox. Do not Power On `3e9ce45e` or `3f80abd0` to open the page. The next EFI to flash is the keep-alive session above, and it is not built yet. Do not curl. Do not `setup-disk`. Do not flash the Toshiba.
 
-The next EFI still drains the reply, then does not listen again (`COEXIST_RELISTEN_HOLD_MS` is `i64::MAX`). COM2 uses `write_line_nowait` for `HTTP exchange ok` and `listen hold after HTTP`, so those lines show after `login:`. The Host card stays red. Do not refresh. Do not click Create or Start. Do not curl. Do not `setup-disk`. If Power State goes OFF, leave it off. Do not flash the Toshiba.
+`3e9ce45e3c58` had already reached `localhost:~#` (lease `10.99.99.151`, same UUID, vda2 one block higher). Host went red, then green, then red. Seq 22543 `SYS1003` and seq 22544 `SYS1001` at 12:21:23, same second, no `RAC1195`.
 
 `grubcfg=no` on this disk is expected. Alpine keeps `grub.cfg` on ext4 `/boot/grub`, not on the ESP. The menu still auto-booted.
 
