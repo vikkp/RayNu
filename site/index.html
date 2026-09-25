@@ -154,13 +154,13 @@
             <code>root=UUID=814a97a0-…</code> → <code>login:</code>.
             That is M7 / ADR-009. M8 has since closed TLS
             (<code>RAYNU-V-M8-TLS-OK</code>) and repeated HV-reboot persist
-            on <code>3e9ce45e</code>
+            on <code>1f33eeda</code>
             (<code>RAYNU-V-M8-DISK-PERSIST-OK</code>, UUID
-            <code>a0ad99ac-…</code>, a fifth boot to
-            <code>login:</code>). Host then went green and the chassis
-            turned off. The next EFI keeps that TLS session for later
-            polls. A guest console
-            UI is still open — not a reopened Everest.
+            <code>a0ad99ac-…</code>, a sixth boot to
+            <code>login:</code>). The SPA then stayed up on one TLS session
+            (Host green, guest console visible). Rollback kit
+            <code>v0.1.0-m8-a4s</code>. Typing from that page is still open
+            — not a reopened Everest.
             Iron rollback:
             <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed"
               ><code>v0.1.0-everest-closed</code></a

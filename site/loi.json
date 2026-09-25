@@ -1,6 +1,6 @@
 {
   "bars": {
-    "a": 82,
+    "a": 88,
     "b": 18
   },
   "baseline_date": "2026-09-14",
@@ -24,14 +24,14 @@
   ],
   "loi_target": "Non-prod Letter of Intent. Bar A = dedicated-box lab. Bar B = RAID-fleet replacement. HDA 99% is Everest, not an LOI.",
   "loihda_version": 1,
-  "months_to_loi_a": 0.75,
-  "months_to_loi_a_prev": 1.0,
+  "months_to_loi_a": 0.5,
+  "months_to_loi_a_prev": 0.75,
   "months_to_loi_b": 3.5,
   "months_to_loi_b_prev": 3.5,
-  "overall_pct": 64,
+  "overall_pct": 67,
   "pieces": {
     "auth": 38,
-    "console": 58,
+    "console": 68,
     "everest": 100,
     "perc": 15,
     "persist": 93,
