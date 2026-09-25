@@ -82,6 +82,12 @@ static mut COEXIST_LAST_HTTP_MS: i64 = 0;
 static mut COEXIST_PENDING_CLOSE: bool = false;
 /// `millis` when the post-exchange TX queue first read empty. 0 = not yet.
 static mut COEXIST_DRAIN_EMPTY_AT_MS: i64 = 0;
+/// SPA `POST /host/poweroff` accepted. Drain the 200, then VMXOFF + shutdown.
+static mut COEXIST_PENDING_POWEROFF: bool = false;
+/// `millis` when that power-off latch was armed. 0 = not pending.
+static mut COEXIST_POWEROFF_ARMED_AT_MS: i64 = 0;
+/// `millis` when the power-off TX queue first read empty. 0 = not yet.
+static mut COEXIST_POWEROFF_EMPTY_AT_MS: i64 = 0;
 /// Last TSC we polled the standing SPA (RayNu-F / USB waits).
 static mut LAST_SPA_TICK_TSC: u64 = 0;
 
@@ -166,6 +172,33 @@ fn tls_session() -> &'static mut Tls12Listen {
             COEXIST_LISTEN_READY = true;
         }
         &mut COEXIST_LISTEN
+    }
+}
+
+/// HTTP 200 is already on the TX queue. Leave VMX, then firmware shutdown.
+///
+/// Returns false when `VMXOFF` fails. That path does not call `ResetSystem`.
+/// Ok never returns: `uefi::runtime::reset` is `!`.
+fn spa_host_poweroff_after_drain() -> bool {
+    serial::write_line_nowait(crate::mgmt::host_power::SPA_POWEROFF_COM2);
+    // SAFETY: coexist ticks run after VMXON (Phase B idle or a RayNu-F
+    // vmexit). VMXOFF in VMX root leaves VMX operation on this CPU.
+    // A current VMCS is cleared by VMXOFF (SDM VMXOFF). Do not reset if
+    // VMXOFF fails — Dell ResetSystem with VMX still on can hang.
+    // KANI-TARGET: host tests cover the HTTP latch; this reset is firmware-only.
+    match unsafe { crate::vmx::hardware::vmxoff() } {
+        Ok(()) => {
+            serial::write_line_nowait("boot: SPA host power-off VMXOFF ok");
+            uefi::runtime::reset(
+                uefi::runtime::ResetType::SHUTDOWN,
+                uefi::Status::SUCCESS,
+                None,
+            );
+        }
+        Err(_) => {
+            serial::write_line_nowait(crate::mgmt::host_power::SPA_POWEROFF_VMXOFF_FAIL);
+            false
+        }
     }
 }
 
@@ -303,6 +336,9 @@ pub fn arm_bcm5720_coexist() -> bool {
         COEXIST_LAST_HTTP_MS = 0;
         COEXIST_PENDING_CLOSE = false;
         COEXIST_DRAIN_EMPTY_AT_MS = 0;
+        COEXIST_PENDING_POWEROFF = false;
+        COEXIST_POWEROFF_ARMED_AT_MS = 0;
+        COEXIST_POWEROFF_EMPTY_AT_MS = 0;
         tls_session().reset();
         COEXIST_LAST_DIAG = 0;
         COEXIST_LAST_RX_DROP = 0;
@@ -389,6 +425,36 @@ pub fn tick_bcm5720_coexist() {
         });
 
         let mut skip_accept = false;
+        if COEXIST_PENDING_POWEROFF {
+            let _ = iface.poll(Instant::from_millis(millis + 1), device, sockets);
+            let queued = sockets.get::<tcp::Socket>(tcp_handle).send_queue();
+            let armed_for = millis.saturating_sub(COEXIST_POWEROFF_ARMED_AT_MS);
+            if queued == 0 {
+                if COEXIST_POWEROFF_EMPTY_AT_MS == 0 {
+                    COEXIST_POWEROFF_EMPTY_AT_MS = millis;
+                }
+            } else {
+                COEXIST_POWEROFF_EMPTY_AT_MS = 0;
+            }
+            let drained = COEXIST_POWEROFF_EMPTY_AT_MS != 0
+                && millis.saturating_sub(COEXIST_POWEROFF_EMPTY_AT_MS) >= 8;
+            // A stuck TX queue must not leave the page up with the latch set.
+            let forced = armed_for >= 2000;
+            if drained || forced {
+                if forced && !drained {
+                    serial::write_line_nowait(
+                        "boot: SPA host power-off TX still queued; shutting down",
+                    );
+                }
+                if !spa_host_poweroff_after_drain() {
+                    COEXIST_PENDING_POWEROFF = false;
+                    COEXIST_POWEROFF_ARMED_AT_MS = 0;
+                    COEXIST_POWEROFF_EMPTY_AT_MS = 0;
+                    crate::mgmt::host_power::clear_spa_poweroff();
+                }
+            }
+            skip_accept = true;
+        }
         if COEXIST_PENDING_CLOSE {
             let _ = iface.poll(Instant::from_millis(millis + 1), device, sockets);
             if sockets.get::<tcp::Socket>(tcp_handle).send_queue() == 0 {
@@ -518,6 +584,7 @@ pub fn tick_bcm5720_coexist() {
         }
         if COEXIST_KEPT
             && !COEXIST_PENDING_CLOSE
+            && !COEXIST_PENDING_POWEROFF
             && !did_keepalive
             && coexist_keepalive_idle(millis, COEXIST_LAST_HTTP_MS, COEXIST_KEEPALIVE_IDLE_MS)
         {
@@ -529,13 +596,21 @@ pub fn tick_bcm5720_coexist() {
             if take_spa_keys_injected() {
                 let _ = maybe_print_iron_console_ok(true, true);
             }
+            if crate::mgmt::host_power::spa_poweroff_latched() {
+                // 200 is already queued. Drain on later ticks, then shutdown.
+                // Do not re-listen: a second handshake is the chassis-off.
+                COEXIST_PENDING_POWEROFF = true;
+                COEXIST_POWEROFF_ARMED_AT_MS = millis;
+                COEXIST_POWEROFF_EMPTY_AT_MS = 0;
+                do_close = false;
+            }
             let _ = iface.poll(Instant::from_millis(millis + 1), device, sockets);
             pci_census::print_host_nic_exchange_ok_marker();
         }
         if did_keepalive {
             serial::write_line_nowait("boot: HOST-NIC HTTP keep-alive");
         }
-        if do_close {
+        if do_close && !COEXIST_PENDING_POWEROFF {
             // Connection: close, peer FIN after a reply, or 10 min idle.
             // abort() without drain RSTs Firefox nssFailure2 (MAC of last
             // TLS record). close() after drain left FIN_WAIT on the only

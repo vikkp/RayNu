@@ -349,6 +349,7 @@ pub mod m8_tls_fw_gate;
 pub mod auth;
 pub mod m8_auth_gate;
 pub mod console;
+pub mod host_power;
 pub mod m8_console_gate;
 pub mod sku_card;
 pub mod iso_upload;

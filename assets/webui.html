@@ -19,6 +19,7 @@ button:hover{background:var(--sea-deep);border-color:var(--sea-deep)}
 button.pri{background:var(--sea);color:#f7fbfc;border-color:var(--sea)}
 button.ghost{background:transparent;color:var(--sea-deep)}
 button:disabled{opacity:.45;cursor:not-allowed}
+button.danger{background:transparent;color:var(--bad);border-color:var(--bad)}
 .drop{position:relative}
 .box{display:none;position:absolute;right:0;top:110%;background:#f7fbfc;border:1px solid var(--line);padding:.8rem;min-width:16rem}
 .drop:hover .box,.drop:focus-within .box{display:block}
@@ -84,6 +85,8 @@ input.token{min-width:12rem}
 <div><i>3</i>Load a typed ISO — UEFI-first.</div>
 <div><i>4</i>Start. Activity is guest keys + host serial log.</div>
 </div>
+<div class="toolbar"><button class="danger" id="btn-poweroff" type="button">Power off host</button></div>
+<p class="empty">Power off host turns this chassis off after the page answers. It is not a guest command.</p>
 </section>
 <section class="pg" data-pg="guests">
 <h2>Guests</h2>
@@ -191,6 +194,7 @@ async function attachCdrom(){const iso=num("f-iso",1)||1;const typ=(document.get
 async function armFirmwareCd(){const iso=num("f-iso",1)||1;await isoCall("/iso/"+iso+"/firmware","ISO "+iso+" firmware CD armed (not guest UEFI)","Firmware arm failed")}
 async function refreshLogs(){setS("Fetching console…");let g="",h="",ok=0;try{const r=await api("GET","/logs/guest");if(r.ok){ok=1;g=await r.text()}}catch(e){}try{const r=await api("GET","/logs/serial");hostOk=r.ok||hostOk;if(r.ok){ok=1;h=await r.text()}}catch(e){}if(!ok){setS("Log failed");paint();return}G.className="";G.textContent=(g?"=== guest COM1 ===\n"+g+"\n":"")+(h?"=== host UART ===\n"+h:"")||"(empty)";setS("Console refreshed");paint()}
 async function sendKeys(){const el=document.getElementById("g-keys");let k=el.value;if(!k)return;if(k.charCodeAt(k.length-1)!==13)k+="\r";const res=await fetch("/console/keys",{method:"POST",headers:{"Authorization":auth(),"Content-Type":"text/plain"},body:k});hostOk=res.ok||hostOk;setS(res.ok?"Sent keys":"Keys failed ("+res.status+")");if(res.ok)el.value=""}
+async function powerOff(){if(!confirm("Power off RayNu-V on this chassis?"))return;setS("Powering off…");const res=await fetch("/host/poweroff",{method:"POST",headers:{"Authorization":auth()}});hostOk=res.ok||hostOk;setS(res.ok?"Host powering off":"Power off failed ("+res.status+")")}
 function render(v){
 if(!v.length){L.className="empty";L.textContent="No guests.";return}
 L.className="";L.innerHTML="";
@@ -215,8 +219,9 @@ document.getElementById("btn-iso-attach").onclick=attachCdrom;
 document.getElementById("btn-iso-firmware").onclick=armFirmwareCd;
 document.getElementById("btn-logs").onclick=refreshLogs;
 document.getElementById("btn-keys").onclick=sendKeys;
+document.getElementById("btn-poweroff").onclick=powerOff;
 document.getElementById("g-keys").onkeydown=function(e){if(e.key==="Enter"){e.preventDefault();sendKeys()}};
-window.raynuWebUi={listVms:listVms,startVm:startVm,stopVm:stopVm,createVm:createVm,listImages:listImages,refreshLogs:refreshLogs,sendKeys:sendKeys};
+window.raynuWebUi={listVms:listVms,startVm:startVm,stopVm:stopVm,createVm:createVm,listImages:listImages,refreshLogs:refreshLogs,sendKeys:sendKeys,powerOff:powerOff};
 dot("hv","ok","Hypervisor is running");listVms();setInterval(listVms,30000);setInterval(function(){if(document.querySelector('.pg.on[data-pg="activity"]'))refreshLogs()},2000);
 })();
 </script>

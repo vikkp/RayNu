@@ -135,11 +135,16 @@ Rollback for this path, when a later EFI misbehaves, is the kit in [`releases/v0
 
 Iron close is COM2 `RAYNU-V-M8-CONSOLE-OK` after a key from the SPA reaches guest COM1 on the BCM5720 path. `maybe_print_iron_console_ok` prints that marker with `write_line_nowait`. Linux earlycon share hushes `write_line`; the keep-alive lines on `1f33eeda` were visible because they already use `write_line_nowait`. This tip has the marker on that path. It is not lived. The page that is up is still `1f33eeda`, and a Send on that page can inject a key while the marker stays silent.
 
+## Host power-off (this tip, not lived)
+
+Overview **Power off host** posts `POST /host/poweroff` with the bearer token. The handler returns HTTP 200 on the existing keep-alive socket and does not reset inside the request. A later coexist tick waits until the TX queue has been empty for 8 ms (or 2 s if the queue never drains), prints `boot: SPA host power-off — VMXOFF then ResetSystem SHUTDOWN`, runs `VMXOFF`, then `EfiResetShutdown`. If `VMXOFF` fails, COM2 prints `boot: WARN — SPA power-off VMXOFF failed; page stays up` and the chassis stays on. This is the host, not a guest `poweroff`. The next boot can still need ext4 journal recovery. The button is not on `1f33eeda`. iDRAC turns that chassis off.
+
 After this chassis is off:
 
 1. Flash this tip. Do not F11 it while Firefox is connected to `1f33eeda`.
 2. After `localhost:~#`, one harmless character in Send. Not `setup-alpine`. Not `setup-disk`.
 3. Proof is the character in the guest console on Activity, and `RAYNU-V-M8-CONSOLE-OK` on COM2. The Activity tail also copies host UART lines (`HTTP keep-alive`), so the character in the guest banner is the proof.
+4. Overview **Power off host**, confirm. COM2 shows the power-off line, then the chassis turns off. Do not use it on `1f33eeda`.
 
 Host/CI still never print `RAYNU-V-M8-CONSOLE-OK`. **not VNC**.
 
