@@ -175,7 +175,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | 2026-09-18 | Bar A A2 | USB Force Off on COM2 | **DONE on evidence** (`4af78b43` keep=1 DISK-BOOT UUID `348005a9`; minted persist-OK not printed) |
 | 2026-09-18 | Bar A A3 | SKU card | **DONE** ([`docs/sku.md`](sku.md) / [`site/sku.html`](../site/sku.html)) |
 | **2026-09-19** | Bar A A4 | TLS on native `:8443` **before RayNu-F** | **DONE** (`928d6224` COM2 `RAYNU-V-M8-TLS-OK`; Mac `curl --cacert` SPA `.140`) |
-| **NOW** | Bar A **A4s held** | Chassis off. No-relisten EFI is a probe | Product session is one TLS handshake and HTTP keep-alive. Do not flash `3f80abd0`. See [m8_state.md](m8_state.md) |
+| **NOW** | Bar A **A4s held** | Keep-alive EFI built, not lived | One TLS session, later polls on it. Do not flash `3f80abd0`. See [m8_state.md](m8_state.md) |
 | then | Bar A A6 | SPA keyboard | after A4s; firmware `POST /console/keys` in-tree; not VNC |
 | then | Bar B B2 | Spare PERC VD persist | after A6; census skip is lab safety |
 | later | Auth / unmodified ISO | A5, Gen-1 Phase 2 | named residuals, not fake closes |
@@ -207,7 +207,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | Field | Value |
 |-------|-------|
 | Commit | m8-grubcfg-esp |
-| Summary | **No-relisten is a probe, not an LOI page.** Do not flash `3f80abd0`. The standing SPA has to keep one TLS session and serve later polls on it. Scores held. |
+| Summary | **Keep-alive session is in this EFI, not lived.** One handshake, later polls on it. `3f80abd0` stays unflashed. Scores held. A4s still open. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Scores **held** (Bar A 82, persist 93, overall 64, months A 0.75, Bar B 18). A4s still open. Four page renders, four chassis-off. |
 | Gates touched | Lived `RAYNU-V-M8-DISK-PERSIST-OK` on boot 3. `./tools/sync-loihda-site.sh --check`. `./tools/check-site-chrome.sh`. No MegaRAID. |
@@ -218,6 +218,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-25 | m8-grubcfg-esp | 82 | 18 | **Keep-alive EFI built, not lived.** Later `/vms` polls stay on the first TLS session. A new handshake waits for peer close or 10 min idle. Do not flash `3f80abd0`. A4s still open. Scores held. |
 | 2026-09-25 | m8-grubcfg-esp | 82 | 18 | **Probe is not the product.** `3f80abd0` (no re-listen, Host stays red) stays unflashed. LOI Bar A needs one kept-alive TLS session beside the guest. Scores held. |
 | 2026-09-25 | m8-grubcfg-esp | 82 | 18 | **`3e9ce45e` fifth login, fourth SPA power-off.** Lease `.151`. Host red, then green, then red. Seq 22543/22544 at 12:21:23, no `RAC1195`. 30 s re-listen was the second session. Scores held. |
 | 2026-09-25 | m8-grubcfg-esp | 82 | 18 | **`fa6ce771` SPA then chassis off.** Fourth login, lease `.150`, same vda2 counts. Page green, then dashboard Power State OFF. Paced SOL RX was not sufficient. Listen hold was the next EFI. Scores held. |
@@ -302,7 +303,7 @@ LOI:           NOT OPEN. Tracker born 2026-09-14.
 Bar A:         82% · 0.75 months · dedicated-box non-prod
 Bar B:         18% · 3.5 months · PERC RAID fleet (out of conversation until PERC persist)
 Overall:       64% · confidence medium
-NOW:           chassis off · do not flash 3f80abd0 · that EFI is a probe (Host stays red) · product is one TLS session with HTTP keep-alive · LOI waits until the page stays up beside the guest · do not curl · do not setup-disk · docs/m8_state.md
+NOW:           chassis off · flash cursor/m8-grubcfg-esp-8366 from Ubuntu · COM2 must show HTTP keep-alive and no second TCP accept · do not flash 3f80abd0 · do not open Firefox on 3e9ce45e · if Power State goes OFF, leave it off · LOI waits until the page stays up · do not curl · do not setup-disk · docs/m8_state.md
 Open:          iron SPA keyboard · iron AUTH-OK · unmodified ISO · cluster · Ubuntu PERC stays standing boot
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
 Sit:           localhost:~# · do not setup-disk · do not flash Toshiba /dev/sdc

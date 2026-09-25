@@ -347,20 +347,20 @@
 
       <section class="section section--hda-com2" id="now">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>NOW · chassis off · quit Firefox</p>
-          <h2 class="section__title">Host went green again, and the server turned itself off.</h2>
+          <p class="milestone-kicker" data-reveal>NOW · chassis off · one TLS session</p>
+          <h2 class="section__title">The next page stays on the first handshake.</h2>
           <p class="section__lede">
             <code>3e9ce45e</code> reached <code>localhost:~#</code> on
             <code>10.99.99.151</code>. Host went red, then green, then red.
             Seq 22543 and 22544 at 12:21:23 are the host power-off, with no
-            GUI power request in front. Quit Firefox. Do not power this EFI
-            back on to open the page again.
+            GUI power request in front. The next EFI answers later polls on
+            that same TLS session. Do not power the old EFI back on.
           </p>
           <pre class="ship-code" data-reveal><code>closed: 3e9ce45e → DISK-BOOTX64 → UUID a0ad99ac → login: (5th)
 lived:  Host red → green → red on .151 · seq 22543 SYS1003 · seq 22544 SYS1001
-power:  30s re-listen was the second session · no RAC1195
-next:   quit Firefox · do not flash 3f80abd0 · product is one kept-alive TLS session
-never:  open Firefox on 3e9ce45e · setup-disk · curl Start · flash the Toshiba
+power:  second handshake preceded the off · no RAC1195
+next:   flash this branch from Ubuntu · one tab · HTTP keep-alive · no second TCP accept
+never:  flash 3f80abd0 · open Firefox on 3e9ce45e · setup-disk · curl Start · flash the Toshiba
 read:   docs/m8_state.md</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
             Rollback remains GitHub Latest

@@ -1,13 +1,13 @@
 //! Coexist-shaped TLS wrap: rustls session uses feed/take/wrap. Not iron.
 
 use super::{
-    headers_complete, request_complete, prop_tls_fw_wrap_package, wrap_plaintext_http,
-    PlaintextListen,
-    M8_TLS_FW_HOST_OK_MARKER, TLS_FW_CURL_NOTE, TLS_FW_WRAP_NOTE, COEXIST_HTTP_OUT_N,
-    COEXIST_RX_ACC_N,
+    drop_prefix, first_request_len, headers_complete, http_request_wants_close,
+    prop_tls_fw_wrap_package, request_complete, wrap_plaintext_http, PlaintextListen,
+    COEXIST_HTTP_OUT_N, COEXIST_RX_ACC_N, M8_TLS_FW_HOST_OK_MARKER, TLS_FW_CURL_NOTE,
+    TLS_FW_WRAP_NOTE,
 };
-use crate::mgmt::http::handle_http_request;
 use crate::mgmt::datastore::ImageTable;
+use crate::mgmt::http::handle_http_request;
 use crate::mgmt::iso::IsoDeployPlan;
 use crate::mgmt::iso_install::InstallToDiskPlan;
 use crate::mgmt::tls::firmware_listen_is_tls12;
@@ -188,6 +188,30 @@ fn plaintext_listen_matches_coexist_buffers() {
     assert_eq!(&out[..n], b"HTTP/1.1 200 OK\r\n\r\n");
     s.reset();
     assert!(s.take_http().is_none());
+}
+
+#[test]
+fn keepalive_request_stays_open_and_close_is_explicit() {
+    let get = b"GET /vms HTTP/1.1\r\nHost: raynu-v.lab\r\n\r\n";
+    assert!(request_complete(get));
+    assert_eq!(first_request_len(get), Some(get.len()));
+    assert!(!http_request_wants_close(get));
+    let ka = b"GET /vms HTTP/1.1\r\nConnection: keep-alive\r\n\r\n";
+    assert!(!http_request_wants_close(ka));
+    let close = b"GET / HTTP/1.1\r\nConnection: close\r\n\r\n";
+    assert!(http_request_wants_close(close));
+    let both = b"GET / HTTP/1.1\r\nConnection: keep-alive, close\r\n\r\n";
+    assert!(http_request_wants_close(both));
+    let post = b"POST /console/keys HTTP/1.1\r\nContent-Length: 2\r\nConnection: close\r\n\r\nhiGET /vms HTTP/1.1\r\n\r\n";
+    let n = first_request_len(post).expect("first");
+    assert!(n < post.len());
+    assert_eq!(&post[n..n + 2], b"GE");
+    assert!(http_request_wants_close(post));
+    let mut buf = *post;
+    let left = drop_prefix(&mut buf, post.len(), n);
+    assert!(left < post.len());
+    assert!(buf.starts_with(b"GET /vms"));
+    assert!(!http_request_wants_close(&buf[..left]));
 }
 
 #[test]

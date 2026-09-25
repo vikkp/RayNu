@@ -351,6 +351,21 @@ impl Tls12Listen {
         }
     }
 
+    /// Drop the first complete HTTP request. Keeps `ST_APP` and the keys.
+    ///
+    /// [`reset`] starts a new handshake. A kept standing-SPA poll must not
+    /// do that. Bytes after the first request stay buffered.
+    pub fn clear_http(&mut self) {
+        if self.state != ST_APP {
+            return;
+        }
+        let Some(n) = crate::mgmt::tls_coexist::first_request_len(&self.http[..self.http_len])
+        else {
+            return;
+        };
+        self.http_len = crate::mgmt::tls_coexist::drop_prefix(&mut self.http, self.http_len, n);
+    }
+
     pub fn wrap_http(&mut self, http: &[u8], tcp_out: &mut [u8]) -> usize {
         if self.state != ST_APP || http.is_empty() {
             return 0;

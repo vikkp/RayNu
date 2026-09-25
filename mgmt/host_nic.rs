@@ -91,20 +91,16 @@ pub fn http_accept_should_idle_abort(
     announced && !headers_done && limit_ms > 0 && elapsed_since_accept_ms >= limit_ms
 }
 
-/// After one standing-SPA HTTP exchange, do not accept another this boot.
+/// Quiet time on a kept TLS session before the slot is reclaimed.
 ///
-/// `3e9ce45e` held for 30s, then re-listened. Host went green on that
-/// second session and the chassis turned off (`SYS1003` then `SYS1001`,
-/// no `RAC1195`). `i64::MAX` does not expire.
-pub const COEXIST_RELISTEN_HOLD_MS: i64 = i64::MAX;
+/// SPA polls are 30 s. `3e9ce45e` re-handshook at 30 s and the chassis
+/// turned off (`SYS1003` then `SYS1001`, no `RAC1195`). Ten minutes is
+/// a standing page, not a second ClientHello.
+pub const COEXIST_KEEPALIVE_IDLE_MS: i64 = 600_000;
 
-/// True when a post-exchange listen hold has expired (`hold_until_ms <= 0`
-/// means no hold). `i64::MAX` never expires.
-pub fn coexist_relisten_due(now_ms: i64, hold_until_ms: i64) -> bool {
-    if hold_until_ms == i64::MAX {
-        return false;
-    }
-    hold_until_ms <= 0 || now_ms >= hold_until_ms
+/// True when a kept session has been idle long enough to accept again.
+pub fn coexist_keepalive_idle(now_ms: i64, last_http_ms: i64, idle_ms: i64) -> bool {
+    idle_ms > 0 && now_ms.saturating_sub(last_http_ms) >= idle_ms
 }
 
 /// Idle-abort budget: 2 s while TLS waits for ClientHello, else 15 s.

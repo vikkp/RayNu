@@ -29,11 +29,10 @@ use crate::mgmt::bcm5720::Bcm5720Device;
 use crate::mgmt::console::{maybe_print_iron_console_ok, take_spa_keys_injected};
 use crate::mgmt::e1000::E1000Device;
 use crate::mgmt::host_nic::{
-    coexist_millis_from_tsc, coexist_relisten_due, host_nic_lab_armed, http_accept_idle_limit_ms,
-    http_accept_should_idle_abort, COEXIST_RELISTEN_HOLD_MS, HOST_NIC_DHCP_MS, HOST_NIC_LISTEN_MS,
-    HOST_NIC_MAX_EXCHANGES,
-    M7_HOST_NIC_QEMU_MARKER, PRE_RAYNUF_HTTPS_MS, QEMU_USERNET_GW, QEMU_USERNET_IPV4,
-    QEMU_USERNET_PREFIX,
+    coexist_keepalive_idle, coexist_millis_from_tsc, host_nic_lab_armed, http_accept_idle_limit_ms,
+    http_accept_should_idle_abort, COEXIST_KEEPALIVE_IDLE_MS, HOST_NIC_DHCP_MS, HOST_NIC_LISTEN_MS,
+    HOST_NIC_MAX_EXCHANGES, M7_HOST_NIC_QEMU_MARKER, PRE_RAYNUF_HTTPS_MS, QEMU_USERNET_GW,
+    QEMU_USERNET_IPV4, QEMU_USERNET_PREFIX,
 };
 use crate::mgmt::host_nic_poll::{bounded_poll, HOST_NIC_POLL_BUDGET};
 use crate::mgmt::http::handle_http_request;
@@ -43,7 +42,7 @@ use crate::mgmt::mgmt_lease;
 use crate::mgmt::pci_census;
 use crate::mgmt::tls::maybe_print_iron_tls_ok;
 use crate::mgmt::tls12::Tls12Listen;
-use crate::mgmt::tls_coexist::{COEXIST_HTTP_OUT_N, COEXIST_RX_ACC_N};
+use crate::mgmt::tls_coexist::{http_request_wants_close, COEXIST_HTTP_OUT_N, COEXIST_RX_ACC_N};
 use core::mem::MaybeUninit;
 use smoltcp::iface::{Config, Interface, SocketHandle, SocketSet, SocketStorage};
 use smoltcp::phy::Device;
@@ -75,10 +74,12 @@ static mut COEXIST_ACCEPT_AT_MS: i64 = 0;
 static mut COEXIST_LAST_DIAG: i64 = 0;
 static mut COEXIST_LAST_RX_DROP: u32 = 0;
 static mut COEXIST_PORT: u16 = MGMT_HTTP_DEFAULT_PORT;
-/// Exchange finished; abort once the TX queue drains. No inline spin.
+/// One TLS handshake is up. Later polls are more HTTP on that session.
+static mut COEXIST_KEPT: bool = false;
+/// `millis` of the last completed HTTP response on the kept session.
+static mut COEXIST_LAST_HTTP_MS: i64 = 0;
+/// `Connection: close`, peer FIN, or keepalive idle: abort once TX drains.
 static mut COEXIST_PENDING_CLOSE: bool = false;
-/// `millis` when a new handshake may be accepted again. 0 = listening.
-static mut COEXIST_RELISTEN_AT_MS: i64 = 0;
 /// `millis` when the post-exchange TX queue first read empty. 0 = not yet.
 static mut COEXIST_DRAIN_EMPTY_AT_MS: i64 = 0;
 /// Last TSC we polled the standing SPA (RayNu-F / USB waits).
@@ -94,17 +95,27 @@ const _: [(); COEXIST_RX_ACC_N] = [(); RX_ACC_N];
 const _: () = assert!(SCRATCH_N + 16 <= crate::mgmt::mgmt_arena::MGMT_ARENA_BYTES);
 
 /// Complete HTTP request → codec → TLS wrap. Not iron TLS-OK by itself.
+///
+/// `Some(true)` means the request asked to close. `Some(false)` means the
+/// TLS keys stay and the next request is another HTTP message on this
+/// session. `None` means the reply was not fully queued; the buffer stays
+/// so the next tick can retry.
 fn wrap_session_try_exchange(
     session: &mut Tls12Listen,
     sock: &mut tcp::Socket,
     out: &mut [u8],
     wrap: &mut [u8],
-) -> bool {
-    let Some(raw_bytes) = session.take_http() else {
-        return false;
+) -> Option<bool> {
+    let wants_close = {
+        let raw_bytes = session.take_http()?;
+        if !sock.can_send() {
+            return None;
+        }
+        http_request_wants_close(raw_bytes)
     };
+    let raw_bytes = session.take_http()?;
     if !sock.can_send() {
-        return false;
+        return None;
     }
     let raw = core::str::from_utf8(raw_bytes).unwrap_or("");
     // SAFETY: BSP-only coexist; PRE-EBS tables leaked for the HTTP codec.
@@ -123,11 +134,11 @@ fn wrap_session_try_exchange(
     }
     .unwrap_or(0);
     if wn == 0 {
-        return false;
+        return None;
     }
     let n = session.wrap_http(&out[..wn], wrap);
     if n == 0 {
-        return false;
+        return None;
     }
     let mut off = 0;
     while off < n && sock.can_send() {
@@ -137,7 +148,12 @@ fn wrap_session_try_exchange(
             Err(_) => break,
         }
     }
-    off == n
+    if off != n {
+        return None;
+    }
+    // clear_http drops this request only. reset() would mint a ClientHello.
+    session.clear_http();
+    Some(wants_close)
 }
 
 fn tls_session() -> &'static mut Tls12Listen {
@@ -283,8 +299,9 @@ pub fn arm_bcm5720_coexist() -> bool {
         COEXIST_TSC0 = crate::arch::cpu::rdtsc();
         COEXIST_ANNOUNCED = false;
         COEXIST_ACCEPT_AT_MS = 0;
+        COEXIST_KEPT = false;
+        COEXIST_LAST_HTTP_MS = 0;
         COEXIST_PENDING_CLOSE = false;
-        COEXIST_RELISTEN_AT_MS = 0;
         COEXIST_DRAIN_EMPTY_AT_MS = 0;
         tls_session().reset();
         COEXIST_LAST_DIAG = 0;
@@ -381,44 +398,42 @@ pub fn tick_bcm5720_coexist() {
                 // drain TX before reclaim, then abort() — not close().
                 // 8 ms of later ticks, not a spin inside this vmexit.
                 if millis.saturating_sub(COEXIST_DRAIN_EMPTY_AT_MS) >= 8 {
-                    sockets.get_mut::<tcp::Socket>(tcp_handle).abort();
+                    let sock = sockets.get_mut::<tcp::Socket>(tcp_handle);
+                    sock.abort();
                     session.reset();
                     COEXIST_ANNOUNCED = false;
+                    COEXIST_KEPT = false;
                     COEXIST_ACCEPT_AT_MS = 0;
                     COEXIST_PENDING_CLOSE = false;
                     COEXIST_DRAIN_EMPTY_AT_MS = 0;
-                    COEXIST_RELISTEN_AT_MS = millis.saturating_add(COEXIST_RELISTEN_HOLD_MS);
+                    let _ = sock.listen(COEXIST_PORT);
                     // linux earlycon hush: write_line is dropped once Linux
-                    // shares the UART. 3e9ce45e exchanged and COM2 stayed on
-                    // the virtio MMIO line. nowait still reaches SOL.
-                    serial::write_line_nowait("boot: HOST-NIC listen hold after HTTP");
+                    // shares the UART. nowait still reaches SOL.
+                    serial::write_line_nowait("boot: HOST-NIC TCP re-listen after HTTP");
                 }
             } else {
                 COEXIST_DRAIN_EMPTY_AT_MS = 0;
             }
             skip_accept = true;
-        } else if COEXIST_RELISTEN_AT_MS != 0
-            && !coexist_relisten_due(millis, COEXIST_RELISTEN_AT_MS)
-        {
-            skip_accept = true;
-        } else if COEXIST_RELISTEN_AT_MS != 0 {
-            let sock = sockets.get_mut::<tcp::Socket>(tcp_handle);
-            let _ = sock.listen(COEXIST_PORT);
-            COEXIST_RELISTEN_AT_MS = 0;
-            serial::write_line_nowait("boot: HOST-NIC TCP re-listen after HTTP");
         }
 
         let mut do_close = false;
         let mut did_exchange = false;
+        let mut did_keepalive = false;
         let mut did_idle_abort = false;
         let mut did_tls_fail = false;
         if !skip_accept {
             let sock = sockets.get_mut::<tcp::Socket>(tcp_handle);
             if !sock.is_open() {
+                let was_up = COEXIST_ANNOUNCED || COEXIST_KEPT;
                 session.reset();
                 COEXIST_ANNOUNCED = false;
+                COEXIST_KEPT = false;
                 COEXIST_ACCEPT_AT_MS = 0;
                 let _ = sock.listen(COEXIST_PORT);
+                if was_up {
+                    serial::write_line_nowait("boot: HOST-NIC TCP re-listen after HTTP");
+                }
             } else if !sock.is_active() && !sock.is_listening() {
                 let _ = sock.listen(COEXIST_PORT);
             }
@@ -426,10 +441,15 @@ pub fn tick_bcm5720_coexist() {
                 serial::write_line_nowait("boot: HOST-NIC TCP accept — client connected");
                 COEXIST_ANNOUNCED = true;
                 COEXIST_ACCEPT_AT_MS = millis;
-                session.reset();
+                // A kept session must not reset here. First accept only.
+                if !COEXIST_KEPT {
+                    session.reset();
+                }
             }
             if sock.can_recv() {
                 let mut chunk = [0u8; 2048];
+                // Ok(0) is an empty read. Peer FIN is CloseWait
+                // (!may_recv && may_send), not Ok(0). smoltcp 0.13.
                 if let Ok(n) = sock.recv_slice(&mut chunk) {
                     if n > 0 {
                         let _ = session.feed_tcp(&chunk[..n]);
@@ -438,30 +458,70 @@ pub fn tick_bcm5720_coexist() {
             }
             drain_tls(session, sock, wrap);
             let headers_done = session.take_http().is_some();
+            // CLOSE-WAIT: peer FIN, our TX still open. A listening socket
+            // is not active, so it is not a peer close.
+            let peer_fin = (COEXIST_ANNOUNCED || COEXIST_KEPT)
+                && sock.is_active()
+                && !sock.may_recv()
+                && sock.may_send();
             if headers_done && sock.can_send() {
-                if wrap_session_try_exchange(session, sock, out, wrap) {
-                    did_exchange = true;
-                    do_close = true;
+                match wrap_session_try_exchange(session, sock, out, wrap) {
+                    Some(true) => {
+                        did_exchange = true;
+                        do_close = true;
+                    }
+                    Some(false) => {
+                        did_exchange = true;
+                        if peer_fin {
+                            do_close = true;
+                        } else {
+                            did_keepalive = true;
+                            COEXIST_KEPT = true;
+                            COEXIST_LAST_HTTP_MS = millis;
+                        }
+                    }
+                    None => {}
                 }
+            } else if peer_fin {
+                sock.abort();
+                session.reset();
+                COEXIST_ANNOUNCED = false;
+                COEXIST_KEPT = false;
+                COEXIST_ACCEPT_AT_MS = 0;
+                let _ = sock.listen(COEXIST_PORT);
+                serial::write_line_nowait("boot: HOST-NIC TCP re-listen after HTTP");
             } else if session.handshake_failed() {
                 sock.abort();
                 session.reset();
                 COEXIST_ANNOUNCED = false;
+                COEXIST_KEPT = false;
                 COEXIST_ACCEPT_AT_MS = 0;
                 did_tls_fail = true;
-            } else if http_accept_should_idle_abort(
-                COEXIST_ANNOUNCED,
-                headers_done,
-                millis.saturating_sub(COEXIST_ACCEPT_AT_MS),
-                // HOST_NIC_HTTP_IDLE_MS unless TLS ST_CH → HOST_NIC_HTTP_HS_IDLE_MS
-                http_accept_idle_limit_ms(session.handshake_waiting_client_hello()),
-            ) {
+            } else if !COEXIST_KEPT
+                && http_accept_should_idle_abort(
+                    COEXIST_ANNOUNCED,
+                    headers_done,
+                    millis.saturating_sub(COEXIST_ACCEPT_AT_MS),
+                    // HOST_NIC_HTTP_IDLE_MS unless TLS ST_CH → HOST_NIC_HTTP_HS_IDLE_MS
+                    http_accept_idle_limit_ms(session.handshake_waiting_client_hello()),
+                )
+            {
+                // 15 s idle abort is for a handshake that never finished.
+                // A kept session waits COEXIST_KEEPALIVE_IDLE_MS instead.
                 sock.abort();
                 session.reset();
                 COEXIST_ANNOUNCED = false;
+                COEXIST_KEPT = false;
                 COEXIST_ACCEPT_AT_MS = 0;
                 did_idle_abort = true;
             }
+        }
+        if COEXIST_KEPT
+            && !COEXIST_PENDING_CLOSE
+            && !did_keepalive
+            && coexist_keepalive_idle(millis, COEXIST_LAST_HTTP_MS, COEXIST_KEEPALIVE_IDLE_MS)
+        {
+            do_close = true;
         }
         if did_exchange {
             serial::write_line_nowait("boot: HOST-NIC HTTP exchange ok");
@@ -472,15 +532,17 @@ pub fn tick_bcm5720_coexist() {
             let _ = iface.poll(Instant::from_millis(millis + 1), device, sockets);
             pci_census::print_host_nic_exchange_ok_marker();
         }
+        if did_keepalive {
+            serial::write_line_nowait("boot: HOST-NIC HTTP keep-alive");
+        }
         if do_close {
+            // Connection: close, peer FIN after a reply, or 10 min idle.
             // abort() without drain RSTs Firefox nssFailure2 (MAC of last
             // TLS record). close() after drain left FIN_WAIT on the only
-            // slot so Firefox refresh is Unable to connect (iron 2026-08-21
-            // curl: (7); lived 2026-09-19 first GET ok, reload fail).
-            // 3e9ce45e re-listened after 30s. Host went green on that
-            // second session, then SYS1003+SYS1001. Hold does not expire.
-            // No tsc_spin in this vmexit.
+            // slot. 3e9ce45e re-handshook after 30s and the chassis turned
+            // off. Keep-alive polls do not set this. No tsc_spin.
             COEXIST_PENDING_CLOSE = true;
+            COEXIST_KEPT = false;
         }
         if did_idle_abort {
             serial::write_line("boot: WARN — HOST-NIC TCP idle abort; re-listen");
@@ -911,7 +973,9 @@ fn listen_loop<D: Device>(
             drain_tls(session, sock, wrap);
             let headers_done = session.take_http().is_some();
             if headers_done && sock.can_send() {
-                if wrap_session_try_exchange(session, sock, out, wrap) {
+                // Blocking PRE-EBS / QEMU window still closes after one
+                // exchange. The standing SPA is the coexist tick above.
+                if wrap_session_try_exchange(session, sock, out, wrap).is_some() {
                     did_exchange = true;
                     do_close = true;
                 }

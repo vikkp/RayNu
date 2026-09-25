@@ -113,20 +113,32 @@ The standing page is the product (ADR-013 Stage 1, ADR-018 M8.3, LOI Bar A A4s).
 
 `3f80abd0` (no re-listen, Host stays red) is a probe already on this branch. It exists because `3e9ce45e` showed the first exchange leave the chassis up and the second handshake (Host green) precede seq 22543/22544. Do not flash `3f80abd0` for a demo or an LOI. Do not Power On to open Firefox on it.
 
-The product session, still one smoltcp socket on the shared BCM5720:
+The product session is in this EFI, still one smoltcp socket on the shared BCM5720:
 
 - One TCP accept and one TLS handshake per browser session.
-- HTTP/1.1 `Connection: keep-alive`. The next `/vms` or console poll is another request on that session, not a new ClientHello.
-- Re-listen only after the browser closes the connection, or after a multi-minute idle. Draining the reply stays on later ticks. No NIC spin inside the vmexit.
+- HTTP/1.1 `Connection: keep-alive`. The next `/vms` poll is another request on that session. `clear_http` drops that request and leaves the TLS keys. COM2: `HTTP exchange ok` then `HTTP keep-alive`. A later poll prints `HTTP keep-alive` again and does not print a new `TCP accept`.
+- A new handshake only after the browser closes (`CloseWait`), the request says `Connection: close`, or 10 minutes with no HTTP (`COEXIST_KEEPALIVE_IDLE_MS`). Those print `TCP re-listen after HTTP`. The 15 s idle abort does not run while the session is kept. Draining a close stays on later ticks. No NIC spin inside the vmexit.
 - The SPA does not open a second connection while that session is live. Overview lists sequentially. The Activity log poll waits its turn on the same socket.
 - Shared LOM stays as lived: keep the APE PHY, no phylock, no BMCR reset.
 - Lines the operator must see after `login:` use `write_line_nowait`. Linux hushes `write_line`.
 
-Still lab, and labeled as lab until each one has its own iron close: millicert, the bring-up bearer, the 8 GiB USB slice, and any probe that refuses the second request. PERC persist is Bar B and is a different disk. An LOI conversation waits until a dedicated R640 can leave the page open beside the guest without the chassis turning off.
+Still lab, and labeled as lab until each one has its own iron close: millicert, the bring-up bearer, the 8 GiB USB slice. PERC persist is Bar B and is a different disk. An LOI conversation waits until a dedicated R640 can leave the page open beside the guest without the chassis turning off. This EFI is that attempt. It is not an A4s close.
 
 ## Next iron step (operator)
 
-The chassis is off. Quit Firefox. Do not Power On `3e9ce45e` or `3f80abd0` to open the page. The next EFI to flash is the keep-alive session above, and it is not built yet. Do not curl. Do not `setup-disk`. Do not flash the Toshiba.
+The chassis is off. Quit Firefox so a tab cannot reconnect. Do not Power On `3e9ce45e` or `3f80abd0` to open the page.
+
+Flash this branch tip (`cursor/m8-grubcfg-esp-8366`) from Ubuntu on the PERC. Power On into that disk first. Leave the Cruzer unbooted for the flash. `raynuf.txt` stays. `usbsoak.txt` stays off. Do not flash the Toshiba. Do not pass `--init-new-cruzer`.
+
+```
+~/projects/raynuv/flashcruzer.sh --branch cursor/m8-grubcfg-esp-8366 --wait --raynu-f --allow-new-serial --linux-iso ~/projects/raynuv/alpine-extended-3.21.3-x86_64.iso
+```
+
+Add `--any-cruzer-usb` when the stick is the LogiLink UDisk. WANT: `RAYNU-V-CRUZER-FLASH-OK` and `RAYNU-V-FLASHCRUZER-OK`.
+
+Then F11 the Cruzer. COM2 `build: sha=` must be this tip. It must not be `3e9ce45e3c58` or `3f80abd0`. Same persist markers (`keep=1`, `grubcfg=no`, `DISK-BOOTX64`, `[vda] 16777216`, UUID `a0ad99ac-…`) mean the install still holds. Match `/etc/hosts` to the `CURL NOW` lease before any browser. One Firefox tab of `https://raynu-v.lab:8443` after `localhost:~#`. Do not refresh. Do not click Create or Start. Do not curl. Do not `setup-disk`.
+
+After that GET, COM2 should show `TCP accept — client connected`, then `HTTP exchange ok`, then `HTTP keep-alive`. A later poll shows `HTTP keep-alive` again and no second `TCP accept`. Host can stay green. A new `TCP accept` or `TCP re-listen after HTTP` means the browser dropped the session. If Power State goes OFF, or iDRAC shows `SYS1003` then `SYS1001` with no `RAC1195`, leave it off. Do not open Firefox again on that EFI.
 
 `3e9ce45e3c58` had already reached `localhost:~#` (lease `10.99.99.151`, same UUID, vda2 one block higher). Host went red, then green, then red. Seq 22543 `SYS1003` and seq 22544 `SYS1001` at 12:21:23, same second, no `RAC1195`.
 
