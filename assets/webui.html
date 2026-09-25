@@ -217,7 +217,7 @@ document.getElementById("btn-logs").onclick=refreshLogs;
 document.getElementById("btn-keys").onclick=sendKeys;
 document.getElementById("g-keys").onkeydown=function(e){if(e.key==="Enter"){e.preventDefault();sendKeys()}};
 window.raynuWebUi={listVms:listVms,startVm:startVm,stopVm:stopVm,createVm:createVm,listImages:listImages,refreshLogs:refreshLogs,sendKeys:sendKeys};
-dot("hv","ok","Hypervisor is running");listVms();setInterval(listVms,8000);setInterval(function(){if(document.querySelector('.pg.on[data-pg="activity"]'))refreshLogs()},2000);
+dot("hv","ok","Hypervisor is running");listVms();setInterval(listVms,30000);setInterval(function(){if(document.querySelector('.pg.on[data-pg="activity"]'))refreshLogs()},2000);
 })();
 </script>
 </body>

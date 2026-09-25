@@ -29,8 +29,9 @@ use crate::mgmt::bcm5720::Bcm5720Device;
 use crate::mgmt::console::{maybe_print_iron_console_ok, take_spa_keys_injected};
 use crate::mgmt::e1000::E1000Device;
 use crate::mgmt::host_nic::{
-    coexist_millis_from_tsc, host_nic_lab_armed, http_accept_idle_limit_ms,
-    http_accept_should_idle_abort, HOST_NIC_DHCP_MS, HOST_NIC_LISTEN_MS, HOST_NIC_MAX_EXCHANGES,
+    coexist_millis_from_tsc, coexist_relisten_due, host_nic_lab_armed, http_accept_idle_limit_ms,
+    http_accept_should_idle_abort, COEXIST_RELISTEN_HOLD_MS, HOST_NIC_DHCP_MS, HOST_NIC_LISTEN_MS,
+    HOST_NIC_MAX_EXCHANGES,
     M7_HOST_NIC_QEMU_MARKER, PRE_RAYNUF_HTTPS_MS, QEMU_USERNET_GW, QEMU_USERNET_IPV4,
     QEMU_USERNET_PREFIX,
 };
@@ -74,6 +75,12 @@ static mut COEXIST_ACCEPT_AT_MS: i64 = 0;
 static mut COEXIST_LAST_DIAG: i64 = 0;
 static mut COEXIST_LAST_RX_DROP: u32 = 0;
 static mut COEXIST_PORT: u16 = MGMT_HTTP_DEFAULT_PORT;
+/// Exchange finished; abort once the TX queue drains. No inline spin.
+static mut COEXIST_PENDING_CLOSE: bool = false;
+/// `millis` when a new handshake may be accepted again. 0 = listening.
+static mut COEXIST_RELISTEN_AT_MS: i64 = 0;
+/// `millis` when the post-exchange TX queue first read empty. 0 = not yet.
+static mut COEXIST_DRAIN_EMPTY_AT_MS: i64 = 0;
 /// Last TSC we polled the standing SPA (RayNu-F / USB waits).
 static mut LAST_SPA_TICK_TSC: u64 = 0;
 
@@ -276,6 +283,9 @@ pub fn arm_bcm5720_coexist() -> bool {
         COEXIST_TSC0 = crate::arch::cpu::rdtsc();
         COEXIST_ANNOUNCED = false;
         COEXIST_ACCEPT_AT_MS = 0;
+        COEXIST_PENDING_CLOSE = false;
+        COEXIST_RELISTEN_AT_MS = 0;
+        COEXIST_DRAIN_EMPTY_AT_MS = 0;
         tls_session().reset();
         COEXIST_LAST_DIAG = 0;
         COEXIST_LAST_RX_DROP = 0;
@@ -361,11 +371,45 @@ pub fn tick_bcm5720_coexist() {
             )
         });
 
+        let mut skip_accept = false;
+        if COEXIST_PENDING_CLOSE {
+            let _ = iface.poll(Instant::from_millis(millis + 1), device, sockets);
+            if sockets.get::<tcp::Socket>(tcp_handle).send_queue() == 0 {
+                if COEXIST_DRAIN_EMPTY_AT_MS == 0 {
+                    COEXIST_DRAIN_EMPTY_AT_MS = millis;
+                }
+                // drain TX before reclaim, then abort() — not close().
+                // 8 ms of later ticks, not a spin inside this vmexit.
+                if millis.saturating_sub(COEXIST_DRAIN_EMPTY_AT_MS) >= 8 {
+                    sockets.get_mut::<tcp::Socket>(tcp_handle).abort();
+                    session.reset();
+                    COEXIST_ANNOUNCED = false;
+                    COEXIST_ACCEPT_AT_MS = 0;
+                    COEXIST_PENDING_CLOSE = false;
+                    COEXIST_DRAIN_EMPTY_AT_MS = 0;
+                    COEXIST_RELISTEN_AT_MS = millis.saturating_add(COEXIST_RELISTEN_HOLD_MS);
+                    serial::write_line("boot: HOST-NIC listen hold after HTTP");
+                }
+            } else {
+                COEXIST_DRAIN_EMPTY_AT_MS = 0;
+            }
+            skip_accept = true;
+        } else if COEXIST_RELISTEN_AT_MS != 0
+            && !coexist_relisten_due(millis, COEXIST_RELISTEN_AT_MS)
+        {
+            skip_accept = true;
+        } else if COEXIST_RELISTEN_AT_MS != 0 {
+            let sock = sockets.get_mut::<tcp::Socket>(tcp_handle);
+            let _ = sock.listen(COEXIST_PORT);
+            COEXIST_RELISTEN_AT_MS = 0;
+            serial::write_line("boot: HOST-NIC TCP re-listen after HTTP");
+        }
+
         let mut do_close = false;
         let mut did_exchange = false;
         let mut did_idle_abort = false;
         let mut did_tls_fail = false;
-        {
+        if !skip_accept {
             let sock = sockets.get_mut::<tcp::Socket>(tcp_handle);
             if !sock.is_open() {
                 session.reset();
@@ -426,27 +470,13 @@ pub fn tick_bcm5720_coexist() {
             pci_census::print_host_nic_exchange_ok_marker();
         }
         if do_close {
-            // drain TX before reclaim, then abort() — not close().
             // abort() without drain RSTs Firefox nssFailure2 (MAC of last
             // TLS record). close() after drain left FIN_WAIT on the only
             // slot so Firefox refresh is Unable to connect (iron 2026-08-21
             // curl: (7); lived 2026-09-19 first GET ok, reload fail).
-            for _ in 0..64 {
-                let _ = iface.poll(Instant::from_millis(millis + 1), device, sockets);
-                if sockets.get::<tcp::Socket>(tcp_handle).send_queue() == 0 {
-                    break;
-                }
-                tsc_spin_ms(1);
-            }
-            tsc_spin_ms(8);
-            sockets.get_mut::<tcp::Socket>(tcp_handle).abort();
-            session.reset();
-            COEXIST_ANNOUNCED = false;
-            COEXIST_ACCEPT_AT_MS = 0;
-            let _ = iface.poll(Instant::from_millis(millis + 2), device, sockets);
-            let sock = sockets.get_mut::<tcp::Socket>(tcp_handle);
-            let _ = sock.listen(COEXIST_PORT);
-            serial::write_line("boot: HOST-NIC TCP re-listen after HTTP");
+            // fa6ce771 still powered off after the SPA painted. Drain on
+            // later ticks, then hold listen. No tsc_spin in this vmexit.
+            COEXIST_PENDING_CLOSE = true;
         }
         if did_idle_abort {
             serial::write_line("boot: WARN — HOST-NIC TCP idle abort; re-listen");

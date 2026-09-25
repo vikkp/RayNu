@@ -115,7 +115,7 @@ If enumeration fails again (`xhci enum p11 … cmd=3 cmpl=0xff`), the soak boot 
 `boot: Stage 46 xhci cmd timeout addr p11 cmd=… sts=… crcr=… iman=… erdp=… cmdenq=… cmdcyc=… evdeq=… evcyc=… evtrb=… portsc=… pmsc=… slotst=… ep0st=… ep0deq=…`
 line per attempt, then `boot: USBSOAK abort — USB enumeration failed err=3 …` and halts. No guest, no ISO, no RAM install. Paste the `legacy`, `trb order` and `cmd timeout` lines; they decide the next fix. With the `trb order` line present, `slotst=2 ep0st=1` on a timed-out Address Device would mean the event lands somewhere other than our dequeue (compare `erdp` with `evdeq`), and `slotst=0 ep0st=0` with `crcr=0x8` would mean the xHC never fetched the command TRB.
 
-**Product path on `36d3b559` (lived).** Three boots reached the GRUB menu and `localhost login:` (UUID `a0ad99ac-…`, `[vda] 16777216`). `grubcfg=no` is the ESP lookup; the menu file is on ext4. Opening Firefox on that EFI was followed twice by iDRAC `SYS1003` then `SYS1001` with no `RAC1195`. Quit Firefox. Do not Power On that EFI to retry the page. A4s is one Firefox tab that stays up beside `localhost:~#` on the EFI that paces Linux-resume SOL RX. Do not curl. Do not setup-disk.
+**Product path (lived).** `fa6ce771` reached the GRUB menu and `localhost login:` (UUID `a0ad99ac-…`, `[vda] 16777216`, vda2 counts unchanged). `grubcfg=no` is the ESP lookup; the menu file is on ext4. Firefox then painted the SPA and the iDRAC dashboard showed Power State OFF. Paced SOL RX did not stop it. Quit Firefox. Do not Power On `fa6ce771` to retry the page. The next EFI prints `listen hold after HTTP` after one exchange. Do not refresh. Do not curl. Do not setup-disk.
 
 Historical `grubcfg=` meanings, if a later disk stops at `grub>`:
 

@@ -193,6 +193,8 @@ pub fn host_nic_surface_present() -> bool {
         && listen.contains("idle abort then abort()+listen")
         && listen.contains("TLS handshake fail; re-listen")
         && listen.contains("TCP re-listen after HTTP")
+        && listen.contains("listen hold after HTTP")
+        && listen.contains("COEXIST_RELISTEN_HOLD_MS")
         && listen.contains("drain TX before reclaim")
         && listen.contains("then abort() — not close()")
         && http.contains("run_post_ebs_host_nic_listen")

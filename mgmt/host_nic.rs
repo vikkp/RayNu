@@ -91,6 +91,19 @@ pub fn http_accept_should_idle_abort(
     announced && !headers_done && limit_ms > 0 && elapsed_since_accept_ms >= limit_ms
 }
 
+/// After one standing-SPA HTTP exchange, ignore new handshakes this long.
+///
+/// `fa6ce771` paced SOL RX, painted the SPA, and the chassis still turned
+/// off. Each exchange was abort()+listen, so Firefox's next fetch was a
+/// new TLS handshake on the shared LOM.
+pub const COEXIST_RELISTEN_HOLD_MS: i64 = 30_000;
+
+/// True when a post-exchange listen hold has expired (`hold_until_ms <= 0`
+/// means no hold).
+pub fn coexist_relisten_due(now_ms: i64, hold_until_ms: i64) -> bool {
+    hold_until_ms <= 0 || now_ms >= hold_until_ms
+}
+
 /// Idle-abort budget: 2 s while TLS waits for ClientHello, else 15 s.
 pub fn http_accept_idle_limit_ms(handshake_waiting: bool) -> i64 {
     if handshake_waiting {

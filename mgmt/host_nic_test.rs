@@ -1,7 +1,8 @@
 use super::{
-    coexist_millis_from_tsc, http_accept_idle_limit_ms, http_accept_should_idle_abort,
-    prop_http_accept_idle_abort, COEXIST_TSC_HZ_FALLBACK, HOST_NIC_DHCP_MS,
-    HOST_NIC_HTTP_HS_IDLE_MS, HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS, PRE_RAYNUF_HTTPS_MS,
+    coexist_millis_from_tsc, coexist_relisten_due, http_accept_idle_limit_ms,
+    http_accept_should_idle_abort, prop_http_accept_idle_abort, COEXIST_RELISTEN_HOLD_MS,
+    COEXIST_TSC_HZ_FALLBACK, HOST_NIC_DHCP_MS, HOST_NIC_HTTP_HS_IDLE_MS, HOST_NIC_HTTP_IDLE_MS,
+    HOST_NIC_LISTEN_MS, PRE_RAYNUF_HTTPS_MS,
 };
 
 #[test]
@@ -55,6 +56,21 @@ fn coexist_millis_from_tsc_2g1_one_ms() {
 fn coexist_millis_from_tsc_hz_zero_uses_fallback() {
     assert_eq!(coexist_millis_from_tsc(0, 2_100_000, 0), 1);
     assert_eq!(coexist_millis_from_tsc(0, 2_100_000, 999), 1);
+}
+
+#[test]
+fn coexist_relisten_hold_blocks_the_next_handshake() {
+    assert_eq!(COEXIST_RELISTEN_HOLD_MS, 30_000);
+    assert!(coexist_relisten_due(0, 0));
+    assert!(!coexist_relisten_due(0, COEXIST_RELISTEN_HOLD_MS));
+    assert!(!coexist_relisten_due(
+        COEXIST_RELISTEN_HOLD_MS - 1,
+        COEXIST_RELISTEN_HOLD_MS
+    ));
+    assert!(coexist_relisten_due(
+        COEXIST_RELISTEN_HOLD_MS,
+        COEXIST_RELISTEN_HOLD_MS
+    ));
 }
 
 #[test]
