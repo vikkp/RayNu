@@ -92,7 +92,7 @@ All must be true:
 | A4 | **TLS** | Browser/`curl --cacert` on native `CURL NOW → https://` **before RayNu-F** | **DONE** (`928d6224` COM2 `RAYNU-V-M8-TLS-OK`; Mac SPA HTML). Lab millicert. PRE-EBS SNP stays `http://`. |
 | A4s | **Standing SPA** | Browser HTTPS **after** RayNu-F / Alpine `login:`; SPA stays; guest COM1 in the page | **LIVED** (`1f33eeda72f9`, lease `10.99.99.154`). One `TCP accept`, then `HTTP exchange ok` / `HTTP keep-alive` through Overview (30 s) and Activity (~2 s). Host stayed green. Activity showed Alpine `localhost login:`. Chassis stayed up. `RAYNU-V-M8-TLS-OK` did not print on this persist boot. |
 | A5 | **Auth beyond bring-up** | Product default is not `raynu-v-bringup` | A shared lab latch is not an operator credential. HostReady (`RAYNU-V-M8-AUTH-HOST-OK`) is not this close. |
-| A6 | **Operator keyboard** | Type in the guest from the SPA (not only iDRAC SOL) | **NEXT.** Soft for the first LOI. Firmware `POST /console/keys` is in-tree. Iron close is COM2 `RAYNU-V-M8-CONSOLE-OK` after a key reaches guest COM1. On the running EFI that marker uses `write_line`, which Linux earlycon share hushes. First code step is `write_line_nowait`. Leave the live Send box empty. Do not flash while this page is up. |
+| A6 | **Operator keyboard** | Type in the guest from the SPA (not only iDRAC SOL) | **NEXT, not lived.** Soft for the first LOI. This tip prints `RAYNU-V-M8-CONSOLE-OK` with `write_line_nowait`. The running page is still `1f33eeda`, where that marker stays silent. Leave Send empty. Flash only after that chassis is off, then one harmless key. |
 
 A2 is **repeated on iron** (`36d3b559`, two Force Offs, same UUID). History: it was **DONE on evidence** and then **not repeatable**. `5c32bd06` (2026-09-22) saw `usbsoak.txt`, timed out Address Device on p11 and p10 (`err=3`), and never started the soak. With no LUN attached it installed onto 1 GiB leftover DRAM and a guest reboot reached `login:` (UUID `4c27e121`). Force Off drops that disk. The Toshiba was not opened. A3 SKU is **DONE**. A4 TLS iron is **DONE** (`928d6224` `RAYNU-V-M8-TLS-OK`). `1fa231df` (2026-09-23) then halted the soak on `err=3` with no guest — the fail-safe worked — and its `cmd timeout` dumps proved the commands had completed (`slotst=2` Addressed, `cmpl=0x13` on retry, No-Op at `evdeq=4`): the driver was tearing the 16-byte completion event (pointer read before the cycle bit) and skipping its own event. `e5cca2e0` then finished the soak: `RAYNU-V-USBSOAK-DONE`, 239/239 reads, Toshiba still `installed=1`. Boot 2 of that EFI reached `image=DISK-BOOTX64` and GRUB 2.12, then `grub>` with `blk_rd=33` (`diskprime past pin` READ LBA 0). `c4a41a17` deleted that warm, staged the same GRUB, and stopped at `grub>`; `disk past pin lba=2048 n=512 ok` was the firmware ESP BPB. **NOW:** A4s lived on `1f33eeda72f9` (sixth login of UUID `a0ad99ac-…`, lease `10.99.99.154`, one TCP accept, `HTTP keep-alive`, Host green, guest COM1 in Activity). Next is A6. Leave the live Send box empty. Do not flash while that page is up. Do not curl Start. Do not `setup-disk`. Evidence: [2026-09-24-36d3b559-persist-login.md](evidence/r640/2026-09-24-36d3b559-persist-login.md). A5 host-ready is not iron ESP-required default. A6 firmware SPA keys are in-tree; iron SPA keyboard is not closed. M8.4 host-ready is not iron ISO-UPLOAD-OK.
 
@@ -150,7 +150,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 **What it is.** Firmware SPA `POST /console/keys` injects operator keys into guest COM1. `GET /logs/guest` is the guest COM1 TX copy (survives SOL drain; **not iDRAC COM2**). HostReady UART (`RAYNU-V-M8-CONSOLE-HOST-OK`) still round-trips. `GET /logs/serial` remains HV UART. Not VNC. Standing HTTPS during RayNu-F is firmware-in-tree.
 
-**Product effect.** Operators should not need iDRAC SOL to see Alpine. On `1f33eeda` Activity showed `localhost login:` while Host stayed green. The same log tail also copies host UART lines (`HTTP keep-alive`), because those lines use `write_line_nowait` on the shared UART. Typing is A6. `RAYNU-V-M8-CONSOLE-OK` still uses `write_line` and stays silent after Linux shares the UART. Soft for Bar A if we name it. A6 is not closed.
+**Product effect.** Operators should not need iDRAC SOL to see Alpine. On `1f33eeda` Activity showed `localhost login:` while Host stayed green. The same log tail also copies host UART lines (`HTTP keep-alive`), because those lines use `write_line_nowait` on the shared UART. Typing is A6. This tip prints `RAYNU-V-M8-CONSOLE-OK` with `write_line_nowait`. The running `1f33eeda` page still hushes `write_line`. Soft for Bar A if we name it. A6 is not closed.
 
 ### 7. PERC RAID I/O — 15%
 
@@ -176,7 +176,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | 2026-09-18 | Bar A A3 | SKU card | **DONE** ([`docs/sku.md`](sku.md) / [`site/sku.html`](../site/sku.html)) |
 | **2026-09-19** | Bar A A4 | TLS on native `:8443` **before RayNu-F** | **DONE** (`928d6224` COM2 `RAYNU-V-M8-TLS-OK`; Mac `curl --cacert` SPA `.140`) |
 | **2026-09-25** | Bar A **A4s** | Page stays up after `login:` | **LIVED** (`1f33eeda72f9`, lease `.154`, one TCP accept, `HTTP keep-alive`, Host green, guest COM1 in Activity) |
-| **NOW** | Bar A **A6** | SPA keyboard | `RAYNU-V-M8-CONSOLE-OK` must use `write_line_nowait`. Leave the live Send box empty. Do not flash while the page is up. not VNC. See [m8_state.md](m8_state.md) |
+| **NOW** | Bar A **A6** | SPA keyboard | Marker uses `write_line_nowait`. Not lived. Leave Send empty on `1f33eeda`. Flash only after that chassis is off. not VNC. See [m8_state.md](m8_state.md) |
 | then | Bar B B2 | Spare PERC VD persist | after A6; census skip is lab safety |
 | later | Auth / unmodified ISO | A5, Gen-1 Phase 2 | named residuals, not fake closes |
 
@@ -207,9 +207,9 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | Field | Value |
 |-------|-------|
 | Commit | m8-grubcfg-esp |
-| Summary | **A4s lived on `1f33eeda72f9`.** Sixth login, lease `.154`, one TLS session, `HTTP keep-alive`, Host green, guest COM1 in Activity. Chassis stayed up. Next is A6. The console marker still uses `write_line` and is hushed after login. Leave Send empty. |
+| Summary | **A6 marker uses `write_line_nowait`. Not lived.** Leave Send empty on `1f33eeda`. Flash only after that chassis is off, then one harmless key. |
 | Everest impact | none — HDA months 0.0 / 99% held |
-| LOI impact | Bar A **82→88**, overall **64→67**, console **58→68**, months A **0.75→0.5**. Persist **93 held**. TLS **80 held**. Bar B **18 held**. Months B **3.5 held**. |
+| LOI impact | Scores **held** (Bar A 88, overall 67, console 68, months A 0.5, persist 93, TLS 80, Bar B 18). A6 not closed. |
 | Gates touched | Lived keep-alive on iron (no new host gate). `./tools/sync-loihda-site.sh --check`. `./tools/check-site-chrome.sh`. No MegaRAID. |
 
 ---
@@ -218,6 +218,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-25 | m8-console-nowait | 88 | 18 | **A6 marker is `write_line_nowait`. Not lived.** `1f33eeda` still hushes the console line. Leave Send empty. Flash this tip only after that chassis is off. Scores held. |
 | 2026-09-25 | m8-grubcfg-esp | 88 | 18 | **A4s lived on `1f33eeda72f9`.** Lease `.154`. Sixth `login:` of UUID `a0ad99ac-…`. One `TCP accept`, then `HTTP keep-alive` through Overview and Activity. Host green. Guest COM1 visible. No second accept. Chassis stayed up. Bar A 82→88, overall 64→67, console 58→68, months A 0.75→0.5. Persist 93 held. Next is A6 (`write_line_nowait` before any Send). |
 | 2026-09-25 | m8-grubcfg-esp | 82 | 18 | **Keep-alive EFI built, not lived.** Later `/vms` polls stay on the first TLS session. A new handshake waits for peer close or 10 min idle. Do not flash `3f80abd0`. A4s still open. Scores held. |
 | 2026-09-25 | m8-grubcfg-esp | 82 | 18 | **Probe is not the product.** `3f80abd0` (no re-listen, Host stays red) stays unflashed. LOI Bar A needs one kept-alive TLS session beside the guest. Scores held. |
@@ -304,7 +305,7 @@ LOI:           NOT OPEN. Tracker born 2026-09-14.
 Bar A:         88% · 0.5 months · dedicated-box non-prod
 Bar B:         18% · 3.5 months · PERC RAID fleet (out of conversation until PERC persist)
 Overall:       67% · confidence medium
-NOW:           A4s lived on 1f33eeda72f9 (lease .154, one TCP accept, HTTP keep-alive, Host green). Leave the page. Leave Send empty. Do not refresh. Do not flash while Firefox is on this EFI. Next code is A6: print RAYNU-V-M8-CONSOLE-OK with write_line_nowait, then one harmless key. Do not setup-alpine. Do not setup-disk. Do not curl. docs/m8_state.md
+NOW:           A4s lived on 1f33eeda72f9. Leave that page. Leave Send empty. Do not flash while Firefox is on it. This tip prints RAYNU-V-M8-CONSOLE-OK with write_line_nowait. Not lived. Flash only after that chassis is off, then one harmless key. Do not setup-alpine. Do not setup-disk. Do not curl. docs/m8_state.md
 Open:          iron SPA keyboard (A6) · iron AUTH-OK · unmodified ISO · cluster · Ubuntu PERC stays standing boot
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
 Rollback:      v0.1.0-m8-a4s → flash the kit EFI (COM2 sha=1f33eeda72f9, CI 36137732145, SHA256 5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693). Everest Latest stays v0.1.0-everest-closed (f72b4276). Do not flash this kit over the live page.
