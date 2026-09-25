@@ -5,24 +5,24 @@ last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
 loi_target: "Non-prod Letter of Intent. Bar A = dedicated-box lab. Bar B = RAID-fleet replacement. HDA 99% is Everest, not an LOI."
-months_to_loi_a: 0.5
-months_to_loi_a_prev: 0.75
+months_to_loi_a: 0.25
+months_to_loi_a_prev: 0.5
 months_to_loi_b: 3.5
 months_to_loi_b_prev: 3.5
-overall_pct: 67
+overall_pct: 70
 confidence: medium
 baseline_date: 2026-09-14
 baseline_months: 1.5
 loi_a_eta_month: "2026-10"
 loi_b_eta_month: "2026-12"
-bar_a_pct: 88
+bar_a_pct: 92
 bar_b_pct: 18
 piece_everest_pct: 100
 piece_persist_pct: 93
 piece_sku_pct: 92
 piece_tls_pct: 80
 piece_auth_pct: 38
-piece_console_pct: 68
+piece_console_pct: 82
 piece_perc_pct: 15
 piece_unmodified_pct: 20
 ---
@@ -43,17 +43,17 @@ Lived: [`docs/progress.md`](progress.md) · M8: [`docs/m8_plan.md`](m8_plan.md) 
 
 | Metric | Value | Meaning |
 |--------|------:|---------|
-| **Overall LOI readiness** | **67%** | Nearest honest conversation is Bar A. Not Bar B. Not GA. Up from 64: `1f33eeda` kept one HTTPS session beside the sixth installed `login:`. A6 is still open. |
-| **Bar A — dedicated-box** | **88%** | One PowerEdge we own or they dedicate. A1 Everest, A3 SKU, A4 TLS, A4s standing SPA **DONE**. A2 persist **repeated** (sixth `login:`, UUID `a0ad99ac-…`). A6 / A5 still open. USB ≠ PERC. |
+| **Overall LOI readiness** | **70%** | Nearest honest conversation is Bar A. Not Bar B. Not GA. Up from 67: this tip typed into Alpine and then turned the chassis off from Overview. A5 is still open. |
+| **Bar A — dedicated-box** | **92%** | One PowerEdge we own or they dedicate. A1 Everest, A3 SKU, A4 TLS, A4s standing SPA **DONE**. A2 persist **repeated** (sixth `login:`, UUID `a0ad99ac-…`). A6 **lived once** on this tip. A5 still open. USB ≠ PERC. |
 | **Bar B — RAID-fleet** | **18%** | Replace the licensed hypervisor on PERC virtual disks they already paid for. |
-| **Months to Bar A** | **0.5** | Baseline 2026-09-14. ETA **2026-10**. Down from 0.75: A4s lived on `1f33eeda` (one TLS session, Host green, guest COM1 in the page). A6 and A5 remain. Do not go to 0. |
+| **Months to Bar A** | **0.25** | Baseline 2026-09-14. ETA **2026-10**. Down from 0.5: A6 lived once (SPA `abc` reached Alpine, marker in Activity, Host stayed green) and Overview Power off host left iDRAC Power State Off. A5 remains. Do not go to 0. |
 | **Months to Bar B** | **3.5** | PERC I/O is the long pole. ETA **2026-12**. |
-| **Confidence** | medium | Everest is high-confidence. A4s lived once on `1f33eeda` (lease `.154`, one `TCP accept`, keep-alive through Overview and Activity). Force Off still needs ext4 journal recovery and clears a vfat dirty bit. A5 / A6 still open. |
+| **Confidence** | medium | Everest is high-confidence. A6 lived once on this tip: Activity showed `abc`, `-sh: abc: not found`, `RAYNU-V-M8-CONSOLE-OK`, Host green. Power off then iDRAC Off. One boot. The guest log still mixes host UART lines. A5 still open. |
 
 ```
-Bar A (dedicated-box)  █████████████████░░░  88%
+Bar A (dedicated-box)  ██████████████████░░  92%
 Bar B (RAID fleet)      ███░░░░░░░░░░░░░░░░░  18%
-Overall LOI             █████████████░░░░░░░  67%
+Overall LOI             ██████████████░░░░░░  70%
 ```
 
 **How the month number moves:** same honesty as Everest HDA. Closed iron gates shrink `months_to_loi_*`. Nested QEMU, host tests, and design docs do **not**. Stalls or new scope slip the ETA. Prefer under-claiming.
@@ -92,9 +92,9 @@ All must be true:
 | A4 | **TLS** | Browser/`curl --cacert` on native `CURL NOW → https://` **before RayNu-F** | **DONE** (`928d6224` COM2 `RAYNU-V-M8-TLS-OK`; Mac SPA HTML). Lab millicert. PRE-EBS SNP stays `http://`. |
 | A4s | **Standing SPA** | Browser HTTPS **after** RayNu-F / Alpine `login:`; SPA stays; guest COM1 in the page | **LIVED** (`1f33eeda72f9`, lease `10.99.99.154`). One `TCP accept`, then `HTTP exchange ok` / `HTTP keep-alive` through Overview (30 s) and Activity (~2 s). Host stayed green. Activity showed Alpine `localhost login:`. Chassis stayed up. `RAYNU-V-M8-TLS-OK` did not print on this persist boot. |
 | A5 | **Auth beyond bring-up** | Product default is not `raynu-v-bringup` | A shared lab latch is not an operator credential. HostReady (`RAYNU-V-M8-AUTH-HOST-OK`) is not this close. |
-| A6 | **Operator keyboard** | Type in the guest from the SPA (not only iDRAC SOL) | **NEXT, not lived.** Soft for the first LOI. This tip prints `RAYNU-V-M8-CONSOLE-OK` with `write_line_nowait`. The running page is still `1f33eeda`, where that marker stays silent. Leave Send empty. Overview **Power off host** is on this tip only (`POST /host/poweroff`). Not on `1f33eeda`. iDRAC off, then flash, then one harmless key. |
+| A6 | **Operator keyboard** | Type in the guest from the SPA (not only iDRAC SOL) | **LIVED once** on this tip. Activity showed `abc`, then `-sh: abc: not found`, then `localhost:~#`, and `RAYNU-V-M8-CONSOLE-OK`, with Host green. The same box still copies `HTTP keep-alive`. Soft for the first LOI. **not VNC**. |
 
-A2 is **repeated on iron** (`36d3b559`, two Force Offs, same UUID). History: it was **DONE on evidence** and then **not repeatable**. `5c32bd06` (2026-09-22) saw `usbsoak.txt`, timed out Address Device on p11 and p10 (`err=3`), and never started the soak. With no LUN attached it installed onto 1 GiB leftover DRAM and a guest reboot reached `login:` (UUID `4c27e121`). Force Off drops that disk. The Toshiba was not opened. A3 SKU is **DONE**. A4 TLS iron is **DONE** (`928d6224` `RAYNU-V-M8-TLS-OK`). `1fa231df` (2026-09-23) then halted the soak on `err=3` with no guest — the fail-safe worked — and its `cmd timeout` dumps proved the commands had completed (`slotst=2` Addressed, `cmpl=0x13` on retry, No-Op at `evdeq=4`): the driver was tearing the 16-byte completion event (pointer read before the cycle bit) and skipping its own event. `e5cca2e0` then finished the soak: `RAYNU-V-USBSOAK-DONE`, 239/239 reads, Toshiba still `installed=1`. Boot 2 of that EFI reached `image=DISK-BOOTX64` and GRUB 2.12, then `grub>` with `blk_rd=33` (`diskprime past pin` READ LBA 0). `c4a41a17` deleted that warm, staged the same GRUB, and stopped at `grub>`; `disk past pin lba=2048 n=512 ok` was the firmware ESP BPB. **NOW:** A4s lived on `1f33eeda72f9` (sixth login of UUID `a0ad99ac-…`, lease `10.99.99.154`, one TCP accept, `HTTP keep-alive`, Host green, guest COM1 in Activity). Next is A6. Leave the live Send box empty. Do not flash while that page is up. Do not curl Start. Do not `setup-disk`. Evidence: [2026-09-24-36d3b559-persist-login.md](evidence/r640/2026-09-24-36d3b559-persist-login.md). A5 host-ready is not iron ESP-required default. A6 firmware SPA keys are in-tree; iron SPA keyboard is not closed. M8.4 host-ready is not iron ISO-UPLOAD-OK.
+A2 is **repeated on iron** (`36d3b559`, two Force Offs, same UUID). History: it was **DONE on evidence** and then **not repeatable**. `5c32bd06` (2026-09-22) saw `usbsoak.txt`, timed out Address Device on p11 and p10 (`err=3`), and never started the soak. With no LUN attached it installed onto 1 GiB leftover DRAM and a guest reboot reached `login:` (UUID `4c27e121`). Force Off drops that disk. The Toshiba was not opened. A3 SKU is **DONE**. A4 TLS iron is **DONE** (`928d6224` `RAYNU-V-M8-TLS-OK`). `1fa231df` (2026-09-23) then halted the soak on `err=3` with no guest — the fail-safe worked — and its `cmd timeout` dumps proved the commands had completed (`slotst=2` Addressed, `cmpl=0x13` on retry, No-Op at `evdeq=4`): the driver was tearing the 16-byte completion event (pointer read before the cycle bit) and skipping its own event. `e5cca2e0` then finished the soak: `RAYNU-V-USBSOAK-DONE`, 239/239 reads, Toshiba still `installed=1`. Boot 2 of that EFI reached `image=DISK-BOOTX64` and GRUB 2.12, then `grub>` with `blk_rd=33` (`diskprime past pin` READ LBA 0). `c4a41a17` deleted that warm, staged the same GRUB, and stopped at `grub>`; `disk past pin lba=2048 n=512 ok` was the firmware ESP BPB. **NOW:** A6 lived once on this tip. Activity showed `abc`, `-sh: abc: not found`, `localhost:~#`, and `RAYNU-V-M8-CONSOLE-OK`, Host green. Overview **Power off host** then COM2 `boot: SPA host po` and iDRAC Power State Off. No lifecycle paste, so no `SYS` sequence is claimed. Leave the chassis off. Next is A5. Do not curl Start. Do not `setup-disk`. Evidence: [2026-09-24-36d3b559-persist-login.md](evidence/r640/2026-09-24-36d3b559-persist-login.md). A5 host-ready is not iron ESP-required default. M8.4 host-ready is not iron ISO-UPLOAD-OK.
 
 ### Bar B — RAID-fleet non-prod LOI
 
@@ -146,11 +146,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 **Product effect.** Shared lab latch ≠ operator credential. The host package names that. The box you own still answers the lab latch until an ESP token is staged. Soft for a dedicated box you control; not A5 closed.
 
-### 6. Guest console UI — 68%
+### 6. Guest console UI — 82%
 
 **What it is.** Firmware SPA `POST /console/keys` injects operator keys into guest COM1. `GET /logs/guest` is the guest COM1 TX copy (survives SOL drain; **not iDRAC COM2**). HostReady UART (`RAYNU-V-M8-CONSOLE-HOST-OK`) still round-trips. `GET /logs/serial` remains HV UART. Not VNC. Standing HTTPS during RayNu-F is firmware-in-tree.
 
-**Product effect.** Operators should not need iDRAC SOL to see Alpine. On `1f33eeda` Activity showed `localhost login:` while Host stayed green. The same log tail also copies host UART lines (`HTTP keep-alive`), because those lines use `write_line_nowait` on the shared UART. Typing is A6. This tip prints `RAYNU-V-M8-CONSOLE-OK` with `write_line_nowait`. The running `1f33eeda` page still hushes `write_line`. Soft for Bar A if we name it. A6 is not closed.
+**Product effect.** Operators should not need iDRAC SOL to see Alpine or to type one command. On this tip Activity showed `abc` run by Alpine (`-sh: abc: not found`) and `RAYNU-V-M8-CONSOLE-OK`, with Host green. The same log tail still copies host UART lines (`HTTP keep-alive`), because those lines use `write_line_nowait` on the shared UART. **not VNC**. A6 is lived once. The mixed tail is why this piece stays at 82.
 
 ### 7. PERC RAID I/O — 15%
 
@@ -176,13 +176,13 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | 2026-09-18 | Bar A A3 | SKU card | **DONE** ([`docs/sku.md`](sku.md) / [`site/sku.html`](../site/sku.html)) |
 | **2026-09-19** | Bar A A4 | TLS on native `:8443` **before RayNu-F** | **DONE** (`928d6224` COM2 `RAYNU-V-M8-TLS-OK`; Mac `curl --cacert` SPA `.140`) |
 | **2026-09-25** | Bar A **A4s** | Page stays up after `login:` | **LIVED** (`1f33eeda72f9`, lease `.154`, one TCP accept, `HTTP keep-alive`, Host green, guest COM1 in Activity) |
-| **NOW** | Bar A **A6** | SPA keyboard | Marker uses `write_line_nowait`. Not lived. Leave Send empty on `1f33eeda`. That page has no Power off button. iDRAC off, then flash this tip. not VNC. See [m8_state.md](m8_state.md) |
-| then | Bar B B2 | Spare PERC VD persist | after A6; census skip is lab safety |
-| later | Auth / unmodified ISO | A5, Gen-1 Phase 2 | named residuals, not fake closes |
+| **NOW** | Bar A **A5** | ESP `auth.token` | A6 lived once on this tip. Chassis is Off after Overview Power off host. Leave it off. not VNC. See [m8_state.md](m8_state.md) |
+| then | Bar B B2 | Spare PERC VD persist | after A5; census skip is lab safety |
+| later | Unmodified ISO | Gen-1 Phase 2 | named residual, not a fake close |
 
 ```
 2026-09  ████████  Everest closed
-2026-10  ██████░░  Bar A: A4s lived on `1f33eeda` → A6 SPA keyboard → A5 residual
+2026-10  ███████░  Bar A: A6 lived once → A5 auth residual
 2026-11  ░░░░░░░░  Bar A: first dedicated-box LOI window
 2026-12  ░░░░░░░░  Bar B: PERC VD I/O
 ```
@@ -207,9 +207,9 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | Field | Value |
 |-------|-------|
 | Commit | m8-spa-poweroff |
-| Summary | **SPA Power off host is in this tip. Not lived.** `1f33eeda` has no button — iDRAC turns that chassis off. A6 marker stays `write_line_nowait`, not lived. |
+| Summary | **A6 lived once. SPA Power off host left iDRAC Off.** Activity: `abc`, `-sh: abc: not found`, `RAYNU-V-M8-CONSOLE-OK`, Host green. COM2 then `boot: SPA host po`. Power State Off. No lifecycle paste. |
 | Everest impact | none — HDA months 0.0 / 99% held |
-| LOI impact | Scores **held** (Bar A 88, overall 67, console 68, months A 0.5, persist 93, TLS 80, Bar B 18). A6 not closed. |
+| LOI impact | Bar A 88→92, overall 67→70, console 68→82, months A 0.5→0.25. Persist 93, TLS 80, auth 38, Bar B 18 held. |
 | Gates touched | Lived keep-alive on iron (no new host gate). `./tools/sync-loihda-site.sh --check`. `./tools/check-site-chrome.sh`. No MegaRAID. |
 
 ---
@@ -218,6 +218,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-25 | m8-spa-poweroff | 92 | 18 | **A6 lived once. iDRAC Off after Power off host.** Activity `abc` / `-sh: abc: not found` / `RAYNU-V-M8-CONSOLE-OK`, Host green. COM2 `boot: SPA host po` (first UART burst). Power State Off. No lifecycle paste. Bar A 88→92, overall 67→70, console 68→82, months A 0.5→0.25. |
 | 2026-09-25 | m8-spa-poweroff | 88 | 18 | **SPA Power off host, not lived.** Overview button posts `/host/poweroff`. Firmware drains the 200, then `VMXOFF` and `ResetSystem` SHUTDOWN. Failed `VMXOFF` leaves the page up. `1f33eeda` has no button. Scores held. |
 | 2026-09-25 | m8-console-nowait | 88 | 18 | **A6 marker is `write_line_nowait`. Not lived.** `1f33eeda` still hushes the console line. Leave Send empty. Flash this tip only after that chassis is off. Scores held. |
 | 2026-09-25 | m8-grubcfg-esp | 88 | 18 | **A4s lived on `1f33eeda72f9`.** Lease `.154`. Sixth `login:` of UUID `a0ad99ac-…`. One `TCP accept`, then `HTTP keep-alive` through Overview and Activity. Host green. Guest COM1 visible. No second accept. Chassis stayed up. Bar A 82→88, overall 64→67, console 58→68, months A 0.75→0.5. Persist 93 held. Next is A6 (`write_line_nowait` before any Send). |
@@ -303,11 +304,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 ```
 LOI:           NOT OPEN. Tracker born 2026-09-14.
-Bar A:         88% · 0.5 months · dedicated-box non-prod
+Bar A:         92% · 0.25 months · dedicated-box non-prod
 Bar B:         18% · 3.5 months · PERC RAID fleet (out of conversation until PERC persist)
-Overall:       67% · confidence medium
-NOW:           A4s lived on 1f33eeda72f9. Leave that page. Leave Send empty. That page has no Power off button — iDRAC turns the chassis off. Do not flash while Firefox is on it. This tip adds Overview Power off host (not lived) and prints RAYNU-V-M8-CONSOLE-OK with write_line_nowait (not lived). After the new EFI: one harmless key, then Power off host. Do not setup-alpine. Do not setup-disk. Do not curl. docs/m8_state.md
-Open:          iron SPA keyboard (A6) · iron AUTH-OK · unmodified ISO · cluster · Ubuntu PERC stays standing boot
+Overall:       70% · confidence medium
+NOW:           Chassis is Off. A6 lived once (abc reached Alpine, RAYNU-V-M8-CONSOLE-OK in Activity, Host green). Power off host then iDRAC Power State Off. COM2 showed boot: SPA host po. Leave it off. Next is A5. Do not setup-disk. Do not curl. docs/m8_state.md
+Open:          iron AUTH-OK · unmodified ISO · cluster · Ubuntu PERC stays standing boot
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
 Rollback:      v0.1.0-m8-a4s → flash the kit EFI (COM2 sha=1f33eeda72f9, CI 36137732145, SHA256 5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693). Everest Latest stays v0.1.0-everest-closed (f72b4276). Do not flash this kit over the live page.
 Sit:           localhost:~# · do not setup-disk · do not flash Toshiba /dev/sdc
