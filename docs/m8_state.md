@@ -1,7 +1,7 @@
 # M8 state — START HERE (persist / LOI Bar A recovery)
 
 > **Read this before touching `mgmt/xhci.rs`, `mgmt/durable_lun.rs`, `mgmt/disk_persist.rs`, `vmx/guest_uefi.rs` (RayNu-F boot source), or the trackers.**  
-> Last rewrite: 2026-09-25 (`fa6ce771`: fourth `login:`, then the SPA went green and the chassis turned off again. Paced SOL RX was not sufficient. Next EFI holds listen 30 s after one HTTP exchange). Trackers: [`hda.md`](hda.md) (Everest, closed) · [`loihda.md`](loihda.md) (LOI, open). Plan: [`m8_plan.md`](m8_plan.md). ADR: [ADR-018](adr/ADR-018.md). Evidence: [`2026-09-24-36d3b559-persist-login.md`](evidence/r640/2026-09-24-36d3b559-persist-login.md).
+> Last rewrite: 2026-09-25 (`3e9ce45e`: fifth `login:`, Host red then green then red, then `SYS1003`+`SYS1001` at 12:21:23 with no `RAC1195`. The 30 s re-listen was the second session. Next EFI does not re-listen). Trackers: [`hda.md`](hda.md) (Everest, closed) · [`loihda.md`](loihda.md) (LOI, open). Plan: [`m8_plan.md`](m8_plan.md). ADR: [ADR-018](adr/ADR-018.md). Evidence: [`2026-09-24-36d3b559-persist-login.md`](evidence/r640/2026-09-24-36d3b559-persist-login.md).
 
 ## One paragraph
 
@@ -14,9 +14,10 @@ Everest (M7) is closed on iron. M8 is operator hardening. Bar A of the LOI needs
 | Everest rollback | `f72b4276` (GitHub Latest `v0.1.0-everest-closed`) | SPA Start → ISO install → disk boot → `login:` on leftover DRAM | persist across HV reboot, TLS |
 | Persist + TLS close | `928d6224` | Force Off → `keep=1` → `DISK-BOOTX64` → menu → `root=UUID=dd673a9a` → `login:`; `RAYNU-V-M8-DISK-PERSIST-OK`; `RAYNU-V-M8-TLS-OK` on `10.99.99.140:8443` | that filesystem was wiped; standing SPA after login |
 | Persist repeat (this disk) | `36d3b559` | Fresh install, then three boots → menu → `root=UUID=a0ad99ac-…` → `login:`. Opening the SPA was followed twice by `SYS1003` then `SYS1001` with no `RAC1195` | Do not F11 this EFI to open Firefox |
-| Fourth login, SOL paced | `fa6ce771` | Same UUID, `[vda] 16777216`, vda2 counts match boots 2 and 3, lease `.150`, `localhost:~#`. SPA then went green and the dashboard showed Power State OFF | Do not F11 this EFI to open Firefox. Paced SOL RX did not stop the power-off |
+| Fourth login, SOL paced | `fa6ce771` | Same UUID, `[vda] 16777216`, vda2 counts match boots 2 and 3, lease `.150`, `localhost:~#`. SPA then went green and the dashboard showed Power State OFF. Lifecycle: seq 22520/22521 at 00:30:20 | Do not F11 this EFI to open Firefox. Paced SOL RX did not stop the power-off |
+| Fifth login, 30 s listen hold | `3e9ce45e` | Same UUID, lease `.151`, vda2 `102909/2084352`. Host red, then green, then red. Seq 22543/22544 at 12:21:23, no `RAC1195` | Do not F11 this EFI to open Firefox. The re-listen is what turned Host green |
 
-The chassis is off. Quit Firefox. Do not Power On `fa6ce771` to open the page. The rows below are prototypes that did not reach a repeated login.
+The chassis is off. Quit Firefox. Do not Power On `3e9ce45e` to open the page. The rows below are prototypes that did not reach a repeated login.
 
 ## USB bench passed (do not F11 this EFI again for `login:`)
 
@@ -108,9 +109,9 @@ PERC H740P = MegaRAID SAS 3.5 (MPT3 Fusion) post-EBS driver on a **spare** VD (n
 
 ## Next iron step (operator)
 
-`fa6ce771557b` reached `localhost:~#` (lease `10.99.99.150`, same UUID, vda2 counts unchanged) and then Firefox painted the SPA. The iDRAC dashboard then showed Power State OFF. Paced SOL RX did not stop that. Quit Firefox. Do not Power On this EFI to open the page.
+`3e9ce45e3c58` reached `localhost:~#` (lease `10.99.99.151`, same UUID, vda2 one block higher). Firefox painted the SPA. Host went red, then green, then red. Seq 22543 `SYS1003` and seq 22544 `SYS1001` at 12:21:23, same second, no `RAC1195`. COM2 hid the HTTP lines: `write_line` is dropped once Linux shares the UART. Quit Firefox. Do not Power On this EFI to open the page.
 
-The next EFI, after one HTTP exchange, drains the reply on later ticks and refuses a new handshake for 30 s (`boot: HOST-NIC listen hold after HTTP`). The Overview Host card can go red when the follow-up list fails. Do not refresh. Do not click Create or Start. Do not curl. Do not `setup-disk`. If Power State goes OFF again, leave it off. Do not flash the Toshiba.
+The next EFI still drains the reply, then does not listen again (`COEXIST_RELISTEN_HOLD_MS` is `i64::MAX`). COM2 uses `write_line_nowait` for `HTTP exchange ok` and `listen hold after HTTP`, so those lines show after `login:`. The Host card stays red. Do not refresh. Do not click Create or Start. Do not curl. Do not `setup-disk`. If Power State goes OFF, leave it off. Do not flash the Toshiba.
 
 `grubcfg=no` on this disk is expected. Alpine keeps `grub.cfg` on ext4 `/boot/grub`, not on the ESP. The menu still auto-booted.
 

@@ -348,19 +348,19 @@
       <section class="section section--hda-com2" id="now">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>NOW · chassis off · quit Firefox</p>
-          <h2 class="section__title">The page came up again, and the server turned itself off.</h2>
+          <h2 class="section__title">Host went green again, and the server turned itself off.</h2>
           <p class="section__lede">
-            <code>fa6ce771</code> reached <code>localhost:~#</code> and
-            Firefox painted <code>https://raynu-v.lab:8443</code> with Host
-            green. The iDRAC dashboard then showed Power State OFF. Pacing
-            the serial poll did not stop it. Quit Firefox. Do not power
-            this EFI back on to open the page again.
+            <code>3e9ce45e</code> reached <code>localhost:~#</code> on
+            <code>10.99.99.151</code>. Host went red, then green, then red.
+            Seq 22543 and 22544 at 12:21:23 are the host power-off, with no
+            GUI power request in front. Quit Firefox. Do not power this EFI
+            back on to open the page again.
           </p>
-          <pre class="ship-code" data-reveal><code>closed: fa6ce771 → DISK-BOOTX64 → UUID a0ad99ac → login: (4th)
-lived:  page green on .150 · dashboard Power State OFF
-power:  paced SOL RX was not sufficient
-next:   quit Firefox · listen hold 30s after one exchange · do not refresh
-never:  open Firefox on fa6ce771 · setup-disk · curl Start · flash the Toshiba
+          <pre class="ship-code" data-reveal><code>closed: 3e9ce45e → DISK-BOOTX64 → UUID a0ad99ac → login: (5th)
+lived:  Host red → green → red on .151 · seq 22543 SYS1003 · seq 22544 SYS1001
+power:  30s re-listen was the second session · no RAC1195
+next:   quit Firefox · one exchange, no re-listen · Host stays red · do not refresh
+never:  open Firefox on 3e9ce45e · setup-disk · curl Start · flash the Toshiba
 read:   docs/m8_state.md</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
             Rollback remains GitHub Latest

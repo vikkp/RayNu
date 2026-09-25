@@ -388,7 +388,10 @@ pub fn tick_bcm5720_coexist() {
                     COEXIST_PENDING_CLOSE = false;
                     COEXIST_DRAIN_EMPTY_AT_MS = 0;
                     COEXIST_RELISTEN_AT_MS = millis.saturating_add(COEXIST_RELISTEN_HOLD_MS);
-                    serial::write_line("boot: HOST-NIC listen hold after HTTP");
+                    // linux earlycon hush: write_line is dropped once Linux
+                    // shares the UART. 3e9ce45e exchanged and COM2 stayed on
+                    // the virtio MMIO line. nowait still reaches SOL.
+                    serial::write_line_nowait("boot: HOST-NIC listen hold after HTTP");
                 }
             } else {
                 COEXIST_DRAIN_EMPTY_AT_MS = 0;
@@ -402,7 +405,7 @@ pub fn tick_bcm5720_coexist() {
             let sock = sockets.get_mut::<tcp::Socket>(tcp_handle);
             let _ = sock.listen(COEXIST_PORT);
             COEXIST_RELISTEN_AT_MS = 0;
-            serial::write_line("boot: HOST-NIC TCP re-listen after HTTP");
+            serial::write_line_nowait("boot: HOST-NIC TCP re-listen after HTTP");
         }
 
         let mut do_close = false;
@@ -420,7 +423,7 @@ pub fn tick_bcm5720_coexist() {
                 let _ = sock.listen(COEXIST_PORT);
             }
             if sock.is_active() && !COEXIST_ANNOUNCED {
-                serial::write_line("boot: HOST-NIC TCP accept — client connected");
+                serial::write_line_nowait("boot: HOST-NIC TCP accept — client connected");
                 COEXIST_ANNOUNCED = true;
                 COEXIST_ACCEPT_AT_MS = millis;
                 session.reset();
@@ -461,7 +464,7 @@ pub fn tick_bcm5720_coexist() {
             }
         }
         if did_exchange {
-            serial::write_line("boot: HOST-NIC HTTP exchange ok");
+            serial::write_line_nowait("boot: HOST-NIC HTTP exchange ok");
             let _ = maybe_print_iron_tls_ok(true, true);
             if take_spa_keys_injected() {
                 let _ = maybe_print_iron_console_ok(true, true);
@@ -474,8 +477,9 @@ pub fn tick_bcm5720_coexist() {
             // TLS record). close() after drain left FIN_WAIT on the only
             // slot so Firefox refresh is Unable to connect (iron 2026-08-21
             // curl: (7); lived 2026-09-19 first GET ok, reload fail).
-            // fa6ce771 still powered off after the SPA painted. Drain on
-            // later ticks, then hold listen. No tsc_spin in this vmexit.
+            // 3e9ce45e re-listened after 30s. Host went green on that
+            // second session, then SYS1003+SYS1001. Hold does not expire.
+            // No tsc_spin in this vmexit.
             COEXIST_PENDING_CLOSE = true;
         }
         if did_idle_abort {

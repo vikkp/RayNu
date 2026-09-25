@@ -60,17 +60,12 @@ fn coexist_millis_from_tsc_hz_zero_uses_fallback() {
 
 #[test]
 fn coexist_relisten_hold_blocks_the_next_handshake() {
-    assert_eq!(COEXIST_RELISTEN_HOLD_MS, 30_000);
+    assert_eq!(COEXIST_RELISTEN_HOLD_MS, i64::MAX);
     assert!(coexist_relisten_due(0, 0));
-    assert!(!coexist_relisten_due(0, COEXIST_RELISTEN_HOLD_MS));
-    assert!(!coexist_relisten_due(
-        COEXIST_RELISTEN_HOLD_MS - 1,
-        COEXIST_RELISTEN_HOLD_MS
-    ));
-    assert!(coexist_relisten_due(
-        COEXIST_RELISTEN_HOLD_MS,
-        COEXIST_RELISTEN_HOLD_MS
-    ));
+    assert!(!coexist_relisten_due(0, i64::MAX));
+    assert!(!coexist_relisten_due(i64::MAX, i64::MAX));
+    assert!(!coexist_relisten_due(29_999, 30_000));
+    assert!(coexist_relisten_due(30_000, 30_000));
 }
 
 #[test]

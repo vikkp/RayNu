@@ -194,6 +194,8 @@ pub fn host_nic_surface_present() -> bool {
         && listen.contains("TLS handshake fail; re-listen")
         && listen.contains("TCP re-listen after HTTP")
         && listen.contains("listen hold after HTTP")
+        && listen.contains("write_line_nowait(\"boot: HOST-NIC listen hold after HTTP")
+        && listen.contains("write_line_nowait(\"boot: HOST-NIC HTTP exchange ok")
         && listen.contains("COEXIST_RELISTEN_HOLD_MS")
         && listen.contains("drain TX before reclaim")
         && listen.contains("then abort() — not close()")

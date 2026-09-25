@@ -44,7 +44,7 @@ Lived: [`docs/progress.md`](progress.md) · M8: [`docs/m8_plan.md`](m8_plan.md) 
 | Metric | Value | Meaning |
 |--------|------:|---------|
 | **Overall LOI readiness** | **64%** | Nearest honest conversation is Bar A. Not Bar B. Not GA. Up from 60: `36d3b559` reached the installed `login:` after two Force Offs. A4s is still open. |
-| **Bar A — dedicated-box** | **82%** | One PowerEdge we own or they dedicate. A1 Everest, A3 SKU, A4 TLS **DONE**. A2 persist **repeated** (`fa6ce771` fourth `login:`, UUID `a0ad99ac-…`). A4s still open: three page renders, three chassis-off. A6 / A5 still open. USB ≠ PERC. |
+| **Bar A — dedicated-box** | **82%** | One PowerEdge we own or they dedicate. A1 Everest, A3 SKU, A4 TLS **DONE**. A2 persist **repeated** (`3e9ce45e` fifth `login:`, UUID `a0ad99ac-…`). A4s still open: four page renders, four chassis-off. A6 / A5 still open. USB ≠ PERC. |
 | **Bar B — RAID-fleet** | **18%** | Replace the licensed hypervisor on PERC virtual disks they already paid for. |
 | **Months to Bar A** | **0.75** | Baseline 2026-09-14. ETA **2026-10**. Down from 1.0: the same EFI reached the installed `login:` after two Force Offs. Do not go below 0.75 until A4s. |
 | **Months to Bar B** | **3.5** | PERC I/O is the long pole. ETA **2026-12**. |
@@ -175,7 +175,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | 2026-09-18 | Bar A A2 | USB Force Off on COM2 | **DONE on evidence** (`4af78b43` keep=1 DISK-BOOT UUID `348005a9`; minted persist-OK not printed) |
 | 2026-09-18 | Bar A A3 | SKU card | **DONE** ([`docs/sku.md`](sku.md) / [`site/sku.html`](../site/sku.html)) |
 | **2026-09-19** | Bar A A4 | TLS on native `:8443` **before RayNu-F** | **DONE** (`928d6224` COM2 `RAYNU-V-M8-TLS-OK`; Mac `curl --cacert` SPA `.140`) |
-| **NOW** | Bar A **A4s held** | Chassis off after `fa6ce771` painted the SPA | Paced SOL RX was not sufficient. Quit Firefox. Do not retry the page on `fa6ce771`. See [m8_state.md](m8_state.md) |
+| **NOW** | Bar A **A4s held** | Chassis off after `3e9ce45e` Host went green | 30 s re-listen was the second session. Quit Firefox. Do not retry the page on `3e9ce45e`. See [m8_state.md](m8_state.md) |
 | then | Bar A A6 | SPA keyboard | after A4s; firmware `POST /console/keys` in-tree; not VNC |
 | then | Bar B B2 | Spare PERC VD persist | after A6; census skip is lab safety |
 | later | Auth / unmodified ISO | A5, Gen-1 Phase 2 | named residuals, not fake closes |
@@ -207,9 +207,9 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | Field | Value |
 |-------|-------|
 | Commit | m8-grubcfg-esp |
-| Summary | **`fa6ce771` SPA then chassis off.** Fourth login, same UUID and vda2 counts. Page went green. Dashboard Power State OFF. Paced SOL RX was not sufficient. Next EFI holds listen 30 s after one exchange. |
+| Summary | **`3e9ce45e` fifth login, fourth SPA power-off.** Lease `.151`. Host red, then green, then red. Seq 22543/22544 at 12:21:23, no `RAC1195`. 30 s re-listen was the second session. This EFI does not re-listen. |
 | Everest impact | none — HDA months 0.0 / 99% held |
-| LOI impact | Scores **held** (Bar A 82, persist 93, overall 64, months A 0.75, Bar B 18). A4s still open. Three page renders, three chassis-off. |
+| LOI impact | Scores **held** (Bar A 82, persist 93, overall 64, months A 0.75, Bar B 18). A4s still open. Four page renders, four chassis-off. |
 | Gates touched | Lived `RAYNU-V-M8-DISK-PERSIST-OK` on boot 3. `./tools/sync-loihda-site.sh --check`. `./tools/check-site-chrome.sh`. No MegaRAID. |
 
 ---
@@ -218,7 +218,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
-| 2026-09-25 | m8-grubcfg-esp | 82 | 18 | **`fa6ce771` SPA then chassis off.** Fourth login, lease `.150`, same vda2 counts. Page green, then dashboard Power State OFF. Paced SOL RX was not sufficient. Listen hold is the next EFI. Scores held. |
+| 2026-09-25 | m8-grubcfg-esp | 82 | 18 | **`3e9ce45e` fifth login, fourth SPA power-off.** Lease `.151`. Host red, then green, then red. Seq 22543/22544 at 12:21:23, no `RAC1195`. 30 s re-listen was the second session. This EFI does not re-listen. Scores held. |
+| 2026-09-25 | m8-grubcfg-esp | 82 | 18 | **`fa6ce771` SPA then chassis off.** Fourth login, lease `.150`, same vda2 counts. Page green, then dashboard Power State OFF. Paced SOL RX was not sufficient. Listen hold was the next EFI. Scores held. |
 | 2026-09-24 | m8-grubcfg-esp | 82 | 18 | **Second SPA power-off.** Boot 3 page at `.150`, then seq 22501 `SYS1003` 23:45:21 and seq 22502 `SYS1001` 23:45:22. No `RAC1195`. GUI Power On and the 19:52 hard reset both have `RAC1195`. Linux resume SOL RX paced. Scores held. |
 | 2026-09-24 | m8-grubcfg-esp | 82 | 18 | **`36d3b559` boot 3: login after chassis off.** iDRAC `SYS1003` then `SYS1001` at 20:14 while the SPA was on screen (lease `.148`). Boot 3 leased `.150`, `DISK-BOOTX64`, same UUID, vda2 counts unchanged from boot 2. Firefox stays closed. Scores held. |
 | 2026-09-24 | m8-grubcfg-esp | 82 | 18 | **`36d3b559` boot 2: installed `login:` again.** Same UUID `a0ad99ac-…`. Ext4 journal recovery, vfat dirty bit cleared, menu still auto-booted. `grubcfg=no` (menu on ext4). Bar A 74→82, persist 85→93, overall 60→64, months A 1.0→0.75. A4s open. |
@@ -300,7 +301,7 @@ LOI:           NOT OPEN. Tracker born 2026-09-14.
 Bar A:         82% · 0.75 months · dedicated-box non-prod
 Bar B:         18% · 3.5 months · PERC RAID fleet (out of conversation until PERC persist)
 Overall:       64% · confidence medium
-NOW:           chassis off · fa6ce771 page green then Power State OFF · paced SOL RX was not sufficient · quit Firefox · do not open the page on fa6ce771 · next EFI listen-hold 30s · do not curl · do not setup-disk · docs/m8_state.md
+NOW:           chassis off · 3e9ce45e Host green then seq 22543/22544 · 30s re-listen was the second session · quit Firefox · do not open the page on 3e9ce45e · next EFI no re-listen · Host stays red · do not curl · do not setup-disk · docs/m8_state.md
 Open:          iron SPA keyboard · iron AUTH-OK · unmodified ISO · cluster · Ubuntu PERC stays standing boot
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
 Sit:           localhost:~# · do not setup-disk · do not flash Toshiba /dev/sdc
