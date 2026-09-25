@@ -350,7 +350,7 @@ impl HeaderBuf {
         h.push_str(content_type);
         h.push_str("\r\nContent-Length: ");
         h.push_usize(body_len);
-        h.push_str("\r\nConnection: close\r\n\r\n");
+        h.push_str("\r\nConnection: keep-alive\r\n\r\n");
         h
     }
     fn push_str(&mut self, s: &str) {

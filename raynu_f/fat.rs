@@ -461,3 +461,27 @@ pub fn resolve_path<R: VolumeRead>(
     }
     last.ok_or(FatError::NotFound)
 }
+
+/// `\EFI\BOOT\grub.cfg` on the ESP.
+pub const GRUB_CFG_PATH_BOOT: &[u8] = b"\\EFI\\BOOT\\grub.cfg";
+/// `\EFI\alpine\grub.cfg` on the ESP.
+pub const GRUB_CFG_PATH_ALPINE: &[u8] = b"\\EFI\\alpine\\grub.cfg";
+
+/// Menu file from a directory walk. `\EFI\BOOT\grub.cfg` wins when it is a file.
+/// A directory is not the menu. `None` means neither file is present.
+pub fn pick_grub_cfg(
+    boot: Option<&FatEntry>,
+    alpine: Option<&FatEntry>,
+) -> Option<(&'static [u8], u32)> {
+    if let Some(e) = boot {
+        if !e.is_dir() {
+            return Some((GRUB_CFG_PATH_BOOT, e.size));
+        }
+    }
+    if let Some(e) = alpine {
+        if !e.is_dir() {
+            return Some((GRUB_CFG_PATH_ALPINE, e.size));
+        }
+    }
+    None
+}

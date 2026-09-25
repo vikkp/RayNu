@@ -11,7 +11,7 @@
     <meta property="og:title" content="RayNu-V · Path to LOI" />
     <meta
       property="og:description"
-              content="Two bars: dedicated-box 78%, RAID-fleet 18%. Persist across HV reboot is evidence-closed. SKU card is done. A4 TLS iron is DONE (lab millicert). Standing SPA is firmware-in-tree; not iron until a browser stays up after Alpine login. Host auth/ISO-upload HostReady are not iron closes. USB is not PERC."
+              content="Two bars: dedicated-box 88%, RAID-fleet 18%. Persist across HV reboot is repeated. SKU card is done. A4 TLS iron is DONE (lab millicert). Standing SPA lived on 1f33eeda. Keyboard and auth are still open. USB is not PERC."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -63,8 +63,8 @@
           id="loi-path"
           aria-label="Path to LOI"
         >
-          Everest loop (closed) → persist across HV reboot (evidence-closed) → SKU card (done) → TLS
-          iron (done) → standing SPA → Bar A dedicated-box LOI → PERC RAID I/O → Bar B fleet LOI
+          Everest loop (closed) → persist across HV reboot (repeated) → SKU card (done) → TLS
+          iron (done) → standing SPA (lived) → Bar A dedicated-box LOI → PERC RAID I/O → Bar B fleet LOI
         </p>
       </div>
     </header>
@@ -219,21 +219,20 @@
             <li data-reveal>
               <header>
                 <span class="loi-pieces__name">Persist across HV reboot</span>
-                <span class="loi-pieces__pct" data-piece="persist">97%</span>
+                <span class="loi-pieces__pct" data-piece="persist">93%</span>
               </header>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill" data-piece-fill="persist" style="width: 97%"></span>
+                <span class="hda-bar__fill" data-piece-fill="persist" style="width: 93%"></span>
               </div>
               <p>
                 A guest reboot already kept the install. A hypervisor Force Off
                 used to wipe it — and that is how you recover a Type-1, so a
-                buyer will do it. On the R640 we own, that is no longer true:
-                after Force Off the same Alpine comes back from the 8 GiB USB
-                slice, and COM2 <code>928d6224</code> printed
-                <code>RAYNU-V-M8-DISK-PERSIST-OK</code>. The last 3% is the
-                whole stick and USB versus PERC. A later boot
-                (<code>08202468</code>) still saw the GPT, then launched the
-                live ISO. That is a boot-order miss, not a wiped disk.
+                buyer will do it. On the R640 we own, EFI
+                <code>36d3b559</code> brought the same Alpine back twice
+                (UUID <code>a0ad99ac-…</code>, 8 GiB USB slice,
+                <code>RAYNU-V-M8-DISK-PERSIST-OK</code>). The remainder is
+                an unclean shutdown (ext4 journal, vfat dirty bit), the
+                8 GiB cap, and USB versus PERC.
               </p>
             </li>
             <li data-reveal>
@@ -270,8 +269,9 @@
                 <code>RAYNU-V-M8-TLS-OK</code> after
                 <code>curl --cacert</code> returned the SPA on
                 <code>10.99.99.140:8443</code> <strong>before RayNu-F</strong>.
-                Standing HTTPS while Alpine runs is firmware-in-tree (A4s), not
-                iron. rustls cannot join the EFI.
+                Standing HTTPS while Alpine runs lived on
+                <code>1f33eeda</code> (one TLS session, Host stayed green).
+                rustls cannot join the EFI.
                 Residual: lab millicert, one cipher, PRE-EBS SNP still
                 <code>http://</code>.
               </p>
@@ -296,17 +296,17 @@
             <li data-reveal>
               <header>
                 <span class="loi-pieces__name">Guest console UI</span>
-                <span class="loi-pieces__pct" data-piece="console">58%</span>
+                <span class="loi-pieces__pct" data-piece="console">68%</span>
               </header>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill" data-piece-fill="console" style="width: 58%"></span>
+                <span class="hda-bar__fill" data-piece-fill="console" style="width: 68%"></span>
               </div>
               <p>
-                The page can type into guest COM1 and show the guest serial
-                copy. Firmware now keeps HTTPS armed during RayNu-F instead of
-                dying at the 45s window. That is not iron until a browser stays
-                up after Alpine login. iDRAC SOL remains the evidence channel.
-                Not VNC.
+                The page showed Alpine <code>localhost login:</code> while the
+                Host card stayed green on <code>1f33eeda</code>. Typing from
+                that page is the next step. The console marker still uses a
+                print path Linux hushes after boot, so the live Send box stays
+                empty. iDRAC SOL remains the evidence channel. Not VNC.
               </p>
             </li>
             <li data-reveal>
@@ -348,20 +348,20 @@
 
       <section class="section section--hda-com2" id="now">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>NOW · installed GRUB · then grub&gt;</p>
-          <h2 class="section__title">The soak passed. The product boot stopped at the GRUB prompt.</h2>
+          <p class="milestone-kicker" data-reveal>NOW · A4s lived · A6 next</p>
+          <h2 class="section__title">The page stayed up beside Alpine.</h2>
           <p class="section__lede">
-            EFI <code>e5cca2e0</code> finished the USB soak, then on the next
-            boot staged the installed GRUB from the 8&nbsp;GiB slice and stopped
-            at <code>grub&gt;</code> with <code>blk_rd=33</code>. The warm on
-            that read fetched LBA 0. The next EFI drops that warm. The first
-            sector GRUB asks for outside the pin is a plain USB read, and COM2
-            prints it once.
+            <code>1f33eeda</code> reached <code>localhost:~#</code> on
+            <code>10.99.99.154</code> and kept one HTTPS session. Host stayed
+            green. Activity showed the guest login. Leave that tab up. Leave
+            Send empty. The rollback file is release
+            <code>v0.1.0-m8-a4s</code>.
           </p>
-          <pre class="ship-code" data-reveal><code>closed: 928d6224 persist-OK + TLS-OK → login: on the Toshiba
-lived:  e5cca2e0 boot 2 → DISK-BOOTX64 → GRUB 2.12 → grub&gt; → blk_rd=33
-next:   flash cursor/m8-unpin-read-8366 · one "disk past pin lba=" line · [vda] 16777216 · login:
-never:  F11 e5cca2e0 again · setup-disk · curl Start · Toshiba /dev/sdc
+          <pre class="ship-code" data-reveal><code>lived:  1f33eeda → DISK-BOOTX64 → UUID a0ad99ac → login: (6th)
+page:   one TCP accept · HTTP keep-alive · Host green · guest COM1 visible
+kit:    v0.1.0-m8-a4s · CI 36137732145 · sha256 5539d838… · not GitHub Latest
+next:   A6 · print RAYNU-V-M8-CONSOLE-OK with write_line_nowait · then one harmless key
+never:  Send on this page · flash over this session · setup-disk · curl Start · flash the Toshiba
 read:   docs/m8_state.md</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
             Rollback remains GitHub Latest

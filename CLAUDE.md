@@ -440,7 +440,8 @@ cargo verus --verify                                    # Formal proofs (Proven 
 - Create-VM / media attach in the Web UI
 - Cluster features (vMotion-like, DRS-like, hot-add) → **M9**, not M7/M8 ([ADR-018](docs/adr/ADR-018.md))
 - Operator polish (persist / TLS / auth / console / ISO upload / catalog) → **M8**, not a reopened Everest
-- **Iron rollback for M8.0:** GitHub Latest [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) (`f72b4276` / `--run 34552377351` / EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc`)
+- **Iron rollback for the standing SPA:** [`v0.1.0-m8-a4s`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-m8-a4s) (`1f33eeda` / `--run 36137732145` / EFI SHA256 `5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693`). Not GitHub Latest.
+- **Iron rollback for the Everest loop:** GitHub Latest [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) (`f72b4276` / `--run 34552377351` / EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc`)
 
 ---
 
@@ -476,12 +477,15 @@ qemu-system-x86_64 \
 
 ### Deploy to R640
 
-**M8.0 known-good (rollback if a persist prototype misbehaves):** GitHub Latest
+**Standing-SPA rollback:** [`v0.1.0-m8-a4s`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-m8-a4s)
+→ EFI built from `1f33eeda72f99e432204dc943386d99d3d341be8` / CI `--run 36137732145` /
+SHA256 `5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693`.
+COM2 must read `build: sha=1f33eeda72f9`. Not GitHub Latest.
+**Everest-loop rollback (GitHub Latest):**
 [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed)
 → git `f72b4276d198b5e90147e9be1037d0d0b7213a28` / CI `--run 34552377351` /
 EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc`.
-COM2 must read `build: sha=f72b4276d198`. Do not flash a later M8 tip as the
-known-good. Do not F11 `34548550755` / `7f8dc0a9`. Checkpoint, not 1.0/GA.
+COM2 must read `build: sha=f72b4276d198`. Do not F11 `34548550755` / `7f8dc0a9`. Checkpoint, not 1.0/GA.
 In-tree kit `releases/v0.1.0-everest-closed/` is PR #243 (open). See
 [`.cursor/rules/iron-rollback.mdc`](.cursor/rules/iron-rollback.mdc).
 

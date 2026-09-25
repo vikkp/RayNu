@@ -528,6 +528,8 @@ fn formats_response() {
     let s = core::str::from_utf8(&out[..n]).unwrap();
     assert!(s.starts_with("HTTP/1.1 200 OK"));
     assert!(s.contains("Content-Length: 2"));
+    assert!(s.contains("Connection: keep-alive"));
+    assert!(!s.contains("Connection: close"));
 }
 
 #[test]

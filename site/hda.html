@@ -124,12 +124,11 @@
             99% on purpose. Standing SPA and a guest console UI are
             <strong>M8</strong>
             (<a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-018.md">ADR-018</a>)
-            — not a reopened Everest. HV-reboot persist is evidence-closed on
-            the 8 GiB USB slice (<code>928d6224</code>). EFI
-            <code>e5cca2e0</code> finished the USB soak (239 of 239 reads),
-            then the same EFI reached installed GRUB and stopped at
-            <code>grub&gt;</code> with <code>blk_rd=33</code>. Do not F11 that
-            EFI again. The next flash drops the extra LBA 0 read inside GRUB.
+            — not a reopened Everest. HV-reboot persist repeated through
+            <code>1f33eeda</code>: the 8 GiB USB slice reached
+            <code>login:</code> a sixth time, and the SPA stayed up on one
+            TLS session. Rollback kit <code>v0.1.0-m8-a4s</code>. Typing
+            from that page is the open M8 step.
           </p>
         </div>
       </section>

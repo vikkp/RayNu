@@ -1,0 +1,15 @@
+RayNu-V EFI release kit
+Version: 0.1.0-m8-a4s
+EFI source: 1f33eeda72f99e432204dc943386d99d3d341be8
+CI: 36137732145
+COM2: build: sha=1f33eeda72f9
+Lived: sixth login UUID a0ad99ac, lease 10.99.99.154, one TLS session, Host green
+Not GitHub Latest. Everest Latest remains v0.1.0-everest-closed.
+Contents:
+  r640-hypervisor.efi
+  r640-hypervisor.efi.sha256
+  VERSION
+  SHA256SUMS
+  MANIFEST.txt
+  README.md
+Flash this file. Do not rebuild and expect the same COM2 stamp.

@@ -5,13 +5,28 @@ globs:
 alwaysApply: true
 ---
 
-# Iron rollback (M8.0 known-good)
+# Iron rollback (two pins)
 
-You are working in **RayNu-V** (`vikkp/RayNu`). Mount Everest (M7) **closed on iron**. Next numbered work is **M8 operator product hardening** ([ADR-018](docs/adr/ADR-018.md), [docs/m8_plan.md](docs/m8_plan.md)). **M8.0** is leftover-DRAM disk persist across a **hypervisor** reboot.
+You are working in **RayNu-V** (`vikkp/RayNu`). Mount Everest (M7) **closed on iron**. Next numbered work is **M8 operator product hardening** ([ADR-018](docs/adr/ADR-018.md), [docs/m8_plan.md](docs/m8_plan.md)). **M8.0** is leftover-DRAM disk persist across a **hypervisor** reboot. **A4s** (standing SPA beside the installed login) lived on `1f33eeda`.
 
-## Flash this if an M8 persist prototype misbehaves
+## Flash `v0.1.0-m8-a4s` to return to the standing SPA
 
-Do **not** treat a later tip, a local `cargo build`, or an untagged CI artifact as the Everest close.
+This is the rollback for the lived keep-alive page and the sixth installed login. It is **not** GitHub Latest. Do not flash it over a session that is already serving Firefox.
+
+| Field | Value |
+|-------|-------|
+| GitHub | https://github.com/vikkp/RayNu/releases/tag/v0.1.0-m8-a4s |
+| EFI source | `1f33eeda72f99e432204dc943386d99d3d341be8` |
+| CI | `--run 36137732145` · COM2 `build: sha=1f33eeda72f9` |
+| EFI SHA256 | `5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693` |
+| In-tree kit | `releases/v0.1.0-m8-a4s/` |
+| Evidence | `docs/evidence/r640/2026-09-24-36d3b559-persist-login.md` (boot 6) |
+
+Flash the kit file. A rebuild of a later commit will not stamp `1f33eeda72f9`.
+
+## Flash Everest Latest if you need the original install loop
+
+Do **not** treat a later tip, a local `cargo build`, or an untagged CI artifact as the Everest close. GitHub Latest stays this tag.
 
 | Field | Value |
 |-------|-------|

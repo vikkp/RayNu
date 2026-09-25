@@ -43,8 +43,7 @@ fn content_length(headers: &[u8]) -> Option<usize> {
     let mut i = 0;
     while i + 15 < headers.len() {
         let rest = &headers[i..];
-        let hit = rest.len() >= 15
-            && rest[..15].eq_ignore_ascii_case(b"content-length:");
+        let hit = rest.len() >= 15 && rest[..15].eq_ignore_ascii_case(b"content-length:");
         if hit {
             let v = rest[15..].split(|b| *b == b'\r' || *b == b'\n').next()?;
             let mut n = 0usize;
@@ -71,13 +70,89 @@ fn content_length(headers: &[u8]) -> Option<usize> {
 
 /// True when headers have ended and any `Content-Length` body has arrived.
 pub fn request_complete(buf: &[u8]) -> bool {
+    first_request_len(buf).is_some()
+}
+
+/// Byte length of the first complete HTTP/1.1 request, if one is buffered.
+///
+/// Extra bytes after that request stay in the buffer (a second request on
+/// the same TLS session). No `Content-Length` means the request ends at the
+/// header block.
+pub fn first_request_len(buf: &[u8]) -> Option<usize> {
+    let end = header_end(buf)?;
+    let n = match content_length(&buf[..end]) {
+        None => end,
+        Some(body) => end.saturating_add(body),
+    };
+    if buf.len() >= n {
+        Some(n)
+    } else {
+        None
+    }
+}
+
+/// Drop `n` leading bytes. `n` is clamped to `len`.
+pub fn drop_prefix(buf: &mut [u8], len: usize, n: usize) -> usize {
+    if n == 0 || len == 0 {
+        return len;
+    }
+    let n = n.min(len).min(buf.len());
+    let len = len.min(buf.len());
+    if n < len {
+        buf.copy_within(n..len, 0);
+    }
+    len - n
+}
+
+fn header_token(value: &[u8], token: &[u8]) -> bool {
+    let mut i = 0;
+    while i < value.len() {
+        while i < value.len() && (value[i] == b' ' || value[i] == b'\t' || value[i] == b',') {
+            i += 1;
+        }
+        if i >= value.len() || value[i] == b'\r' || value[i] == b'\n' {
+            break;
+        }
+        let start = i;
+        while i < value.len()
+            && value[i] != b','
+            && value[i] != b' '
+            && value[i] != b'\t'
+            && value[i] != b'\r'
+            && value[i] != b'\n'
+        {
+            i += 1;
+        }
+        if value[start..i].eq_ignore_ascii_case(token) {
+            return true;
+        }
+    }
+    false
+}
+
+/// True when the first request's `Connection` header lists `close`.
+///
+/// HTTP/1.1 with no `Connection` header stays open. `close` wins when both
+/// tokens are present. The standing SPA does not send `close`.
+pub fn http_request_wants_close(buf: &[u8]) -> bool {
     let Some(end) = header_end(buf) else {
         return false;
     };
-    match content_length(&buf[..end]) {
-        None => true,
-        Some(n) => buf.len().saturating_sub(end) >= n,
+    let headers = &buf[..end];
+    let mut i = 0;
+    while i < headers.len() {
+        let line_end = headers[i..]
+            .iter()
+            .position(|&b| b == b'\n')
+            .map(|p| i + p + 1)
+            .unwrap_or(headers.len());
+        let line = &headers[i..line_end];
+        if line.len() >= 11 && line[..11].eq_ignore_ascii_case(b"connection:") {
+            return header_token(&line[11..], b"close");
+        }
+        i = line_end;
     }
+    false
 }
 
 /// Identity wrap: HTTP bytes are the TCP payload (lab plaintext).

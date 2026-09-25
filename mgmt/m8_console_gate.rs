@@ -52,6 +52,7 @@ pub fn console_surface_present() -> bool {
         && include_str!("../vmx/guest_uefi.rs").contains("poll_host_rx_paced")
         && !include_str!("../vmx/guest_uefi.rs")
             .contains("maybe_tick_standing_spa();\n    crate::devices::guest_uart::poll_host_rx();")
+        && !include_str!("../vmx/guest_uefi.rs").contains("::poll_host_rx()")
         && include_str!("../devices/guest_uart.rs").contains("fn host_rx_ready(")
         && include_str!("../devices/guest_uart.rs").contains("fn take_host_rx(")
         && include_str!("../devices/guest_uart.rs").contains("fn poll_host_rx_paced(")

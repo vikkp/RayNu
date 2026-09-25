@@ -91,6 +91,18 @@ pub fn http_accept_should_idle_abort(
     announced && !headers_done && limit_ms > 0 && elapsed_since_accept_ms >= limit_ms
 }
 
+/// Quiet time on a kept TLS session before the slot is reclaimed.
+///
+/// SPA polls are 30 s. `3e9ce45e` re-handshook at 30 s and the chassis
+/// turned off (`SYS1003` then `SYS1001`, no `RAC1195`). Ten minutes is
+/// a standing page, not a second ClientHello.
+pub const COEXIST_KEEPALIVE_IDLE_MS: i64 = 600_000;
+
+/// True when a kept session has been idle long enough to accept again.
+pub fn coexist_keepalive_idle(now_ms: i64, last_http_ms: i64, idle_ms: i64) -> bool {
+    idle_ms > 0 && now_ms.saturating_sub(last_http_ms) >= idle_ms
+}
+
 /// Idle-abort budget: 2 s while TLS waits for ClientHello, else 15 s.
 pub fn http_accept_idle_limit_ms(handshake_waiting: bool) -> i64 {
     if handshake_waiting {

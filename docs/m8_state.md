@@ -1,20 +1,24 @@
 # M8 state — START HERE (persist / LOI Bar A recovery)
 
 > **Read this before touching `mgmt/xhci.rs`, `mgmt/durable_lun.rs`, `mgmt/disk_persist.rs`, `vmx/guest_uefi.rs` (RayNu-F boot source), or the trackers.**  
-> Last rewrite: 2026-09-24 (`e5cca2e0` boot 2: `image=DISK-BOOTX64`, GRUB 2.12, `grub>`, wall cap `blk_rd=33`. The in-GRUB “past pin” warm read LBA 0. This EFI deletes that warm. The first unpinned `BlockIo` is `xhci_live_rw`, with one COM2 line). Trackers: [`hda.md`](hda.md) (Everest, closed) · [`loihda.md`](loihda.md) (LOI, open). Plan: [`m8_plan.md`](m8_plan.md). ADR: [ADR-018](adr/ADR-018.md). Evidence: [`2026-09-24-e5cca2e0-grub-wallcap.md`](evidence/r640/2026-09-24-e5cca2e0-grub-wallcap.md) · [`2026-09-23-e5cca2e0-usbsoak-done.md`](evidence/r640/2026-09-23-e5cca2e0-usbsoak-done.md).
+> Last rewrite: 2026-09-25 (`1f33eeda72f9`: sixth `login:`, one TLS session, Host green, guest COM1 in Activity, chassis stayed up. A4s lived. Rollback kit `v0.1.0-m8-a4s`. Next is A6). Trackers: [`hda.md`](hda.md) (Everest, closed) · [`loihda.md`](loihda.md) (LOI, open). Plan: [`m8_plan.md`](m8_plan.md). ADR: [ADR-018](adr/ADR-018.md). Evidence: [`2026-09-24-36d3b559-persist-login.md`](evidence/r640/2026-09-24-36d3b559-persist-login.md). Kit: [`releases/v0.1.0-m8-a4s/`](../releases/v0.1.0-m8-a4s/).
 
 ## One paragraph
 
-Everest (M7) is closed on iron. M8 is operator hardening. Bar A of the LOI needs one R640 to boot the **installed** Alpine from the persist disk (Toshiba USB, 8 GiB virtio slice) after Force Off and sit at `localhost:~#`, then a browser stays on HTTPS (A4s) and types into the guest (A6). That worked on `4af78b43` and `928d6224` (`RAYNU-V-M8-DISK-PERSIST-OK`, `RAYNU-V-M8-TLS-OK`). Seven flashes since have **not** reached the installed login. Every failure has the same shape: a USB BOT command on the Toshiba gets no Transfer Event (`cmpl=0xff` / `err=8`), usually after tens of seconds of idle. The fixes since have been scheduling heuristics (`warm`, `diskprime`, `peekretry`, `pin`) written against one COM2 each. Phase 0 makes a miss **safe and visible**; Phase 1 makes the USB driver **deterministic from evidence** instead of guesses.
+Everest (M7) is closed on iron. M8 is operator hardening. Bar A of the LOI needs one R640 to boot the **installed** Alpine from the persist disk (Toshiba USB, 8 GiB virtio slice) after Force Off and sit at `localhost:~#`, then a browser stays on HTTPS (A4s) and types into the guest (A6). `1f33eeda72f9` did the sixth login of UUID `a0ad99ac-ca25-4458-ade1-cd8599ca4928` (lease `10.99.99.154`) and kept one Firefox session up: one `TCP accept`, then `HTTP keep-alive`, Host green, Activity showed `localhost login:`. The `cmpl=0xff` tear is closed (`e5cca2e0` soak 239/239). A4s is lived. A6 is the open step. Leave this page up. Do not flash over it.
 
 ## Known-good iron builds (flash these, nothing else, for a demo)
 
 | Purpose | EFI | What it proved | Not this |
 |---------|-----|----------------|----------|
 | Everest rollback | `f72b4276` (GitHub Latest `v0.1.0-everest-closed`) | SPA Start → ISO install → disk boot → `login:` on leftover DRAM | persist across HV reboot, TLS |
-| Persist + TLS close | `928d6224` | Force Off → `keep=1` → `DISK-BOOTX64` → menu → `root=UUID=dd673a9a` → `login:`; `RAYNU-V-M8-DISK-PERSIST-OK`; `RAYNU-V-M8-TLS-OK` on `10.99.99.140:8443` | standing SPA after login, console keys |
+| Persist + TLS close | `928d6224` | Force Off → `keep=1` → `DISK-BOOTX64` → menu → `root=UUID=dd673a9a` → `login:`; `RAYNU-V-M8-DISK-PERSIST-OK`; `RAYNU-V-M8-TLS-OK` on `10.99.99.140:8443` | that filesystem was wiped; standing SPA after login |
+| Persist repeat (this disk) | `36d3b559` | Fresh install, then three boots → menu → `root=UUID=a0ad99ac-…` → `login:`. Opening the SPA was followed twice by `SYS1003` then `SYS1001` with no `RAC1195` | Do not F11 this EFI to open Firefox |
+| Fourth login, SOL paced | `fa6ce771` | Same UUID, `[vda] 16777216`, vda2 counts match boots 2 and 3, lease `.150`, `localhost:~#`. SPA then went green and the dashboard showed Power State OFF. Lifecycle: seq 22520/22521 at 00:30:20 | Do not F11 this EFI to open Firefox. Paced SOL RX did not stop the power-off |
+| Fifth login, 30 s listen hold | `3e9ce45e` | Same UUID, lease `.151`, vda2 `102909/2084352`. Host red, then green, then red. Seq 22543/22544 at 12:21:23, no `RAC1195` | Do not F11 this EFI to open Firefox. The re-listen is what turned Host green |
+| A4s lived (rollback) | `1f33eeda` | Sixth login, lease `.154`, same UUID, vda2 `102909/2084352`. One `TCP accept`, then `HTTP keep-alive`. Host green. Activity showed Alpine login. Chassis stayed up. Kit `v0.1.0-m8-a4s`, CI `36137732145`, SHA256 `5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693` | Leave the live page. Do not Send. Do not flash over this session. Flash this kit later to return to this path |
 
-Every EFI after `928d6224` is a **prototype**. Do not treat a later tip as known-good until it reaches the installed `login:` on COM2 **more than once**.
+The page on `1f33eeda` is up. Leave it. Do not Power On `3e9ce45e` or `3f80abd0` to open Firefox. The rows below are prototypes that did not reach a repeated login.
 
 ## USB bench passed (do not F11 this EFI again for `login:`)
 
@@ -37,6 +41,7 @@ Every EFI after `928d6224` is a **prototype**. Do not treat a later tip as known
 | `5c32bd06` | `USB soak requested` then p11 and p10 Address Device `cmd=3 cmpl=0xff` (`err=3` Enum). No `USBSOAK`. `image=ISO-BOOTX64` onto **1 GiB leftover DRAM**; F7 `DISK-BOOTX64` → `login:` UUID `4c27e121`. Toshiba never opened | **enumeration timeout before the soak**; RAM login is not persist |
 | `1fa231df` | `legacy pre/post forced=0` (no BIOS SMIs armed); No-Op, p11 Address Device, p10 Enable Slot all `cmpl=0xff` with `crcr=0x8` idle and **`slotst=2 ep0st=1`** (Addressed) on p11; retry `cmpl=0x13`. `USBSOAK abort err=3` → halt, **no guest** | **completion events lost to a torn 16-byte event read**; the soak halt worked (no RAM install) |
 | `e5cca2e0` boot 2 | No `USB soak requested`. Peek `installed=1`, `keep=1`, `image=DISK-BOOTX64`, GRUB 2.12 `grub>`, `diskprime past pin`, wall cap `blk_rd=33 blk_wr=0 wall_ms=180005`, then `Stage 46 hold alive` | **in-GRUB warm read LBA 0**; same `blk_rd` as the pin-only `grub>` on `d60431ee`. Evidence: [2026-09-24-e5cca2e0-grub-wallcap.md](evidence/r640/2026-09-24-e5cca2e0-grub-wallcap.md) |
+| `c4a41a17` | No soak. No `diskprime past pin`. `keep=1`, `image=DISK-BOOTX64`, `BOOTX64.EFI bytes=139264`, `disk past pin lba=2048 n=512 ok` during the ESP BPB read, then GRUB 2.12 `grub>`. Force Off before the wall cap | **one-shot consumed by firmware staging**, not by GRUB. Evidence: [2026-09-24-c4a41a17-grub-staging-oneshot.md](evidence/r640/2026-09-24-c4a41a17-grub-staging-oneshot.md) |
 
 ## Why it kept failing (diagnosis, 2026-09-22)
 
@@ -97,39 +102,49 @@ Reading the next `xhci cmd timeout` line if one still appears **with** the `trb 
 
 ### Phase 2 — re-close Bar A on the deterministic driver
 
-A2 again (several Force Offs, not one) → A4s Firefox load/reload on `https://raynu-v.lab:8443` after `login:` → A6 type from the SPA (`RAYNU-V-M8-CONSOLE-OK`) → A5 ESP `auth.token` default.
+A2 again (several Force Offs, not one) → A4s lived on `1f33eeda` → A6 type from the SPA (`RAYNU-V-M8-CONSOLE-OK`) → A5 ESP `auth.token` default.
 
 ### Phase 3 — Bar B honestly
 
 PERC H740P = MegaRAID SAS 3.5 (MPT3 Fusion) post-EBS driver on a **spare** VD (never Ubuntu). Interim: an NVMe in the lab R640 uses the already host-proven NVMe DurableLun and is a stronger dedicated-box story than a USB stick.
 
+## Product vs probe
+
+The standing page is the product (ADR-013 Stage 1, ADR-018 M8.3, LOI Bar A A4s). One browser session stays up beside the running guest: the Host card stays green, and later the guest console is in that same page. A page that goes red and never answers again is a failed A4s, and it is not something to put in front of an LOI.
+
+`3f80abd0` (no re-listen, Host stays red) is a probe already on this branch. It exists because `3e9ce45e` showed the first exchange leave the chassis up and the second handshake (Host green) precede seq 22543/22544. Do not flash `3f80abd0` for a demo or an LOI. Do not Power On to open Firefox on it.
+
+The product session is in this EFI, still one smoltcp socket on the shared BCM5720:
+
+- One TCP accept and one TLS handshake per browser session.
+- HTTP/1.1 `Connection: keep-alive`. The next `/vms` poll is another request on that session. `clear_http` drops that request and leaves the TLS keys. COM2: `HTTP exchange ok` then `HTTP keep-alive`. A later poll prints `HTTP keep-alive` again and does not print a new `TCP accept`.
+- A new handshake only after the browser closes (`CloseWait`), the request says `Connection: close`, or 10 minutes with no HTTP (`COEXIST_KEEPALIVE_IDLE_MS`). Those print `TCP re-listen after HTTP`. The 15 s idle abort does not run while the session is kept. Draining a close stays on later ticks. No NIC spin inside the vmexit.
+- The SPA does not open a second connection while that session is live. Overview lists sequentially. The Activity log poll waits its turn on the same socket.
+- Shared LOM stays as lived: keep the APE PHY, no phylock, no BMCR reset.
+- Lines the operator must see after `login:` use `write_line_nowait`. Linux hushes `write_line`.
+
+Still lab, and labeled as lab until each one has its own iron close: millicert, the bring-up bearer, the 8 GiB USB slice. PERC persist is Bar B and is a different disk. A4s is lived on `1f33eeda72f9`: one handshake, keep-alive through Overview and Activity, Host green, guest COM1 visible, chassis stayed up. The rollback kit is `v0.1.0-m8-a4s`. A6 is not closed.
+
 ## Next iron step (operator)
 
-Boot 2 of `e5cca2e0` is done: installed GRUB, then `grub>`, `blk_rd=33`. **Do not F11 `e5cca2e0` again.** Force Off if `Stage 46 hold alive` is still printing.
+The page on `1f33eeda` is the A4s close. Leave Firefox on it. Leave the Send box empty. Do not refresh. Do not click Create or Start. Do not curl. Do not `setup-disk`. Do not flash a new EFI while this session is the one serving the browser.
 
-`usbsoak.txt` stays deleted. `raynuf.txt` stays. Toshiba stays seated. After CI is green for `cursor/m8-unpin-read-8366`:
+Rollback for this path, when a later EFI misbehaves, is the kit in [`releases/v0.1.0-m8-a4s/`](../releases/v0.1.0-m8-a4s/) and GitHub release `v0.1.0-m8-a4s` (not GitHub Latest). Flash that file. COM2 must read `build: sha=1f33eeda72f9`. SHA256 `5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693`. CI run `36137732145`. Everest Latest stays `v0.1.0-everest-closed` (`f72b4276`) for the original install loop on leftover DRAM.
 
-```
-~/projects/raynuv/flashcruzer.sh --branch cursor/m8-unpin-read-8366 --wait \
-  --any-cruzer-usb --allow-new-serial --raynu-f \
-  --linux-iso ~/projects/raynuv/alpine-extended-3.21.3-x86_64.iso
-```
+## A6 — SPA keyboard (next code, not this boot)
 
-F11 that stick. COM2 must show the new `build: sha=` and must not show `USB soak requested` or `diskprime past pin`. One line, once:
+Iron close is COM2 `RAYNU-V-M8-CONSOLE-OK` after a key from the SPA reaches guest COM1 on the BCM5720 path. `maybe_print_iron_console_ok` in `mgmt/console.rs` prints that marker with `write_line`. After Linux boot, `linux_earlycon_share()` is on and `write_line` returns without printing. `write_line_nowait` does not check that share. The keep-alive lines on this boot were visible because they already use `write_line_nowait`. On this running EFI a Send can inject a key and the marker can still be silent.
 
-```
-boot: Stage 46 disk past pin lba=N n=BYTES ok (not ISO-INSTALL-OK)
-```
+First code step, on a later commit, after this chassis is off:
 
-or the same line with `err=N`. That `lba` is the first sector GRUB asked for outside LBA 0–33. The read is `xhci_live_rw`, the function the soak ran 239 times. No extra INQUIRY on that call.
+1. Print `RAYNU-V-M8-CONSOLE-OK` with `write_line_nowait`.
+2. Flash that EFI only after this page is gone. Do not F11 over `1f33eeda` while Firefox is connected to it.
+3. After `localhost:~#`, one harmless character in Send. Not `setup-alpine`. Not `setup-disk`.
+4. Proof is the character in the guest console on Activity, and the marker on COM2. The Activity tail also copies host UART lines (`HTTP keep-alive`), so the character in the guest banner is the proof.
 
-- `ok` and the GRUB menu, then `[vda] 16777216` and `login:`: sit there. Firefox `https://raynu-v.lab:8443` after that.
-- `ok` and `grub>` again: the pipe delivered the sector. The next change is the file GRUB opens.
-- `err=N`: the guest path failed on that LBA. Paste the line.
-- `image=ISO-BOOTX64` or `[vda] 2097152` (1.00 GiB): that is RAM. Force Off and paste COM2.
-- `WARN LUN saw EFI PART; skip ISO` and `Stage 46 hold alive` is the other acceptable halt.
+Host/CI still never print `RAYNU-V-M8-CONSOLE-OK`. **not VNC**.
 
-Do not curl `POST /vms/1/start`. Do not run `setup-disk`. Do not type at `grub>`. Do not flash Toshiba `/dev/sdc`.
+`grubcfg=no` on this disk is expected. Alpine keeps `grub.cfg` on ext4 `/boot/grub`, not on the ESP. The menu still auto-booted. A new `TCP accept` or `TCP re-listen after HTTP` followed by `SYS1003` then `SYS1001` with no `RAC1195` means the browser dropped the session. Leave that EFI off.
 
 ## Rules that stay true
 

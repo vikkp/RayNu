@@ -8191,6 +8191,36 @@ fn raynu_f_disk_gpt_miss(code: u64) {
     serial::write_byte(b'\n');
 }
 
+/// Directory lookup of the ESP menu file. Does not read the file body.
+#[cfg(target_os = "uefi")]
+fn raynu_f_note_esp_grub_cfg<R: crate::raynu_f::fat::VolumeRead>(
+    vol: &crate::raynu_f::fat::FatVolume,
+    r: &R,
+) {
+    let boot_path = b"\\EFI\\BOOT\\grub.cfg";
+    let alpine_path = b"\\EFI\\alpine\\grub.cfg";
+    let file = |path: &[u8]| match crate::raynu_f::fat::resolve_path(vol, r, path) {
+        Ok(e) if !e.is_dir() => Some(e),
+        _ => None,
+    };
+    let boot = file(boot_path);
+    let alpine = file(alpine_path);
+    match crate::raynu_f::fat::pick_grub_cfg(boot.as_ref(), alpine.as_ref()) {
+        Some((path, bytes)) => {
+            serial::write_str("boot: RayNu-F grubcfg=yes path=");
+            for &b in path {
+                serial::write_byte(b);
+            }
+            serial::write_str(" bytes=");
+            write_dec(u64::from(bytes));
+            serial::write_line(" (F7 disk; not ISO-INSTALL-OK)");
+        }
+        None => {
+            serial::write_line("boot: RayNu-F grubcfg=no (F7 disk; not ISO-INSTALL-OK)");
+        }
+    }
+}
+
 /// F7: mount the GPT ESP on the install disk and stage `\EFI\BOOT\BOOTX64.EFI`
 /// (fallback `\EFI\alpine\grubx64.efi`). Publishes a Hardware/Vendor whole-disk
 /// path on `HANDLE_DISK` (not Media/HardDrive — GRUB `efidisk` would skip
@@ -8295,6 +8325,7 @@ unsafe fn raynu_f_stage_disk_bootloader(
     serial::write_str(" bytes=");
     write_dec(u64::from(entry.size));
     serial::write_line(" (F7 disk; not ISO-INSTALL-OK)");
+    raynu_f_note_esp_grub_cfg(&vol, &vol_reader);
     let loaded = raynu_f_stage_bootloader_from_volume(
         &vol,
         &vol_reader,
@@ -13567,7 +13598,9 @@ unsafe fn try_inject_guest_irq() {
     if !crate::devices::ide_cdrom::product_iso_window_armed() {
         return;
     }
-    crate::devices::guest_uart::poll_host_rx();
+    // Paced. Unpaced poll_host_rx() on this resume is per-exit COM2 inb
+    // (iron b5e290be chassis off). RayNu-F already uses the paced wrapper.
+    crate::devices::guest_uart::poll_host_rx_paced();
     crate::devices::guest_uart::reassert_irq();
     // Firmware PIC before leftover IOAPIC pin 2 (BDS CpuSleep needs PIC IRQ 0).
     // Linux after MADT still prefers GSI 2 (iron `a525340`: PIC 0x20 into the
