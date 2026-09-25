@@ -13598,7 +13598,9 @@ unsafe fn try_inject_guest_irq() {
     if !crate::devices::ide_cdrom::product_iso_window_armed() {
         return;
     }
-    crate::devices::guest_uart::poll_host_rx();
+    // Paced. Unpaced poll_host_rx() on this resume is per-exit COM2 inb
+    // (iron b5e290be chassis off). RayNu-F already uses the paced wrapper.
+    crate::devices::guest_uart::poll_host_rx_paced();
     crate::devices::guest_uart::reassert_irq();
     // Firmware PIC before leftover IOAPIC pin 2 (BDS CpuSleep needs PIC IRQ 0).
     // Linux after MADT still prefers GSI 2 (iron `a525340`: PIC 0x20 into the

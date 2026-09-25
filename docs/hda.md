@@ -38,7 +38,7 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 
 | Metric | Value | Δ vs previous HDA |
 |--------|------:|-------------------|
-| **Overall product readiness** | **99%** | **held** — Everest **CLOSED** (`f72b4276`). `36d3b559` repeated the installed Toshiba `login:` (UUID `a0ad99ac-…`, `RAYNU-V-M8-DISK-PERSIST-OK` twice). Not 100%: A4s / console / auth are M8. |
+| **Overall product readiness** | **99%** | **held** — Everest **CLOSED** (`f72b4276`). `36d3b559` reached the installed Toshiba `login:` three times (UUID `a0ad99ac-…`). Two SPA renders were followed by `SYS1003` then `SYS1001` with no GUI power-control line. Not 100%: A4s / console / auth are M8. |
 | **Months to Mount Everest** | **0.0** | **held** (summit reached 2026-09-11; `f72b4276` SPA ISO loop) |
 | **ETA month** | **2026-09** | **closed this month on iron**; next work is M8, not a slipped Everest |
 | **Confidence** | high | E1–E6 on COM2. M8 named separately so polish cannot reopen the summit |
@@ -355,7 +355,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | m8-grubcfg-esp |
-| Summary | **`36d3b559` boot 3: login after `SYS1001`.** Lease `10.99.99.150`. Same UUID `a0ad99ac-…`. vda2 counts match boot 2. Firefox stays closed. Months **0.0 held**. Overall **99 held**. |
+| Summary | **Second SPA power-off on `36d3b559`.** Seq 22501 `SYS1003` 23:45:21 then seq 22502 `SYS1001` 23:45:22. No `RAC1195`. Linux resume SOL RX is now paced. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. A4s / console / auth are M8. Nested QEMU ≠ R640. |
 | Gates touched | `m8_disk_persist_host_gate_passes`; `esp_grub_cfg_prefers_boot_path_and_reports_size`; `./tools/sync-hda-site.sh --check`; `./tools/check-site-chrome.sh`. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA months A 1.0→0.75. |
@@ -366,11 +366,11 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | ID | Blocker / risk | Severity | Mitigations |
 |----|----------------|----------|-------------|
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
-| H2 | TLS / console polish | MED | **M8.1 CLOSED on COM2** (`928d6224` `RAYNU-V-M8-TLS-OK`). `36d3b559` boot 3 is at the installed login after iDRAC `SYS1001`. Firefox stays closed: the boot 2 SPA render was the same minute as that power-off. SPA keyboard (A6) and ESP-token auth (A5) stay firmware-in-tree. rustls/ring stay out of `uefi-bin`. Not a reopened Everest. |
+| H2 | TLS / console polish | MED | **M8.1 CLOSED on COM2** (`928d6224` `RAYNU-V-M8-TLS-OK`). Two Firefox renders on `36d3b559` were each followed by `SYS1003` then `SYS1001` with no GUI power-control line (20:14 and 23:45). Linux resume was still calling unpaced `poll_host_rx` (the `b5e290be` class). This EFI paces it. A4s stays open. SPA keyboard (A6) and ESP-token auth (A5) stay firmware-in-tree. rustls/ring stay out of `uefi-bin`. Not a reopened Everest. |
 | H3 | ~~Guest UEFI CD not bootable / no reboot-to-disk on iron~~ | — | **Resolved** 2026-09-10 (`56a3ffd` / run `34480107961`): `RAYNU-V-RAYNU-F-DISK-BOOT-OK` + second Linux `root=UUID=` from `vda` + `login:` on the real R640. Chain: `59ac070` install-to-disk (`ISO-INSTALL-OK`) → F7 VMCLEAR/VMPTRLD (81 KiB `FirmwareState::new()` stack temporary over the VMCS; template reset + 32-page stack guard) → `975f8fc` relaunch into the installed GRUB menu, 1 M exit-cap inside GRUB's 2 s menu poll loop (~2 exits/µs) → `56a3ffd` RayNu-F wall cap (time, not exits, bounds the loader phase). Earlier: `916af96` THRE chain telemetry → UART TX ring room + line-rate pace + COM2 FIFO burst fixed the `apk` console stall. Evidence: [2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md](evidence/r640/2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md). Do not F11 `34474850361` / `34425781629` for Phase A; `34480107961` is the Phase A reference pin. |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
 | H5 | ~~Phase B — iron SPA still launches the SHELL stub~~ | — | **Resolved** 2026-09-11 (`f72b4276` / `34552377351`). Residual polish is **M8**, not Everest. |
-| H10 | Persist disk must be **reliable**, not once | **HIGH** | `36d3b559` reached the installed `login:` twice the same day (UUID `a0ad99ac-…`). Residual: Force Off still needs ext4 journal recovery and clears a vfat dirty bit. Next product step is A4s, not another flash. Plan: [m8_state.md](m8_state.md). Evidence: [2026-09-24-36d3b559-persist-login.md](evidence/r640/2026-09-24-36d3b559-persist-login.md). |
+| H10 | Persist disk must be **reliable**, not once | **HIGH** | `36d3b559` reached the installed `login:` three times the same day (UUID `a0ad99ac-…`), including once after the 20:14 chassis off. A second SPA power-off at 23:45 is not yet a fourth login. Residual: unclean shutdown still needs ext4 journal recovery and clears a vfat dirty bit. Do not open Firefox on `36d3b559`. Plan: [m8_state.md](m8_state.md). Evidence: [2026-09-24-36d3b559-persist-login.md](evidence/r640/2026-09-24-36d3b559-persist-login.md). |
 | H11 | Truncated `site/` on feature branches | LOW | **This commit (main catch-up):** keep Kimi updater chrome from `origin/main` (nav / Status / CIO View / Stories / Please reboot); patch lived Everest-closed strings in place; `./tools/check-site-chrome.sh` + CI `site-chrome`; always-on `.cursor/rules/site-chrome.mdc`. Do not replace `site/index.html` wholesale on HDA/Everest work. |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-24 | m8-grubcfg-esp | 0.0 | 99 | **Second SPA power-off.** `36d3b559` boot 3 page-up then seq 22501 `SYS1003` 23:45:21 and seq 22502 `SYS1001` 23:45:22. No `RAC1195` (GUI Power On at 23:26 and hard reset at 19:52 both have it). Linux resume `poll_host_rx` is now paced. Quit Firefox. Do not retry the page on `36d3b559`. months 0.0 held; overall 99 held |
 | 2026-09-24 | m8-grubcfg-esp | 0.0 | 99 | **`36d3b559` boot 3: login after `SYS1001`.** Lease `.150`. Same UUID and vda2 counts as boot 2. SPA on boot 2 was the same minute as the chassis off. Firefox stays closed. months 0.0 held; overall 99 held |
 | 2026-09-24 | m8-grubcfg-esp | 0.0 | 99 | **`36d3b559`: installed `login:` twice.** UUID `a0ad99ac-…`, `[vda] 16777216`, `grubcfg=no` (menu on ext4). Boot 2 recovered the journal. months 0.0 held; overall 99 held. A4s still open |
 | 2026-09-24 | m8-grubcfg-esp | 0.0 | 99 | **`c4a41a17`: `DISK-BOOTX64` then `grub>`.** One-shot `lba=2048 n=512 ok` was the ESP BPB, before GRUB. This EFI prints `grubcfg=yes` (path + bytes) or `grubcfg=no` on that walk. Not lived. months 0.0 held; overall 99 held |
@@ -1004,7 +1005,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     **Leave `36d3b559` boot 3 at `localhost:~#`.** Lease is `10.99.99.150`. Firefox stays closed (boot 2 SPA was the same minute as iDRAC `SYS1001`). Update hosts to `10.99.99.150 raynu-v.lab` before any later browser. Do not curl. Do not setup-disk. Do not reflash. Do not flash the Toshiba. See docs/m8_state.md.
+Next move:     **Chassis is off.** Quit Firefox. Do not Power On `36d3b559` to open the page (23:45 `SYS1003` then `SYS1001`, no `RAC1195`). This EFI paces Linux-resume SOL RX. Flash from Ubuntu, then one Firefox tab only after `localhost:~#`. Do not curl. Do not setup-disk. Do not flash the Toshiba. See docs/m8_state.md.
 Rollback:      GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351
                EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc
                COM2 build: sha=f72b4276d198. Do not flash a later M8 persist prototype as known-good.

@@ -1,7 +1,7 @@
 # M8 state — START HERE (persist / LOI Bar A recovery)
 
 > **Read this before touching `mgmt/xhci.rs`, `mgmt/durable_lun.rs`, `mgmt/disk_persist.rs`, `vmx/guest_uefi.rs` (RayNu-F boot source), or the trackers.**  
-> Last rewrite: 2026-09-24 (`36d3b559`: installed `login:` twice, UUID `a0ad99ac-…`. `grubcfg=no` because the menu is on ext4. Leave boot 2 up for A4s). Trackers: [`hda.md`](hda.md) (Everest, closed) · [`loihda.md`](loihda.md) (LOI, open). Plan: [`m8_plan.md`](m8_plan.md). ADR: [ADR-018](adr/ADR-018.md). Evidence: [`2026-09-24-36d3b559-persist-login.md`](evidence/r640/2026-09-24-36d3b559-persist-login.md).
+> Last rewrite: 2026-09-24 (`36d3b559`: three installed `login:`s, then a second SPA power-off at 23:45, `SYS1003`+`SYS1001`, no GUI line. Chassis is off. Linux resume SOL RX is paced on the next EFI). Trackers: [`hda.md`](hda.md) (Everest, closed) · [`loihda.md`](loihda.md) (LOI, open). Plan: [`m8_plan.md`](m8_plan.md). ADR: [ADR-018](adr/ADR-018.md). Evidence: [`2026-09-24-36d3b559-persist-login.md`](evidence/r640/2026-09-24-36d3b559-persist-login.md).
 
 ## One paragraph
 
@@ -13,9 +13,9 @@ Everest (M7) is closed on iron. M8 is operator hardening. Bar A of the LOI needs
 |---------|-----|----------------|----------|
 | Everest rollback | `f72b4276` (GitHub Latest `v0.1.0-everest-closed`) | SPA Start → ISO install → disk boot → `login:` on leftover DRAM | persist across HV reboot, TLS |
 | Persist + TLS close | `928d6224` | Force Off → `keep=1` → `DISK-BOOTX64` → menu → `root=UUID=dd673a9a` → `login:`; `RAYNU-V-M8-DISK-PERSIST-OK`; `RAYNU-V-M8-TLS-OK` on `10.99.99.140:8443` | that filesystem was wiped; standing SPA after login |
-| Persist repeat (this disk) | `36d3b559` | Fresh install, then two Force Offs → menu → `root=UUID=a0ad99ac-…` → `login:`; lease `10.99.99.148`; `grubcfg=no` (menu on ext4) | A4s, A6, production PKI, PERC |
+| Persist repeat (this disk) | `36d3b559` | Fresh install, then three boots → menu → `root=UUID=a0ad99ac-…` → `login:` (leases `.148` then `.150`); `grubcfg=no` (menu on ext4). Boot 3 matched boot 2’s vda2 counts after the 20:14 chassis off | A4s. Opening the SPA on this EFI was followed twice by `SYS1003` then `SYS1001` with no `RAC1195`. Do not open Firefox on this EFI |
 
-`36d3b559` is the stick that is booted. Do not F11 a newer EFI over this login. The rows below are prototypes that did not reach a repeated login.
+`36d3b559` repeated the installed login. The chassis is off after the 23:45 SPA power-off. Quit Firefox before any Power On. Do not F11 `36d3b559` to retry the page. The rows below are prototypes that did not reach a repeated login.
 
 ## USB bench passed (do not F11 this EFI again for `login:`)
 
@@ -107,9 +107,11 @@ PERC H740P = MegaRAID SAS 3.5 (MPT3 Fusion) post-EBS driver on a **spare** VD (n
 
 ## Next iron step (operator)
 
-`36d3b559` boot 3 is at `localhost:~#` after iDRAC `SYS1001` (system turning off) at 20:14:54. Same UUID `a0ad99ac-…`. `/dev/vda2` file counts match boot 2. Leave the shell. Do not type `setup-alpine` or `setup-disk`. Do not curl. Do not reflash.
+The chassis is **off**. Firefox on boot 3 (lease `10.99.99.150`) painted `https://raynu-v.lab:8443` while COM2 was still at `localhost:~#`, then iDRAC logged seq 22501 `SYS1003` at 23:45:21 and seq 22502 `SYS1001` at 23:45:22. No `RAC1195` and no `RAC0701`/`RAC0703` in front of that pair. The same pair at 20:14 was the first SPA death. A GUI Power On (23:26:42) and a GUI hard reset (19:52:18) both have `RAC1195` plus `RAC0701` or `RAC0703`. Quit Firefox. Do not Power On `36d3b559` to open the page again.
 
-Firefox stays closed. The previous SPA render was the same minute as `SYS1003` then `SYS1001`. This lease is `10.99.99.150`. The Mac hosts line for `raynu-v.lab` has to become `10.99.99.150` before any later browser attempt. The millicert does not list `.150`. Lab CA remains `/tmp/raynu-lab-ca.crt.pem`.
+The next EFI paces host SOL RX on the Linux resume path (`poll_host_rx_paced` inside `try_inject_guest_irq`). That call was still unpaced, which is the `b5e290be` chassis-off class. The login had already been taking those `inb`s for the whole shell, so this is the known hole, not a claim that A4s is closed. Flash the Cruzer from Ubuntu only after Firefox is quit. One Firefox tab only after `localhost:~#` on the new EFI. If `SYS1003` is followed by `SYS1001` with no `RAC1195`, leave it off.
+
+Do not type `setup-alpine` or `setup-disk`. Do not curl. Do not flash the Toshiba. The millicert does not list `.150`. Lab CA remains `/tmp/raynu-lab-ca.crt.pem`. A new boot may lease a new address; hosts must match before any browser.
 
 `grubcfg=no` on this disk is expected. Alpine keeps `grub.cfg` on ext4 `/boot/grub`, not on the ESP. The menu still auto-booted.
 

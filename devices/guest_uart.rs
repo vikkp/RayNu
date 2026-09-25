@@ -413,8 +413,9 @@ pub fn inject_sysrq(key: u8) -> bool {
 ///
 /// Product ISO Linux ttyS0 **and** RayNu-F GRUB serial (Alpine
 /// `terminal_input serial console` polls 16550 first; stub LSR never
-/// shows DR so EFI ConIn is never reached at `grub>`). RayNu-F must
-/// call [`poll_host_rx_paced`], never this, on the vmexit hot path.
+/// shows DR so EFI ConIn is never reached at `grub>`). RayNu-F and the
+/// Linux resume path must call [`poll_host_rx_paced`], never this, on
+/// the vmexit hot path.
 pub fn poll_host_rx() {
     for _ in 0..RX_CAP {
         let Some(b) = crate::boot::serial::try_read_byte() else {

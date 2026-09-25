@@ -347,20 +347,22 @@
 
       <section class="section section--hda-com2" id="now">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>NOW · third login · Firefox stays closed</p>
-          <h2 class="section__title">The installed Alpine came back after the chassis turned off.</h2>
+          <p class="milestone-kicker" data-reveal>NOW · chassis off · quit Firefox</p>
+          <h2 class="section__title">The page came up, and the server turned itself off.</h2>
           <p class="section__lede">
-            EFI <code>36d3b559</code> reached <code>localhost login:</code> a
-            third time, after iDRAC logged the server turning off. The same
-            UUID and the same <code>vda2</code> file counts came back. The
-            browser stays closed on this boot. The new lease is
-            <code>10.99.99.150</code>.
+            Firefox painted <code>https://raynu-v.lab:8443</code> on
+            <code>36d3b559</code> while Alpine was still at
+            <code>localhost:~#</code>. iDRAC then logged
+            <code>SYS1003</code> and, one second later,
+            <code>SYS1001</code>. There is no GUI power-control line in
+            front of that pair. Quit Firefox. Do not power this EFI back on
+            to open the page again.
           </p>
           <pre class="ship-code" data-reveal><code>closed: 36d3b559 → DISK-BOOTX64 → menu → UUID a0ad99ac → login: ×3
-lived:  boot 3 at localhost:~# · journal recovered · vda2 counts match boot 2
-power:  SYS1003 then SYS1001 at 20:14, same minute as the boot 2 SPA
-next:   hosts 10.99.99.150 raynu-v.lab · Firefox stays closed · no curl
-never:  reflash · setup-disk · curl Start · flash the Toshiba
+lived:  page up on .150 · then seq 22501 SYS1003 · seq 22502 SYS1001
+power:  no RAC1195 (a real GUI Power On or hard reset has that line)
+next:   quit Firefox · pace Linux SOL RX · one tab only after the new login
+never:  open Firefox on 36d3b559 · setup-disk · curl Start · flash the Toshiba
 read:   docs/m8_state.md</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
             Rollback remains GitHub Latest
