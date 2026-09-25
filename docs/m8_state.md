@@ -133,14 +133,13 @@ Rollback for this path, when a later EFI misbehaves, is the kit in [`releases/v0
 
 ## A6 — SPA keyboard (next code, not this boot)
 
-Iron close is COM2 `RAYNU-V-M8-CONSOLE-OK` after a key from the SPA reaches guest COM1 on the BCM5720 path. `maybe_print_iron_console_ok` in `mgmt/console.rs` prints that marker with `write_line`. After Linux boot, `linux_earlycon_share()` is on and `write_line` returns without printing. `write_line_nowait` does not check that share. The keep-alive lines on this boot were visible because they already use `write_line_nowait`. On this running EFI a Send can inject a key and the marker can still be silent.
+Iron close is COM2 `RAYNU-V-M8-CONSOLE-OK` after a key from the SPA reaches guest COM1 on the BCM5720 path. `maybe_print_iron_console_ok` prints that marker with `write_line_nowait`. Linux earlycon share hushes `write_line`; the keep-alive lines on `1f33eeda` were visible because they already use `write_line_nowait`. This tip has the marker on that path. It is not lived. The page that is up is still `1f33eeda`, and a Send on that page can inject a key while the marker stays silent.
 
-First code step, on a later commit, after this chassis is off:
+After this chassis is off:
 
-1. Print `RAYNU-V-M8-CONSOLE-OK` with `write_line_nowait`.
-2. Flash that EFI only after this page is gone. Do not F11 over `1f33eeda` while Firefox is connected to it.
-3. After `localhost:~#`, one harmless character in Send. Not `setup-alpine`. Not `setup-disk`.
-4. Proof is the character in the guest console on Activity, and the marker on COM2. The Activity tail also copies host UART lines (`HTTP keep-alive`), so the character in the guest banner is the proof.
+1. Flash this tip. Do not F11 it while Firefox is connected to `1f33eeda`.
+2. After `localhost:~#`, one harmless character in Send. Not `setup-alpine`. Not `setup-disk`.
+3. Proof is the character in the guest console on Activity, and `RAYNU-V-M8-CONSOLE-OK` on COM2. The Activity tail also copies host UART lines (`HTTP keep-alive`), so the character in the guest banner is the proof.
 
 Host/CI still never print `RAYNU-V-M8-CONSOLE-OK`. **not VNC**.
 

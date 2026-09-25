@@ -31,6 +31,8 @@ pub fn console_surface_present() -> bool {
         && console.contains("fn firmware_console_serves_spa_keys(")
         && console.contains("fn host_never_prints_iron_console_ok(")
         && console.contains("fn maybe_print_iron_console_ok(")
+        && console.contains("write_line_nowait(M8_CONSOLE_OK_MARKER)")
+        && !console.contains("write_line(M8_CONSOLE_OK_MARKER)")
         && console.contains("fn prop_console_host_package(")
         && console.contains("fn inject_operator_keys(")
         && console.contains(M8_CONSOLE_OK_MARKER)

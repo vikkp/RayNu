@@ -120,7 +120,7 @@ All must be true (no hand-waving):
 | **UEFI NIC HTTP listen** | DONE (M7.6 iron) | `RAYNU-V-M7-UEFI-HTTP-OK` R640 SNP residual; [2026-08-16-uefi-http-ok.md](evidence/r640/2026-08-16-uefi-http-ok.md) |
 | PRE-EBS durable mgmt tables | DONE | `pre_ebs_mgmt` shared across HTTP exchanges |
 | TLS | **DONE on iron** | `RAYNU-V-M8-TLS-OK` COM2 `928d6224` after native HTTPS GET `.140` before RayNu-F; Mac `curl --cacert` SPA; lab millicert / TLS 1.2 only; PRE-EBS SNP stays `http://`; [2026-09-19-928d6224-m8-tls-ok.md](evidence/r640/2026-09-19-928d6224-m8-tls-ok.md) |
-| Guest console / serial log UI | PARTIAL | A4s lived on `1f33eeda` (page stayed up; Activity showed guest COM1). SPA `POST /console/keys` → guest COM1 is A6, still open. `RAYNU-V-M8-CONSOLE-OK` uses `write_line` and is hushed after Linux shares the UART; the next code step is `write_line_nowait`. `GET /logs/guest` is guest COM1 TX (not iDRAC SOL) and also copies those nowait host lines. `GET /logs/serial` stays HV UART. HostReady UART (`RAYNU-V-M8-CONSOLE-HOST-OK`). Iron CONSOLE-OK is typing from the SPA on BCM5720 then COM2 (not VNC) |
+| Guest console / serial log UI | PARTIAL | A4s lived on `1f33eeda` (page stayed up; Activity showed guest COM1). SPA `POST /console/keys` → guest COM1 is A6, still open. This tip prints `RAYNU-V-M8-CONSOLE-OK` with `write_line_nowait` (Linux hushes `write_line`). Not lived. `GET /logs/guest` is guest COM1 TX (not iDRAC SOL) and also copies nowait host lines. `GET /logs/serial` stays HV UART. HostReady UART (`RAYNU-V-M8-CONSOLE-HOST-OK`). Iron CONSOLE-OK is typing from the SPA on BCM5720 then COM2 (not VNC) |
 | Auth beyond bring-up toy | PARTIAL | HostReady rejects bring-up (`RAYNU-V-M8-AUTH-HOST-OK`); firmware still lab latch without ESP `auth.token` (not iron AUTH-OK) |
 | Networking/storage ops UI | MISSING | probes only |
 | Audit/tasks pane | PARTIAL | ring exists; UI thin |
@@ -355,10 +355,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | m8-grubcfg-esp |
-| Summary | **A4s lived. Rollback kit `v0.1.0-m8-a4s`.** EFI is the CI binary of `1f33eeda72f9` (run `36137732145`, SHA256 `5539d838…`). One TLS session, Host green, guest COM1 in Activity. Next is A6 (`write_line_nowait` before any Send). Everest Latest stays `v0.1.0-everest-closed`. Months **0.0 held**. Overall **99 held**. |
+| Summary | **A6 marker uses `write_line_nowait`. Not lived.** The running page stays `1f33eeda` / `v0.1.0-m8-a4s`. Leave Send empty. Flash this tip only after that chassis is off, then one harmless key. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. A6 / auth are M8. Nested QEMU ≠ R640. |
 | Gates touched | `./tools/sync-hda-site.sh --check`; `./tools/sync-loihda-site.sh --check`; `./tools/check-site-chrome.sh`. No rebuild. No MegaRAID. |
-| Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA months A 0.75→0.5. |
+| Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA months A 0.5 held. Bar A 88 held. |
 
 
 ## Blockers & risks (Everest-relevant)
@@ -366,7 +366,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | ID | Blocker / risk | Severity | Mitigations |
 |----|----------------|----------|-------------|
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
-| H2 | TLS / console polish | MED | **M8.1 CLOSED on COM2** (`928d6224` `RAYNU-V-M8-TLS-OK`). **A4s lived** on `1f33eeda72f9` (lease `.154`): one `TCP accept`, then `HTTP keep-alive`, Host green, Activity showed Alpine login, chassis stayed up. Four earlier page renders were each followed by `SYS1003` then `SYS1001` with no `RAC1195`. A6 is next: `RAYNU-V-M8-CONSOLE-OK` still uses `write_line` and is hushed after login. A5 stays firmware-in-tree. rustls/ring stay out of `uefi-bin`. Not a reopened Everest. |
+| H2 | TLS / console polish | MED | **M8.1 CLOSED on COM2** (`928d6224` `RAYNU-V-M8-TLS-OK`). **A4s lived** on `1f33eeda72f9` (lease `.154`): one `TCP accept`, then `HTTP keep-alive`, Host green, Activity showed Alpine login, chassis stayed up. Four earlier page renders were each followed by `SYS1003` then `SYS1001` with no `RAC1195`. A6 marker now uses `write_line_nowait`. Not lived. Leave Send empty on `1f33eeda`. A5 stays firmware-in-tree. rustls/ring stay out of `uefi-bin`. Not a reopened Everest. |
 | H3 | ~~Guest UEFI CD not bootable / no reboot-to-disk on iron~~ | — | **Resolved** 2026-09-10 (`56a3ffd` / run `34480107961`): `RAYNU-V-RAYNU-F-DISK-BOOT-OK` + second Linux `root=UUID=` from `vda` + `login:` on the real R640. Chain: `59ac070` install-to-disk (`ISO-INSTALL-OK`) → F7 VMCLEAR/VMPTRLD (81 KiB `FirmwareState::new()` stack temporary over the VMCS; template reset + 32-page stack guard) → `975f8fc` relaunch into the installed GRUB menu, 1 M exit-cap inside GRUB's 2 s menu poll loop (~2 exits/µs) → `56a3ffd` RayNu-F wall cap (time, not exits, bounds the loader phase). Earlier: `916af96` THRE chain telemetry → UART TX ring room + line-rate pace + COM2 FIFO burst fixed the `apk` console stall. Evidence: [2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md](evidence/r640/2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md). Do not F11 `34474850361` / `34425781629` for Phase A; `34480107961` is the Phase A reference pin. |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
 | H5 | ~~Phase B — iron SPA still launches the SHELL stub~~ | — | **Resolved** 2026-09-11 (`f72b4276` / `34552377351`). Residual polish is **M8**, not Everest. |
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-25 | m8-console-nowait | 0.0 | 99 | **A6 marker is `write_line_nowait`. Not lived.** `1f33eeda` still hushes `write_line` after login. Leave that Send box empty. Flash this tip only after that chassis is off. months 0.0 held; overall 99 held |
 | 2026-09-25 | m8-grubcfg-esp | 0.0 | 99 | **A4s lived. Kit `v0.1.0-m8-a4s`.** CI EFI of `1f33eeda72f9` (run `36137732145`). One `TCP accept`, `HTTP keep-alive`, Host green, guest COM1 in Activity. Chassis stayed up. Next is A6. Everest Latest stays `f72b4276`. months 0.0 held; overall 99 held |
 | 2026-09-25 | m8-grubcfg-esp | 0.0 | 99 | **Keep-alive EFI built, not lived.** One TLS handshake. Later `/vms` polls stay on that session (`HTTP keep-alive`). New handshake after peer close, `Connection: close`, or 10 min idle. Do not flash `3f80abd0` or reopen Firefox on `3e9ce45e`. A4s still open. months 0.0 held; overall 99 held |
 | 2026-09-25 | m8-grubcfg-esp | 0.0 | 99 | **No-relisten is a probe.** Do not flash `3f80abd0`. Product session is one TLS handshake and HTTP keep-alive on the one socket. LOI waits on a page that stays up beside the guest. months 0.0 held; overall 99 held |
@@ -1011,7 +1012,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     Leave the live page on `1f33eeda`. Leave Send empty. Do not refresh. Do not flash while Firefox is connected. Next code is A6: print RAYNU-V-M8-CONSOLE-OK with write_line_nowait, then one harmless key after a later boot. Do not setup-alpine. Do not setup-disk. Do not curl. See docs/m8_state.md.
+Next move:     Leave the live page on `1f33eeda`. Leave Send empty. Do not refresh. Do not flash while Firefox is connected. This tip prints RAYNU-V-M8-CONSOLE-OK with write_line_nowait. Flash it only after that chassis is off, then one harmless key. Do not setup-alpine. Do not setup-disk. Do not curl. See docs/m8_state.md.
 Rollback:      Standing SPA: v0.1.0-m8-a4s → CI 36137732145 / COM2 sha=1f33eeda72f9 / EFI SHA256 5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693
 Everest:       GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351 / EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc / COM2 build: sha=f72b4276d198
 Do not F11:    M8 prototypes `b5e290be` `17d120c5` `3b388279` `08202468` `d60431ee` `28cd4ff1` `15e3d665` `5c32bd06` `1fa231df` `e5cca2e0` `c4a41a17` (table in docs/m8_state.md); Phase B fails `34548550755` / `7f8dc0a9`

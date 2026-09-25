@@ -11,8 +11,9 @@
 //! console). This is **not VNC**.
 //!
 //! Iron close marker [`M8_CONSOLE_OK_MARKER`] is operator typing in Alpine
-//! from the SPA after `BOOT-OK` on BCM5720, then COM2. Host/CI print
-//! [`M8_CONSOLE_HOST_OK_MARKER`]. Nested QEMU ≠ R640. Do not flash. Not VNC.
+//! from the SPA after `BOOT-OK` on BCM5720, then COM2. The print uses
+//! `write_line_nowait` because Linux earlycon share hushes `write_line`.
+//! Host/CI print [`M8_CONSOLE_HOST_OK_MARKER`]. Nested QEMU ≠ R640. Not VNC.
 
 use core::sync::atomic::{AtomicBool, Ordering};
 
@@ -86,7 +87,9 @@ pub fn maybe_print_iron_console_ok(keys_ok: bool, bcm5720: bool) -> bool {
     }
     #[cfg(feature = "uefi-bin")]
     {
-        crate::boot::serial::write_line(M8_CONSOLE_OK_MARKER);
+        // linux earlycon share drops write_line after Alpine boot. COM2
+        // after login only shows write_line_nowait (same path as HTTP keep-alive).
+        crate::boot::serial::write_line_nowait(M8_CONSOLE_OK_MARKER);
     }
     true
 }
