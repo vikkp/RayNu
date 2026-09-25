@@ -86,7 +86,7 @@
               A4 TLS iron printed <code>RAYNU-V-M8-TLS-OK</code> on
               <code>928d6224</code> after
               <code>curl --cacert</code> returned the SPA. Standing HTTPS
-              during Alpine is firmware-in-tree, not iron. Lab millicert,
+              during Alpine lived on <code>1f33eeda</code> (Host stayed green). Lab millicert,
               TLS 1.2 only. PRE-EBS SNP remains
               <strong>plaintext HTTP</strong>.
             </li>
@@ -97,7 +97,9 @@
               latch. The box you own still accepts it.
             </li>
             <li>
-              Keyboard is iDRAC SOL / HV UART. The SPA is not a guest console.
+              The SPA typed once into Alpine (<code>abc</code>). The guest
+              log still mixes host UART lines. Not VNC. iDRAC SOL remains
+              the evidence channel.
             </li>
           </ul>
         </div>
@@ -131,9 +133,9 @@
               credential.
             </li>
             <li>
-              Iron SPA keyboard / VNC is open until standing HTTPS is lived.
-              Firmware <code>POST /console/keys</code> and
-              <code>GET /logs/guest</code> are in-tree. Not VNC.
+              Iron SPA keyboard lived once (<code>abc</code> reached Alpine).
+              The guest log still mixes host UART lines. Not VNC. Overview
+              Power off host left iDRAC Off.
             </li>
           </ul>
         </div>
@@ -150,8 +152,9 @@
           </p>
           <p data-reveal>
             A1 Everest is done. A2 persist is done on evidence. A3 is this
-            page. <strong>A4 TLS iron is DONE.</strong> <strong>Standing SPA
-            is NOW</strong> (then A6). A5 is a named residual, not a fake close.
+            page. <strong>A4 TLS iron is DONE.</strong> Standing SPA lived.
+            <strong>A6 keyboard lived once.</strong> A5 auth is the open
+            residual, not a fake close.
           </p>
           <div class="cta" data-reveal>
             <a class="cta__primary" href="loi.html">Path to LOI</a>

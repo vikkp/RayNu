@@ -38,14 +38,14 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 
 | Metric | Value | Δ vs previous HDA |
 |--------|------:|-------------------|
-| **Overall product readiness** | **99%** | **held** — Everest **CLOSED** (`f72b4276`). A4s lived on `1f33eeda` (one TLS session, Host green, guest COM1 in the page). Rollback kit `v0.1.0-m8-a4s`. Not 100%: A6 console / A5 auth are M8. |
+| **Overall product readiness** | **99%** | **held** — Everest **CLOSED** (`f72b4276`). A6 lived once on this tip and Overview Power off host left iDRAC Off. Rollback kit `v0.1.0-m8-a4s` stays the standing-SPA pin. Not 100%: A5 auth is M8. |
 | **Months to Mount Everest** | **0.0** | **held** (summit reached 2026-09-11; `f72b4276` SPA ISO loop) |
 | **ETA month** | **2026-09** | **closed this month on iron**; next work is M8, not a slipped Everest |
 | **Confidence** | high | E1–E6 on COM2. M8 named separately so polish cannot reopen the summit |
 | **Hypervisor core (VMX/EPT/Linux/multi-VM)** | ~88% | proved on real R640 through M4 |
 | **Ship EFI artifact** | ~95% | M7.0 + iron kits under `releases/` |
 | **Real R640 boot** | ~98% | E2 closed; Redfish/soak follow-ons only |
-| **vSphere-like UI (network)** | ~98% | E3 + E3b + Phase F + P0-14 + **P0-63 Phase B CLOSED on iron**. **M8.1 TLS iron CLOSED** (`RAYNU-V-M8-TLS-OK`). M8 residual: console/auth |
+| **vSphere-like UI (network)** | ~98% | E3 + E3b + Phase F + P0-14 + **P0-63 Phase B CLOSED on iron**. **M8.1 TLS iron CLOSED** (`RAYNU-V-M8-TLS-OK`). A6 keyboard lived once. SPA host power-off left iDRAC Off. M8 residual: auth |
 | **Deploy Linux ISO** | ~99% | **DONE on iron end-to-end** (Phase A `56a3ffd` + Phase B SPA `f72b4276`). HV-reboot persist **DONE on evidence** (`4af78b43`). Remaining 1% is **M8** (upload / catalog persist / minted persist-OK / multi-distro) |
 | **Production bar (M6.8–M6.9)** | **100%** | soak + EXT closed on Latitude |
 
@@ -120,7 +120,7 @@ All must be true (no hand-waving):
 | **UEFI NIC HTTP listen** | DONE (M7.6 iron) | `RAYNU-V-M7-UEFI-HTTP-OK` R640 SNP residual; [2026-08-16-uefi-http-ok.md](evidence/r640/2026-08-16-uefi-http-ok.md) |
 | PRE-EBS durable mgmt tables | DONE | `pre_ebs_mgmt` shared across HTTP exchanges |
 | TLS | **DONE on iron** | `RAYNU-V-M8-TLS-OK` COM2 `928d6224` after native HTTPS GET `.140` before RayNu-F; Mac `curl --cacert` SPA; lab millicert / TLS 1.2 only; PRE-EBS SNP stays `http://`; [2026-09-19-928d6224-m8-tls-ok.md](evidence/r640/2026-09-19-928d6224-m8-tls-ok.md) |
-| Guest console / serial log UI | PARTIAL | A4s lived on `1f33eeda` (page stayed up; Activity showed guest COM1). SPA `POST /console/keys` → guest COM1 is A6, still open. This tip prints `RAYNU-V-M8-CONSOLE-OK` with `write_line_nowait` (Linux hushes `write_line`). Not lived. `GET /logs/guest` is guest COM1 TX (not iDRAC SOL) and also copies nowait host lines. `GET /logs/serial` stays HV UART. HostReady UART (`RAYNU-V-M8-CONSOLE-HOST-OK`). Iron CONSOLE-OK is typing from the SPA on BCM5720 then COM2 (not VNC) |
+| Guest console / serial log UI | **LIVED once** | Activity on this tip showed `abc`, `-sh: abc: not found`, `localhost:~#`, and `RAYNU-V-M8-CONSOLE-OK`, Host green. The guest box still copies `HTTP keep-alive`. Overview **Power off host** then COM2 `boot: SPA host po` and iDRAC Power State Off. The full shutdown sentence is queued; SOL shows one UART burst before `ResetSystem`. No lifecycle paste. `GET /logs/serial` stays HV UART. HostReady UART (`RAYNU-V-M8-CONSOLE-HOST-OK`). not VNC |
 | Auth beyond bring-up toy | PARTIAL | HostReady rejects bring-up (`RAYNU-V-M8-AUTH-HOST-OK`); firmware still lab latch without ESP `auth.token` (not iron AUTH-OK) |
 | Networking/storage ops UI | MISSING | probes only |
 | Audit/tasks pane | PARTIAL | ring exists; UI thin |
@@ -167,7 +167,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 | M+2 | 2026-09 | E3b native NIC lab (QEMU e1000) + ISO residual | ADR-013 Phase C | **Phase C DONE (QEMU)** |
 | M+3 | 2026-08 | E3b iron HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | **DONE (M7.8 iron)** |
 | M+4 | 2026-09 | Phase B (SPA → installed disk) | remaining Everest | **DONE — EVEREST CLOSED** (`f72b4276` / `34552377351`) |
-| M+5 | 2026-10 | **M8.0** persist (file nested / LUN iron / leftover fallback) | keep=1 + `DISK-BOOTX64` + `root=UUID=` after Force Off | **Repeated** through `1f33eeda` (sixth `login:`, UUID `a0ad99ac-…`). A4s lived. Next is A6. Rollback kit `v0.1.0-m8-a4s`. See [m8_state.md](m8_state.md). |
+| M+5 | 2026-10 | **M8.0** persist (file nested / LUN iron / leftover fallback) | keep=1 + `DISK-BOOTX64` + `root=UUID=` after Force Off | **Repeated** through `1f33eeda`. A6 lived once on this tip. SPA power-off left iDRAC Off. Next is A5. Rollback kit `v0.1.0-m8-a4s`. See [m8_state.md](m8_state.md). |
 
 ### Timeline burn-down
 
@@ -175,7 +175,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 2026-07 ████████  HDA + M6 closed (Latitude)
 2026-08 ████████  R640 boot (E2) + E3b HTTP-OK
 2026-09 ████████  E5 + Phase B — **Mount Everest CLOSED** (`f72b4276`)  ← months_to_everest = 0.0
-2026-10 ██████░░  M8.0 persist **repeated**; A4s **lived** on `1f33eeda`; next is A6 SPA keyboard
+2026-10 ███████░  M8.0 persist **repeated**; A6 **lived once**; SPA power-off left iDRAC Off; next is A5
 2026-11 ░░░░░░░░  M8.3 console iron → PERC spare VD
 ```
 
@@ -245,7 +245,7 @@ Ordered for critical path (parallelize B with D design):
 | P0-9 | M6.9 external audit + spec review | E6 | **DONE** | proofs green | `docs/`, `ept_model/`, `mgmt/ext` |
 | P0-10 | R640 soak / hardware confidence | E2 | 0.5 | P0-2 | `tools/`, `mgmt/soak` — post M7.5 |
 | P0-11 | **M9 sketch** vMotion-like / DRS-like / hot-add | — | — | M8 | deferred — was M8 in ADR-009; **M9** after operator hardening (ADR-018) |
-| P0-64 | **M8** operator product hardening | — | IN PROGRESS | Everest closed | [ADR-018](adr/ADR-018.md) / [m8_plan.md](m8_plan.md) / **[m8_state.md](m8_state.md) (START HERE)**. `1f33eeda` repeated the installed `login:` (UUID `a0ad99ac-…`) and kept the SPA up (A4s). Next is A6. Narrative: [36d3b559](evidence/r640/2026-09-24-36d3b559-persist-login.md). Nested QEMU ≠ R640. |
+| P0-64 | **M8** operator product hardening | — | IN PROGRESS | Everest closed | [ADR-018](adr/ADR-018.md) / [m8_plan.md](m8_plan.md) / **[m8_state.md](m8_state.md) (START HERE)**. A6 lived once on this tip. SPA power-off left iDRAC Off. Next is A5. Narrative: [36d3b559](evidence/r640/2026-09-24-36d3b559-persist-login.md). Nested QEMU ≠ R640. |
 
 ---
 
@@ -354,11 +354,11 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-grubcfg-esp |
-| Summary | **A6 marker uses `write_line_nowait`. Not lived.** The running page stays `1f33eeda` / `v0.1.0-m8-a4s`. Leave Send empty. Flash this tip only after that chassis is off, then one harmless key. Months **0.0 held**. Overall **99 held**. |
-| Everest impact | none — Everest stays closed. Not 100%. A6 / auth are M8. Nested QEMU ≠ R640. |
+| Commit | m8-spa-poweroff |
+| Summary | **A6 lived once. iDRAC Power State Off after Power off host.** Activity showed `abc` executed and `RAYNU-V-M8-CONSOLE-OK`. COM2 started `boot: SPA host po`. No lifecycle paste. Months **0.0 held**. Overall **99 held**. |
+| Everest impact | none — Everest stays closed. Not 100%. A5 auth is M8. Nested QEMU ≠ R640. |
 | Gates touched | `./tools/sync-hda-site.sh --check`; `./tools/sync-loihda-site.sh --check`; `./tools/check-site-chrome.sh`. No rebuild. No MegaRAID. |
-| Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA months A 0.5 held. Bar A 88 held. |
+| Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA months A 0.5→0.25. Bar A 88→92. |
 
 
 ## Blockers & risks (Everest-relevant)
@@ -366,7 +366,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | ID | Blocker / risk | Severity | Mitigations |
 |----|----------------|----------|-------------|
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
-| H2 | TLS / console polish | MED | **M8.1 CLOSED on COM2** (`928d6224` `RAYNU-V-M8-TLS-OK`). **A4s lived** on `1f33eeda72f9` (lease `.154`): one `TCP accept`, then `HTTP keep-alive`, Host green, Activity showed Alpine login, chassis stayed up. Four earlier page renders were each followed by `SYS1003` then `SYS1001` with no `RAC1195`. A6 marker now uses `write_line_nowait`. Not lived. Leave Send empty on `1f33eeda`. A5 stays firmware-in-tree. rustls/ring stay out of `uefi-bin`. Not a reopened Everest. |
+| H2 | TLS / console polish | MED | **M8.1 CLOSED on COM2** (`928d6224` `RAYNU-V-M8-TLS-OK`). **A4s lived** on `1f33eeda72f9`. **A6 lived once** on this tip: Activity `abc` / `-sh: abc: not found` / `RAYNU-V-M8-CONSOLE-OK`, Host green. Overview Power off host then COM2 `boot: SPA host po` and iDRAC Power State Off. No lifecycle paste. SOL shows one UART burst of the shutdown line. A5 stays firmware-in-tree. rustls/ring stay out of `uefi-bin`. Not a reopened Everest. |
 | H3 | ~~Guest UEFI CD not bootable / no reboot-to-disk on iron~~ | — | **Resolved** 2026-09-10 (`56a3ffd` / run `34480107961`): `RAYNU-V-RAYNU-F-DISK-BOOT-OK` + second Linux `root=UUID=` from `vda` + `login:` on the real R640. Chain: `59ac070` install-to-disk (`ISO-INSTALL-OK`) → F7 VMCLEAR/VMPTRLD (81 KiB `FirmwareState::new()` stack temporary over the VMCS; template reset + 32-page stack guard) → `975f8fc` relaunch into the installed GRUB menu, 1 M exit-cap inside GRUB's 2 s menu poll loop (~2 exits/µs) → `56a3ffd` RayNu-F wall cap (time, not exits, bounds the loader phase). Earlier: `916af96` THRE chain telemetry → UART TX ring room + line-rate pace + COM2 FIFO burst fixed the `apk` console stall. Evidence: [2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md](evidence/r640/2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md). Do not F11 `34474850361` / `34425781629` for Phase A; `34480107961` is the Phase A reference pin. |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
 | H5 | ~~Phase B — iron SPA still launches the SHELL stub~~ | — | **Resolved** 2026-09-11 (`f72b4276` / `34552377351`). Residual polish is **M8**, not Everest. |
@@ -381,6 +381,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-25 | m8-spa-poweroff | 0.0 | 99 | **A6 lived once. iDRAC Off.** Activity `abc` reached Alpine and `RAYNU-V-M8-CONSOLE-OK` showed in the page. Power off host. COM2 `boot: SPA host po`. Power State Off. No lifecycle paste. months 0.0 held; overall 99 held |
+| 2026-09-25 | m8-spa-poweroff | 0.0 | 99 | **SPA Power off host, not lived.** `POST /host/poweroff` on the kept session, then `VMXOFF` and `ResetSystem` SHUTDOWN. Failed `VMXOFF` leaves the page up. `1f33eeda` has no button. iDRAC off, then flash. A6 still `write_line_nowait`, not lived. months 0.0 held; overall 99 held |
 | 2026-09-25 | m8-console-nowait | 0.0 | 99 | **A6 marker is `write_line_nowait`. Not lived.** `1f33eeda` still hushes `write_line` after login. Leave that Send box empty. Flash this tip only after that chassis is off. months 0.0 held; overall 99 held |
 | 2026-09-25 | m8-grubcfg-esp | 0.0 | 99 | **A4s lived. Kit `v0.1.0-m8-a4s`.** CI EFI of `1f33eeda72f9` (run `36137732145`). One `TCP accept`, `HTTP keep-alive`, Host green, guest COM1 in Activity. Chassis stayed up. Next is A6. Everest Latest stays `f72b4276`. months 0.0 held; overall 99 held |
 | 2026-09-25 | m8-grubcfg-esp | 0.0 | 99 | **Keep-alive EFI built, not lived.** One TLS handshake. Later `/vms` polls stay on that session (`HTTP keep-alive`). New handshake after peer close, `Connection: close`, or 10 min idle. Do not flash `3f80abd0` or reopen Firefox on `3e9ce45e`. A4s still open. months 0.0 held; overall 99 held |
@@ -1012,7 +1014,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     Leave the live page on `1f33eeda`. Leave Send empty. Do not refresh. Do not flash while Firefox is connected. This tip prints RAYNU-V-M8-CONSOLE-OK with write_line_nowait. Flash it only after that chassis is off, then one harmless key. Do not setup-alpine. Do not setup-disk. Do not curl. See docs/m8_state.md.
+Next move:     Chassis is Off. Leave it off. A6 lived once and Power off host matched iDRAC Power State Off. Next is A5. Do not power on to finish the COM2 sentence. Do not setup-alpine. Do not setup-disk. Do not curl. See docs/m8_state.md.
 Rollback:      Standing SPA: v0.1.0-m8-a4s → CI 36137732145 / COM2 sha=1f33eeda72f9 / EFI SHA256 5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693
 Everest:       GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351 / EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc / COM2 build: sha=f72b4276d198
 Do not F11:    M8 prototypes `b5e290be` `17d120c5` `3b388279` `08202468` `d60431ee` `28cd4ff1` `15e3d665` `5c32bd06` `1fa231df` `e5cca2e0` `c4a41a17` (table in docs/m8_state.md); Phase B fails `34548550755` / `7f8dc0a9`

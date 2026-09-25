@@ -533,6 +533,62 @@ fn formats_response() {
 }
 
 #[test]
+fn spa_poweroff_post_latches_and_stays_off_reset() {
+    use crate::mgmt::host_power::{self, HOST_POWEROFF_PATH};
+    host_power::clear_spa_poweroff();
+    let mut table = VmTable::new();
+    let mut images = ImageTable::new();
+    let mut iso_plan = IsoDeployPlan::empty();
+    let mut iso_install = InstallToDiskPlan::empty();
+    let mut out = [0u8; HTTP_RESPONSE_CAP];
+    let denied = format!("POST {HOST_POWEROFF_PATH} HTTP/1.1\r\n\r\n");
+    let n = handle_http_request(
+        &mut table,
+        &mut images,
+        &mut iso_plan,
+        &mut iso_install,
+        &denied,
+        &mut out,
+    )
+    .unwrap();
+    let s = core::str::from_utf8(&out[..n]).unwrap();
+    assert!(s.contains("HTTP/1.1 401"), "{s}");
+    assert!(!host_power::spa_poweroff_latched());
+    let get = format!("GET {HOST_POWEROFF_PATH} HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n");
+    let n = handle_http_request(
+        &mut table,
+        &mut images,
+        &mut iso_plan,
+        &mut iso_install,
+        &get,
+        &mut out,
+    )
+    .unwrap();
+    let s = core::str::from_utf8(&out[..n]).unwrap();
+    assert!(s.contains("HTTP/1.1 400"), "{s}");
+    assert!(!host_power::spa_poweroff_latched());
+    let post = format!(
+        "POST {HOST_POWEROFF_PATH} HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n"
+    );
+    let n = handle_http_request(
+        &mut table,
+        &mut images,
+        &mut iso_plan,
+        &mut iso_install,
+        &post,
+        &mut out,
+    )
+    .unwrap();
+    let s = core::str::from_utf8(&out[..n]).unwrap();
+    assert!(s.contains("HTTP/1.1 200"), "{s}");
+    assert!(s.contains("\"power\":\"off\""), "{s}");
+    assert!(s.contains("Connection: keep-alive"), "{s}");
+    assert!(host_power::spa_poweroff_latched());
+    assert!(!s.contains("ResetSystem"));
+    host_power::clear_spa_poweroff();
+}
+
+#[test]
 fn http_mgmt_package() {
     assert_eq!(M7_HTTP_OK_MARKER, "RAYNU-V-M7-HTTP-OK");
     assert!(HTTP_GAP_NOTE.contains("CLOSED M7.1"));

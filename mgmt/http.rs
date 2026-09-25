@@ -443,6 +443,26 @@ pub fn handle_http_request(
         let n = crate::boot::serial::spa_guest_log_snapshot(&mut log);
         return format_http_response(200, "text/plain; charset=utf-8", &log[..n], out);
     }
+    // SPA Overview: turn this chassis off. 200 is queued here. Firmware
+    // coexist drains it, then VMXOFF and ResetSystem. Not a guest command.
+    if parsed.path == crate::mgmt::host_power::HOST_POWEROFF_PATH {
+        if !matches!(parsed.method, RestMethod::Post) {
+            return format_http_response(400, "text/plain; charset=utf-8", b"bad request", out);
+        }
+        if !auth_allows(parsed.auth_token) {
+            return format_http_response(401, "text/plain; charset=utf-8", b"unauthorized", out);
+        }
+        crate::mgmt::host_power::note_spa_poweroff();
+        crate::audit_log!(crate::audit::AuditEvent::HostPowerOff {
+            source: crate::mgmt::host_power::SPA_POWEROFF_SOURCE,
+        });
+        return format_http_response(
+            200,
+            "application/json",
+            b"{\"ok\":true,\"power\":\"off\"}",
+            out,
+        );
+    }
     // M8.3: SPA keyboard → guest COM1. GET /logs/serial stays HV UART.
     if parsed.path == "/console/keys" {
         if !matches!(parsed.method, RestMethod::Post) {

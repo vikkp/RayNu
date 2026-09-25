@@ -1,11 +1,11 @@
 # M8 state — START HERE (persist / LOI Bar A recovery)
 
 > **Read this before touching `mgmt/xhci.rs`, `mgmt/durable_lun.rs`, `mgmt/disk_persist.rs`, `vmx/guest_uefi.rs` (RayNu-F boot source), or the trackers.**  
-> Last rewrite: 2026-09-25 (`1f33eeda72f9`: sixth `login:`, one TLS session, Host green, guest COM1 in Activity, chassis stayed up. A4s lived. Rollback kit `v0.1.0-m8-a4s`. Next is A6). Trackers: [`hda.md`](hda.md) (Everest, closed) · [`loihda.md`](loihda.md) (LOI, open). Plan: [`m8_plan.md`](m8_plan.md). ADR: [ADR-018](adr/ADR-018.md). Evidence: [`2026-09-24-36d3b559-persist-login.md`](evidence/r640/2026-09-24-36d3b559-persist-login.md). Kit: [`releases/v0.1.0-m8-a4s/`](../releases/v0.1.0-m8-a4s/).
+> Last rewrite: 2026-09-25 (this tip: A6 lived once, then Overview Power off host, iDRAC Power State Off). Trackers: [`hda.md`](hda.md) (Everest, closed) · [`loihda.md`](loihda.md) (LOI, open). Plan: [`m8_plan.md`](m8_plan.md). ADR: [ADR-018](adr/ADR-018.md). Evidence: [`2026-09-24-36d3b559-persist-login.md`](evidence/r640/2026-09-24-36d3b559-persist-login.md). Kit: [`releases/v0.1.0-m8-a4s/`](../releases/v0.1.0-m8-a4s/).
 
 ## One paragraph
 
-Everest (M7) is closed on iron. M8 is operator hardening. Bar A of the LOI needs one R640 to boot the **installed** Alpine from the persist disk (Toshiba USB, 8 GiB virtio slice) after Force Off and sit at `localhost:~#`, then a browser stays on HTTPS (A4s) and types into the guest (A6). `1f33eeda72f9` did the sixth login of UUID `a0ad99ac-ca25-4458-ade1-cd8599ca4928` (lease `10.99.99.154`) and kept one Firefox session up: one `TCP accept`, then `HTTP keep-alive`, Host green, Activity showed `localhost login:`. The `cmpl=0xff` tear is closed (`e5cca2e0` soak 239/239). A4s is lived. A6 is the open step. Leave this page up. Do not flash over it.
+Everest (M7) is closed on iron. M8 is operator hardening. Bar A of the LOI needs one R640 to boot the **installed** Alpine from the persist disk (Toshiba USB, 8 GiB virtio slice) after Force Off and sit at `localhost:~#`, then a browser stays on HTTPS (A4s) and types into the guest (A6). This tip did that typing: Activity showed `abc`, `-sh: abc: not found`, `localhost:~#`, and `RAYNU-V-M8-CONSOLE-OK`, with Host green. Overview **Power off host** then COM2 `boot: SPA host po` and iDRAC Power State Off. The chassis is off. Leave it off. Next is A5.
 
 ## Known-good iron builds (flash these, nothing else, for a demo)
 
@@ -16,9 +16,10 @@ Everest (M7) is closed on iron. M8 is operator hardening. Bar A of the LOI needs
 | Persist repeat (this disk) | `36d3b559` | Fresh install, then three boots → menu → `root=UUID=a0ad99ac-…` → `login:`. Opening the SPA was followed twice by `SYS1003` then `SYS1001` with no `RAC1195` | Do not F11 this EFI to open Firefox |
 | Fourth login, SOL paced | `fa6ce771` | Same UUID, `[vda] 16777216`, vda2 counts match boots 2 and 3, lease `.150`, `localhost:~#`. SPA then went green and the dashboard showed Power State OFF. Lifecycle: seq 22520/22521 at 00:30:20 | Do not F11 this EFI to open Firefox. Paced SOL RX did not stop the power-off |
 | Fifth login, 30 s listen hold | `3e9ce45e` | Same UUID, lease `.151`, vda2 `102909/2084352`. Host red, then green, then red. Seq 22543/22544 at 12:21:23, no `RAC1195` | Do not F11 this EFI to open Firefox. The re-listen is what turned Host green |
-| A4s lived (rollback) | `1f33eeda` | Sixth login, lease `.154`, same UUID, vda2 `102909/2084352`. One `TCP accept`, then `HTTP keep-alive`. Host green. Activity showed Alpine login. Chassis stayed up. Kit `v0.1.0-m8-a4s`, CI `36137732145`, SHA256 `5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693` | Leave the live page. Do not Send. Do not flash over this session. Flash this kit later to return to this path |
+| A4s lived (rollback) | `1f33eeda` | Sixth login, lease `.154`, same UUID, vda2 `102909/2084352`. One `TCP accept`, then `HTTP keep-alive`. Host green. Activity showed Alpine login. Chassis stayed up. Kit `v0.1.0-m8-a4s`, CI `36137732145`, SHA256 `5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693` | Standing-SPA rollback. Flash the kit file. COM2 `build: sha=1f33eeda72f9` |
+| A6 + SPA power-off | `fd2ca12e` | Activity: `abc`, `-sh: abc: not found`, `RAYNU-V-M8-CONSOLE-OK`, Host green. Then Power off host. COM2 `boot: SPA host po`. iDRAC Power State Off. No lifecycle paste. `build: sha=` was not in this paste; the shutdown sentence exists only on this tip | Chassis is Off. Do not power it on to finish the COM2 sentence. Next boot can journal-recover |
 
-The page on `1f33eeda` is up. Leave it. Do not Power On `3e9ce45e` or `3f80abd0` to open Firefox. The rows below are prototypes that did not reach a repeated login.
+The chassis is Off. Leave it off. Do not Power On `3e9ce45e` or `3f80abd0` to open Firefox. The rows below are prototypes that did not reach a repeated login.
 
 ## USB bench passed (do not F11 this EFI again for `login:`)
 
@@ -123,23 +124,21 @@ The product session is in this EFI, still one smoltcp socket on the shared BCM57
 - Shared LOM stays as lived: keep the APE PHY, no phylock, no BMCR reset.
 - Lines the operator must see after `login:` use `write_line_nowait`. Linux hushes `write_line`.
 
-Still lab, and labeled as lab until each one has its own iron close: millicert, the bring-up bearer, the 8 GiB USB slice. PERC persist is Bar B and is a different disk. A4s is lived on `1f33eeda72f9`: one handshake, keep-alive through Overview and Activity, Host green, guest COM1 visible, chassis stayed up. The rollback kit is `v0.1.0-m8-a4s`. A6 is not closed.
+Still lab, and labeled as lab until each one has its own iron close: millicert, the bring-up bearer, the 8 GiB USB slice. PERC persist is Bar B and is a different disk. A4s is lived on `1f33eeda72f9`: one handshake, keep-alive through Overview and Activity, Host green, guest COM1 visible, chassis stayed up. The rollback kit is `v0.1.0-m8-a4s`. A6 lived once on `fd2ca12e`. The chassis is Off.
 
 ## Next iron step (operator)
 
-The page on `1f33eeda` is the A4s close. Leave Firefox on it. Leave the Send box empty. Do not refresh. Do not click Create or Start. Do not curl. Do not `setup-disk`. Do not flash a new EFI while this session is the one serving the browser.
+The chassis is Off. Leave it off. A6 lived once and Power off host matched iDRAC Power State Off. Do not power on to finish the COM2 sentence. Do not curl. Do not `setup-disk`. Next open Bar A item is A5 (ESP `auth.token`).
 
 Rollback for this path, when a later EFI misbehaves, is the kit in [`releases/v0.1.0-m8-a4s/`](../releases/v0.1.0-m8-a4s/) and GitHub release `v0.1.0-m8-a4s` (not GitHub Latest). Flash that file. COM2 must read `build: sha=1f33eeda72f9`. SHA256 `5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693`. CI run `36137732145`. Everest Latest stays `v0.1.0-everest-closed` (`f72b4276`) for the original install loop on leftover DRAM.
 
-## A6 — SPA keyboard (next code, not this boot)
+## A6 — SPA keyboard (lived once)
 
-Iron close is COM2 `RAYNU-V-M8-CONSOLE-OK` after a key from the SPA reaches guest COM1 on the BCM5720 path. `maybe_print_iron_console_ok` prints that marker with `write_line_nowait`. Linux earlycon share hushes `write_line`; the keep-alive lines on `1f33eeda` were visible because they already use `write_line_nowait`. This tip has the marker on that path. It is not lived. The page that is up is still `1f33eeda`, and a Send on that page can inject a key while the marker stays silent.
+Activity on this tip showed `abc`, then `-sh: abc: not found`, then `localhost:~#`, and `RAYNU-V-M8-CONSOLE-OK`, with Host green. `maybe_print_iron_console_ok` prints that marker with `write_line_nowait`. The Activity tail also copies host UART lines (`HTTP keep-alive`). That mixed tail is the residual. **not VNC**.
 
-After this chassis is off:
+## Host power-off (lived; COM2 shows one burst)
 
-1. Flash this tip. Do not F11 it while Firefox is connected to `1f33eeda`.
-2. After `localhost:~#`, one harmless character in Send. Not `setup-alpine`. Not `setup-disk`.
-3. Proof is the character in the guest console on Activity, and `RAYNU-V-M8-CONSOLE-OK` on COM2. The Activity tail also copies host UART lines (`HTTP keep-alive`), so the character in the guest banner is the proof.
+Overview **Power off host** posts `POST /host/poweroff`. The handler returns HTTP 200 on the existing keep-alive socket. A later coexist tick drains that reply, prints `boot: SPA host power-off — VMXOFF then ResetSystem SHUTDOWN`, runs `VMXOFF`, then `EfiResetShutdown`. COM2 showed `boot: SPA host po` because `write_line_nowait` pushes one UART burst and `ResetSystem` follows before another tick drains the rest. iDRAC Power State is Off. No lifecycle paste, so no `SYS` sequence is claimed. If `VMXOFF` fails, the page stays up; that line did not appear. The next boot can still need ext4 journal recovery. Leave the chassis off.
 
 Host/CI still never print `RAYNU-V-M8-CONSOLE-OK`. **not VNC**.
 

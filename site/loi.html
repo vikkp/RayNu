@@ -11,7 +11,7 @@
     <meta property="og:title" content="RayNu-V · Path to LOI" />
     <meta
       property="og:description"
-              content="Two bars: dedicated-box 88%, RAID-fleet 18%. Persist across HV reboot is repeated. SKU card is done. A4 TLS iron is DONE (lab millicert). Standing SPA lived on 1f33eeda. Keyboard and auth are still open. USB is not PERC."
+              content="Two bars: dedicated-box 92%, RAID-fleet 18%. Persist across HV reboot is repeated. SKU card is done. A4 TLS iron is DONE (lab millicert). Standing SPA lived. The SPA typed once, then Power off host left iDRAC Off. Auth is still open. USB is not PERC."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -296,17 +296,17 @@
             <li data-reveal>
               <header>
                 <span class="loi-pieces__name">Guest console UI</span>
-                <span class="loi-pieces__pct" data-piece="console">68%</span>
+                <span class="loi-pieces__pct" data-piece="console">82%</span>
               </header>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill" data-piece-fill="console" style="width: 68%"></span>
+                <span class="hda-bar__fill" data-piece-fill="console" style="width: 82%"></span>
               </div>
               <p>
-                The page showed Alpine <code>localhost login:</code> while the
-                Host card stayed green on <code>1f33eeda</code>. Typing from
-                that page is the next step. The console marker still uses a
-                print path Linux hushes after boot, so the live Send box stays
-                empty. iDRAC SOL remains the evidence channel. Not VNC.
+                Activity on this tip showed <code>abc</code>, then
+                <code>-sh: abc: not found</code>, and
+                <code>RAYNU-V-M8-CONSOLE-OK</code>, with the Host card green.
+                The same log still copies host UART lines
+                (<code>HTTP keep-alive</code>). One boot. Not VNC.
               </p>
             </li>
             <li data-reveal>
@@ -348,20 +348,21 @@
 
       <section class="section section--hda-com2" id="now">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>NOW · A4s lived · A6 next</p>
-          <h2 class="section__title">The page stayed up beside Alpine.</h2>
+          <p class="milestone-kicker" data-reveal>NOW · A6 lived once · chassis Off</p>
+          <h2 class="section__title">The SPA typed, then turned the chassis off.</h2>
           <p class="section__lede">
-            <code>1f33eeda</code> reached <code>localhost:~#</code> on
-            <code>10.99.99.154</code> and kept one HTTPS session. Host stayed
-            green. Activity showed the guest login. Leave that tab up. Leave
-            Send empty. The rollback file is release
+            Activity showed <code>abc</code>, then
+            <code>-sh: abc: not found</code>, and
+            <code>RAYNU-V-M8-CONSOLE-OK</code>. Host stayed green. Power off
+            host left the iDRAC power state Off. Leave the chassis off. The
+            standing-SPA rollback file is still
             <code>v0.1.0-m8-a4s</code>.
           </p>
-          <pre class="ship-code" data-reveal><code>lived:  1f33eeda → DISK-BOOTX64 → UUID a0ad99ac → login: (6th)
-page:   one TCP accept · HTTP keep-alive · Host green · guest COM1 visible
-kit:    v0.1.0-m8-a4s · CI 36137732145 · sha256 5539d838… · not GitHub Latest
-next:   A6 EFI prints RAYNU-V-M8-CONSOLE-OK with write_line_nowait · not lived · flash only after this chassis is off
-never:  Send on this page · flash over this session · setup-alpine · setup-disk · curl Start · flash the Toshiba
+          <pre class="ship-code" data-reveal><code>lived:  abc reached Alpine · RAYNU-V-M8-CONSOLE-OK in Activity · Host green
+off:    COM2 boot: SPA host po · iDRAC Power State Off · no lifecycle paste
+kit:    v0.1.0-m8-a4s remains the standing-SPA rollback · not GitHub Latest
+next:   A5 ESP auth.token · leave the chassis off
+never:  power on to finish the COM2 sentence · setup-alpine · setup-disk · curl Start · flash the Toshiba
 read:   docs/m8_state.md</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
             Rollback remains GitHub Latest

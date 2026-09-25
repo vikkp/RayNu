@@ -385,6 +385,11 @@ pub enum AuditEvent {
         catalog: u64,
         boot_image: u64,
     },
+    /// Authenticated SPA `POST /host/poweroff`. `source` 1 = Overview button.
+    /// Firmware `ResetSystem` runs later, after that HTTP 200 drains.
+    HostPowerOff {
+        source: u8,
+    },
 }
 
 /// One sealed audit record in the hash chain.
@@ -600,6 +605,7 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::OvmfGuestUefiBoth { .. } => 71,
         AuditEvent::OvmfGuestUefiAtapi { .. } => 72,
         AuditEvent::OvmfGuestUefiEltorito { .. } => 73,
+        AuditEvent::HostPowerOff { .. } => 74,
     }
 }
 
@@ -1110,6 +1116,11 @@ fn mirror_audit_to_com1(event: AuditEvent) {
             write_u64(catalog);
             serial::write_str(" bootimg=");
             write_u64(boot_image);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::HostPowerOff { source } => {
+            serial::write_str("RAYNU-V-AUDIT: HostPowerOff source=");
+            write_u32(source as u32);
             serial::write_byte(b'\n');
         }
         AuditEvent::FrameAllocated { .. } | AuditEvent::FrameFreed { .. } => {}
