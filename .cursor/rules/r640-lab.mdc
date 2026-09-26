@@ -26,6 +26,6 @@ Open only the **PERC H740P Mini** (integrated, serial `97101GC`, `0000:18:00.0`)
 
 The empty spare is a prerequisite. It is not `RAYNU-V-M8-PERC-LUN-OK`. `piece_perc_pct` stays 15 until a mailbox read of the spare lives on iron. Host/CI never print that marker. A5 (`auth.token`) is parked.
 
-**M8.7** is the mailbox milestone (`docs/m8_plan.md`). The host slice packs frames in `mgmt/megaraid.rs` and does not map BAR0. `skip PERC` stays. Do not flash an fwstate EFI unless the operator asks. Do not reset the adapter.
+**M8.7** is the mailbox milestone (`docs/m8_plan.md`). This EFI loads `outbound_msg_0` on the one H740P Mini and prints `boot: perc fwstate`. `skip PERC` stays. The current F11 is a one-shot of the Cruzer (label `RAYNUV`). Ubuntu stays the boot device. Paste that COM2 line. Do not flash a doorbell image in the same boot. Do not reset the adapter.
 
 iDRAC 3.34 cannot delete virtual disks from the web UI (RAC0503). F2 → Device Settings → H740P Mini is the configuration path. Do not repeat it.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# M8.7 host/CI smoke: frame pack + spare size fence → RAYNU-V-M8-PERC-HOST-OK.
+# M8.7 host/CI smoke: frame pack + fwstate gate → RAYNU-V-M8-PERC-HOST-OK.
 # Never prints RAYNU-V-M8-PERC-LUN-OK. No doorbell. durable_lun still skips PERC.
 set -euo pipefail
 
@@ -18,6 +18,22 @@ if ! grep -q 'fn pick_spare(' "$ROOT/mgmt/megaraid.rs"; then
 fi
 if ! grep -q 'fn adapter_reset_is_allowed(' "$ROOT/mgmt/megaraid.rs"; then
   echo "error: reset policy required" >&2
+  exit 1
+fi
+if ! grep -q 'fn perc_fwstate_probe(' "$ROOT/mgmt/megaraid.rs"; then
+  echo "error: missing perc_fwstate_probe" >&2
+  exit 1
+fi
+if ! grep -q 'fn pci_cmd_for_fwstate_load(' "$ROOT/mgmt/megaraid.rs"; then
+  echo "error: missing memory-space command policy" >&2
+  exit 1
+fi
+if grep -q 'pci_write32(bus, dev, func, 0x00' "$ROOT/mgmt/megaraid.rs"; then
+  echo "error: fwstate must not store a doorbell" >&2
+  exit 1
+fi
+if ! grep -q 'perc_fwstate_probe()' "$ROOT/boot/handoff.rs"; then
+  echo "error: fwstate probe is not on the post-EBS path" >&2
   exit 1
 fi
 if grep -q 'println!("RAYNU-V-M8-PERC-LUN-OK")' "$ROOT/mgmt/megaraid.rs" "$ROOT/mgmt/durable_lun.rs" "$ROOT/mgmt/m8_perc_gate.rs"; then
