@@ -1,0 +1,29 @@
+---
+description: Lab R640 disk map — Ubuntu on UBUNTU0, empty RAYNU-SPARE, do not format either
+globs:
+  - "docs/runbooks/r640_perc_lab.md"
+  - "docs/m8_state.md"
+  - "mgmt/durable_lun.rs"
+alwaysApply: true
+---
+
+# Lab R640 disks (2026-09-26)
+
+Before SSH, `racadm`, flash, or any MegaRAID idea, read [`docs/runbooks/r640_perc_lab.md`](docs/runbooks/r640_perc_lab.md). That file is the map. [`docs/m8_state.md`](docs/m8_state.md) is the persist history.
+
+Ubuntu 26.04 is the standing OS. RayNu is not booted. Service tag **D0324Y2**. iDRAC `https://10.99.99.24` (3.34.34.34). SSH `vikkp@10.99.99.151` (DHCP; prompt `raynusrv1`). Host key `SHA256:e8RgOlR34L9cvcIbhNRn12T1AVof8MiqlzmsZm6az1I`.
+
+Disk letters move. Match size:
+
+| Size | Name | Rule |
+|------|------|------|
+| ~400 GB | **UBUNTU0**, boot | Ubuntu `/` and `/boot/efi`. Do not shrink, delete, or format. |
+| ~2.9 TB | **RAYNU-SPARE** | Empty. Do not partition, mkfs, mount, or LVM. |
+| ~3.8 GB | Cruzer, label `RAYNUV` | Flash target. Never pick a disk by `/dev/sdX`. |
+| ~298 GB | Toshiba | Alpine persist. Do not format. Do not flash. 8 GiB virtio cap stays. |
+
+Open only the **PERC H740P Mini** (integrated, serial `97101GC`, `0000:18:00.0`). Do not open the **H840** in slot 1. Do not Clear Configuration again.
+
+The empty spare is a prerequisite. It is not `RAYNU-V-M8-PERC-LUN-OK`. `piece_perc_pct` stays 15 until a mailbox read of the spare lives on iron. Host/CI never print that marker. A5 (`auth.token`) is parked. Do not start the MegaRAID driver unless the operator asks.
+
+iDRAC 3.34 cannot delete virtual disks from the web UI (RAC0503). F2 → Device Settings → H740P Mini is the configuration path. Do not repeat it.

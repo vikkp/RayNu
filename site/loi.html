@@ -11,7 +11,7 @@
     <meta property="og:title" content="RayNu-V · Path to LOI" />
     <meta
       property="og:description"
-              content="Two bars: dedicated-box 92%, RAID-fleet 18%. Persist across HV reboot is repeated. SKU card is done. A4 TLS iron is DONE (lab millicert). Standing SPA lived. The SPA typed once, then Power off host left iDRAC Off. Auth is still open. USB is not PERC."
+              content="Two bars: dedicated-box 92%, RAID-fleet 18%. Persist across HV reboot is repeated. SKU card is done. A4 TLS iron is DONE (lab millicert). Standing SPA lived. Ubuntu 26.04 is on a 400 GB PERC VD. An empty 2.9 TB spare exists. PERC I/O has not started. Auth is parked. USB is not PERC."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -318,13 +318,13 @@
                 <span class="hda-bar__fill loi-bar__fill--fleet" data-piece-fill="perc" style="width: 15%"></span>
               </div>
               <p>
-                The R640 “HDD” is Ubuntu on a PERC H740P. The mapper already
-                <em>classifies</em> RAID and prints <code>skip PERC</code> so
-                we do not destroy the lab OS. Classification is not I/O. There
-                is no MegaRAID mailbox driver. Firmware RAID BlockIo dies at
-                ExitBootServices. This 15% is census plus classification. Bar B waits
-                on a <strong>spare</strong> virtual disk — not the Ubuntu
-                standing boot.
+                The lab H740P Mini has two RAID-6 virtual disks.
+                <strong>UBUNTU0</strong> (~400 GB) is Ubuntu 26.04 and the boot
+                device. <strong>RAYNU-SPARE</strong> (~2.9 TB) is empty. The
+                mapper still prints <code>skip PERC</code>. Classification is
+                not I/O. There is no MegaRAID mailbox driver. This 15% is
+                census plus an empty spare. Do not format UBUNTU0. Do not
+                partition RAYNU-SPARE.
               </p>
             </li>
             <li data-reveal>
@@ -348,29 +348,30 @@
 
       <section class="section section--hda-com2" id="now">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>NOW · A6 lived once · chassis Off</p>
-          <h2 class="section__title">The SPA typed, then turned the chassis off.</h2>
+          <p class="milestone-kicker" data-reveal>NOW · Ubuntu up · spare empty</p>
+          <h2 class="section__title">Ubuntu is on a 400 GB virtual disk. The spare is empty.</h2>
           <p class="section__lede">
-            Activity showed <code>abc</code>, then
+            A6 still lived once: Activity showed <code>abc</code>, then
             <code>-sh: abc: not found</code>, and
-            <code>RAYNU-V-M8-CONSOLE-OK</code>. Host stayed green. Power off
-            host left the iDRAC power state Off. Leave the chassis off. The
-            standing-SPA rollback file is still
-            <code>v0.1.0-m8-a4s</code>.
+            <code>RAYNU-V-M8-CONSOLE-OK</code>. On 2026-09-26 Ubuntu 26.04
+            is the standing OS on <strong>UBUNTU0</strong>.
+            <strong>RAYNU-SPARE</strong> (~2.9 TB) has no partition. PERC I/O
+            has not started. Auth is parked. The standing-SPA rollback file
+            is still <code>v0.1.0-m8-a4s</code>.
           </p>
-          <pre class="ship-code" data-reveal><code>lived:  abc reached Alpine · RAYNU-V-M8-CONSOLE-OK in Activity · Host green
-off:    COM2 boot: SPA host po · iDRAC Power State Off · no lifecycle paste
-kit:    v0.1.0-m8-a4s remains the standing-SPA rollback · not GitHub Latest
-next:   A5 ESP auth.token · leave the chassis off
-never:  power on to finish the COM2 sentence · setup-alpine · setup-disk · curl Start · flash the Toshiba
-read:   docs/m8_state.md</code></pre>
+          <pre class="ship-code" data-reveal><code>boot:   UBUNTU0 ~400 GB · Ubuntu 26.04 · / and /boot/efi
+spare:  RAYNU-SPARE ~2.9 TB · empty · do not partition
+ctrl:   PERC H740P Mini only · do not open the H840
+next:   MegaRAID I/O on the spare when asked · A5 parked · perc stays 15
+never:  format UBUNTU0 · format the spare · format the Toshiba · setup-disk · curl Start
+read:   docs/runbooks/r640_perc_lab.md</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
             Rollback remains GitHub Latest
             <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed"
               ><code>v0.1.0-everest-closed</code></a
-            >
-            — do not flash a persist prototype as the known-good. Do not format
-            the Ubuntu PERC.
+            >.
+            Do not flash a persist prototype as the known-good. Do not format
+            UBUNTU0. Do not partition RAYNU-SPARE.
           </p>
         </div>
       </section>

@@ -1,6 +1,6 @@
 ---
 loihda_version: 1
-last_updated: 2026-09-25
+last_updated: 2026-09-26
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
@@ -43,12 +43,12 @@ Lived: [`docs/progress.md`](progress.md) · M8: [`docs/m8_plan.md`](m8_plan.md) 
 
 | Metric | Value | Meaning |
 |--------|------:|---------|
-| **Overall LOI readiness** | **70%** | Nearest honest conversation is Bar A. Not Bar B. Not GA. Up from 67: this tip typed into Alpine and then turned the chassis off from Overview. A5 is still open. |
-| **Bar A — dedicated-box** | **92%** | One PowerEdge we own or they dedicate. A1 Everest, A3 SKU, A4 TLS, A4s standing SPA **DONE**. A2 persist **repeated** (sixth `login:`, UUID `a0ad99ac-…`). A6 **lived once** on this tip. A5 still open. USB ≠ PERC. |
-| **Bar B — RAID-fleet** | **18%** | Replace the licensed hypervisor on PERC virtual disks they already paid for. |
-| **Months to Bar A** | **0.25** | Baseline 2026-09-14. ETA **2026-10**. Down from 0.5: A6 lived once (SPA `abc` reached Alpine, marker in Activity, Host stayed green) and Overview Power off host left iDRAC Power State Off. A5 remains. Do not go to 0. |
-| **Months to Bar B** | **3.5** | PERC I/O is the long pole. ETA **2026-12**. |
-| **Confidence** | medium | Everest is high-confidence. A6 lived once on this tip: Activity showed `abc`, `-sh: abc: not found`, `RAYNU-V-M8-CONSOLE-OK`, Host green. Power off then iDRAC Off. One boot. The guest log still mixes host UART lines. A5 still open. |
+| **Overall LOI readiness** | **70%** | Nearest honest conversation is Bar A. Not Bar B. Not GA. Held: A6 lived once, then the lab was rebuilt. Ubuntu 26.04 is up on UBUNTU0. RAYNU-SPARE is empty. A5 is parked. perc stays 15. |
+| **Bar A — dedicated-box** | **92%** | One PowerEdge we own or they dedicate. A1 Everest, A3 SKU, A4 TLS, A4s standing SPA **DONE**. A2 persist **repeated** (sixth `login:`, UUID `a0ad99ac-…`). A6 **lived once**. A5 parked. USB ≠ PERC. |
+| **Bar B — RAID-fleet** | **18%** | Replace the licensed hypervisor on PERC virtual disks they already paid for. The lab spare VD exists and is empty. I/O has not started. |
+| **Months to Bar A** | **0.25** | Baseline 2026-09-14. ETA **2026-10**. Held. A6 lived once. A5 is parked, not closed. Do not go to 0. |
+| **Months to Bar B** | **3.5** | PERC I/O is the long pole. The empty spare is a prerequisite, not the close. ETA **2026-12**. |
+| **Confidence** | medium | Everest is high-confidence. A6 lived once. The 2026-09-26 `lsblk` shows UBUNTU0 mounted and RAYNU-SPARE empty. That is layout, not MegaRAID I/O. A5 parked. |
 
 ```
 Bar A (dedicated-box)  ██████████████████░░  92%
@@ -102,7 +102,7 @@ A2 is **repeated on iron** (`36d3b559`, two Force Offs, same UUID). History: it 
 |---|-----------|-----------|----------------|
 | B1 | Bar A honest | Bar A criteria closed or explicitly waived in the SKU card | Do not skip A to sell B. |
 | B2 | **PERC virtual disk I/O** | COM2 `RAYNU-V-M8-PERC-LUN-OK` on a VD that is **not** Ubuntu | ~80% of R640 fleets boot guests from RAID. USB persist does not extend those fleets. |
-| B3 | Census skip ≠ product policy | Mapper still refuses the **lab** Ubuntu VD; product talks to a **spare** VD | Formatting `raynuvsrv1` Ubuntu is not an LOI strategy. |
+| B3 | Census skip ≠ product policy | Mapper still refuses the **lab** Ubuntu VD; product talks to a **spare** VD | UBUNTU0 stays the lab OS. RAYNU-SPARE is the only future target. Formatting either is not an LOI strategy. See [`runbooks/r640_perc_lab.md`](runbooks/r640_perc_lab.md). |
 
 ---
 
@@ -154,9 +154,9 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 ### 7. PERC RAID I/O — 15%
 
-**What it is.** The R640 “HDD” is Ubuntu on PERC H740P (`01:04`). The DurableLun mapper **classifies** RAID and prints `skip PERC` so we do not destroy the lab OS. There is no MegaRAID mailbox driver. PRE-EBS UEFI RAID BlockIo dies at ExitBootServices.
+**What it is.** The lab H740P Mini (`0000:18:00.0`) now has two RAID-6 VDs in one disk group: **UBUNTU0** (~400 GB, Ubuntu 26.04, boot) and **RAYNU-SPARE** (~2.9 TB, empty). The DurableLun mapper still **classifies** RAID and prints `skip PERC`. There is no MegaRAID mailbox driver. PRE-EBS UEFI RAID BlockIo dies at ExitBootServices. Map: [`runbooks/r640_perc_lab.md`](runbooks/r640_perc_lab.md).
 
-**Product effect.** This is the difference between a lab hypervisor and “extend the life of the fleet you already paid for.” USB persist is mechanism. Fleet persist is a spare virtual disk. Do not format Ubuntu.
+**Product effect.** This is the difference between a lab hypervisor and “extend the life of the fleet you already paid for.” USB persist is mechanism. Fleet persist is a spare virtual disk. The spare now exists and is empty. That is why this piece stays at 15. Do not format UBUNTU0. Do not partition RAYNU-SPARE. Do not open the H840.
 
 ### 8. Unmodified media (Gen-1) — 20%
 
@@ -176,13 +176,13 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | 2026-09-18 | Bar A A3 | SKU card | **DONE** ([`docs/sku.md`](sku.md) / [`site/sku.html`](../site/sku.html)) |
 | **2026-09-19** | Bar A A4 | TLS on native `:8443` **before RayNu-F** | **DONE** (`928d6224` COM2 `RAYNU-V-M8-TLS-OK`; Mac `curl --cacert` SPA `.140`) |
 | **2026-09-25** | Bar A **A4s** | Page stays up after `login:` | **LIVED** (`1f33eeda72f9`, lease `.154`, one TCP accept, `HTTP keep-alive`, Host green, guest COM1 in Activity) |
-| **NOW** | Bar A **A5** | ESP `auth.token` | A6 lived once on this tip. Chassis is Off after Overview Power off host. Leave it off. not VNC. See [m8_state.md](m8_state.md) |
-| then | Bar B B2 | Spare PERC VD persist | after A5; census skip is lab safety |
+| **NOW** | Bar B prerequisite | Empty spare VD | Ubuntu 26.04 is up on UBUNTU0. RAYNU-SPARE (~2.9 TB) is empty. I/O not started. A5 parked. not VNC. See [m8_state.md](m8_state.md) and [r640_perc_lab.md](runbooks/r640_perc_lab.md) |
+| then | Bar B B2 | Spare PERC VD persist | mailbox driver on RAYNU-SPARE only; census skip still refuses UBUNTU0 |
 | later | Unmodified ISO | Gen-1 Phase 2 | named residual, not a fake close |
 
 ```
 2026-09  ████████  Everest closed
-2026-10  ███████░  Bar A: A6 lived once → A5 auth residual
+2026-10  ███████░  Bar A held; spare VD exists; PERC I/O not started; A5 parked
 2026-11  ░░░░░░░░  Bar A: first dedicated-box LOI window
 2026-12  ░░░░░░░░  Bar B: PERC VD I/O
 ```
@@ -194,7 +194,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 - Latitude and nested QEMU are not PowerEdge R640 evidence.
 - Leftover DRAM, USB persist, NVMe persist, and PERC persist are distinct closes.
 - Host/CI never print `RAYNU-V-M7-ISO-INSTALL-OK`, `RAYNU-V-M8-DISK-PERSIST-OK`, `RAYNU-V-M8-TLS-OK`, `RAYNU-V-M8-AUTH-OK`, `RAYNU-V-M8-CONSOLE-OK`, `RAYNU-V-M8-ISO-UPLOAD-OK`, or `RAYNU-V-M8-PERC-LUN-OK`.
-- The Ubuntu PERC on `raynuvsrv1` is not formatted as an LOI strategy.
+- UBUNTU0 on the H740P Mini is the lab OS. RAYNU-SPARE is empty and is the only future MegaRAID target. Do not format either. See [`runbooks/r640_perc_lab.md`](runbooks/r640_perc_lab.md). The older hostname spelling `raynuvsrv1` is the same machine; the prompt after this reinstall is `raynusrv1`.
 - RAID-fleet LOI waits on PERC virtual-disk persist. A USB demonstration is not that close.
 - Everest remains closed. A patched Alpine ISO is a named residual, not a reopened summit.
 - Cluster / vMotion is **M9**, not an LOI closer.
@@ -206,11 +206,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-spa-poweroff |
-| Summary | **A6 lived once. SPA Power off host left iDRAC Off.** Activity: `abc`, `-sh: abc: not found`, `RAYNU-V-M8-CONSOLE-OK`, Host green. COM2 then `boot: SPA host po`. Power State Off. No lifecycle paste. |
+| Commit | m8-perc-lab-vd |
+| Summary | **Lab PERC map recorded.** Ubuntu 26.04 on UBUNTU0 (~400 GB, boot). RAYNU-SPARE (~2.9 TB) empty. H840 left alone. A5 parked. No mailbox driver. |
 | Everest impact | none — HDA months 0.0 / 99% held |
-| LOI impact | Bar A 88→92, overall 67→70, console 68→82, months A 0.5→0.25. Persist 93, TLS 80, auth 38, Bar B 18 held. |
-| Gates touched | Lived keep-alive on iron (no new host gate). `./tools/sync-loihda-site.sh --check`. `./tools/check-site-chrome.sh`. No MegaRAID. |
+| LOI impact | Scores held. Bar A 92, overall 70, Bar B 18, perc 15, months A 0.25, months B 3.5. The empty spare is not `RAYNU-V-M8-PERC-LUN-OK`. |
+| Gates touched | `./tools/sync-loihda-site.sh --check`. `./tools/sync-hda-site.sh --check`. `./tools/check-site-chrome.sh`. No MegaRAID. |
 
 ---
 
@@ -218,6 +218,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-26 | m8-perc-lab-vd | 92 | 18 | **PERC lab layout recorded.** H740P Mini Disk Group 0: UBUNTU0 400 GB Ubuntu 26.04 boot, RAYNU-SPARE 2.9 TB empty. Operator `lsblk`. H840 not touched. A5 parked. perc 15 held. Not `RAYNU-V-M8-PERC-LUN-OK`. Map: `docs/runbooks/r640_perc_lab.md`. |
 | 2026-09-25 | m8-spa-poweroff | 92 | 18 | **A6 lived once. iDRAC Off after Power off host.** Activity `abc` / `-sh: abc: not found` / `RAYNU-V-M8-CONSOLE-OK`, Host green. COM2 `boot: SPA host po` (first UART burst). Power State Off. No lifecycle paste. Bar A 88→92, overall 67→70, console 68→82, months A 0.5→0.25. |
 | 2026-09-25 | m8-spa-poweroff | 88 | 18 | **SPA Power off host, not lived.** Overview button posts `/host/poweroff`. Firmware drains the 200, then `VMXOFF` and `ResetSystem` SHUTDOWN. Failed `VMXOFF` leaves the page up. `1f33eeda` has no button. Scores held. |
 | 2026-09-25 | m8-console-nowait | 88 | 18 | **A6 marker is `write_line_nowait`. Not lived.** `1f33eeda` still hushes the console line. Leave Send empty. Flash this tip only after that chassis is off. Scores held. |
@@ -307,11 +308,11 @@ LOI:           NOT OPEN. Tracker born 2026-09-14.
 Bar A:         92% · 0.25 months · dedicated-box non-prod
 Bar B:         18% · 3.5 months · PERC RAID fleet (out of conversation until PERC persist)
 Overall:       70% · confidence medium
-NOW:           Chassis is Off. A6 lived once (abc reached Alpine, RAYNU-V-M8-CONSOLE-OK in Activity, Host green). Power off host then iDRAC Power State Off. COM2 showed boot: SPA host po. Leave it off. Next is A5. Do not setup-disk. Do not curl. docs/m8_state.md
-Open:          iron AUTH-OK · unmodified ISO · cluster · Ubuntu PERC stays standing boot
+NOW:           Ubuntu 26.04 is up on UBUNTU0 (~400 GB, H740P Mini). RAYNU-SPARE (~2.9 TB) is empty. Do not format either. Do not open the H840. A5 is parked. perc 15. Not PERC-LUN-OK. docs/runbooks/r640_perc_lab.md
+Open:          MegaRAID I/O on RAYNU-SPARE · iron AUTH-OK (parked) · unmodified ISO · cluster
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
-Rollback:      v0.1.0-m8-a4s → flash the kit EFI (COM2 sha=1f33eeda72f9, CI 36137732145, SHA256 5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693). Everest Latest stays v0.1.0-everest-closed (f72b4276). Do not flash this kit over the live page.
-Sit:           localhost:~# · do not setup-disk · do not flash Toshiba /dev/sdc
+Rollback:      v0.1.0-m8-a4s → standing SPA (COM2 sha=1f33eeda72f9, CI 36137732145). v0.1.0-m8-a6 → keyboard + power-off (fd2ca12e, CI 36166108942), not Latest. Everest Latest stays v0.1.0-everest-closed (f72b4276).
+Sit:           Ubuntu is the OS. Do not setup-disk. Do not format the ~298 GB Toshiba. Identify disks by size, never by sdX.
 ```
 
 Public page: [`site/loi.html`](../site/loi.html). Living doc: this file. Sync: `./tools/sync-loihda-site.sh`.

@@ -16,7 +16,7 @@ Nested QEMU ≠ R640. QEMU NVMe/USB ≠ Intel PCH xHCI. Nested File RAM (`M8_PER
 |------|--------|--------|
 | ESP | Cruzer / UDisk 2–8 GiB with alpine-extended | Boot stick. Mapper **refuses** this window as a LUN. |
 | LUN | NVMe class `01:08`, **or** USB ≥ 1 GiB **outside** 2–8 GiB | 16 GiB+ stick is the usual USB pick. 1–2 GiB also eligible. never PERC. |
-| Standing boot | Ubuntu on PERC | Do **not** format PERC. One-time F11 the ESP only. |
+| Standing boot | Ubuntu 26.04 on PERC VD **UBUNTU0** (~400 GB) | Do **not** format UBUNTU0. Do **not** partition **RAYNU-SPARE** (~2.9 TB, empty). Letters move. Map: [`r640_perc_lab.md`](r640_perc_lab.md). One-time F11 the ESP only, and only when the operator asks. |
 
 Without a LUN, COM2 prints `durable LUN none (leftover DRAM)` / `skip PERC` / `skip ESP Cruzer` plus `need NVMe class 01:08 or USB ≥1GiB outside Cruzer 2-8GiB`. Phase B then installs to leftover DRAM (dies on Force Off).
 
