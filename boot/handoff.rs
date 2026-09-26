@@ -104,6 +104,8 @@ pub unsafe fn leave_firmware() -> Handoff {
     // is wiped by OVMF NVMe ExitBootServices (HCRST). Not ISO-INSTALL-OK.
     crate::mgmt::init_durable_lun_io();
     crate::mgmt::init_durable_lun_usb_io();
+    // M8.7 fwstate: one load of H740P outbound_msg_0. Does not change the pick.
+    crate::mgmt::megaraid::perc_fwstate_probe();
 
     let mut regions: [(u64, u64); 64] = [(0, 0); 64];
     let mut region_count = 0usize;
