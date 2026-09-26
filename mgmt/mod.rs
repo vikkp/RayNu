@@ -337,6 +337,8 @@ pub mod iso_install;
 pub mod disk_persist;
 pub mod durable_lun;
 pub mod nvme;
+pub mod megaraid;
+pub mod m8_perc_gate;
 pub mod usb_bot;
 pub mod xhci;
 pub mod m8_disk_persist_gate;
