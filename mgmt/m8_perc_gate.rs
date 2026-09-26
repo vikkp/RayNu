@@ -29,6 +29,7 @@ pub fn perc_surface_present() -> bool {
         && mega.contains("fn fwstate_may_load(")
         && mega.contains("fn pci_cmd_for_fwstate_load(")
         && mega.contains("fn memory_bar64(")
+        && mega.contains("fn h740p_mini_subsys(")
         && mega.contains("fn perc_fwstate_probe(")
         && mega.contains("fn dcmd_is_allowed(")
         && mega.contains("fn adapter_reset_is_allowed(")

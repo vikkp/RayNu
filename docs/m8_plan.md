@@ -1,6 +1,6 @@
 # M8 Plan — operator product hardening (post-Everest)
 
-**Status:** **OPEN — M8.7 fwstate in the EFI, not lived** (2026-09-26). **Read [m8_state.md](m8_state.md) first.** Disk map: [r640_perc_lab.md](runbooks/r640_perc_lab.md). Everest **CLOSED** (`f72b4276`). M8.0 persist **repeated** and A4s **lived** on `1f33eeda72f9`. A6 **lived once** (`abc` reached Alpine, `RAYNU-V-M8-CONSOLE-OK` in Activity, Host green). Ubuntu 26.04 is the standing OS on PERC VD **UBUNTU0** (~400 GB). **RAYNU-SPARE** (~2.9 TB) is empty. Do not format either. A5 is parked. **M8.7 fwstate** loads `outbound_msg_0` after ExitBootServices. Not lived until COM2 is pasted. No doorbell. `skip PERC` stays. Host pack remains `RAYNU-V-M8-PERC-HOST-OK`. Rollback kit [`v0.1.0-m8-a4s`](../releases/v0.1.0-m8-a4s/). `3f80abd0` is a probe; do not flash it. Do not open Firefox on `3e9ce45e`. Phase 0 stays. M8.2 host-ready. M8.3 keyboard lived once. M8.4 host-ready. A3 SKU DONE. Known-good and do-not-F11 tables live in `m8_state.md`, not here. **not VNC**.
+**Status:** **OPEN — M8.7 fwstate in the EFI, not lived** (2026-09-26). **Read [m8_state.md](m8_state.md) first.** Disk map: [r640_perc_lab.md](runbooks/r640_perc_lab.md). Everest **CLOSED** (`f72b4276`). M8.0 persist **repeated** and A4s **lived** on `1f33eeda72f9`. A6 **lived once** (`abc` reached Alpine, `RAYNU-V-M8-CONSOLE-OK` in Activity, Host green). Ubuntu 26.04 is the standing OS on PERC VD **UBUNTU0** (~400 GB). **RAYNU-SPARE** (~2.9 TB) is empty. Do not format either. A5 is parked. **M8.7 fwstate** on `cc03d01b` printed `refuse count=2` (H740P Mini and H840 are both `1000:0016`). No BAR load. The next EFI names subsystem ids and loads only a Dell H740P Mini (`1028:1fcd` or `1028:1fcf`). No doorbell. `skip PERC` stays. Host pack remains `RAYNU-V-M8-PERC-HOST-OK`. Rollback kit [`v0.1.0-m8-a4s`](../releases/v0.1.0-m8-a4s/). `3f80abd0` is a probe; do not flash it. Do not open Firefox on `3e9ce45e`. Phase 0 stays. M8.2 host-ready. M8.3 keyboard lived once. M8.4 host-ready. A3 SKU DONE. Known-good and do-not-F11 tables live in `m8_state.md`, not here. **not VNC**.
 **Parent:** [ADR-018](adr/ADR-018.md) · Everest: [ADR-009](adr/ADR-009.md) · lived: [progress.md](progress.md) · HDA: [hda.md](hda.md)  
 **Prior track:** [m7_plan.md](m7_plan.md) (closed). Cluster / elasticity is **M9**, not this plan.
 
@@ -180,7 +180,7 @@ HDA + `site/hda.html` stay fresh: update `docs/hda.md`, then `./tools/sync-hda-s
 
 ### M8.7 — PERC mailbox on RAYNU-SPARE
 
-**Status: fwstate is in the EFI. Not lived. No doorbell. perc stays 15.**
+**Status: iron `cc03d01b` refused `count=2`. Next EFI picks the Mini by subsystem. No doorbell. perc stays 15.**
 
 **Goal:** Post-EBS MFI frames for the H740P Mini (`1000:0016`, Linux Harpoon), aimed at the empty ~2.9 TB VD. UBUNTU0 stays the boot disk. `pick_durable_lun` still prints `skip PERC`. Host marker `RAYNU-V-M8-PERC-HOST-OK`. Iron marker `RAYNU-V-M8-PERC-LUN-OK` is later, and host/CI never print it.
 
@@ -189,7 +189,7 @@ M8.4, M8.5, and M8.6 stay open. This milestone runs beside them because Bar B do
 | Step | What | Close when |
 |------|------|------------|
 | M8.7 host | Pack `MR_DCMD_LD_GET_LIST` and one-block READ(16). Size fence. No BAR0. | `RAYNU-V-M8-PERC-HOST-OK` (landed) |
-| M8.7 fwstate | Load `outbound_msg_0` (BAR0 + 0x18) on the one `1000:0016`. Memory-space enable only if firmware left it off. No bus-master change. | COM2 `perc fwstate`. This EFI. Not lived. Still `skip PERC`. |
+| M8.7 fwstate | Load `outbound_msg_0` (BAR0 + 0x18) on the Dell H740P Mini only (`1028:1fcd` or `1028:1fcf`). Iron `cc03d01b` saw two `1000:0016` and stopped. H840 `1028:1fc9` is never mapped. | COM2 `perc fwstate` with `allow=`. Still `skip PERC`. |
 | M8.7 list | One LD-list DCMD. | COM2 prints both sizes and the spare target. |
 | M8.7 read | One READ(16) of LBA 0 on that target. | COM2 `perc read ok`. Still not virtio. |
 | M8.7 virtio | Attach the spare only, `setup-disk` still withheld. | Iron `RAYNU-V-M8-PERC-LUN-OK`. perc can leave 15. |
@@ -214,4 +214,4 @@ Do not pull M9 into M8 gate lists.
 
 **M8.0 persist-first attach.** Choice remains **file-backed nested / durable LUN on iron / leftover DRAM as fallback**. Attach prefers persist (`attach_disk_keep` / `attach_lun` when the media looks installed). Nested `M8_PERSIST_IMG` backs QEMU RAM (distro OVMF ignores nvdimm/pc-dimm), default off. **NVMe I/O** (`MODE=lun`) Identify + Read/Write backs virtio when Identify succeeds; empty NVMe is not 1 GiB-zeroed. **USB BOT** (`MODE=usb`) is TCG-proven. **`MODE=lunkeep` TCG-proven:** plant GPT+ESP+ext4 at NVMe LUN offset 0, kill HV, second boot `keep=1`. NVMe I/O is post-EBS. **`MODE=usbkeep` TCG-proven:** same on qemu-xhci + usb-storage (header CRC + first ESP + FAT BPB + ext4; not 32 BOT array CRC). Iron marker is `RAYNU-V-M8-DISK-PERSIST-OK` (in-tree `uefi-bin` serial on keep=1 DurableLun DISK-BOOT; not on flashed `4af78b43`). Host marker is `RAYNU-V-M8-DISK-PERSIST-HOST-OK`. Keep ADR-004 exclusive ownership. Do not claim persist from nested QEMU alone. Do not copy 1 GiB through the Cruzer ESP. Do not format the PERC. Keep [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) as the flash rollback. A2 evidence close does not retire that pin.
 
-**Next:** F11 this EFI (one-shot Cruzer, label `RAYNUV`). COM2 should show `boot: perc fwstate` after ExitBootServices, then `build: sha=`. Census still `skip PERC`. Ubuntu 26.04 stays the standing OS on UBUNTU0. Do not format RAYNU-SPARE. A6 lived once. **not VNC**. Do not `setup-disk`. Do not flash the Toshiba. Do not doorbell in this image. Nested QEMU ≠ R640.
+**Next:** Reboot to Ubuntu, then F11 the next EFI (one-shot Cruzer, label `RAYNUV`). COM2 on `cc03d01b` was `perc fwstate refuse count=2`. The next image prints `cand` lines and loads only the Mini. Census still `skip PERC`. Ubuntu 26.04 stays the standing OS on UBUNTU0. Do not format RAYNU-SPARE. A6 lived once. **not VNC**. Do not `setup-disk`. Do not flash the Toshiba. Do not doorbell in this image. Nested QEMU ≠ R640.

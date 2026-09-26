@@ -126,4 +126,8 @@ fn fwstate_load_is_one_harpoon_and_does_not_bus_master() {
     assert!(PERC_SCAN_BUS_LAST < 0xFF);
     assert!(PERC_HOST_RESIDUAL_NOTE.contains("no doorbell"));
     assert!(PERC_HOST_RESIDUAL_NOTE.contains("outbound_msg_0"));
+    assert!(super::h740p_mini_subsys(0x1028, 0x1fcd));
+    assert!(super::h740p_mini_subsys(0x1028, 0x1fcf));
+    assert!(!super::h740p_mini_subsys(0x1028, 0x1fc9));
+    assert!(!super::h740p_mini_subsys(0x1028, 0x1fcb));
 }

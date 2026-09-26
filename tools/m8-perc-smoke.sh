@@ -24,6 +24,10 @@ if ! grep -q 'fn perc_fwstate_probe(' "$ROOT/mgmt/megaraid.rs"; then
   echo "error: missing perc_fwstate_probe" >&2
   exit 1
 fi
+if ! grep -q 'fn h740p_mini_subsys(' "$ROOT/mgmt/megaraid.rs"; then
+  echo "error: missing H740P Mini subsystem pick" >&2
+  exit 1
+fi
 if ! grep -q 'fn pci_cmd_for_fwstate_load(' "$ROOT/mgmt/megaraid.rs"; then
   echo "error: missing memory-space command policy" >&2
   exit 1

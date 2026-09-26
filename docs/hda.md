@@ -38,7 +38,7 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 
 | Metric | Value | Δ vs previous HDA |
 |--------|------:|-------------------|
-| **Overall product readiness** | **99%** | **held** — Everest **CLOSED** (`f72b4276`). M8.7 fwstate is in the EFI (one load of `outbound_msg_0`, not lived, no doorbell). Not MegaRAID I/O. Not 100%. A5 is parked. |
+| **Overall product readiness** | **99%** | **held** — Everest **CLOSED** (`f72b4276`). M8.7 fwstate on `cc03d01b` refused two `1000:0016` (no BAR load, no doorbell). Not MegaRAID I/O. Not 100%. A5 is parked. |
 | **Months to Mount Everest** | **0.0** | **held** (summit reached 2026-09-11; `f72b4276` SPA ISO loop) |
 | **ETA month** | **2026-09** | **closed this month on iron**; next work is M8, not a slipped Everest |
 | **Confidence** | high | E1–E6 on COM2. M8 named separately so polish cannot reopen the summit |
@@ -167,7 +167,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 | M+2 | 2026-09 | E3b native NIC lab (QEMU e1000) + ISO residual | ADR-013 Phase C | **Phase C DONE (QEMU)** |
 | M+3 | 2026-08 | E3b iron HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | **DONE (M7.8 iron)** |
 | M+4 | 2026-09 | Phase B (SPA → installed disk) | remaining Everest | **DONE — EVEREST CLOSED** (`f72b4276` / `34552377351`) |
-| M+5 | 2026-10 | **M8.0** persist (file nested / LUN iron / leftover fallback) | keep=1 + `DISK-BOOTX64` + `root=UUID=` after Force Off | **Repeated** through `1f33eeda`. A6 lived once. **M8.7 fwstate** is in the EFI. Not lived. No doorbell. See [m8_plan.md](m8_plan.md). |
+| M+5 | 2026-10 | **M8.0** persist (file nested / LUN iron / leftover fallback) | keep=1 + `DISK-BOOTX64` + `root=UUID=` after Force Off | **Repeated** through `1f33eeda`. A6 lived once. **M8.7 fwstate** refused `count=2` on `cc03d01b`. No doorbell. See [m8_plan.md](m8_plan.md). |
 
 ### Timeline burn-down
 
@@ -175,7 +175,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 2026-07 ████████  HDA + M6 closed (Latitude)
 2026-08 ████████  R640 boot (E2) + E3b HTTP-OK
 2026-09 ████████  E5 + Phase B — **Mount Everest CLOSED** (`f72b4276`)  ← months_to_everest = 0.0
-2026-10 ███████░  M8.0 persist **repeated**; A6 **lived once**; M8.7 fwstate in the EFI, not lived; A5 parked
+2026-10 ███████░  M8.0 persist **repeated**; A6 **lived once**; M8.7 fwstate refused count=2; A5 parked
 2026-11 ░░░░░░░░  paste COM2 `perc fwstate`, then one READ of RAYNU-SPARE
 ```
 
@@ -355,7 +355,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | m8-7-perc-fwstate |
-| Summary | **M8.7 fwstate in the EFI.** One load of `outbound_msg_0`. Not lived. No doorbell. Months **0.0 held**. Overall **99 held**. |
+| Summary | **Iron `cc03d01b` `refuse count=2`.** H740P Mini and H840 share `1000:0016`. Next EFI loads only Mini subsystem `1fcd`/`1fcf`. No doorbell. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. A register load is not PERC I/O. Nested QEMU ≠ R640. |
 | Gates touched | `cargo test --lib m8_perc_host_gate_passes`. `./tools/m8-perc-smoke.sh`. Site sync. No doorbell. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 18 held, perc 15 held, months A 0.25 held. |
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-26 | m8-7-perc-fwstate | 0.0 | 99 | **Iron fwstate refuse.** `cc03d01b` COM2 `perc fwstate refuse count=2`. No BAR load. H840 is also `1000:0016`. Next EFI picks Mini `1028:1fcd`/`1fcf`. perc 15 held. Not `RAYNU-V-M8-PERC-LUN-OK`. months 0.0 held; overall 99 held |
 | 2026-09-26 | m8-7-perc-fwstate | 0.0 | 99 | **M8.7 fwstate in the EFI.** Loads `outbound_msg_0` on the one `1000:0016`. Not lived. No doorbell. `skip PERC` stays. perc 15 held. Not `RAYNU-V-M8-PERC-LUN-OK`. months 0.0 held; overall 99 held |
 | 2026-09-26 | m8-7-perc-host | 0.0 | 99 | **M8.7 host pack.** Frames + size fence in `mgmt/megaraid.rs`. No doorbell. `skip PERC` stays. perc 15 held. Not `RAYNU-V-M8-PERC-LUN-OK`. months 0.0 held; overall 99 held |
 | 2026-09-26 | m8-perc-lab-vd | 0.0 | 99 | **PERC lab layout recorded.** UBUNTU0 ~400 GB Ubuntu 26.04 boot. RAYNU-SPARE ~2.9 TB empty. H740P Mini only. H840 not opened. A5 parked. perc 15 held. Not `RAYNU-V-M8-PERC-LUN-OK`. months 0.0 held; overall 99 held |
@@ -1017,7 +1018,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     F11 this EFI once (Cruzer label RAYNUV). Paste COM2 `boot: perc fwstate` and `build: sha=`. No doorbell in this image. Do not format UBUNTU0 or RAYNU-SPARE. Do not open the H840. A5 is parked. Do not setup-disk. See docs/m8_plan.md.
+Next move:     cc03d01b printed perc fwstate refuse count=2. Reboot to Ubuntu, flash the Mini-subsystem EFI, F11 once. Paste cand lines. No doorbell. Do not format UBUNTU0 or RAYNU-SPARE. Do not open the H840. A5 is parked. Do not setup-disk. See docs/m8_plan.md.
 Rollback:      Standing SPA: v0.1.0-m8-a4s → CI 36137732145 / COM2 sha=1f33eeda72f9 / EFI SHA256 5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693
 Everest:       GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351 / EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc / COM2 build: sha=f72b4276d198
 Do not F11:    M8 prototypes `b5e290be` `17d120c5` `3b388279` `08202468` `d60431ee` `28cd4ff1` `15e3d665` `5c32bd06` `1fa231df` `e5cca2e0` `c4a41a17` (table in docs/m8_state.md); Phase B fails `34548550755` / `7f8dc0a9`

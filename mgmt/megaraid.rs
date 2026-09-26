@@ -65,6 +65,8 @@ pub const PCI_CFG_COMMAND: u8 = 0x04;
 pub const PCI_CFG_HEADER: u8 = 0x0C;
 pub const PCI_CFG_BAR0: u8 = 0x10;
 pub const PCI_CFG_BAR1: u8 = 0x14;
+/// Subsystem vendor (low 16) and subsystem device (high 16). Header type 0.
+pub const PCI_CFG_SUBSYS: u8 = 0x2C;
 /// Memory Space Enable. Bus master is a different bit and stays as firmware left it.
 pub const PCI_CMD_MEMORY: u16 = 1 << 1;
 pub const PCI_CMD_BUS_MASTER: u16 = 1 << 2;
@@ -172,9 +174,29 @@ pub fn dcmd_is_allowed(opcode: u32) -> bool {
     opcode == MR_DCMD_LD_GET_LIST
 }
 
-/// One H740P Mini. A second `1000:0016`, or any other RAID device id, stops the probe.
+/// One H740P Mini by device id alone. Iron `cc03d01b` found two `1000:0016`
+/// (the Mini and the H840). Use [`h740p_mini_subsys`] to tell them apart.
 pub fn h740p_mini_singleton(vendor: u16, device: u16, count: u32) -> bool {
     count == 1 && vendor == PCI_VENDOR_LSI && device == PCI_DEVICE_H740P_HARPOON
+}
+
+pub const PCI_VENDOR_DELL: u16 = 0x1028;
+/// pci.ids: PERC H840 Adapter. Config-space id only. Never map its BAR.
+pub const PCI_SUBSYS_H840: u16 = 0x1fc9;
+/// pci.ids: full-height PERC H740P Adapter. Not the integrated Mini.
+pub const PCI_SUBSYS_H740P_ADAPTER: u16 = 0x1fcb;
+/// pci.ids: PERC H740P Mini.
+pub const PCI_SUBSYS_H740P_MINI_1FCD: u16 = 0x1fcd;
+/// pci.ids: PERC H740P Mini (second Dell id).
+pub const PCI_SUBSYS_H740P_MINI_1FCF: u16 = 0x1fcf;
+
+/// Dell H740P Mini only. H840 (`1028:1fc9`) and the full-height adapter are false.
+pub fn h740p_mini_subsys(subvendor: u16, subdevice: u16) -> bool {
+    subvendor == PCI_VENDOR_DELL
+        && matches!(
+            subdevice,
+            PCI_SUBSYS_H740P_MINI_1FCD | PCI_SUBSYS_H740P_MINI_1FCF
+        )
 }
 
 /// OR in memory space. Leave every other command bit, including bus master.
@@ -401,6 +423,11 @@ pub fn prop_perc_host_package() -> bool {
         && pci_cmd_for_fwstate_load(PCI_CMD_BUS_MASTER) & PCI_CMD_BUS_MASTER != 0
         && PERC_SCAN_BUS_LAST >= 0x18
         && PERC_SCAN_BUS_LAST < 0xFF
+        && h740p_mini_subsys(PCI_VENDOR_DELL, PCI_SUBSYS_H740P_MINI_1FCD)
+        && h740p_mini_subsys(PCI_VENDOR_DELL, PCI_SUBSYS_H740P_MINI_1FCF)
+        && !h740p_mini_subsys(PCI_VENDOR_DELL, PCI_SUBSYS_H840)
+        && !h740p_mini_subsys(PCI_VENDOR_DELL, PCI_SUBSYS_H740P_ADAPTER)
+        && !h740p_mini_subsys(PCI_VENDOR_LSI, PCI_SUBSYS_H740P_MINI_1FCD)
         && h740p_mini_singleton(PCI_VENDOR_LSI, PCI_DEVICE_H740P_HARPOON, 1)
         && !h740p_mini_singleton(PCI_VENDOR_LSI, PCI_DEVICE_H740P_HARPOON, 2)
         && !h740p_mini_singleton(PCI_VENDOR_LSI, 0x005d, 1)
@@ -434,11 +461,12 @@ fn put_u64_be(buf: &mut [u8], off: usize, v: u64) {
 /// Post-EBS read of H740P `outbound_msg_0`. Host and QEMU take the empty stub.
 ///
 /// Walks PCI config for `1000:0016` through [`PERC_SCAN_BUS_LAST`] (lab bus
-/// `0x18` is inside that window). Zero or two matches: print and return.
-/// One match: enable memory space only when firmware left it off, then load
-/// BAR0 + [`MFI_OUTBOUND_MSG_0`]. Does not set bus master, does not store
-/// `inbound_msg_0`, does not ring a doorbell, and does not change the
-/// durable-LUN pick. The H840 is a different device id and is not mapped.
+/// `0x18` is inside that window). Iron `cc03d01b` printed `refuse count=2`:
+/// the H740P Mini and the H840 Adapter share that id. Each match gets a
+/// subsystem read. Exactly one Dell H740P Mini (`1028:1fcd` or `1028:1fcf`)
+/// may be loaded. The H840 BAR is never mapped. Does not set bus master,
+/// does not store `inbound_msg_0`, does not ring a doorbell, and does not
+/// change the durable-LUN pick.
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 pub fn perc_fwstate_probe() {}
 
@@ -451,7 +479,8 @@ pub fn perc_fwstate_probe() {
     write_hex8(PERC_SCAN_BUS_LAST);
     serial::write_line(" (not PERC-LUN-OK)");
 
-    let mut count = 0u32;
+    let mut harpoon = 0u32;
+    let mut mini_count = 0u32;
     let mut found = (0u8, 0u8, 0u8);
     for bus in 0u8..=PERC_SCAN_BUS_LAST {
         for dev in 0u8..32 {
@@ -466,10 +495,26 @@ pub fn perc_fwstate_probe() {
                 let vendor = id as u16;
                 let device = (id >> 16) as u16;
                 if vendor == PCI_VENDOR_LSI && device == PCI_DEVICE_H740P_HARPOON {
-                    if count == 0 {
-                        found = (bus, dev, func);
+                    let ss = pci_read32(bus, dev, func, PCI_CFG_SUBSYS);
+                    let subvendor = ss as u16;
+                    let subdevice = (ss >> 16) as u16;
+                    let mini = h740p_mini_subsys(subvendor, subdevice);
+                    harpoon = harpoon.saturating_add(1);
+                    if mini {
+                        if mini_count == 0 {
+                            found = (bus, dev, func);
+                        }
+                        mini_count = mini_count.saturating_add(1);
                     }
-                    count = count.saturating_add(1);
+                    serial::write_str("boot: perc fwstate cand bdf=");
+                    write_bdf(bus, dev, func);
+                    serial::write_str(" sub=");
+                    write_hex16(subvendor);
+                    serial::write_byte(b':');
+                    write_hex16(subdevice);
+                    serial::write_str(" mini=");
+                    serial::write_byte(if mini { b'1' } else { b'0' });
+                    serial::write_line(" (not PERC-LUN-OK)");
                 }
                 if func == 0 {
                     let ht = (pci_read32(bus, dev, func, PCI_CFG_HEADER) >> 16) as u8;
@@ -481,9 +526,12 @@ pub fn perc_fwstate_probe() {
         }
     }
 
-    if !h740p_mini_singleton(PCI_VENDOR_LSI, PCI_DEVICE_H740P_HARPOON, count) {
-        serial::write_str("boot: perc fwstate refuse count=");
-        write_dec(count);
+    // Dummy BAR: this only checks mini_count == 1. The real BAR is read below.
+    if !fwstate_may_load(mini_count, Some(0x10_0000)) {
+        serial::write_str("boot: perc fwstate refuse mini=");
+        write_dec(mini_count);
+        serial::write_str(" harpoon=");
+        write_dec(harpoon);
         serial::write_line(" (not PERC-LUN-OK)");
         return;
     }
@@ -501,7 +549,7 @@ pub fn perc_fwstate_probe() {
         serial::write_line(" bar=0 (not PERC-LUN-OK)");
         return;
     };
-    if !fwstate_may_load(count, Some(bar)) {
+    if !fwstate_may_load(mini_count, Some(bar)) {
         serial::write_str("boot: perc fwstate refuse bdf=");
         write_bdf(bus, dev, func);
         serial::write_line(" bar=0 (not PERC-LUN-OK)");
@@ -564,6 +612,12 @@ fn write_hex8(v: u8) {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     crate::boot::serial::write_byte(HEX[(v >> 4) as usize]);
     crate::boot::serial::write_byte(HEX[(v & 0xF) as usize]);
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn write_hex16(v: u16) {
+    write_hex8((v >> 8) as u8);
+    write_hex8(v as u8);
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
