@@ -38,7 +38,7 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 
 | Metric | Value | Δ vs previous HDA |
 |--------|------:|-------------------|
-| **Overall product readiness** | **99%** | **held** — Everest **CLOSED** (`f72b4276`). Lab PERC map recorded 2026-09-26: Ubuntu 26.04 on UBUNTU0, empty RAYNU-SPARE. Not MegaRAID I/O. Not 100%. A5 is parked. |
+| **Overall product readiness** | **99%** | **held** — Everest **CLOSED** (`f72b4276`). M8.7 host pack is in tree (no doorbell). Not MegaRAID I/O. Not 100%. A5 is parked. |
 | **Months to Mount Everest** | **0.0** | **held** (summit reached 2026-09-11; `f72b4276` SPA ISO loop) |
 | **ETA month** | **2026-09** | **closed this month on iron**; next work is M8, not a slipped Everest |
 | **Confidence** | high | E1–E6 on COM2. M8 named separately so polish cannot reopen the summit |
@@ -167,7 +167,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 | M+2 | 2026-09 | E3b native NIC lab (QEMU e1000) + ISO residual | ADR-013 Phase C | **Phase C DONE (QEMU)** |
 | M+3 | 2026-08 | E3b iron HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | **DONE (M7.8 iron)** |
 | M+4 | 2026-09 | Phase B (SPA → installed disk) | remaining Everest | **DONE — EVEREST CLOSED** (`f72b4276` / `34552377351`) |
-| M+5 | 2026-10 | **M8.0** persist (file nested / LUN iron / leftover fallback) | keep=1 + `DISK-BOOTX64` + `root=UUID=` after Force Off | **Repeated** through `1f33eeda`. A6 lived once. Ubuntu 26.04 is up on UBUNTU0. RAYNU-SPARE is empty. A5 parked. See [m8_state.md](m8_state.md) and [r640_perc_lab.md](runbooks/r640_perc_lab.md). |
+| M+5 | 2026-10 | **M8.0** persist (file nested / LUN iron / leftover fallback) | keep=1 + `DISK-BOOTX64` + `root=UUID=` after Force Off | **Repeated** through `1f33eeda`. A6 lived once. **M8.7 host** packs PERC frames. No doorbell. See [m8_plan.md](m8_plan.md). |
 
 ### Timeline burn-down
 
@@ -175,8 +175,8 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 2026-07 ████████  HDA + M6 closed (Latitude)
 2026-08 ████████  R640 boot (E2) + E3b HTTP-OK
 2026-09 ████████  E5 + Phase B — **Mount Everest CLOSED** (`f72b4276`)  ← months_to_everest = 0.0
-2026-10 ███████░  M8.0 persist **repeated**; A6 **lived once**; spare VD exists; PERC I/O not started; A5 parked
-2026-11 ░░░░░░░░  MegaRAID I/O on RAYNU-SPARE
+2026-10 ███████░  M8.0 persist **repeated**; A6 **lived once**; M8.7 host pack; no doorbell; A5 parked
+2026-11 ░░░░░░░░  M8.7 fwstate, then one READ of RAYNU-SPARE
 ```
 
 **Pull-forward rule:** E2 closed 2026-08-15; E3 bring-up closed 2026-08-16; **E3b closed 2026-08-20**; **P0-14 closed 2026-08-21**; **E5 install-to-disk closed on iron 2026-09-10** (`59ac070`); **F7 relaunch + installed-disk GRUB reached on iron 2026-09-10** (`975f8fc`, exit-cap ended it); **E5 reboot-to-disk closed on iron 2026-09-10** (`56a3ffd`: `DISK-BOOT-OK`, second Linux `root=UUID=`, `login:`) → months 0.5→0.25; **Phase B closed on iron 2026-09-11** (`f72b4276` / `34552377351`: coexist HTTP-OK → SPA Start of RayNu-F ISO → install → disk reboot) → months 0.25→0.0. Document why in [Changelog](#hda-changelog).
@@ -245,7 +245,7 @@ Ordered for critical path (parallelize B with D design):
 | P0-9 | M6.9 external audit + spec review | E6 | **DONE** | proofs green | `docs/`, `ept_model/`, `mgmt/ext` |
 | P0-10 | R640 soak / hardware confidence | E2 | 0.5 | P0-2 | `tools/`, `mgmt/soak` — post M7.5 |
 | P0-11 | **M9 sketch** vMotion-like / DRS-like / hot-add | — | — | M8 | deferred — was M8 in ADR-009; **M9** after operator hardening (ADR-018) |
-| P0-64 | **M8** operator product hardening | — | IN PROGRESS | Everest closed | [ADR-018](adr/ADR-018.md) / [m8_plan.md](m8_plan.md) / **[m8_state.md](m8_state.md) (START HERE)**. Disk map: [r640_perc_lab.md](runbooks/r640_perc_lab.md). Ubuntu on UBUNTU0. RAYNU-SPARE empty. A5 parked. Narrative: [36d3b559](evidence/r640/2026-09-24-36d3b559-persist-login.md). Nested QEMU ≠ R640. |
+| P0-64 | **M8** operator product hardening | — | IN PROGRESS | Everest closed | [ADR-018](adr/ADR-018.md) / [m8_plan.md](m8_plan.md) / **[m8_state.md](m8_state.md) (START HERE)**. **M8.7 host** frame pack. No doorbell. Disk map: [r640_perc_lab.md](runbooks/r640_perc_lab.md). Nested QEMU ≠ R640. |
 
 ---
 
@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-perc-lab-vd |
-| Summary | **Lab PERC map recorded.** Ubuntu 26.04 on UBUNTU0 (~400 GB). RAYNU-SPARE (~2.9 TB) empty. H840 untouched. A5 parked. Months **0.0 held**. Overall **99 held**. |
-| Everest impact | none — Everest stays closed. Not 100%. The empty spare is not a summit. Nested QEMU ≠ R640. |
-| Gates touched | `./tools/sync-hda-site.sh --check`; `./tools/sync-loihda-site.sh --check`; `./tools/check-site-chrome.sh`. No rebuild. No MegaRAID. |
+| Commit | m8-7-perc-host |
+| Summary | **M8.7 host pack.** LD-list DCMD and one-block READ(16). Size fence refuses UBUNTU0. No BAR0. Months **0.0 held**. Overall **99 held**. |
+| Everest impact | none — Everest stays closed. Not 100%. A packed frame is not PERC I/O. Nested QEMU ≠ R640. |
+| Gates touched | `cargo test --lib m8_perc_host_gate_passes`. `./tools/m8-perc-smoke.sh`. Site sync. No doorbell. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 18 held, perc 15 held, months A 0.25 held. |
 
 
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-26 | m8-7-perc-host | 0.0 | 99 | **M8.7 host pack.** Frames + size fence in `mgmt/megaraid.rs`. No doorbell. `skip PERC` stays. perc 15 held. Not `RAYNU-V-M8-PERC-LUN-OK`. months 0.0 held; overall 99 held |
 | 2026-09-26 | m8-perc-lab-vd | 0.0 | 99 | **PERC lab layout recorded.** UBUNTU0 ~400 GB Ubuntu 26.04 boot. RAYNU-SPARE ~2.9 TB empty. H740P Mini only. H840 not opened. A5 parked. perc 15 held. Not `RAYNU-V-M8-PERC-LUN-OK`. months 0.0 held; overall 99 held |
 | 2026-09-25 | m8-spa-poweroff | 0.0 | 99 | **A6 lived once. iDRAC Off.** Activity `abc` reached Alpine and `RAYNU-V-M8-CONSOLE-OK` showed in the page. Power off host. COM2 `boot: SPA host po`. Power State Off. No lifecycle paste. months 0.0 held; overall 99 held |
 | 2026-09-25 | m8-spa-poweroff | 0.0 | 99 | **SPA Power off host, not lived.** `POST /host/poweroff` on the kept session, then `VMXOFF` and `ResetSystem` SHUTDOWN. Failed `VMXOFF` leaves the page up. `1f33eeda` has no button. iDRAC off, then flash. A6 still `write_line_nowait`, not lived. months 0.0 held; overall 99 held |
@@ -1015,7 +1016,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     Ubuntu 26.04 is up on UBUNTU0 (~400 GB). RAYNU-SPARE (~2.9 TB) is empty. Do not format either. Do not open the H840. A5 is parked. PERC I/O has not started. Do not setup-disk. Do not curl. See docs/runbooks/r640_perc_lab.md.
+Next move:     M8.7 host pack is in tree. Next iron step is M8.7 fwstate, only when a flash is asked for. Do not format UBUNTU0 or RAYNU-SPARE. Do not open the H840. A5 is parked. Do not setup-disk. See docs/m8_plan.md.
 Rollback:      Standing SPA: v0.1.0-m8-a4s → CI 36137732145 / COM2 sha=1f33eeda72f9 / EFI SHA256 5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693
 Everest:       GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351 / EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc / COM2 build: sha=f72b4276d198
 Do not F11:    M8 prototypes `b5e290be` `17d120c5` `3b388279` `08202468` `d60431ee` `28cd4ff1` `15e3d665` `5c32bd06` `1fa231df` `e5cca2e0` `c4a41a17` (table in docs/m8_state.md); Phase B fails `34548550755` / `7f8dc0a9`

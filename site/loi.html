@@ -320,10 +320,11 @@
               <p>
                 The lab H740P Mini has two RAID-6 virtual disks.
                 <strong>UBUNTU0</strong> (~400 GB) is Ubuntu 26.04 and the boot
-                device. <strong>RAYNU-SPARE</strong> (~2.9 TB) is empty. The
-                mapper still prints <code>skip PERC</code>. Classification is
-                not I/O. There is no MegaRAID mailbox driver. This 15% is
-                census plus an empty spare. Do not format UBUNTU0. Do not
+                device. <strong>RAYNU-SPARE</strong> (~2.9 TB) is empty.
+                <strong>M8.7</strong> packs mailbox frames on the host and
+                refuses the Ubuntu-sized disk. The mapper still prints
+                <code>skip PERC</code>. A packed frame is not I/O. This 15%
+                stays census plus an empty spare. Do not format UBUNTU0. Do not
                 partition RAYNU-SPARE.
               </p>
             </li>
@@ -362,7 +363,7 @@
           <pre class="ship-code" data-reveal><code>boot:   UBUNTU0 ~400 GB · Ubuntu 26.04 · / and /boot/efi
 spare:  RAYNU-SPARE ~2.9 TB · empty · do not partition
 ctrl:   PERC H740P Mini only · do not open the H840
-next:   MegaRAID I/O on the spare when asked · A5 parked · perc stays 15
+next:   M8.7 fwstate when a flash is asked for · host pack is in tree · A5 parked · perc stays 15
 never:  format UBUNTU0 · format the spare · format the Toshiba · setup-disk · curl Start
 read:   docs/runbooks/r640_perc_lab.md</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>

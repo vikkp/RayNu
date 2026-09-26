@@ -1,6 +1,6 @@
 # M8 Plan — operator product hardening (post-Everest)
 
-**Status:** **OPEN — PERC spare exists, I/O not started** (2026-09-26). **Read [m8_state.md](m8_state.md) first.** Disk map: [r640_perc_lab.md](runbooks/r640_perc_lab.md). Everest **CLOSED** (`f72b4276`). M8.0 persist **repeated** and A4s **lived** on `1f33eeda72f9`. A6 **lived once** (`abc` reached Alpine, `RAYNU-V-M8-CONSOLE-OK` in Activity, Host green) and Overview Power off host left iDRAC Power State Off. On 2026-09-26 Ubuntu 26.04 is the standing OS on PERC VD **UBUNTU0** (~400 GB). **RAYNU-SPARE** (~2.9 TB) is empty. Do not format either. A5 is parked. Rollback kit [`v0.1.0-m8-a4s`](../releases/v0.1.0-m8-a4s/). `3f80abd0` is a probe; do not flash it. Do not open Firefox on `3e9ce45e`. Phase 0 stays. M8.2 host-ready. M8.3 keyboard lived once. M8.4 host-ready. A3 SKU DONE. Known-good and do-not-F11 tables live in `m8_state.md`, not here. **not VNC**.
+**Status:** **OPEN — M8.7 host pack** (2026-09-26). **Read [m8_state.md](m8_state.md) first.** Disk map: [r640_perc_lab.md](runbooks/r640_perc_lab.md). Everest **CLOSED** (`f72b4276`). M8.0 persist **repeated** and A4s **lived** on `1f33eeda72f9`. A6 **lived once** (`abc` reached Alpine, `RAYNU-V-M8-CONSOLE-OK` in Activity, Host green). Ubuntu 26.04 is the standing OS on PERC VD **UBUNTU0** (~400 GB). **RAYNU-SPARE** (~2.9 TB) is empty. Do not format either. A5 is parked. **M8.7** mailbox frames pack on the host (`RAYNU-V-M8-PERC-HOST-OK`). No doorbell. `skip PERC` stays. Rollback kit [`v0.1.0-m8-a4s`](../releases/v0.1.0-m8-a4s/). `3f80abd0` is a probe; do not flash it. Do not open Firefox on `3e9ce45e`. Phase 0 stays. M8.2 host-ready. M8.3 keyboard lived once. M8.4 host-ready. A3 SKU DONE. Known-good and do-not-F11 tables live in `m8_state.md`, not here. **not VNC**.
 **Parent:** [ADR-018](adr/ADR-018.md) · Everest: [ADR-009](adr/ADR-009.md) · lived: [progress.md](progress.md) · HDA: [hda.md](hda.md)  
 **Prior track:** [m7_plan.md](m7_plan.md) (closed). Cluster / elasticity is **M9**, not this plan.
 
@@ -49,7 +49,7 @@ Evidence: [`docs/evidence/r640/2026-09-11-f72b4276-phase-b-spa-iso-install-disk-
 - Do **not** reopen M7. Host/CI never print `RAYNU-V-M7-ISO-INSTALL-OK`.
 - Do **not** pull TLS / persist / console into Proven Core without a new ADR (default **no**).
 - Do **not** start vMotion / DRS / hot-add on this path (→ **M9**).
-- Build **in order**. A later gate may be designed in parallel; it does not close before its predecessor without rewriting this plan.
+- Build **in order**. A later gate may be designed in parallel; it does not close before its predecessor without rewriting this plan. **M8.7** is the parallel Bar B track (host pack first). It does not close M8.4–M8.6.
 
 ```
 M8.0  Persist install disk across HV reboot
@@ -60,6 +60,8 @@ M8.3  Guest console UI (web/VNC; serial already worked)
 M8.4  ISO blob upload via SPA/REST
 M8.5  UEFI catalog persist (SFS/NVMe write)
 M8.6  Windows / multi-distro (ADR-014 later)
+M8.7  PERC mailbox on RAYNU-SPARE (host pack, then one read)
+      M8.4–M8.6 stay open. Bar B does not wait on them.
 
 → M9 sketch: vMotion-like · DRS-like · hot-add
 ```
@@ -176,6 +178,26 @@ HDA + `site/hda.html` stay fresh: update `docs/hda.md`, then `./tools/sync-hda-s
 
 ---
 
+### M8.7 — PERC mailbox on RAYNU-SPARE
+
+**Status: host pack in tree. No doorbell. perc stays 15.**
+
+**Goal:** Post-EBS MFI frames for the H740P Mini (`1000:0016`, Linux Harpoon), aimed at the empty ~2.9 TB VD. UBUNTU0 stays the boot disk. `pick_durable_lun` still prints `skip PERC`. Host marker `RAYNU-V-M8-PERC-HOST-OK`. Iron marker `RAYNU-V-M8-PERC-LUN-OK` is later, and host/CI never print it.
+
+M8.4, M8.5, and M8.6 stay open. This milestone runs beside them because Bar B does not depend on ISO upload or Windows. The operator asked for the number and the host slice.
+
+| Step | What | Close when |
+|------|------|------------|
+| M8.7 host | Pack `MR_DCMD_LD_GET_LIST` and one-block READ(16). Size fence. No BAR0. | `RAYNU-V-M8-PERC-HOST-OK` (this slice) |
+| M8.7 fwstate | Load `outbound_msg_0` (BAR0 + 0x18). Ready or operational, or stop. | COM2 `perc fwstate=`. Still `skip PERC`. |
+| M8.7 list | One LD-list DCMD. | COM2 prints both sizes and the spare target. |
+| M8.7 read | One READ(16) of LBA 0 on that target. | COM2 `perc read ok`. Still not virtio. |
+| M8.7 virtio | Attach the spare only, `setup-disk` still withheld. | Iron `RAYNU-V-M8-PERC-LUN-OK`. perc can leave 15. |
+
+The fence accepts one LD of ~2.5–3.1 TiB and refuses ~300–512 GiB. Two `1000:0016` functions stop the probe (the H840 is not this device). Firmware state other than ready/operational, or `MFI_RESET_REQUIRED`, stops the probe. Adapter reset is not an allowed command. QEMU has no H740P. Do not flash this slice.
+
+---
+
 ## M9 sketch (out of scope)
 
 | Theme | Intent |
@@ -192,4 +214,4 @@ Do not pull M9 into M8 gate lists.
 
 **M8.0 persist-first attach.** Choice remains **file-backed nested / durable LUN on iron / leftover DRAM as fallback**. Attach prefers persist (`attach_disk_keep` / `attach_lun` when the media looks installed). Nested `M8_PERSIST_IMG` backs QEMU RAM (distro OVMF ignores nvdimm/pc-dimm), default off. **NVMe I/O** (`MODE=lun`) Identify + Read/Write backs virtio when Identify succeeds; empty NVMe is not 1 GiB-zeroed. **USB BOT** (`MODE=usb`) is TCG-proven. **`MODE=lunkeep` TCG-proven:** plant GPT+ESP+ext4 at NVMe LUN offset 0, kill HV, second boot `keep=1`. NVMe I/O is post-EBS. **`MODE=usbkeep` TCG-proven:** same on qemu-xhci + usb-storage (header CRC + first ESP + FAT BPB + ext4; not 32 BOT array CRC). Iron marker is `RAYNU-V-M8-DISK-PERSIST-OK` (in-tree `uefi-bin` serial on keep=1 DurableLun DISK-BOOT; not on flashed `4af78b43`). Host marker is `RAYNU-V-M8-DISK-PERSIST-HOST-OK`. Keep ADR-004 exclusive ownership. Do not claim persist from nested QEMU alone. Do not copy 1 GiB through the Cruzer ESP. Do not format the PERC. Keep [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) as the flash rollback. A2 evidence close does not retire that pin.
 
-**Next:** **M8.3 console iron.** Firmware SPA `POST /console/keys` is in-tree. A4 TLS is **CLOSED on COM2** (`928d6224` `RAYNU-V-M8-TLS-OK`). Persist-OK also printed on keep=1 DISK-BOOT. Iron close is typing in the guest from the SPA (`RAYNU-V-M8-CONSOLE-OK`). Not VNC. The live page is `1f33eeda` (A4s). It has no Power off button. iDRAC turns that chassis off before the next flash. Do not `setup-disk`. Do not flash Toshiba. Nested QEMU ≠ R640.
+**Next:** **M8.7 fwstate**, when the operator asks for a flash. The host pack is in tree (`RAYNU-V-M8-PERC-HOST-OK`). It does not map BAR0. Census still `skip PERC`. Ubuntu 26.04 stays the standing OS on UBUNTU0. Do not format RAYNU-SPARE. A6 lived once. **not VNC**. Do not `setup-disk`. Do not flash the Toshiba. Nested QEMU ≠ R640.
