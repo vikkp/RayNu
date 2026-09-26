@@ -100,7 +100,7 @@ The ~100 GB the old Ubuntu looked like was a filesystem inside the old large VD.
 **In scope when the operator asks**
 
 - Read-only `lsblk` / `findmnt` / `storcli` or MegaRAID inquiry that does not write.
-- **M8.7 fwstate** on `cc03d01b` printed `refuse count=2`. The H740P Mini and the H840 are both `1000:0016`. The next EFI reads subsystem ids and maps a BAR only for `1028:1fcd` or `1028:1fcf`. It does not ring a doorbell.
+- **M8.7 identify** lived on `2dd2b412`: Mini `18:00.0` `1028:1fcd` BAR `0x9d800000`, H840 `3b:00.0` `1028:1fc9` not mapped, xscale `outbound_msg_0` was 0. The next EFI loads scratch pads `0xB0`–`0xBC` and does not post a descriptor. Do not F11 `2dd2b412` or `cc03d01b` again for this question.
 - A5 (ESP `EFI/RayNu/auth.token`, reject `raynu-v-bringup`) is **parked**. The operator skipped it. The product rule that stays is: the password is not compiled into the EFI or the SPA. Do not start A5 unless they ask.
 
 Scores stay put until iron I/O exists. `piece_perc_pct` is 15. Bar B is 18. HDA overall is 99, months 0.0. An empty virtual disk does not move them.
@@ -155,7 +155,7 @@ The A6 docs commit `f7a84e48` stamps `build: sha=f7a84e48cf1e`. The release bina
 
 ## What is still open
 
-- **M8.7 fwstate** lived as a refuse on `cc03d01b`: COM2 `boot: perc fwstate refuse count=2`, EFI SHA256 `b0848230b9b9b1ce8b6e4d6f64ea132e6ff6761590d75e819990819282975e05`. No BAR was mapped. The host pack still builds the LD-list frame and a one-block READ(16). `mgmt/durable_lun.rs` still skips the whole PERC (`skip PERC`). No doorbell has been sent. PRE-EBS UEFI RAID BlockIo dies at ExitBootServices. The iron close is still `RAYNU-V-M8-PERC-LUN-OK`, and host/CI never print it.
+- **M8.7 identify** lived on `2dd2b412`: COM2 `perc fwstate cand bdf=18:00.0 sub=1028:1fcd mini=1`, `cand bdf=3b:00.0 sub=1028:1fc9 mini=0`, then `bdf=18:00.0 bar=0x000000009d800000 raw=0x00000000 allow=0 mse=0`. `cc03d01b` was the earlier refuse (`count=2`, EFI SHA256 `b0848230b9b9b1ce8b6e4d6f64ea132e6ff6761590d75e819990819282975e05`). The zero is the xscale register. The host pack still builds the LD-list frame and a one-block READ(16). `mgmt/durable_lun.rs` still skips the whole PERC (`skip PERC`). No doorbell has been sent. PRE-EBS UEFI RAID BlockIo dies at ExitBootServices. The iron close is still `RAYNU-V-M8-PERC-LUN-OK`, and host/CI never print it. The path from here is scratch pad 0, then IOC init, then one LD list. `mapped=0` stops that path.
 - USB persist on the Toshiba is a different close from PERC persist. Latitude and QEMU are a different close from this R640.
 - A6 lived once (`abc` in Activity, `RAYNU-V-M8-CONSOLE-OK`, Host green), then Power off host left iDRAC Off. That history stays. The chassis was powered back on for this reinstall. **not VNC**.
 - A5 stays parked.
