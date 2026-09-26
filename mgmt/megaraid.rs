@@ -10,9 +10,14 @@
 //!
 //! This slice packs frames, chooses the spare logical disk, and on the EFI
 //! loads the Fusion scratch pads for the one H740P Mini. `outbound_msg_0` is
-//! printed because iron already showed it as zero; it is not the Harpoon
-//! status word. It does not ring a doorbell, post an MFA descriptor, issue a
-//! DCMD, or change [`crate::mgmt::durable_lun::pick_durable_lun`].
+//! printed because iron `2dd2b412` showed it as zero; it is not the Harpoon
+//! status word. Iron `22ce3728` read scratch pad 0 as `0xb73c0fed` (READY,
+//! max commands 4077). When that state nibble is READY and scratch pad 1 asks
+//! for RDPQ, the EFI posts one IOC init and, only if that status is 0, one
+//! `MR_DCMD_LD_GET_LIST`. Both posts are a single 64-bit store to the low
+//! inbound queue port (`0xC0`). It does not ring the doorbell, issue a
+//! READ(16), attach virtio, or change
+//! [`crate::mgmt::durable_lun::pick_durable_lun`].
 //! The guest disk stays the Toshiba. Iron `RAYNU-V-M8-PERC-LUN-OK` is not this close.
 
 /// Iron COM2 close: a READ of RAYNU-SPARE lived, and the LD was attached.
@@ -24,7 +29,7 @@ pub const M8_PERC_HOST_OK_MARKER: &str = "RAYNU-V-M8-PERC-HOST-OK";
 
 /// Honesty: a firmware-state load is not a doorbell and not the iron marker.
 pub const PERC_HOST_RESIDUAL_NOTE: &str =
-    "residual: M8.7 Harpoon status is scratch_pad_0; outbound_msg_0 is the xscale register; not iron RAYNU-V-M8-PERC-LUN-OK; no doorbell; durable_lun still skip PERC; QEMU has no H740P; do not format UBUNTU0; do not partition RAYNU-SPARE";
+    "residual: M8.7 Harpoon status is scratch_pad_0; outbound_msg_0 is the xscale register; READY nibble posts one IOC init and one LD list to inbound_low_queue_port; not iron RAYNU-V-M8-PERC-LUN-OK; no doorbell; durable_lun still skip PERC; QEMU has no H740P; do not format UBUNTU0; do not partition RAYNU-SPARE";
 
 /// 64-byte MFI frame (`MEGAMFI_FRAME_SIZE`).
 pub const MFI_FRAME_BYTES: usize = 64;
@@ -66,11 +71,13 @@ pub const MFI_STATE_FORCE_OCR: u32 = 0x0000_0080;
 pub const MFI_OUTBOUND_MSG_0: u32 = 0x18;
 
 /// Fusion doorbell. Linux writes `MFI_RESET_FLAGS` here to leave OPERATIONAL.
-/// This slice never stores it.
+/// This slice never stores it. Iron is already READY, so the transition is skipped.
 pub const MFI_DOORBELL: u32 = 0x00;
-/// Fusion request-descriptor port. IOC init and DCMDs post here later.
+/// Legacy MFI inbound port. Fusion does not post here.
 /// This slice never stores it.
 pub const MFI_INBOUND_QUEUE_PORT: u32 = 0x40;
+/// Fusion MFA port. One 64-bit store covers `0xC0` and `0xC4`.
+pub const MFI_INBOUND_LOW_QUEUE_PORT: u32 = 0xC0;
 /// `ABORT | READY | MFIMODE`. Drops the previous owner's queues. Not OCR.
 pub const MFI_RESET_FLAGS: u32 = 0x0000_0007;
 
@@ -89,6 +96,34 @@ pub const MR_MAX_REPLY_QUEUES_EXT_OFFSET: u32 = 0x003F_C000;
 pub const MR_MAX_REPLY_QUEUES_EXT_SHIFT: u32 = 14;
 /// Scratch pad 1. Set means the firmware wants an RDPQ array.
 pub const MR_RDPQ_MODE_OFFSET: u32 = 0x0080_0000;
+
+/// `MEGASAS_REQ_DESCRIPT_FLAGS_MFA << TYPE_SHIFT`. Low byte of an MFA descriptor.
+pub const MFA_REQUEST_FLAGS: u64 = 0x02;
+pub const MPI2_FUNCTION_IOC_INIT: u8 = 0x02;
+pub const MPI2_WHOINIT_HOST_DRIVER: u8 = 0x04;
+pub const MPI2_VERSION: u16 = 0x0200;
+pub const MPI2_HEADER_VERSION: u16 = 0x1000;
+pub const MPI2_IOCINIT_MSGFLAG_RDPQ_ARRAY_MODE: u8 = 0x01;
+/// `sizeof(MPI2_IOC_INIT_REQUEST)` in Linux v6.12.
+pub const MPI2_IOC_INIT_BYTES: usize = 0x48;
+pub const MEGA_MPI2_RAID_DEFAULT_IO_FRAME_SIZE: u16 = 256;
+pub const MFI_CMD_STATUS_POLL: u8 = 0xFF;
+pub const MFI_FRAME_DONT_POST_IN_REPLY_QUEUE: u16 = 0x0001;
+pub const MFI_STAT_OK: u8 = 0x00;
+/// One reply queue. Poll mode. Not the 128 the firmware can offer.
+pub const FUSION_REPLY_Q_DEPTH: u16 = 16;
+pub const FUSION_HOST_PAGE_SHIFT: u8 = 12;
+pub const FUSION_HOST_MSIX_VECTORS: u8 = 1;
+/// `sizeof(MR_LD_LIST)` with `MAX_LOGICAL_DRIVES_EXT` 256. A 64-entry buffer is too small.
+pub const LD_LIST_FW_ENTRIES: usize = 256;
+pub const LD_LIST_FW_BYTES: u32 =
+    (LD_LIST_HEADER_BYTES + LD_LIST_FW_ENTRIES * LD_LIST_ENTRY_BYTES) as u32;
+/// Bounded poll. Not Linux's 180s `MFI_IO_TIMEOUT_SECS`.
+pub const FUSION_POLL_SECS: u64 = 4;
+pub const FUSION_DOORBELL_WAIT_SECS: u64 = 2;
+/// Iron `22ce3728` scratch pads. Host tests pin the decode. Not a second load.
+pub const IRON_FUSION_S0: u32 = 0xb73c_0fed;
+pub const IRON_FUSION_S1: u32 = 0xb1df_c50f;
 
 /// PCI command register. The only config dword the fwstate slice may write.
 pub const PCI_CFG_COMMAND: u8 = 0x04;
@@ -225,14 +260,116 @@ pub fn fusion_regs_look_unmapped(s0: u32, s1: u32, s2: u32, s3: u32) -> bool {
     s0 == 0 && s1 == 0 && s2 == 0 && s3 == 0
 }
 
-/// MFA descriptor post (inbound queue port) stays off in this image.
-pub fn fusion_post_is_allowed() -> bool {
-    false
+/// True only for the READY state nibble.
+///
+/// Low 16 bits of scratch pad 0 are `max_fw_cmds`. On iron they are `0x0fed`
+/// (4077), which sets bit 0 and bit 7. Those bits are not `MFI_RESET_REQUIRED`
+/// or `MFI_STATE_FORCE_OCR` on this register. OPERATIONAL does not post in
+/// this image: that transition would store the doorbell, and this image never
+/// does. FAULT and an all-zero pad do not post.
+pub fn fusion_post_is_allowed(status: u32) -> bool {
+    fw_state(status) == MFI_STATE_READY
 }
 
 /// Doorbell write that moves OPERATIONAL → READY stays off in this image.
 pub fn doorbell_transition_is_allowed() -> bool {
     false
+}
+
+/// Cycles to spin at `tsc_hz` (0 or a tiny calibration → 2.1 GHz).
+pub fn fusion_poll_cycles(tsc_hz: u64, secs: u64) -> u64 {
+    let hz = if tsc_hz < 1_000_000 {
+        2_100_000_000
+    } else {
+        tsc_hz
+    };
+    hz.saturating_mul(secs)
+}
+
+/// MFA descriptor for a 256-byte-aligned frame below 4 GiB.
+///
+/// Low byte is [`MFA_REQUEST_FLAGS`]. An address that would occupy that byte,
+/// or any address at or above 4 GiB, is rejected. Scratch pad 1 bit 25 was
+/// clear on iron, so this image does not advertise 64-bit DMA.
+pub fn pack_mfa_descriptor(frame_phys: u64) -> Option<u64> {
+    if frame_phys & 0xFF != 0 || frame_phys >= 0x1_0000_0000 {
+        return None;
+    }
+    Some(frame_phys | MFA_REQUEST_FLAGS)
+}
+
+/// MPI2 IOC INIT, RDPQ array mode, one MSI-X vector, poll depth 16.
+///
+/// `ChainOffset` stays 0. `driver_operations` is not this message.
+/// Both physical addresses must sit below 4 GiB.
+pub fn pack_ioc_init_request(
+    io_frame_phys: u64,
+    rdpq_array_phys: u64,
+) -> Option<[u8; MPI2_IOC_INIT_BYTES]> {
+    if io_frame_phys >= 0x1_0000_0000
+        || rdpq_array_phys >= 0x1_0000_0000
+        || io_frame_phys & 0xFF != 0
+        || rdpq_array_phys & 0xF != 0
+    {
+        return None;
+    }
+    let mut m = [0u8; MPI2_IOC_INIT_BYTES];
+    m[0x00] = MPI2_WHOINIT_HOST_DRIVER;
+    m[0x03] = MPI2_FUNCTION_IOC_INIT;
+    m[0x07] = MPI2_IOCINIT_MSGFLAG_RDPQ_ARRAY_MODE;
+    put_u16(&mut m, 0x0C, MPI2_VERSION);
+    put_u16(&mut m, 0x0E, MPI2_HEADER_VERSION);
+    m[0x16] = FUSION_HOST_PAGE_SHIFT;
+    m[0x17] = FUSION_HOST_MSIX_VECTORS;
+    put_u16(&mut m, 0x1A, MEGA_MPI2_RAID_DEFAULT_IO_FRAME_SIZE / 4);
+    put_u16(&mut m, 0x1C, FUSION_REPLY_Q_DEPTH);
+    put_u64(&mut m, 0x28, io_frame_phys);
+    put_u64(&mut m, 0x30, rdpq_array_phys);
+    Some(m)
+}
+
+/// One RDPQ array entry: reply-queue physical address, then 8 reserved bytes.
+pub fn pack_rdpq_entry(queue_phys: u64) -> Option<[u8; 16]> {
+    if queue_phys >= 0x1_0000_0000 || queue_phys & 0xF != 0 {
+        return None;
+    }
+    let mut e = [0u8; 16];
+    put_u64(&mut e, 0, queue_phys);
+    Some(e)
+}
+
+/// `MFI_CMD_INIT` header. `driver_operations` stays 0. Polled (`cmd_status` `0xFF`).
+pub fn pack_mfi_init_frame(ioc_msg_phys: u64) -> Option<[u8; MFI_FRAME_BYTES]> {
+    if ioc_msg_phys >= 0x1_0000_0000 || ioc_msg_phys & 0xF != 0 {
+        return None;
+    }
+    let mut f = [0u8; MFI_FRAME_BYTES];
+    f[0] = MFI_CMD_INIT;
+    f[2] = MFI_CMD_STATUS_POLL;
+    put_u16(&mut f, 0x10, MFI_FRAME_DONT_POST_IN_REPLY_QUEUE);
+    put_u32(&mut f, 0x14, MPI2_IOC_INIT_BYTES as u32);
+    put_u32(&mut f, 0x18, ioc_msg_phys as u32);
+    put_u32(&mut f, 0x1C, (ioc_msg_phys >> 32) as u32);
+    Some(f)
+}
+
+/// Polled `MR_DCMD_LD_GET_LIST`. Buffer length is the full 256-entry firmware struct.
+pub fn pack_ld_get_list_polled(
+    context: u32,
+    reply_phys: u64,
+    reply_bytes: u32,
+) -> Option<[u8; MFI_FRAME_BYTES]> {
+    if reply_bytes != LD_LIST_FW_BYTES || reply_phys >= 0x1_0000_0000 || reply_phys & 0xF != 0 {
+        return None;
+    }
+    let mut f = pack_ld_get_list(context, reply_phys, reply_bytes);
+    f[2] = MFI_CMD_STATUS_POLL;
+    let flags = u16::from_le_bytes(f[0x10..0x12].try_into().unwrap());
+    put_u16(&mut f, 0x10, flags | MFI_FRAME_DONT_POST_IN_REPLY_QUEUE);
+    if !frame_is_read(&f) || f[0] != MFI_CMD_DCMD {
+        return None;
+    }
+    Some(f)
 }
 
 /// True for the one management opcode we encode.
@@ -268,6 +405,12 @@ pub fn h740p_mini_subsys(subvendor: u16, subdevice: u16) -> bool {
 /// OR in memory space. Leave every other command bit, including bus master.
 pub fn pci_cmd_for_fwstate_load(cmd: u16) -> u16 {
     cmd | PCI_CMD_MEMORY
+}
+
+/// Memory space plus bus master. Used only on the H740P Mini, and only when
+/// an MFA descriptor is about to be posted. Never applied to the H840.
+pub fn pci_cmd_for_fusion_post(cmd: u16) -> u16 {
+    cmd | PCI_CMD_MEMORY | PCI_CMD_BUS_MASTER
 }
 
 /// True when `after` turns bus master on and `before` had it off.
@@ -506,11 +649,33 @@ pub fn prop_perc_host_package() -> bool {
         && fusion_max_cmds(MFI_STATE_OPERATIONAL | 0x03F8) == 0x03F8
         && fusion_regs_look_unmapped(0, 0, 0, 0)
         && !fusion_regs_look_unmapped(MFI_STATE_OPERATIONAL, 0, 0, 0)
-        && !fusion_post_is_allowed()
+        && fw_state(IRON_FUSION_S0) == MFI_STATE_READY
+        && !fw_state_allows_mailbox(IRON_FUSION_S0)
+        && fusion_max_cmds(IRON_FUSION_S0) == 0x0fed
+        && fusion_reply_queues_ventura(IRON_FUSION_S1) == 128
+        && fusion_rdpq(IRON_FUSION_S1)
+        && fusion_post_is_allowed(IRON_FUSION_S0)
+        && fusion_post_is_allowed(MFI_STATE_READY | MFI_RESET_REQUIRED)
+        && !fusion_post_is_allowed(MFI_STATE_OPERATIONAL)
+        && !fusion_post_is_allowed(MFI_STATE_OPERATIONAL | 0x0fed)
+        && !fusion_post_is_allowed(MFI_STATE_FAULT)
+        && !fusion_post_is_allowed(MFI_STATE_FLUSH_CACHE)
+        && !fusion_post_is_allowed(0)
         && !doorbell_transition_is_allowed()
         && MFI_RESET_FLAGS == 0x7
         && MFI_DOORBELL == 0
         && MFI_INBOUND_QUEUE_PORT == 0x40
+        && MFI_INBOUND_LOW_QUEUE_PORT == 0xC0
+        && MFA_REQUEST_FLAGS == 0x02
+        && LD_LIST_FW_BYTES == 4104
+        && FUSION_POLL_SECS <= 8
+        && FUSION_DOORBELL_WAIT_SECS <= 4
+        && pack_mfa_descriptor(0x1000) == Some(0x1002)
+        && pack_mfa_descriptor(0x1001).is_none()
+        && pack_mfa_descriptor(0x1_0000_0000).is_none()
+        && pci_cmd_for_fusion_post(0) == PCI_CMD_MEMORY | PCI_CMD_BUS_MASTER
+        && pci_cmd_newly_bus_master(0, pci_cmd_for_fusion_post(0))
+        && !pci_cmd_newly_bus_master(0, pci_cmd_for_fwstate_load(0))
         && host_never_prints_iron_perc_ok()
         && PERC_HOST_RESIDUAL_NOTE.contains("not iron")
         && PERC_HOST_RESIDUAL_NOTE.contains("scratch_pad_0")
@@ -548,11 +713,13 @@ fn put_u64_be(buf: &mut [u8], off: usize, v: u64) {
 /// Iron `2dd2b412` mapped only the Mini (`18:00.0`, `1028:1fcd`, BAR
 /// `0x9d800000`) and read `outbound_msg_0` as zero. That offset is the xscale
 /// status word. This function still prints it, then loads scratch pads
-/// `0xB0`–`0xBC`. `allow` on the fusion line is [`fw_state_allows_mailbox`] of
-/// scratch pad 0. All-zero scratch pads print `mapped=0` and stop the design
-/// there. The H840 BAR is never mapped. Does not set bus master, does not
-/// store the doorbell or the inbound queue port, and does not change the
-/// durable-LUN pick.
+/// `0xB0`–`0xBC`. `allow` on the fusion line is [`fusion_post_is_allowed`]:
+/// the READY nibble only. Iron `22ce3728` printed `allow=0` because the
+/// previous image used [`fw_state_allows_mailbox`], which treats max-command
+/// bits 0 and 7 as a reset request. All-zero scratch pads print `mapped=0`
+/// and stop. The H840 BAR is never mapped. A READY nibble with RDPQ set
+/// posts one IOC init to [`MFI_INBOUND_LOW_QUEUE_PORT`]. The doorbell is
+/// not stored. The durable-LUN pick is not changed.
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 pub fn perc_fwstate_probe() {}
 
@@ -675,17 +842,18 @@ pub fn perc_fwstate_probe() {
 
     // SAFETY: same firmware-assigned Mini BAR. Linux maps 8 KiB of it and
     // reads outbound_scratch_pad_0 as the Harpoon status word. Four aligned
-    // loads. No doorbell, no inbound queue port, no H840.
+    // loads. These loads do not store the doorbell. No H840.
     // KANI-TARGET: host tests cover the allow gate and the queue decoder.
     let load = |off: u32| unsafe { core::ptr::read_volatile((bar + u64::from(off)) as *const u32) };
     let s0 = load(MFI_SCRATCH_PAD_0);
     let s1 = load(MFI_SCRATCH_PAD_1);
     let s2 = load(MFI_SCRATCH_PAD_2);
     let s3 = load(MFI_SCRATCH_PAD_3);
-    debug_assert!(!fusion_post_is_allowed());
     debug_assert!(!doorbell_transition_is_allowed());
-    let fallow = fw_state_allows_mailbox(s0);
+    debug_assert!(!adapter_reset_is_allowed());
+    let fallow = fusion_post_is_allowed(s0);
     let unmapped = fusion_regs_look_unmapped(s0, s1, s2, s3);
+    let rdpq = !unmapped && fusion_rdpq(s1);
 
     serial::write_str("boot: perc fusion bdf=");
     write_bdf(bus, dev, func);
@@ -699,6 +867,10 @@ pub fn perc_fwstate_probe() {
     write_hex32(s3);
     serial::write_str(" allow=");
     serial::write_byte(if fallow { b'1' } else { b'0' });
+    serial::write_str(" nibble=");
+    write_hex_digit((s0 >> 28) as u8);
+    serial::write_str(" maxcmds=");
+    write_dec(u32::from(fusion_max_cmds(s0)));
     if unmapped {
         serial::write_str(" queues=na");
     } else {
@@ -706,15 +878,271 @@ pub fn perc_fwstate_probe() {
         write_dec(fusion_reply_queues_ventura(s1));
     }
     serial::write_str(" rdpq=");
-    serial::write_byte(if !unmapped && fusion_rdpq(s1) {
-        b'1'
-    } else {
-        b'0'
-    });
+    serial::write_byte(if rdpq { b'1' } else { b'0' });
     serial::write_str(" mapped=");
     serial::write_byte(if unmapped { b'0' } else { b'1' });
     serial::write_str(" post=0");
     serial::write_line(" (not PERC-LUN-OK)");
+
+    if unmapped || !fallow || !rdpq {
+        serial::write_str("boot: perc ioc skip");
+        if unmapped {
+            serial::write_str(" mapped=0");
+        } else if !fallow {
+            serial::write_str(" allow=0");
+        } else {
+            serial::write_str(" rdpq=0");
+        }
+        serial::write_line(" (not PERC-LUN-OK)");
+        return;
+    }
+    perc_fusion_post(bar, bus, dev, func);
+}
+
+/// Identity-mapped DMA blob. Firmware page tables are still installed here.
+/// Each region is a page so the MFA low byte stays clear. The LD list is the
+/// full 256-entry firmware struct (4104 bytes), not the 64-entry parser cap.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+#[repr(C, align(4096))]
+struct PercFusionDma {
+    init_frame: [u8; 4096],
+    ioc_msg: [u8; 4096],
+    io_frames: [u8; 4096],
+    rdpq: [u8; 4096],
+    reply_q: [u8; 4096],
+    dcmd_frame: [u8; 4096],
+    ld_list: [u8; 8192],
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+static mut PERC_FUSION_DMA: PercFusionDma = PercFusionDma {
+    init_frame: [0; 4096],
+    ioc_msg: [0; 4096],
+    io_frames: [0; 4096],
+    rdpq: [0; 4096],
+    reply_q: [0; 4096],
+    dcmd_frame: [0; 4096],
+    ld_list: [0; 8192],
+};
+
+/// One IOC init, then one LD list if that status is 0.
+///
+/// Prints the post line before the 64-bit store. A doorbell bit 0 that stays
+/// set skips the post. The doorbell register is never written. Bus master is
+/// set on this Mini only, and only after the skip checks pass.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn perc_fusion_post(bar: u64, bus: u8, dev: u8, func: u8) {
+    use crate::boot::serial;
+    use crate::mgmt::e1000_mmio::{pci_read32, pci_write32};
+
+    debug_assert_eq!(core::mem::offset_of!(PercFusionDma, ioc_msg), 4096);
+    debug_assert_eq!(core::mem::offset_of!(PercFusionDma, io_frames), 8192);
+    debug_assert_eq!(core::mem::offset_of!(PercFusionDma, rdpq), 12288);
+    debug_assert_eq!(core::mem::offset_of!(PercFusionDma, reply_q), 16384);
+    debug_assert_eq!(core::mem::offset_of!(PercFusionDma, dcmd_frame), 20480);
+    debug_assert_eq!(core::mem::offset_of!(PercFusionDma, ld_list), 24576);
+    let dma = core::ptr::addr_of_mut!(PERC_FUSION_DMA);
+    let base = dma as u64;
+    if base >= 0x1_0000_0000 || base & 0xFFF != 0 {
+        serial::write_line("boot: perc ioc skip above4g (not PERC-LUN-OK)");
+        return;
+    }
+    let init_phys = base;
+    let ioc_phys = base + 4096;
+    let io_phys = base + 8192;
+    let rdpq_phys = base + 12288;
+    let reply_phys = base + 16384;
+    let dcmd_phys = base + 20480;
+    let ld_phys = base + 24576;
+
+    // SAFETY: firmware-assigned Mini BAR. One load of the doorbell. No store.
+    // KANI-TARGET: host tests keep doorbell_transition_is_allowed false.
+    let db = unsafe { core::ptr::read_volatile((bar + u64::from(MFI_DOORBELL)) as *const u32) };
+    serial::write_str("boot: perc ioc db=0x");
+    write_hex32(db);
+    serial::write_line(" (not PERC-LUN-OK)");
+    if db & 1 != 0 {
+        let start = crate::arch::cpu::rdtsc();
+        let budget = fusion_poll_cycles(
+            crate::boot::raynu_f_flag::tsc_hz(),
+            FUSION_DOORBELL_WAIT_SECS,
+        );
+        let mut still = db;
+        while still & 1 != 0 && crate::arch::cpu::rdtsc().wrapping_sub(start) < budget {
+            core::hint::spin_loop();
+            // SAFETY: same doorbell load. Still no store.
+            still =
+                unsafe { core::ptr::read_volatile((bar + u64::from(MFI_DOORBELL)) as *const u32) };
+        }
+        if still & 1 != 0 {
+            serial::write_line("boot: perc ioc skip dbbusy=1 (not PERC-LUN-OK)");
+            return;
+        }
+    }
+
+    let Some(desc) = pack_mfa_descriptor(init_phys) else {
+        serial::write_line("boot: perc ioc skip frame (not PERC-LUN-OK)");
+        return;
+    };
+    let Some(msg) = pack_ioc_init_request(io_phys, rdpq_phys) else {
+        serial::write_line("boot: perc ioc skip frame (not PERC-LUN-OK)");
+        return;
+    };
+    let Some(entry) = pack_rdpq_entry(reply_phys) else {
+        serial::write_line("boot: perc ioc skip frame (not PERC-LUN-OK)");
+        return;
+    };
+    let Some(frame) = pack_mfi_init_frame(ioc_phys) else {
+        serial::write_line("boot: perc ioc skip frame (not PERC-LUN-OK)");
+        return;
+    };
+
+    let cmd_dw = pci_read32(bus, dev, func, PCI_CFG_COMMAND);
+    let next = pci_cmd_for_fusion_post(cmd_dw as u16);
+    debug_assert!(
+        pci_cmd_newly_bus_master(cmd_dw as u16, next) || cmd_dw as u16 & PCI_CMD_BUS_MASTER != 0
+    );
+    // High half stays 0 so RW1C status bits are not cleared.
+    pci_write32(bus, dev, func, PCI_CFG_COMMAND, u32::from(next));
+    core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+
+    // SAFETY: static BSS, identity-mapped, below 4 GiB. Zero, then fill the
+    // reply queue with 0xFF the way Linux does. No H840 pointer is formed.
+    // KANI-TARGET: host tests cover the packed bytes, not this copy.
+    unsafe {
+        core::ptr::write_bytes(dma, 0, 1);
+        let reply = (dma as *mut u8).add(16384);
+        core::ptr::write_bytes(reply, 0xFF, usize::from(FUSION_REPLY_Q_DEPTH) * 8);
+        core::ptr::copy_nonoverlapping(entry.as_ptr(), (dma as *mut u8).add(12288), entry.len());
+        core::ptr::copy_nonoverlapping(msg.as_ptr(), (dma as *mut u8).add(4096), msg.len());
+        core::ptr::copy_nonoverlapping(frame.as_ptr(), dma as *mut u8, frame.len());
+    }
+    core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+
+    serial::write_str("boot: perc ioc post bdf=");
+    write_bdf(bus, dev, func);
+    serial::write_str(" port=c0 frame=0x");
+    write_hex64(init_phys);
+    serial::write_str(" desc=0x");
+    write_hex64(desc);
+    serial::write_str(" bm=1");
+    serial::write_line(" (not PERC-LUN-OK)");
+
+    // SAFETY: Mini BAR + 0xC0. One 64-bit store. Not the legacy port 0x40.
+    // Not the doorbell. Ventura requires the 64-bit write.
+    // KANI-TARGET: host tests reject an unaligned descriptor.
+    unsafe {
+        core::ptr::write_volatile(
+            (bar + u64::from(MFI_INBOUND_LOW_QUEUE_PORT)) as *mut u64,
+            desc,
+        );
+    }
+    let (st, timed_out) = poll_mfi_status(dma as *mut u8);
+    serial::write_str("boot: perc ioc status=0x");
+    write_hex8(st);
+    serial::write_str(" to=");
+    serial::write_byte(if timed_out { b'1' } else { b'0' });
+    serial::write_line(" (not PERC-LUN-OK)");
+    if timed_out || st != MFI_STAT_OK {
+        return;
+    }
+
+    let Some(dcmd) = pack_ld_get_list_polled(1, ld_phys, LD_LIST_FW_BYTES) else {
+        serial::write_line("boot: perc ld skip frame (not PERC-LUN-OK)");
+        return;
+    };
+    let Some(ld_desc) = pack_mfa_descriptor(dcmd_phys) else {
+        serial::write_line("boot: perc ld skip frame (not PERC-LUN-OK)");
+        return;
+    };
+    // SAFETY: same static. The DCMD frame is a different page from the init frame.
+    unsafe {
+        let dcmd_ptr = (dma as *mut u8).add(20480);
+        core::ptr::write_bytes(dcmd_ptr, 0, 4096);
+        core::ptr::copy_nonoverlapping(dcmd.as_ptr(), dcmd_ptr, dcmd.len());
+        let ld_ptr = (dma as *mut u8).add(24576);
+        core::ptr::write_bytes(ld_ptr, 0, LD_LIST_FW_BYTES as usize);
+    }
+    core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+
+    serial::write_str("boot: perc ld post bdf=");
+    write_bdf(bus, dev, func);
+    serial::write_str(" port=c0 frame=0x");
+    write_hex64(dcmd_phys);
+    serial::write_str(" desc=0x");
+    write_hex64(ld_desc);
+    serial::write_str(" bytes=");
+    write_dec(LD_LIST_FW_BYTES);
+    serial::write_line(" (not PERC-LUN-OK)");
+
+    // SAFETY: second MFA store to the same low queue port. Still not a doorbell.
+    unsafe {
+        core::ptr::write_volatile(
+            (bar + u64::from(MFI_INBOUND_LOW_QUEUE_PORT)) as *mut u64,
+            ld_desc,
+        );
+    }
+    let dcmd_ptr = unsafe { (dma as *mut u8).add(20480) };
+    let (lst, lto) = poll_mfi_status(dcmd_ptr);
+    serial::write_str("boot: perc ld status=0x");
+    write_hex8(lst);
+    serial::write_str(" to=");
+    serial::write_byte(if lto { b'1' } else { b'0' });
+    if !lto && lst == MFI_STAT_OK {
+        core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+        // SAFETY: firmware wrote at most LD_LIST_FW_BYTES into this page.
+        let buf = unsafe {
+            core::slice::from_raw_parts((dma as *const u8).add(24576), LD_LIST_FW_BYTES as usize)
+        };
+        match parse_ld_list(buf, 512) {
+            Ok(list) => {
+                serial::write_str(" n=");
+                write_dec(list.count as u32);
+                let show = list.count.min(4);
+                for i in 0..show {
+                    let e = list.entries[i];
+                    serial::write_str(" id=");
+                    write_dec(u32::from(e.target_id));
+                    serial::write_str(" class=");
+                    serial::write_str(match classify_ld_bytes(e.size_bytes) {
+                        LdClass::Ubuntu => "ubuntu",
+                        LdClass::Spare => "spare",
+                        LdClass::Other => "other",
+                    });
+                    serial::write_str(" bytes=");
+                    write_dec64(e.size_bytes);
+                }
+                match pick_spare(&list.entries[..list.count]) {
+                    Ok(p) => {
+                        serial::write_str(" pick=");
+                        write_dec(u32::from(p.target_id));
+                    }
+                    Err(PickError::UbuntuOnly) => serial::write_str(" pick=ubuntu"),
+                    Err(PickError::NoSpare) => serial::write_str(" pick=none"),
+                    Err(PickError::ManySpares) => serial::write_str(" pick=many"),
+                }
+            }
+            Err(_) => serial::write_str(" parse=0"),
+        }
+    }
+    serial::write_line(" (not PERC-LUN-OK)");
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn poll_mfi_status(frame: *mut u8) -> (u8, bool) {
+    let start = crate::arch::cpu::rdtsc();
+    let budget = fusion_poll_cycles(crate::boot::raynu_f_flag::tsc_hz(), FUSION_POLL_SECS);
+    loop {
+        // SAFETY: cmd_status is byte 2 of the frame we just posted.
+        let st = unsafe { core::ptr::read_volatile(frame.add(2)) };
+        if st != MFI_CMD_STATUS_POLL {
+            return (st, false);
+        }
+        if crate::arch::cpu::rdtsc().wrapping_sub(start) >= budget {
+            return (st, true);
+        }
+        core::hint::spin_loop();
+    }
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
@@ -734,6 +1162,31 @@ fn write_dec(mut n: u32) {
     for b in &buf[i..] {
         serial::write_byte(*b);
     }
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn write_dec64(mut n: u64) {
+    use crate::boot::serial;
+    let mut buf = [0u8; 20];
+    let mut i = buf.len();
+    if n == 0 {
+        serial::write_byte(b'0');
+        return;
+    }
+    while n > 0 {
+        i -= 1;
+        buf[i] = b'0' + (n % 10) as u8;
+        n /= 10;
+    }
+    for b in &buf[i..] {
+        serial::write_byte(*b);
+    }
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn write_hex_digit(v: u8) {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    crate::boot::serial::write_byte(HEX[(v & 0xF) as usize]);
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]

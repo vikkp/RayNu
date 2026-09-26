@@ -32,12 +32,24 @@ if ! grep -q 'fn harpoon_fw_status_offset(' "$ROOT/mgmt/megaraid.rs"; then
   echo "error: missing Harpoon status offset" >&2
   exit 1
 fi
-if ! grep -q 'fn fusion_post_is_allowed(' "$ROOT/mgmt/megaraid.rs"; then
+if ! grep -q 'fn fusion_post_is_allowed(status:' "$ROOT/mgmt/megaraid.rs"; then
   echo "error: fusion post must stay an explicit policy" >&2
+  exit 1
+fi
+if ! grep -q 'fn pack_mfa_descriptor(' "$ROOT/mgmt/megaraid.rs"; then
+  echo "error: missing MFA descriptor pack" >&2
+  exit 1
+fi
+if ! grep -q 'fn pci_cmd_for_fusion_post(' "$ROOT/mgmt/megaraid.rs"; then
+  echo "error: missing fusion bus-master policy" >&2
   exit 1
 fi
 if ! grep -q 'boot: perc fusion' "$ROOT/mgmt/megaraid.rs"; then
   echo "error: missing fusion status line" >&2
+  exit 1
+fi
+if ! grep -q 'boot: perc ioc' "$ROOT/mgmt/megaraid.rs"; then
+  echo "error: missing IOC post line" >&2
   exit 1
 fi
 if ! grep -q 'fn pci_cmd_for_fwstate_load(' "$ROOT/mgmt/megaraid.rs"; then
