@@ -2,11 +2,13 @@
 
 use super::{
     cdb_is_single_read16, classify_ld_bytes, dcmd_is_allowed, frame_is_read,
-    fw_state_allows_mailbox, h740p_mini_singleton, host_never_prints_iron_perc_ok,
-    pack_ld_get_list, pack_ld_read16, parse_ld_list, pick_spare, prop_perc_host_package,
+    fw_state_allows_mailbox, fwstate_may_load, h740p_mini_singleton,
+    host_never_prints_iron_perc_ok, memory_bar64, pack_ld_get_list, pack_ld_read16, parse_ld_list,
+    pci_cmd_for_fwstate_load, pci_cmd_newly_bus_master, pick_spare, prop_perc_host_package,
     FrameError, LdClass, LdEntry, LAB_SPARE_BYTES, LAB_UBUNTU0_BYTES, M8_PERC_HOST_OK_MARKER,
     M8_PERC_LUN_OK_MARKER, MFI_CMD_DCMD, MFI_CMD_LD_SCSI_IO, MFI_CMD_LD_WRITE, MR_DCMD_LD_GET_LIST,
-    PCI_DEVICE_H740P_HARPOON, PCI_VENDOR_LSI, PERC_HOST_RESIDUAL_NOTE, SCSI_READ_16, SCSI_WRITE_16,
+    PCI_CMD_BUS_MASTER, PCI_CMD_MEMORY, PCI_DEVICE_H740P_HARPOON, PCI_VENDOR_LSI,
+    PERC_HOST_RESIDUAL_NOTE, PERC_SCAN_BUS_LAST, SCSI_READ_16, SCSI_WRITE_16,
 };
 
 fn lab_list_bytes() -> [u8; 8 + 32] {
@@ -98,4 +100,30 @@ fn two_harpoons_and_a_faulted_fw_stop() {
         size_bytes: LAB_UBUNTU0_BYTES,
     };
     println!("{M8_PERC_HOST_OK_MARKER}");
+}
+
+#[test]
+fn fwstate_load_is_one_harpoon_and_does_not_bus_master() {
+    assert!(fwstate_may_load(1, memory_bar64(0xF000_0000, 0)));
+    assert!(!fwstate_may_load(0, memory_bar64(0xF000_0000, 0)));
+    assert!(!fwstate_may_load(2, memory_bar64(0xF000_0000, 0)));
+    assert!(!fwstate_may_load(1, None));
+    let above4g = memory_bar64(0x0000_0004, 0x1).unwrap();
+    assert_eq!(above4g, 0x1_0000_0000);
+    assert!(fwstate_may_load(1, Some(above4g)));
+    assert!(memory_bar64(0x0000_1000, 0).is_none());
+    assert!(memory_bar64(0x0000_0001, 0).is_none());
+    let enabled = pci_cmd_for_fwstate_load(0);
+    assert_eq!(enabled, PCI_CMD_MEMORY);
+    assert!(!pci_cmd_newly_bus_master(0, enabled));
+    let already = pci_cmd_for_fwstate_load(PCI_CMD_BUS_MASTER | PCI_CMD_MEMORY);
+    assert_eq!(already & PCI_CMD_BUS_MASTER, PCI_CMD_BUS_MASTER);
+    assert!(!pci_cmd_newly_bus_master(
+        PCI_CMD_BUS_MASTER,
+        pci_cmd_for_fwstate_load(PCI_CMD_BUS_MASTER)
+    ));
+    assert!(PERC_SCAN_BUS_LAST >= 0x18);
+    assert!(PERC_SCAN_BUS_LAST < 0xFF);
+    assert!(PERC_HOST_RESIDUAL_NOTE.contains("no doorbell"));
+    assert!(PERC_HOST_RESIDUAL_NOTE.contains("outbound_msg_0"));
 }
