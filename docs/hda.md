@@ -38,7 +38,7 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 
 | Metric | Value | Δ vs previous HDA |
 |--------|------:|-------------------|
-| **Overall product readiness** | **99%** | **held** — Everest **CLOSED** (`f72b4276`). M8.7 identify lived on `2dd2b412` (Mini BAR, xscale word `0`). Fusion status not lived. Not MegaRAID I/O. Not 100%. A5 is parked. |
+| **Overall product readiness** | **99%** | **held** — Everest **CLOSED** (`f72b4276`). Fusion status lived on `22ce3728` (READY, `mapped=1`). IOC init not lived. Not MegaRAID I/O. Not 100%. A5 is parked. |
 | **Months to Mount Everest** | **0.0** | **held** (summit reached 2026-09-11; `f72b4276` SPA ISO loop) |
 | **ETA month** | **2026-09** | **closed this month on iron**; next work is M8, not a slipped Everest |
 | **Confidence** | high | E1–E6 on COM2. M8 named separately so polish cannot reopen the summit |
@@ -167,7 +167,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 | M+2 | 2026-09 | E3b native NIC lab (QEMU e1000) + ISO residual | ADR-013 Phase C | **Phase C DONE (QEMU)** |
 | M+3 | 2026-08 | E3b iron HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | **DONE (M7.8 iron)** |
 | M+4 | 2026-09 | Phase B (SPA → installed disk) | remaining Everest | **DONE — EVEREST CLOSED** (`f72b4276` / `34552377351`) |
-| M+5 | 2026-10 | **M8.0** persist (file nested / LUN iron / leftover fallback) | keep=1 + `DISK-BOOTX64` + `root=UUID=` after Force Off | **Repeated** through `1f33eeda`. A6 lived once. **M8.7 identify** lived on `2dd2b412`. Fusion status next. No doorbell. See [m8_plan.md](m8_plan.md). |
+| M+5 | 2026-10 | **M8.0** persist (file nested / LUN iron / leftover fallback) | keep=1 + `DISK-BOOTX64` + `root=UUID=` after Force Off | **Repeated** through `1f33eeda`. A6 lived once. Fusion status lived on `22ce3728` (READY). IOC init is the next F11. No doorbell. See [m8_plan.md](m8_plan.md). |
 
 ### Timeline burn-down
 
@@ -175,8 +175,8 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 2026-07 ████████  HDA + M6 closed (Latitude)
 2026-08 ████████  R640 boot (E2) + E3b HTTP-OK
 2026-09 ████████  E5 + Phase B — **Mount Everest CLOSED** (`f72b4276`)  ← months_to_everest = 0.0
-2026-10 ███████░  M8.0 persist **repeated**; A6 **lived once**; M8.7 Mini identified; Fusion status next; A5 parked
-2026-11 ░░░░░░░░  Fusion IOC init, then one READ of RAYNU-SPARE, only if scratch pad 0 allows it
+2026-10 ███████░  M8.0 persist **repeated**; A6 **lived once**; fusion snapshot READY on `22ce3728`; IOC init next; A5 parked
+2026-11 ░░░░░░░░  One READ of RAYNU-SPARE only after IOC status 0 and an LD list; no doorbell
 ```
 
 **Pull-forward rule:** E2 closed 2026-08-15; E3 bring-up closed 2026-08-16; **E3b closed 2026-08-20**; **P0-14 closed 2026-08-21**; **E5 install-to-disk closed on iron 2026-09-10** (`59ac070`); **F7 relaunch + installed-disk GRUB reached on iron 2026-09-10** (`975f8fc`, exit-cap ended it); **E5 reboot-to-disk closed on iron 2026-09-10** (`56a3ffd`: `DISK-BOOT-OK`, second Linux `root=UUID=`, `login:`) → months 0.5→0.25; **Phase B closed on iron 2026-09-11** (`f72b4276` / `34552377351`: coexist HTTP-OK → SPA Start of RayNu-F ISO → install → disk reboot) → months 0.25→0.0. Document why in [Changelog](#hda-changelog).
@@ -245,7 +245,7 @@ Ordered for critical path (parallelize B with D design):
 | P0-9 | M6.9 external audit + spec review | E6 | **DONE** | proofs green | `docs/`, `ept_model/`, `mgmt/ext` |
 | P0-10 | R640 soak / hardware confidence | E2 | 0.5 | P0-2 | `tools/`, `mgmt/soak` — post M7.5 |
 | P0-11 | **M9 sketch** vMotion-like / DRS-like / hot-add | — | — | M8 | deferred — was M8 in ADR-009; **M9** after operator hardening (ADR-018) |
-| P0-64 | **M8** operator product hardening | — | IN PROGRESS | Everest closed | [ADR-018](adr/ADR-018.md) / [m8_plan.md](m8_plan.md) / **[m8_state.md](m8_state.md) (START HERE)**. **M8.7 identify** lived (`2dd2b412`). Fusion status snapshot is next. No doorbell. Disk map: [r640_perc_lab.md](runbooks/r640_perc_lab.md). Nested QEMU ≠ R640. |
+| P0-64 | **M8** operator product hardening | — | IN PROGRESS | Everest closed | [ADR-018](adr/ADR-018.md) / [m8_plan.md](m8_plan.md) / **[m8_state.md](m8_state.md) (START HERE)**. Fusion status lived (`22ce3728`, READY). IOC init is next. No doorbell. Disk map: [r640_perc_lab.md](runbooks/r640_perc_lab.md). Nested QEMU ≠ R640. |
 
 ---
 
@@ -354,9 +354,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-7-perc-fusion |
-| Summary | **Iron `2dd2b412` mapped the Mini and read the xscale word as 0.** Harpoon status is scratch pad 0. This EFI loads that word and the queue-geometry pads. `post=0`. No doorbell. Months **0.0 held**. Overall **99 held**. |
-| Everest impact | none — Everest stays closed. Not 100%. A register load is not PERC I/O. Nested QEMU ≠ R640. |
+| Commit | m8-7-perc-ioc |
+| Summary | **Iron `22ce3728` scratch pad 0 is READY (`0xb73c0fed`, max commands 4077, `mapped=1`).** The old `allow=0` was the command-count bits. This EFI posts one IOC init and one LD list to port `0xC0`. No doorbell. No READ. Months **0.0 held**. Overall **99 held**. |
+| Everest impact | none — Everest stays closed. Not 100%. An unlived IOC post is not PERC I/O. Nested QEMU ≠ R640. |
 | Gates touched | `cargo test --lib m8_perc_host_gate_passes`. `./tools/m8-perc-smoke.sh`. Site sync. No doorbell. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 18 held, perc 15 held, months A 0.25 held. |
 
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-26 | m8-7-perc-ioc | 0.0 | 99 | **IOC init packed, not lived.** `22ce3728` COM2 `s0=0xb73c0fed` READY, `queues=128`, `rdpq=1`, `mapped=1`. `allow=0` was maxcmds 4077, not a reset. This EFI posts one MFA to `0xC0`, then one LD list if status is 0. No doorbell. No READ. perc 15 held. Not `RAYNU-V-M8-PERC-LUN-OK`. months 0.0 held; overall 99 held |
 | 2026-09-26 | m8-7-perc-fusion | 0.0 | 99 | **Fusion path, not another offset hunt.** `2dd2b412` mapped Mini `18:00.0` `1028:1fcd` BAR `0x9d800000` and read xscale `outbound_msg_0` as 0. H840 not mapped. Status word is scratch pad 0. Sequence is status, READY, IOC init, one LD list. This EFI prints `perc fusion` with `post=0`. `mapped=0` stops. perc 15 held. Not `RAYNU-V-M8-PERC-LUN-OK`. months 0.0 held; overall 99 held |
 | 2026-09-26 | m8-7-perc-fwstate | 0.0 | 99 | **Iron fwstate refuse.** `cc03d01b` COM2 `perc fwstate refuse count=2`. No BAR load. H840 is also `1000:0016`. Next EFI picks Mini `1028:1fcd`/`1fcf`. perc 15 held. Not `RAYNU-V-M8-PERC-LUN-OK`. months 0.0 held; overall 99 held |
 | 2026-09-26 | m8-7-perc-fwstate | 0.0 | 99 | **M8.7 fwstate in the EFI.** Loads `outbound_msg_0` on the one `1000:0016`. Not lived. No doorbell. `skip PERC` stays. perc 15 held. Not `RAYNU-V-M8-PERC-LUN-OK`. months 0.0 held; overall 99 held |
@@ -1019,7 +1020,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     2dd2b412 mapped the Mini and read outbound_msg_0 as 0. Reboot to Ubuntu. Do not F11 that stick again. Flash the fusion-status EFI, F11 once, paste perc fusion. mapped=0 or allow=0 stops. No doorbell. Do not format UBUNTU0 or RAYNU-SPARE. Do not open the H840. A5 is parked. Do not setup-disk. See docs/m8_plan.md.
+Next move:     22ce3728 showed scratch pad 0 READY (0xb73c0fed, maxcmds 4077, mapped=1). Chassis is in that Alpine guest. Reboot to Ubuntu without F11. Do not F11 22ce3728 again. Flash the IOC EFI, F11 once, paste perc ioc and perc ld. status other than 0x00 stops. No doorbell. No READ. Do not format UBUNTU0 or RAYNU-SPARE. Do not open the H840. A5 is parked. Do not setup-disk. See docs/m8_plan.md.
 Rollback:      Standing SPA: v0.1.0-m8-a4s → CI 36137732145 / COM2 sha=1f33eeda72f9 / EFI SHA256 5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693
 Everest:       GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351 / EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc / COM2 build: sha=f72b4276d198
 Do not F11:    M8 prototypes `b5e290be` `17d120c5` `3b388279` `08202468` `d60431ee` `28cd4ff1` `15e3d665` `5c32bd06` `1fa231df` `e5cca2e0` `c4a41a17` (table in docs/m8_state.md); Phase B fails `34548550755` / `7f8dc0a9`

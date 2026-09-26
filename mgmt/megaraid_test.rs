@@ -61,6 +61,83 @@ fn dcmd_frame_is_the_ld_list_read() {
 }
 
 #[test]
+fn iron_scratch_pad_is_ready_and_ioc_init_is_one_mfa() {
+    use super::{
+        pack_ioc_init_request, pack_ld_get_list_polled, pack_mfa_descriptor, pack_mfi_init_frame,
+        pack_rdpq_entry, IRON_FUSION_S0, IRON_FUSION_S1, LD_LIST_FW_BYTES, MFA_REQUEST_FLAGS,
+        MFI_CMD_INIT, MFI_CMD_STATUS_POLL, MFI_FRAME_DIR_READ, MFI_FRAME_DIR_WRITE,
+        MFI_FRAME_DONT_POST_IN_REPLY_QUEUE, MFI_INBOUND_LOW_QUEUE_PORT, MPI2_FUNCTION_IOC_INIT,
+        MPI2_HEADER_VERSION, MPI2_IOC_INIT_BYTES, MPI2_VERSION, MPI2_WHOINIT_HOST_DRIVER,
+    };
+    assert_eq!(super::fw_state(IRON_FUSION_S0), super::MFI_STATE_READY);
+    assert!(!super::fw_state_allows_mailbox(IRON_FUSION_S0));
+    assert!(super::fusion_post_is_allowed(IRON_FUSION_S0));
+    assert!(!super::fusion_post_is_allowed(super::MFI_STATE_OPERATIONAL));
+    assert_eq!(super::fusion_max_cmds(IRON_FUSION_S0), 0x0fed);
+    assert_eq!(super::fusion_reply_queues_ventura(IRON_FUSION_S1), 128);
+    assert!(super::fusion_rdpq(IRON_FUSION_S1));
+    assert_eq!(MFI_INBOUND_LOW_QUEUE_PORT, 0xC0);
+    assert_eq!(
+        pack_mfa_descriptor(0x20_0000),
+        Some(0x20_0000 | MFA_REQUEST_FLAGS)
+    );
+    let msg = pack_ioc_init_request(0x30_0000, 0x40_0000).unwrap();
+    assert_eq!(msg.len(), MPI2_IOC_INIT_BYTES);
+    assert_eq!(msg[0x00], MPI2_WHOINIT_HOST_DRIVER);
+    assert_eq!(msg[0x02], 0);
+    assert_eq!(msg[0x03], MPI2_FUNCTION_IOC_INIT);
+    assert_eq!(msg[0x07], 0x01);
+    assert_eq!(
+        u16::from_le_bytes(msg[0x0C..0x0E].try_into().unwrap()),
+        MPI2_VERSION
+    );
+    assert_eq!(
+        u16::from_le_bytes(msg[0x0E..0x10].try_into().unwrap()),
+        MPI2_HEADER_VERSION
+    );
+    assert_eq!(msg[0x16], 12);
+    assert_eq!(msg[0x17], 1);
+    assert_eq!(u16::from_le_bytes(msg[0x1A..0x1C].try_into().unwrap()), 64);
+    assert_eq!(u16::from_le_bytes(msg[0x1C..0x1E].try_into().unwrap()), 16);
+    assert_eq!(
+        u64::from_le_bytes(msg[0x28..0x30].try_into().unwrap()),
+        0x30_0000
+    );
+    assert_eq!(
+        u64::from_le_bytes(msg[0x30..0x38].try_into().unwrap()),
+        0x40_0000
+    );
+    assert!(pack_ioc_init_request(0x1_0000_0000, 0x40_0000).is_none());
+    let entry = pack_rdpq_entry(0x50_0000).unwrap();
+    assert_eq!(
+        u64::from_le_bytes(entry[0..8].try_into().unwrap()),
+        0x50_0000
+    );
+    let init = pack_mfi_init_frame(0x30_0100).unwrap();
+    assert_eq!(init[0], MFI_CMD_INIT);
+    assert_eq!(init[2], MFI_CMD_STATUS_POLL);
+    assert_eq!(init[4], 0, "driver_operations stays 0");
+    let flags = u16::from_le_bytes(init[0x10..0x12].try_into().unwrap());
+    assert_eq!(flags, MFI_FRAME_DONT_POST_IN_REPLY_QUEUE);
+    assert_eq!(flags & MFI_FRAME_DIR_WRITE, 0);
+    assert_eq!(
+        u32::from_le_bytes(init[0x14..0x18].try_into().unwrap()),
+        MPI2_IOC_INIT_BYTES as u32
+    );
+    let dcmd = pack_ld_get_list_polled(1, 0x60_0000, LD_LIST_FW_BYTES).unwrap();
+    assert_eq!(dcmd[2], MFI_CMD_STATUS_POLL);
+    let dflags = u16::from_le_bytes(dcmd[0x10..0x12].try_into().unwrap());
+    assert_ne!(dflags & MFI_FRAME_DONT_POST_IN_REPLY_QUEUE, 0);
+    assert_ne!(dflags & MFI_FRAME_DIR_READ, 0);
+    assert_eq!(dflags & MFI_FRAME_DIR_WRITE, 0);
+    assert_eq!(LD_LIST_FW_BYTES, 4104);
+    assert!(pack_ld_get_list_polled(1, 0x60_0000, 2048).is_none());
+    assert!(super::fusion_poll_cycles(2_095_684_400, super::FUSION_POLL_SECS) > 4_000_000_000);
+    assert!(!super::adapter_reset_is_allowed());
+    assert!(!super::doorbell_transition_is_allowed());
+}
+
+#[test]
 fn read16_is_one_block_on_the_spare_target() {
     let frame = pack_ld_read16(1, 0, 1, 0x2000, 512).unwrap();
     assert_eq!(frame[0], MFI_CMD_LD_SCSI_IO);
@@ -128,7 +205,9 @@ fn fwstate_load_is_one_harpoon_and_does_not_bus_master() {
     assert!(PERC_HOST_RESIDUAL_NOTE.contains("outbound_msg_0"));
     assert!(PERC_HOST_RESIDUAL_NOTE.contains("scratch_pad_0"));
     assert_eq!(super::harpoon_fw_status_offset(), super::MFI_SCRATCH_PAD_0);
-    assert!(!super::fusion_post_is_allowed());
+    assert!(super::fusion_post_is_allowed(super::IRON_FUSION_S0));
+    assert!(!super::fusion_post_is_allowed(super::MFI_STATE_OPERATIONAL));
+    assert!(!super::fusion_post_is_allowed(super::MFI_STATE_FAULT));
     assert!(!super::doorbell_transition_is_allowed());
     assert!(super::fusion_regs_look_unmapped(0, 0, 0, 0));
     assert!(super::h740p_mini_subsys(0x1028, 0x1fcd));
