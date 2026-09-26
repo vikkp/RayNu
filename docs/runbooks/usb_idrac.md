@@ -84,10 +84,11 @@ Instead of hand-copying to FAT, build a ready image:
 Map the `.img` as iDRAC Virtual Media **USB**, or write it with
 `./tools/make-boot-usb.sh`. Full runbook: [`media_maker.md`](media_maker.md).
 
-## Cruzer Micro on raynuvsrv1 (RAYNUV)
+## Cruzer Micro on the lab R640 (RAYNUV)
 
-On the R640 Ubuntu PERC host (`vikkp@raynuvsrv1`, clone `~/projects/raynu`),
-refresh `\EFI\BOOT\BOOTX64.EFI` from the latest green CI artifact:
+On the R640 Ubuntu host (`vikkp@10.99.99.151`, prompt `raynusrv1`; older notes say `raynuvsrv1`),
+refresh `\EFI\BOOT\BOOTX64.EFI` from the latest green CI artifact.
+Disk map: [`r640_perc_lab.md`](r640_perc_lab.md). The clone may be missing after the 2026-09-26 reinstall; check before flashing.
 
 ```bash
 ~/projects/raynuv/flashcruzer.sh
@@ -110,13 +111,13 @@ PR artifact), verifies size + SHA256, refuses known-bad prefixes, then calls
 `sudo ./tools/flash-cruzer-esp.sh --efi ~/r640-hypervisor.efi --sha256 …`.
 
 Identify the stick by **label `RAYNUV` + USB + Cruzer** (`lsusb` `0781:5151`).
-Never hardcodes `/dev/sdc`. Never write PERC `sda`/`sdb`. Never format. Leave
+Never hardcode a `/dev/sdX`. Disk letters move: UBUNTU0 is ~400 GB, RAYNU-SPARE is ~2.9 TB, the Toshiba is ~298 GB. Never write a PERC virtual disk. Never format. Leave
 `EFI/RayNu/installdisk.bin` and `auth.token` alone.
 
 If `lsusb` shows LogiLink UDisk `abcd:1234` but `lsblk` has no UDisk (common
 after RayNu-V `xhci hcrst`), `flashcruzer.sh --any-cruzer-usb` cycles that
 VID/PID `authorized` only. `--branch` re-execs the on-disk script after
-checkout so a newer kick actually runs. Do **not** flash `/dev/sdc` (Toshiba 298 GiB).
+checkout so a newer kick actually runs. Do **not** flash the Toshiba (~298 GiB). Match it by size, not by letter.
 
 WANT: `RAYNU-V-CRUZER-FLASH-OK` and `RAYNU-V-FLASHCRUZER-OK`.  
 Next: BIOS boot order stays Ubuntu on PERC; one-time **F11** Cruzer.

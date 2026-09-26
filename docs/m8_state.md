@@ -1,11 +1,11 @@
 # M8 state — START HERE (persist / LOI Bar A recovery)
 
 > **Read this before touching `mgmt/xhci.rs`, `mgmt/durable_lun.rs`, `mgmt/disk_persist.rs`, `vmx/guest_uefi.rs` (RayNu-F boot source), or the trackers.**  
-> Last rewrite: 2026-09-25 (this tip: A6 lived once, then Overview Power off host, iDRAC Power State Off). Trackers: [`hda.md`](hda.md) (Everest, closed) · [`loihda.md`](loihda.md) (LOI, open). Plan: [`m8_plan.md`](m8_plan.md). ADR: [ADR-018](adr/ADR-018.md). Evidence: [`2026-09-24-36d3b559-persist-login.md`](evidence/r640/2026-09-24-36d3b559-persist-login.md). Kit: [`releases/v0.1.0-m8-a4s/`](../releases/v0.1.0-m8-a4s/).
+> Last rewrite: 2026-09-26 (Ubuntu 26.04 is the standing OS on PERC VD **UBUNTU0**; **RAYNU-SPARE** is empty). Disk map: [`runbooks/r640_perc_lab.md`](runbooks/r640_perc_lab.md). Trackers: [`hda.md`](hda.md) (Everest, closed) · [`loihda.md`](loihda.md) (LOI, open). Plan: [`m8_plan.md`](m8_plan.md). ADR: [ADR-018](adr/ADR-018.md). Evidence: [`2026-09-24-36d3b559-persist-login.md`](evidence/r640/2026-09-24-36d3b559-persist-login.md). Kit: [`releases/v0.1.0-m8-a4s/`](../releases/v0.1.0-m8-a4s/).
 
 ## One paragraph
 
-Everest (M7) is closed on iron. M8 is operator hardening. Bar A of the LOI needs one R640 to boot the **installed** Alpine from the persist disk (Toshiba USB, 8 GiB virtio slice) after Force Off and sit at `localhost:~#`, then a browser stays on HTTPS (A4s) and types into the guest (A6). This tip did that typing: Activity showed `abc`, `-sh: abc: not found`, `localhost:~#`, and `RAYNU-V-M8-CONSOLE-OK`, with Host green. Overview **Power off host** then COM2 `boot: SPA host po` and iDRAC Power State Off. The chassis is off. Leave it off. Next is A5.
+Everest (M7) is closed on iron. M8 is operator hardening. Bar A of the LOI needs one R640 to boot the **installed** Alpine from the persist disk (Toshiba USB, 8 GiB virtio slice) after Force Off and sit at `localhost:~#`, then a browser stays on HTTPS (A4s) and types into the guest (A6). That typing lived once: Activity showed `abc`, `-sh: abc: not found`, `localhost:~#`, and `RAYNU-V-M8-CONSOLE-OK`, with Host green. Overview **Power off host** then COM2 `boot: SPA host po` and iDRAC Power State Off. On 2026-09-26 the operator powered the chassis back on, cleared the old PERC layout, and installed Ubuntu 26.04 on a 400 GB VD named **UBUNTU0**. A second VD, **RAYNU-SPARE** (~2.9 TB), is empty. RayNu is not the running OS. A5 is parked. The disk map is [`runbooks/r640_perc_lab.md`](runbooks/r640_perc_lab.md).
 
 ## Known-good iron builds (flash these, nothing else, for a demo)
 
@@ -17,9 +17,9 @@ Everest (M7) is closed on iron. M8 is operator hardening. Bar A of the LOI needs
 | Fourth login, SOL paced | `fa6ce771` | Same UUID, `[vda] 16777216`, vda2 counts match boots 2 and 3, lease `.150`, `localhost:~#`. SPA then went green and the dashboard showed Power State OFF. Lifecycle: seq 22520/22521 at 00:30:20 | Do not F11 this EFI to open Firefox. Paced SOL RX did not stop the power-off |
 | Fifth login, 30 s listen hold | `3e9ce45e` | Same UUID, lease `.151`, vda2 `102909/2084352`. Host red, then green, then red. Seq 22543/22544 at 12:21:23, no `RAC1195` | Do not F11 this EFI to open Firefox. The re-listen is what turned Host green |
 | A4s lived (rollback) | `1f33eeda` | Sixth login, lease `.154`, same UUID, vda2 `102909/2084352`. One `TCP accept`, then `HTTP keep-alive`. Host green. Activity showed Alpine login. Chassis stayed up. Kit `v0.1.0-m8-a4s`, CI `36137732145`, SHA256 `5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693` | Standing-SPA rollback. Flash the kit file. COM2 `build: sha=1f33eeda72f9` |
-| A6 + SPA power-off | `fd2ca12e` | Activity: `abc`, `-sh: abc: not found`, `RAYNU-V-M8-CONSOLE-OK`, Host green. Then Power off host. COM2 `boot: SPA host po`. iDRAC Power State Off. No lifecycle paste. `build: sha=` was not in this paste; the shutdown sentence exists only on this tip | Chassis is Off. Do not power it on to finish the COM2 sentence. Next boot can journal-recover |
+| A6 + SPA power-off | `fd2ca12e` | Activity: `abc`, `-sh: abc: not found`, `RAYNU-V-M8-CONSOLE-OK`, Host green. Then Power off host. COM2 `boot: SPA host po`. iDRAC Power State Off. No lifecycle paste. `build: sha=` was not in this paste; the shutdown sentence exists only on this tip | That boot ended Off. On 2026-09-26 Ubuntu was reinstalled. Do not power on just to finish the COM2 sentence. Do not F11 this EFI over the new Ubuntu. |
 
-The chassis is Off. Leave it off. Do not Power On `3e9ce45e` or `3f80abd0` to open Firefox. The rows below are prototypes that did not reach a repeated login.
+On 2026-09-26 the chassis is up: Ubuntu 26.04 on **UBUNTU0**. Do not Power On `3e9ce45e` or `3f80abd0` to open Firefox. The rows below are prototypes that did not reach a repeated login. Disk map: [`runbooks/r640_perc_lab.md`](runbooks/r640_perc_lab.md).
 
 ## USB bench passed (do not F11 this EFI again for `login:`)
 
@@ -103,11 +103,11 @@ Reading the next `xhci cmd timeout` line if one still appears **with** the `trb 
 
 ### Phase 2 — re-close Bar A on the deterministic driver
 
-A2 again (several Force Offs, not one) → A4s lived on `1f33eeda` → A6 type from the SPA (`RAYNU-V-M8-CONSOLE-OK`) → A5 ESP `auth.token` default.
+A2 again (several Force Offs, not one) → A4s lived on `1f33eeda` → A6 type from the SPA (`RAYNU-V-M8-CONSOLE-OK`). A5 ESP `auth.token` is parked until the operator asks.
 
 ### Phase 3 — Bar B honestly
 
-PERC H740P = MegaRAID SAS 3.5 (MPT3 Fusion) post-EBS driver on a **spare** VD (never Ubuntu). Interim: an NVMe in the lab R640 uses the already host-proven NVMe DurableLun and is a stronger dedicated-box story than a USB stick.
+PERC H740P Mini = MegaRAID SAS (`0000:18:00.0`, `1000:0016`). As of 2026-09-26 Disk Group 0 is RAID-6 with **UBUNTU0** (boot, ~400 GB, Ubuntu 26.04) and **RAYNU-SPARE** (~2.9 TB, empty, not boot). Map: [`runbooks/r640_perc_lab.md`](runbooks/r640_perc_lab.md). The empty spare is the hardware prerequisite. There is still no MegaRAID mailbox driver. `durable_lun` still skips the whole PERC. A future driver may read only RAYNU-SPARE and must refuse UBUNTU0. Do not format either VD. Do not open the H840 in slot 1. Host/CI never print `RAYNU-V-M8-PERC-LUN-OK`. perc stays 15. An NVMe DurableLun remains a host-proven alternative path; this lab’s chosen Bar B disk is the spare VD.
 
 ## Product vs probe
 
@@ -124,13 +124,13 @@ The product session is in this EFI, still one smoltcp socket on the shared BCM57
 - Shared LOM stays as lived: keep the APE PHY, no phylock, no BMCR reset.
 - Lines the operator must see after `login:` use `write_line_nowait`. Linux hushes `write_line`.
 
-Still lab, and labeled as lab until each one has its own iron close: millicert, the bring-up bearer, the 8 GiB USB slice. PERC persist is Bar B and is a different disk. A4s is lived on `1f33eeda72f9`: one handshake, keep-alive through Overview and Activity, Host green, guest COM1 visible, chassis stayed up. The rollback kit is `v0.1.0-m8-a4s`. A6 lived once on `fd2ca12e`. The chassis is Off.
+Still lab, and labeled as lab until each one has its own iron close: millicert, the bring-up bearer, the 8 GiB USB slice. PERC persist is Bar B and is a different disk. A4s is lived on `1f33eeda72f9`: one handshake, keep-alive through Overview and Activity, Host green, guest COM1 visible, chassis stayed up. The rollback kit is `v0.1.0-m8-a4s`. A6 lived once on `fd2ca12e`. On 2026-09-26 the standing OS is Ubuntu 26.04 on UBUNTU0. RAYNU-SPARE is empty. See [`runbooks/r640_perc_lab.md`](runbooks/r640_perc_lab.md).
 
 ## Next iron step (operator)
 
-The chassis is Off. Leave it off. A6 lived once and Power off host matched iDRAC Power State Off. Do not power on to finish the COM2 sentence. Do not curl. Do not `setup-disk`. Next open Bar A item is A5 (ESP `auth.token`).
+Ubuntu 26.04 is up on **UBUNTU0**. **RAYNU-SPARE** (~2.9 TB) is empty. Read [`runbooks/r640_perc_lab.md`](runbooks/r640_perc_lab.md) before any disk, flash, or iDRAC storage step. Do not format either VD. Do not open the H840. A6 lived once and Power off host matched iDRAC Power State Off; that shutdown is history, and the chassis was powered on again for the reinstall. Do not power on a persist EFI just to finish the COM2 sentence. Do not curl. Do not `setup-disk`. A5 (ESP `auth.token`) is parked. MegaRAID I/O on the spare is the next product work when the operator asks. It is not started. perc stays 15.
 
-Rollback for this path, when a later EFI misbehaves, is the kit in [`releases/v0.1.0-m8-a4s/`](../releases/v0.1.0-m8-a4s/) and GitHub release `v0.1.0-m8-a4s` (not GitHub Latest). Flash that file. COM2 must read `build: sha=1f33eeda72f9`. SHA256 `5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693`. CI run `36137732145`. Everest Latest stays `v0.1.0-everest-closed` (`f72b4276`) for the original install loop on leftover DRAM.
+Rollback for the standing SPA, when a later EFI misbehaves, is the kit in [`releases/v0.1.0-m8-a4s/`](../releases/v0.1.0-m8-a4s/) and GitHub release `v0.1.0-m8-a4s` (not GitHub Latest). Flash that file only when a RayNu boot is the task. COM2 must read `build: sha=1f33eeda72f9`. SHA256 `5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693`. CI run `36137732145`. The A6 keyboard + power-off pin is GitHub `v0.1.0-m8-a6` (`fd2ca12e`, CI `36166108942`, SHA256 `be0df621ad0a7b03cd7817525b8122d61b7daaf23f29d5d2db67ef4d4c2bcba9`), also not Latest. Everest Latest stays `v0.1.0-everest-closed` (`f72b4276`) for the original install loop on leftover DRAM.
 
 ## A6 — SPA keyboard (lived once)
 
@@ -138,7 +138,7 @@ Activity on this tip showed `abc`, then `-sh: abc: not found`, then `localhost:~
 
 ## Host power-off (lived; COM2 shows one burst)
 
-Overview **Power off host** posts `POST /host/poweroff`. The handler returns HTTP 200 on the existing keep-alive socket. A later coexist tick drains that reply, prints `boot: SPA host power-off — VMXOFF then ResetSystem SHUTDOWN`, runs `VMXOFF`, then `EfiResetShutdown`. COM2 showed `boot: SPA host po` because `write_line_nowait` pushes one UART burst and `ResetSystem` follows before another tick drains the rest. iDRAC Power State is Off. No lifecycle paste, so no `SYS` sequence is claimed. If `VMXOFF` fails, the page stays up; that line did not appear. The next boot can still need ext4 journal recovery. Leave the chassis off.
+Overview **Power off host** posts `POST /host/poweroff`. The handler returns HTTP 200 on the existing keep-alive socket. A later coexist tick drains that reply, prints `boot: SPA host power-off — VMXOFF then ResetSystem SHUTDOWN`, runs `VMXOFF`, then `EfiResetShutdown`. COM2 showed `boot: SPA host po` because `write_line_nowait` pushes one UART burst and `ResetSystem` follows before another tick drains the rest. iDRAC Power State went Off. No lifecycle paste, so no `SYS` sequence is claimed. If `VMXOFF` fails, the page stays up; that line did not appear. On 2026-09-26 the chassis is Ubuntu 26.04 again. See [`runbooks/r640_perc_lab.md`](runbooks/r640_perc_lab.md).
 
 Host/CI still never print `RAYNU-V-M8-CONSOLE-OK`. **not VNC**.
 

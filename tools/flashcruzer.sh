@@ -4,8 +4,10 @@
 # Pillar: [Z] [D]
 # Proven Core: outside
 #
-# Run on raynuvsrv1 (Ubuntu on the R640 PERC) with the Cruzer left in
-# front USB 2. This is the operator one-liner after an agent push:
+# Run on the lab R640 (Ubuntu on PERC VD UBUNTU0; prompt raynusrv1,
+# older notes say raynuvsrv1) with the Cruzer left in
+# front USB 2. Disk map: docs/runbooks/r640_perc_lab.md.
+# This is the operator one-liner after an agent push:
 #
 #   ~/projects/raynuv/flashcruzer.sh
 #
@@ -13,7 +15,9 @@
 # sudo ./tools/flash-cruzer-esp.sh --efi ~/r640-hypervisor.efi --sha256 …
 #
 # Identifies the stick by label RAYNUV + USB + Cruzer. Never hardcodes
-# /dev/sdc. Never writes PERC sda/sdb. Never formats. Leaves installdisk.bin
+# a /dev/sdX. Disk letters move (docs/runbooks/r640_perc_lab.md):
+# UBUNTU0 ~400G, RAYNU-SPARE ~2.9T, Toshiba ~298G. Never writes a PERC
+# virtual disk. Never formats. Leaves installdisk.bin
 # and auth.token alone. Stages EFI/RayNu/OVMF.fd from the host OVMF package
 # (required for guest-UEFI / Stage 44; pass --no-ovmf to skip).
 set -euo pipefail

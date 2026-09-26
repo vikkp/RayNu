@@ -6,12 +6,13 @@
 # Pillar: [Z] [D]
 # Proven Core: outside
 #
-# Run on raynuvsrv1 (Ubuntu on the R640 PERC), with the Cruzer left in
+# Run on the lab R640 (Ubuntu on PERC VD UBUNTU0), with the Cruzer left in
 # front USB 2. Identifies the stick by FAT label RAYNUV + USB + Cruzer
-# model. Never uses a hardcoded /dev/sdc. Never dd. Never format PERC.
+# model. Never uses a hardcoded /dev/sdX. Never dd. Never format PERC.
+# Disk letters move; see docs/runbooks/r640_perc_lab.md.
 # Cruzer --refat-cruzer is opt-in after RAYNUV+serial+Cruzer identity:
 # copy installdisk.bin/auth.token off, mkfs.vfat -I -F 32 -n RAYNUV, restore.
-# Never touches PERC volumes (sda/sdb).
+# Never touches PERC volumes (UBUNTU0 ~400G, RAYNU-SPARE ~2.9T).
 #
 # Usage:
 #   ./tools/flash-cruzer-esp.sh --self-test

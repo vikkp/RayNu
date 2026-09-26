@@ -4,6 +4,7 @@ globs:
   - "docs/loihda.md"
   - "docs/m8_plan.md"
   - "docs/runbooks/m8_persist_iron.md"
+  - "docs/runbooks/r640_perc_lab.md"
   - "site/loi.*"
   - "mgmt/durable_lun.rs"
   - "mgmt/disk_persist.rs"
@@ -20,7 +21,7 @@ Public page: **`site/loi.html`** (reads **`site/loi.json`**). Sync: `./tools/syn
 
 Keep LOIHDA on the **working persist/TLS/PERC branch**, not only `cursor/loi-hda-page-8366`. Every iron USB/xHCI/BOT step is Bar A A2 work.
 
-**Start at `docs/m8_state.md`** (known-good `928d6224`, prototype do-not-F11 table, diagnosis, Phase 0–3). One changelog row per iron boot; one scoreboard sentence per gate. Scores go **down** on regression evidence and **up** only on a repeated iron close.
+**Start at `docs/m8_state.md`** (known-good `928d6224`, prototype do-not-F11 table, diagnosis, Phase 0–3). **Lab disks: `docs/runbooks/r640_perc_lab.md`.** Ubuntu 26.04 is up on UBUNTU0. RAYNU-SPARE is empty. Do not tell the operator to leave the chassis off. One changelog row per iron boot; one scoreboard sentence per gate. Scores go **down** on regression evidence and **up** only on a repeated iron close.
 
 ## Two bars (do not mix)
 
@@ -56,7 +57,7 @@ Also run the Everest HDA procedure if that rule also fires. The two trackers mus
 ## Scope of claims
 
 - RAID-fleet LOI waits on PERC virtual-disk persist. A USB demonstration is not that close.
-- The Ubuntu PERC is not formatted as an LOI strategy.
+- UBUNTU0 is not formatted as an LOI strategy. RAYNU-SPARE stays empty until a MegaRAID driver is asked for. Layout: `docs/runbooks/r640_perc_lab.md`.
 - Host/CI/nested do not print iron persist or PERC markers.
 - Everest remains closed. A patched Alpine ISO is a named residual, not a reopened summit.
 - Leftover DRAM / `ISO-INSTALL-OK` is A1 noise, not A2 persist.

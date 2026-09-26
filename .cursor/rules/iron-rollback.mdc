@@ -48,6 +48,28 @@ That pin printed coexist `HOST-NIC-HTTP-OK` on `10.99.99.145:8443` → SPA Start
 - Print `RAYNU-V-M7-ISO-INSTALL-OK` from host, CI, or nested QEMU. Latitude/QEMU ≠ R640.
 - Start M9 cluster / vMotion on the M8 path.
 
+## Lab host (2026-09-26)
+
+Ubuntu 26.04 is the standing OS. The chassis is up. RayNu is not booted. Disk map: [`docs/runbooks/r640_perc_lab.md`](docs/runbooks/r640_perc_lab.md).
+
+| Size | Name | Rule |
+|------|------|------|
+| ~400 GB | UBUNTU0 | Boot. Do not format. |
+| ~2.9 TB | RAYNU-SPARE | Empty. Do not partition. |
+| ~298 GB | Toshiba | Do not format. Match by size, never by `sdX`. |
+
+Do not open the H840. Do not Clear Configuration again. A5 is parked. perc stays 15 until MegaRAID I/O on the spare. Host/CI never print `RAYNU-V-M8-PERC-LUN-OK`.
+
+## A6 pin (keyboard + power-off, not Latest)
+
+| Field | Value |
+|-------|-------|
+| GitHub | https://github.com/vikkp/RayNu/releases/tag/v0.1.0-m8-a6 |
+| EFI source | `fd2ca12e8eb97a41968d5657c9a02d1dd58eca62` |
+| CI | `--run 36166108942` · COM2 `build: sha=fd2ca12e8eb9` |
+| EFI SHA256 | `be0df621ad0a7b03cd7817525b8122d61b7daaf23f29d5d2db67ef4d4c2bcba9` |
+| Not this | GitHub Latest. The docs commit `f7a84e48` stamps a different `build: sha=`. |
+
 ## Where this is recorded
 
-`CLAUDE.md` (current progress + Deploy to R640) · `README.md` Status · `docs/m8_plan.md` · `docs/adr/ADR-018.md` · `docs/progress.md` · `docs/hda.md` operator quick view · `docs/evidence/r640/README.md` · `docs/runbooks/r640_f7_iso_iron.md` · `docs/runbooks/usb_idrac.md`.
+`CLAUDE.md` (current progress + Deploy to R640) · `README.md` Status · `docs/m8_plan.md` · `docs/m8_state.md` · `docs/runbooks/r640_perc_lab.md` · `docs/adr/ADR-018.md` · `docs/progress.md` · `docs/hda.md` operator quick view · `docs/evidence/r640/README.md` · `docs/runbooks/r640_f7_iso_iron.md` · `docs/runbooks/usb_idrac.md`.
