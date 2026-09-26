@@ -126,6 +126,11 @@ fn fwstate_load_is_one_harpoon_and_does_not_bus_master() {
     assert!(PERC_SCAN_BUS_LAST < 0xFF);
     assert!(PERC_HOST_RESIDUAL_NOTE.contains("no doorbell"));
     assert!(PERC_HOST_RESIDUAL_NOTE.contains("outbound_msg_0"));
+    assert!(PERC_HOST_RESIDUAL_NOTE.contains("scratch_pad_0"));
+    assert_eq!(super::harpoon_fw_status_offset(), super::MFI_SCRATCH_PAD_0);
+    assert!(!super::fusion_post_is_allowed());
+    assert!(!super::doorbell_transition_is_allowed());
+    assert!(super::fusion_regs_look_unmapped(0, 0, 0, 0));
     assert!(super::h740p_mini_subsys(0x1028, 0x1fcd));
     assert!(super::h740p_mini_subsys(0x1028, 0x1fcf));
     assert!(!super::h740p_mini_subsys(0x1028, 0x1fc9));

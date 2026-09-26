@@ -43,7 +43,7 @@ Lived: [`docs/progress.md`](progress.md) · M8: [`docs/m8_plan.md`](m8_plan.md) 
 
 | Metric | Value | Meaning |
 |--------|------:|---------|
-| **Overall LOI readiness** | **70%** | Nearest honest conversation is Bar A. Not Bar B. Not GA. Held: iron fwstate refused two `1000:0016`. No BAR load. perc stays 15. |
+| **Overall LOI readiness** | **70%** | Nearest honest conversation is Bar A. Not Bar B. Not GA. Held: Mini BAR lived, xscale word was 0. Fusion status not lived. perc stays 15. |
 | **Bar A — dedicated-box** | **92%** | One PowerEdge we own or they dedicate. A1 Everest, A3 SKU, A4 TLS, A4s standing SPA **DONE**. A2 persist **repeated** (sixth `login:`, UUID `a0ad99ac-…`). A6 **lived once**. A5 parked. USB ≠ PERC. |
 | **Bar B — RAID-fleet** | **18%** | Replace the licensed hypervisor on PERC virtual disks they already paid for. The lab spare VD exists and is empty. I/O has not started. |
 | **Months to Bar A** | **0.25** | Baseline 2026-09-14. ETA **2026-10**. Held. A6 lived once. A5 is parked, not closed. Do not go to 0. |
@@ -154,7 +154,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 ### 7. PERC RAID I/O — 15%
 
-**What it is.** The lab H740P Mini (`0000:18:00.0`) has two RAID-6 VDs: **UBUNTU0** (~400 GB, Ubuntu 26.04, boot) and **RAYNU-SPARE** (~2.9 TB, empty). **M8.7** is the mailbox milestone. The host slice packs frames and refuses the Ubuntu-sized LD (`RAYNU-V-M8-PERC-HOST-OK`). Iron `cc03d01b` printed `boot: perc fwstate refuse count=2` and did not map a BAR. The H740P Mini and the H840 share `1000:0016`. The next EFI loads `outbound_msg_0` only for subsystem `1028:1fcd` or `1028:1fcf`. The DurableLun mapper still prints `skip PERC`. There is no doorbell yet. PRE-EBS UEFI RAID BlockIo dies at ExitBootServices. Map: [`runbooks/r640_perc_lab.md`](runbooks/r640_perc_lab.md).
+**What it is.** The lab H740P Mini (`0000:18:00.0`) has two RAID-6 VDs: **UBUNTU0** (~400 GB, Ubuntu 26.04, boot) and **RAYNU-SPARE** (~2.9 TB, empty). **M8.7** is the Fusion mailbox milestone: scratch-pad status, one IOC init, one LD list, one READ, then the spare only. The host slice packs frames and refuses the Ubuntu-sized LD (`RAYNU-V-M8-PERC-HOST-OK`). Iron `2dd2b412` mapped the Mini (`1028:1fcd`, BAR `0x9d800000`) and left the H840 (`3b:00.0`, `1028:1fc9`) unmapped. `outbound_msg_0` was 0. That is the xscale register. The next EFI loads scratch pad 0 and prints `perc fusion` with `post=0`. The DurableLun mapper still prints `skip PERC`. There is no doorbell yet. PRE-EBS UEFI RAID BlockIo dies at ExitBootServices. Map: [`runbooks/r640_perc_lab.md`](runbooks/r640_perc_lab.md).
 
 **Product effect.** This is the difference between a lab hypervisor and “extend the life of the fleet you already paid for.” USB persist is mechanism. Fleet persist is a spare virtual disk. A firmware-state load is not I/O, so this piece stays at 15. Do not format UBUNTU0. Do not partition RAYNU-SPARE. Do not open the H840.
 
@@ -176,13 +176,13 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | 2026-09-18 | Bar A A3 | SKU card | **DONE** ([`docs/sku.md`](sku.md) / [`site/sku.html`](../site/sku.html)) |
 | **2026-09-19** | Bar A A4 | TLS on native `:8443` **before RayNu-F** | **DONE** (`928d6224` COM2 `RAYNU-V-M8-TLS-OK`; Mac `curl --cacert` SPA `.140`) |
 | **2026-09-25** | Bar A **A4s** | Page stays up after `login:` | **LIVED** (`1f33eeda72f9`, lease `.154`, one TCP accept, `HTTP keep-alive`, Host green, guest COM1 in Activity) |
-| **NOW** | **M8.7 fwstate** | Pick the Mini | Iron `refuse count=2` on `cc03d01b`. Next EFI names subsystem ids. No doorbell. A5 parked. not VNC. See [m8_plan.md](m8_plan.md) |
-| then | M8.7 list | One LD-list DCMD | only if the pasted line says `allow=1`; census still `skip PERC` |
+| **NOW** | **M8.7 fusion status** | Read scratch pad 0 | Identify lived on `2dd2b412`. Next line is `perc fusion`. `post=0`. No doorbell. A5 parked. not VNC. See [m8_plan.md](m8_plan.md) |
+| then | M8.7 IOC init + list | One MFA post path | only if the pasted line says `mapped=1` and `allow=1`; census still `skip PERC` |
 | later | Unmodified ISO | Gen-1 Phase 2 | named residual, not a fake close |
 
 ```
 2026-09  ████████  Everest closed
-2026-10  ███████░  Bar A held; fwstate EFI awaits COM2; PERC I/O not started; A5 parked
+2026-10  ███████░  Bar A held; Fusion status awaits COM2; PERC I/O not started; A5 parked
 2026-11  ░░░░░░░░  Bar A: first dedicated-box LOI window
 2026-12  ░░░░░░░░  Bar B: PERC VD I/O
 ```
@@ -206,8 +206,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-7-perc-fwstate |
-| Summary | **Iron `refuse count=2`.** `cc03d01b` did not map a BAR. Next EFI loads only H740P Mini subsystem `1fcd` or `1fcf`. `skip PERC` stays. |
+| Commit | m8-7-perc-fusion |
+| Summary | **Iron Mini BAR lived; xscale word was 0.** Next EFI loads scratch pad 0 and prints `perc fusion` with `post=0`. `skip PERC` stays. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Scores held. Bar A 92, overall 70, Bar B 18, perc 15, months A 0.25, months B 3.5. A register load is not `RAYNU-V-M8-PERC-LUN-OK`. |
 | Gates touched | `cargo test --lib m8_perc_host_gate_passes`. `./tools/m8-perc-smoke.sh`. Site sync. No doorbell. |
@@ -218,6 +218,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-26 | m8-7-perc-fusion | 92 | 18 | **Fusion path.** `2dd2b412` mapped Mini `18:00.0` and read xscale `outbound_msg_0` as 0. H840 not mapped. Status is scratch pad 0, then IOC init, then one LD list. This EFI does not post. perc 15 held. Not `RAYNU-V-M8-PERC-LUN-OK`. |
 | 2026-09-26 | m8-7-perc-fwstate | 92 | 18 | **Iron fwstate refuse.** `cc03d01b` COM2 `perc fwstate refuse count=2`. No BAR load. H840 shares `1000:0016`. Next EFI picks Mini `1028:1fcd`/`1fcf`. perc 15 held. Not `RAYNU-V-M8-PERC-LUN-OK`. |
 | 2026-09-26 | m8-7-perc-fwstate | 92 | 18 | **M8.7 fwstate in the EFI.** Loads `outbound_msg_0` on the one `1000:0016`. Not lived until COM2 is pasted. No doorbell. `skip PERC` stays. perc 15 held. Not iron `RAYNU-V-M8-PERC-LUN-OK`. |
 | 2026-09-26 | m8-7-perc-host | 92 | 18 | **M8.7 host pack.** `mgmt/megaraid.rs` packs the LD list and a one-block READ(16). Fence keeps ~400 GiB and accepts one ~2.9 TiB LD. No doorbell. `skip PERC` stays. perc 15 held. Host marker `RAYNU-V-M8-PERC-HOST-OK`. Not iron `RAYNU-V-M8-PERC-LUN-OK`. |
@@ -311,8 +312,8 @@ LOI:           NOT OPEN. Tracker born 2026-09-14.
 Bar A:         92% · 0.25 months · dedicated-box non-prod
 Bar B:         18% · 3.5 months · PERC RAID fleet (out of conversation until PERC persist)
 Overall:       70% · confidence medium
-NOW:           cc03d01b refused count=2. Reboot to Ubuntu, flash the Mini pick, F11 once. UBUNTU0 stays boot. RAYNU-SPARE stays empty. No doorbell. skip PERC stays. A5 parked. perc 15. docs/m8_plan.md
-Open:          M8.7 list after allow=1 · iron AUTH-OK (parked) · unmodified ISO · cluster
+NOW:           2dd2b412 mapped the Mini; outbound_msg_0 was 0. Reboot to Ubuntu. Flash the fusion-status EFI, F11 once, paste perc fusion. mapped=0 or allow=0 stops. UBUNTU0 stays boot. RAYNU-SPARE stays empty. No doorbell. skip PERC stays. A5 parked. perc 15. docs/m8_plan.md
+Open:          M8.7 IOC init after mapped=1 and allow=1 · iron AUTH-OK (parked) · unmodified ISO · cluster
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
 Rollback:      v0.1.0-m8-a4s → standing SPA (COM2 sha=1f33eeda72f9, CI 36137732145). v0.1.0-m8-a6 → keyboard + power-off (fd2ca12e, CI 36166108942), not Latest. Everest Latest stays v0.1.0-everest-closed (f72b4276).
 Sit:           Ubuntu is the OS. Do not setup-disk. Do not format the ~298 GB Toshiba. Identify disks by size, never by sdX.

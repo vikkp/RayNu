@@ -321,11 +321,10 @@
                 The lab H740P Mini has two RAID-6 virtual disks.
                 <strong>UBUNTU0</strong> (~400 GB) is Ubuntu 26.04 and the boot
                 device. <strong>RAYNU-SPARE</strong> (~2.9 TB) is empty.
-                <strong>M8.7</strong> packs mailbox frames on the host and
-                iron <code>cc03d01b</code> printed
-                <code>perc fwstate refuse count=2</code> and did not map a BAR.
-                The H840 shares <code>1000:0016</code>. The mapper still
-                prints <code>skip PERC</code>. A register load is not I/O.
+                <strong>M8.7</strong> packs mailbox frames on the host.
+                Iron <code>2dd2b412</code> mapped the H740P Mini and read the
+                xscale status word as 0. The H840 was not mapped. The mapper
+                still prints <code>skip PERC</code>. A register load is not I/O.
                 This 15% stays census plus an empty spare. Do not format
                 UBUNTU0. Do not partition RAYNU-SPARE.
               </p>

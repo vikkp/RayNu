@@ -28,6 +28,18 @@ if ! grep -q 'fn h740p_mini_subsys(' "$ROOT/mgmt/megaraid.rs"; then
   echo "error: missing H740P Mini subsystem pick" >&2
   exit 1
 fi
+if ! grep -q 'fn harpoon_fw_status_offset(' "$ROOT/mgmt/megaraid.rs"; then
+  echo "error: missing Harpoon status offset" >&2
+  exit 1
+fi
+if ! grep -q 'fn fusion_post_is_allowed(' "$ROOT/mgmt/megaraid.rs"; then
+  echo "error: fusion post must stay an explicit policy" >&2
+  exit 1
+fi
+if ! grep -q 'boot: perc fusion' "$ROOT/mgmt/megaraid.rs"; then
+  echo "error: missing fusion status line" >&2
+  exit 1
+fi
 if ! grep -q 'fn pci_cmd_for_fwstate_load(' "$ROOT/mgmt/megaraid.rs"; then
   echo "error: missing memory-space command policy" >&2
   exit 1

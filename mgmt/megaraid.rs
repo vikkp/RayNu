@@ -9,8 +9,10 @@
 //! Device `1000:0016` is `PCI_DEVICE_ID_LSI_HARPOON` (PERC H740P Mini).
 //!
 //! This slice packs frames, chooses the spare logical disk, and on the EFI
-//! loads `outbound_msg_0` for the one H740P Mini. It does not ring a doorbell,
-//! issue a DCMD, or change [`crate::mgmt::durable_lun::pick_durable_lun`].
+//! loads the Fusion scratch pads for the one H740P Mini. `outbound_msg_0` is
+//! printed because iron already showed it as zero; it is not the Harpoon
+//! status word. It does not ring a doorbell, post an MFA descriptor, issue a
+//! DCMD, or change [`crate::mgmt::durable_lun::pick_durable_lun`].
 //! The guest disk stays the Toshiba. Iron `RAYNU-V-M8-PERC-LUN-OK` is not this close.
 
 /// Iron COM2 close: a READ of RAYNU-SPARE lived, and the LD was attached.
@@ -22,7 +24,7 @@ pub const M8_PERC_HOST_OK_MARKER: &str = "RAYNU-V-M8-PERC-HOST-OK";
 
 /// Honesty: a firmware-state load is not a doorbell and not the iron marker.
 pub const PERC_HOST_RESIDUAL_NOTE: &str =
-    "residual: M8.7 fwstate may load outbound_msg_0; not iron RAYNU-V-M8-PERC-LUN-OK; no doorbell; durable_lun still skip PERC; QEMU has no H740P; do not format UBUNTU0; do not partition RAYNU-SPARE";
+    "residual: M8.7 Harpoon status is scratch_pad_0; outbound_msg_0 is the xscale register; not iron RAYNU-V-M8-PERC-LUN-OK; no doorbell; durable_lun still skip PERC; QEMU has no H740P; do not format UBUNTU0; do not partition RAYNU-SPARE";
 
 /// 64-byte MFI frame (`MEGAMFI_FRAME_SIZE`).
 pub const MFI_FRAME_BYTES: usize = 64;
@@ -56,9 +58,37 @@ pub const MFI_RESET_REQUIRED: u32 = 0x0000_0001;
 pub const MFI_RESET_ADAPTER: u32 = 0x0000_0002;
 pub const MFI_STATE_FORCE_OCR: u32 = 0x0000_0080;
 
-/// Firmware posts state in the upper nibble of `outbound_msg_0` (BAR0 + 0x18).
-/// The fwstate slice loads this register. It must not store `inbound_msg_0`.
+/// Xscale / classic MFI status word (BAR0 + 0x18).
+///
+/// Iron `2dd2b412` loaded this on the H740P Mini and got `0`. Harpoon is
+/// Ventura/Fusion. Linux `megasas_read_fw_status_reg_fusion` does not use
+/// this offset. A zero here is not `MFI_STATE_UNDEFINED` and is not a reset.
 pub const MFI_OUTBOUND_MSG_0: u32 = 0x18;
+
+/// Fusion doorbell. Linux writes `MFI_RESET_FLAGS` here to leave OPERATIONAL.
+/// This slice never stores it.
+pub const MFI_DOORBELL: u32 = 0x00;
+/// Fusion request-descriptor port. IOC init and DCMDs post here later.
+/// This slice never stores it.
+pub const MFI_INBOUND_QUEUE_PORT: u32 = 0x40;
+/// `ABORT | READY | MFIMODE`. Drops the previous owner's queues. Not OCR.
+pub const MFI_RESET_FLAGS: u32 = 0x0000_0007;
+
+/// Fusion firmware-status word. Upper nibble is `MFI_STATE_*`. Low 16 bits
+/// are the max command count. Linux reads this for Harpoon.
+pub const MFI_SCRATCH_PAD_0: u32 = 0xB0;
+/// Reply-queue count and RDPQ live here. Ventura uses the extended field.
+pub const MFI_SCRATCH_PAD_1: u32 = 0xB4;
+/// Raid-map size hint. Loaded with the status word so IOC init is sized once.
+pub const MFI_SCRATCH_PAD_2: u32 = 0xB8;
+/// NVMe page-size hint on Ventura. Same snapshot, still a load.
+pub const MFI_SCRATCH_PAD_3: u32 = 0xBC;
+
+/// Bits 21:14 of scratch pad 1, plus one. Thunderbolt's 5-bit field is not this.
+pub const MR_MAX_REPLY_QUEUES_EXT_OFFSET: u32 = 0x003F_C000;
+pub const MR_MAX_REPLY_QUEUES_EXT_SHIFT: u32 = 14;
+/// Scratch pad 1. Set means the firmware wants an RDPQ array.
+pub const MR_RDPQ_MODE_OFFSET: u32 = 0x0080_0000;
 
 /// PCI command register. The only config dword the fwstate slice may write.
 pub const PCI_CFG_COMMAND: u8 = 0x04;
@@ -166,6 +196,42 @@ pub fn fw_state_allows_mailbox(raw: u32) -> bool {
 
 /// This module never stores `MFI_RESET_ADAPTER` to `inbound_msg_0`.
 pub fn adapter_reset_is_allowed() -> bool {
+    false
+}
+
+/// Harpoon (`1000:0016`, Ventura) status offset. Not [`MFI_OUTBOUND_MSG_0`].
+pub fn harpoon_fw_status_offset() -> u32 {
+    MFI_SCRATCH_PAD_0
+}
+
+/// Ventura reply-queue count from scratch pad 1. Meaningful only when the
+/// four scratch pads are not all zero.
+pub fn fusion_reply_queues_ventura(scratch_pad_1: u32) -> u32 {
+    ((scratch_pad_1 & MR_MAX_REPLY_QUEUES_EXT_OFFSET) >> MR_MAX_REPLY_QUEUES_EXT_SHIFT) + 1
+}
+
+pub fn fusion_rdpq(scratch_pad_1: u32) -> bool {
+    scratch_pad_1 & MR_RDPQ_MODE_OFFSET != 0
+}
+
+/// Low 16 bits of the fusion status word.
+pub fn fusion_max_cmds(status: u32) -> u16 {
+    status as u16
+}
+
+/// All four scratch pads zero: the BAR did not present a fusion register file.
+/// The next step is to stop. It is not a walk of other offsets.
+pub fn fusion_regs_look_unmapped(s0: u32, s1: u32, s2: u32, s3: u32) -> bool {
+    s0 == 0 && s1 == 0 && s2 == 0 && s3 == 0
+}
+
+/// MFA descriptor post (inbound queue port) stays off in this image.
+pub fn fusion_post_is_allowed() -> bool {
+    false
+}
+
+/// Doorbell write that moves OPERATIONAL → READY stays off in this image.
+pub fn doorbell_transition_is_allowed() -> bool {
     false
 }
 
@@ -431,11 +497,28 @@ pub fn prop_perc_host_package() -> bool {
         && h740p_mini_singleton(PCI_VENDOR_LSI, PCI_DEVICE_H740P_HARPOON, 1)
         && !h740p_mini_singleton(PCI_VENDOR_LSI, PCI_DEVICE_H740P_HARPOON, 2)
         && !h740p_mini_singleton(PCI_VENDOR_LSI, 0x005d, 1)
+        && harpoon_fw_status_offset() == MFI_SCRATCH_PAD_0
+        && harpoon_fw_status_offset() != MFI_OUTBOUND_MSG_0
+        && fusion_reply_queues_ventura(0) == 1
+        && fusion_reply_queues_ventura(1 << MR_MAX_REPLY_QUEUES_EXT_SHIFT) == 2
+        && fusion_rdpq(MR_RDPQ_MODE_OFFSET)
+        && !fusion_rdpq(0)
+        && fusion_max_cmds(MFI_STATE_OPERATIONAL | 0x03F8) == 0x03F8
+        && fusion_regs_look_unmapped(0, 0, 0, 0)
+        && !fusion_regs_look_unmapped(MFI_STATE_OPERATIONAL, 0, 0, 0)
+        && !fusion_post_is_allowed()
+        && !doorbell_transition_is_allowed()
+        && MFI_RESET_FLAGS == 0x7
+        && MFI_DOORBELL == 0
+        && MFI_INBOUND_QUEUE_PORT == 0x40
         && host_never_prints_iron_perc_ok()
         && PERC_HOST_RESIDUAL_NOTE.contains("not iron")
+        && PERC_HOST_RESIDUAL_NOTE.contains("scratch_pad_0")
         && plan.contains("M8.7")
         && plan.contains(M8_PERC_HOST_OK_MARKER)
         && plan.contains("skip PERC")
+        && plan.contains("scratch_pad_0")
+        && plan.contains("IOC init")
 }
 
 fn put_u16(buf: &mut [u8], off: usize, v: u16) {
@@ -458,15 +541,18 @@ fn put_u64_be(buf: &mut [u8], off: usize, v: u64) {
     buf[off..off + 8].copy_from_slice(&v.to_be_bytes());
 }
 
-/// Post-EBS read of H740P `outbound_msg_0`. Host and QEMU take the empty stub.
+/// Post-EBS read of the H740P Mini register file. Host and QEMU take the empty stub.
 ///
 /// Walks PCI config for `1000:0016` through [`PERC_SCAN_BUS_LAST`] (lab bus
-/// `0x18` is inside that window). Iron `cc03d01b` printed `refuse count=2`:
-/// the H740P Mini and the H840 Adapter share that id. Each match gets a
-/// subsystem read. Exactly one Dell H740P Mini (`1028:1fcd` or `1028:1fcf`)
-/// may be loaded. The H840 BAR is never mapped. Does not set bus master,
-/// does not store `inbound_msg_0`, does not ring a doorbell, and does not
-/// change the durable-LUN pick.
+/// `0x18` is inside that window). Iron `cc03d01b` printed `refuse count=2`.
+/// Iron `2dd2b412` mapped only the Mini (`18:00.0`, `1028:1fcd`, BAR
+/// `0x9d800000`) and read `outbound_msg_0` as zero. That offset is the xscale
+/// status word. This function still prints it, then loads scratch pads
+/// `0xB0`–`0xBC`. `allow` on the fusion line is [`fw_state_allows_mailbox`] of
+/// scratch pad 0. All-zero scratch pads print `mapped=0` and stop the design
+/// there. The H840 BAR is never mapped. Does not set bus master, does not
+/// store the doorbell or the inbound queue port, and does not change the
+/// durable-LUN pick.
 #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
 pub fn perc_fwstate_probe() {}
 
@@ -585,6 +671,49 @@ pub fn perc_fwstate_probe() {
     serial::write_byte(if allow { b'1' } else { b'0' });
     serial::write_str(" mse=");
     serial::write_byte(if mse { b'1' } else { b'0' });
+    serial::write_line(" (not PERC-LUN-OK)");
+
+    // SAFETY: same firmware-assigned Mini BAR. Linux maps 8 KiB of it and
+    // reads outbound_scratch_pad_0 as the Harpoon status word. Four aligned
+    // loads. No doorbell, no inbound queue port, no H840.
+    // KANI-TARGET: host tests cover the allow gate and the queue decoder.
+    let load = |off: u32| unsafe { core::ptr::read_volatile((bar + u64::from(off)) as *const u32) };
+    let s0 = load(MFI_SCRATCH_PAD_0);
+    let s1 = load(MFI_SCRATCH_PAD_1);
+    let s2 = load(MFI_SCRATCH_PAD_2);
+    let s3 = load(MFI_SCRATCH_PAD_3);
+    debug_assert!(!fusion_post_is_allowed());
+    debug_assert!(!doorbell_transition_is_allowed());
+    let fallow = fw_state_allows_mailbox(s0);
+    let unmapped = fusion_regs_look_unmapped(s0, s1, s2, s3);
+
+    serial::write_str("boot: perc fusion bdf=");
+    write_bdf(bus, dev, func);
+    serial::write_str(" s0=0x");
+    write_hex32(s0);
+    serial::write_str(" s1=0x");
+    write_hex32(s1);
+    serial::write_str(" s2=0x");
+    write_hex32(s2);
+    serial::write_str(" s3=0x");
+    write_hex32(s3);
+    serial::write_str(" allow=");
+    serial::write_byte(if fallow { b'1' } else { b'0' });
+    if unmapped {
+        serial::write_str(" queues=na");
+    } else {
+        serial::write_str(" queues=");
+        write_dec(fusion_reply_queues_ventura(s1));
+    }
+    serial::write_str(" rdpq=");
+    serial::write_byte(if !unmapped && fusion_rdpq(s1) {
+        b'1'
+    } else {
+        b'0'
+    });
+    serial::write_str(" mapped=");
+    serial::write_byte(if unmapped { b'0' } else { b'1' });
+    serial::write_str(" post=0");
     serial::write_line(" (not PERC-LUN-OK)");
 }
 
