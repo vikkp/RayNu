@@ -11,7 +11,7 @@
     <meta property="og:title" content="RayNu-V · Path to LOI" />
     <meta
       property="og:description"
-              content="Two bars: dedicated-box 92%, RAID-fleet 36%. Persist across HV reboot is repeated. SKU card is done. A4 TLS iron is DONE (lab millicert). Standing SPA lived. Ubuntu 26.04 is on a 400 GB PERC VD. One last-LBA sector of the 2.9 TB spare was written and read back. That is not a boot disk. Auth is parked. USB is not PERC."
+              content="Bar A 92%. Bar B 36%. Overall 70%. PERC piece 55%. SKU piece 92%. TLS piece 80%. The 8 GiB spare copy lived on 0739edd0 and the guest stopped at gpt_err=1. That is not a boot disk. Auth is parked. USB is not PERC."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -63,8 +63,7 @@
           id="loi-path"
           aria-label="Path to LOI"
         >
-          Everest loop (closed) → persist across HV reboot (repeated) → SKU card (done) → TLS
-          iron (done) → standing SPA (lived) → Bar A dedicated-box LOI → PERC RAID I/O → Bar B fleet LOI
+          Everest 100% → Persist 93% → SKU 92% → TLS 80% → Auth 38% → Console 82% → PERC 55% → Unmodified 20% → Bar A 92% → Bar B 36% → Overall 70%
         </p>
       </div>
     </header>
@@ -135,11 +134,13 @@
           </div>
           <p class="hda-aside" data-reveal>
             These numbers move only with COM2 evidence. Nested QEMU and host
-            tests do not. Persist repeated through <code>1f33eeda</code>.
-            Iron <code>f0a7aabb</code> printed
-            <code>RAYNU-V-M8-PERC-WRITE-OK</code> for one last-LBA sector of
-            RAYNU-SPARE. That is not a boot disk. Guests still boot from the
-            Toshiba. Auth is parked.
+            tests do not. Bar A is <span data-loi-pct="bars.a">92%</span>.
+            Bar B is <span data-loi-pct="bars.b">36%</span>. Overall is
+            <span data-loi-pct="overall">70%</span>. The PERC piece is
+            <span data-loi-pct="pieces.perc">55%</span>.
+            Iron <code>0739edd0</code> copied 8 GiB onto RAYNU-SPARE and the
+            guest stopped at <code>gpt_err=1</code>. That did not move Bar B
+            or the PERC piece. Auth is parked.
           </p>
         </div>
       </section>
@@ -174,9 +175,11 @@
               <p class="loi-card__kicker" id="loi-kicker-b" data-bar-kicker="b">Bar B · 36%</p>
               <h3>RAID fleet</h3>
               <p>
-                Keep the iron. Replace the licensed hypervisor. Guest and boot
-                disks already live on PERC H740P virtual disks — that is most
-                of the R640 installed base. USB persist does not close this.
+                Keep the iron. Replace the licensed hypervisor. This bar is
+                <span data-loi-pct="bars.b">36%</span>. The PERC I/O piece
+                inside it is <span data-loi-pct="pieces.perc">55%</span>.
+                Those are two scores for two questions: the fleet conversation,
+                and how far spare I/O has come. USB persist does not close this.
                 Formatting the lab Ubuntu array does not close this.
               </p>
               <p class="loi-card__effect">
@@ -246,7 +249,8 @@
               <p>
                 One page: what ships, what does not. Dedicated-box versus fleet.
                 USB versus PERC. Alpine-patched versus unmodified. No cluster.
-                No Windows. The card is written
+                No Windows. This piece is
+                <span data-loi-pct="pieces.sku">92%</span>. The card is written
                 (<a href="sku.html">dedicated-box SKU</a>). Persist is
                 evidence-closed on the 8 GiB USB slice. Native coexist is
                 HTTPS with a lab millicert. PRE-EBS SNP remains
@@ -272,6 +276,7 @@
                 Standing HTTPS while Alpine runs lived on
                 <code>1f33eeda</code> (one TLS session, Host stayed green).
                 rustls cannot join the EFI.
+                This piece is <span data-loi-pct="pieces.tls">80%</span>.
                 Residual: lab millicert, one cipher, PRE-EBS SNP still
                 <code>http://</code>.
               </p>
@@ -320,16 +325,15 @@
               <p>
                 The lab H740P Mini has two RAID-6 virtual disks.
                 <strong>UBUNTU0</strong> (~400 GB) is Ubuntu 26.04 and the boot
-                device. <strong>RAYNU-SPARE</strong> (~2.9 TB) is empty.
-                Iron <code>9c37fcae</code> printed
-                <code>RAYNU-V-M8-PERC-LUN-OK</code> when Linux probed
-                <code>vdc</code>. Iron <code>f0a7aabb</code> then wrote one
-                sector at the spare's last LBA and read it back.
-                COM2 printed <code>RAYNU-V-M8-PERC-WRITE-OK</code>. LBA 0 is
-                not written. The H840 was not mapped.
-                The mapper still prints <code>skip PERC</code>. Fifty-five
-                percent is that one sector, not a boot disk.
-                Do not format UBUNTU0. Do not partition RAYNU-SPARE.
+                device. Iron <code>0739edd0</code> copied the Toshiba window
+                onto the first 8 GiB of <strong>RAYNU-SPARE</strong>
+                (<code>perc copy done</code>, <code>perc copy gpt ok</code>)
+                and the guest stopped at <code>gpt_err=1</code>.
+                This piece stays at <span data-loi-pct="pieces.perc">55%</span>.
+                Bar B stays at <span data-loi-pct="bars.b">36%</span> until a
+                guest boots from that window. The mailbox probe LBA 0 is not
+                written. The H840 was not mapped. The mapper still prints
+                <code>skip PERC</code>. Do not format UBUNTU0.
               </p>
             </li>
             <li data-reveal>
@@ -353,7 +357,7 @@
 
       <section class="section section--hda-com2" id="now">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>NOW · spare copy lived, boot open · Bar A 92% · Bar B 36% · overall 70%</p>
+          <p class="milestone-kicker" data-reveal>NOW · spare copy lived, boot open · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">36%</span> · overall <span data-loi-pct="overall">70%</span> · PERC <span data-loi-pct="pieces.perc">55%</span></p>
           <h2 class="section__title">Ubuntu is on a 400 GB virtual disk. The 8 GiB spare copy lived. The guest did not boot it.</h2>
           <p class="section__lede">
             A6 still lived once: Activity showed <code>abc</code>, then
@@ -368,7 +372,7 @@
           <pre class="ship-code" data-reveal><code>boot:   UBUNTU0 ~400 GB · Ubuntu 26.04 · / and /boot/efi
 spare:  RAYNU-SPARE ~2.9 TB · first 8 GiB copied on 0739edd0 · guest gpt_err=1 · do not format
 ctrl:   PERC H740P Mini only · do not open the H840
-next:   Force Off the hold, then flash this EFI · watch boot: perc copy skip present · Bar A 92% · Bar B 36% · overall 70% · perc 55%
+next:   Force Off the hold, then flash this EFI · watch boot: perc copy skip present · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">36%</span> · overall <span data-loi-pct="overall">70%</span> · PERC <span data-loi-pct="pieces.perc">55%</span>
 never:  format UBUNTU0 · format the spare · format the Toshiba · setup-disk · curl Start
 read:   docs/runbooks/r640_perc_lab.md</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
@@ -393,7 +397,7 @@ read:   docs/runbooks/r640_perc_lab.md</code></pre>
           </p>
           <ul class="loi-locks">
             <li>A USB persist demonstration is the dedicated-box mechanism. RAID-fleet LOI waits on PERC virtual-disk persist.</li>
-            <li>Console iron, unmodified ISO install, and cluster remain open and are not presented as closed. A4 TLS iron is DONE (lab millicert).</li>
+            <li>TLS piece is <span data-loi-pct="pieces.tls">80%</span>. The iron marker <code>RAYNU-V-M8-TLS-OK</code> is closed; the remainder is the lab millicert. SKU piece is <span data-loi-pct="pieces.sku">92%</span>. Console, unmodified ISO, and cluster stay open.</li>
             <li>Everest remains closed. A patched Alpine ISO is a named residual, not a reason to reopen the summit.</li>
             <li>Iron install and persist markers are printed on R640 COM2 only. Host and CI do not emit them.</li>
             <li>Latitude and nested QEMU are not PowerEdge R640 evidence.</li>

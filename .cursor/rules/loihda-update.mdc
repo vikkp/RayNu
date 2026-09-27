@@ -21,7 +21,7 @@ Public page: **`site/loi.html`** (reads **`site/loi.json`**). Sync: `./tools/syn
 
 Keep LOIHDA on the **working persist/TLS/PERC branch**, not only `cursor/loi-hda-page-8366`. Every iron USB/xHCI/BOT step is Bar A A2 work.
 
-**Start at `docs/m8_state.md`** (known-good `928d6224`, prototype do-not-F11 table, diagnosis, Phase 0–3). **Lab disks: `docs/runbooks/r640_perc_lab.md`.** Ubuntu 26.04 is up on UBUNTU0. RAYNU-SPARE is empty. Do not tell the operator to leave the chassis off. One changelog row per iron boot; one scoreboard sentence per gate. Scores go **down** on regression evidence and **up** only on a repeated iron close.
+**Start at `docs/m8_state.md`** (known-good `928d6224`, prototype do-not-F11 table, diagnosis, Phase 0–3). **Lab disks: `docs/runbooks/r640_perc_lab.md`.** Ubuntu 26.04 is the standing OS on UBUNTU0. The first 8 GiB of RAYNU-SPARE holds the `0739edd0` image copy; it is not a boot disk. Bar B stays 36. The PERC piece stays 55 until COM2 shows `RAYNU-V-M8-PERC-BOOT-OK`. Do not tell the operator to leave the chassis off. One changelog row per iron boot; one scoreboard sentence per gate. Scores go **down** on regression evidence and **up** only on a repeated iron close. On `site/loi.html`, every mention of a named stage uses that stage's score (Bar A 92, Bar B 36, overall 70, PERC 55, SKU 92, TLS 80). Do not call a piece done when its score is below 100.
 
 ## Two bars (do not mix)
 
