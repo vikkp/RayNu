@@ -353,22 +353,22 @@
 
       <section class="section section--hda-com2" id="now">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>NOW · image copy packed · Bar A 92% · Bar B 36% · overall 70%</p>
-          <h2 class="section__title">Ubuntu is on a 400 GB virtual disk. The 8 GiB spare copy is packed.</h2>
+          <p class="milestone-kicker" data-reveal>NOW · spare copy lived, boot open · Bar A 92% · Bar B 36% · overall 70%</p>
+          <h2 class="section__title">Ubuntu is on a 400 GB virtual disk. The 8 GiB spare copy lived. The guest did not boot it.</h2>
           <p class="section__lede">
             A6 still lived once: Activity showed <code>abc</code>, then
             <code>-sh: abc: not found</code>, and
             <code>RAYNU-V-M8-CONSOLE-OK</code>. On 2026-09-26 Ubuntu 26.04
             is the standing OS on <strong>UBUNTU0</strong>.
-            <strong>RAYNU-SPARE</strong> (~2.9 TB) has no partition. Iron
-            <code>f0a7aabb</code> wrote one sector at its last LBA and read
-            it back. Auth is parked. The standing-SPA rollback file
+            Iron <code>0739edd0</code> copied the Toshiba window onto the
+            first 8 GiB of <strong>RAYNU-SPARE</strong> and the guest stopped
+            at <code>gpt_err=1</code>. Auth is parked. The standing-SPA rollback file
             is still <code>v0.1.0-m8-a4s</code>.
           </p>
           <pre class="ship-code" data-reveal><code>boot:   UBUNTU0 ~400 GB · Ubuntu 26.04 · / and /boot/efi
-spare:  RAYNU-SPARE ~2.9 TB · 8 GiB image copy packed, not lived · do not format
+spare:  RAYNU-SPARE ~2.9 TB · first 8 GiB copied on 0739edd0 · guest gpt_err=1 · do not format
 ctrl:   PERC H740P Mini only · do not open the H840
-next:   chassis off until this EFI is flashed from Ubuntu · watch boot: perc copy · Bar A 92% · Bar B 36% · overall 70% · perc 55%
+next:   Force Off the hold, then flash this EFI · watch boot: perc copy skip present · Bar A 92% · Bar B 36% · overall 70% · perc 55%
 never:  format UBUNTU0 · format the spare · format the Toshiba · setup-disk · curl Start
 read:   docs/runbooks/r640_perc_lab.md</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>

@@ -30,18 +30,21 @@
 //! single 64-bit store to the low inbound queue port (`0xC0`). It does
 //! not ring the doorbell, and it does not change
 //! [`crate::mgmt::durable_lun::pick_durable_lun`].
-//! The boot disk stays the Toshiba until an image copy latches. After the
-//! last-LBA write, this EFI may copy the 8 GiB Toshiba guest window onto
-//! RAYNU-SPARE starting at LBA 0. That copy is the bytes of the installed
-//! disk. It is not `setup-disk` and it does not touch UBUNTU0. The mailbox
-//! probe still does not write LBA 0. The copy runs only after a USB peek
-//! shows `EFI PART` at offset 512, then prints `boot: perc copy` heartbeats.
+//! The boot disk stays the Toshiba until an image copy latches. Iron
+//! `0739edd0` copied the 8 GiB Toshiba window (`perc copy done`,
+//! `perc copy gpt ok`) and the guest then stopped at `gpt_err=1`: the GPT
+//! walker reads 128-byte entries, and a 512-only window was a short read.
+//! This EFI serves those byte ranges. When the spare already has a GPT
+//! header whose backup sector is `EFI PART`, it prints
+//! `boot: perc copy skip present` and does not rewrite the 8 GiB. Otherwise
+//! it copies after a USB peek shows `EFI PART`. It is not `setup-disk` and
+//! it does not touch UBUNTU0. The mailbox probe still does not write LBA 0.
 //! `RAYNU-V-M8-PERC-LUN-OK` prints only after a guest read of the read-only
 //! virtio device succeeds. `RAYNU-V-M8-PERC-WRITE-OK` prints only after the
 //! last-LBA readback matches. `RAYNU-V-M8-PERC-BOOT-OK` prints only after
 //! the guest starts from the copied image. All three use `write_line_nowait`
 //! because Linux earlycon hushes `write_line`. Host/CI never print them.
-//! The image copy is packed, not lived.
+//! The boot marker is packed, not lived.
 
 /// Iron COM2 close: a READ of RAYNU-SPARE lived, and the LD was attached.
 /// Host/CI/nested must never print this.
@@ -166,7 +169,7 @@ pub fn perc_note_disk_boot() {
 
 /// Honesty: a firmware-state load is not a doorbell and not the iron marker.
 pub const PERC_HOST_RESIDUAL_NOTE: &str =
-    "residual: M8.7 Harpoon status is scratch_pad_0; outbound_msg_0 is the xscale register; READY nibble posts one IOC init and one LD list to inbound_low_queue_port; DMA is eight frame-pool pages below 4GiB; READ(16) of LBA 0 then the last LBA on the spare only; one WRITE(16) of that last LBA then a readback; mailbox probe LBA 0 is not written; read-only virtio 00:04.0 after both status 0; not iron RAYNU-V-M8-PERC-LUN-OK until a guest read; not iron RAYNU-V-M8-PERC-WRITE-OK until readback matches; not iron RAYNU-V-M8-PERC-BOOT-OK until the copied image boots; image copy of 8GiB onto spare LBA 0 is packed not lived; no doorbell; durable_lun still skip PERC; QEMU has no H740P; do not format UBUNTU0; do not setup-disk";
+    "residual: M8.7 Harpoon status is scratch_pad_0; outbound_msg_0 is the xscale register; READY nibble posts one IOC init and one LD list to inbound_low_queue_port; DMA is eight frame-pool pages below 4GiB; READ(16) of LBA 0 then the last LBA on the spare only; one WRITE(16) of that last LBA then a readback; mailbox probe LBA 0 is not written; read-only virtio 00:04.0 after both status 0; not iron RAYNU-V-M8-PERC-LUN-OK until a guest read; not iron RAYNU-V-M8-PERC-WRITE-OK until readback matches; not iron RAYNU-V-M8-PERC-BOOT-OK until the copied image boots; image copy of 8GiB onto spare LBA 0 lived on 0739edd0 then gpt_err=1; byte-range reads and skip-present are packed not lived as a boot; no doorbell; durable_lun still skip PERC; QEMU has no H740P; do not format UBUNTU0; do not setup-disk";
 
 /// 64-byte MFI frame (`MEGAMFI_FRAME_SIZE`).
 pub const MFI_FRAME_BYTES: usize = 64;
@@ -611,6 +614,7 @@ pub fn gpt_header_is_efi_part(buf: &[u8]) -> bool {
 }
 
 /// True when `off`/`len` is a 512-byte-aligned span inside the 8 GiB image.
+/// Writes stay on this fence. A short write would need a read-modify-write.
 /// Offsets past the image are refused. They do not fall through to USB.
 pub fn image_io_in_window(off: u64, len: usize) -> bool {
     if len == 0 || off % 512 != 0 || len % 512 != 0 {
@@ -618,6 +622,62 @@ pub fn image_io_in_window(off: u64, len: usize) -> bool {
     }
     off.checked_add(len as u64)
         .is_some_and(|end| end <= PERC_IMAGE_BYTES)
+}
+
+/// True when a byte range lies entirely inside the 8 GiB image.
+/// GPT partition entries are 128 bytes and are not sector-aligned.
+pub fn image_read_in_window(off: u64, len: usize) -> bool {
+    if len == 0 {
+        return false;
+    }
+    off.checked_add(len as u64)
+        .is_some_and(|end| end <= PERC_IMAGE_BYTES)
+}
+
+/// One piece of an install-disk read, covered by a single 512-byte sector.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ImageReadSlice {
+    pub lba: u64,
+    pub skip: usize,
+    pub take: usize,
+}
+
+/// Next sector slice for a byte read. `done` is how many bytes are already
+/// copied. `skip` is the offset inside that sector. `take` stops at the
+/// sector end or at the end of the caller's buffer.
+pub fn image_read_slice(off: u64, len: usize, done: usize) -> Option<ImageReadSlice> {
+    if !image_read_in_window(off, len) || done >= len {
+        return None;
+    }
+    let pos = off + done as u64;
+    let lba = pos / 512;
+    let skip = (pos % 512) as usize;
+    let take = (512 - skip).min(len - done);
+    if take == 0 || lba >= PERC_IMAGE_BYTES / 512 {
+        return None;
+    }
+    Some(ImageReadSlice { lba, skip, take })
+}
+
+/// Alternate LBA from a CRC-valid GPT header, when that LBA sits inside the
+/// 8 GiB image and is not the primary header. Host tests feed a sector.
+/// A miss means the spare does not yet hold this image.
+pub fn image_backup_lba(lba1: &[u8]) -> Option<u64> {
+    let hdr = crate::raynu_f::gpt::parse_gpt_header(lba1).ok()?;
+    if hdr.my_lba != 1 || lba1.len() < 40 {
+        return None;
+    }
+    let alt = u64::from_le_bytes(lba1[32..40].try_into().ok()?);
+    let sectors = PERC_IMAGE_BYTES / 512;
+    if alt <= 1 || alt >= sectors {
+        return None;
+    }
+    Some(alt)
+}
+
+/// True when a backup GPT sector starts with `EFI PART`.
+pub fn image_backup_is_efi_part(backup: &[u8]) -> bool {
+    backup.len() >= 8 && &backup[..8] == b"EFI PART"
 }
 
 /// WRITE(16) of the image window. LBA 0 is allowed here. The mailbox packer
@@ -1180,6 +1240,16 @@ pub fn prop_perc_host_package() -> bool {
         && !gpt_header_is_efi_part(&[0u8; 1024])
         && image_io_in_window(0, 512)
         && !image_io_in_window(PERC_IMAGE_BYTES, 512)
+        && !image_io_in_window(1024, 128)
+        && image_read_in_window(1024, 128)
+        && image_read_slice(1024, 128, 0).is_some_and(|s| s.lba == 2 && s.skip == 0 && s.take == 128)
+        && image_read_slice(1152, 128, 0)
+            .is_some_and(|s| s.lba == 2 && s.skip == 128 && s.take == 128)
+        && image_read_slice(400, 200, 0).is_some_and(|s| s.lba == 0 && s.skip == 400 && s.take == 112)
+        && image_read_slice(400, 200, 112).is_some_and(|s| s.lba == 1 && s.skip == 0 && s.take == 88)
+        && image_read_slice(0, 0, 0).is_none()
+        && image_backup_lba(&[0u8; 512]).is_none()
+        && !image_backup_is_efi_part(&[0u8; 8])
         && 24576 + PERC_IMAGE_CHUNK_BYTES as usize + 32 <= 32768
         && !perc_image_boot_latched()
 }
@@ -1950,10 +2020,71 @@ fn issue_ld_read16(
     Some(poll_mfi_status(frame_phys as *mut u8))
 }
 
+/// Whether the spare already holds the copied image.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+enum ImagePresent {
+    /// Backup GPT header at `alt` starts with `EFI PART`.
+    Yes(u64),
+    /// LBA 1 answered and is not this image.
+    No,
+    /// A READ(16) did not return status 0. Do not start the 8 GiB rewrite.
+    Io,
+}
+
+/// READ(16) of LBA 1, then of the header's alternate LBA.
+///
+/// Iron `0739edd0` already finished `perc copy done`. A second boot must
+/// not rewrite those 8 GiB before the guest walk. A timeout stops here.
+/// An absent header falls through to the USB copy. No WRITE is posted.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn perc_image_spare_present(
+    bar: u64,
+    target: u8,
+    frame_phys: u64,
+    data_phys: u64,
+) -> ImagePresent {
+    let Some((rst, rto)) = issue_ld_read16(bar, target, 1, frame_phys, data_phys) else {
+        return ImagePresent::Io;
+    };
+    if rto || rst != MFI_STAT_OK {
+        return ImagePresent::Io;
+    }
+    core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+    let mut lba1 = [0u8; 512];
+    // SAFETY: READ(16) of LBA 1 just completed into the 512-byte payload.
+    // KANI-TARGET: host tests cover image_backup_lba, not this load.
+    unsafe {
+        core::ptr::copy_nonoverlapping(data_phys as *const u8, lba1.as_mut_ptr(), 512);
+    }
+    let Some(alt) = image_backup_lba(&lba1) else {
+        return ImagePresent::No;
+    };
+    let Some((rst, rto)) = issue_ld_read16(bar, target, alt, frame_phys, data_phys) else {
+        return ImagePresent::Io;
+    };
+    if rto || rst != MFI_STAT_OK {
+        return ImagePresent::Io;
+    }
+    core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+    let mut sig = [0u8; 8];
+    // SAFETY: READ(16) of the alternate LBA just completed. The signature
+    // is the first 8 bytes. No write CDB was posted.
+    // KANI-TARGET: host tests cover image_backup_is_efi_part, not this load.
+    unsafe {
+        core::ptr::copy_nonoverlapping(data_phys as *const u8, sig.as_mut_ptr(), 8);
+    }
+    if image_backup_is_efi_part(&sig) {
+        ImagePresent::Yes(alt)
+    } else {
+        ImagePresent::No
+    }
+}
+
 /// Copy the 8 GiB Toshiba window onto the spare. A miss leaves the boot latch clear.
 ///
 /// The mailbox probe already ran and did not write LBA 0. This path may.
-/// UBUNTU0 sizes and a USB image without `EFI PART` skip the copy.
+/// If the spare already has the image, the copy is skipped. UBUNTU0 sizes
+/// and a USB image without `EFI PART` skip the copy.
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn perc_image_copy(bar: u64, target: u8, bytes: u64, frame_phys: u64, data_phys: u64) {
     use crate::boot::serial;
@@ -1964,6 +2095,20 @@ fn perc_image_copy(bar: u64, target: u8, bytes: u64, frame_phys: u64, data_phys:
         serial::write_line("boot: perc copy skip plan (not PERC-BOOT-OK)");
         return;
     };
+    match perc_image_spare_present(bar, target, frame_phys, data_phys) {
+        ImagePresent::Yes(alt) => {
+            serial::write_str("boot: perc copy skip present alt=");
+            write_dec64(alt);
+            serial::write_line(" (not PERC-BOOT-OK)");
+            PERC_IMAGE_GPT_OK.store(true, core::sync::atomic::Ordering::Release);
+            return;
+        }
+        ImagePresent::Io => {
+            serial::write_line("boot: perc copy present skip status (not PERC-BOOT-OK)");
+            return;
+        }
+        ImagePresent::No => {}
+    }
     if !durable_lun_post_ebs_io_ready() {
         serial::write_line("boot: perc copy skip usb (not PERC-BOOT-OK)");
         return;
@@ -2084,11 +2229,16 @@ fn issue_ld_write16_image(
     Some(poll_mfi_status(frame_phys as *mut u8))
 }
 
-/// Install-disk read of the latched image. One READ(16) per sector.
+/// Install-disk read of the latched image.
+///
+/// Iron `0739edd0` copied the image, then RayNu-F reported `gpt_err=1`.
+/// The GPT walker reads 128-byte partition entries. A 512-only window
+/// returned false before any READ(16). This path reads each covering
+/// sector and copies the requested slice. One READ(16) per sector touched.
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn perc_image_read_uefi(off: u64, buf: &mut [u8]) -> bool {
     if !PERC_IMAGE_BOOT.load(core::sync::atomic::Ordering::Acquire)
-        || !image_io_in_window(off, buf.len())
+        || !image_read_in_window(off, buf.len())
     {
         return false;
     }
@@ -2102,22 +2252,30 @@ fn perc_image_read_uefi(off: u64, buf: &mut [u8]) -> bool {
     }
     let mut done = 0usize;
     while done < buf.len() {
-        let lba = off / 512 + (done as u64 / 512);
-        let Some((st, timed_out)) = issue_ld_read16(bar, target, lba, frame, data) else {
-            perc_image_io_fail(lba);
+        let Some(slice) = image_read_slice(off, buf.len(), done) else {
+            perc_image_io_fail(off / 512);
+            return false;
+        };
+        let Some((st, timed_out)) = issue_ld_read16(bar, target, slice.lba, frame, data) else {
+            perc_image_io_fail(slice.lba);
             return false;
         };
         if timed_out || st != MFI_STAT_OK {
-            perc_image_io_fail(lba);
+            perc_image_io_fail(slice.lba);
             return false;
         }
         core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
-        // SAFETY: firmware wrote 512 bytes at `data`. `buf` is the install-disk
-        // window for this read. No write CDB was posted.
+        // SAFETY: firmware wrote 512 bytes at `data`. `slice` stays inside
+        // that sector and inside `buf`. No write CDB was posted.
+        // KANI-TARGET: host tests cover image_read_slice, not this copy.
         unsafe {
-            core::ptr::copy_nonoverlapping(data as *const u8, buf[done..].as_mut_ptr(), 512);
+            core::ptr::copy_nonoverlapping(
+                (data + slice.skip as u64) as *const u8,
+                buf[done..].as_mut_ptr(),
+                slice.take,
+            );
         }
-        done += 512;
+        done += slice.take;
     }
     true
 }

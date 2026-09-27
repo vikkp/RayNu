@@ -129,12 +129,12 @@
             <code>login:</code> a sixth time, and the SPA stayed up on one
             TLS session. Rollback kit <code>v0.1.0-m8-a4s</code>. The SPA
             typed once, then Power off host left iDRAC Off. On 2026-09-26
-            Ubuntu 26.04 is back on a 400 GB PERC virtual disk. An empty
-            2.9 TB spare exists.             Iron <code>f0a7aabb</code> printed
-            <code>RAYNU-V-M8-PERC-WRITE-OK</code> after one last-LBA sector
-            matched. The mailbox probe LBA 0 is not written. The next EFI
-            copies the 8 GiB Toshiba window onto the spare. That image copy
-            is packed, not lived. That sector is not a boot disk.
+            Ubuntu 26.04 is back on a 400 GB PERC virtual disk.
+            Iron <code>0739edd0</code> copied the 8 GiB Toshiba window onto
+            the spare (<code>perc copy done</code>, <code>perc copy gpt ok</code>)
+            and the guest stopped at <code>gpt_err=1</code>. The mailbox probe
+            LBA 0 is not written. This EFI reads the 128-byte GPT entries.
+            The boot marker is packed, not lived.
             The H840 was not mapped. No doorbell yet. Auth is parked.
           </p>
         </div>
