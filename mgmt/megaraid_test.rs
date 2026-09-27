@@ -341,6 +341,11 @@ fn fwstate_load_is_one_harpoon_and_does_not_bus_master() {
     assert!(super::image_backup_is_efi_part(b"EFI PART"));
     assert!(!super::image_backup_is_efi_part(&[0u8; 8]));
     assert!(!super::perc_image_boot_latched());
+    assert!(super::spare_virtio_offered(512, false));
+    assert!(super::spare_virtio_offered(3_169_417_691_136, false));
+    assert!(!super::spare_virtio_offered(3_169_417_691_136, true));
+    assert!(!super::spare_virtio_offered(511, false));
+    assert!(!super::spare_virtio_offered(0, true));
     assert_eq!(super::perc_spare_bytes(), 0);
     let mut scratch = [0u8; 512];
     assert!(!super::perc_spare_read(0, &mut scratch));
