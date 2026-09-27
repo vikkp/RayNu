@@ -43,11 +43,11 @@ Lived: [`docs/progress.md`](progress.md) · M8: [`docs/m8_plan.md`](m8_plan.md) 
 
 | Metric | Value | Meaning |
 |--------|------:|---------|
-| **Overall LOI readiness** | **70%** | Nearest honest conversation is Bar A. Not Bar B. Not GA. Held: `f0a7aabb` printed `RAYNU-V-M8-PERC-WRITE-OK` for one last-LBA sector. That is not a boot disk. perc 40→55. |
+| **Overall LOI readiness** | **70%** | Nearest honest conversation is Bar A. Bar B stays 36. Held: `f0a7aabb` printed `RAYNU-V-M8-PERC-WRITE-OK` for one last-LBA sector. The 8 GiB image copy is packed, not lived. perc 55 held. |
 | **Bar A — dedicated-box** | **92%** | One PowerEdge we own or they dedicate. A1 Everest, A3 SKU, A4 TLS, A4s standing SPA **DONE**. A2 persist **repeated** (sixth `login:`, UUID `a0ad99ac-…`). A6 **lived once**. A5 parked. USB ≠ PERC. |
-| **Bar B — RAID-fleet** | **36%** | Replace the licensed hypervisor on PERC virtual disks they already paid for. One last-LBA write lived. The spare is still unpartitioned. Guests still boot from the Toshiba. |
+| **Bar B — RAID-fleet** | **36%** | Replace the licensed hypervisor on PERC virtual disks they already paid for. One last-LBA write lived. The 8 GiB image copy is packed, not lived. Guests still boot from the Toshiba. |
 | **Months to Bar A** | **0.25** | Baseline 2026-09-14. ETA **2026-10**. Held. A6 lived once. A5 is parked, not closed. Do not go to 0. |
-| **Months to Bar B** | **2.75** | The last-LBA write marker lived. An installed guest and boot-from-VD are still open. ETA **2026-12**. |
+| **Months to Bar B** | **2.75** | The last-LBA write marker lived. The 8 GiB image copy is packed, not lived. Boot-from-VD stays open until COM2 shows `RAYNU-V-M8-PERC-BOOT-OK`. ETA **2026-12**. |
 | **Confidence** | medium | Everest is high-confidence. A6 lived once. Iron `f0a7aabb` wrote one last-LBA sector of RAYNU-SPARE and read it back. The spare is still unpartitioned. A5 parked. |
 
 ```
@@ -194,7 +194,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 - Latitude and nested QEMU are not PowerEdge R640 evidence.
 - Leftover DRAM, USB persist, NVMe persist, and PERC persist are distinct closes.
-- Host/CI never print `RAYNU-V-M7-ISO-INSTALL-OK`, `RAYNU-V-M8-DISK-PERSIST-OK`, `RAYNU-V-M8-TLS-OK`, `RAYNU-V-M8-AUTH-OK`, `RAYNU-V-M8-CONSOLE-OK`, `RAYNU-V-M8-ISO-UPLOAD-OK`, `RAYNU-V-M8-PERC-LUN-OK`, or `RAYNU-V-M8-PERC-WRITE-OK`.
+- Host/CI never print `RAYNU-V-M7-ISO-INSTALL-OK`, `RAYNU-V-M8-DISK-PERSIST-OK`, `RAYNU-V-M8-TLS-OK`, `RAYNU-V-M8-AUTH-OK`, `RAYNU-V-M8-CONSOLE-OK`, `RAYNU-V-M8-ISO-UPLOAD-OK`, `RAYNU-V-M8-PERC-LUN-OK`, `RAYNU-V-M8-PERC-WRITE-OK`, or `RAYNU-V-M8-PERC-BOOT-OK`.
 - UBUNTU0 on the H740P Mini is the lab OS. RAYNU-SPARE is empty and is the only future MegaRAID target. Do not format either. See [`runbooks/r640_perc_lab.md`](runbooks/r640_perc_lab.md). The older hostname spelling `raynuvsrv1` is the same machine; the prompt after this reinstall is `raynusrv1`.
 - RAID-fleet LOI waits on PERC virtual-disk persist. A USB demonstration is not that close.
 - Everest remains closed. A patched Alpine ISO is a named residual, not a reopened summit.
@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-7-perc-write-ok |
-| Summary | **`RAYNU-V-M8-PERC-WRITE-OK` lived on `f0a7aabb`.** COM2 `perc write status=0x00` at LBA `6190268927`, then `perc write rd lba=6190268927 match`. LBA 0 is not written (signature still 16 zeros). Virtio stayed read-only. Alpine still booted the Toshiba. |
+| Commit | m8-7-perc-image |
+| Summary | **8 GiB image copy packed, not lived.** Copies the Toshiba guest window onto RAYNU-SPARE after a USB `EFI PART` peek. The mailbox probe LBA 0 is not written. `RAYNU-V-M8-PERC-BOOT-OK` waits on COM2. |
 | Everest impact | none — HDA months 0.0 / 99% held |
-| LOI impact | perc 40→55. Bar B 28→36. Months B 3.0→2.75. Bar A 92 held. Overall 70 held. Months A 0.25 held. One sector is not a boot disk. |
-| Gates touched | Docs close of the lived marker. No new doorbell. No format. |
+| LOI impact | perc 55 held. Bar B 36 held. Months B 2.75 held. Bar A 92 held. Overall 70 held. Months A 0.25 held. A packed copy is not a boot disk. |
+| Gates touched | Host pack of the image copy. LOI page percentages aligned. No new doorbell. No format. |
 
 ---
 
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-27 | m8-7-perc-image | 92 | 36 | **8 GiB image copy packed, not lived.** Toshiba guest window onto RAYNU-SPARE after a USB `EFI PART` peek. Mailbox probe LBA 0 is not written. `00:04.0` stays read-only. perc 55 held. Bar A 92 held. Bar B 36 held. Overall 70 held. Months A 0.25 held. Months B 2.75 held. Not `RAYNU-V-M8-PERC-BOOT-OK` until COM2 shows it. |
 | 2026-09-27 | m8-7-perc-write-ok | 92 | 36 | **Last-LBA WRITE lived.** `f0a7aabb` COM2 `perc write status=0x00` LBA `6190268927`, readback `status=0x00`, `perc write rd lba=6190268927 match`, then `RAYNU-V-M8-PERC-WRITE-OK`. LBA 0 stayed 16 zeros. Read-only virtio. Alpine on the Toshiba. perc 40→55. Bar B 28→36. Months B 3.0→2.75. Not a boot disk. |
 | 2026-09-27 | m8-7-perc-write | 92 | 28 | **Last-LBA WRITE packed, not lived.** One WRITE(16) of RAYNU-SPARE's last LBA, signature `RAYNU-SPARE-WR16`, then a READ back. LBA 0 is not written. Virtio stays read-only. perc 40 held. Not `RAYNU-V-M8-PERC-WRITE-OK` until COM2 shows the match. |
 | 2026-09-27 | m8-7-perc-lun-ok | 92 | 28 | **Spare read marker lived.** `9c37fcae` `boot: perc virtio rd lba=0 ok` then `RAYNU-V-M8-PERC-LUN-OK` during the `vdc` probe. Same boot: `dd if=/dev/vdc bs=512 count=1` copied 512 bytes, first 16 zero, in 0.029s. perc 15→40. Bar B 18→28. Months B 3.5→3.0. Read-only. Spare unpartitioned. |
@@ -320,7 +321,7 @@ LOI:           NOT OPEN. Tracker born 2026-09-14.
 Bar A:         92% · 0.25 months · dedicated-box non-prod
 Bar B:         36% · 2.75 months · PERC RAID fleet (one last-LBA write lived; not a boot disk)
 Overall:       70% · confidence medium
-NOW:           f0a7aabb printed RAYNU-V-M8-PERC-WRITE-OK. Leave the Alpine prompt. Do not flash again for this marker. Do not format. Do not setup-disk. Do not dd a write from the guest. vdc stays read-only. LBA 0 stayed zeros. One last-LBA sector is not the Toshiba install. UBUNTU0 stays boot. RAYNU-SPARE stays unpartitioned. skip PERC stays. A5 parked. perc 40→55. Bar B 28→36. months B 3.0→2.75. docs/m8_plan.md
+NOW:           Chassis is off. Flash the image-copy EFI from Ubuntu. Watch boot: perc copy. RAYNU-V-M8-PERC-BOOT-OK is not claimed until COM2 shows it. Do not format UBUNTU0. Do not setup-disk. vdc stays read-only. Mailbox probe LBA 0 is not written. skip PERC stays. A5 parked. Bar A 92. Bar B 36. Overall 70. perc 55. months A 0.25. months B 2.75. docs/m8_plan.md
 Open:          boot a guest from a VD · iron AUTH-OK (parked) · unmodified ISO · cluster
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
 Rollback:      v0.1.0-m8-a4s → standing SPA (COM2 sha=1f33eeda72f9, CI 36137732145). v0.1.0-m8-a6 → keyboard + power-off (fd2ca12e, CI 36166108942), not Latest. Everest Latest stays v0.1.0-everest-closed (f72b4276).

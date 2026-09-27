@@ -8,8 +8,9 @@
 //! `pick_durable_lun` still skips PERC.
 
 use crate::mgmt::megaraid::{
-    host_never_prints_iron_perc_ok, prop_perc_host_package, M8_PERC_HOST_OK_MARKER,
-    M8_PERC_LUN_OK_MARKER, M8_PERC_WRITE_OK_MARKER, PERC_HOST_RESIDUAL_NOTE,
+    host_never_prints_iron_perc_ok, prop_perc_host_package, M8_PERC_BOOT_OK_MARKER,
+    M8_PERC_HOST_OK_MARKER, M8_PERC_LUN_OK_MARKER, M8_PERC_WRITE_OK_MARKER,
+    PERC_HOST_RESIDUAL_NOTE,
 };
 
 /// Host / CI marker when the M8.7 pack passes.
@@ -23,6 +24,7 @@ pub fn perc_surface_present() -> bool {
     let handoff = include_str!("../boot/handoff.rs");
     let forbidden = concat!("println!(", "\"RAYNU-V-M8-PERC-LUN-OK\")");
     let forbidden_write = concat!("println!(", "\"RAYNU-V-M8-PERC-WRITE-OK\")");
+    let forbidden_boot = concat!("println!(", "\"RAYNU-V-M8-PERC-BOOT-OK\")");
     mega.contains("fn pack_ld_get_list(")
         && mega.contains("fn pack_ld_read16(")
         && mega.contains("fn pick_spare(")
@@ -47,6 +49,11 @@ pub fn perc_surface_present() -> bool {
         && mega.contains("fn spare_write_lba(")
         && mega.contains("boot: perc write")
         && mega.contains("write_line_nowait(M8_PERC_WRITE_OK_MARKER)")
+        && mega.contains("fn image_copy_plan(")
+        && mega.contains("fn pack_ld_write16_image(")
+        && mega.contains("fn gpt_header_is_efi_part(")
+        && mega.contains("boot: perc copy")
+        && mega.contains("write_line_nowait(M8_PERC_BOOT_OK_MARKER)")
         && mega.contains("LBA 0 is not written")
         && mega.contains("write_line_nowait(M8_PERC_LUN_OK_MARKER)")
         && mega.contains("fn write_dec64_nowait(")
@@ -61,9 +68,11 @@ pub fn perc_surface_present() -> bool {
         && mega.contains("not PERC-LUN-OK")
         && mega.contains(M8_PERC_LUN_OK_MARKER)
         && mega.contains(M8_PERC_WRITE_OK_MARKER)
+        && mega.contains(M8_PERC_BOOT_OK_MARKER)
         && mega.contains(M8_PERC_HOST_OK_MARKER)
         && !mega.contains(forbidden)
         && !mega.contains(forbidden_write)
+        && !mega.contains(forbidden_boot)
         && !mega.contains("pci_write32(bus, dev, func, 0x00")
         && !mega.contains("pci_write32(bus, dev, func, 0x10")
         && !mega.contains("pci_write32(bus, dev, func, 0x20")
@@ -71,6 +80,7 @@ pub fn perc_surface_present() -> bool {
         && !lun.contains("perc_fwstate_probe")
         && !lun.contains(forbidden)
         && !lun.contains(forbidden_write)
+        && !lun.contains(forbidden_boot)
         && lun.contains("skip PERC")
         && handoff.contains("perc_fwstate_probe()")
         && handoff.contains("perc_fusion_post_low")
@@ -80,6 +90,8 @@ pub fn perc_surface_present() -> bool {
         && plan.contains("M8.7")
         && plan.contains(M8_PERC_HOST_OK_MARKER)
         && plan.contains("skip PERC")
+        && plan.contains("image copy")
+        && plan.contains(M8_PERC_BOOT_OK_MARKER)
         && PERC_HOST_RESIDUAL_NOTE.contains("no doorbell")
         && PERC_HOST_RESIDUAL_NOTE.contains("not iron")
         && PERC_HOST_RESIDUAL_NOTE.contains("skip PERC")

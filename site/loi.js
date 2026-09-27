@@ -3,8 +3,8 @@
 
   const fmtMonths = (n) => {
     const x = Number(n);
-    if (Number.isNaN(x)) return String(n);
-    return Number.isInteger(x) ? String(x) : x.toFixed(1).replace(/\.0$/, "");
+    if (!Number.isFinite(x)) return String(n);
+    return String(x);
   };
 
   const clampPct = (n) => Math.max(0, Math.min(100, Number(n) || 0));
@@ -41,6 +41,14 @@
     setBar("loi-bar-a", "loi-bar-a-label", bars.a);
     setBar("loi-bar-b", "loi-bar-b-label", bars.b);
     setBar("loi-bar-overall", "loi-bar-overall-label", overall);
+
+    document.querySelectorAll("[data-bar-kicker]").forEach((el) => {
+      const key = el.getAttribute("data-bar-kicker");
+      if (key && bars[key] != null) {
+        const name = key === "b" ? "Bar B" : "Bar A";
+        el.textContent = `${name} · ${Math.round(clampPct(bars[key]))}%`;
+      }
+    });
 
     document.querySelectorAll("[data-piece]").forEach((el) => {
       const key = el.getAttribute("data-piece");

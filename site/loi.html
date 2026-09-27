@@ -78,13 +78,13 @@
           <div class="hda-tracker" data-reveal>
             <div class="hda-tracker__hero">
               <p class="hda-tracker__label" id="loi-tracker-label">Months to Bar A</p>
-              <p class="hda-tracker__months" id="loi-months">0.75 mo</p>
-              <p class="hda-tracker__delta" id="loi-delta">Bar A · was 1.0 · Bar B 3.5 mo</p>
+              <p class="hda-tracker__months" id="loi-months">0.25 mo</p>
+              <p class="hda-tracker__delta" id="loi-delta">Bar A · was 0.5 · Bar B 2.75 mo</p>
             </div>
             <dl class="hda-tracker__meta">
               <div>
                 <dt>Overall LOI readiness</dt>
-                <dd id="loi-overall">63%</dd>
+                <dd id="loi-overall">70%</dd>
               </div>
               <div>
                 <dt>Bar A ETA</dt>
@@ -100,7 +100,7 @@
               </div>
               <div>
                 <dt>Updated</dt>
-                <dd id="loi-updated">2026-09-22</dd>
+                <dd id="loi-updated">2026-09-27</dd>
               </div>
             </dl>
           </div>
@@ -157,7 +157,7 @@
           </p>
           <div class="loi-cards" data-reveal>
             <article class="loi-card">
-              <p class="loi-card__kicker">Bar A · 92%</p>
+              <p class="loi-card__kicker" id="loi-kicker-a" data-bar-kicker="a">Bar A · 92%</p>
               <h3>Dedicated box</h3>
               <p>
                 One PowerEdge we own, or they can afford to dedicate. The guest
@@ -171,7 +171,7 @@
               </p>
             </article>
             <article class="loi-card">
-              <p class="loi-card__kicker">Bar B · 36%</p>
+              <p class="loi-card__kicker" id="loi-kicker-b" data-bar-kicker="b">Bar B · 36%</p>
               <h3>RAID fleet</h3>
               <p>
                 Keep the iron. Replace the licensed hypervisor. Guest and boot
@@ -353,8 +353,8 @@
 
       <section class="section section--hda-com2" id="now">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>NOW · one spare sector written · spare unpartitioned</p>
-          <h2 class="section__title">Ubuntu is on a 400 GB virtual disk. One spare sector matched.</h2>
+          <p class="milestone-kicker" data-reveal>NOW · image copy packed · Bar A 92% · Bar B 36% · overall 70%</p>
+          <h2 class="section__title">Ubuntu is on a 400 GB virtual disk. The 8 GiB spare copy is packed.</h2>
           <p class="section__lede">
             A6 still lived once: Activity showed <code>abc</code>, then
             <code>-sh: abc: not found</code>, and
@@ -366,9 +366,9 @@
             is still <code>v0.1.0-m8-a4s</code>.
           </p>
           <pre class="ship-code" data-reveal><code>boot:   UBUNTU0 ~400 GB · Ubuntu 26.04 · / and /boot/efi
-spare:  RAYNU-SPARE ~2.9 TB · unpartitioned · one last-LBA sector lived · do not partition
+spare:  RAYNU-SPARE ~2.9 TB · 8 GiB image copy packed, not lived · do not format
 ctrl:   PERC H740P Mini only · do not open the H840
-next:   leave the Alpine prompt · do not flash again · do not dd a write · perc 55 · Bar B 36
+next:   chassis off until this EFI is flashed from Ubuntu · watch boot: perc copy · Bar A 92% · Bar B 36% · overall 70% · perc 55%
 never:  format UBUNTU0 · format the spare · format the Toshiba · setup-disk · curl Start
 read:   docs/runbooks/r640_perc_lab.md</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>

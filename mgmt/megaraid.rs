@@ -30,10 +30,18 @@
 //! single 64-bit store to the low inbound queue port (`0xC0`). It does
 //! not ring the doorbell, and it does not change
 //! [`crate::mgmt::durable_lun::pick_durable_lun`].
-//! The boot disk stays the Toshiba. `RAYNU-V-M8-PERC-LUN-OK` prints only
-//! after a guest read of that virtio device succeeds. `RAYNU-V-M8-PERC-WRITE-OK`
-//! prints only after the last-LBA readback matches. Both lines use
-//! `write_line_nowait` because Linux earlycon hushes `write_line`.
+//! The boot disk stays the Toshiba until an image copy latches. After the
+//! last-LBA write, this EFI may copy the 8 GiB Toshiba guest window onto
+//! RAYNU-SPARE starting at LBA 0. That copy is the bytes of the installed
+//! disk. It is not `setup-disk` and it does not touch UBUNTU0. The mailbox
+//! probe still does not write LBA 0. The copy runs only after a USB peek
+//! shows `EFI PART` at offset 512, then prints `boot: perc copy` heartbeats.
+//! `RAYNU-V-M8-PERC-LUN-OK` prints only after a guest read of the read-only
+//! virtio device succeeds. `RAYNU-V-M8-PERC-WRITE-OK` prints only after the
+//! last-LBA readback matches. `RAYNU-V-M8-PERC-BOOT-OK` prints only after
+//! the guest starts from the copied image. All three use `write_line_nowait`
+//! because Linux earlycon hushes `write_line`. Host/CI never print them.
+//! The image copy is packed, not lived.
 
 /// Iron COM2 close: a READ of RAYNU-SPARE lived, and the LD was attached.
 /// Host/CI/nested must never print this.
@@ -43,8 +51,24 @@ pub const M8_PERC_LUN_OK_MARKER: &str = "RAYNU-V-M8-PERC-LUN-OK";
 /// lab signature. Host/CI/nested must never print this. LBA 0 is not this write.
 pub const M8_PERC_WRITE_OK_MARKER: &str = "RAYNU-V-M8-PERC-WRITE-OK";
 
-/// First 16 bytes of the one sector this image may write. The other 496 are zero.
+/// Iron COM2 close: the guest started from the 8 GiB image on RAYNU-SPARE.
+/// Host/CI/nested must never print this. Packed until COM2 shows it.
+pub const M8_PERC_BOOT_OK_MARKER: &str = "RAYNU-V-M8-PERC-BOOT-OK";
+
+/// First 16 bytes of the one mailbox sector this image may write. The other 496 are zero.
 pub const PERC_WRITE_SIG: [u8; 16] = *b"RAYNU-SPARE-WR16";
+
+/// Bytes copied from the Toshiba guest window. Same size as
+/// [`crate::mgmt::durable_lun::DURABLE_LUN_GUEST_USB_BYTES`].
+pub const PERC_IMAGE_BYTES: u64 = 8 * 1024 * 1024 * 1024;
+/// Sectors per image WRITE(16). Eight sectors is 4096 bytes, which fits
+/// in the LD DMA page with 32 bytes of sense. USB still splits below this.
+pub const PERC_IMAGE_CHUNK_SECTORS: u32 = 8;
+pub const PERC_IMAGE_CHUNK_BYTES: u32 = PERC_IMAGE_CHUNK_SECTORS * 512;
+/// COM2 heartbeat. One line per 64 MiB of the 8 GiB image.
+pub const PERC_IMAGE_HEARTBEAT_SECTORS: u64 = (64 * 1024 * 1024) / 512;
+
+const _: () = assert!(PERC_IMAGE_BYTES == crate::mgmt::durable_lun::DURABLE_LUN_GUEST_USB_BYTES);
 
 /// Host/CI: frames pack, the size fence keeps UBUNTU0, and reset stays forbidden.
 pub const M8_PERC_HOST_OK_MARKER: &str = "RAYNU-V-M8-PERC-HOST-OK";
@@ -58,6 +82,15 @@ static PERC_SPARE_FRAME: core::sync::atomic::AtomicU64 = core::sync::atomic::Ato
 static PERC_SPARE_TARGET: core::sync::atomic::AtomicU8 = core::sync::atomic::AtomicU8::new(0);
 static PERC_SPARE_GUEST_OK: core::sync::atomic::AtomicBool =
     core::sync::atomic::AtomicBool::new(false);
+/// Set when LBA 1 of the spare reads back `EFI PART` after the image copy.
+/// Cleared at the start of every fusion post. Host tests never set it.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+static PERC_IMAGE_GPT_OK: core::sync::atomic::AtomicBool =
+    core::sync::atomic::AtomicBool::new(false);
+/// Set inside [`perc_spare_arm`] only after the spare bytes are stored and
+/// [`PERC_IMAGE_GPT_OK`] is set. Install-disk I/O follows this latch.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+static PERC_IMAGE_BOOT: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
 
 /// Bytes of the armed read-only spare. Zero when the host READs did not both
 /// return status 0, and always zero in host tests.
@@ -79,9 +112,61 @@ pub fn perc_spare_read(lba: u64, buf: &mut [u8]) -> bool {
     }
 }
 
+/// True when install-disk I/O should use the copied 8 GiB image on the spare.
+/// Host and QEMU stay false. `00:04.0` does not use this latch.
+pub fn perc_image_boot_latched() -> bool {
+    #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+    {
+        PERC_IMAGE_BOOT.load(core::sync::atomic::Ordering::Acquire)
+    }
+    #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+    {
+        false
+    }
+}
+
+/// Read the latched image. Offsets outside the 8 GiB window fail.
+/// Host and QEMU return false.
+pub fn perc_image_read(off: u64, buf: &mut [u8]) -> bool {
+    #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+    {
+        perc_image_read_uefi(off, buf)
+    }
+    #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+    {
+        let _ = (off, buf);
+        false
+    }
+}
+
+/// Write the latched image, one sector at a time. Offsets outside the window fail.
+/// Host and QEMU return false.
+pub fn perc_image_write(off: u64, buf: &[u8]) -> bool {
+    #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+    {
+        perc_image_write_uefi(off, buf)
+    }
+    #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+    {
+        let _ = (off, buf);
+        false
+    }
+}
+
+/// Iron boot marker. Prints only when the image latch is set, and only from
+/// the disk-boot path. Host and QEMU do not print it.
+pub fn perc_note_disk_boot() {
+    #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+    {
+        if PERC_IMAGE_BOOT.load(core::sync::atomic::Ordering::Acquire) {
+            crate::boot::serial::write_line_nowait(M8_PERC_BOOT_OK_MARKER);
+        }
+    }
+}
+
 /// Honesty: a firmware-state load is not a doorbell and not the iron marker.
 pub const PERC_HOST_RESIDUAL_NOTE: &str =
-    "residual: M8.7 Harpoon status is scratch_pad_0; outbound_msg_0 is the xscale register; READY nibble posts one IOC init and one LD list to inbound_low_queue_port; DMA is eight frame-pool pages below 4GiB; READ(16) of LBA 0 then the last LBA on the spare only; one WRITE(16) of that last LBA then a readback; LBA 0 is not written; read-only virtio 00:04.0 after both status 0; not iron RAYNU-V-M8-PERC-LUN-OK until a guest read; not iron RAYNU-V-M8-PERC-WRITE-OK until readback matches; no doorbell; durable_lun still skip PERC; QEMU has no H740P; do not format UBUNTU0; do not partition RAYNU-SPARE";
+    "residual: M8.7 Harpoon status is scratch_pad_0; outbound_msg_0 is the xscale register; READY nibble posts one IOC init and one LD list to inbound_low_queue_port; DMA is eight frame-pool pages below 4GiB; READ(16) of LBA 0 then the last LBA on the spare only; one WRITE(16) of that last LBA then a readback; mailbox probe LBA 0 is not written; read-only virtio 00:04.0 after both status 0; not iron RAYNU-V-M8-PERC-LUN-OK until a guest read; not iron RAYNU-V-M8-PERC-WRITE-OK until readback matches; not iron RAYNU-V-M8-PERC-BOOT-OK until the copied image boots; image copy of 8GiB onto spare LBA 0 is packed not lived; no doorbell; durable_lun still skip PERC; QEMU has no H740P; do not format UBUNTU0; do not setup-disk";
 
 /// 64-byte MFI frame (`MEGAMFI_FRAME_SIZE`).
 pub const MFI_FRAME_BYTES: usize = 64;
@@ -485,6 +570,116 @@ pub fn perc_write_readback_matches(buf: &[u8]) -> bool {
     buf.len() >= PERC_WRITE_SIG.len() && buf[..PERC_WRITE_SIG.len()] == PERC_WRITE_SIG
 }
 
+/// How many sectors the image copy will post, and how often COM2 speaks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ImageCopyPlan {
+    pub sectors: u64,
+    pub chunk_sectors: u32,
+    pub heartbeat_sectors: u64,
+}
+
+/// Plan for copying [`PERC_IMAGE_BYTES`] onto a spare-class LD.
+///
+/// `None` for UBUNTU0, the whole array, a source that is not exactly 8 GiB,
+/// or a spare whose last LBA is not strictly after the image. The mailbox
+/// signature at the spare's last LBA stays outside the image.
+pub fn image_copy_plan(spare_bytes: u64, source_bytes: u64) -> Option<ImageCopyPlan> {
+    if classify_ld_bytes(spare_bytes) != LdClass::Spare {
+        return None;
+    }
+    if source_bytes != PERC_IMAGE_BYTES || source_bytes % 512 != 0 {
+        return None;
+    }
+    let sectors = source_bytes / 512;
+    if sectors == 0 || sectors % u64::from(PERC_IMAGE_CHUNK_SECTORS) != 0 {
+        return None;
+    }
+    let spare_last = spare_last_lba(spare_bytes)?;
+    if sectors - 1 >= spare_last {
+        return None;
+    }
+    Some(ImageCopyPlan {
+        sectors,
+        chunk_sectors: PERC_IMAGE_CHUNK_SECTORS,
+        heartbeat_sectors: PERC_IMAGE_HEARTBEAT_SECTORS,
+    })
+}
+
+/// True when a 1024-byte USB peek has `EFI PART` at offset 512 (GPT LBA 1).
+pub fn gpt_header_is_efi_part(buf: &[u8]) -> bool {
+    buf.len() >= 520 && &buf[512..520] == b"EFI PART"
+}
+
+/// True when `off`/`len` is a 512-byte-aligned span inside the 8 GiB image.
+/// Offsets past the image are refused. They do not fall through to USB.
+pub fn image_io_in_window(off: u64, len: usize) -> bool {
+    if len == 0 || off % 512 != 0 || len % 512 != 0 {
+        return false;
+    }
+    off.checked_add(len as u64)
+        .is_some_and(|end| end <= PERC_IMAGE_BYTES)
+}
+
+/// WRITE(16) of the image window. LBA 0 is allowed here. The mailbox packer
+/// [`pack_ld_write16`] still refuses LBA 0. UBUNTU0 sizes return `None`.
+/// `blocks` is 1 (guest I/O) or 8 (the copy, and only on an 8-sector boundary).
+pub fn pack_ld_write16_image(
+    spare_bytes: u64,
+    target_id: u8,
+    lba: u64,
+    blocks: u32,
+    data_phys: u64,
+) -> Option<[u8; MFI_FRAME_BYTES]> {
+    if classify_ld_bytes(spare_bytes) != LdClass::Spare {
+        return None;
+    }
+    let plan = image_copy_plan(spare_bytes, PERC_IMAGE_BYTES)?;
+    if blocks != 1 && blocks != PERC_IMAGE_CHUNK_SECTORS {
+        return None;
+    }
+    if blocks == PERC_IMAGE_CHUNK_SECTORS && lba % u64::from(PERC_IMAGE_CHUNK_SECTORS) != 0 {
+        return None;
+    }
+    let end = lba.checked_add(u64::from(blocks))?;
+    if end > plan.sectors {
+        return None;
+    }
+    let data_bytes = blocks.checked_mul(512)?;
+    if data_phys == 0
+        || data_phys >= 0x1_0000_0000
+        || data_phys & 0x1FF != 0
+        || data_phys.saturating_add(u64::from(data_bytes) + 32) > 0x1_0000_0000
+    {
+        return None;
+    }
+    let mut f = [0u8; MFI_FRAME_BYTES];
+    f[0] = MFI_CMD_LD_SCSI_IO;
+    f[1] = 32;
+    f[2] = MFI_CMD_STATUS_POLL;
+    f[4] = target_id;
+    f[6] = 16;
+    f[7] = 1;
+    put_u16(
+        &mut f,
+        0x10,
+        MFI_FRAME_SGL64 | MFI_FRAME_DIR_WRITE | MFI_FRAME_DONT_POST_IN_REPLY_QUEUE,
+    );
+    put_u16(&mut f, 0x12, 30);
+    put_u32(&mut f, 0x14, data_bytes);
+    put_u64(&mut f, 0x18, data_phys + u64::from(data_bytes));
+    let mut cdb = [0u8; 16];
+    cdb[0] = SCSI_WRITE_16;
+    put_u64_be(&mut cdb, 2, lba);
+    put_u32_be(&mut cdb, 10, blocks);
+    f[0x20..0x30].copy_from_slice(&cdb);
+    put_u64(&mut f, 0x30, data_phys);
+    put_u32(&mut f, 0x38, data_bytes);
+    if !frame_is_write(&f) || frame_is_read(&f) || f[0] != MFI_CMD_LD_SCSI_IO {
+        return None;
+    }
+    Some(f)
+}
+
 /// Polled one-block READ(16). Sense stays inside the data page.
 /// `data_phys` is the 512-byte payload. Sense is the next 32 bytes.
 pub fn pack_ld_read16_polled(
@@ -810,6 +1005,10 @@ pub fn host_never_prints_iron_perc_ok() -> bool {
         && M8_PERC_HOST_OK_MARKER != M8_PERC_LUN_OK_MARKER
         && M8_PERC_HOST_OK_MARKER != M8_PERC_WRITE_OK_MARKER
         && M8_PERC_LUN_OK_MARKER != M8_PERC_WRITE_OK_MARKER
+        && M8_PERC_BOOT_OK_MARKER == "RAYNU-V-M8-PERC-BOOT-OK"
+        && M8_PERC_HOST_OK_MARKER != M8_PERC_BOOT_OK_MARKER
+        && M8_PERC_LUN_OK_MARKER != M8_PERC_BOOT_OK_MARKER
+        && M8_PERC_WRITE_OK_MARKER != M8_PERC_BOOT_OK_MARKER
         && !adapter_reset_is_allowed()
 }
 
@@ -847,8 +1046,7 @@ pub fn prop_perc_host_package() -> bool {
                 target_id: 1,
                 size_bytes: IRON_LD1_BYTES,
             },
-        ]))
-            == Some(1)
+        ])) == Some(1)
         && spare_read_target(Err(PickError::UbuntuOnly)).is_none()
         && spare_last_lba(IRON_LD1_BYTES).is_some()
         && pack_ld_read16_polled(1, 0, 0x1006000).is_some()
@@ -955,7 +1153,35 @@ pub fn prop_perc_host_package() -> bool {
         && plan.contains("WRITE(16)")
         && plan.contains("LBA 0 is not written")
         && plan.contains(M8_PERC_WRITE_OK_MARKER)
+        && plan.contains(M8_PERC_BOOT_OK_MARKER)
+        && plan.contains("image copy")
         && PERC_HOST_RESIDUAL_NOTE.contains("LBA 0 is not written")
+        && PERC_HOST_RESIDUAL_NOTE.contains("do not setup-disk")
+        && image_copy_plan(IRON_LD1_BYTES, PERC_IMAGE_BYTES).is_some_and(|p| {
+            p.sectors == 16_777_216
+                && p.chunk_sectors == PERC_IMAGE_CHUNK_SECTORS
+                && p.sectors - 1 < spare_last_lba(IRON_LD1_BYTES).unwrap_or(0)
+        })
+        && image_copy_plan(IRON_LD0_BYTES, PERC_IMAGE_BYTES).is_none()
+        && image_copy_plan(LAB_UBUNTU0_BYTES, PERC_IMAGE_BYTES).is_none()
+        && image_copy_plan(LAB_WHOLE_ARRAY_BYTES, PERC_IMAGE_BYTES).is_none()
+        && image_copy_plan(IRON_LD1_BYTES, 512).is_none()
+        && pack_ld_write16_image(IRON_LD1_BYTES, 1, 0, 8, 0x1006000).is_some()
+        && pack_ld_write16_image(IRON_LD1_BYTES, 1, 0, 1, 0x1006000).is_some()
+        && pack_ld_write16_image(IRON_LD0_BYTES, 1, 0, 1, 0x1006000).is_none()
+        && pack_ld_write16_image(IRON_LD1_BYTES, 1, 1, 8, 0x1006000).is_none()
+        && pack_ld_write16_image(IRON_LD1_BYTES, 1, 16_777_216, 1, 0x1006000).is_none()
+        && pack_ld_write16(1, 0, 1, 0x1006000, 512) == Err(FrameError::Lba0)
+        && {
+            let mut peek = [0u8; 1024];
+            peek[512..520].copy_from_slice(b"EFI PART");
+            gpt_header_is_efi_part(&peek)
+        }
+        && !gpt_header_is_efi_part(&[0u8; 1024])
+        && image_io_in_window(0, 512)
+        && !image_io_in_window(PERC_IMAGE_BYTES, 512)
+        && 24576 + PERC_IMAGE_CHUNK_BYTES as usize + 32 <= 32768
+        && !perc_image_boot_latched()
 }
 
 fn put_u16(buf: &mut [u8], off: usize, v: u16) {
@@ -1278,6 +1504,9 @@ fn perc_fusion_post(bar: u64, bus: u8, dev: u8, func: u8, base: u64) {
     use crate::boot::serial;
     use crate::mgmt::e1000_mmio::{pci_read32, pci_write32};
 
+    PERC_IMAGE_GPT_OK.store(false, core::sync::atomic::Ordering::Release);
+    PERC_IMAGE_BOOT.store(false, core::sync::atomic::Ordering::Release);
+
     debug_assert_eq!(DMA_OFF_IOC, 4096);
     debug_assert_eq!(DMA_BYTES, (FUSION_DMA_PAGES as usize) * 4096);
     if !fusion_dma_base_ok(base) {
@@ -1436,9 +1665,8 @@ fn perc_fusion_post(bar: u64, bus: u8, dev: u8, func: u8, base: u64) {
     if !lto && lst == MFI_STAT_OK {
         core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
         // SAFETY: firmware wrote at most LD_LIST_FW_BYTES into this page.
-        let buf = unsafe {
-            core::slice::from_raw_parts(dma.add(DMA_OFF_LD), LD_LIST_FW_BYTES as usize)
-        };
+        let buf =
+            unsafe { core::slice::from_raw_parts(dma.add(DMA_OFF_LD), LD_LIST_FW_BYTES as usize) };
         match parse_ld_list(buf, 512) {
             Ok(list) => {
                 serial::write_str(" n=");
@@ -1552,6 +1780,8 @@ fn perc_fusion_post(bar: u64, bus: u8, dev: u8, func: u8, base: u64) {
 
     // The read chain already lived. A write miss still arms read-only virtio.
     perc_spare_write_last(bar, bus, dev, func, target, bytes, dcmd_phys, data_phys);
+    // Image copy may write spare LBA 0. A miss still arms read-only virtio.
+    perc_image_copy(bar, target, bytes, dcmd_phys, data_phys);
 
     serial::write_str("boot: perc virtio ro id=");
     write_dec(u32::from(target));
@@ -1720,6 +1950,227 @@ fn issue_ld_read16(
     Some(poll_mfi_status(frame_phys as *mut u8))
 }
 
+/// Copy the 8 GiB Toshiba window onto the spare. A miss leaves the boot latch clear.
+///
+/// The mailbox probe already ran and did not write LBA 0. This path may.
+/// UBUNTU0 sizes and a USB image without `EFI PART` skip the copy.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn perc_image_copy(bar: u64, target: u8, bytes: u64, frame_phys: u64, data_phys: u64) {
+    use crate::boot::serial;
+    use crate::mgmt::durable_lun::{durable_lun_post_ebs_io_ready, durable_lun_rw};
+
+    PERC_IMAGE_GPT_OK.store(false, core::sync::atomic::Ordering::Release);
+    let Some(plan) = image_copy_plan(bytes, PERC_IMAGE_BYTES) else {
+        serial::write_line("boot: perc copy skip plan (not PERC-BOOT-OK)");
+        return;
+    };
+    if !durable_lun_post_ebs_io_ready() {
+        serial::write_line("boot: perc copy skip usb (not PERC-BOOT-OK)");
+        return;
+    }
+    let mut peek = [0u8; 1024];
+    if !durable_lun_rw(0, &mut peek, false) || !gpt_header_is_efi_part(&peek) {
+        serial::write_line("boot: perc copy skip gpt (not PERC-BOOT-OK)");
+        return;
+    }
+    serial::write_str("boot: perc copy start bytes=");
+    write_dec64(PERC_IMAGE_BYTES);
+    serial::write_line(" (not PERC-BOOT-OK)");
+
+    let mut lba = 0u64;
+    while lba < plan.sectors {
+        if lba % plan.heartbeat_sectors == 0 {
+            serial::write_str("boot: perc copy lba=");
+            write_dec64(lba);
+            serial::write_line(" (not PERC-BOOT-OK)");
+        }
+        let mut chunk = [0u8; PERC_IMAGE_CHUNK_BYTES as usize];
+        let off = lba.saturating_mul(512);
+        if !durable_lun_rw(off, &mut chunk, false) {
+            perc_copy_stop(lba);
+            return;
+        }
+        let Some((st, timed_out)) = issue_ld_write16_image(
+            bar,
+            target,
+            bytes,
+            lba,
+            plan.chunk_sectors,
+            frame_phys,
+            data_phys,
+            &chunk,
+        ) else {
+            perc_copy_stop(lba);
+            return;
+        };
+        if timed_out || st != MFI_STAT_OK {
+            perc_copy_stop(lba);
+            return;
+        }
+        lba = lba.saturating_add(u64::from(plan.chunk_sectors));
+    }
+
+    serial::write_str("boot: perc copy done bytes=");
+    write_dec64(PERC_IMAGE_BYTES);
+    serial::write_line(" (not PERC-BOOT-OK)");
+
+    let Some((rst, rto)) = issue_ld_read16(bar, target, 1, frame_phys, data_phys) else {
+        serial::write_line("boot: perc copy gpt skip frame (not PERC-BOOT-OK)");
+        return;
+    };
+    if rto || rst != MFI_STAT_OK {
+        serial::write_line("boot: perc copy gpt skip status (not PERC-BOOT-OK)");
+        return;
+    }
+    core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+    // SAFETY: READ(16) of LBA 1 just completed into the 512-byte payload.
+    // The GPT header signature is the first 8 bytes of that sector.
+    // KANI-TARGET: host tests cover gpt_header_is_efi_part, not this load.
+    let hdr = unsafe { core::slice::from_raw_parts(data_phys as *const u8, 8) };
+    if hdr == b"EFI PART" {
+        serial::write_line("boot: perc copy gpt ok (not PERC-BOOT-OK)");
+        PERC_IMAGE_GPT_OK.store(true, core::sync::atomic::Ordering::Release);
+    } else {
+        serial::write_line("boot: perc copy gpt mismatch (not PERC-BOOT-OK)");
+    }
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn perc_copy_stop(lba: u64) {
+    use crate::boot::serial;
+    serial::write_str("boot: perc copy stop lba=");
+    write_dec64(lba);
+    serial::write_line(" (not PERC-BOOT-OK)");
+}
+
+/// One polled image WRITE(16). `blocks` is 1 or 8. LBA 0 is allowed.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn issue_ld_write16_image(
+    bar: u64,
+    target: u8,
+    spare_bytes: u64,
+    lba: u64,
+    blocks: u32,
+    frame_phys: u64,
+    data_phys: u64,
+    payload: &[u8],
+) -> Option<(u8, bool)> {
+    let nbytes = usize::try_from(blocks).ok()?.checked_mul(512)?;
+    if payload.len() != nbytes {
+        return None;
+    }
+    let wr = pack_ld_write16_image(spare_bytes, target, lba, blocks, data_phys)?;
+    let desc = pack_mfa_descriptor(frame_phys)?;
+    // SAFETY: both addresses are pages inside the eight-page frame-pool
+    // allocation, identity-mapped after EBS. The payload is one image chunk
+    // (4096 bytes) or one guest sector (512). Sense is the next 32 bytes.
+    // The CDB is WRITE(16) inside the 8 GiB image. No doorbell store.
+    // KANI-TARGET: host tests cover pack_ld_write16_image, not this copy.
+    unsafe {
+        let frame = frame_phys as *mut u8;
+        core::ptr::write_bytes(frame, 0, 4096);
+        core::ptr::copy_nonoverlapping(wr.as_ptr(), frame, wr.len());
+        core::ptr::copy_nonoverlapping(payload.as_ptr(), data_phys as *mut u8, nbytes);
+        core::ptr::write_bytes((data_phys + nbytes as u64) as *mut u8, 0, 32);
+    }
+    core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+    // SAFETY: one 64-bit store to the low inbound queue port. Not doorbell 0x00.
+    unsafe {
+        core::ptr::write_volatile(
+            (bar + u64::from(MFI_INBOUND_LOW_QUEUE_PORT)) as *mut u64,
+            desc,
+        );
+    }
+    Some(poll_mfi_status(frame_phys as *mut u8))
+}
+
+/// Install-disk read of the latched image. One READ(16) per sector.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn perc_image_read_uefi(off: u64, buf: &mut [u8]) -> bool {
+    if !PERC_IMAGE_BOOT.load(core::sync::atomic::Ordering::Acquire)
+        || !image_io_in_window(off, buf.len())
+    {
+        return false;
+    }
+    let bar = PERC_SPARE_BAR.load(core::sync::atomic::Ordering::Acquire);
+    let data = PERC_SPARE_DATA.load(core::sync::atomic::Ordering::Acquire);
+    let frame = PERC_SPARE_FRAME.load(core::sync::atomic::Ordering::Acquire);
+    let target = PERC_SPARE_TARGET.load(core::sync::atomic::Ordering::Acquire);
+    let spare = PERC_SPARE_BYTES.load(core::sync::atomic::Ordering::Acquire);
+    if bar == 0 || data == 0 || frame == 0 || spare < PERC_IMAGE_BYTES {
+        return false;
+    }
+    let mut done = 0usize;
+    while done < buf.len() {
+        let lba = off / 512 + (done as u64 / 512);
+        let Some((st, timed_out)) = issue_ld_read16(bar, target, lba, frame, data) else {
+            perc_image_io_fail(lba);
+            return false;
+        };
+        if timed_out || st != MFI_STAT_OK {
+            perc_image_io_fail(lba);
+            return false;
+        }
+        core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+        // SAFETY: firmware wrote 512 bytes at `data`. `buf` is the install-disk
+        // window for this read. No write CDB was posted.
+        unsafe {
+            core::ptr::copy_nonoverlapping(data as *const u8, buf[done..].as_mut_ptr(), 512);
+        }
+        done += 512;
+    }
+    true
+}
+
+/// Install-disk write of the latched image. One WRITE(16) per sector.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn perc_image_write_uefi(off: u64, buf: &[u8]) -> bool {
+    if !PERC_IMAGE_BOOT.load(core::sync::atomic::Ordering::Acquire)
+        || !image_io_in_window(off, buf.len())
+    {
+        return false;
+    }
+    let bar = PERC_SPARE_BAR.load(core::sync::atomic::Ordering::Acquire);
+    let data = PERC_SPARE_DATA.load(core::sync::atomic::Ordering::Acquire);
+    let frame = PERC_SPARE_FRAME.load(core::sync::atomic::Ordering::Acquire);
+    let target = PERC_SPARE_TARGET.load(core::sync::atomic::Ordering::Acquire);
+    let spare = PERC_SPARE_BYTES.load(core::sync::atomic::Ordering::Acquire);
+    if bar == 0 || data == 0 || frame == 0 || spare < PERC_IMAGE_BYTES {
+        return false;
+    }
+    let mut done = 0usize;
+    while done < buf.len() {
+        let lba = off / 512 + (done as u64 / 512);
+        let Some((st, timed_out)) = issue_ld_write16_image(
+            bar,
+            target,
+            spare,
+            lba,
+            1,
+            frame,
+            data,
+            &buf[done..done + 512],
+        ) else {
+            perc_image_io_fail(lba);
+            return false;
+        };
+        if timed_out || st != MFI_STAT_OK {
+            perc_image_io_fail(lba);
+            return false;
+        }
+        done += 512;
+    }
+    true
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn perc_image_io_fail(lba: u64) {
+    use crate::boot::serial;
+    serial::write_str_nowait("boot: perc image io fail lba=");
+    write_dec64_nowait(lba);
+    serial::write_line_nowait(" (not PERC-BOOT-OK)");
+}
+
 /// Remember the Mini BAR and the spare DMA pages for later guest reads.
 /// Bytes are stored last so an Acquire load of [`perc_spare_bytes`] sees them.
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
@@ -1729,6 +2180,9 @@ fn perc_spare_arm(bar: u64, target: u8, bytes: u64, data_phys: u64, frame_phys: 
     PERC_SPARE_DATA.store(data_phys, core::sync::atomic::Ordering::Release);
     PERC_SPARE_FRAME.store(frame_phys, core::sync::atomic::Ordering::Release);
     PERC_SPARE_BYTES.store(bytes, core::sync::atomic::Ordering::Release);
+    if PERC_IMAGE_GPT_OK.load(core::sync::atomic::Ordering::Acquire) {
+        PERC_IMAGE_BOOT.store(true, core::sync::atomic::Ordering::Release);
+    }
 }
 
 /// Guest IN path. One MFI READ(16) per 512-byte sector. Never a WRITE.

@@ -88,6 +88,22 @@ if ! grep -q 'LBA 0 is not written' "$ROOT/mgmt/megaraid.rs"; then
   echo "error: LBA 0 must stay unwritten" >&2
   exit 1
 fi
+if ! grep -q 'fn image_copy_plan(' "$ROOT/mgmt/megaraid.rs"; then
+  echo "error: missing image copy plan" >&2
+  exit 1
+fi
+if ! grep -q 'fn pack_ld_write16_image(' "$ROOT/mgmt/megaraid.rs"; then
+  echo "error: missing image WRITE packer" >&2
+  exit 1
+fi
+if ! grep -q 'boot: perc copy' "$ROOT/mgmt/megaraid.rs"; then
+  echo "error: missing image copy heartbeat" >&2
+  exit 1
+fi
+if ! grep -q 'write_line_nowait(M8_PERC_BOOT_OK_MARKER)' "$ROOT/mgmt/megaraid.rs"; then
+  echo "error: boot marker must use write_line_nowait" >&2
+  exit 1
+fi
 if ! grep -q 'fn pci_cmd_for_fwstate_load(' "$ROOT/mgmt/megaraid.rs"; then
   echo "error: missing memory-space command policy" >&2
   exit 1
@@ -120,6 +136,10 @@ if grep -q 'println!("RAYNU-V-M8-PERC-WRITE-OK")' "$ROOT/mgmt/megaraid.rs" "$ROO
   echo "error: host must never println iron PERC-WRITE-OK" >&2
   exit 1
 fi
+if grep -q 'println!("RAYNU-V-M8-PERC-BOOT-OK")' "$ROOT/mgmt/megaraid.rs" "$ROOT/mgmt/durable_lun.rs" "$ROOT/mgmt/m8_perc_gate.rs"; then
+  echo "error: host must never println iron PERC-BOOT-OK" >&2
+  exit 1
+fi
 
 OUT="$(cargo test --lib m8_perc_host_gate_passes -- --nocapture 2>&1)"
 echo "$OUT"
@@ -133,6 +153,10 @@ if echo "$OUT" | grep -F 'RAYNU-V-M8-PERC-LUN-OK' | grep -q .; then
 fi
 if echo "$OUT" | grep -F 'RAYNU-V-M8-PERC-WRITE-OK' | grep -q .; then
   echo "error: iron PERC-WRITE-OK printed" >&2
+  exit 1
+fi
+if echo "$OUT" | grep -F 'RAYNU-V-M8-PERC-BOOT-OK' | grep -q .; then
+  echo "error: iron PERC-BOOT-OK printed" >&2
   exit 1
 fi
 echo "$MARKER"

@@ -784,11 +784,7 @@ pub fn mmio_bar_base() -> u64 {
 
 /// Disk, ISO, then spare BAR GPAs. 0 when that device is off / queues unarmed.
 pub fn mmio_programmed_bar_gpas() -> [u64; 3] {
-    [
-        mmio_bar_base(),
-        mmio_iso_bar_base(),
-        mmio_spare_bar_base(),
-    ]
+    [mmio_bar_base(), mmio_iso_bar_base(), mmio_spare_bar_base()]
 }
 
 fn mmio_iso_bar_base() -> u64 {
@@ -1329,6 +1325,27 @@ fn blk_sector_rw_with(
         }
         return VIRTIO_BLK_S_IOERR;
     }
+    if allow_lun && crate::mgmt::megaraid::perc_image_boot_latched() {
+        let off = match sector.checked_mul(SECTOR as u64) {
+            Some(o) => o,
+            None => return VIRTIO_BLK_S_IOERR,
+        };
+        if buf.is_empty() {
+            return VIRTIO_BLK_S_IOERR;
+        }
+        let ok = if ty == VIRTIO_BLK_T_OUT {
+            crate::mgmt::megaraid::perc_image_write(off, buf)
+        } else if ty == VIRTIO_BLK_T_IN {
+            crate::mgmt::megaraid::perc_image_read(off, buf)
+        } else {
+            false
+        };
+        return if ok {
+            VIRTIO_BLK_S_OK
+        } else {
+            VIRTIO_BLK_S_IOERR
+        };
+    }
     if allow_lun
         && crate::mgmt::durable_lun::durable_lun_serving()
         && LUN_ATTACHED.load(Ordering::Acquire)
@@ -1454,6 +1471,9 @@ pub fn take_iso_install_ok() -> bool {
 /// Bounds-checked against the attached disk; the caller has already validated
 /// the request against media geometry.
 pub fn raynu_f_disk_read(off: u64, buf: &mut [u8]) -> bool {
+    if crate::mgmt::megaraid::perc_image_boot_latched() {
+        return crate::mgmt::megaraid::perc_image_read(off, buf);
+    }
     if LUN_ATTACHED.load(Ordering::Acquire) && crate::mgmt::durable_lun::durable_lun_serving() {
         let dlen = DISK_LEN.load(Ordering::Acquire);
         let Some(end) = off.checked_add(buf.len() as u64) else {
@@ -1493,6 +1513,13 @@ pub fn raynu_f_disk_read(off: u64, buf: &mut [u8]) -> bool {
 /// RayNu-F (ADR-016 F4) `BlockIo` write to the install disk at a byte offset.
 /// This is the path a real installer's GPT/ESP writes will take.
 pub fn raynu_f_disk_write(off: u64, buf: &[u8]) -> bool {
+    if crate::mgmt::megaraid::perc_image_boot_latched() {
+        let ok = crate::mgmt::megaraid::perc_image_write(off, buf);
+        if ok {
+            BYTES_WRITTEN.fetch_add(buf.len() as u64, Ordering::AcqRel);
+        }
+        return ok;
+    }
     if LUN_ATTACHED.load(Ordering::Acquire) && crate::mgmt::durable_lun::durable_lun_serving() {
         let dlen = DISK_LEN.load(Ordering::Acquire);
         let Some(end) = off.checked_add(buf.len() as u64) else {
@@ -2050,8 +2077,7 @@ fn drain_iso(translate: &impl Fn(u64) -> Option<u64>) {
 /// OUT is rejected. A hidden spare (bytes == 0) returns immediately.
 /// PIC 11 is the same line as the install disk. Not a doorbell.
 fn drain_spare(translate: &impl Fn(u64) -> Option<u64>) {
-    let (notified, enabled, qsize, last, used_i, desc, avail, used) =
-        with_spare(|v| take_queue(v));
+    let (notified, enabled, qsize, last, used_i, desc, avail, used) = with_spare(|v| take_queue(v));
     if !enabled || crate::mgmt::megaraid::perc_spare_bytes() < SECTOR as u64 {
         if notified {
             crate::devices::guest_irq::raise_virtio();
