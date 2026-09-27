@@ -354,11 +354,11 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-7-perc-login |
-| Summary | **Unattended `localhost login:` from the 8 GiB spare image.** `bda7a59b` hid `vdc`, mounted `vda2`, and reached a root shell. Months **0.0 held**. Overall **99 held**. |
-| Everest impact | none — Everest stays closed. Not 100%. A spare-image login is not a reopened Everest. Nested QEMU ≠ R640. |
-| Gates touched | Lived login. No doorbell. No format of UBUNTU0. The whole 2.9 TB VD stays hidden. |
-| Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 36→52, perc 55→74, months B 2.75→2.0, overall LOI 70→73, months A 0.25 held. |
+| Commit | m8-7-perc-reboot |
+| Summary | **Same spare-image login after a chassis restart.** Second `bda7a59b` boot skipped the copy and reached `localhost login:` on `a0ad99ac`. Months **0.0 held**. Overall **99 held**. |
+| Everest impact | none — Everest stays closed. Not 100%. A second spare-image login is not a reopened Everest. Nested QEMU ≠ R640. |
+| Gates touched | Lived second login. No doorbell. No format of UBUNTU0. The Toshiba was still attached. The whole 2.9 TB VD stays hidden. |
+| Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 52→56, perc 74 held, months B 2.0→1.75, overall LOI 73 held, months A 0.25 held. |
 
 
 ## Blockers & risks (Everest-relevant)
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-27 | m8-7-perc-reboot | 0.0 | 99 | **Same login after a chassis restart.** Second `bda7a59b` boot: `perc copy skip present`, `perc virtio ro hidden`, `vda2` `6380/521216`, `localhost login: root` on `a0ad99ac`. perc 74 held. Bar B 52→56. Months B 2.0→1.75. months 0.0 held; overall 99 held |
 | 2026-09-27 | m8-7-perc-login | 0.0 | 99 | **Unattended login from the spare image.** `bda7a59b` hid `vdc`, mounted `vda2` (`a0ad99ac`), and reached `localhost login: root`. perc 55→74. Bar B 36→52. Months B 2.75→2.0. The guest disk is 8 GiB. months 0.0 held; overall 99 held |
 | 2026-09-27 | m8-7-perc-hide-vdc | 0.0 | 99 | **Hide read-only `vdc` when the image latch is set.** `40ec12fc` printed `RAYNU-V-M8-PERC-BOOT-OK` at GRUB StartImage. Initramfs stopped on `vdc2`. Hand mount of `vda2` recovered r/w. Login still open. perc 55 held. months 0.0 held; overall 99 held |
 | 2026-09-27 | m8-7-loi-chrome | 0.0 | 99 | **LOI page uses one number per named stage.** Bar A 92, Bar B 36, overall 70, PERC 55, SKU 92, TLS 80. Scores held. months 0.0 held; overall 99 held |
@@ -1031,7 +1032,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     bda7a59b is at localhost:~# from the 8 GiB spare image. Leave that shell. Do not run setup-alpine. Do not setup-disk. Do not format UBUNTU0. The whole 2.9 TB VD stays hidden. No doorbell. Do not open the H840. A5 is parked. See docs/m8_plan.md.
+Next move:     bda7a59b is at localhost:~# again after the chassis restart. Leave that shell. Do not run setup-alpine. Do not setup-disk. Do not format UBUNTU0. The whole 2.9 TB VD stays hidden. No doorbell. Do not open the H840. A5 is parked. See docs/m8_plan.md.
 Rollback:      Standing SPA: v0.1.0-m8-a4s → CI 36137732145 / COM2 sha=1f33eeda72f9 / EFI SHA256 5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693
 Everest:       GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351 / EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc / COM2 build: sha=f72b4276d198
 Do not F11:    M8 prototypes `b5e290be` `17d120c5` `3b388279` `08202468` `d60431ee` `28cd4ff1` `15e3d665` `5c32bd06` `1fa231df` `e5cca2e0` `c4a41a17` (table in docs/m8_state.md); Phase B fails `34548550755` / `7f8dc0a9`

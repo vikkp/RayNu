@@ -1,7 +1,7 @@
 {
   "bars": {
     "a": 92,
-    "b": 52
+    "b": 56
   },
   "baseline_date": "2026-09-14",
   "baseline_months": 1.5,
@@ -26,8 +26,8 @@
   "loihda_version": 1,
   "months_to_loi_a": 0.25,
   "months_to_loi_a_prev": 0.5,
-  "months_to_loi_b": 2.0,
-  "months_to_loi_b_prev": 2.75,
+  "months_to_loi_b": 1.75,
+  "months_to_loi_b_prev": 2.0,
   "overall_pct": 73,
   "pieces": {
     "auth": 38,
