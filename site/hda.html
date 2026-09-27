@@ -130,11 +130,10 @@
             TLS session. Rollback kit <code>v0.1.0-m8-a4s</code>. The SPA
             typed once, then Power off host left iDRAC Off. On 2026-09-26
             Ubuntu 26.04 is back on a 400 GB PERC virtual disk. An empty
-            2.9 TB spare exists. Iron <code>9c37fcae</code> printed
-            <code>RAYNU-V-M8-PERC-LUN-OK</code> on a read of that spare.
-            The next EFI writes one sector at the spare's last LBA and
-            reads it back. LBA 0 is not written. The H840 was not mapped.
-            No doorbell yet. Auth is parked.
+            2.9 TB spare exists. Iron <code>f0a7aabb</code> printed
+            <code>RAYNU-V-M8-PERC-WRITE-OK</code> after one last-LBA sector
+            matched. LBA 0 is not written. That sector is not a boot disk.
+            The H840 was not mapped. No doorbell yet. Auth is parked.
           </p>
         </div>
       </section>
