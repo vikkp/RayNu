@@ -205,6 +205,12 @@ fn fwstate_load_is_one_harpoon_and_does_not_bus_master() {
     assert!(PERC_HOST_RESIDUAL_NOTE.contains("outbound_msg_0"));
     assert!(PERC_HOST_RESIDUAL_NOTE.contains("scratch_pad_0"));
     assert_eq!(super::harpoon_fw_status_offset(), super::MFI_SCRATCH_PAD_0);
+    assert!(super::fusion_dma_base_ok(0x1000000));
+    assert!(super::fusion_dma_base_ok(0xFFFF_8000));
+    assert!(!super::fusion_dma_base_ok(0));
+    assert!(!super::fusion_dma_base_ok(0x1_0000_0000));
+    assert!(!super::fusion_dma_base_ok(0xFFFF_F000));
+    assert_eq!(super::FUSION_DMA_PAGES, 8);
     assert!(super::fusion_post_is_allowed(super::IRON_FUSION_S0));
     assert!(!super::fusion_post_is_allowed(super::MFI_STATE_OPERATIONAL));
     assert!(!super::fusion_post_is_allowed(super::MFI_STATE_FAULT));

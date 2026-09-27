@@ -10,6 +10,17 @@ fn bump_allocates_then_exhausts() {
 }
 
 #[test]
+fn bump_alloc_pages_reserves_a_span() {
+    let mut bump = FrameBump::new(0x1000000, 16);
+    assert!(bump.alloc_pages(0).is_none());
+    assert!(bump.alloc_pages(17).is_none());
+    assert_eq!(bump.remaining_pages(), 16);
+    assert_eq!(bump.alloc_pages(8).unwrap(), 0x1000000);
+    assert_eq!(bump.alloc_frame().unwrap().0, 0x1008000);
+    assert_eq!(bump.remaining_pages(), 7);
+}
+
+#[test]
 fn take_remaining_drains_pool() {
     let mut bump = FrameBump::new(0x1000, 4);
     assert_eq!(bump.alloc_frame().unwrap().0, 0x1000);

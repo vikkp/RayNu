@@ -322,11 +322,12 @@
                 <strong>UBUNTU0</strong> (~400 GB) is Ubuntu 26.04 and the boot
                 device. <strong>RAYNU-SPARE</strong> (~2.9 TB) is empty.
                 <strong>M8.7</strong> packs mailbox frames on the host.
-                Iron <code>22ce3728</code> read the H740P Mini scratch pad
-                as READY (<code>0xb73c0fed</code>, mapped). The H840 was not
-                mapped. The mapper still prints <code>skip PERC</code>.
-                A READY register is not I/O. This 15% stays census plus an
-                empty spare. Do not format UBUNTU0. Do not partition RAYNU-SPARE.
+                Iron <code>83ae471e</code> read the H740P Mini scratch pad
+                as READY (<code>0xb73c0fed</code>, mapped) and skipped IOC DMA
+                above 4 GiB. The H840 was not mapped. The mapper still prints
+                <code>skip PERC</code>. A READY register is not I/O. This 15%
+                stays census plus an empty spare. Do not format UBUNTU0. Do
+                not partition RAYNU-SPARE.
               </p>
             </li>
             <li data-reveal>
@@ -364,7 +365,7 @@
           <pre class="ship-code" data-reveal><code>boot:   UBUNTU0 ~400 GB · Ubuntu 26.04 · / and /boot/efi
 spare:  RAYNU-SPARE ~2.9 TB · empty · do not partition
 ctrl:   PERC H740P Mini only · do not open the H840
-next:   22ce3728 READY · reboot to Ubuntu · flash the IOC EFI · F11 once · perc stays 15
+next:   83ae471e skip above4g · reboot to Ubuntu · flash the pool EFI · F11 once · perc stays 15
 never:  format UBUNTU0 · format the spare · format the Toshiba · setup-disk · curl Start
 read:   docs/runbooks/r640_perc_lab.md</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
