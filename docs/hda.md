@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-7-perc-gpt-read |
-| Summary | **Byte-range spare reads, boot marker packed.** `0739edd0` finished the 8 GiB copy and stopped at `gpt_err=1` (128-byte GPT entries). This EFI copies the sector slice and skips a second rewrite when the backup header is `EFI PART`. Mailbox probe LBA 0 is not written. Months **0.0 held**. Overall **99 held**. |
-| Everest impact | none — Everest stays closed. Not 100%. A reader fix is not `RAYNU-V-M8-PERC-BOOT-OK`. Nested QEMU ≠ R640. |
-| Gates touched | Host pack of the byte-range read and the skip-present check. Site sync. No doorbell. No format of UBUNTU0. |
+| Commit | m8-7-loi-chrome |
+| Summary | **LOI page uses one number per named stage.** Path, bars, pieces, and NOW all read Bar A 92, Bar B 36, overall 70, PERC 55, SKU 92, TLS 80. Months **0.0 held**. Overall **99 held**. |
+| Everest impact | none — Everest stays closed. Not 100%. A page alignment is not `RAYNU-V-M8-PERC-BOOT-OK`. Nested QEMU ≠ R640. |
+| Gates touched | Site copy only. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 36 held, perc 55 held, months B 2.75 held, months A 0.25 held. |
 
 
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-27 | m8-7-loi-chrome | 0.0 | 99 | **LOI page uses one number per named stage.** Bar A 92, Bar B 36, overall 70, PERC 55, SKU 92, TLS 80. Scores held. months 0.0 held; overall 99 held |
 | 2026-09-27 | m8-7-perc-gpt-read | 0.0 | 99 | **Byte-range spare reads, boot marker packed.** `0739edd0` lived `perc copy done` and `perc copy gpt ok`, then `gpt_err=1`. This EFI serves 128-byte GPT entries and skips a second copy when the backup header is `EFI PART`. Not `RAYNU-V-M8-PERC-BOOT-OK` until COM2 shows it. perc 55 held. months 0.0 held; overall 99 held |
 | 2026-09-27 | m8-7-perc-image | 0.0 | 99 | **8 GiB image copy packed, not lived.** Copies the Toshiba guest window onto RAYNU-SPARE after a USB `EFI PART` peek. Mailbox probe LBA 0 is not written. `00:04.0` stays read-only. Not `RAYNU-V-M8-PERC-BOOT-OK` until COM2 shows it. perc 55 held. months 0.0 held; overall 99 held |
 | 2026-09-27 | m8-7-perc-write-ok | 0.0 | 99 | **Last-LBA WRITE lived.** `f0a7aabb` COM2 `perc write status=0x00` LBA `6190268927`, readback match, `RAYNU-V-M8-PERC-WRITE-OK`. LBA 0 stayed 16 zeros. Read-only virtio. Alpine on the Toshiba. perc 40→55. months 0.0 held; overall 99 held |
