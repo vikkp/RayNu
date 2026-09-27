@@ -354,11 +354,11 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-7-perc-hide-vdc |
-| Summary | **Hide read-only `vdc` once the spare image is the install disk.** `40ec12fc` started GRUB from that image. A hand mount of `vda2` recovered r/w. Login did not follow. Months **0.0 held**. Overall **99 held**. |
-| Everest impact | none — Everest stays closed. Not 100%. A virtio hide is not a reopened Everest. Nested QEMU ≠ R640. |
-| Gates touched | Host predicate `spare_virtio_offered`. No doorbell. No format of UBUNTU0. |
-| Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 36 held, perc 55 held, months B 2.75 held, months A 0.25 held. |
+| Commit | m8-7-perc-login |
+| Summary | **Unattended `localhost login:` from the 8 GiB spare image.** `bda7a59b` hid `vdc`, mounted `vda2`, and reached a root shell. Months **0.0 held**. Overall **99 held**. |
+| Everest impact | none — Everest stays closed. Not 100%. A spare-image login is not a reopened Everest. Nested QEMU ≠ R640. |
+| Gates touched | Lived login. No doorbell. No format of UBUNTU0. The whole 2.9 TB VD stays hidden. |
+| Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 36→52, perc 55→74, months B 2.75→2.0, overall LOI 70→73, months A 0.25 held. |
 
 
 ## Blockers & risks (Everest-relevant)
@@ -366,7 +366,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | ID | Blocker / risk | Severity | Mitigations |
 |----|----------------|----------|-------------|
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
-| H2 | TLS / console polish | MED | **M8.1 CLOSED on COM2** (`928d6224` `RAYNU-V-M8-TLS-OK`). **A4s lived** on `1f33eeda72f9`. **A6 lived once**: Activity `abc` / `-sh: abc: not found` / `RAYNU-V-M8-CONSOLE-OK`, Host green. Overview Power off host then COM2 `boot: SPA host po` and iDRAC Power State Off. On 2026-09-26 Ubuntu 26.04 is the standing OS on UBUNTU0. `0739edd0` wrote the Toshiba image into the first 8 GiB of RAYNU-SPARE and the guest did not boot it (`gpt_err=1`) ([r640_perc_lab.md](runbooks/r640_perc_lab.md)). A5 is parked. rustls/ring stay out of `uefi-bin`. Not a reopened Everest. |
+| H2 | TLS / console polish | MED | **M8.1 CLOSED on COM2** (`928d6224` `RAYNU-V-M8-TLS-OK`). **A4s lived** on `1f33eeda72f9`. **A6 lived once**: Activity `abc` / `-sh: abc: not found` / `RAYNU-V-M8-CONSOLE-OK`, Host green. Overview Power off host then COM2 `boot: SPA host po` and iDRAC Power State Off. On 2026-09-26 Ubuntu 26.04 is the standing OS on UBUNTU0. `bda7a59b` reached `localhost login:` from the 8 GiB image on RAYNU-SPARE. The whole VD stays hidden ([r640_perc_lab.md](runbooks/r640_perc_lab.md)). A5 is parked. rustls/ring stay out of `uefi-bin`. Not a reopened Everest. |
 | H3 | ~~Guest UEFI CD not bootable / no reboot-to-disk on iron~~ | — | **Resolved** 2026-09-10 (`56a3ffd` / run `34480107961`): `RAYNU-V-RAYNU-F-DISK-BOOT-OK` + second Linux `root=UUID=` from `vda` + `login:` on the real R640. Chain: `59ac070` install-to-disk (`ISO-INSTALL-OK`) → F7 VMCLEAR/VMPTRLD (81 KiB `FirmwareState::new()` stack temporary over the VMCS; template reset + 32-page stack guard) → `975f8fc` relaunch into the installed GRUB menu, 1 M exit-cap inside GRUB's 2 s menu poll loop (~2 exits/µs) → `56a3ffd` RayNu-F wall cap (time, not exits, bounds the loader phase). Earlier: `916af96` THRE chain telemetry → UART TX ring room + line-rate pace + COM2 FIFO burst fixed the `apk` console stall. Evidence: [2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md](evidence/r640/2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md). Do not F11 `34474850361` / `34425781629` for Phase A; `34480107961` is the Phase A reference pin. |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
 | H5 | ~~Phase B — iron SPA still launches the SHELL stub~~ | — | **Resolved** 2026-09-11 (`f72b4276` / `34552377351`). Residual polish is **M8**, not Everest. |
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-27 | m8-7-perc-login | 0.0 | 99 | **Unattended login from the spare image.** `bda7a59b` hid `vdc`, mounted `vda2` (`a0ad99ac`), and reached `localhost login: root`. perc 55→74. Bar B 36→52. Months B 2.75→2.0. The guest disk is 8 GiB. months 0.0 held; overall 99 held |
 | 2026-09-27 | m8-7-perc-hide-vdc | 0.0 | 99 | **Hide read-only `vdc` when the image latch is set.** `40ec12fc` printed `RAYNU-V-M8-PERC-BOOT-OK` at GRUB StartImage. Initramfs stopped on `vdc2`. Hand mount of `vda2` recovered r/w. Login still open. perc 55 held. months 0.0 held; overall 99 held |
 | 2026-09-27 | m8-7-loi-chrome | 0.0 | 99 | **LOI page uses one number per named stage.** Bar A 92, Bar B 36, overall 70, PERC 55, SKU 92, TLS 80. Scores held. months 0.0 held; overall 99 held |
 | 2026-09-27 | m8-7-perc-gpt-read | 0.0 | 99 | **Byte-range spare reads, boot marker packed.** `0739edd0` lived `perc copy done` and `perc copy gpt ok`, then `gpt_err=1`. This EFI serves 128-byte GPT entries and skips a second copy when the backup header is `EFI PART`. Not `RAYNU-V-M8-PERC-BOOT-OK` until COM2 shows it. perc 55 held. months 0.0 held; overall 99 held |
@@ -1030,7 +1031,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     Chassis is at the Alpine emergency shell on 40ec12fc. vda2 is mounted r/w. Do not setup-disk. Do not exit. Force Off, then flash this EFI. Watch `boot: perc virtio ro hidden` and no `[vdc]`. Login is still open. Do not format UBUNTU0. Mailbox probe LBA 0 is not written. No doorbell. Do not open the H840. A5 is parked. See docs/m8_plan.md.
+Next move:     bda7a59b is at localhost:~# from the 8 GiB spare image. Leave that shell. Do not run setup-alpine. Do not setup-disk. Do not format UBUNTU0. The whole 2.9 TB VD stays hidden. No doorbell. Do not open the H840. A5 is parked. See docs/m8_plan.md.
 Rollback:      Standing SPA: v0.1.0-m8-a4s → CI 36137732145 / COM2 sha=1f33eeda72f9 / EFI SHA256 5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693
 Everest:       GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351 / EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc / COM2 build: sha=f72b4276d198
 Do not F11:    M8 prototypes `b5e290be` `17d120c5` `3b388279` `08202468` `d60431ee` `28cd4ff1` `15e3d665` `5c32bd06` `1fa231df` `e5cca2e0` `c4a41a17` (table in docs/m8_state.md); Phase B fails `34548550755` / `7f8dc0a9`
