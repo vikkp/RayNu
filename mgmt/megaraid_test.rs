@@ -179,6 +179,23 @@ fn two_harpoons_and_a_faulted_fw_stop() {
     println!("{M8_PERC_HOST_OK_MARKER}");
 }
 
+fn image_header_sector(alt: u64) -> [u8; 512] {
+    use crate::raynu_f::gpt::{GPT_HEADER_SIZE_MIN, GPT_REVISION_1_0, GPT_SIGNATURE};
+    use crate::raynu_f::tables::crc32;
+    let mut hdr = [0u8; 512];
+    hdr[0..8].copy_from_slice(GPT_SIGNATURE);
+    hdr[8..12].copy_from_slice(&GPT_REVISION_1_0.to_le_bytes());
+    hdr[12..16].copy_from_slice(&GPT_HEADER_SIZE_MIN.to_le_bytes());
+    hdr[24..32].copy_from_slice(&1u64.to_le_bytes());
+    hdr[32..40].copy_from_slice(&alt.to_le_bytes());
+    hdr[72..80].copy_from_slice(&2u64.to_le_bytes());
+    hdr[80..84].copy_from_slice(&128u32.to_le_bytes());
+    hdr[84..88].copy_from_slice(&128u32.to_le_bytes());
+    let c = crc32(&hdr[..GPT_HEADER_SIZE_MIN as usize]);
+    hdr[16..20].copy_from_slice(&c.to_le_bytes());
+    hdr
+}
+
 #[test]
 fn fwstate_load_is_one_harpoon_and_does_not_bus_master() {
     assert!(fwstate_may_load(1, memory_bar64(0xF000_0000, 0)));
@@ -303,6 +320,26 @@ fn fwstate_load_is_one_harpoon_and_does_not_bus_master() {
     peek[512..520].copy_from_slice(b"EFI PART");
     assert!(super::gpt_header_is_efi_part(&peek));
     assert!(!super::gpt_header_is_efi_part(&[0u8; 1024]));
+    let entry0 = super::image_read_slice(1024, 128, 0).unwrap();
+    assert_eq!((entry0.lba, entry0.skip, entry0.take), (2, 0, 128));
+    let entry1 = super::image_read_slice(1152, 128, 0).unwrap();
+    assert_eq!((entry1.lba, entry1.skip, entry1.take), (2, 128, 128));
+    let span0 = super::image_read_slice(400, 200, 0).unwrap();
+    assert_eq!((span0.lba, span0.skip, span0.take), (0, 400, 112));
+    let span1 = super::image_read_slice(400, 200, 112).unwrap();
+    assert_eq!((span1.lba, span1.skip, span1.take), (1, 0, 88));
+    assert!(super::image_read_in_window(1024, 128));
+    assert!(!super::image_io_in_window(1024, 128));
+    assert!(super::image_read_slice(0, 0, 0).is_none());
+    assert!(super::image_read_slice(super::PERC_IMAGE_BYTES - 1, 2, 0).is_none());
+    let alt = (super::PERC_IMAGE_BYTES / 512) - 1;
+    let lba1 = image_header_sector(alt);
+    assert_eq!(super::image_backup_lba(&lba1), Some(alt));
+    assert!(super::image_backup_lba(&[0u8; 512]).is_none());
+    assert!(super::image_backup_lba(&image_header_sector(1)).is_none());
+    assert!(super::image_backup_lba(&image_header_sector(super::PERC_IMAGE_BYTES / 512)).is_none());
+    assert!(super::image_backup_is_efi_part(b"EFI PART"));
+    assert!(!super::image_backup_is_efi_part(&[0u8; 8]));
     assert!(!super::perc_image_boot_latched());
     assert_eq!(super::perc_spare_bytes(), 0);
     let mut scratch = [0u8; 512];

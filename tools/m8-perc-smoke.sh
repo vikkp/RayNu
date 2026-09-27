@@ -100,6 +100,14 @@ if ! grep -q 'boot: perc copy' "$ROOT/mgmt/megaraid.rs"; then
   echo "error: missing image copy heartbeat" >&2
   exit 1
 fi
+if ! grep -q 'fn image_read_slice(' "$ROOT/mgmt/megaraid.rs"; then
+  echo "error: missing byte-range image read" >&2
+  exit 1
+fi
+if ! grep -q 'boot: perc copy skip present' "$ROOT/mgmt/megaraid.rs"; then
+  echo "error: missing spare-already-present skip" >&2
+  exit 1
+fi
 if ! grep -q 'write_line_nowait(M8_PERC_BOOT_OK_MARKER)' "$ROOT/mgmt/megaraid.rs"; then
   echo "error: boot marker must use write_line_nowait" >&2
   exit 1
