@@ -45,6 +45,8 @@ pub fn perc_surface_present() -> bool {
         && mega.contains("boot: perc read")
         && mega.contains("boot: perc read2")
         && mega.contains("boot: perc virtio ro")
+        && mega.contains("fn spare_virtio_offered(")
+        && mega.contains("boot: perc virtio ro hidden")
         && mega.contains("fn pack_ld_write16_last_polled(")
         && mega.contains("fn spare_write_lba(")
         && mega.contains("boot: perc write")

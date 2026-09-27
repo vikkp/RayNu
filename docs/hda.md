@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-7-loi-chrome |
-| Summary | **LOI page uses one number per named stage.** Path, bars, pieces, and NOW all read Bar A 92, Bar B 36, overall 70, PERC 55, SKU 92, TLS 80. Months **0.0 held**. Overall **99 held**. |
-| Everest impact | none — Everest stays closed. Not 100%. A page alignment is not `RAYNU-V-M8-PERC-BOOT-OK`. Nested QEMU ≠ R640. |
-| Gates touched | Site copy only. No doorbell. No format of UBUNTU0. |
+| Commit | m8-7-perc-hide-vdc |
+| Summary | **Hide read-only `vdc` once the spare image is the install disk.** `40ec12fc` started GRUB from that image. A hand mount of `vda2` recovered r/w. Login did not follow. Months **0.0 held**. Overall **99 held**. |
+| Everest impact | none — Everest stays closed. Not 100%. A virtio hide is not a reopened Everest. Nested QEMU ≠ R640. |
+| Gates touched | Host predicate `spare_virtio_offered`. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 36 held, perc 55 held, months B 2.75 held, months A 0.25 held. |
 
 
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-27 | m8-7-perc-hide-vdc | 0.0 | 99 | **Hide read-only `vdc` when the image latch is set.** `40ec12fc` printed `RAYNU-V-M8-PERC-BOOT-OK` at GRUB StartImage. Initramfs stopped on `vdc2`. Hand mount of `vda2` recovered r/w. Login still open. perc 55 held. months 0.0 held; overall 99 held |
 | 2026-09-27 | m8-7-loi-chrome | 0.0 | 99 | **LOI page uses one number per named stage.** Bar A 92, Bar B 36, overall 70, PERC 55, SKU 92, TLS 80. Scores held. months 0.0 held; overall 99 held |
 | 2026-09-27 | m8-7-perc-gpt-read | 0.0 | 99 | **Byte-range spare reads, boot marker packed.** `0739edd0` lived `perc copy done` and `perc copy gpt ok`, then `gpt_err=1`. This EFI serves 128-byte GPT entries and skips a second copy when the backup header is `EFI PART`. Not `RAYNU-V-M8-PERC-BOOT-OK` until COM2 shows it. perc 55 held. months 0.0 held; overall 99 held |
 | 2026-09-27 | m8-7-perc-image | 0.0 | 99 | **8 GiB image copy packed, not lived.** Copies the Toshiba guest window onto RAYNU-SPARE after a USB `EFI PART` peek. Mailbox probe LBA 0 is not written. `00:04.0` stays read-only. Not `RAYNU-V-M8-PERC-BOOT-OK` until COM2 shows it. perc 55 held. months 0.0 held; overall 99 held |
@@ -1029,7 +1030,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     Chassis is in the Stage 46 hold on 0739edd0. Force Off, then flash this EFI. Watch `boot: perc copy skip present` and a guest start. Do not F11 0739edd0 again. `RAYNU-V-M8-PERC-BOOT-OK` is not claimed until COM2 shows it. Do not format UBUNTU0. Do not setup-disk. vdc stays read-only. Mailbox probe LBA 0 is not written. No doorbell. Do not open the H840. A5 is parked. See docs/m8_plan.md.
+Next move:     Chassis is at the Alpine emergency shell on 40ec12fc. vda2 is mounted r/w. Do not setup-disk. Do not exit. Force Off, then flash this EFI. Watch `boot: perc virtio ro hidden` and no `[vdc]`. Login is still open. Do not format UBUNTU0. Mailbox probe LBA 0 is not written. No doorbell. Do not open the H840. A5 is parked. See docs/m8_plan.md.
 Rollback:      Standing SPA: v0.1.0-m8-a4s → CI 36137732145 / COM2 sha=1f33eeda72f9 / EFI SHA256 5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693
 Everest:       GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351 / EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc / COM2 build: sha=f72b4276d198
 Do not F11:    M8 prototypes `b5e290be` `17d120c5` `3b388279` `08202468` `d60431ee` `28cd4ff1` `15e3d665` `5c32bd06` `1fa231df` `e5cca2e0` `c4a41a17` (table in docs/m8_state.md); Phase B fails `34548550755` / `7f8dc0a9`

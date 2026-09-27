@@ -10,7 +10,11 @@
 //! `ata_piix`; `/dev/vdb` is ISO9660 so `nlplug-findfs` can find media).
 //! When both H740P spare READs return status 0, the boot path may WRITE
 //! the spare's last LBA once, then a third read-only virtio-blk appears
-//! at `00:04.0` (`/dev/vdc`). Guest OUT on that device stays rejected.
+//! at `00:04.0` (`/dev/vdc`) unless the 8 GiB image is already the install
+//! disk. Guest OUT on that device stays rejected. Iron `40ec12fc` showed
+//! both `vda` and `vdc` with UUID `a0ad99ac`; initramfs mounted read-only
+//! `vdc2`. A hand mount of `vda2` recovered read-write. The latched image
+//! hides `00:04.0`.
 //! It does not join the
 //! PIT / DRIVER_OK pair (`00:02.0` and `00:03.0`). Absent or failed
 //! READs leave `00:04.0` hidden. Not `RAYNU-V-M8-PERC-LUN-OK` until a
@@ -495,7 +499,10 @@ pub fn present() -> bool {
                 }
             }
             let spare_bytes = crate::mgmt::megaraid::perc_spare_bytes();
-            if spare_bytes >= SECTOR as u64 {
+            if crate::mgmt::megaraid::spare_virtio_offered(
+                spare_bytes,
+                crate::mgmt::megaraid::perc_image_boot_latched(),
+            ) {
                 b.spare.visible = true;
                 b.spare.bar0 = GUEST_VIRTIO_SPARE_BAR0_DEFAULT;
                 b.spare.default_bar = GUEST_VIRTIO_SPARE_BAR0_DEFAULT;

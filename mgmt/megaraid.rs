@@ -25,8 +25,13 @@
 //! Both are one 512-byte block, spare only. If both return 0, this EFI
 //! posts one WRITE(16) of the spare's last LBA, then reads that LBA back.
 //! The payload is 16 bytes `RAYNU-SPARE-WR16` and 496 zeros. LBA 0 is not
-//! written. A non-zero status or a mismatch does not retry. The spare is
-//! still offered as a read-only virtio-blk at `00:04.0`. Every post is a
+//! written. A non-zero status or a mismatch does not retry. Until the
+//! 8 GiB image is the install disk, the spare is still offered as a
+//! read-only virtio-blk at `00:04.0`. Iron `40ec12fc` booted GRUB from
+//! that image, then initramfs mounted read-only `vdc2` (same UUID as
+//! `vda2`) and the journal replay failed. A hand mount of `vda2` came
+//! up read-write. This EFI hides `00:04.0` once that latch is set.
+//! Every post is a
 //! single 64-bit store to the low inbound queue port (`0xC0`). It does
 //! not ring the doorbell, and it does not change
 //! [`crate::mgmt::durable_lun::pick_durable_lun`].
@@ -44,7 +49,9 @@
 //! last-LBA readback matches. `RAYNU-V-M8-PERC-BOOT-OK` prints only after
 //! the guest starts from the copied image. All three use `write_line_nowait`
 //! because Linux earlycon hushes `write_line`. Host/CI never print them.
-//! The boot marker is packed, not lived.
+//! Iron `40ec12fc` printed the boot marker at StartImage. Login did not
+//! follow: initramfs chose read-only `vdc2`. This EFI hides that device
+//! when the image latch is set. Login is still open.
 
 /// Iron COM2 close: a READ of RAYNU-SPARE lived, and the LD was attached.
 /// Host/CI/nested must never print this.
@@ -128,6 +135,14 @@ pub fn perc_image_boot_latched() -> bool {
     }
 }
 
+/// Whole-spare virtio (`00:04.0` / `vdc`) stays hidden once the 8 GiB image
+/// is the install disk. That second view shares the Alpine UUID and is
+/// read-only, so initramfs cannot replay the ext4 journal. The install
+/// disk remains, and it is read-write through the image latch.
+pub fn spare_virtio_offered(spare_bytes: u64, image_latched: bool) -> bool {
+    spare_bytes >= 512 && !image_latched
+}
+
 /// Read the latched image. Offsets outside the 8 GiB window fail.
 /// Host and QEMU return false.
 pub fn perc_image_read(off: u64, buf: &mut [u8]) -> bool {
@@ -169,7 +184,7 @@ pub fn perc_note_disk_boot() {
 
 /// Honesty: a firmware-state load is not a doorbell and not the iron marker.
 pub const PERC_HOST_RESIDUAL_NOTE: &str =
-    "residual: M8.7 Harpoon status is scratch_pad_0; outbound_msg_0 is the xscale register; READY nibble posts one IOC init and one LD list to inbound_low_queue_port; DMA is eight frame-pool pages below 4GiB; READ(16) of LBA 0 then the last LBA on the spare only; one WRITE(16) of that last LBA then a readback; mailbox probe LBA 0 is not written; read-only virtio 00:04.0 after both status 0; not iron RAYNU-V-M8-PERC-LUN-OK until a guest read; not iron RAYNU-V-M8-PERC-WRITE-OK until readback matches; not iron RAYNU-V-M8-PERC-BOOT-OK until the copied image boots; image copy of 8GiB onto spare LBA 0 lived on 0739edd0 then gpt_err=1; byte-range reads and skip-present are packed not lived as a boot; no doorbell; durable_lun still skip PERC; QEMU has no H740P; do not format UBUNTU0; do not setup-disk";
+    "residual: M8.7 Harpoon status is scratch_pad_0; outbound_msg_0 is the xscale register; READY nibble posts one IOC init and one LD list to inbound_low_queue_port; DMA is eight frame-pool pages below 4GiB; READ(16) of LBA 0 then the last LBA on the spare only; one WRITE(16) of that last LBA then a readback; mailbox probe LBA 0 is not written; read-only virtio 00:04.0 after both status 0; not iron RAYNU-V-M8-PERC-LUN-OK until a guest read; not iron RAYNU-V-M8-PERC-WRITE-OK until readback matches; not iron RAYNU-V-M8-PERC-BOOT-OK until the copied image boots; image copy of 8GiB onto spare LBA 0 lived on 0739edd0 then gpt_err=1; 40ec12fc skipped the copy and started GRUB from the image; a hand mount of vda2 recovered r/w; 00:04.0 hides when that latch is set; login still open; no doorbell; durable_lun still skip PERC; QEMU has no H740P; do not format UBUNTU0; do not setup-disk";
 
 /// 64-byte MFI frame (`MEGAMFI_FRAME_SIZE`).
 pub const MFI_FRAME_BYTES: usize = 64;
@@ -1853,12 +1868,18 @@ fn perc_fusion_post(bar: u64, bus: u8, dev: u8, func: u8, base: u64) {
     // Image copy may write spare LBA 0. A miss still arms read-only virtio.
     perc_image_copy(bar, target, bytes, dcmd_phys, data_phys);
 
-    serial::write_str("boot: perc virtio ro id=");
-    write_dec(u32::from(target));
-    serial::write_str(" bytes=");
-    write_dec64(bytes);
-    serial::write_line(" (not PERC-LUN-OK)");
     perc_spare_arm(bar, target, bytes, data_phys, dcmd_phys);
+    if perc_image_boot_latched() {
+        serial::write_line(
+            "boot: perc virtio ro hidden (vda is the 8 GiB image; not PERC-BOOT-OK)",
+        );
+    } else {
+        serial::write_str("boot: perc virtio ro id=");
+        write_dec(u32::from(target));
+        serial::write_str(" bytes=");
+        write_dec64(bytes);
+        serial::write_line(" (not PERC-LUN-OK)");
+    }
 }
 
 /// One polled WRITE(16) of the spare's last LBA, then a READ of that LBA.
