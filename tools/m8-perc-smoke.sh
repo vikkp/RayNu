@@ -72,6 +72,22 @@ if ! grep -q 'write_line_nowait(M8_PERC_LUN_OK_MARKER)' "$ROOT/mgmt/megaraid.rs"
   echo "error: guest marker must use write_line_nowait (earlycon hushes write_line)" >&2
   exit 1
 fi
+if ! grep -q 'fn pack_ld_write16_last_polled(' "$ROOT/mgmt/megaraid.rs"; then
+  echo "error: missing polled spare last-LBA WRITE" >&2
+  exit 1
+fi
+if ! grep -q 'boot: perc write' "$ROOT/mgmt/megaraid.rs"; then
+  echo "error: missing spare WRITE line" >&2
+  exit 1
+fi
+if ! grep -q 'write_line_nowait(M8_PERC_WRITE_OK_MARKER)' "$ROOT/mgmt/megaraid.rs"; then
+  echo "error: write marker must use write_line_nowait" >&2
+  exit 1
+fi
+if ! grep -q 'LBA 0 is not written' "$ROOT/mgmt/megaraid.rs"; then
+  echo "error: LBA 0 must stay unwritten" >&2
+  exit 1
+fi
 if ! grep -q 'fn pci_cmd_for_fwstate_load(' "$ROOT/mgmt/megaraid.rs"; then
   echo "error: missing memory-space command policy" >&2
   exit 1
@@ -100,6 +116,10 @@ if grep -q 'println!("RAYNU-V-M8-PERC-LUN-OK")' "$ROOT/mgmt/megaraid.rs" "$ROOT/
   echo "error: host must never println iron PERC-LUN-OK" >&2
   exit 1
 fi
+if grep -q 'println!("RAYNU-V-M8-PERC-WRITE-OK")' "$ROOT/mgmt/megaraid.rs" "$ROOT/mgmt/durable_lun.rs" "$ROOT/mgmt/m8_perc_gate.rs"; then
+  echo "error: host must never println iron PERC-WRITE-OK" >&2
+  exit 1
+fi
 
 OUT="$(cargo test --lib m8_perc_host_gate_passes -- --nocapture 2>&1)"
 echo "$OUT"
@@ -109,6 +129,10 @@ if ! echo "$OUT" | grep -q "$MARKER"; then
 fi
 if echo "$OUT" | grep -F 'RAYNU-V-M8-PERC-LUN-OK' | grep -q .; then
   echo "error: iron PERC-LUN-OK printed" >&2
+  exit 1
+fi
+if echo "$OUT" | grep -F 'RAYNU-V-M8-PERC-WRITE-OK' | grep -q .; then
+  echo "error: iron PERC-WRITE-OK printed" >&2
   exit 1
 fi
 echo "$MARKER"

@@ -261,6 +261,29 @@ fn fwstate_load_is_one_harpoon_and_does_not_bus_master() {
         u64::from_be_bytes(tail[0x22..0x2A].try_into().unwrap()),
         last
     );
+    let wr = super::pack_ld_write16_last_polled(1, super::IRON_LD1_BYTES, 0x1006000).unwrap();
+    assert_eq!(wr[0], super::MFI_CMD_LD_SCSI_IO);
+    assert_eq!(wr[2], super::MFI_CMD_STATUS_POLL);
+    assert!(super::cdb_is_single_write16(&wr[0x20..0x30]));
+    assert!(super::frame_is_write(&wr));
+    assert!(!super::frame_is_read(&wr));
+    assert_eq!(
+        u64::from_be_bytes(wr[0x22..0x2A].try_into().unwrap()),
+        last
+    );
+    let wflags = u16::from_le_bytes(wr[0x10..0x12].try_into().unwrap());
+    assert_ne!(wflags & super::MFI_FRAME_DIR_WRITE, 0);
+    assert_eq!(wflags & super::MFI_FRAME_DIR_READ, 0);
+    assert!(super::pack_ld_write16_last_polled(1, super::IRON_LD0_BYTES, 0x1006000).is_none());
+    assert_eq!(
+        super::pack_ld_write16(1, 0, 1, 0x1006000, 512),
+        Err(super::FrameError::Lba0)
+    );
+    let sector = super::perc_write_sector();
+    assert!(super::perc_write_readback_matches(&sector));
+    assert_eq!(&sector[..16], b"RAYNU-SPARE-WR16");
+    assert!(sector[16..].iter().all(|b| *b == 0));
+    assert!(!super::perc_write_readback_matches(&[0u8; 512]));
     assert_eq!(super::perc_spare_bytes(), 0);
     let mut scratch = [0u8; 512];
     assert!(!super::perc_spare_read(0, &mut scratch));

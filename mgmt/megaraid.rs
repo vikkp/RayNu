@@ -22,18 +22,29 @@
 //! target 0 is UBUNTU0 (`429496467456` bytes) and target 1 is RAYNU-SPARE
 //! (`3169417691136` bytes, `pick=1`). This EFI then posts one READ(16) of
 //! LBA 0 and, only if that status is 0, one READ(16) of the last LBA.
-//! Both are one 512-byte block, spare only. If both return 0, the spare
-//! is offered as a read-only virtio-blk at `00:04.0`. Every post is a
+//! Both are one 512-byte block, spare only. If both return 0, this EFI
+//! posts one WRITE(16) of the spare's last LBA, then reads that LBA back.
+//! The payload is 16 bytes `RAYNU-SPARE-WR16` and 496 zeros. LBA 0 is not
+//! written. A non-zero status or a mismatch does not retry. The spare is
+//! still offered as a read-only virtio-blk at `00:04.0`. Every post is a
 //! single 64-bit store to the low inbound queue port (`0xC0`). It does
-//! not ring the doorbell, write a block, or change
+//! not ring the doorbell, and it does not change
 //! [`crate::mgmt::durable_lun::pick_durable_lun`].
 //! The boot disk stays the Toshiba. `RAYNU-V-M8-PERC-LUN-OK` prints only
-//! after a guest read of that virtio device succeeds, and that line uses
+//! after a guest read of that virtio device succeeds. `RAYNU-V-M8-PERC-WRITE-OK`
+//! prints only after the last-LBA readback matches. Both lines use
 //! `write_line_nowait` because Linux earlycon hushes `write_line`.
 
 /// Iron COM2 close: a READ of RAYNU-SPARE lived, and the LD was attached.
 /// Host/CI/nested must never print this.
 pub const M8_PERC_LUN_OK_MARKER: &str = "RAYNU-V-M8-PERC-LUN-OK";
+
+/// Iron COM2 close: one WRITE(16) of the spare's last LBA read back the
+/// lab signature. Host/CI/nested must never print this. LBA 0 is not this write.
+pub const M8_PERC_WRITE_OK_MARKER: &str = "RAYNU-V-M8-PERC-WRITE-OK";
+
+/// First 16 bytes of the one sector this image may write. The other 496 are zero.
+pub const PERC_WRITE_SIG: [u8; 16] = *b"RAYNU-SPARE-WR16";
 
 /// Host/CI: frames pack, the size fence keeps UBUNTU0, and reset stays forbidden.
 pub const M8_PERC_HOST_OK_MARKER: &str = "RAYNU-V-M8-PERC-HOST-OK";
@@ -70,7 +81,7 @@ pub fn perc_spare_read(lba: u64, buf: &mut [u8]) -> bool {
 
 /// Honesty: a firmware-state load is not a doorbell and not the iron marker.
 pub const PERC_HOST_RESIDUAL_NOTE: &str =
-    "residual: M8.7 Harpoon status is scratch_pad_0; outbound_msg_0 is the xscale register; READY nibble posts one IOC init and one LD list to inbound_low_queue_port; DMA is eight frame-pool pages below 4GiB; READ(16) of LBA 0 then the last LBA on the spare only; read-only virtio 00:04.0 after both status 0; not iron RAYNU-V-M8-PERC-LUN-OK until a guest read; no doorbell; no WRITE; durable_lun still skip PERC; QEMU has no H740P; do not format UBUNTU0; do not partition RAYNU-SPARE";
+    "residual: M8.7 Harpoon status is scratch_pad_0; outbound_msg_0 is the xscale register; READY nibble posts one IOC init and one LD list to inbound_low_queue_port; DMA is eight frame-pool pages below 4GiB; READ(16) of LBA 0 then the last LBA on the spare only; one WRITE(16) of that last LBA then a readback; LBA 0 is not written; read-only virtio 00:04.0 after both status 0; not iron RAYNU-V-M8-PERC-LUN-OK until a guest read; not iron RAYNU-V-M8-PERC-WRITE-OK until readback matches; no doorbell; durable_lun still skip PERC; QEMU has no H740P; do not format UBUNTU0; do not partition RAYNU-SPARE";
 
 /// 64-byte MFI frame (`MEGAMFI_FRAME_SIZE`).
 pub const MFI_FRAME_BYTES: usize = 64;
@@ -256,6 +267,8 @@ pub enum ParseError {
 pub enum FrameError {
     NotOneBlock,
     Length,
+    /// WRITE(16) of LBA 0 is refused. The empty spare's first sector stays zero.
+    Lba0,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -446,6 +459,32 @@ pub fn spare_last_lba(size_bytes: u64) -> Option<u64> {
     Some(size_bytes / 512 - 1)
 }
 
+/// Last LBA of a spare-class LD, and only when that LBA is not 0.
+/// UBUNTU0, the whole array, and a one-sector disk all return `None`.
+pub fn spare_write_lba(size_bytes: u64) -> Option<u64> {
+    if classify_ld_bytes(size_bytes) != LdClass::Spare {
+        return None;
+    }
+    let lba = spare_last_lba(size_bytes)?;
+    if lba == 0 {
+        None
+    } else {
+        Some(lba)
+    }
+}
+
+/// 512-byte payload for the one allowed write. Signature, then zeros.
+pub fn perc_write_sector() -> [u8; 512] {
+    let mut sector = [0u8; 512];
+    sector[..PERC_WRITE_SIG.len()].copy_from_slice(&PERC_WRITE_SIG);
+    sector
+}
+
+/// True when a readback begins with [`PERC_WRITE_SIG`].
+pub fn perc_write_readback_matches(buf: &[u8]) -> bool {
+    buf.len() >= PERC_WRITE_SIG.len() && buf[..PERC_WRITE_SIG.len()] == PERC_WRITE_SIG
+}
+
 /// Polled one-block READ(16). Sense stays inside the data page.
 /// `data_phys` is the 512-byte payload. Sense is the next 32 bytes.
 pub fn pack_ld_read16_polled(
@@ -470,6 +509,76 @@ pub fn pack_ld_read16_polled(
         return None;
     }
     if flags & MFI_FRAME_DIR_WRITE != 0 {
+        return None;
+    }
+    Some(f)
+}
+
+/// One-block WRITE(16). LBA 0 is refused. Direction is write, not read.
+pub fn pack_ld_write16(
+    target_id: u8,
+    lba: u64,
+    blocks: u32,
+    data_phys: u64,
+    data_bytes: u32,
+) -> Result<[u8; MFI_FRAME_BYTES], FrameError> {
+    if lba == 0 {
+        return Err(FrameError::Lba0);
+    }
+    if blocks != 1 {
+        return Err(FrameError::NotOneBlock);
+    }
+    if data_bytes != 512 {
+        return Err(FrameError::Length);
+    }
+    let mut f = [0u8; MFI_FRAME_BYTES];
+    f[0] = MFI_CMD_LD_SCSI_IO;
+    f[4] = target_id;
+    f[6] = 16;
+    f[7] = 1;
+    put_u16(&mut f, 0x10, MFI_FRAME_SGL64 | MFI_FRAME_DIR_WRITE);
+    put_u16(&mut f, 0x12, 30);
+    put_u32(&mut f, 0x14, data_bytes);
+    let mut cdb = [0u8; 16];
+    cdb[0] = SCSI_WRITE_16;
+    put_u64_be(&mut cdb, 2, lba);
+    put_u32_be(&mut cdb, 10, blocks);
+    f[0x20..0x30].copy_from_slice(&cdb);
+    put_u64(&mut f, 0x30, data_phys);
+    put_u32(&mut f, 0x38, data_bytes);
+    Ok(f)
+}
+
+/// Polled WRITE(16) of the spare's last LBA. UBUNTU0 sizes return `None`.
+/// Sense stays in the 32 bytes after the 512-byte payload, same as the READ.
+pub fn pack_ld_write16_last_polled(
+    target_id: u8,
+    size_bytes: u64,
+    data_phys: u64,
+) -> Option<[u8; MFI_FRAME_BYTES]> {
+    let lba = spare_write_lba(size_bytes)?;
+    if lba == 0
+        || data_phys == 0
+        || data_phys >= 0x1_0000_0000
+        || data_phys & 0x1FF != 0
+        || data_phys.saturating_add(512 + 32) > 0x1_0000_0000
+    {
+        return None;
+    }
+    let mut f = pack_ld_write16(target_id, lba, 1, data_phys, 512).ok()?;
+    f[1] = 32;
+    f[2] = MFI_CMD_STATUS_POLL;
+    put_u64(&mut f, 0x18, data_phys + 512);
+    let flags = u16::from_le_bytes(f[0x10..0x12].try_into().unwrap());
+    put_u16(&mut f, 0x10, flags | MFI_FRAME_DONT_POST_IN_REPLY_QUEUE);
+    if !frame_is_write(&f) || frame_is_read(&f) || f[0] != MFI_CMD_LD_SCSI_IO {
+        return None;
+    }
+    if !cdb_is_single_write16(&f[0x20..0x30]) {
+        return None;
+    }
+    let cdb_lba = u64::from_be_bytes(f[0x22..0x2A].try_into().ok()?);
+    if cdb_lba != lba || cdb_lba == 0 {
         return None;
     }
     Some(f)
@@ -678,10 +787,29 @@ pub fn frame_is_read(frame: &[u8]) -> bool {
     flags & MFI_FRAME_DIR_READ != 0 && flags & MFI_FRAME_DIR_WRITE == 0
 }
 
+/// True when the 16-byte CDB is a single-block WRITE(16) and the LBA is not 0.
+pub fn cdb_is_single_write16(cdb: &[u8]) -> bool {
+    cdb.len() >= 16
+        && cdb[0] == SCSI_WRITE_16
+        && u64::from_be_bytes(cdb[2..10].try_into().unwrap()) != 0
+        && u32::from_be_bytes(cdb[10..14].try_into().unwrap()) == 1
+}
+
+pub fn frame_is_write(frame: &[u8]) -> bool {
+    if frame.len() < 0x12 {
+        return false;
+    }
+    let flags = u16::from_le_bytes(frame[0x10..0x12].try_into().unwrap());
+    flags & MFI_FRAME_DIR_WRITE != 0 && flags & MFI_FRAME_DIR_READ == 0
+}
+
 pub fn host_never_prints_iron_perc_ok() -> bool {
     M8_PERC_LUN_OK_MARKER == "RAYNU-V-M8-PERC-LUN-OK"
+        && M8_PERC_WRITE_OK_MARKER == "RAYNU-V-M8-PERC-WRITE-OK"
         && M8_PERC_HOST_OK_MARKER == "RAYNU-V-M8-PERC-HOST-OK"
         && M8_PERC_HOST_OK_MARKER != M8_PERC_LUN_OK_MARKER
+        && M8_PERC_HOST_OK_MARKER != M8_PERC_WRITE_OK_MARKER
+        && M8_PERC_LUN_OK_MARKER != M8_PERC_WRITE_OK_MARKER
         && !adapter_reset_is_allowed()
 }
 
@@ -726,6 +854,16 @@ pub fn prop_perc_host_package() -> bool {
         && pack_ld_read16_polled(1, 0, 0x1006000).is_some()
         && pack_ld_read16_polled(1, spare_last_lba(IRON_LD1_BYTES).unwrap_or(0), 0x1006000)
             .is_some()
+        && spare_write_lba(IRON_LD1_BYTES) == spare_last_lba(IRON_LD1_BYTES)
+        && spare_write_lba(IRON_LD0_BYTES).is_none()
+        && spare_write_lba(LAB_UBUNTU0_BYTES).is_none()
+        && spare_write_lba(LAB_WHOLE_ARRAY_BYTES).is_none()
+        && pack_ld_write16(1, 0, 1, 0x1006000, 512) == Err(FrameError::Lba0)
+        && pack_ld_write16_last_polled(1, IRON_LD1_BYTES, 0x1006000).is_some()
+        && pack_ld_write16_last_polled(1, IRON_LD0_BYTES, 0x1006000).is_none()
+        && pack_ld_write16_last_polled(1, IRON_LD1_BYTES, 0).is_none()
+        && perc_write_readback_matches(&perc_write_sector())
+        && !perc_write_readback_matches(&[0u8; 16])
         && pack_ld_read16_polled(1, 0, 0).is_none()
         && pack_ld_read16_polled(1, 0, 0x1_0000_0000).is_none()
         && classify_ld_bytes(LAB_WHOLE_ARRAY_BYTES) == LdClass::Other
@@ -814,6 +952,10 @@ pub fn prop_perc_host_package() -> bool {
         && plan.contains("skip PERC")
         && plan.contains("scratch_pad_0")
         && plan.contains("IOC init")
+        && plan.contains("WRITE(16)")
+        && plan.contains("LBA 0 is not written")
+        && plan.contains(M8_PERC_WRITE_OK_MARKER)
+        && PERC_HOST_RESIDUAL_NOTE.contains("LBA 0 is not written")
 }
 
 fn put_u16(buf: &mut [u8], off: usize, v: u16) {
@@ -1408,6 +1550,9 @@ fn perc_fusion_post(bar: u64, bus: u8, dev: u8, func: u8, base: u64) {
         return;
     }
 
+    // The read chain already lived. A write miss still arms read-only virtio.
+    perc_spare_write_last(bar, bus, dev, func, target, bytes, dcmd_phys, data_phys);
+
     serial::write_str("boot: perc virtio ro id=");
     write_dec(u32::from(target));
     serial::write_str(" bytes=");
@@ -1416,10 +1561,134 @@ fn perc_fusion_post(bar: u64, bus: u8, dev: u8, func: u8, base: u64) {
     perc_spare_arm(bar, target, bytes, data_phys, dcmd_phys);
 }
 
+/// One polled WRITE(16) of the spare's last LBA, then a READ of that LBA.
+///
+/// LBA 0 is not posted. A failed pack, status, or readback returns without
+/// the iron marker. The caller still arms read-only virtio.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn perc_spare_write_last(
+    bar: u64,
+    bus: u8,
+    dev: u8,
+    func: u8,
+    target: u8,
+    bytes: u64,
+    frame_phys: u64,
+    data_phys: u64,
+) {
+    use crate::boot::serial;
+    let Some(lba) = spare_write_lba(bytes) else {
+        serial::write_line("boot: perc write skip lba (not PERC-WRITE-OK)");
+        return;
+    };
+    serial::write_str("boot: perc write post bdf=");
+    write_bdf(bus, dev, func);
+    serial::write_str(" port=c0 id=");
+    write_dec(u32::from(target));
+    serial::write_str(" lba=");
+    write_dec64(lba);
+    serial::write_str(" blocks=1 frame=0x");
+    write_hex64(frame_phys);
+    serial::write_str(" data=0x");
+    write_hex64(data_phys);
+    serial::write_line(" (not PERC-WRITE-OK)");
+
+    let Some((st, timed_out)) = issue_ld_write16_last(bar, target, bytes, frame_phys, data_phys)
+    else {
+        serial::write_line("boot: perc write skip frame (not PERC-WRITE-OK)");
+        return;
+    };
+    serial::write_str("boot: perc write status=0x");
+    write_hex8(st);
+    serial::write_str(" to=");
+    serial::write_byte(if timed_out { b'1' } else { b'0' });
+    serial::write_line(" (not PERC-WRITE-OK)");
+    if timed_out || st != MFI_STAT_OK {
+        serial::write_line("boot: perc write rd skip status (not PERC-WRITE-OK)");
+        return;
+    }
+
+    serial::write_str("boot: perc write rd post lba=");
+    write_dec64(lba);
+    serial::write_line(" (not PERC-WRITE-OK)");
+    let Some((rst, rto)) = issue_ld_read16(bar, target, lba, frame_phys, data_phys) else {
+        serial::write_line("boot: perc write rd skip frame (not PERC-WRITE-OK)");
+        return;
+    };
+    serial::write_str("boot: perc write rd status=0x");
+    write_hex8(rst);
+    serial::write_str(" to=");
+    serial::write_byte(if rto { b'1' } else { b'0' });
+    serial::write_line(" (not PERC-WRITE-OK)");
+    if rto || rst != MFI_STAT_OK {
+        return;
+    }
+    core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+    // SAFETY: the READ(16) just completed into the 512-byte payload page.
+    // Only the first 16 bytes are compared to the lab signature.
+    // KANI-TARGET: host tests cover the signature compare, not this load.
+    let sig = unsafe { core::slice::from_raw_parts(data_phys as *const u8, 16) };
+    if perc_write_readback_matches(sig) {
+        serial::write_str_nowait("boot: perc write rd lba=");
+        write_dec64_nowait(lba);
+        serial::write_line_nowait(" match");
+        serial::write_line_nowait(M8_PERC_WRITE_OK_MARKER);
+    } else {
+        serial::write_str("boot: perc write rd mismatch sig=");
+        for b in sig {
+            write_hex8(*b);
+        }
+        serial::write_line(" (not PERC-WRITE-OK)");
+    }
+}
+
+/// One polled WRITE(16) of [`spare_write_lba`]. Returns `(cmd_status, timed_out)`.
+///
+/// Copies the lab sector into the payload page before the MFA store.
+/// Sense is the next 32 bytes. No doorbell. LBA 0 is not encoded.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn issue_ld_write16_last(
+    bar: u64,
+    target: u8,
+    size_bytes: u64,
+    frame_phys: u64,
+    data_phys: u64,
+) -> Option<(u8, bool)> {
+    let lba = spare_write_lba(size_bytes)?;
+    if lba == 0 {
+        return None;
+    }
+    let wr = pack_ld_write16_last_polled(target, size_bytes, data_phys)?;
+    let desc = pack_mfa_descriptor(frame_phys)?;
+    let sector = perc_write_sector();
+    // SAFETY: both addresses are pages inside the eight-page frame-pool
+    // allocation, identity-mapped after EBS. The payload is the lab sector.
+    // The CDB is WRITE(16) of the spare last LBA. No doorbell store. No H840
+    // pointer. LBA 0 is not in the frame.
+    // KANI-TARGET: host tests cover the packed WRITE, not this copy.
+    unsafe {
+        let frame = frame_phys as *mut u8;
+        core::ptr::write_bytes(frame, 0, 4096);
+        core::ptr::copy_nonoverlapping(wr.as_ptr(), frame, wr.len());
+        core::ptr::copy_nonoverlapping(sector.as_ptr(), data_phys as *mut u8, 512);
+        core::ptr::write_bytes((data_phys + 512) as *mut u8, 0, 32);
+    }
+    core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+    // SAFETY: one 64-bit store to the low inbound queue port. Not doorbell 0x00.
+    unsafe {
+        core::ptr::write_volatile(
+            (bar + u64::from(MFI_INBOUND_LOW_QUEUE_PORT)) as *mut u64,
+            desc,
+        );
+    }
+    Some(poll_mfi_status(frame_phys as *mut u8))
+}
+
 /// One polled READ(16). Returns `(cmd_status, timed_out)`.
 ///
 /// Reuses the DCMD page for the frame and the LD page for 512 bytes plus
-/// 32 bytes of sense. Reply queue and RDPQ stay. No doorbell. No WRITE.
+/// 32 bytes of sense. Reply queue and RDPQ stay. No doorbell. This function
+/// posts READ(16) only.
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn issue_ld_read16(
     bar: u64,
