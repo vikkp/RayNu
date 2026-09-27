@@ -8,6 +8,11 @@
 //! Product ISO window also reveals a **read-only** virtio-blk at `00:03.0`
 //! backed by the same ISO bytes (alpine-virt initramfs has virtio, not
 //! `ata_piix`; `/dev/vdb` is ISO9660 so `nlplug-findfs` can find media).
+//! When both H740P spare READs return status 0, a third read-only
+//! virtio-blk appears at `00:04.0` (`/dev/vdc`). It does not join the
+//! PIT / DRIVER_OK pair (`00:02.0` and `00:03.0`). Absent or failed
+//! READs leave `00:04.0` hidden. Not `RAYNU-V-M8-PERC-LUN-OK` until a
+//! guest IN of that device succeeds.
 //! Nested VT-x: this OVMF PEI only `inw` Device ID of `00:00.0` into
 //! `HostBridgeDevId`. Iron `c1476d3` served virtio `0x1042` there, so PEI
 //! skipped the stock QEMU map (`PlatformMemMapInitialization` IoMemory HOB
@@ -50,6 +55,9 @@ pub const GUEST_VIRTIO_PCI_FN: u8 = 0;
 /// Read-only product ISO virtio-blk. Not `00:00.0`. Not slot 2 (install disk).
 pub const GUEST_VIRTIO_ISO_PCI_DEV: u8 = 3;
 pub const GUEST_VIRTIO_ISO_PCI_FN: u8 = 0;
+/// Read-only RAYNU-SPARE virtio-blk. Hidden until both host READs return 0.
+pub const GUEST_VIRTIO_SPARE_PCI_DEV: u8 = 4;
+pub const GUEST_VIRTIO_SPARE_PCI_FN: u8 = 0;
 /// Slot 0 is always the i440FX host-bridge DID PEI/DXE probe.
 pub const GUEST_SLOT0_PCI_DEV: u8 = 0;
 pub const GUEST_SLOT0_PCI_FN: u8 = 0;
@@ -64,6 +72,8 @@ pub const GUEST_VIRTIO_PCI_SUBSYS: u16 = 0x0002;
 pub const GUEST_VIRTIO_BAR0_DEFAULT: u32 = 0xFE00_0000;
 /// Slot 3 ISO BAR — same 2 MiB trap page as [`GUEST_VIRTIO_BAR0_DEFAULT`].
 pub const GUEST_VIRTIO_ISO_BAR0_DEFAULT: u32 = 0xFE00_1000;
+/// Slot 4 spare BAR — same 2 MiB trap page. Not the install disk.
+pub const GUEST_VIRTIO_SPARE_BAR0_DEFAULT: u32 = 0xFE00_2000;
 pub const GUEST_VIRTIO_BAR0_SIZE: u32 = 0x1000;
 /// PCI BAR size probe result for a 4 KiB memory BAR.
 pub const GUEST_VIRTIO_BAR0_SIZE_MASK: u32 = 0xFFFF_F000;
@@ -130,6 +140,11 @@ struct VirtioPci {
     /// Last guest avail.idx seen by drain (COM2 stall dump).
     seen_avail: u16,
     readonly: bool,
+    /// 0 = install disk, 1 = product ISO, 2 = PERC spare.
+    /// A readonly device with kind 0 still reports the ISO size (older tests).
+    cap_kind: u8,
+    /// Non-zero overrides the readonly→ISO default BAR during sizing.
+    default_bar: u32,
     /// Last completed request (COM2 stall dump): avail head, status GPA,
     /// header type and sector. virtio stall dump ring.
     last_head: u16,
@@ -164,6 +179,8 @@ impl VirtioPci {
             notify_pending: false,
             seen_avail: 0,
             readonly: false,
+            cap_kind: 0,
+            default_bar: 0,
             last_head: 0,
             last_status_gpa: 0,
             last_ty: 0,
@@ -186,6 +203,7 @@ struct VirtioBox {
     pci_addr: u32,
     disk: VirtioPci,
     iso: VirtioPci,
+    spare: VirtioPci,
 }
 
 impl VirtioBox {
@@ -194,6 +212,7 @@ impl VirtioBox {
             pci_addr: 0,
             disk: VirtioPci::empty(),
             iso: VirtioPci::empty(),
+            spare: VirtioPci::empty(),
         }
     }
 }
@@ -266,6 +285,14 @@ fn with_iso<R>(f: impl FnOnce(&mut VirtioPci) -> R) -> R {
     with_box(|b| f(&mut b.iso))
 }
 
+fn with_spare<R>(f: impl FnOnce(&mut VirtioPci) -> R) -> R {
+    with_box(|b| f(&mut b.spare))
+}
+
+/// True only while [`drain_spare`] is inside [`process_blk_queue`].
+/// Install-disk and ISO drains leave this clear.
+static PERC_XFER: AtomicBool = AtomicBool::new(false);
+
 pub fn pci_addr_selects_slot0(addr: u32) -> bool {
     if (addr & 0x8000_0000) == 0 {
         return false;
@@ -290,11 +317,22 @@ pub fn pci_addr_selects_virtio_iso(addr: u32) -> bool {
     bus == GUEST_VIRTIO_PCI_BUS && dev == GUEST_VIRTIO_ISO_PCI_DEV && fun == GUEST_VIRTIO_ISO_PCI_FN
 }
 
-/// Slot 0 host-bridge DID or latched virtio `00:02.0` / `00:03.0`.
+pub fn pci_addr_selects_virtio_spare(addr: u32) -> bool {
+    if (addr & 0x8000_0000) == 0 {
+        return false;
+    }
+    let (bus, dev, fun, _) = pci_bdf(addr);
+    bus == GUEST_VIRTIO_PCI_BUS
+        && dev == GUEST_VIRTIO_SPARE_PCI_DEV
+        && fun == GUEST_VIRTIO_SPARE_PCI_FN
+}
+
+/// Slot 0 host-bridge DID or latched virtio `00:02.0` / `00:03.0` / `00:04.0`.
 pub fn pci_addr_selects_owned(addr: u32) -> bool {
     pci_addr_selects_slot0(addr)
         || pci_addr_selects_virtio(addr)
         || pci_addr_selects_virtio_iso(addr)
+        || pci_addr_selects_virtio_spare(addr)
 }
 
 /// PCI config address for the guest virtio-blk function (`00:02.0`).
@@ -311,6 +349,14 @@ pub fn pci_config_addr_iso() -> u32 {
         | (u32::from(GUEST_VIRTIO_PCI_BUS) << 16)
         | (u32::from(GUEST_VIRTIO_ISO_PCI_DEV) << 11)
         | (u32::from(GUEST_VIRTIO_ISO_PCI_FN) << 8)
+}
+
+/// PCI config address for the read-only spare virtio-blk (`00:04.0`).
+pub fn pci_config_addr_spare() -> u32 {
+    0x8000_0000
+        | (u32::from(GUEST_VIRTIO_PCI_BUS) << 16)
+        | (u32::from(GUEST_VIRTIO_SPARE_PCI_DEV) << 11)
+        | (u32::from(GUEST_VIRTIO_SPARE_PCI_FN) << 8)
 }
 pub fn pci_config_addr_slot0() -> u32 {
     0x8000_0000
@@ -427,6 +473,8 @@ pub fn present() -> bool {
         *b = VirtioBox::empty();
         b.disk.visible = true;
         b.disk.bar0 = GUEST_VIRTIO_BAR0_DEFAULT;
+        b.disk.default_bar = GUEST_VIRTIO_BAR0_DEFAULT;
+        b.disk.cap_kind = 0;
         b.disk.queues_armed = queues;
         b.disk.queue_size = QUEUE_MAX;
         if queues {
@@ -437,10 +485,22 @@ pub fn present() -> bool {
                     ISO_LEN.store(n as u64, Ordering::Release);
                     b.iso.visible = true;
                     b.iso.bar0 = GUEST_VIRTIO_ISO_BAR0_DEFAULT;
+                    b.iso.default_bar = GUEST_VIRTIO_ISO_BAR0_DEFAULT;
+                    b.iso.cap_kind = 1;
                     b.iso.queues_armed = true;
                     b.iso.queue_size = QUEUE_MAX;
                     b.iso.readonly = true;
                 }
+            }
+            let spare_bytes = crate::mgmt::megaraid::perc_spare_bytes();
+            if spare_bytes >= SECTOR as u64 {
+                b.spare.visible = true;
+                b.spare.bar0 = GUEST_VIRTIO_SPARE_BAR0_DEFAULT;
+                b.spare.default_bar = GUEST_VIRTIO_SPARE_BAR0_DEFAULT;
+                b.spare.cap_kind = 2;
+                b.spare.queues_armed = true;
+                b.spare.queue_size = QUEUE_MAX;
+                b.spare.readonly = true;
             }
         }
         b.iso.visible
@@ -625,6 +685,12 @@ pub fn pci_read_data(port: u16, size: u8) -> u32 {
             }
             return shift_cfg(virtio_dword(&b.iso, aligned), off, size);
         }
+        if pci_addr_selects_virtio_spare(addr) {
+            if !b.spare.visible || pei_host_bridge_did() {
+                return 0xFFFF_FFFF;
+            }
+            return shift_cfg(virtio_dword(&b.spare, aligned), off, size);
+        }
         if !pci_addr_selects_virtio(addr) {
             return 0xFFFF_FFFF;
         }
@@ -671,6 +737,14 @@ pub fn pci_write_data(port: u16, size: u8, val: u32) {
             } else if off == 0x10 {
                 apply_bar_write(&mut b.iso, GUEST_VIRTIO_ISO_BAR0_DEFAULT, size, val);
             }
+            return;
+        }
+        if pci_addr_selects_virtio_spare(addr) && b.spare.visible {
+            if off == 0x04 {
+                b.spare.pci_cmd = (val as u16) | 0x0002;
+            } else if off == 0x10 {
+                apply_bar_write(&mut b.spare, GUEST_VIRTIO_SPARE_BAR0_DEFAULT, size, val);
+            }
         }
     });
 }
@@ -686,7 +760,9 @@ fn mmio_bar_base_locked(v: &VirtioPci) -> u64 {
     if !v.queues_armed {
         return 0;
     }
-    let default = if v.readonly {
+    let default = if v.default_bar != 0 {
+        v.default_bar
+    } else if v.readonly {
         GUEST_VIRTIO_ISO_BAR0_DEFAULT
     } else {
         GUEST_VIRTIO_BAR0_DEFAULT
@@ -704,13 +780,21 @@ pub fn mmio_bar_base() -> u64 {
     with_virtio(|v| mmio_bar_base_locked(v))
 }
 
-/// Disk then ISO BAR GPAs. 0 when that device is off / queues unarmed.
-pub fn mmio_programmed_bar_gpas() -> [u64; 2] {
-    [mmio_bar_base(), mmio_iso_bar_base()]
+/// Disk, ISO, then spare BAR GPAs. 0 when that device is off / queues unarmed.
+pub fn mmio_programmed_bar_gpas() -> [u64; 3] {
+    [
+        mmio_bar_base(),
+        mmio_iso_bar_base(),
+        mmio_spare_bar_base(),
+    ]
 }
 
 fn mmio_iso_bar_base() -> u64 {
     with_iso(|v| mmio_bar_base_locked(v))
+}
+
+fn mmio_spare_bar_base() -> u64 {
+    with_spare(|v| mmio_bar_base_locked(v))
 }
 
 fn bar_covers(bar: u64, gpa: u64) -> bool {
@@ -727,11 +811,19 @@ pub fn mmio_bar_base_for_gpa(gpa: u64) -> Option<u64> {
     if bar_covers(iso, gpa) {
         return Some(iso);
     }
+    let spare = mmio_spare_bar_base();
+    if bar_covers(spare, gpa) {
+        return Some(spare);
+    }
     None
 }
 
 pub fn is_virtio_iso_bar_gpa(gpa: u64) -> bool {
     bar_covers(mmio_iso_bar_base(), gpa)
+}
+
+fn is_virtio_spare_bar_gpa(gpa: u64) -> bool {
+    bar_covers(mmio_spare_bar_base(), gpa)
 }
 
 /// GPA in a 4 KiB virtio BAR. False for the lab enum stub.
@@ -750,7 +842,11 @@ pub fn is_virtio_bar_2m_gpa(gpa: u64) -> bool {
         return true;
     }
     let iso = mmio_iso_bar_base();
-    iso != 0 && page == (iso & !0x1F_FFFF)
+    if iso != 0 && page == (iso & !0x1F_FFFF) {
+        return true;
+    }
+    let spare = mmio_spare_bar_base();
+    spare != 0 && page == (spare & !0x1F_FFFF)
 }
 
 fn features_for(v: &VirtioPci, sel: u32) -> u32 {
@@ -769,26 +865,28 @@ fn features_for(v: &VirtioPci, sel: u32) -> u32 {
 }
 
 fn capacity_sectors_for(v: &VirtioPci) -> u64 {
-    if v.readonly {
-        ISO_LEN.load(Ordering::Acquire) / SECTOR as u64
-    } else {
-        DISK_LEN.load(Ordering::Acquire) / SECTOR as u64
-    }
+    let bytes = match v.cap_kind {
+        2 => crate::mgmt::megaraid::perc_spare_bytes(),
+        1 => ISO_LEN.load(Ordering::Acquire),
+        _ if v.readonly => ISO_LEN.load(Ordering::Acquire),
+        _ => DISK_LEN.load(Ordering::Acquire),
+    };
+    bytes / SECTOR as u64
 }
 
 /// Read virtio-pci BAR MMIO (install disk).
 pub fn mmio_read(off: u16, size: u8) -> u64 {
-    mmio_read_dev(false, off, size)
+    mmio_read_dev(VirtioFn::Disk, off, size)
 }
 
 pub fn mmio_read_iso(off: u16, size: u8) -> u64 {
-    mmio_read_dev(true, off, size)
+    mmio_read_dev(VirtioFn::Iso, off, size)
 }
 
-/// Either product-ISO virtio function still has ISR=1 (INTx asserted).
+/// Either product-ISO virtio function, or the spare, still has ISR=1.
 /// linux virtio INTx reassert. Not `ISO-INSTALL-OK`.
 pub fn virtio_isr_latched() -> bool {
-    with_box(|b| b.disk.isr != 0 || b.iso.isr != 0)
+    with_box(|b| b.disk.isr != 0 || b.iso.isr != 0 || b.spare.isr != 0)
 }
 
 /// COM2 snapshot when virtio MMIO goes quiet during apk. virtio stall dump.
@@ -922,6 +1020,7 @@ pub fn virtio_stall_pulse_intx() {
     with_box(|b| {
         b.disk.isr = 1;
         b.iso.isr = 1;
+        b.spare.isr = 1;
     });
     crate::devices::guest_irq::raise_virtio();
     crate::devices::guest_irq::raise_virtio_iso();
@@ -931,8 +1030,8 @@ pub fn virtio_stall_pulse_intx() {
 /// high if the sibling still has ISR=1. apk overlay uses vda+vdb on the
 /// same INTx. virtio shared INTx. Not `ISO-INSTALL-OK`.
 pub fn reassert_virtio_shared_intx() {
-    let (disk, iso) = with_box(|b| (b.disk.isr != 0, b.iso.isr != 0));
-    if disk {
+    let (disk, iso, spare) = with_box(|b| (b.disk.isr != 0, b.iso.isr != 0, b.spare.isr != 0));
+    if disk || spare {
         crate::devices::guest_irq::raise_virtio();
     }
     if iso {
@@ -949,18 +1048,26 @@ pub fn virtio_shared_intx_hold(sibling_isr: bool) -> bool {
     sibling_isr
 }
 
-fn mmio_read_dev(iso: bool, off: u16, size: u8) -> u64 {
-    let val = if iso {
-        with_iso(|v| mmio_read_locked(v, off, size))
-    } else {
-        with_virtio(|v| mmio_read_locked(v, off, size))
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum VirtioFn {
+    Disk,
+    Iso,
+    Spare,
+}
+
+fn mmio_read_dev(which: VirtioFn, off: u16, size: u8) -> u64 {
+    let val = match which {
+        VirtioFn::Iso => with_iso(|v| mmio_read_locked(v, off, size)),
+        VirtioFn::Spare => with_spare(|v| mmio_read_locked(v, off, size)),
+        VirtioFn::Disk => with_virtio(|v| mmio_read_locked(v, off, size)),
     };
     if off == OFF_ISR {
         // virtio shared INTx hold: ISR read-to-clear is per-function;
-        // PIC 11 is the OR of both. Do not lower while the sibling is latched.
+        // PIC 11 is the OR of disk, ISO, and spare. Do not lower while a
+        // sibling is latched.
         if virtio_shared_intx_hold(virtio_isr_latched()) {
             reassert_virtio_shared_intx();
-        } else if iso {
+        } else if which == VirtioFn::Iso {
             crate::devices::guest_irq::lower_virtio_iso();
         } else {
             crate::devices::guest_irq::lower_virtio();
@@ -974,7 +1081,14 @@ pub fn mmio_read_at(gpa: u64, size: u8) -> u64 {
         return 0;
     };
     let off = (gpa.wrapping_sub(bar)) as u16;
-    mmio_read_dev(is_virtio_iso_bar_gpa(gpa), off, size)
+    let which = if is_virtio_spare_bar_gpa(gpa) {
+        VirtioFn::Spare
+    } else if is_virtio_iso_bar_gpa(gpa) {
+        VirtioFn::Iso
+    } else {
+        VirtioFn::Disk
+    };
+    mmio_read_dev(which, off, size)
 }
 
 /// One little-endian byte of virtio-pci common cfg (QEMU packed layout).
@@ -1062,11 +1176,11 @@ fn mmio_read_locked(v: &mut VirtioPci, off: u16, size: u8) -> u64 {
 
 /// Write virtio-pci BAR MMIO. Notify sets a pending bit; call [`drain_queue`].
 pub fn mmio_write(off: u16, size: u8, val: u64) {
-    mmio_write_dev(false, off, size, val);
+    mmio_write_dev(VirtioFn::Disk, off, size, val);
 }
 
 pub fn mmio_write_iso(off: u16, size: u8, val: u64) {
-    mmio_write_dev(true, off, size, val);
+    mmio_write_dev(VirtioFn::Iso, off, size, val);
 }
 
 pub fn mmio_write_at(gpa: u64, size: u8, val: u64) {
@@ -1074,14 +1188,21 @@ pub fn mmio_write_at(gpa: u64, size: u8, val: u64) {
         return;
     };
     let off = (gpa.wrapping_sub(bar)) as u16;
-    mmio_write_dev(is_virtio_iso_bar_gpa(gpa), off, size, val);
+    let which = if is_virtio_spare_bar_gpa(gpa) {
+        VirtioFn::Spare
+    } else if is_virtio_iso_bar_gpa(gpa) {
+        VirtioFn::Iso
+    } else {
+        VirtioFn::Disk
+    };
+    mmio_write_dev(which, off, size, val);
 }
 
-fn mmio_write_dev(iso: bool, off: u16, size: u8, val: u64) {
-    if iso {
-        with_iso(|v| mmio_write_locked(v, off, size, val));
-    } else {
-        with_virtio(|v| mmio_write_locked(v, off, size, val));
+fn mmio_write_dev(which: VirtioFn, off: u16, size: u8, val: u64) {
+    match which {
+        VirtioFn::Iso => with_iso(|v| mmio_write_locked(v, off, size, val)),
+        VirtioFn::Spare => with_spare(|v| mmio_write_locked(v, off, size, val)),
+        VirtioFn::Disk => with_virtio(|v| mmio_write_locked(v, off, size, val)),
     }
 }
 
@@ -1196,6 +1317,15 @@ fn blk_sector_rw_with(
 ) -> u8 {
     if ty == VIRTIO_BLK_T_FLUSH {
         return VIRTIO_BLK_S_OK;
+    }
+    if PERC_XFER.load(Ordering::Acquire) {
+        if ty != VIRTIO_BLK_T_IN || buf.is_empty() || buf.len() % SECTOR != 0 {
+            return VIRTIO_BLK_S_IOERR;
+        }
+        if crate::mgmt::megaraid::perc_spare_read(sector, buf) {
+            return VIRTIO_BLK_S_OK;
+        }
+        return VIRTIO_BLK_S_IOERR;
     }
     if allow_lun
         && crate::mgmt::durable_lun::durable_lun_serving()
@@ -1798,6 +1928,7 @@ fn take_queue(v: &mut VirtioPci) -> (bool, bool, u16, u16, u16, u64, u64, u64) {
 pub fn drain_queue(translate: impl Fn(u64) -> Option<u64>) -> u32 {
     let disk_n = drain_disk(&translate);
     drain_iso(&translate);
+    drain_spare(&translate);
     disk_n
 }
 
@@ -1910,6 +2041,50 @@ fn drain_iso(translate: &impl Fn(u64) -> Option<u64>) {
     }
     if n > 0 {
         ISO_READ.fetch_add(u64::from(n), Ordering::AcqRel);
+    }
+}
+
+/// Read-only spare at `00:04.0`. IN goes to the H740P mailbox.
+/// OUT is rejected. A hidden spare (bytes == 0) returns immediately.
+/// PIC 11 is the same line as the install disk. Not a doorbell.
+fn drain_spare(translate: &impl Fn(u64) -> Option<u64>) {
+    let (notified, enabled, qsize, last, used_i, desc, avail, used) =
+        with_spare(|v| take_queue(v));
+    if !enabled || crate::mgmt::megaraid::perc_spare_bytes() < SECTOR as u64 {
+        if notified {
+            crate::devices::guest_irq::raise_virtio();
+        }
+        return;
+    }
+    let mut dummy = [0u8; 1];
+    let mut last_avail = last;
+    let mut used_idx = used_i;
+    let mut last_req = LastReq::default();
+    PERC_XFER.store(true, Ordering::Release);
+    let (_n, nreq, avail_seen) = process_blk_queue(
+        qsize,
+        &mut last_avail,
+        &mut used_idx,
+        desc,
+        avail,
+        used,
+        &mut dummy,
+        translate,
+        true,
+        &mut last_req,
+    );
+    PERC_XFER.store(false, Ordering::Release);
+    with_spare(|v| {
+        v.last_avail = last_avail;
+        v.used_idx = used_idx;
+        v.seen_avail = avail_seen;
+        note_last_req(v, &last_req);
+        if nreq > 0 {
+            v.isr = 1;
+        }
+    });
+    if notified || nreq > 0 {
+        crate::devices::guest_irq::raise_virtio();
     }
 }
 

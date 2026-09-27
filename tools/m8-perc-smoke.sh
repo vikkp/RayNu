@@ -52,6 +52,22 @@ if ! grep -q 'boot: perc ioc' "$ROOT/mgmt/megaraid.rs"; then
   echo "error: missing IOC post line" >&2
   exit 1
 fi
+if ! grep -q 'fn pack_ld_read16_polled(' "$ROOT/mgmt/megaraid.rs"; then
+  echo "error: missing polled spare READ" >&2
+  exit 1
+fi
+if ! grep -q 'boot: perc read' "$ROOT/mgmt/megaraid.rs"; then
+  echo "error: missing spare READ line" >&2
+  exit 1
+fi
+if ! grep -q 'boot: perc read2' "$ROOT/mgmt/megaraid.rs"; then
+  echo "error: missing spare last-LBA READ line" >&2
+  exit 1
+fi
+if ! grep -q 'boot: perc virtio ro' "$ROOT/mgmt/megaraid.rs"; then
+  echo "error: missing read-only spare virtio line" >&2
+  exit 1
+fi
 if ! grep -q 'fn pci_cmd_for_fwstate_load(' "$ROOT/mgmt/megaraid.rs"; then
   echo "error: missing memory-space command policy" >&2
   exit 1

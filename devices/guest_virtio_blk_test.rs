@@ -3,7 +3,8 @@ use super::{
     is_virtio_bar_2m_gpa, is_virtio_bar_gpa, iso_visible, latch_dxe_virtio_did, mmio_decoded_len,
     mmio_effective_len, mmio_insn_bytes_this_page, mmio_read, mmio_read_iso, mmio_write,
     mmio_write_iso, pci_addr_selects_owned, pci_addr_selects_slot0, pci_addr_selects_virtio,
-    pci_addr_selects_virtio_iso, pci_config_addr, pci_config_addr_iso, pci_config_addr_slot0,
+    pci_addr_selects_virtio_iso, pci_addr_selects_virtio_spare, pci_config_addr,
+    pci_config_addr_iso, pci_config_addr_slot0, pci_config_addr_spare,
     pci_enumerated, pci_read_data, pci_write_addr, pci_write_data, pei_host_bridge_did, present,
     process_blk_queue_in, process_iso_queue_in, queues_armed, raynu_f_disk_read,
     raynu_f_disk_write, reset, reset_keep_disk, take_marker, virtio_disk_evidence,
@@ -34,6 +35,9 @@ fn pci_bdf_is_probe_slot_not_ide() {
     assert_eq!(pci_bdf(pci_config_addr_iso()), (0, 3, 0, 0));
     assert!(pci_addr_selects_virtio_iso(pci_config_addr_iso()));
     assert!(pci_addr_selects_owned(pci_config_addr_iso()));
+    assert_eq!(pci_bdf(pci_config_addr_spare()), (0, 4, 0, 0));
+    assert!(pci_addr_selects_virtio_spare(pci_config_addr_spare()));
+    assert!(pci_addr_selects_owned(pci_config_addr_spare()));
 }
 
 #[test]
@@ -110,6 +114,12 @@ fn lab_stub_keeps_enum_cap_product_iso_gets_vendor_caps() {
     assert_eq!(mmio_read_iso(0x04, 4) & VIRTIO_BLK_F_RO, VIRTIO_BLK_F_RO);
     let cap = mmio_read_iso(0x200, 8);
     assert_eq!(cap, (extra / 512) as u64);
+    pci_write_addr(pci_config_addr_spare());
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        0xFFFF_FFFF,
+        "unarmed spare stays hidden"
+    );
     assert!(!crate::devices::guest_platform::is_platform_sink_gpa(
         u64::from(GUEST_VIRTIO_BAR0_DEFAULT)
     ));

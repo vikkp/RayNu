@@ -211,6 +211,59 @@ fn fwstate_load_is_one_harpoon_and_does_not_bus_master() {
     assert!(!super::fusion_dma_base_ok(0x1_0000_0000));
     assert!(!super::fusion_dma_base_ok(0xFFFF_F000));
     assert_eq!(super::FUSION_DMA_PAGES, 8);
+    assert_eq!(
+        super::classify_ld_bytes(super::IRON_LD0_BYTES),
+        super::LdClass::Ubuntu
+    );
+    assert_eq!(
+        super::classify_ld_bytes(super::IRON_LD1_BYTES),
+        super::LdClass::Spare
+    );
+    assert_eq!(
+        super::spare_read_target(super::pick_spare(&[
+            super::LdEntry {
+                target_id: 0,
+                size_bytes: super::IRON_LD0_BYTES,
+            },
+            super::LdEntry {
+                target_id: 1,
+                size_bytes: super::IRON_LD1_BYTES,
+            },
+        ])),
+        Some(1)
+    );
+    assert!(super::spare_read_target(Err(super::PickError::UbuntuOnly)).is_none());
+    let rd = super::pack_ld_read16_polled(1, 0, 0x1006000).unwrap();
+    assert_eq!(rd[0], super::MFI_CMD_LD_SCSI_IO);
+    assert_eq!(rd[1], 32);
+    assert_eq!(rd[2], super::MFI_CMD_STATUS_POLL);
+    assert_eq!(rd[4], 1);
+    assert!(super::cdb_is_single_read16(&rd[0x20..0x30]));
+    assert!(super::frame_is_read(&rd));
+    let flags = u16::from_le_bytes(rd[0x10..0x12].try_into().unwrap());
+    assert_eq!(flags & super::MFI_FRAME_DIR_WRITE, 0);
+    assert_ne!(flags & super::MFI_FRAME_DIR_READ, 0);
+    assert_ne!(flags & super::MFI_FRAME_DONT_POST_IN_REPLY_QUEUE, 0);
+    assert_eq!(
+        u64::from_le_bytes(rd[0x18..0x20].try_into().unwrap()),
+        0x1006200
+    );
+    assert_eq!(
+        u64::from_le_bytes(rd[0x30..0x38].try_into().unwrap()),
+        0x1006000
+    );
+    assert_eq!(u32::from_le_bytes(rd[0x38..0x3C].try_into().unwrap()), 512);
+    assert!(super::pack_ld_read16_polled(1, 0, 0).is_none());
+    let last = super::spare_last_lba(super::IRON_LD1_BYTES).unwrap();
+    assert!(last > 0);
+    let tail = super::pack_ld_read16_polled(1, last, 0x1006000).unwrap();
+    assert_eq!(
+        u64::from_be_bytes(tail[0x22..0x2A].try_into().unwrap()),
+        last
+    );
+    assert_eq!(super::perc_spare_bytes(), 0);
+    let mut scratch = [0u8; 512];
+    assert!(!super::perc_spare_read(0, &mut scratch));
     assert!(super::fusion_post_is_allowed(super::IRON_FUSION_S0));
     assert!(!super::fusion_post_is_allowed(super::MFI_STATE_OPERATIONAL));
     assert!(!super::fusion_post_is_allowed(super::MFI_STATE_FAULT));
