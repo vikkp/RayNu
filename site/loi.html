@@ -11,7 +11,7 @@
     <meta property="og:title" content="RayNu-V · Path to LOI" />
     <meta
       property="og:description"
-              content="Two bars: dedicated-box 92%, RAID-fleet 18%. Persist across HV reboot is repeated. SKU card is done. A4 TLS iron is DONE (lab millicert). Standing SPA lived. Ubuntu 26.04 is on a 400 GB PERC VD. An empty 2.9 TB spare exists. PERC I/O has not started. Auth is parked. USB is not PERC."
+              content="Two bars: dedicated-box 92%, RAID-fleet 28%. Persist across HV reboot is repeated. SKU card is done. A4 TLS iron is DONE (lab millicert). Standing SPA lived. Ubuntu 26.04 is on a 400 GB PERC VD. An empty 2.9 TB spare was read once. That is not a boot disk. Auth is parked. USB is not PERC."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -117,10 +117,10 @@
             <div class="hda-bar">
               <div class="hda-bar__head">
                 <span>Bar B · RAID fleet</span>
-                <span id="loi-bar-b-label">18%</span>
+                <span id="loi-bar-b-label">28%</span>
               </div>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill loi-bar__fill--fleet" id="loi-bar-b" style="width: 18%"></span>
+                <span class="hda-bar__fill loi-bar__fill--fleet" id="loi-bar-b" style="width: 28%"></span>
               </div>
             </div>
             <div class="hda-bar">
@@ -171,7 +171,7 @@
               </p>
             </article>
             <article class="loi-card">
-              <p class="loi-card__kicker">Bar B · 18%</p>
+              <p class="loi-card__kicker">Bar B · 28%</p>
               <h3>RAID fleet</h3>
               <p>
                 Keep the iron. Replace the licensed hypervisor. Guest and boot
@@ -312,23 +312,21 @@
             <li data-reveal>
               <header>
                 <span class="loi-pieces__name">PERC RAID I/O</span>
-                <span class="loi-pieces__pct" data-piece="perc">15%</span>
+                <span class="loi-pieces__pct" data-piece="perc">40%</span>
               </header>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill loi-bar__fill--fleet" data-piece-fill="perc" style="width: 15%"></span>
+                <span class="hda-bar__fill loi-bar__fill--fleet" data-piece-fill="perc" style="width: 40%"></span>
               </div>
               <p>
                 The lab H740P Mini has two RAID-6 virtual disks.
                 <strong>UBUNTU0</strong> (~400 GB) is Ubuntu 26.04 and the boot
                 device. <strong>RAYNU-SPARE</strong> (~2.9 TB) is empty.
-                <strong>M8.7</strong> packs mailbox frames on the host.
-                Iron <code>985495bef9fa</code> read LBA 0 and the last LBA
-                (<code>status=0x00</code>) and Linux enumerated
-                <code>vdc</code> at 2.88 TiB. The H840 was not mapped.
-                The guest marker used <code>write_line</code> and did not
-                reach COM2. The next EFI uses <code>write_line_nowait</code>.
-                The mapper still prints <code>skip PERC</code>. A hushed
-                marker is not the close. This 15% stays until that line.
+                Iron <code>9c37fcae</code> printed
+                <code>RAYNU-V-M8-PERC-LUN-OK</code> when Linux probed
+                <code>vdc</code>. A later <code>dd</code> of that disk copied
+                512 bytes whose first 16 were zero. The H840 was not mapped.
+                The mapper still prints <code>skip PERC</code>. There is no
+                WRITE. Forty percent is the read. It is not a boot disk.
                 Do not format UBUNTU0. Do not partition RAYNU-SPARE.
               </p>
             </li>
@@ -353,21 +351,21 @@
 
       <section class="section section--hda-com2" id="now">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>NOW · Ubuntu up · spare empty</p>
-          <h2 class="section__title">Ubuntu is on a 400 GB virtual disk. The spare is empty.</h2>
+          <p class="milestone-kicker" data-reveal>NOW · spare read lived · spare empty</p>
+          <h2 class="section__title">Ubuntu is on a 400 GB virtual disk. The spare was read once.</h2>
           <p class="section__lede">
             A6 still lived once: Activity showed <code>abc</code>, then
             <code>-sh: abc: not found</code>, and
             <code>RAYNU-V-M8-CONSOLE-OK</code>. On 2026-09-26 Ubuntu 26.04
             is the standing OS on <strong>UBUNTU0</strong>.
-            <strong>RAYNU-SPARE</strong> (~2.9 TB) has no partition. PERC I/O
-            has not started. Auth is parked. The standing-SPA rollback file
+            <strong>RAYNU-SPARE</strong> (~2.9 TB) has no partition. Iron
+            <code>9c37fcae</code> read one sector of it. Auth is parked. The standing-SPA rollback file
             is still <code>v0.1.0-m8-a4s</code>.
           </p>
           <pre class="ship-code" data-reveal><code>boot:   UBUNTU0 ~400 GB · Ubuntu 26.04 · / and /boot/efi
-spare:  RAYNU-SPARE ~2.9 TB · empty · do not partition
+spare:  RAYNU-SPARE ~2.9 TB · empty · read once · do not partition
 ctrl:   PERC H740P Mini only · do not open the H840
-next:   985495bef9fa READs + vdc lived · marker hushed · flash the nowait EFI · F11 once · perc stays 15
+next:   9c37fcae printed RAYNU-V-M8-PERC-LUN-OK · leave the shell · do not flash again
 never:  format UBUNTU0 · format the spare · format the Toshiba · setup-disk · curl Start
 read:   docs/runbooks/r640_perc_lab.md</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
