@@ -68,6 +68,10 @@ if ! grep -q 'boot: perc virtio ro' "$ROOT/mgmt/megaraid.rs"; then
   echo "error: missing read-only spare virtio line" >&2
   exit 1
 fi
+if ! grep -q 'write_line_nowait(M8_PERC_LUN_OK_MARKER)' "$ROOT/mgmt/megaraid.rs"; then
+  echo "error: guest marker must use write_line_nowait (earlycon hushes write_line)" >&2
+  exit 1
+fi
 if ! grep -q 'fn pci_cmd_for_fwstate_load(' "$ROOT/mgmt/megaraid.rs"; then
   echo "error: missing memory-space command policy" >&2
   exit 1

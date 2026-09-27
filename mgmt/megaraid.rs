@@ -28,7 +28,8 @@
 //! not ring the doorbell, write a block, or change
 //! [`crate::mgmt::durable_lun::pick_durable_lun`].
 //! The boot disk stays the Toshiba. `RAYNU-V-M8-PERC-LUN-OK` prints only
-//! after a guest read of that virtio device succeeds.
+//! after a guest read of that virtio device succeeds, and that line uses
+//! `write_line_nowait` because Linux earlycon hushes `write_line`.
 
 /// Iron COM2 close: a READ of RAYNU-SPARE lived, and the LD was attached.
 /// Host/CI/nested must never print this.
@@ -1463,9 +1464,12 @@ fn perc_spare_arm(bar: u64, target: u8, bytes: u64, data_phys: u64, frame_phys: 
 
 /// Guest IN path. One MFI READ(16) per 512-byte sector. Never a WRITE.
 /// The iron marker prints once, after the first full success.
+///
+/// Linux earlycon share drops [`crate::boot::serial::write_line`]. Iron
+/// `985495be` lived both boot READs and Linux `vdc`, and COM2 never showed
+/// this marker. These lines use the nowait UART path.
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn perc_spare_read_uefi(lba: u64, buf: &mut [u8]) -> bool {
-    use crate::boot::serial;
     let bytes = PERC_SPARE_BYTES.load(core::sync::atomic::Ordering::Acquire);
     let bar = PERC_SPARE_BAR.load(core::sync::atomic::Ordering::Acquire);
     let data = PERC_SPARE_DATA.load(core::sync::atomic::Ordering::Acquire);
@@ -1482,24 +1486,18 @@ fn perc_spare_read_uefi(lba: u64, buf: &mut [u8]) -> bool {
             .and_then(|off| off.checked_add(buf.len() as u64))
             .is_some_and(|end| end <= bytes);
     if !ok_range {
-        serial::write_str("boot: perc virtio rd fail lba=");
-        write_dec64(lba);
-        serial::write_line(" (not PERC-LUN-OK)");
+        perc_guest_rd_fail(lba);
         return false;
     }
     let mut off = 0usize;
     while off < buf.len() {
         let sec = lba + (off as u64 / 512);
         let Some((st, timed_out)) = issue_ld_read16(bar, target, sec, frame, data) else {
-            serial::write_str("boot: perc virtio rd fail lba=");
-            write_dec64(sec);
-            serial::write_line(" (not PERC-LUN-OK)");
+            perc_guest_rd_fail(sec);
             return false;
         };
         if timed_out || st != MFI_STAT_OK {
-            serial::write_str("boot: perc virtio rd fail lba=");
-            write_dec64(sec);
-            serial::write_line(" (not PERC-LUN-OK)");
+            perc_guest_rd_fail(sec);
             return false;
         }
         core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
@@ -1511,12 +1509,22 @@ fn perc_spare_read_uefi(lba: u64, buf: &mut [u8]) -> bool {
         off += 512;
     }
     if !PERC_SPARE_GUEST_OK.swap(true, core::sync::atomic::Ordering::AcqRel) {
-        serial::write_str("boot: perc virtio rd lba=");
-        write_dec64(lba);
-        serial::write_line(" ok");
-        serial::write_line(M8_PERC_LUN_OK_MARKER);
+        use crate::boot::serial;
+        serial::write_str_nowait("boot: perc virtio rd lba=");
+        write_dec64_nowait(lba);
+        serial::write_line_nowait(" ok");
+        serial::write_line_nowait(M8_PERC_LUN_OK_MARKER);
     }
     true
+}
+
+/// Guest-read failure on the nowait UART. Earlycon hushes `write_line`.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn perc_guest_rd_fail(lba: u64) {
+    use crate::boot::serial;
+    serial::write_str_nowait("boot: perc virtio rd fail lba=");
+    write_dec64_nowait(lba);
+    serial::write_line_nowait(" (not PERC-LUN-OK)");
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
@@ -1571,6 +1579,26 @@ fn write_dec64(mut n: u64) {
     }
     for b in &buf[i..] {
         serial::write_byte(*b);
+    }
+}
+
+/// Decimal on the guest UART ring. Boot READs stay on [`write_dec64`].
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn write_dec64_nowait(mut n: u64) {
+    use crate::boot::serial;
+    let mut buf = [0u8; 20];
+    let mut i = buf.len();
+    if n == 0 {
+        serial::write_byte_nowait(b'0');
+        return;
+    }
+    while n > 0 {
+        i -= 1;
+        buf[i] = b'0' + (n % 10) as u8;
+        n /= 10;
+    }
+    for b in &buf[i..] {
+        serial::write_byte_nowait(*b);
     }
 }
 

@@ -12,7 +12,7 @@
 //! virtio-blk appears at `00:04.0` (`/dev/vdc`). It does not join the
 //! PIT / DRIVER_OK pair (`00:02.0` and `00:03.0`). Absent or failed
 //! READs leave `00:04.0` hidden. Not `RAYNU-V-M8-PERC-LUN-OK` until a
-//! guest IN of that device succeeds.
+//! guest IN of that device succeeds. That marker uses `write_line_nowait`.
 //! Nested VT-x: this OVMF PEI only `inw` Device ID of `00:00.0` into
 //! `HostBridgeDevId`. Iron `c1476d3` served virtio `0x1042` there, so PEI
 //! skipped the stock QEMU map (`PlatformMemMapInitialization` IoMemory HOB
