@@ -43,7 +43,7 @@ Lived: [`docs/progress.md`](progress.md) · M8: [`docs/m8_plan.md`](m8_plan.md) 
 
 | Metric | Value | Meaning |
 |--------|------:|---------|
-| **Overall LOI readiness** | **70%** | Nearest honest conversation is Bar A. Not Bar B. Not GA. Held: `83ae471e` READY then `perc ioc skip above4g`. IOC init not lived. perc stays 15. |
+| **Overall LOI readiness** | **70%** | Nearest honest conversation is Bar A. Not Bar B. Not GA. Held: `7577f934` lived IOC init and the LD list. The spare READ is not lived. perc stays 15. |
 | **Bar A — dedicated-box** | **92%** | One PowerEdge we own or they dedicate. A1 Everest, A3 SKU, A4 TLS, A4s standing SPA **DONE**. A2 persist **repeated** (sixth `login:`, UUID `a0ad99ac-…`). A6 **lived once**. A5 parked. USB ≠ PERC. |
 | **Bar B — RAID-fleet** | **18%** | Replace the licensed hypervisor on PERC virtual disks they already paid for. The lab spare VD exists and is empty. I/O has not started. |
 | **Months to Bar A** | **0.25** | Baseline 2026-09-14. ETA **2026-10**. Held. A6 lived once. A5 is parked, not closed. Do not go to 0. |
@@ -154,9 +154,9 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 ### 7. PERC RAID I/O — 15%
 
-**What it is.** The lab H740P Mini (`0000:18:00.0`) has two RAID-6 VDs: **UBUNTU0** (~400 GB, Ubuntu 26.04, boot) and **RAYNU-SPARE** (~2.9 TB, empty). **M8.7** is the Fusion mailbox milestone: scratch-pad status, one IOC init, one LD list, one READ, then the spare only. The host slice packs frames and refuses the Ubuntu-sized LD (`RAYNU-V-M8-PERC-HOST-OK`). Iron `2dd2b412` mapped the Mini (`1028:1fcd`, BAR `0x9d800000`) and left the H840 (`3b:00.0`, `1028:1fc9`) unmapped. `outbound_msg_0` was 0. That is the xscale register. Iron `22ce3728` read scratch pad 0 as `0xb73c0fed` (READY, max commands 4077, `mapped=1`). Iron `83ae471e` printed `allow=1` and `perc ioc skip above4g`. The DurableLun mapper still prints `skip PERC`. This EFI posts one IOC init and one LD list from eight frame-pool pages and does not store a doorbell. An LD list is not I/O. PRE-EBS UEFI RAID BlockIo dies at ExitBootServices. Map: [`runbooks/r640_perc_lab.md`](runbooks/r640_perc_lab.md).
+**What it is.** The lab H740P Mini (`0000:18:00.0`) has two RAID-6 VDs: **UBUNTU0** (~400 GB, Ubuntu 26.04, boot) and **RAYNU-SPARE** (~2.9 TB, empty). **M8.7** is the Fusion mailbox milestone: scratch-pad status, one IOC init, one LD list, one READ, then the spare only. The host slice packs frames and refuses the Ubuntu-sized LD (`RAYNU-V-M8-PERC-HOST-OK`). Iron `2dd2b412` mapped the Mini (`1028:1fcd`, BAR `0x9d800000`) and left the H840 (`3b:00.0`, `1028:1fc9`) unmapped. `outbound_msg_0` was 0. That is the xscale register. Iron `22ce3728` read scratch pad 0 as `0xb73c0fed` (READY, max commands 4077, `mapped=1`). Iron `7577f934` posted IOC init and the LD list from `dma phys=0x1000000`: both statuses `0x00`, `n=2`, `pick=1`. The DurableLun mapper still prints `skip PERC`. This EFI posts one READ(16) of LBA 0 on that spare and does not store a doorbell. An unlived READ is not I/O. PRE-EBS UEFI RAID BlockIo dies at ExitBootServices. Map: [`runbooks/r640_perc_lab.md`](runbooks/r640_perc_lab.md).
 
-**Product effect.** This is the difference between a lab hypervisor and “extend the life of the fleet you already paid for.” USB persist is mechanism. Fleet persist is a spare virtual disk. A READY scratch pad and a skipped DMA post are not I/O, so this piece stays at 15. Do not format UBUNTU0. Do not partition RAYNU-SPARE. Do not open the H840.
+**Product effect.** This is the difference between a lab hypervisor and “extend the life of the fleet you already paid for.” USB persist is mechanism. Fleet persist is a spare virtual disk. An LD list and an unlived READ are not I/O, so this piece stays at 15. Do not format UBUNTU0. Do not partition RAYNU-SPARE. Do not open the H840.
 
 ### 8. Unmodified media (Gen-1) — 20%
 
@@ -176,13 +176,13 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | 2026-09-18 | Bar A A3 | SKU card | **DONE** ([`docs/sku.md`](sku.md) / [`site/sku.html`](../site/sku.html)) |
 | **2026-09-19** | Bar A A4 | TLS on native `:8443` **before RayNu-F** | **DONE** (`928d6224` COM2 `RAYNU-V-M8-TLS-OK`; Mac `curl --cacert` SPA `.140`) |
 | **2026-09-25** | Bar A **A4s** | Page stays up after `login:` | **LIVED** (`1f33eeda72f9`, lease `.154`, one TCP accept, `HTTP keep-alive`, Host green, guest COM1 in Activity) |
-| **NOW** | **M8.7 IOC init** | One MFA post, then one LD list | `83ae471e` skipped `above4g`. This EFI uses the frame pool. Not lived. No doorbell. A5 parked. not VNC. See [m8_plan.md](m8_plan.md) |
-| then | M8.7 READ | One READ(16) of the spare | only after `perc ioc status=0x00` and an LD list; census still `skip PERC` |
+| **NOW** | **M8.7 spare READ** | One READ(16) of LBA 0 on RAYNU-SPARE | `7577f934` lived IOC init and the LD list (`pick=1`). This EFI reads. Not lived. No doorbell. No WRITE. A5 parked. not VNC. See [m8_plan.md](m8_plan.md) |
+| then | M8.7 virtio | Attach the spare only | only after `perc read ok`; census still `skip PERC` until that attach |
 | later | Unmodified ISO | Gen-1 Phase 2 | named residual, not a fake close |
 
 ```
 2026-09  ████████  Everest closed
-2026-10  ███████░  Bar A held; IOC DMA skipped above 4 GiB; frame-pool post next; PERC I/O not started; A5 parked
+2026-10  ███████░  Bar A held; `7577f934` IOC+LD list lived; spare READ next; PERC virtio not started; A5 parked
 2026-11  ░░░░░░░░  Bar A: first dedicated-box LOI window
 2026-12  ░░░░░░░░  Bar B: PERC VD I/O
 ```
@@ -206,10 +206,10 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-7-perc-lowdma |
-| Summary | **Iron `83ae471e` skipped IOC DMA above 4 GiB.** READY was already on the wire (`allow=1`). This EFI posts from the frame pool. `skip PERC` stays. No doorbell. |
+| Commit | m8-7-perc-read |
+| Summary | **Iron `7577f934` lived IOC init and the LD list.** This EFI posts one READ(16) of LBA 0 on the spare. `skip PERC` stays. No doorbell. No WRITE. |
 | Everest impact | none — HDA months 0.0 / 99% held |
-| LOI impact | Scores held. Bar A 92, overall 70, Bar B 18, perc 15, months A 0.25, months B 3.5. An unlived post is not `RAYNU-V-M8-PERC-LUN-OK`. |
+| LOI impact | Scores held. Bar A 92, overall 70, Bar B 18, perc 15, months A 0.25, months B 3.5. An unlived READ is not `RAYNU-V-M8-PERC-LUN-OK`. |
 | Gates touched | `cargo test --lib m8_perc_host_gate_passes`. `./tools/m8-perc-smoke.sh`. Site sync. No doorbell. |
 
 ---
@@ -218,6 +218,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-27 | m8-7-perc-read | 92 | 18 | **One spare READ packed, not lived.** `7577f934` `perc ioc status=0x00` and `perc ld status=0x00 n=2 pick=1`. This EFI reads LBA 0 of target 1. No doorbell. No WRITE. perc 15 held. Not `RAYNU-V-M8-PERC-LUN-OK`. |
 | 2026-09-27 | m8-7-perc-lowdma | 92 | 18 | **IOC DMA moves to the frame pool.** `83ae471e` `allow=1` then `perc ioc skip above4g`. No doorbell. This EFI uses eight pool pages. perc 15 held. Not `RAYNU-V-M8-PERC-LUN-OK`. |
 | 2026-09-26 | m8-7-perc-ioc | 92 | 18 | **IOC init packed, not lived.** `22ce3728` scratch pad 0 `0xb73c0fed` READY, `mapped=1`, queues 128, RDPQ. Old `allow=0` was maxcmds. This EFI posts one MFA and one LD list. No doorbell. No READ. perc 15 held. Not `RAYNU-V-M8-PERC-LUN-OK`. |
 | 2026-09-26 | m8-7-perc-fusion | 92 | 18 | **Fusion path.** `2dd2b412` mapped Mini `18:00.0` and read xscale `outbound_msg_0` as 0. H840 not mapped. Status is scratch pad 0, then IOC init, then one LD list. This EFI does not post. perc 15 held. Not `RAYNU-V-M8-PERC-LUN-OK`. |
@@ -314,8 +315,8 @@ LOI:           NOT OPEN. Tracker born 2026-09-14.
 Bar A:         92% · 0.25 months · dedicated-box non-prod
 Bar B:         18% · 3.5 months · PERC RAID fleet (out of conversation until PERC persist)
 Overall:       70% · confidence medium
-NOW:           83ae471e printed READY and perc ioc skip above4g. Chassis is in that Alpine guest. Reboot to Ubuntu without F11. Flash this EFI, F11 once, paste perc ioc dma phys= and perc ioc status=. status other than 0x00 stops. UBUNTU0 stays boot. RAYNU-SPARE stays empty. No doorbell. skip PERC stays. A5 parked. perc 15. docs/m8_plan.md
-Open:          M8.7 IOC init on iron · one READ after status 0x00 · iron AUTH-OK (parked) · unmodified ISO · cluster
+NOW:           7577f934 lived IOC status 0x00 and LD list pick=1. Chassis is in that Alpine guest. Reboot to Ubuntu without F11. Flash this EFI, F11 once, paste perc read status= and perc read ok. status other than 0x00 stops. UBUNTU0 stays boot. RAYNU-SPARE stays empty. No doorbell. No WRITE. skip PERC stays. A5 parked. perc 15. docs/m8_plan.md
+Open:          M8.7 spare READ on iron · virtio after perc read ok · iron AUTH-OK (parked) · unmodified ISO · cluster
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
 Rollback:      v0.1.0-m8-a4s → standing SPA (COM2 sha=1f33eeda72f9, CI 36137732145). v0.1.0-m8-a6 → keyboard + power-off (fd2ca12e, CI 36166108942), not Latest. Everest Latest stays v0.1.0-everest-closed (f72b4276).
 Sit:           Ubuntu is the OS. Do not setup-disk. Do not format the ~298 GB Toshiba. Identify disks by size, never by sdX.
