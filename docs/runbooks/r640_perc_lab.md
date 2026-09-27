@@ -100,10 +100,36 @@ The ~100 GB the old Ubuntu looked like was a filesystem inside the old large VD.
 **In scope when the operator asks**
 
 - Read-only `lsblk` / `findmnt` / `storcli` or MegaRAID inquiry that does not write.
-- **M8.7 identify** lived on `2dd2b412`: Mini `18:00.0` `1028:1fcd` BAR `0x9d800000`, H840 `3b:00.0` `1028:1fc9` not mapped, xscale `outbound_msg_0` was 0. **Fusion status** lived on `22ce3728`: scratch pad 0 `0xb73c0fed` READY, max commands 4077, queues 128, RDPQ, `mapped=1`. Iron `7577f934` posted IOC init and the LD list from `dma phys=0x1000000`: `perc ioc status=0x00`, `perc ld status=0x00 n=2 pick=1`. The doorbell was loaded (`db=0x40000000`) and not stored. This EFI posts one READ(16) of LBA 0 on the spare only. Do not F11 `7577f934`, `83ae471e`, `22ce3728`, `2dd2b412`, or `cc03d01b` again.
+- **M8.7 identify** lived on `2dd2b412`: Mini `18:00.0` `1028:1fcd` BAR `0x9d800000`, H840 `3b:00.0` `1028:1fc9` not mapped, xscale `outbound_msg_0` was 0. **Fusion status** lived on `22ce3728`: scratch pad 0 `0xb73c0fed` READY, max commands 4077, queues 128, RDPQ, `mapped=1`. Iron `7577f934` posted IOC init and the LD list from `dma phys=0x1000000`: `perc ioc status=0x00`, `perc ld status=0x00 n=2 pick=1`. The doorbell was loaded (`db=0x40000000`) and not stored. This EFI posts READ(16) of spare LBA 0, then the last LBA, then read-only virtio at `00:04.0`, each only if the previous status is 0. Do not F11 `7577f934`, `83ae471e`, `22ce3728`, `2dd2b412`, or `cc03d01b` again.
 - A5 (ESP `EFI/RayNu/auth.token`, reject `raynu-v-bringup`) is **parked**. The operator skipped it. The product rule that stays is: the password is not compiled into the EFI or the SPA. Do not start A5 unless they ask.
 
-Scores stay put until iron I/O exists. `piece_perc_pct` is 15. Bar B is 18. HDA overall is 99, months 0.0. An empty virtual disk does not move them.
+Scores stay put until iron I/O exists. `piece_perc_pct` is 15. Bar B is 18. HDA overall is 99, months 0.0. An empty virtual disk does not move them. Arming virtio is not the iron marker.
+
+## Read-only ground truth (Ubuntu, before the flash)
+
+The spare is the whole disk whose size is `3169417691136` bytes. UBUNTU0 is about `429496467456`. Do not use a `/dev/sdX` name you remembered from an earlier boot. These commands only read.
+
+```bash
+lsblk -b -d -o NAME,SIZE,TYPE,TRAN,LABEL,UUID,MOUNTPOINT
+node=$(python3 - <<'PY'
+import os
+want = 3169417691136
+hits = []
+for name in sorted(os.listdir("/sys/block")):
+    size = int(open(f"/sys/block/{name}/size").read()) * 512
+    if size == want:
+        hits.append(name)
+if len(hits) != 1:
+    raise SystemExit(f"expected one spare, found {hits}")
+print(hits[0])
+PY
+)
+echo "spare node $node"
+sudo dd if=/dev/$node bs=512 count=1 status=none | xxd -l 16
+sudo dd if=/dev/$node bs=512 count=1 skip=$(($(sudo blockdev --getsz /dev/$node) - 1)) status=none | xxd -l 16
+```
+
+After the EFI, compare the first `xxd` line with COM2 `perc read status=0x00` `sig=`. Compare the second with a later guest `dd if=/dev/vdc`. A size other than `3169417691136` is not the spare. Stop.
 
 ---
 
@@ -155,7 +181,7 @@ The A6 docs commit `f7a84e48` stamps `build: sha=f7a84e48cf1e`. The release bina
 
 ## What is still open
 
-- **M8.7 identify** lived on `2dd2b412`: COM2 `perc fwstate cand bdf=18:00.0 sub=1028:1fcd mini=1`, `cand bdf=3b:00.0 sub=1028:1fc9 mini=0`, then `bdf=18:00.0 bar=0x000000009d800000 raw=0x00000000 allow=0 mse=0`. `cc03d01b` was the earlier refuse (`count=2`, EFI SHA256 `b0848230b9b9b1ce8b6e4d6f64ea132e6ff6761590d75e819990819282975e05`). The zero is the xscale register. Iron `22ce3728` then printed `perc fusion` `s0=0xb73c0fed` `s1=0xb1dfc50f` `queues=128` `rdpq=1` `mapped=1` `post=0`. That state nibble is READY. The `allow=0` on that image treated max-command bits as a reset request. `mgmt/durable_lun.rs` still skips the whole PERC (`skip PERC`). No doorbell has been sent. PRE-EBS UEFI RAID BlockIo dies at ExitBootServices. The iron close is still `RAYNU-V-M8-PERC-LUN-OK`, and host/CI never print it. Iron `83ae471e` then printed `allow=1` and `perc ioc skip above4g` (DMA static not below 4 GiB; doorbell not stored). Iron `7577f934` posted from the frame pool (`dma phys=0x1000000`): `perc ioc status=0x00`, `perc ld status=0x00`, `n=2`, id 0 ubuntu `429496467456`, id 1 spare `3169417691136`, `pick=1`. The doorbell was loaded (`db=0x40000000`) and not stored. This image posts one READ(16) of LBA 0 on that spare. It does not write. `mapped=0` or a nibble other than READY still skips the post. A read status other than `0x00` stops.
+- **M8.7 identify** lived on `2dd2b412`: COM2 `perc fwstate cand bdf=18:00.0 sub=1028:1fcd mini=1`, `cand bdf=3b:00.0 sub=1028:1fc9 mini=0`, then `bdf=18:00.0 bar=0x000000009d800000 raw=0x00000000 allow=0 mse=0`. `cc03d01b` was the earlier refuse (`count=2`, EFI SHA256 `b0848230b9b9b1ce8b6e4d6f64ea132e6ff6761590d75e819990819282975e05`). The zero is the xscale register. Iron `22ce3728` then printed `perc fusion` `s0=0xb73c0fed` `s1=0xb1dfc50f` `queues=128` `rdpq=1` `mapped=1` `post=0`. That state nibble is READY. The `allow=0` on that image treated max-command bits as a reset request. `mgmt/durable_lun.rs` still skips the whole PERC (`skip PERC`). No doorbell has been sent. PRE-EBS UEFI RAID BlockIo dies at ExitBootServices. The iron close is still `RAYNU-V-M8-PERC-LUN-OK`, and host/CI never print it. Iron `83ae471e` then printed `allow=1` and `perc ioc skip above4g` (DMA static not below 4 GiB; doorbell not stored). Iron `7577f934` posted from the frame pool (`dma phys=0x1000000`): `perc ioc status=0x00`, `perc ld status=0x00`, `n=2`, id 0 ubuntu `429496467456`, id 1 spare `3169417691136`, `pick=1`. The doorbell was loaded (`db=0x40000000`) and not stored. This image posts READ(16) of spare LBA 0, then the last LBA, then read-only virtio at `00:04.0`, each only if the previous status is 0. It does not write. `mapped=0` or a nibble other than READY still skips the post. A status other than `0x00` stops that stage.
 - USB persist on the Toshiba is a different close from PERC persist. Latitude and QEMU are a different close from this R640.
 - A6 lived once (`abc` in Activity, `RAYNU-V-M8-CONSOLE-OK`, Host green), then Power off host left iDRAC Off. That history stays. The chassis was powered back on for this reinstall. **not VNC**.
 - A5 stays parked.

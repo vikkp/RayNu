@@ -233,7 +233,7 @@ fn fwstate_load_is_one_harpoon_and_does_not_bus_master() {
         Some(1)
     );
     assert!(super::spare_read_target(Err(super::PickError::UbuntuOnly)).is_none());
-    let rd = super::pack_ld_read16_polled(1, 0x1006000).unwrap();
+    let rd = super::pack_ld_read16_polled(1, 0, 0x1006000).unwrap();
     assert_eq!(rd[0], super::MFI_CMD_LD_SCSI_IO);
     assert_eq!(rd[1], 32);
     assert_eq!(rd[2], super::MFI_CMD_STATUS_POLL);
@@ -253,7 +253,17 @@ fn fwstate_load_is_one_harpoon_and_does_not_bus_master() {
         0x1006000
     );
     assert_eq!(u32::from_le_bytes(rd[0x38..0x3C].try_into().unwrap()), 512);
-    assert!(super::pack_ld_read16_polled(1, 0).is_none());
+    assert!(super::pack_ld_read16_polled(1, 0, 0).is_none());
+    let last = super::spare_last_lba(super::IRON_LD1_BYTES).unwrap();
+    assert!(last > 0);
+    let tail = super::pack_ld_read16_polled(1, last, 0x1006000).unwrap();
+    assert_eq!(
+        u64::from_be_bytes(tail[0x22..0x2A].try_into().unwrap()),
+        last
+    );
+    assert_eq!(super::perc_spare_bytes(), 0);
+    let mut scratch = [0u8; 512];
+    assert!(!super::perc_spare_read(0, &mut scratch));
     assert!(super::fusion_post_is_allowed(super::IRON_FUSION_S0));
     assert!(!super::fusion_post_is_allowed(super::MFI_STATE_OPERATIONAL));
     assert!(!super::fusion_post_is_allowed(super::MFI_STATE_FAULT));
