@@ -11,7 +11,7 @@
     <meta property="og:title" content="RayNu-V · Path to LOI" />
     <meta
       property="og:description"
-              content="Bar A 92%. Bar B 36%. Overall 70%. PERC piece 55%. SKU piece 92%. TLS piece 80%. The 8 GiB spare copy lived on 0739edd0 and the guest stopped at gpt_err=1. That is not a boot disk. Auth is parked. USB is not PERC."
+              content="Bar A 92%. Bar B 52%. Overall 73%. PERC piece 74%. SKU piece 92%. TLS piece 80%. bda7a59b reached localhost login from the 8 GiB spare image. That window is not the 2.9 TB VD. Auth is parked. USB is not PERC."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -63,7 +63,7 @@
           id="loi-path"
           aria-label="Path to LOI"
         >
-          Everest 100% → Persist 93% → SKU 92% → TLS 80% → Auth 38% → Console 82% → PERC 55% → Unmodified 20% → Bar A 92% → Bar B 36% → Overall 70%
+          Everest 100% → Persist 93% → SKU 92% → TLS 80% → Auth 38% → Console 82% → PERC 74% → Unmodified 20% → Bar A 92% → Bar B 52% → Overall 73%
         </p>
       </div>
     </header>
@@ -78,12 +78,12 @@
             <div class="hda-tracker__hero">
               <p class="hda-tracker__label" id="loi-tracker-label">Months to Bar A</p>
               <p class="hda-tracker__months" id="loi-months">0.25 mo</p>
-              <p class="hda-tracker__delta" id="loi-delta">Bar A · was 0.5 · Bar B 2.75 mo</p>
+              <p class="hda-tracker__delta" id="loi-delta">Bar A · was 0.5 · Bar B 2.0 mo</p>
             </div>
             <dl class="hda-tracker__meta">
               <div>
                 <dt>Overall LOI readiness</dt>
-                <dd id="loi-overall">70%</dd>
+                <dd id="loi-overall">73%</dd>
               </div>
               <div>
                 <dt>Bar A ETA</dt>
@@ -116,31 +116,31 @@
             <div class="hda-bar">
               <div class="hda-bar__head">
                 <span>Bar B · RAID fleet</span>
-                <span id="loi-bar-b-label">36%</span>
+                <span id="loi-bar-b-label">52%</span>
               </div>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill loi-bar__fill--fleet" id="loi-bar-b" style="width: 36%"></span>
+                <span class="hda-bar__fill loi-bar__fill--fleet" id="loi-bar-b" style="width: 52%"></span>
               </div>
             </div>
             <div class="hda-bar">
               <div class="hda-bar__head">
                 <span>Overall LOI readiness</span>
-                <span id="loi-bar-overall-label">70%</span>
+                <span id="loi-bar-overall-label">73%</span>
               </div>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill" id="loi-bar-overall" style="width: 70%"></span>
+                <span class="hda-bar__fill" id="loi-bar-overall" style="width: 73%"></span>
               </div>
             </div>
           </div>
           <p class="hda-aside" data-reveal>
             These numbers move only with COM2 evidence. Nested QEMU and host
             tests do not. Bar A is <span data-loi-pct="bars.a">92%</span>.
-            Bar B is <span data-loi-pct="bars.b">36%</span>. Overall is
-            <span data-loi-pct="overall">70%</span>. The PERC piece is
-            <span data-loi-pct="pieces.perc">55%</span>.
-            Iron <code>0739edd0</code> copied 8 GiB onto RAYNU-SPARE and the
-            guest stopped at <code>gpt_err=1</code>. That did not move Bar B
-            or the PERC piece. Auth is parked.
+            Bar B is <span data-loi-pct="bars.b">52%</span>. Overall is
+            <span data-loi-pct="overall">73%</span>. The PERC piece is
+            <span data-loi-pct="pieces.perc">74%</span>.
+            Iron <code>bda7a59b</code> reached <code>localhost login:</code>
+            from the 8 GiB image on RAYNU-SPARE. That window is not the
+            2.9 TB VD. Auth is parked.
           </p>
         </div>
       </section>
@@ -172,20 +172,21 @@
               </p>
             </article>
             <article class="loi-card">
-              <p class="loi-card__kicker" id="loi-kicker-b" data-bar-kicker="b">Bar B · 36%</p>
+              <p class="loi-card__kicker" id="loi-kicker-b" data-bar-kicker="b">Bar B · 52%</p>
               <h3>RAID fleet</h3>
               <p>
                 Keep the iron. Replace the licensed hypervisor. This bar is
-                <span data-loi-pct="bars.b">36%</span>. The PERC I/O piece
-                inside it is <span data-loi-pct="pieces.perc">55%</span>.
+                <span data-loi-pct="bars.b">52%</span>. The PERC I/O piece
+                inside it is <span data-loi-pct="pieces.perc">74%</span>.
                 Those are two scores for two questions: the fleet conversation,
                 and how far spare I/O has come. USB persist does not close this.
                 Formatting the lab Ubuntu array does not close this.
               </p>
               <p class="loi-card__effect">
                 <strong>Product effect:</strong> this is the “extend the life
-                of the fleet you already paid for” pitch. Until a spare VD
-                holds a guest across Force Off, we do not take this conversation.
+                of the fleet you already paid for” pitch. A guest logged in
+                from an 8 GiB window on the spare. The 2.9 TB VD is not that
+                disk, so this conversation stays partial.
               </p>
             </article>
           </div>
@@ -317,23 +318,24 @@
             <li data-reveal>
               <header>
                 <span class="loi-pieces__name">PERC RAID I/O</span>
-                <span class="loi-pieces__pct" data-piece="perc">55%</span>
+                <span class="loi-pieces__pct" data-piece="perc">74%</span>
               </header>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill loi-bar__fill--fleet" data-piece-fill="perc" style="width: 55%"></span>
+                <span class="hda-bar__fill loi-bar__fill--fleet" data-piece-fill="perc" style="width: 74%"></span>
               </div>
               <p>
                 The lab H740P Mini has two RAID-6 virtual disks.
                 <strong>UBUNTU0</strong> (~400 GB) is Ubuntu 26.04 and the boot
-                device. Iron <code>40ec12fc</code> started GRUB from the first
-                8 GiB of <strong>RAYNU-SPARE</strong>. Initramfs mounted the
-                read-only whole spare. A hand mount of <code>vda2</code>
-                recovered read-write. This piece stays at
-                <span data-loi-pct="pieces.perc">55%</span>.
-                Bar B stays at <span data-loi-pct="bars.b">36%</span> until
-                <code>login:</code>. The mailbox probe LBA 0 is not
-                written. The H840 was not mapped. The mapper still prints
-                <code>skip PERC</code>. Do not format UBUNTU0.
+                device. Iron <code>bda7a59b</code> reached
+                <code>localhost login:</code> from the first 8 GiB of
+                <strong>RAYNU-SPARE</strong>. <code>vdc</code> stayed hidden.
+                This piece is
+                <span data-loi-pct="pieces.perc">74%</span>.
+                Bar B is <span data-loi-pct="bars.b">52%</span>.
+                The guest disk is that 8 GiB window, not the 2.9 TB VD.
+                The mailbox probe LBA 0 is not written. The H840 was not
+                mapped. The mapper still prints <code>skip PERC</code>.
+                Do not format UBUNTU0.
               </p>
             </li>
             <li data-reveal>
@@ -357,28 +359,27 @@
 
       <section class="section section--hda-com2" id="now">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>NOW · GRUB lived, login open · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">36%</span> · overall <span data-loi-pct="overall">70%</span> · PERC <span data-loi-pct="pieces.perc">55%</span></p>
-          <h2 class="section__title">The spare image reached GRUB. Alpine stopped on the read-only copy.</h2>
+          <p class="milestone-kicker" data-reveal>NOW · login lived · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">52%</span> · overall <span data-loi-pct="overall">73%</span> · PERC <span data-loi-pct="pieces.perc">74%</span></p>
+          <h2 class="section__title">Alpine logged in from the 8 GiB spare image.</h2>
           <p class="section__lede">
             A6 still lived once: Activity showed <code>abc</code>, then
             <code>-sh: abc: not found</code>, and
             <code>RAYNU-V-M8-CONSOLE-OK</code>. On 2026-09-26 Ubuntu 26.04
             is the standing OS on <strong>UBUNTU0</strong>.
-            Iron <code>40ec12fc</code> skipped a second copy
-            (<code>perc copy skip present alt=16777215</code>), launched GRUB
-            from the spare image, and printed
-            <code>RAYNU-V-M8-PERC-BOOT-OK</code> at StartImage. Initramfs
-            mounted read-only <code>vdc2</code>. A hand mount of
-            <code>vda2</code> recovered the filesystem read-write
-            (<code>a0ad99ac</code>). This EFI hides that second disk. Login
-            is still open. Auth is parked. The standing-SPA rollback file
-            is still <code>v0.1.0-m8-a4s</code>.
+            Iron <code>bda7a59b</code> printed
+            <code>boot: perc virtio ro hidden</code>, skipped a second copy,
+            and reached <code>localhost login: root</code> from
+            <code>vda2</code> (<code>a0ad99ac</code>). Linux did not see
+            <code>vdc</code>. The guest disk is that 8 GiB window, not the
+            2.9 TB VD. Leave the shell. Do not run
+            <code>setup-alpine</code>. Auth is parked. The standing-SPA
+            rollback file is still <code>v0.1.0-m8-a4s</code>.
           </p>
           <pre class="ship-code" data-reveal><code>boot:   UBUNTU0 ~400 GB · Ubuntu 26.04 · / and /boot/efi
-spare:  RAYNU-SPARE ~2.9 TB · 40ec12fc GRUB from the 8 GiB image · vda2 mounted r/w by hand · do not format
+spare:  RAYNU-SPARE ~2.9 TB · bda7a59b login from the 8 GiB image · whole VD hidden · do not format
 ctrl:   PERC H740P Mini only · do not open the H840
-next:   Force Off the shell, then flash this EFI · watch boot: perc virtio ro hidden · no [vdc] · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">36%</span> · overall <span data-loi-pct="overall">70%</span> · PERC <span data-loi-pct="pieces.perc">55%</span>
-never:  format UBUNTU0 · format the spare · format the Toshiba · setup-disk · curl Start
+next:   leave localhost:~# · do not setup-alpine · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">52%</span> · overall <span data-loi-pct="overall">73%</span> · PERC <span data-loi-pct="pieces.perc">74%</span>
+never:  format UBUNTU0 · format the spare · format the Toshiba · setup-disk · setup-alpine · curl Start
 read:   docs/runbooks/r640_perc_lab.md</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
             Rollback remains GitHub Latest
