@@ -267,10 +267,7 @@ fn fwstate_load_is_one_harpoon_and_does_not_bus_master() {
     assert!(super::cdb_is_single_write16(&wr[0x20..0x30]));
     assert!(super::frame_is_write(&wr));
     assert!(!super::frame_is_read(&wr));
-    assert_eq!(
-        u64::from_be_bytes(wr[0x22..0x2A].try_into().unwrap()),
-        last
-    );
+    assert_eq!(u64::from_be_bytes(wr[0x22..0x2A].try_into().unwrap()), last);
     let wflags = u16::from_le_bytes(wr[0x10..0x12].try_into().unwrap());
     assert_ne!(wflags & super::MFI_FRAME_DIR_WRITE, 0);
     assert_eq!(wflags & super::MFI_FRAME_DIR_READ, 0);
@@ -284,6 +281,29 @@ fn fwstate_load_is_one_harpoon_and_does_not_bus_master() {
     assert_eq!(&sector[..16], b"RAYNU-SPARE-WR16");
     assert!(sector[16..].iter().all(|b| *b == 0));
     assert!(!super::perc_write_readback_matches(&[0u8; 512]));
+    let plan = super::image_copy_plan(super::IRON_LD1_BYTES, super::PERC_IMAGE_BYTES).unwrap();
+    assert_eq!(plan.sectors, 16_777_216);
+    assert_eq!(plan.chunk_sectors, 8);
+    assert!(plan.sectors - 1 < last);
+    assert!(super::image_copy_plan(super::IRON_LD0_BYTES, super::PERC_IMAGE_BYTES).is_none());
+    assert!(super::image_copy_plan(super::IRON_LD1_BYTES, 512).is_none());
+    let image = super::pack_ld_write16_image(super::IRON_LD1_BYTES, 1, 0, 8, 0x1006000).unwrap();
+    assert_eq!(image[0], super::MFI_CMD_LD_SCSI_IO);
+    assert!(super::frame_is_write(&image));
+    assert!(!super::frame_is_read(&image));
+    assert_eq!(u64::from_be_bytes(image[0x22..0x2A].try_into().unwrap()), 0);
+    assert_eq!(u32::from_be_bytes(image[0x2A..0x2E].try_into().unwrap()), 8);
+    assert_eq!(
+        u64::from_le_bytes(image[0x18..0x20].try_into().unwrap()),
+        0x1006000 + 4096
+    );
+    assert!(super::pack_ld_write16_image(super::IRON_LD0_BYTES, 1, 0, 1, 0x1006000).is_none());
+    assert!(super::pack_ld_write16_image(super::IRON_LD1_BYTES, 1, 1, 8, 0x1006000).is_none());
+    let mut peek = [0u8; 1024];
+    peek[512..520].copy_from_slice(b"EFI PART");
+    assert!(super::gpt_header_is_efi_part(&peek));
+    assert!(!super::gpt_header_is_efi_part(&[0u8; 1024]));
+    assert!(!super::perc_image_boot_latched());
     assert_eq!(super::perc_spare_bytes(), 0);
     let mut scratch = [0u8; 512];
     assert!(!super::perc_spare_read(0, &mut scratch));

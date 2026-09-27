@@ -11942,6 +11942,7 @@ unsafe fn handle_raynu_f_service() -> bool {
                 serial::write_line(crate::raynu_f::RAYNU_F_START_IMAGE_OK_MARKER);
                 if RAYNU_F_STAGED_FROM_DISK.load(Ordering::Acquire) {
                     serial::write_line(crate::raynu_f::RAYNU_F_DISK_BOOT_OK_MARKER);
+                    crate::mgmt::megaraid::perc_note_disk_boot();
                     let _ = crate::mgmt::disk_persist::maybe_print_iron_persist_ok(
                         crate::devices::guest_virtio_blk::disk_attached_keep(),
                         crate::mgmt::durable_lun::durable_lun_serving(),
