@@ -38,7 +38,7 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 
 | Metric | Value | Δ vs previous HDA |
 |--------|------:|-------------------|
-| **Overall product readiness** | **99%** | **held** — Everest **CLOSED** (`f72b4276`). Iron `9c37fcae` printed `RAYNU-V-M8-PERC-LUN-OK` on a read of the empty spare. That is not a boot disk. Not 100%. A5 is parked. |
+| **Overall product readiness** | **99%** | **held** — Everest **CLOSED** (`f72b4276`). Iron `9c37fcae` printed `RAYNU-V-M8-PERC-LUN-OK` on a read of the spare. One last-LBA WRITE is packed, not lived. Not 100%. A5 is parked. |
 | **Months to Mount Everest** | **0.0** | **held** (summit reached 2026-09-11; `f72b4276` SPA ISO loop) |
 | **ETA month** | **2026-09** | **closed this month on iron**; next work is M8, not a slipped Everest |
 | **Confidence** | high | E1–E6 on COM2. M8 named separately so polish cannot reopen the summit |
@@ -167,7 +167,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 | M+2 | 2026-09 | E3b native NIC lab (QEMU e1000) + ISO residual | ADR-013 Phase C | **Phase C DONE (QEMU)** |
 | M+3 | 2026-08 | E3b iron HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | **DONE (M7.8 iron)** |
 | M+4 | 2026-09 | Phase B (SPA → installed disk) | remaining Everest | **DONE — EVEREST CLOSED** (`f72b4276` / `34552377351`) |
-| M+5 | 2026-10 | **M8.0** persist (file nested / LUN iron / leftover fallback) | keep=1 + `DISK-BOOTX64` + `root=UUID=` after Force Off | **Repeated** through `1f33eeda`. A6 lived once. `9c37fcae` printed `RAYNU-V-M8-PERC-LUN-OK` on a spare read. Spare still empty. See [m8_plan.md](m8_plan.md). |
+| M+5 | 2026-10 | **M8.0** persist (file nested / LUN iron / leftover fallback) | keep=1 + `DISK-BOOTX64` + `root=UUID=` after Force Off | **Repeated** through `1f33eeda`. A6 lived once. `9c37fcae` printed `RAYNU-V-M8-PERC-LUN-OK`. One last-LBA WRITE is packed, not lived. See [m8_plan.md](m8_plan.md). |
 
 ### Timeline burn-down
 
@@ -175,8 +175,8 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 2026-07 ████████  HDA + M6 closed (Latitude)
 2026-08 ████████  R640 boot (E2) + E3b HTTP-OK
 2026-09 ████████  E5 + Phase B — **Mount Everest CLOSED** (`f72b4276`)  ← months_to_everest = 0.0
-2026-10 ███████░  M8.0 persist **repeated**; A6 **lived once**; `9c37fcae` spare read marker lived; spare still empty; A5 parked
-2026-11 ░░░░░░░░  No WRITE on the spare; `skip PERC` stays; no doorbell
+2026-10 ███████░  M8.0 persist **repeated**; A6 **lived once**; spare read marker lived; last-LBA WRITE packed, not lived; A5 parked
+2026-11 ░░░░░░░░  `RAYNU-V-M8-PERC-WRITE-OK` on COM2; LBA 0 stays unwritten; `skip PERC` stays
 ```
 
 **Pull-forward rule:** E2 closed 2026-08-15; E3 bring-up closed 2026-08-16; **E3b closed 2026-08-20**; **P0-14 closed 2026-08-21**; **E5 install-to-disk closed on iron 2026-09-10** (`59ac070`); **F7 relaunch + installed-disk GRUB reached on iron 2026-09-10** (`975f8fc`, exit-cap ended it); **E5 reboot-to-disk closed on iron 2026-09-10** (`56a3ffd`: `DISK-BOOT-OK`, second Linux `root=UUID=`, `login:`) → months 0.5→0.25; **Phase B closed on iron 2026-09-11** (`f72b4276` / `34552377351`: coexist HTTP-OK → SPA Start of RayNu-F ISO → install → disk reboot) → months 0.25→0.0. Document why in [Changelog](#hda-changelog).
@@ -245,7 +245,7 @@ Ordered for critical path (parallelize B with D design):
 | P0-9 | M6.9 external audit + spec review | E6 | **DONE** | proofs green | `docs/`, `ept_model/`, `mgmt/ext` |
 | P0-10 | R640 soak / hardware confidence | E2 | 0.5 | P0-2 | `tools/`, `mgmt/soak` — post M7.5 |
 | P0-11 | **M9 sketch** vMotion-like / DRS-like / hot-add | — | — | M8 | deferred — was M8 in ADR-009; **M9** after operator hardening (ADR-018) |
-| P0-64 | **M8** operator product hardening | — | IN PROGRESS | Everest closed | [ADR-018](adr/ADR-018.md) / [m8_plan.md](m8_plan.md) / **[m8_state.md](m8_state.md) (START HERE)**. `9c37fcae` printed `RAYNU-V-M8-PERC-LUN-OK` on a read of RAYNU-SPARE. Read-only. Spare empty. No doorbell. Disk map: [r640_perc_lab.md](runbooks/r640_perc_lab.md). Nested QEMU ≠ R640. |
+| P0-64 | **M8** operator product hardening | — | IN PROGRESS | Everest closed | [ADR-018](adr/ADR-018.md) / [m8_plan.md](m8_plan.md) / **[m8_state.md](m8_state.md) (START HERE)**. `9c37fcae` printed `RAYNU-V-M8-PERC-LUN-OK`. One WRITE(16) of the spare last LBA is packed, not lived. LBA 0 is not written. No doorbell. Disk map: [r640_perc_lab.md](runbooks/r640_perc_lab.md). Nested QEMU ≠ R640. |
 
 ---
 
@@ -354,11 +354,11 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-7-perc-lun-ok |
-| Summary | **Iron `9c37fcae` printed `RAYNU-V-M8-PERC-LUN-OK`.** Kernel probe of `vdc` read LBA 0. A later `dd if=/dev/vdc bs=512 count=1` copied 512 bytes in 0.029s; the first 16 were zero. Read-only. Spare still empty. No doorbell. No WRITE. Months **0.0 held**. Overall **99 held**. |
-| Everest impact | none — Everest stays closed. Not 100%. The spare read is M8. Nested QEMU ≠ R640. |
+| Commit | m8-7-perc-write |
+| Summary | **One WRITE(16) of the spare last LBA is packed, not lived.** After both host READs return 0, the EFI writes 16 bytes `RAYNU-SPARE-WR16` (rest zero) and reads that LBA back. LBA 0 is not written. Virtio stays read-only. `RAYNU-V-M8-PERC-WRITE-OK` prints only on iron after a match. Months **0.0 held**. Overall **99 held**. |
+| Everest impact | none — Everest stays closed. Not 100%. The spare write is M8 and is not lived. Nested QEMU ≠ R640. |
 | Gates touched | `cargo test --lib m8_perc_host_gate_passes`. `./tools/m8-perc-smoke.sh`. Site sync. No doorbell. |
-| Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 18→28, perc 15→40, months B 3.5→3.0, months A 0.25 held. |
+| Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 28 held, perc 40 held, months B 3.0 held, months A 0.25 held. |
 
 
 ## Blockers & risks (Everest-relevant)
@@ -381,7 +381,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
-| 2026-09-27 | m8-7-perc-lun-ok | 0.0 | 99 | **Spare read marker lived.** `9c37fcae` COM2 `boot: perc virtio rd lba=0 ok` then `RAYNU-V-M8-PERC-LUN-OK` during the `vdc` probe. Same boot: `dd` of `/dev/vdc` copied 512 bytes, first 16 zero, in 0.029s. Read-only. Spare empty. perc 15→40. months 0.0 held; overall 99 held |
+| 2026-09-27 | m8-7-perc-write | 0.0 | 99 | **Last-LBA WRITE packed, not lived.** One WRITE(16) of RAYNU-SPARE's last LBA, then a READ back. Signature `RAYNU-SPARE-WR16`. LBA 0 is not written. Virtio stays read-only. Not `RAYNU-V-M8-PERC-WRITE-OK` until COM2 shows the match. perc 40 held. months 0.0 held; overall 99 held |
+| 2026-09-27 | m8-7-perc-lun-ok | 0.0 | 99 | **Spare read marker lived.** `9c37fcae` COM2 `boot: perc virtio rd lba=0 ok` then `RAYNU-V-M8-PERC-LUN-OK` during the `vdc` probe. Same boot: `dd` of `/dev/vdc` copied 512 bytes, first 16 zero, in 0.029s. Read-only. Spare unpartitioned. perc 15→40. months 0.0 held; overall 99 held |
 | 2026-09-27 | m8-7-perc-nowait | 0.0 | 99 | **Spare READs and `vdc` lived. Marker hushed.** `985495bef9fa` COM2 `perc read status=0x00` sig 16 zeros, `perc read2 status=0x00` `lba=6190268927`, `perc virtio ro`, Linux `[vdc] 6190268928`, Alpine login on the Toshiba. `RAYNU-V-M8-PERC-LUN-OK` absent: `write_line` drops after earlycon. The following EFI uses `write_line_nowait`. perc 15 held. months 0.0 held; overall 99 held |
 | 2026-09-27 | m8-7-perc-chain | 0.0 | 99 | **Spare READ chain packed, not lived.** `7577f934` COM2 `perc ioc status=0x00` `perc ld status=0x00 n=2 pick=1` from `dma phys=0x1000000`. This EFI posts LBA 0, then the last LBA, then read-only virtio `00:04.0`, each only if the previous status is 0. No WRITE. perc 15 held. Not `RAYNU-V-M8-PERC-LUN-OK` until a guest read. months 0.0 held; overall 99 held |
 | 2026-09-27 | m8-7-perc-lowdma | 0.0 | 99 | **IOC DMA moves to the frame pool.** `83ae471e` COM2 `s0=0xb73c0fed` `allow=1` `queues=128` `rdpq=1` `mapped=1`, then `perc ioc skip above4g`. No doorbell was stored. This EFI takes eight pages from the pool (`phys=0x1000000` on that boot). Not lived. perc 15 held. Not `RAYNU-V-M8-PERC-LUN-OK`. months 0.0 held; overall 99 held |
@@ -1024,7 +1025,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     9c37fcae printed RAYNU-V-M8-PERC-LUN-OK on the vdc probe, then dd of /dev/vdc returned 16 zero bytes. Leave the Alpine shell. Do not type another command. Do not flash again for this marker. No doorbell. No WRITE. Do not format UBUNTU0 or RAYNU-SPARE. Do not open the H840. A5 is parked. Do not setup-disk. See docs/m8_plan.md.
+Next move:     9c37fcae already printed RAYNU-V-M8-PERC-LUN-OK. This EFI writes one sector at the spare's last LBA and reads it back. LBA 0 is not written. The running vdc is read-only. Power off only to flash this EFI, F11 once, and paste whether COM2 shows perc write status=0x00 and RAYNU-V-M8-PERC-WRITE-OK. No doorbell. Do not format UBUNTU0 or RAYNU-SPARE. Do not open the H840. A5 is parked. Do not setup-disk. See docs/m8_plan.md.
 Rollback:      Standing SPA: v0.1.0-m8-a4s → CI 36137732145 / COM2 sha=1f33eeda72f9 / EFI SHA256 5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693
 Everest:       GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351 / EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc / COM2 build: sha=f72b4276d198
 Do not F11:    M8 prototypes `b5e290be` `17d120c5` `3b388279` `08202468` `d60431ee` `28cd4ff1` `15e3d665` `5c32bd06` `1fa231df` `e5cca2e0` `c4a41a17` (table in docs/m8_state.md); Phase B fails `34548550755` / `7f8dc0a9`

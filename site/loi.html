@@ -324,9 +324,11 @@
                 Iron <code>9c37fcae</code> printed
                 <code>RAYNU-V-M8-PERC-LUN-OK</code> when Linux probed
                 <code>vdc</code>. A later <code>dd</code> of that disk copied
-                512 bytes whose first 16 were zero. The H840 was not mapped.
-                The mapper still prints <code>skip PERC</code>. There is no
-                WRITE. Forty percent is the read. It is not a boot disk.
+                512 bytes whose first 16 were zero. The next EFI writes one
+                sector at the spare's last LBA and reads it back. LBA 0 is
+                not written. The H840 was not mapped.
+                The mapper still prints <code>skip PERC</code>. Forty percent
+                stays the read until that write marker is on COM2.
                 Do not format UBUNTU0. Do not partition RAYNU-SPARE.
               </p>
             </li>
@@ -365,7 +367,7 @@
           <pre class="ship-code" data-reveal><code>boot:   UBUNTU0 ~400 GB · Ubuntu 26.04 · / and /boot/efi
 spare:  RAYNU-SPARE ~2.9 TB · empty · read once · do not partition
 ctrl:   PERC H740P Mini only · do not open the H840
-next:   9c37fcae printed RAYNU-V-M8-PERC-LUN-OK · leave the shell · do not flash again
+next:   flash the write EFI · F11 once · paste RAYNU-V-M8-PERC-WRITE-OK · LBA 0 stays zero · perc stays 40
 never:  format UBUNTU0 · format the spare · format the Toshiba · setup-disk · curl Start
 read:   docs/runbooks/r640_perc_lab.md</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>

@@ -8,8 +8,10 @@
 //! Product ISO window also reveals a **read-only** virtio-blk at `00:03.0`
 //! backed by the same ISO bytes (alpine-virt initramfs has virtio, not
 //! `ata_piix`; `/dev/vdb` is ISO9660 so `nlplug-findfs` can find media).
-//! When both H740P spare READs return status 0, a third read-only
-//! virtio-blk appears at `00:04.0` (`/dev/vdc`). It does not join the
+//! When both H740P spare READs return status 0, the boot path may WRITE
+//! the spare's last LBA once, then a third read-only virtio-blk appears
+//! at `00:04.0` (`/dev/vdc`). Guest OUT on that device stays rejected.
+//! It does not join the
 //! PIT / DRIVER_OK pair (`00:02.0` and `00:03.0`). Absent or failed
 //! READs leave `00:04.0` hidden. Not `RAYNU-V-M8-PERC-LUN-OK` until a
 //! guest IN of that device succeeds. That marker uses `write_line_nowait`.

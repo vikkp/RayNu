@@ -132,8 +132,9 @@
             Ubuntu 26.04 is back on a 400 GB PERC virtual disk. An empty
             2.9 TB spare exists. Iron <code>9c37fcae</code> printed
             <code>RAYNU-V-M8-PERC-LUN-OK</code> on a read of that spare.
-            The spare is still empty. The H840 was not mapped. No doorbell
-            yet. Auth is parked.
+            The next EFI writes one sector at the spare's last LBA and
+            reads it back. LBA 0 is not written. The H840 was not mapped.
+            No doorbell yet. Auth is parked.
           </p>
         </div>
       </section>
