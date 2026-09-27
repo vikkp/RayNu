@@ -64,6 +64,18 @@ if ! grep -q 'perc_fwstate_probe()' "$ROOT/boot/handoff.rs"; then
   echo "error: fwstate probe is not on the post-EBS path" >&2
   exit 1
 fi
+if ! grep -q 'perc_fusion_post_low' "$ROOT/boot/handoff.rs"; then
+  echo "error: IOC post must use the frame pool" >&2
+  exit 1
+fi
+if ! grep -q 'fn fusion_dma_base_ok(' "$ROOT/mgmt/megaraid.rs"; then
+  echo "error: missing 32-bit DMA address check" >&2
+  exit 1
+fi
+if grep -q 'PERC_FUSION_DMA' "$ROOT/mgmt/megaraid.rs"; then
+  echo "error: DMA must not be a BSS static" >&2
+  exit 1
+fi
 if grep -q 'println!("RAYNU-V-M8-PERC-LUN-OK")' "$ROOT/mgmt/megaraid.rs" "$ROOT/mgmt/durable_lun.rs" "$ROOT/mgmt/m8_perc_gate.rs"; then
   echo "error: host must never println iron PERC-LUN-OK" >&2
   exit 1

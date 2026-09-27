@@ -209,6 +209,21 @@ pub unsafe fn leave_firmware() -> Handoff {
         mem::FrameBump::new(0, 0)
     };
 
+    // H740P DMA: eight pages from this pool, not the EFI image. Iron
+    // `83ae471e` printed `perc ioc skip above4g` because the BSS static was
+    // not a 32-bit page. The pool on that boot started at `0x1000000`.
+    // These pages stay reserved: `alloc_pages` does not give them back.
+    let mut frames = frames;
+    if crate::mgmt::megaraid::perc_post_armed() {
+        match frames.alloc_pages(crate::mgmt::megaraid::FUSION_DMA_PAGES) {
+            Some(base) => crate::mgmt::megaraid::perc_fusion_post_low(base),
+            None => {
+                serial::write_line("boot: perc ioc skip nopoool (not PERC-LUN-OK)");
+                crate::mgmt::megaraid::perc_post_disarm();
+            }
+        }
+    }
+
     if crate::mgmt::iso_install::product_iso_retained_bytes().is_some() {
         let above_pages = mem::conventional_pages_above(&regions[..region_count], precise_end);
         serial::write_str("boot: conventional above PRECISE pages=");
@@ -312,7 +327,6 @@ pub unsafe fn leave_firmware() -> Handoff {
     serial::write_line(M1_EBS_OK_MARKER);
 
     // Smoke-allocate one frame so the pool is exercised (not required for gate).
-    let mut frames = frames;
     if let Some(f) = frames.alloc_frame() {
         serial::write_str("boot: smoke frame phys=0x");
         write_u64_hex(f.0);

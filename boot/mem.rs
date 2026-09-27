@@ -59,6 +59,26 @@ impl FrameBump {
         self.end.saturating_sub(self.base) / PAGE_SIZE
     }
 
+    /// Allocate `pages` contiguous 4K frames. Returns the physical base.
+    ///
+    /// Does not advance the bump when the span does not fit. Used for the
+    /// H740P DMA window, which must stay reserved (never returned to a guest).
+    pub fn alloc_pages(&mut self, pages: u64) -> Option<u64> {
+        if pages == 0 {
+            return None;
+        }
+        let bytes = pages.saturating_mul(PAGE_SIZE);
+        if bytes / PAGE_SIZE != pages {
+            return None;
+        }
+        if self.next.saturating_add(bytes) > self.end {
+            return None;
+        }
+        let start = self.next;
+        self.next += bytes;
+        Some(start)
+    }
+
     /// Allocate one 4K frame. Returns physical address of the frame.
     pub fn alloc_frame(&mut self) -> Option<PhysAddr> {
         if self.next + PAGE_SIZE > self.end {
