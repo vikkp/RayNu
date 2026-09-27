@@ -11,7 +11,7 @@
     <meta property="og:title" content="RayNu-V · Path to LOI" />
     <meta
       property="og:description"
-              content="Bar A 92%. Bar B 52%. Overall 73%. PERC piece 74%. SKU piece 92%. TLS piece 80%. bda7a59b reached localhost login from the 8 GiB spare image. That window is not the 2.9 TB VD. Auth is parked. USB is not PERC."
+              content="Bar A 92%. Bar B 56%. Overall 73%. PERC piece 74%. SKU piece 92%. TLS piece 80%. bda7a59b reached localhost login from the 8 GiB spare image, then again after a chassis restart. That window is not the 2.9 TB VD. Auth is parked. USB is not PERC."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -63,7 +63,7 @@
           id="loi-path"
           aria-label="Path to LOI"
         >
-          Everest 100% → Persist 93% → SKU 92% → TLS 80% → Auth 38% → Console 82% → PERC 74% → Unmodified 20% → Bar A 92% → Bar B 52% → Overall 73%
+          Everest 100% → Persist 93% → SKU 92% → TLS 80% → Auth 38% → Console 82% → PERC 74% → Unmodified 20% → Bar A 92% → Bar B 56% → Overall 73%
         </p>
       </div>
     </header>
@@ -78,7 +78,7 @@
             <div class="hda-tracker__hero">
               <p class="hda-tracker__label" id="loi-tracker-label">Months to Bar A</p>
               <p class="hda-tracker__months" id="loi-months">0.25 mo</p>
-              <p class="hda-tracker__delta" id="loi-delta">Bar A · was 0.5 · Bar B 2.0 mo</p>
+              <p class="hda-tracker__delta" id="loi-delta">Bar A · was 0.5 · Bar B 1.75 mo</p>
             </div>
             <dl class="hda-tracker__meta">
               <div>
@@ -116,10 +116,10 @@
             <div class="hda-bar">
               <div class="hda-bar__head">
                 <span>Bar B · RAID fleet</span>
-                <span id="loi-bar-b-label">52%</span>
+                <span id="loi-bar-b-label">56%</span>
               </div>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill loi-bar__fill--fleet" id="loi-bar-b" style="width: 52%"></span>
+                <span class="hda-bar__fill loi-bar__fill--fleet" id="loi-bar-b" style="width: 56%"></span>
               </div>
             </div>
             <div class="hda-bar">
@@ -135,7 +135,7 @@
           <p class="hda-aside" data-reveal>
             These numbers move only with COM2 evidence. Nested QEMU and host
             tests do not. Bar A is <span data-loi-pct="bars.a">92%</span>.
-            Bar B is <span data-loi-pct="bars.b">52%</span>. Overall is
+            Bar B is <span data-loi-pct="bars.b">56%</span>. Overall is
             <span data-loi-pct="overall">73%</span>. The PERC piece is
             <span data-loi-pct="pieces.perc">74%</span>.
             Iron <code>bda7a59b</code> reached <code>localhost login:</code>
@@ -172,11 +172,11 @@
               </p>
             </article>
             <article class="loi-card">
-              <p class="loi-card__kicker" id="loi-kicker-b" data-bar-kicker="b">Bar B · 52%</p>
+              <p class="loi-card__kicker" id="loi-kicker-b" data-bar-kicker="b">Bar B · 56%</p>
               <h3>RAID fleet</h3>
               <p>
                 Keep the iron. Replace the licensed hypervisor. This bar is
-                <span data-loi-pct="bars.b">52%</span>. The PERC I/O piece
+                <span data-loi-pct="bars.b">56%</span>. The PERC I/O piece
                 inside it is <span data-loi-pct="pieces.perc">74%</span>.
                 Those are two scores for two questions: the fleet conversation,
                 and how far spare I/O has come. USB persist does not close this.
@@ -331,7 +331,7 @@
                 <strong>RAYNU-SPARE</strong>. <code>vdc</code> stayed hidden.
                 This piece is
                 <span data-loi-pct="pieces.perc">74%</span>.
-                Bar B is <span data-loi-pct="bars.b">52%</span>.
+                Bar B is <span data-loi-pct="bars.b">56%</span>.
                 The guest disk is that 8 GiB window, not the 2.9 TB VD.
                 The mailbox probe LBA 0 is not written. The H840 was not
                 mapped. The mapper still prints <code>skip PERC</code>.
@@ -359,26 +359,28 @@
 
       <section class="section section--hda-com2" id="now">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>NOW · login lived · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">52%</span> · overall <span data-loi-pct="overall">73%</span> · PERC <span data-loi-pct="pieces.perc">74%</span></p>
-          <h2 class="section__title">Alpine logged in from the 8 GiB spare image.</h2>
+          <p class="milestone-kicker" data-reveal>NOW · restart lived · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">56%</span> · overall <span data-loi-pct="overall">73%</span> · PERC <span data-loi-pct="pieces.perc">74%</span></p>
+          <h2 class="section__title">The same Alpine login came back after a chassis restart.</h2>
           <p class="section__lede">
             A6 still lived once: Activity showed <code>abc</code>, then
             <code>-sh: abc: not found</code>, and
             <code>RAYNU-V-M8-CONSOLE-OK</code>. On 2026-09-26 Ubuntu 26.04
             is the standing OS on <strong>UBUNTU0</strong>.
-            Iron <code>bda7a59b</code> printed
-            <code>boot: perc virtio ro hidden</code>, skipped a second copy,
-            and reached <code>localhost login: root</code> from
-            <code>vda2</code> (<code>a0ad99ac</code>). Linux did not see
-            <code>vdc</code>. The guest disk is that 8 GiB window, not the
-            2.9 TB VD. Leave the shell. Do not run
-            <code>setup-alpine</code>. Auth is parked. The standing-SPA
-            rollback file is still <code>v0.1.0-m8-a4s</code>.
+            A second boot of <code>bda7a59b</code> printed
+            <code>boot: perc copy skip present</code> and
+            <code>boot: perc virtio ro hidden</code>, then
+            <code>localhost login: root</code> from <code>vda2</code>
+            (<code>a0ad99ac</code>, <code>6380/521216</code> files). Linux
+            did not see <code>vdc</code>. The image was not rewritten. The
+            guest disk is that 8 GiB window, not the 2.9 TB VD. Leave the
+            shell. Do not run <code>setup-alpine</code>. Auth is parked.
+            The standing-SPA rollback file is still
+            <code>v0.1.0-m8-a4s</code>.
           </p>
           <pre class="ship-code" data-reveal><code>boot:   UBUNTU0 ~400 GB · Ubuntu 26.04 · / and /boot/efi
-spare:  RAYNU-SPARE ~2.9 TB · bda7a59b login from the 8 GiB image · whole VD hidden · do not format
+spare:  RAYNU-SPARE ~2.9 TB · bda7a59b login survived a chassis restart · 8 GiB image · whole VD hidden · do not format
 ctrl:   PERC H740P Mini only · do not open the H840
-next:   leave localhost:~# · do not setup-alpine · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">52%</span> · overall <span data-loi-pct="overall">73%</span> · PERC <span data-loi-pct="pieces.perc">74%</span>
+next:   leave localhost:~# · do not setup-alpine · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">56%</span> · overall <span data-loi-pct="overall">73%</span> · PERC <span data-loi-pct="pieces.perc">74%</span>
 never:  format UBUNTU0 · format the spare · format the Toshiba · setup-disk · setup-alpine · curl Start
 read:   docs/runbooks/r640_perc_lab.md</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
