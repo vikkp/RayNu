@@ -11,7 +11,7 @@
     <meta property="og:title" content="RayNu-V · Path to LOI" />
     <meta
       property="og:description"
-              content="Bar A 92%. Bar B 56%. Overall 73%. PERC piece 74%. SKU piece 92%. TLS piece 80%. bda7a59b reached localhost login from the 8 GiB spare image, then again after a chassis restart. That window is not the 2.9 TB VD. Auth is parked. USB is not PERC."
+              content="Bar A 92%. Bar B 56%. Overall 73%. PERC piece 74%. SKU piece 92%. TLS piece 80%. The spare image survived a chassis restart. The next EFI waits on the SPA before it boots or reinstalls that 8 GiB window. Auth is parked. USB is not PERC."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -359,29 +359,24 @@
 
       <section class="section section--hda-com2" id="now">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>NOW · restart lived · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">56%</span> · overall <span data-loi-pct="overall">73%</span> · PERC <span data-loi-pct="pieces.perc">74%</span></p>
-          <h2 class="section__title">The same Alpine login came back after a chassis restart.</h2>
+          <p class="milestone-kicker" data-reveal>NOW · SPA choice packed · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">56%</span> · overall <span data-loi-pct="overall">73%</span> · PERC <span data-loi-pct="pieces.perc">74%</span></p>
+          <h2 class="section__title">The next boot waits for a choice in the SPA.</h2>
           <p class="section__lede">
-            A6 still lived once: Activity showed <code>abc</code>, then
-            <code>-sh: abc: not found</code>, and
-            <code>RAYNU-V-M8-CONSOLE-OK</code>. On 2026-09-26 Ubuntu 26.04
-            is the standing OS on <strong>UBUNTU0</strong>.
-            A second boot of <code>bda7a59b</code> printed
-            <code>boot: perc copy skip present</code> and
-            <code>boot: perc virtio ro hidden</code>, then
-            <code>localhost login: root</code> from <code>vda2</code>
-            (<code>a0ad99ac</code>, <code>6380/521216</code> files). Linux
-            did not see <code>vdc</code>. The image was not rewritten. The
-            guest disk is that 8 GiB window, not the 2.9 TB VD. Leave the
-            shell. Do not run <code>setup-alpine</code>. Auth is parked.
-            The standing-SPA rollback file is still
-            <code>v0.1.0-m8-a4s</code>.
+            A second boot of <code>bda7a59b</code> reached
+            <code>localhost login: root</code> from the 8 GiB spare image
+            and did not rewrite it. The next EFI, once that image is
+            latched, waits after HTTPS. Overview offers
+            <strong>Boot installed Alpine</strong> or
+            <strong>Reinstall Alpine on spare</strong>. An unattended boot
+            does not install. UBUNTU0 is not touched. Leave the live shell.
+            Do not type <code>setup-alpine</code> there. Auth is parked.
+            Bar A is 92. Bar B is 56. Overall is 73. PERC is 74.
           </p>
           <pre class="ship-code" data-reveal><code>boot:   UBUNTU0 ~400 GB · Ubuntu 26.04 · / and /boot/efi
-spare:  RAYNU-SPARE ~2.9 TB · bda7a59b login survived a chassis restart · 8 GiB image · whole VD hidden · do not format
+spare:  RAYNU-SPARE ~2.9 TB · 8 GiB image survived a restart · SPA chooses boot or reinstall · whole VD hidden
 ctrl:   PERC H740P Mini only · do not open the H840
-next:   leave localhost:~# · do not setup-alpine · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">56%</span> · overall <span data-loi-pct="overall">73%</span> · PERC <span data-loi-pct="pieces.perc">74%</span>
-never:  format UBUNTU0 · format the spare · format the Toshiba · setup-disk · setup-alpine · curl Start
+next:   leave localhost:~# · SPA boot or reinstall · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">56%</span> · overall <span data-loi-pct="overall">73%</span> · PERC <span data-loi-pct="pieces.perc">74%</span>
+never:  format UBUNTU0 · format the whole spare · format the Toshiba · type setup-alpine on the live shell · curl Start
 read:   docs/runbooks/r640_perc_lab.md</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
             Rollback remains GitHub Latest

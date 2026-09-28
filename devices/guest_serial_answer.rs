@@ -249,6 +249,9 @@ static SETUP_WITHHELD_LOG: AtomicBool = AtomicBool::new(false);
 /// - LUN serving and any LBA1 read this boot was `EFI PART`: **never**.
 /// - LUN serving, no `EFI PART` seen: only after an explicit SPA Start
 ///   (`request_from_spa`), not after the `raynuf.txt` flag file.
+/// - A latched spare image ignores this function when the SPA posted a
+///   clean reinstall (`spare_reinstall_wipe_allowed`). That override is
+///   the 8 GiB window only. Boot-as-is does not set it.
 pub fn setup_wipe_allowed(lun_serving: bool, spa_started: bool, efi_part_seen: bool) -> bool {
     if !lun_serving {
         return true;
@@ -257,6 +260,14 @@ pub fn setup_wipe_allowed(lun_serving: bool, spa_started: bool, efi_part_seen: b
 }
 
 fn wipe_allowed_now() -> bool {
+    if crate::mgmt::perc_boot_choice::spare_reinstall_wipe_allowed(
+        crate::mgmt::megaraid::perc_image_boot_latched(),
+        crate::mgmt::perc_boot_choice::clean_reinstall_chosen(),
+    ) {
+        // SPA asked to replace the latched 8 GiB window. `EFI PART` on
+        // that window is the install being replaced. UBUNTU0 is not this disk.
+        return true;
+    }
     setup_wipe_allowed(
         crate::mgmt::durable_lun::durable_lun_serving(),
         crate::boot::raynu_f_flag::spa_started(),

@@ -87,6 +87,12 @@ pub fn spa_started() -> bool {
     SPA_STARTED.load(Ordering::Acquire)
 }
 
+/// Steady-state boot of an installed disk. Sets the RayNu-F request
+/// without [`spa_started`], so the installer auto-answer stays withheld.
+pub fn request_installed_boot() {
+    REQUESTED.store(true, Ordering::Release);
+}
+
 /// Clear the RayNu-F request latch (host tests).
 pub fn clear_request() {
     REQUESTED.store(false, Ordering::Release);

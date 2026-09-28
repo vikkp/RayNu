@@ -352,6 +352,7 @@ pub mod auth;
 pub mod m8_auth_gate;
 pub mod console;
 pub mod host_power;
+pub mod perc_boot_choice;
 pub mod m8_console_gate;
 pub mod sku_card;
 pub mod iso_upload;
@@ -481,6 +482,7 @@ pub use host_nic::{
 pub use host_nic_coexist::{
     maybe_tick_standing_spa, prop_coexist_wired, tick_native_coexist, try_arm_native_coexist,
 };
+pub use perc_boot_choice::wait_perc_spa_choice_if_latched;
 pub use http::{prop_http_mgmt_package, HTTP_GAP_NOTE, HTTP_LAB_NOTE, M7_HTTP_OK_MARKER};
 pub use http_listen::{
     run_post_ebs_http_idle, run_post_ebs_http_snp_warn_only, run_post_ebs_mgmt_listen,

@@ -1873,6 +1873,9 @@ fn perc_fusion_post(bar: u64, bus: u8, dev: u8, func: u8, base: u64) {
         serial::write_line(
             "boot: perc virtio ro hidden (vda is the 8 GiB image; not PERC-BOOT-OK)",
         );
+        serial::write_line(
+            "boot: perc image latched — HTTPS will wait for SPA boot or reinstall (not PERC-BOOT-OK)",
+        );
     } else {
         serial::write_str("boot: perc virtio ro id=");
         write_dec(u32::from(target));
