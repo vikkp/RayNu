@@ -38,7 +38,7 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 
 | Metric | Value | Δ vs previous HDA |
 |--------|------:|-------------------|
-| **Overall product readiness** | **99%** | **held** — Everest **CLOSED** (`f72b4276`). `bda7a59b` logged in from the 8 GiB spare image, then again after a chassis restart. The next EFI waits on the SPA before it boots or reinstalls that window. Not 100%. A5 is parked. |
+| **Overall product readiness** | **99%** | **held** — Everest **CLOSED** (`f72b4276`). `8ad2ac89` reinstalled the 8 GiB spare window, then a later boot logged in from `d43dbf07-…` with `setup-disk` withheld. Not 100%. A5 is parked. The 2.9 TB VD stays hidden. |
 | **Months to Mount Everest** | **0.0** | **held** (summit reached 2026-09-11; `f72b4276` SPA ISO loop) |
 | **ETA month** | **2026-09** | **closed this month on iron**; next work is M8, not a slipped Everest |
 | **Confidence** | high | E1–E6 on COM2. M8 named separately so polish cannot reopen the summit |
@@ -354,11 +354,11 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-7-perc-spa-choice |
-| Summary | **SPA chooses boot or reinstall before a latched spare image launches.** An unattended F11 does not run `setup-disk`. Months **0.0 held**. Overall **99 held**. |
-| Everest impact | none — Everest stays closed. Not 100%. A packed SPA choice is not a reopened Everest. Nested QEMU ≠ R640. |
-| Gates touched | Host predicates and EFI build. No new iron COM2. No doorbell. No format of UBUNTU0. The whole 2.9 TB VD stays hidden. |
-| Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 56 held, perc 74 held, months B 1.75 held, overall LOI 73 held, months A 0.25 held. |
+| Commit | m8-7-perc-spa-lived |
+| Summary | **Both SPA paths lived on `8ad2ac89`.** Choice 2 reinstalled the 8 GiB window. Choice 1 booted that UUID. Months **0.0 held**. Overall **99 held**. |
+| Everest impact | none — Everest stays closed. Not 100%. A lived SPA choice is not a reopened Everest. Nested QEMU ≠ R640. |
+| Gates touched | Iron COM2. No new code. No doorbell. No format of UBUNTU0. The whole 2.9 TB VD stays hidden. |
+| Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 56→60, perc 74→78, months B 1.75→1.5, overall LOI 73 held, months A 0.25 held. |
 
 
 ## Blockers & risks (Everest-relevant)
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-28 | m8-7-perc-spa-lived | 0.0 | 99 | **Both SPA paths lived.** `8ad2ac89` choice 2 wrote `d43dbf07-…`. Choice 1 then `DISK-BOOTX64` and `localhost login:` with `setup-disk` withheld. perc 74→78. Bar B 56→60. Months B 1.75→1.5. months 0.0 held; overall 99 held |
 | 2026-09-28 | m8-7-perc-spa-choice | 0.0 | 99 | **SPA chooses boot or clean reinstall.** A latched spare image waits after HTTPS. Overview posts boot-as-is or a reinstall of the 8 GiB window. Unattended F11 does not install. Packed, not lived. perc 74 held. Bar B 56 held. months 0.0 held; overall 99 held |
 | 2026-09-27 | m8-7-perc-reboot | 0.0 | 99 | **Same login after a chassis restart.** Second `bda7a59b` boot: `perc copy skip present`, `perc virtio ro hidden`, `vda2` `6380/521216`, `localhost login: root` on `a0ad99ac`. perc 74 held. Bar B 52→56. Months B 2.0→1.75. months 0.0 held; overall 99 held |
 | 2026-09-27 | m8-7-perc-login | 0.0 | 99 | **Unattended login from the spare image.** `bda7a59b` hid `vdc`, mounted `vda2` (`a0ad99ac`), and reached `localhost login: root`. perc 55→74. Bar B 36→52. Months B 2.75→2.0. The guest disk is 8 GiB. months 0.0 held; overall 99 held |
@@ -1033,7 +1034,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     Leave the live localhost:~# on bda7a59b. Do not type setup-alpine there. The next EFI waits on the SPA after the spare image is latched: Boot installed Alpine, or Reinstall Alpine on the 8 GiB window. An unattended boot does not install. Do not format UBUNTU0. The whole 2.9 TB VD stays hidden. No doorbell. Do not open the H840. A5 is parked. See docs/m8_plan.md.
+Next move:     Leave the live localhost:~# on d43dbf07. Do not type setup-alpine. Both SPA paths lived on 8ad2ac89. The guest disk is still the 8 GiB window. Do not format UBUNTU0. The whole 2.9 TB VD stays hidden. No doorbell. Do not open the H840. A5 is parked. See docs/m8_plan.md.
 Rollback:      Standing SPA: v0.1.0-m8-a4s → CI 36137732145 / COM2 sha=1f33eeda72f9 / EFI SHA256 5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693
 Everest:       GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351 / EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc / COM2 build: sha=f72b4276d198
 Do not F11:    M8 prototypes `b5e290be` `17d120c5` `3b388279` `08202468` `d60431ee` `28cd4ff1` `15e3d665` `5c32bd06` `1fa231df` `e5cca2e0` `c4a41a17` (table in docs/m8_state.md); Phase B fails `34548550755` / `7f8dc0a9`
