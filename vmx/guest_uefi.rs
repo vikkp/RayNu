@@ -5153,14 +5153,28 @@ unsafe fn attach_product_iso_install_disk(alloc: &mut FrameAllocator, warn: bool
     if crate::devices::guest_virtio_blk::disk_bytes() != 0 {
         return;
     }
-    if let Some(bytes) = crate::mgmt::durable_lun::take_durable_lun_install_disk() {
-        let keep = crate::mgmt::disk_persist::persist_lun_keep();
+    if let Some(lun_bytes) = crate::mgmt::durable_lun::take_durable_lun_install_disk() {
+        let tail = crate::mgmt::perc_boot_choice::armed_tail();
+        let bytes = tail.map(|(_, disk)| disk).unwrap_or(lun_bytes);
+        let keep = if tail.is_some() {
+            false
+        } else {
+            crate::mgmt::disk_persist::persist_lun_keep()
+        };
         crate::mgmt::disk_persist::set_install_disk_keep(keep);
         if crate::devices::guest_virtio_blk::attach_lun(bytes as usize, !keep) {
             serial::write_str("boot: Stage 46 virtio-blk install disk bytes=");
             write_dec(crate::devices::guest_virtio_blk::disk_bytes());
             serial::write_str(" keep=");
             write_dec(u64::from(keep));
+            if let Some((spare_off, _)) = tail {
+                serial::write_str(" tail_off=");
+                write_dec(spare_off);
+                serial::write_line(
+                    " (free tail; 8 GiB window is not vda; not ISO-INSTALL-OK)",
+                );
+                return;
+            }
             if crate::mgmt::nvme::nvme_io_ready() {
                 serial::write_line(" (durable LUN nvme; not ISO-INSTALL-OK)");
             } else {
@@ -7418,8 +7432,12 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
         || iso_forbidden;
     // SPA clean reinstall forces the ISO even when this disk already has
     // an ESP. Steady state keeps disk-before-ISO.
-    let clean = crate::mgmt::perc_boot_choice::clean_reinstall_chosen();
-    if clean {
+    let force_iso = crate::mgmt::perc_boot_choice::installer_iso_forced();
+    if crate::mgmt::perc_boot_choice::armed_tail().is_some() {
+        serial::write_line(
+            "boot: perc SPA tail — stage ISO; vda is the free tail; the 8 GiB window stays (not ISO-INSTALL-OK)",
+        );
+    } else if crate::mgmt::perc_boot_choice::clean_reinstall_chosen() {
         serial::write_line(
             "boot: perc SPA reinstall — stage ISO, not the installed ESP (8 GiB window; not ISO-INSTALL-OK)",
         );
@@ -7430,7 +7448,7 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
             || sticky
             || pin
             || iso_forbidden,
-        clean,
+        force_iso,
     );
     let disk_entry = if try_disk {
         let mut e = None;
@@ -7453,7 +7471,7 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
         sticky,
         pin,
         iso_forbidden,
-        clean,
+        force_iso,
     ) {
         raynu_f_stage_iso_bootloader(&layout, ram_hpa)
     } else {
@@ -7477,15 +7495,15 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
         }
         None
     };
-    if clean && iso_entry.is_none() {
+    if force_iso && iso_entry.is_none() {
         serial::write_line(
-            "boot: WARN perc SPA reinstall ISO miss; not booting the installed ESP (not ISO-INSTALL-OK)",
+            "boot: WARN perc SPA installer ISO miss; not booting the installed window (not ISO-INSTALL-OK)",
         );
     }
     let (entry, image_handle) = match crate::mgmt::perc_boot_choice::pick_staged_entry(
         disk_entry.is_some(),
         iso_entry.is_some(),
-        clean,
+        force_iso,
     ) {
         crate::mgmt::perc_boot_choice::StagedPick::Disk => match disk_entry {
             Some(e) => (e, crate::raynu_f::protocol::HANDLE_IMAGE),

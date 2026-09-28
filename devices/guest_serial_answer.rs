@@ -260,6 +260,13 @@ pub fn setup_wipe_allowed(lun_serving: bool, spa_started: bool, efi_part_seen: b
 }
 
 fn wipe_allowed_now() -> bool {
+    if crate::mgmt::perc_boot_choice::armed_tail().is_some()
+        && crate::mgmt::megaraid::perc_image_boot_latched()
+    {
+        // vda is the free tail. setup-disk writes that geometry. The
+        // installed window is not in this LBA space.
+        return true;
+    }
     if crate::mgmt::perc_boot_choice::spare_reinstall_wipe_allowed(
         crate::mgmt::megaraid::perc_image_boot_latched(),
         crate::mgmt::perc_boot_choice::clean_reinstall_chosen(),
@@ -337,7 +344,9 @@ pub fn note_tx(b: u8) {
             MEDIA_MOUNTED.store(true, Ordering::Release);
         }
         match phase {
-            PHASE_LOGIN if !GRUB_SENT.load(Ordering::Acquire) && ends_with(&a.win, a.wlen, GRUB) => {
+            PHASE_LOGIN
+                if !GRUB_SENT.load(Ordering::Acquire) && ends_with(&a.win, a.wlen, GRUB) =>
+            {
                 enqueue(a, GRUB_ENTER);
                 GRUB_SENT.store(true, Ordering::Release);
             }

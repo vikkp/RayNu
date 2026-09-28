@@ -87,7 +87,7 @@ input.token{min-width:12rem}
 </div>
 <div class="card" id="perc-choice">
 <b>Spare</b>
-<p class="empty" id="perc-note">Open Guests. Start boots the installed guest. A Linux ISO inside the window is the install. UBUNTU0 is not touched.</p>
+<p class="empty" id="perc-note">Open Guests. Start boots the installed guest. A larger Linux disk is a new disk in the free tail. UBUNTU0 is not touched.</p>
 </div>
 <div class="toolbar"><button class="danger" id="btn-poweroff" type="button">Power off host</button></div>
 <p class="empty">Power off host turns this chassis off after the page answers. It is not a guest command.</p>
@@ -204,7 +204,7 @@ async function powerOff(){if(!confirm("Power off RayNu-V on this chassis?"))retu
 function paintSpare(b){
 const cap=document.getElementById("spare-cap"),box=document.getElementById("spare-list");
 const mb=function(n){return Math.floor((n||0)/1048576)};
-cap.textContent="Spare "+mb(b.spare_bytes)+" MiB. Used "+mb(b.used_bytes)+". Free "+mb(b.free_bytes)+". This boot places "+mb(b.placeable_bytes)+" MiB.";
+cap.textContent="Spare "+mb(b.spare_bytes)+" MiB. Used "+mb(b.used_bytes)+". Free "+mb(b.free_bytes)+". A new disk can use "+mb(b.placeable_bytes)+" MiB.";
 const g=b.guests||[];
 if(!g.length){box.className="empty";box.textContent="No guest on the spare.";return}
 box.className="";box.innerHTML="";
@@ -220,9 +220,10 @@ let r;try{r=await api("GET","/perc/guests")}catch(e){return}
 hostOk=r.ok||hostOk;if(!r.ok)return;
 let b={};try{b=await r.json()}catch(e){}
 const n=document.getElementById("perc-note");
-if(b.waiting)n.textContent="Installed guest is on Guests. Start boots it. Linux ISO inside the window reinstalls that window.";
+if(b.waiting)n.textContent="Installed guest is on Guests. Start boots it. A larger Linux disk is placed in the free tail. Disk 8192 reinstalls the window.";
 else if(b.choice==="boot")n.textContent="Booting the installed guest. setup-disk stays withheld.";
 else if(b.choice==="reinstall")n.textContent="Installing linux_iso on the spare window.";
+else if(b.choice==="tail")n.textContent="Installing linux_iso on a new disk in the free tail. The installed window stays.";
 else n.textContent="No latched spare image. A new disk is refused until one is present.";
 paintSpare(b);
 }
