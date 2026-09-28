@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-perc-spa-rollback |
-| Summary | **Rollback pin `v0.1.0-m8-perc-spa`.** CI EFI of `8ad2ac89` (run `36362775808`). Months **0.0 held**. Overall **99 held**. |
+| Commit | m8-guest-catalog |
+| Summary | **ADR-019 slice 1 packed.** Guests lists the latched spare image. A disk past the 8 GiB window is refused. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. A lived SPA choice is not a reopened Everest. Nested QEMU ≠ R640. |
 | Gates touched | Iron COM2. No new code. No doorbell. No format of UBUNTU0. The whole 2.9 TB VD stays hidden. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 56→60, perc 74→78, months B 1.75→1.5, overall LOI 73 held, months A 0.25 held. |
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-28 | m8-guest-catalog | 0.0 | 99 | **ADR-019 slice 1 packed, not lived.** Guests lists the latch. Start boots it. `linux_iso` inside 8 GiB is the reinstall. A larger disk is refused. Windows refused. Rollback `v0.1.0-m8-perc-spa`. months 0.0 held; overall 99 held |
 | 2026-09-28 | m8-perc-spa-rollback | 0.0 | 99 | **Rollback pin `v0.1.0-m8-perc-spa`.** CI `36362775808`, COM2 `build: sha=8ad2ac89125e`, EFI SHA256 `6d5dc7cb…`. Not Latest. months 0.0 held; overall 99 held |
 | 2026-09-28 | m8-7-perc-spa-lived | 0.0 | 99 | **Both SPA paths lived.** `8ad2ac89` choice 2 wrote `d43dbf07-…`. Choice 1 then `DISK-BOOTX64` and `localhost login:` with `setup-disk` withheld. perc 74→78. Bar B 56→60. Months B 1.75→1.5. months 0.0 held; overall 99 held |
 | 2026-09-28 | m8-7-perc-spa-choice | 0.0 | 99 | **SPA chooses boot or clean reinstall.** A latched spare image waits after HTTPS. Overview posts boot-as-is or a reinstall of the 8 GiB window. Unattended F11 does not install. Packed, not lived. perc 74 held. Bar B 56 held. months 0.0 held; overall 99 held |
@@ -1035,7 +1036,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     Leave the live localhost:~# on d43dbf07. Do not type setup-alpine. Both SPA paths lived on 8ad2ac89. The guest disk is still the 8 GiB window. Do not format UBUNTU0. The whole 2.9 TB VD stays hidden. No doorbell. Do not open the H840. A5 is parked. See docs/m8_plan.md.
+Next move:     ADR-019 slice 1 is packed. Guests lists the latched image and refuses a disk past 8 GiB. Not lived until COM2 shows it. Leave localhost:~# on d43dbf07. Do not type setup-alpine. Rollback is v0.1.0-m8-perc-spa. Do not format UBUNTU0. The whole 2.9 TB VD stays hidden. No doorbell. A5 is parked. See docs/adr/ADR-019.md.
 Rollback:      PERC SPA: v0.1.0-m8-perc-spa → CI 36362775808 / COM2 sha=8ad2ac89125e / EFI SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849
 Standing SPA:  v0.1.0-m8-a4s → CI 36137732145 / COM2 sha=1f33eeda72f9 / EFI SHA256 5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693
 Everest:       GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351 / EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc / COM2 build: sha=f72b4276d198

@@ -31,11 +31,11 @@ pub const CHOICE_REINSTALL: u8 = 2;
 
 /// COM2 while the firmware waits. Not an iron marker.
 pub const PERC_SPA_WAIT_NOTE: &str =
-    "boot: perc image present — waiting for SPA (boot installed Alpine, or clean reinstall on the spare window; not ISO-INSTALL-OK)";
-/// COM2 after Overview "Boot installed Alpine".
+    "boot: perc image present — waiting for SPA Guests (start the installed guest, or linux_iso inside the spare window; not ISO-INSTALL-OK)";
+/// COM2 after Guests Start.
 pub const PERC_SPA_BOOT_NOTE: &str =
     "boot: perc SPA choice boot installed (steady state; setup-disk withheld; not ISO-INSTALL-OK)";
-/// COM2 after Overview "Reinstall Alpine on spare".
+/// COM2 after Guests Create with linux_iso inside the window.
 pub const PERC_SPA_REINSTALL_NOTE: &str =
     "boot: perc SPA choice clean reinstall (ISO on the 8 GiB spare window; UBUNTU0 untouched; not ISO-INSTALL-OK)";
 
@@ -294,11 +294,9 @@ pub fn prop_perc_spa_choice() -> bool {
     let guest = include_str!("../vmx/guest_uefi.rs");
     http.contains("perc_choice_rest")
         && http.contains("PercSpaChoice")
-        && html.contains("btn-perc-boot")
-        && html.contains("btn-perc-re")
-        && html.contains(PERC_BOOT_INSTALLED_PATH)
-        && html.contains(PERC_BOOT_REINSTALL_PATH)
-        && html.contains(PERC_BOOT_STATUS_PATH)
+        && html.contains("spare-list")
+        && html.contains("/perc/guests/1/start")
+        && !html.contains(PERC_BOOT_INSTALLED_PATH)
         && main.contains("wait_perc_spa_choice_if_latched()")
         && answer.contains("spare_reinstall_wipe_allowed")
         && guest.contains("prefer_installed_disk")
