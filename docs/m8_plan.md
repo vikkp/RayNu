@@ -21,7 +21,7 @@ Three pins. GitHub Latest stays the Everest loop. The current PERC rollback is t
 | CI | `--run 36362775808` · COM2 `build: sha=8ad2ac89125e` |
 | EFI SHA256 | `6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849` |
 | In-tree kit | `releases/v0.1.0-m8-perc-spa/` |
-| Lived | Choice 2 wrote `d43dbf07-…`. A later boot, choice 1, reached `localhost login:` with `setup-disk` withheld |
+| Lived | Choice 2 wrote `d43dbf07-…`. A later boot, choice 1, reached `localhost login:` with `setup-disk` withheld. `5175b3da` then lived Guests Start of that same UUID |
 
 Flash the kit file to leave the Guests-screen work. Do not rebuild it and expect the same COM2 stamp.
 
