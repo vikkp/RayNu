@@ -482,6 +482,32 @@ pub fn handle_http_request(
             );
         }
     }
+    // ADR-019: Guests lists the latched spare image and posts the same
+    // choice. A disk past the 8 GiB window is refused. Not an iron marker.
+    match crate::mgmt::guest_catalog::guest_catalog_rest(
+        parsed.method,
+        parsed.path,
+        auth_allows(parsed.auth_token),
+    ) {
+        crate::mgmt::guest_catalog::GuestCatalogHttp::NotMine => {}
+        crate::mgmt::guest_catalog::GuestCatalogHttp::Unauthorized => {
+            return format_http_response(401, "text/plain; charset=utf-8", b"unauthorized", out);
+        }
+        crate::mgmt::guest_catalog::GuestCatalogHttp::BadMethod => {
+            return format_http_response(400, "text/plain; charset=utf-8", b"bad request", out);
+        }
+        crate::mgmt::guest_catalog::GuestCatalogHttp::Ready {
+            status,
+            len,
+            body,
+            audit_choice,
+        } => {
+            if let Some(choice) = audit_choice {
+                crate::audit_log!(crate::audit::AuditEvent::PercSpaChoice { choice });
+            }
+            return format_http_response(status, "application/json", &body[..len], out);
+        }
+    }
     // SPA Overview: turn this chassis off. 200 is queued here. Firmware
     // coexist drains it, then VMXOFF and ResetSystem. Not a guest command.
     if parsed.path == crate::mgmt::host_power::HOST_POWEROFF_PATH {

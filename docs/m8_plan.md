@@ -10,7 +10,20 @@ M8 is the polish table that used to read as “Everest residual.” It is **not*
 
 ## Iron rollback
 
-Two pins. GitHub Latest stays the Everest loop. The standing-SPA pin is the path back to `1f33eeda` after a later experiment. Do **not** treat an untagged tip as either pin.
+Three pins. GitHub Latest stays the Everest loop. The current PERC rollback is the lived SPA choice. The standing-SPA pin is the older path back to `1f33eeda`. Do **not** treat an untagged tip as any of these pins.
+
+### PERC SPA choice (`v0.1.0-m8-perc-spa`)
+
+| Field | Value |
+|-------|-------|
+| GitHub | https://github.com/vikkp/RayNu/releases/tag/v0.1.0-m8-perc-spa (not Latest) |
+| EFI source | `8ad2ac89125ee055d978f4ac1161770b97da40a2` |
+| CI | `--run 36362775808` · COM2 `build: sha=8ad2ac89125e` |
+| EFI SHA256 | `6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849` |
+| In-tree kit | `releases/v0.1.0-m8-perc-spa/` |
+| Lived | Choice 2 wrote `d43dbf07-…`. A later boot, choice 1, reached `localhost login:` with `setup-disk` withheld. `5175b3da` then lived Guests Start of that same UUID |
+
+Flash the kit file to leave the Guests-screen work. Do not rebuild it and expect the same COM2 stamp.
 
 ### Standing SPA + this install (`v0.1.0-m8-a4s`)
 

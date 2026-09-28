@@ -178,7 +178,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | **2026-09-25** | Bar A **A4s** | Page stays up after `login:` | **LIVED** (`1f33eeda72f9`, lease `.154`, one TCP accept, `HTTP keep-alive`, Host green, guest COM1 in Activity) |
 | **2026-09-27** | M8.7 spare read | COM2 `RAYNU-V-M8-PERC-LUN-OK` | **LIVED** (`9c37fcae`: `perc virtio rd lba=0 ok`, then `dd` of `/dev/vdc` returned 16 zero bytes) |
 | **2026-09-27** | M8.7 last-LBA write | COM2 `RAYNU-V-M8-PERC-WRITE-OK` | **LIVED** (`f0a7aabb`: `perc write status=0x00` at LBA `6190268927`, readback match, then the marker. LBA 0 stayed 16 zeros. Read-only virtio. Alpine still on the Toshiba.) |
-| **NOW** | Both SPA paths lived | Choice 2 reinstalled the window; choice 1 booted that UUID | Lived on `8ad2ac89`. Leave `localhost:~#`. Do not type `setup-alpine`. PERC 74→78. Bar B 56→60. Months B 1.75→1.5. Overall 73 held. Bar A 92 held. The guest disk is still 8 GiB. `skip PERC` stays. A5 parked. See [m8_plan.md](m8_plan.md) |
+| **NOW** | Guests Start lived | `5175b3da` choice 1 booted `d43dbf07` from the Guests row | Leave `localhost:~#`. Do not type `setup-alpine`. Do not click Create on this boot. The 10240 MiB refusal is still untested on iron. Scores held. The guest disk is still 8 GiB. See [ADR-019](adr/ADR-019.md) |
 | later | Unmodified ISO | Gen-1 Phase 2 | named residual, not a fake close |
 
 ```
@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-7-perc-spa-lived |
-| Summary | **Both SPA paths lived on `8ad2ac89`.** Choice 2 reinstalled the 8 GiB window. Choice 1 then booted `d43dbf07-…` and withheld `setup-disk`. |
+| Commit | m8-guest-catalog |
+| Summary | **Guests Start lived on `5175b3da`.** Same UUID `d43dbf07`, `setup-disk` withheld. The 10240 MiB refusal was not clicked. |
 | Everest impact | none — HDA months 0.0 / 99% held |
-| LOI impact | perc 74→78. Bar B 56→60. Months B 1.75→1.5. Overall 73 held. Bar A 92 held. Months A 0.25 held. Not the 2.9 TB VD. |
-| Gates touched | Iron COM2 only. No new code. No doorbell. No format of UBUNTU0. The whole 2.9 TB VD stays hidden. |
+| LOI impact | Scores held. Bar A 92. Bar B 60. perc 78. Overall 73. Unmodified media stays 20. The guest disk is still 8 GiB. The page showed the spare size. |
+| Gates touched | Host catalog. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
 
 ---
 
@@ -219,6 +219,9 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-28 | m8-guest-start-lived | 92 | 60 | **Guests Start lived.** `5175b3da` `choice=1`, `DISK-BOOTX64`, `RAYNU-V-M8-PERC-BOOT-OK`, `localhost:~#` on `d43dbf07`. `vda` 8.00 GiB. `vda2` clean `6380/521216`. Page showed spare 3022592 MiB. Create was not clicked. Scores held. Unmodified media stays 20. |
+| 2026-09-28 | m8-guest-catalog | 92 | 60 | **ADR-019 slice 1 packed, not lived.** Guests lists the latch and refuses a disk past the 8 GiB window. `windows_iso` refused. Unmodified media stays 20. Scores held. Rollback `v0.1.0-m8-perc-spa`. |
+| 2026-09-28 | m8-perc-spa-rollback | 92 | 60 | **Rollback pin `v0.1.0-m8-perc-spa`.** CI `36362775808`, `build: sha=8ad2ac89125e`. Not Latest. Scores held. |
 | 2026-09-28 | m8-7-perc-spa-lived | 92 | 60 | **Both SPA paths lived.** `8ad2ac89` choice 2 ran `setup-disk` and wrote `d43dbf07-…`. A later HV boot, choice 1, printed `DISK-BOOTX64`, `RAYNU-V-M8-PERC-BOOT-OK`, and `localhost login:` from that UUID. `vda2` clean `6377/521216`. `setup-disk` withheld. perc 74→78. Bar B 56→60. Months B 1.75→1.5. Overall 73 held. Bar A 92 held. A guest reboot during the reinstall choice returned to the ISO. Toshiba still attached. Not the 2.9 TB VD. |
 | 2026-09-28 | m8-7-perc-spa-choice | 92 | 56 | **SPA chooses boot or clean reinstall.** A latched spare image waits after HTTPS. Overview posts one path. Unattended F11 does not run `setup-disk`. Packed, not lived. perc 74 held. Bar B 56 held. Months B 1.75 held. Overall 73 held. Not the 2.9 TB VD. |
 | 2026-09-27 | m8-7-perc-reboot | 92 | 56 | **Same login after a chassis restart.** Second `bda7a59b` boot skipped the copy (`alt=16777215`), hid `vdc`, and reached `localhost login: root` on `a0ad99ac`. `vda2` still `6380/521216` files. perc 74 held. Bar B 52→56. Months B 2.0→1.75. Overall 73 held. Toshiba still attached. Not the 2.9 TB VD. |
@@ -328,10 +331,10 @@ LOI:           NOT OPEN. Tracker born 2026-09-14.
 Bar A:         92% · 0.25 months · dedicated-box non-prod
 Bar B:         60% · 1.5 months · PERC RAID fleet (8ad2ac89 reinstall then boot of d43dbf07; 8 GiB image; whole VD still hidden)
 Overall:       73% · confidence medium
-NOW:           Leave the live localhost:~# on d43dbf07. Do not type setup-alpine. Both SPA paths lived on 8ad2ac89. Do not format UBUNTU0. The guest disk is the 8 GiB image, not the 2.9 TB VD. skip PERC stays. A5 parked. Bar A 92. Bar B 60. Overall 73. perc 78. months A 0.25. months B 1.5. docs/m8_plan.md
+NOW:           Guests Start lived on 5175b3da. Leave localhost:~# on d43dbf07. Do not type setup-alpine. Do not click Create guest on this boot. The 10240 MiB refusal is still untested on iron. Rollback v0.1.0-m8-perc-spa. Do not format UBUNTU0. The guest disk is still the 8 GiB image. skip PERC stays. A5 parked. Bar A 92. Bar B 60. Overall 73. perc 78. unmodified 20. months A 0.25. months B 1.5. docs/adr/ADR-019.md
 Open:          boot a guest from a VD · iron AUTH-OK (parked) · unmodified ISO · cluster
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
-Rollback:      v0.1.0-m8-a4s → standing SPA (COM2 sha=1f33eeda72f9, CI 36137732145). v0.1.0-m8-a6 → keyboard + power-off (fd2ca12e, CI 36166108942), not Latest. Everest Latest stays v0.1.0-everest-closed (f72b4276).
+Rollback:      v0.1.0-m8-perc-spa → lived SPA choice (COM2 sha=8ad2ac89125e, CI 36362775808, SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849). v0.1.0-m8-a4s → older standing SPA (1f33eeda72f9, CI 36137732145). v0.1.0-m8-a6 → keyboard + power-off (fd2ca12e, CI 36166108942), not Latest. Everest Latest stays v0.1.0-everest-closed (f72b4276).
 Sit:           Ubuntu is the OS. Do not setup-disk. Do not format the ~298 GB Toshiba. Identify disks by size, never by sdX.
 ```
 

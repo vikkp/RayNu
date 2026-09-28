@@ -301,6 +301,7 @@ All ADRs live in `docs/adr/`. Format: numbered, dated, context/decision/rational
 | 016   | RayNu-F — be the guest firmware for E5 | Be the guest UEFI boot env ourselves (own EFI system table + boot services over virtio-blk/CD) instead of puppeting OVMF; RayNu-F is a subsystem in the single binary, outside Proven Core; disable the 3k–3o OVMF forcing (self-inflicted the 9474ab6/4e16b59 NULL-event #PF + CpuDeadLoop); **No third-party firmware state mutation**; do not claim ISO-INSTALL-OK |
 | 017   | Guest reset under RayNu-F (F7)        | Disk-before-ISO; `reset_keep_disk`; CF9/KBC/TF; cap=1; HANDLE_DISK Vendor path; nested `fe4785a` reboot-to-disk (`DISK-BOOT-OK` + `root=UUID=`); do not claim ISO-INSTALL-OK |
 | 018   | Post-Everest M8 operator hardening    | Everest CLOSED on iron `f72b4276`; rollback kit `v0.1.0-everest-closed`; M8 = persist/TLS/auth/console/upload/catalog/Windows-later; cluster → **M9**; no Proven Core expansion |
+| 019   | Guests screen is the spare boot policy | Guests lists the latched spare image and chooses boot or `linux_iso`. Slice 1 places only the 8 GiB window. Windows is refused. Rollback `v0.1.0-m8-perc-spa` |
 
 **Rule:** Any new ADR is added here AND to `docs/adr/ADR-NNN.md`.
 
