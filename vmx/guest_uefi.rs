@@ -7416,12 +7416,22 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
         || sticky
         || pin
         || iso_forbidden;
-    let try_disk = crate::raynu_f::raynu_f_boot_source(disk_has)
-        == crate::raynu_f::BootSource::Disk
-        || crate::devices::guest_virtio_blk::disk_bytes_written() != 0
-        || sticky
-        || pin
-        || iso_forbidden;
+    // SPA clean reinstall forces the ISO even when this disk already has
+    // an ESP. Steady state keeps disk-before-ISO.
+    let clean = crate::mgmt::perc_boot_choice::clean_reinstall_chosen();
+    if clean {
+        serial::write_line(
+            "boot: perc SPA reinstall — stage ISO, not the installed ESP (8 GiB window; not ISO-INSTALL-OK)",
+        );
+    }
+    let try_disk = crate::mgmt::perc_boot_choice::prefer_installed_disk(
+        crate::raynu_f::raynu_f_boot_source(disk_has) == crate::raynu_f::BootSource::Disk
+            || crate::devices::guest_virtio_blk::disk_bytes_written() != 0
+            || sticky
+            || pin
+            || iso_forbidden,
+        clean,
+    );
     let disk_entry = if try_disk {
         let mut e = None;
         for _ in 0..3 {
@@ -7438,7 +7448,13 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
     // keep=1 BOOTX64 miss; skip ISO (do not wipe persist). Iron b5e290be
     // found DISK BOOTX64 then FAT read failed → image=ISO-BOOTX64; auto-answer
     // setup-disk can wipe the 8 GiB slice.
-    let iso_entry = if disk_entry.is_none() && !sticky && !pin && !iso_forbidden {
+    let iso_entry = if crate::mgmt::perc_boot_choice::stage_installer_iso(
+        disk_entry.is_none(),
+        sticky,
+        pin,
+        iso_forbidden,
+        clean,
+    ) {
         raynu_f_stage_iso_bootloader(&layout, ram_hpa)
     } else {
         if disk_entry.is_none() && sticky {
@@ -7461,10 +7477,25 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
         }
         None
     };
-    let (entry, image_handle) = match (disk_entry, iso_entry) {
-        (Some(e), _) => (e, crate::raynu_f::protocol::HANDLE_IMAGE),
-        (None, Some(e)) => (e, crate::raynu_f::protocol::HANDLE_IMAGE),
-        (None, None) => (loaded.entry, plan.rcx),
+    if clean && iso_entry.is_none() {
+        serial::write_line(
+            "boot: WARN perc SPA reinstall ISO miss; not booting the installed ESP (not ISO-INSTALL-OK)",
+        );
+    }
+    let (entry, image_handle) = match crate::mgmt::perc_boot_choice::pick_staged_entry(
+        disk_entry.is_some(),
+        iso_entry.is_some(),
+        clean,
+    ) {
+        crate::mgmt::perc_boot_choice::StagedPick::Disk => match disk_entry {
+            Some(e) => (e, crate::raynu_f::protocol::HANDLE_IMAGE),
+            None => (loaded.entry, plan.rcx),
+        },
+        crate::mgmt::perc_boot_choice::StagedPick::Iso => match iso_entry {
+            Some(e) => (e, crate::raynu_f::protocol::HANDLE_IMAGE),
+            None => (loaded.entry, plan.rcx),
+        },
+        crate::mgmt::perc_boot_choice::StagedPick::Fallback => (loaded.entry, plan.rcx),
     };
     // Stack (zeroed; RSP slot holds a 0 return address) and GDT just above it.
     let sb = plan.stack_base as usize;

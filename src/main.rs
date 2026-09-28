@@ -104,6 +104,9 @@ fn main() -> Status {
     let mut bump = handoff.frames;
 
     let _ = r640_hypervisor::mgmt::run_post_ebs_mgmt_listen();
+    // Latched spare image: do not launch RayNu-F until the SPA picks
+    // boot-as-is or a clean reinstall. No image latch returns immediately.
+    r640_hypervisor::mgmt::wait_perc_spa_choice_if_latched();
 
     boot::serial::write_str("boot: handoff pool remaining_pages=");
     write_dec(bump.remaining_pages());

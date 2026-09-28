@@ -369,6 +369,13 @@ pub fn arm_bcm5720_coexist() -> bool {
 /// INVARIANTS:
 /// - No-op unless [`arm_bcm5720_coexist`] succeeded
 /// - At most one [`tick_bcm5720_coexist`] per ~2 ms (TSC)
+/// True after [`arm_bcm5720_coexist`] stored the coexist session.
+pub fn coexist_session_armed() -> bool {
+    // SAFETY: BSP-only flag. The perc SPA wait reads it; it does not arm.
+    // KANI-TARGET: host gate checks the wait note, not this flag.
+    unsafe { COEXIST_ARMED }
+}
+
 pub fn maybe_tick_bcm5720_standing_spa() {
     // SAFETY: BSP-only coexist latch; same session as [`tick_bcm5720_coexist`].
     // KANI-TARGET: host gate checks the call sites, not this flag.

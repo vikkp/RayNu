@@ -390,6 +390,12 @@ pub enum AuditEvent {
     HostPowerOff {
         source: u8,
     },
+    /// Authenticated SPA choice for a latched spare image.
+    /// `choice` 1 = boot installed Alpine. `choice` 2 = clean reinstall
+    /// of that 8 GiB window. Not a chassis power-off.
+    PercSpaChoice {
+        choice: u8,
+    },
 }
 
 /// One sealed audit record in the hash chain.
@@ -606,6 +612,7 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::OvmfGuestUefiAtapi { .. } => 72,
         AuditEvent::OvmfGuestUefiEltorito { .. } => 73,
         AuditEvent::HostPowerOff { .. } => 74,
+        AuditEvent::PercSpaChoice { .. } => 75,
     }
 }
 
@@ -1121,6 +1128,11 @@ fn mirror_audit_to_com1(event: AuditEvent) {
         AuditEvent::HostPowerOff { source } => {
             serial::write_str("RAYNU-V-AUDIT: HostPowerOff source=");
             write_u32(source as u32);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::PercSpaChoice { choice } => {
+            serial::write_str("RAYNU-V-AUDIT: PercSpaChoice choice=");
+            write_u32(choice as u32);
             serial::write_byte(b'\n');
         }
         AuditEvent::FrameAllocated { .. } | AuditEvent::FrameFreed { .. } => {}
