@@ -1,0 +1,6 @@
+0.1.0-m8-perc-spa
+efi_source 8ad2ac89125ee055d978f4ac1161770b97da40a2
+ci 36362775808
+com2 build: sha=8ad2ac89125e
+marker both SPA paths lived (reinstall d43dbf07, then boot installed)
+not_github_latest

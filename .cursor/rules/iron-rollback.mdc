@@ -5,9 +5,24 @@ globs:
 alwaysApply: true
 ---
 
-# Iron rollback (two pins)
+# Iron rollback (three pins)
 
-You are working in **RayNu-V** (`vikkp/RayNu`). Mount Everest (M7) **closed on iron**. Next numbered work is **M8 operator product hardening** ([ADR-018](docs/adr/ADR-018.md), [docs/m8_plan.md](docs/m8_plan.md)). **M8.0** is leftover-DRAM disk persist across a **hypervisor** reboot. **A4s** (standing SPA beside the installed login) lived on `1f33eeda`.
+You are working in **RayNu-V** (`vikkp/RayNu`). Mount Everest (M7) **closed on iron**. Next numbered work is **M8 operator product hardening** ([ADR-018](docs/adr/ADR-018.md), [docs/m8_plan.md](docs/m8_plan.md)). The current rollback for the lived PERC SPA choice is `v0.1.0-m8-perc-spa`. **A4s** remains the older standing-SPA pin.
+
+## Flash `v0.1.0-m8-perc-spa` to return to the lived SPA choice
+
+This is the rollback when a later Guests-screen EFI misbehaves. It is **not** GitHub Latest. Both SPA paths lived on this file: choice 2 reinstalled the 8 GiB window, then a later boot with choice 1 reached `localhost login:`.
+
+| Field | Value |
+|-------|-------|
+| GitHub | https://github.com/vikkp/RayNu/releases/tag/v0.1.0-m8-perc-spa |
+| EFI source | `8ad2ac89125ee055d978f4ac1161770b97da40a2` |
+| CI | `--run 36362775808` · COM2 `build: sha=8ad2ac89125e` |
+| EFI SHA256 | `6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849` |
+| In-tree kit | `releases/v0.1.0-m8-perc-spa/` |
+| Lived | Choice 2 wrote `d43dbf07-…`. Choice 1 then `DISK-BOOTX64` and `localhost login:` with `setup-disk` withheld. Lease `.151` |
+
+Flash the kit file. A rebuild of a later commit will not stamp `8ad2ac89125e`.
 
 ## Flash `v0.1.0-m8-a4s` to return to the standing SPA
 

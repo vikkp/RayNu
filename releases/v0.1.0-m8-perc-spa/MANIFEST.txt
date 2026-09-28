@@ -1,0 +1,15 @@
+RayNu-V EFI release kit
+Version: 0.1.0-m8-perc-spa
+EFI source: 8ad2ac89125ee055d978f4ac1161770b97da40a2
+CI: 36362775808
+COM2: build: sha=8ad2ac89125e
+Lived: choice 2 wrote d43dbf07; choice 1 then localhost login with setup-disk withheld
+Not GitHub Latest. Everest Latest remains v0.1.0-everest-closed.
+Contents:
+  r640-hypervisor.efi
+  r640-hypervisor.efi.sha256
+  VERSION
+  SHA256SUMS
+  MANIFEST.txt
+  README.md
+Flash this file. Do not rebuild and expect the same COM2 stamp.

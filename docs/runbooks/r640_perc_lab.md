@@ -171,6 +171,7 @@ GitHub Latest stays the Everest loop. Do not move Latest.
 
 | Pin | When to use it | Identity |
 |-----|----------------|----------|
+| `v0.1.0-m8-perc-spa` (not Latest) | Lived SPA choice on the 8 GiB spare window. Current rollback for later Guests work | `8ad2ac89125e` / CI `36362775808` / EFI 2,088,960 bytes / SHA256 `6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849` / COM2 `build: sha=8ad2ac89125e` |
 | `v0.1.0-everest-closed` (Latest) | Original ISO loop on leftover DRAM | `f72b4276` / CI `34552377351` / SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc` / COM2 `build: sha=f72b4276d198` |
 | `v0.1.0-m8-a4s` (not Latest) | Standing SPA rollback, no keyboard, no power button | `1f33eeda72f9` / CI `36137732145` / SHA256 `5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693` |
 | `v0.1.0-m8-a6` (not Latest) | Last lived keyboard + host power-off | `fd2ca12e8eb9` / CI `36166108942` / EFI 2,066,944 bytes / SHA256 `be0df621ad0a7b03cd7817525b8122d61b7daaf23f29d5d2db67ef4d4c2bcba9` |
