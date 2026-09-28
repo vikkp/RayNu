@@ -7,8 +7,8 @@ updated_by: cursor
 loi_target: "Non-prod Letter of Intent. Bar A = dedicated-box lab. Bar B = RAID-fleet replacement. HDA 99% is Everest, not an LOI."
 months_to_loi_a: 0.25
 months_to_loi_a_prev: 0.5
-months_to_loi_b: 1.75
-months_to_loi_b_prev: 2.0
+months_to_loi_b: 1.5
+months_to_loi_b_prev: 1.75
 overall_pct: 73
 confidence: medium
 baseline_date: 2026-09-14
@@ -16,14 +16,14 @@ baseline_months: 1.5
 loi_a_eta_month: "2026-10"
 loi_b_eta_month: "2026-12"
 bar_a_pct: 92
-bar_b_pct: 56
+bar_b_pct: 60
 piece_everest_pct: 100
 piece_persist_pct: 93
 piece_sku_pct: 92
 piece_tls_pct: 80
 piece_auth_pct: 38
 piece_console_pct: 82
-piece_perc_pct: 74
+piece_perc_pct: 78
 piece_unmodified_pct: 20
 ---
 
@@ -43,16 +43,16 @@ Lived: [`docs/progress.md`](progress.md) · M8: [`docs/m8_plan.md`](m8_plan.md) 
 
 | Metric | Value | Meaning |
 |--------|------:|---------|
-| **Overall LOI readiness** | **73%** | Nearest honest conversation is still Bar A. The spare image survived a chassis restart. The next EFI waits on the SPA before it boots or reinstalls that window. perc 74 held. The guest disk is still that 8 GiB window. |
-| **Bar A — dedicated-box** | **92%** | One PowerEdge we own or they dedicate. A1 Everest, A3 SKU, A4 TLS, A4s standing SPA **DONE**. A2 persist **repeated** (sixth `login:`, UUID `a0ad99ac-…`). A6 **lived once**. A5 parked. USB ≠ PERC. |
-| **Bar B — RAID-fleet** | **56%** | Second `bda7a59b` boot after a chassis restart reached the same login and did not rewrite the image. The next EFI waits for an SPA choice: boot that Alpine, or clean-reinstall it onto the 8 GiB window. Packed, not lived. The Toshiba was still attached. |
+| **Overall LOI readiness** | **73%** | Nearest honest conversation is still Bar A. Both SPA paths lived on `8ad2ac89`. The guest disk is still the 8 GiB window. perc 78. Overall held. |
+| **Bar A — dedicated-box** | **92%** | One PowerEdge we own or they dedicate. A1 Everest, A3 SKU, A4 TLS, A4s standing SPA **DONE**. A2 persist **repeated** (sixth `login:`, UUID `a0ad99ac-…`). A6 **lived once**. A5 parked. USB ≠ PERC. Held. |
+| **Bar B — RAID-fleet** | **60%** | `8ad2ac89` choice 2 reinstalled the 8 GiB window (`d43dbf07-…`). A later HV boot, choice 1, reached `localhost login:` from that UUID with `setup-disk` withheld. The Toshiba was still attached. The 2.9 TB VD stays hidden. |
 | **Months to Bar A** | **0.25** | Baseline 2026-09-14. ETA **2026-10**. Held. A6 lived once. A5 is parked, not closed. Do not go to 0. |
-| **Months to Bar B** | **1.75** | Held. The chassis restart returned to the same login. The SPA choice is packed, not a lived install. The guest sees 8 GiB. The whole VD stays hidden. ETA **2026-12**. |
-| **Confidence** | medium | Everest is high-confidence. A6 lived once. Iron `bda7a59b` logged in from the 8 GiB spare image, then again after a chassis restart. The whole 2.9 TB VD is not the guest disk. A5 parked. |
+| **Months to Bar B** | **1.5** | 1.75→1.5. Both SPA buttons lived. The guest disk is still 8 GiB, not the spare VD. ETA **2026-12** held. |
+| **Confidence** | medium | Everest is high-confidence. A6 lived once. Iron `8ad2ac89` reinstalled the 8 GiB window, then booted that UUID after a new HV boot. The whole 2.9 TB VD is not the guest disk. A5 parked. |
 
 ```
 Bar A (dedicated-box)  ██████████████████░░  92%
-Bar B (RAID fleet)      ███████████░░░░░░░░░  56%
+Bar B (RAID fleet)      ████████████░░░░░░░░  60%
 Overall LOI             ███████████████░░░░░  73%
 ```
 
@@ -69,7 +69,7 @@ There are **two** LOIs. Treating them as one conversation overstates what is rea
 | Bar | Who signs | What they are buying | Close when |
 |-----|-----------|----------------------|------------|
 | **A — dedicated-box** | A lab / innovation / “spare R640” owner | One binary on a box they can afford to dedicate. Guest disk survives Force Off. HTTPS they can show InfoSec. | M8.0-mech on COM2 + SKU card + TLS path |
-| **B — RAID-fleet** | Someone whose disks already live on PERC H740P | “Keep the iron, replace the licensed hypervisor.” USB is not this. | A guest reaches `login:` from a spare VD. Bar B is 56%. The PERC piece is 74%. `bda7a59b` logged in from the 8 GiB image, including after a chassis restart. The 2.9 TB VD is not the guest disk. |
+| **B — RAID-fleet** | Someone whose disks already live on PERC H740P | “Keep the iron, replace the licensed hypervisor.” USB is not this. | A guest reaches `login:` from a spare VD. Bar B is 60%. The PERC piece is 78%. `8ad2ac89` reinstalled the 8 GiB window, then a later boot logged in from `d43dbf07-…`. The 2.9 TB VD is not the guest disk. |
 
 **Bar B stays out of commercial conversation until its close criteria are met.** A USB persist demonstration is the Bar A mechanism. It is not evidence that RayNu-V runs on the customer’s RAID virtual disks.
 
@@ -101,7 +101,7 @@ A2 is **repeated on iron** (`36d3b559`, two Force Offs, same UUID). History: it 
 | # | Criterion | Done when | Product effect |
 |---|-----------|-----------|----------------|
 | B1 | Bar A honest | Bar A criteria closed or explicitly waived in the SKU card | Do not skip A to sell B. |
-| B2 | **PERC virtual disk I/O** | **LIVED login, then a chassis restart** (`bda7a59b` COM2 `localhost login:` from `vda2` on the spare image, twice). Piece score **74%**. Bar B is a different score (**56%**). | Most R640 fleets boot guests from RAID. This login is the 8 GiB window, not the 2.9 TB VD. |
+| B2 | **PERC virtual disk I/O** | **LIVED reinstall, then a chosen disk boot** (`8ad2ac89` choice 2 wrote `d43dbf07-…`; choice 1 then `DISK-BOOTX64`, `root=UUID=d43dbf07-…`, `localhost login:`). Piece score **78%**. Bar B is a different score (**60%**). | Most R640 fleets boot guests from RAID. This login is the 8 GiB window, not the 2.9 TB VD. |
 | B3 | Census skip ≠ product policy | Mapper still refuses the **lab** Ubuntu VD; product talks to a **spare** VD | UBUNTU0 stays the lab OS. RAYNU-SPARE is the only future target. Formatting either is not an LOI strategy. See [`runbooks/r640_perc_lab.md`](runbooks/r640_perc_lab.md). |
 
 ---
@@ -152,11 +152,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 **Product effect.** Operators should not need iDRAC SOL to see Alpine or to type one command. On this tip Activity showed `abc` run by Alpine (`-sh: abc: not found`) and `RAYNU-V-M8-CONSOLE-OK`, with Host green. The same log tail still copies host UART lines (`HTTP keep-alive`), because those lines use `write_line_nowait` on the shared UART. **not VNC**. A6 is lived once. The mixed tail is why this piece stays at 82.
 
-### 7. PERC RAID I/O — 74%
+### 7. PERC RAID I/O — 78%
 
 **What it is.** The lab H740P Mini (`0000:18:00.0`) has two RAID-6 VDs: **UBUNTU0** (~400 GB, Ubuntu 26.04, boot) and **RAYNU-SPARE** (~2.9 TB). Iron `bda7a59b` hid `00:04.0` and reached `localhost login:` from `vda` (8.00 GiB, `vda2` UUID `a0ad99ac`). The guest disk is the copied image in the first 8 GiB of the spare. The rest of the 2.9 TB VD is not offered. **M8.7** is the Fusion mailbox milestone: scratch-pad status, one IOC init, one LD list, LBA 0 then the last LBA, then the image window. The host slice packs frames and refuses the Ubuntu-sized LD (`RAYNU-V-M8-PERC-HOST-OK`). Iron `2dd2b412` mapped the Mini (`1028:1fcd`, BAR `0x9d800000`) and left the H840 (`3b:00.0`, `1028:1fc9`) unmapped. Iron `22ce3728` read scratch pad 0 as `0xb73c0fed` (READY, max commands 4077, `mapped=1`). Iron `7577f934` posted IOC init and the LD list (`status=0x00`, `n=2`, `pick=1`). Iron `985495bef9fa` lived both host READs and Linux `[vdc]`. Iron `9c37fcae` then printed `boot: perc virtio rd lba=0 ok` and `RAYNU-V-M8-PERC-LUN-OK`. Iron `f0a7aabb` posted one WRITE(16) of the spare's last LBA (`6190268927`) and the readback matched (`RAYNU-V-M8-PERC-WRITE-OK`). LBA 0 of the probe was not written. Iron `0739edd0` copied the 8 GiB image. Iron `40ec12fc` started GRUB from it. Iron `bda7a59b` logged in. The DurableLun mapper still prints `skip PERC`. PRE-EBS UEFI RAID BlockIo dies at ExitBootServices. Map: [`runbooks/r640_perc_lab.md`](runbooks/r640_perc_lab.md).
 
-**Product effect.** This is the difference between a lab hypervisor and “extend the life of the fleet you already paid for.” This piece is **74%**. Bar B, the fleet conversation, is **56%**. A guest logged in from the 8 GiB window, then again after a chassis restart. The copy was not rewritten (`perc copy skip present`). The next EFI waits on the SPA: boot that Alpine, or clean-reinstall it onto the same window. An unattended boot does not install. The whole VD is still hidden. The Toshiba was still attached. Do not format UBUNTU0. Do not open the H840. Do not type `setup-alpine` on the live shell.
+**Product effect.** This is the difference between a lab hypervisor and “extend the life of the fleet you already paid for.” This piece is **78%**. Bar B, the fleet conversation, is **60%**. On `8ad2ac89` the SPA waited. Choice 2 ran `setup-disk` on the 8 GiB window and replaced `a0ad99ac-…` with `d43dbf07-…`. A later HV boot, choice 1, printed `DISK-BOOTX64`, `RAYNU-V-M8-PERC-BOOT-OK`, and `localhost login:` from that UUID with `setup-disk` withheld. `vda2` was clean (`6377/521216` files) and remounted read/write. A guest `reboot` while the reinstall choice was still set returned to the ISO. The whole VD is still hidden. The Toshiba was still attached. `vdb` is still the ISO. Do not format UBUNTU0. Do not open the H840. Do not type `setup-alpine` on this shell.
 
 ### 8. Unmodified media (Gen-1) — 20%
 
@@ -178,12 +178,12 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | **2026-09-25** | Bar A **A4s** | Page stays up after `login:` | **LIVED** (`1f33eeda72f9`, lease `.154`, one TCP accept, `HTTP keep-alive`, Host green, guest COM1 in Activity) |
 | **2026-09-27** | M8.7 spare read | COM2 `RAYNU-V-M8-PERC-LUN-OK` | **LIVED** (`9c37fcae`: `perc virtio rd lba=0 ok`, then `dd` of `/dev/vdc` returned 16 zero bytes) |
 | **2026-09-27** | M8.7 last-LBA write | COM2 `RAYNU-V-M8-PERC-WRITE-OK` | **LIVED** (`f0a7aabb`: `perc write status=0x00` at LBA `6190268927`, readback match, then the marker. LBA 0 stayed 16 zeros. Read-only virtio. Alpine still on the Toshiba.) |
-| **NOW** | SPA chooses boot or reinstall | The operator picks in the SPA; an unattended boot does not install | Packed, not lived. `bda7a59b` is still the login on the chassis. Leave that shell. PERC piece 74 held. Bar B 56. Months B 1.75. Do not format UBUNTU0. `skip PERC` stays. A5 parked. See [m8_plan.md](m8_plan.md) |
+| **NOW** | Both SPA paths lived | Choice 2 reinstalled the window; choice 1 booted that UUID | Lived on `8ad2ac89`. Leave `localhost:~#`. Do not type `setup-alpine`. PERC 74→78. Bar B 56→60. Months B 1.75→1.5. Overall 73 held. Bar A 92 held. The guest disk is still 8 GiB. `skip PERC` stays. A5 parked. See [m8_plan.md](m8_plan.md) |
 | later | Unmodified ISO | Gen-1 Phase 2 | named residual, not a fake close |
 
 ```
 2026-09  ████████  Everest closed
-2026-10  ████████  Bar A held; spare image survived a chassis restart; SPA choice packed; whole VD still hidden; A5 parked
+2026-10  ████████  Bar A held; both SPA paths lived on the 8 GiB window; whole VD still hidden; A5 parked
 2026-11  ░░░░░░░░  Bar A: first dedicated-box LOI window; iron shows the SPA wait then one chosen path
 2026-12  ░░░░░░░░  Bar B: the guest disk is the spare VD, not an 8 GiB window
 ```
@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-7-perc-spa-choice |
-| Summary | **The latched spare image waits for the SPA.** Overview offers boot installed Alpine, or a clean reinstall onto the 8 GiB window. An unattended boot does not install. UBUNTU0 is not a target. |
+| Commit | m8-7-perc-spa-lived |
+| Summary | **Both SPA paths lived on `8ad2ac89`.** Choice 2 reinstalled the 8 GiB window. Choice 1 then booted `d43dbf07-…` and withheld `setup-disk`. |
 | Everest impact | none — HDA months 0.0 / 99% held |
-| LOI impact | perc 74 held. Bar B 56 held. Months B 1.75 held. Overall 73 held. Bar A 92 held. Months A 0.25 held. Packed, not lived. |
-| Gates touched | Host predicates and an EFI build. No new iron COM2. No doorbell. No format. The whole 2.9 TB VD stays hidden. |
+| LOI impact | perc 74→78. Bar B 56→60. Months B 1.75→1.5. Overall 73 held. Bar A 92 held. Months A 0.25 held. Not the 2.9 TB VD. |
+| Gates touched | Iron COM2 only. No new code. No doorbell. No format of UBUNTU0. The whole 2.9 TB VD stays hidden. |
 
 ---
 
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-28 | m8-7-perc-spa-lived | 92 | 60 | **Both SPA paths lived.** `8ad2ac89` choice 2 ran `setup-disk` and wrote `d43dbf07-…`. A later HV boot, choice 1, printed `DISK-BOOTX64`, `RAYNU-V-M8-PERC-BOOT-OK`, and `localhost login:` from that UUID. `vda2` clean `6377/521216`. `setup-disk` withheld. perc 74→78. Bar B 56→60. Months B 1.75→1.5. Overall 73 held. Bar A 92 held. A guest reboot during the reinstall choice returned to the ISO. Toshiba still attached. Not the 2.9 TB VD. |
 | 2026-09-28 | m8-7-perc-spa-choice | 92 | 56 | **SPA chooses boot or clean reinstall.** A latched spare image waits after HTTPS. Overview posts one path. Unattended F11 does not run `setup-disk`. Packed, not lived. perc 74 held. Bar B 56 held. Months B 1.75 held. Overall 73 held. Not the 2.9 TB VD. |
 | 2026-09-27 | m8-7-perc-reboot | 92 | 56 | **Same login after a chassis restart.** Second `bda7a59b` boot skipped the copy (`alt=16777215`), hid `vdc`, and reached `localhost login: root` on `a0ad99ac`. `vda2` still `6380/521216` files. perc 74 held. Bar B 52→56. Months B 2.0→1.75. Overall 73 held. Toshiba still attached. Not the 2.9 TB VD. |
 | 2026-09-27 | m8-7-perc-login | 92 | 52 | **Unattended login from the spare image.** `bda7a59b` hid `vdc`, mounted `vda2` (`a0ad99ac`), and reached `localhost login: root`. perc 55→74. Bar B 36→52. Months B 2.75→2.0. Overall 70→73. The guest disk is 8 GiB, not the 2.9 TB VD. |
@@ -325,9 +326,9 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 ```
 LOI:           NOT OPEN. Tracker born 2026-09-14.
 Bar A:         92% · 0.25 months · dedicated-box non-prod
-Bar B:         56% · 1.75 months · PERC RAID fleet (bda7a59b login survived a chassis restart; 8 GiB image; whole VD still hidden)
+Bar B:         60% · 1.5 months · PERC RAID fleet (8ad2ac89 reinstall then boot of d43dbf07; 8 GiB image; whole VD still hidden)
 Overall:       73% · confidence medium
-NOW:           Leave the live localhost:~# on bda7a59b. Do not type setup-alpine there. The next EFI waits on the SPA: Boot installed Alpine, or Reinstall Alpine on the 8 GiB window. An unattended boot does not install. Do not format UBUNTU0. The guest disk is the 8 GiB image, not the 2.9 TB VD. skip PERC stays. A5 parked. Bar A 92. Bar B 56. Overall 73. perc 74. months A 0.25. months B 1.75. docs/m8_plan.md
+NOW:           Leave the live localhost:~# on d43dbf07. Do not type setup-alpine. Both SPA paths lived on 8ad2ac89. Do not format UBUNTU0. The guest disk is the 8 GiB image, not the 2.9 TB VD. skip PERC stays. A5 parked. Bar A 92. Bar B 60. Overall 73. perc 78. months A 0.25. months B 1.5. docs/m8_plan.md
 Open:          boot a guest from a VD · iron AUTH-OK (parked) · unmodified ISO · cluster
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
 Rollback:      v0.1.0-m8-a4s → standing SPA (COM2 sha=1f33eeda72f9, CI 36137732145). v0.1.0-m8-a6 → keyboard + power-off (fd2ca12e, CI 36166108942), not Latest. Everest Latest stays v0.1.0-everest-closed (f72b4276).

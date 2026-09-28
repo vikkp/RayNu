@@ -1,7 +1,7 @@
 {
   "bars": {
     "a": 92,
-    "b": 56
+    "b": 60
   },
   "baseline_date": "2026-09-14",
   "baseline_months": 1.5,
@@ -26,14 +26,14 @@
   "loihda_version": 1,
   "months_to_loi_a": 0.25,
   "months_to_loi_a_prev": 0.5,
-  "months_to_loi_b": 1.75,
-  "months_to_loi_b_prev": 2.0,
+  "months_to_loi_b": 1.5,
+  "months_to_loi_b_prev": 1.75,
   "overall_pct": 73,
   "pieces": {
     "auth": 38,
     "console": 82,
     "everest": 100,
-    "perc": 74,
+    "perc": 78,
     "persist": 93,
     "sku": 92,
     "tls": 80,
