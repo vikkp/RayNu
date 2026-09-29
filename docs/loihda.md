@@ -178,7 +178,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | **2026-09-25** | Bar A **A4s** | Page stays up after `login:` | **LIVED** (`1f33eeda72f9`, lease `.154`, one TCP accept, `HTTP keep-alive`, Host green, guest COM1 in Activity) |
 | **2026-09-27** | M8.7 spare read | COM2 `RAYNU-V-M8-PERC-LUN-OK` | **LIVED** (`9c37fcae`: `perc virtio rd lba=0 ok`, then `dd` of `/dev/vdc` returned 16 zero bytes) |
 | **2026-09-27** | M8.7 last-LBA write | COM2 `RAYNU-V-M8-PERC-WRITE-OK` | **LIVED** (`f0a7aabb`: `perc write status=0x00` at LBA `6190268927`, readback match, then the marker. LBA 0 stayed 16 zeros. Read-only virtio. Alpine still on the Toshiba.) |
-| **NOW** | Two guest rows packed | 8 GiB window and a 10 GiB tail disk | Leave `localhost:~#` on the live ISO. Do not type `setup-alpine`. `67bdb0d9` wrote `ee851fd5` on a 10 GiB `vda` at `tail_off=8589934592`. The reboot staged the ISO again. Scores held. Bar B stays 60 until that UUID boots. See [ADR-019](adr/ADR-019.md) |
+| **NOW** | Tail guest booted | `ee851fd5` on 10 GiB `vda` | Leave `localhost:~#`. Do not type `setup-alpine`. Do not click Stop on `f44ba647` (Linux never read it). Bar B stays 60. The 2.9 TB VD is not this disk. See [ADR-019](adr/ADR-019.md) |
 | later | Unmodified ISO | Gen-1 Phase 2 | named residual, not a fake close |
 
 ```
@@ -207,10 +207,10 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-guest-rows |
-| Summary | **Two Guests rows.** The 8 GiB window and a free-tail disk. Start on the tail disk withholds `setup-disk`. Stop ends the guest. `67bdb0d9` installed `ee851fd5` on 10 GiB `vda`. The reboot returned to the ISO. Scores held. |
+| Commit | m8-guest-stop-linux |
+| Summary | **Stop on the Linux exit path.** `f44ba647` booted `ee851fd5`. Stop on that EFI did not run after Linux handoff. Packed, not lived. Scores held. |
 | Everest impact | none — HDA months 0.0 / 99% held |
-| LOI impact | Scores held. Bar A 92. Bar B 60. perc 78. Overall 73. Unmodified media stays 20. `ee851fd5` is installed on 10 GiB `vda`. Bar B waits until that UUID boots. |
+| LOI impact | Scores held. Bar A 92. Bar B 60. perc 78. Overall 73. Unmodified media stays 20. `ee851fd5` reached `localhost:~#` on a 10 GiB `vda`. The 2.9 TB VD is not that disk. |
 | Gates touched | Host catalog. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
 
 ---
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-29 | m8-guest-stop-linux | 92 | 60 | **`f44ba647` booted `ee851fd5`.** `choice=4`, `DISK-BOOTX64`, `[vda]` 10.0 GiB, `localhost:~#`. Stop on that EFI did not run after Linux handoff. This fix is packed, not lived. Scores held. Bar B stays 60. The 2.9 TB VD is not the guest disk. Unmodified media stays 20. |
 | 2026-09-29 | m8-guest-rows | 92 | 60 | **Two Guests rows packed.** `67bdb0d9` COM2: `choice=3`, `tail_off=8589934592`, `[vda]` 10.0 GiB, `setup-disk` wrote `ee851fd5`. Reboot staged `ISO-BOOTX64` again. Scores held. Unmodified media stays 20. Bar B stays 60 until that UUID reaches its own login. |
 | 2026-09-29 | m8-guest-captions | 92 | 60 | **Guests captions moved onto `GET /perc/guests`.** The shell fits the 20 KiB HTTP reply. `b330e28f` crossed that reply and is not a flash. Slice 2 stays packed, not lived. Scores held. Unmodified media stays 20. The guest disk is still 8 GiB. |
 | 2026-09-28 | m8-guest-tail | 92 | 60 | **ADR-019 slice 2 packed, not lived.** Host tests place 10240 MiB at spare offset 8589934592 and refuse a write of the window. Not COM2. Scores held. Unmodified media stays 20. The guest disk is still 8 GiB. |

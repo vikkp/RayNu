@@ -6362,6 +6362,14 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
         raynu_f_vmexit(reason, qual, rip, intr);
     }
     crate::mgmt::maybe_tick_standing_spa();
+    // After EBS, RAYNU_F_MODE is clear and Linux owns this exit path.
+    // SPA Stop is posted inside the tick above. Consume it here or the
+    // flag sits until the next hypervisor boot (iron f44ba647).
+    if crate::mgmt::perc_boot_choice::take_guest_stop() {
+        serial::set_linux_earlycon_share(false);
+        serial::set_linux_high_half(false);
+        raynu_f_stop("spa-stop");
+    }
     if guest_uefi_linux_earlycon_share_on_bootimg(
         crate::devices::ide_cdrom::product_iso_window_armed(),
         crate::devices::ide_cdrom::eltorito_boot_image_read(),
