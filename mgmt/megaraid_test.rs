@@ -332,6 +332,110 @@ fn fwstate_load_is_one_harpoon_and_does_not_bus_master() {
     assert!(!super::image_io_in_window(1024, 128));
     assert!(super::image_read_slice(0, 0, 0).is_none());
     assert!(super::image_read_slice(super::PERC_IMAGE_BYTES - 1, 2, 0).is_none());
+    let ten = 10_240u64 * 1024 * 1024;
+    let place =
+        super::place_in_free_tail(super::IRON_LD1_BYTES, super::PERC_IMAGE_BYTES, true, ten)
+            .unwrap();
+    assert_eq!(place.spare_off, super::PERC_IMAGE_BYTES);
+    assert_eq!(place.disk_bytes, ten);
+    assert_eq!(
+        super::tail_guest_to_lba(place, 0, 512),
+        Some(super::PERC_IMAGE_BYTES / 512)
+    );
+    assert!(super::tail_guest_to_lba(place, 0, 511).is_none());
+    assert!(super::tail_guest_to_lba(place, ten, 512).is_none());
+    assert!(super::place_in_free_tail(
+        super::IRON_LD1_BYTES,
+        super::PERC_IMAGE_BYTES,
+        true,
+        super::PERC_IMAGE_BYTES
+    )
+    .is_none());
+    assert!(
+        super::place_in_free_tail(super::IRON_LD1_BYTES, super::PERC_IMAGE_BYTES, false, ten)
+            .is_none()
+    );
+    assert!(super::place_in_free_tail(
+        super::LAB_UBUNTU0_BYTES,
+        super::PERC_IMAGE_BYTES,
+        true,
+        ten
+    )
+    .is_none());
+    let free = super::IRON_LD1_BYTES - super::PERC_IMAGE_BYTES;
+    assert!(
+        super::place_in_free_tail(super::IRON_LD1_BYTES, super::PERC_IMAGE_BYTES, true, free)
+            .is_some()
+    );
+    assert!(super::place_in_free_tail(
+        super::IRON_LD1_BYTES,
+        super::PERC_IMAGE_BYTES,
+        true,
+        free + 512
+    )
+    .is_none());
+    let tail_lba = super::PERC_IMAGE_BYTES / 512;
+    assert!(super::pack_ld_write16_tail(
+        super::IRON_LD1_BYTES,
+        1,
+        0,
+        1,
+        0x1006000,
+        place.spare_off,
+        place.disk_bytes
+    )
+    .is_none());
+    assert!(super::pack_ld_write16_tail(
+        super::IRON_LD1_BYTES,
+        1,
+        tail_lba - 1,
+        1,
+        0x1006000,
+        place.spare_off,
+        place.disk_bytes
+    )
+    .is_none());
+    let packed = super::pack_ld_write16_tail(
+        super::IRON_LD1_BYTES,
+        1,
+        tail_lba,
+        1,
+        0x1006000,
+        place.spare_off,
+        place.disk_bytes,
+    )
+    .unwrap();
+    assert_eq!(
+        u64::from_be_bytes(packed[0x22..0x2A].try_into().unwrap()),
+        tail_lba
+    );
+    assert!(super::pack_ld_write16_tail(
+        super::LAB_UBUNTU0_BYTES,
+        1,
+        tail_lba,
+        1,
+        0x1006000,
+        place.spare_off,
+        place.disk_bytes
+    )
+    .is_none());
+    let guest0 = super::image_guest_read_slice(ten, super::PERC_IMAGE_BYTES, 0, 512, 0).unwrap();
+    assert_eq!(guest0.lba, tail_lba);
+    assert!(
+        super::image_guest_read_slice(ten, 0, 0, 512, 0).is_none()
+            || super::image_guest_read_slice(ten, 0, 0, 512, 0)
+                .unwrap()
+                .lba
+                == 0
+    );
+    assert!(super::image_guest_read_slice(
+        super::PERC_IMAGE_BYTES,
+        super::PERC_IMAGE_BYTES / 2,
+        0,
+        512,
+        0
+    )
+    .is_none());
     let alt = (super::PERC_IMAGE_BYTES / 512) - 1;
     let lba1 = image_header_sector(alt);
     assert_eq!(super::image_backup_lba(&lba1), Some(alt));

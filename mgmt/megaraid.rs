@@ -695,6 +695,110 @@ pub fn image_backup_is_efi_part(backup: &[u8]) -> bool {
     backup.len() >= 8 && &backup[..8] == b"EFI PART"
 }
 
+/// A new guest disk in the free tail of a spare-class VD.
+///
+/// `spare_off` is the first byte the guest sees as LBA 0. It is the end of
+/// the installed window, so the latched Alpine is not this disk.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TailPlacement {
+    pub spare_off: u64,
+    pub disk_bytes: u64,
+}
+
+/// Place `disk_bytes` at the start of the free tail.
+///
+/// `None` when the latch is clear, the disk is not larger than the window,
+/// the size is not sector-aligned, the VD is not spare-class, or the disk
+/// does not fit in `spare - window`. The window itself is the slice-1
+/// reinstall, not this placement.
+pub fn place_in_free_tail(
+    spare_bytes: u64,
+    window_bytes: u64,
+    installed: bool,
+    disk_bytes: u64,
+) -> Option<TailPlacement> {
+    if !installed || spare_bytes == 0 || window_bytes == 0 {
+        return None;
+    }
+    if disk_bytes <= window_bytes || disk_bytes % 512 != 0 || window_bytes % 512 != 0 {
+        return None;
+    }
+    if classify_ld_bytes(spare_bytes) != LdClass::Spare {
+        return None;
+    }
+    let spare_off = window_bytes;
+    let end = spare_off.checked_add(disk_bytes)?;
+    if end > spare_bytes {
+        return None;
+    }
+    Some(TailPlacement {
+        spare_off,
+        disk_bytes,
+    })
+}
+
+/// Spare LBA for one guest byte range on a tail disk.
+///
+/// Guest offset 0 is `spare_off`, never the installed window. A range that
+/// runs past the placed disk, or a `spare_off` inside the window, is `None`.
+pub fn tail_guest_to_lba(place: TailPlacement, guest_off: u64, len: usize) -> Option<u64> {
+    if len == 0 || guest_off % 512 != 0 || len % 512 != 0 {
+        return None;
+    }
+    if place.spare_off < PERC_IMAGE_BYTES || place.spare_off % 512 != 0 {
+        return None;
+    }
+    let end = guest_off.checked_add(len as u64)?;
+    if end > place.disk_bytes {
+        return None;
+    }
+    let spare = place.spare_off.checked_add(guest_off)?;
+    if spare < PERC_IMAGE_BYTES {
+        return None;
+    }
+    Some(spare / 512)
+}
+
+/// One covering sector of a guest read, plus a spare-byte base.
+///
+/// `spare_base == 0` is the 8 GiB window. A tail base must be the window or
+/// later. The returned LBA is on the spare, not the guest.
+pub fn image_guest_read_slice(
+    guest_end: u64,
+    spare_base: u64,
+    off: u64,
+    len: usize,
+    done: usize,
+) -> Option<ImageReadSlice> {
+    if len == 0 || done >= len || spare_base % 512 != 0 {
+        return None;
+    }
+    if spare_base != 0 && spare_base < PERC_IMAGE_BYTES {
+        return None;
+    }
+    if off
+        .checked_add(len as u64)
+        .is_none_or(|end| end > guest_end)
+    {
+        return None;
+    }
+    let pos = off + done as u64;
+    let spare_pos = spare_base.checked_add(pos)?;
+    let lba = spare_pos / 512;
+    let skip = (spare_pos % 512) as usize;
+    let take = (512 - skip).min(len - done);
+    if take == 0 {
+        return None;
+    }
+    if spare_base == 0 && lba >= PERC_IMAGE_BYTES / 512 {
+        return None;
+    }
+    if spare_base != 0 && lba < spare_base / 512 {
+        return None;
+    }
+    Some(ImageReadSlice { lba, skip, take })
+}
+
 /// WRITE(16) of the image window. LBA 0 is allowed here. The mailbox packer
 /// [`pack_ld_write16`] still refuses LBA 0. UBUNTU0 sizes return `None`.
 /// `blocks` is 1 (guest I/O) or 8 (the copy, and only on an 8-sector boundary).
@@ -719,6 +823,52 @@ pub fn pack_ld_write16_image(
     if end > plan.sectors {
         return None;
     }
+    encode_polled_write16(target_id, lba, blocks, data_phys)
+}
+
+/// WRITE(16) of one guest sector in the free tail.
+///
+/// `spare_off` is the first byte of that disk and must be the 8 GiB window
+/// or later. LBAs inside the window, including LBA 0, are refused. UBUNTU0
+/// sizes return `None`. The 8-sector image copy does not use this packer.
+pub fn pack_ld_write16_tail(
+    spare_bytes: u64,
+    target_id: u8,
+    lba: u64,
+    blocks: u32,
+    data_phys: u64,
+    spare_off: u64,
+    disk_bytes: u64,
+) -> Option<[u8; MFI_FRAME_BYTES]> {
+    if classify_ld_bytes(spare_bytes) != LdClass::Spare {
+        return None;
+    }
+    if blocks != 1 || spare_off < PERC_IMAGE_BYTES || spare_off % 512 != 0 || disk_bytes % 512 != 0
+    {
+        return None;
+    }
+    let lo = spare_off / 512;
+    let nsec = disk_bytes / 512;
+    if nsec == 0 {
+        return None;
+    }
+    let end = lba.checked_add(u64::from(blocks))?;
+    if lba < lo || end > lo.checked_add(nsec)? {
+        return None;
+    }
+    let spare_sectors = spare_bytes / 512;
+    if end > spare_sectors {
+        return None;
+    }
+    encode_polled_write16(target_id, lba, blocks, data_phys)
+}
+
+fn encode_polled_write16(
+    target_id: u8,
+    lba: u64,
+    blocks: u32,
+    data_phys: u64,
+) -> Option<[u8; MFI_FRAME_BYTES]> {
     let data_bytes = blocks.checked_mul(512)?;
     if data_phys == 0
         || data_phys >= 0x1_0000_0000
@@ -1257,11 +1407,14 @@ pub fn prop_perc_host_package() -> bool {
         && !image_io_in_window(PERC_IMAGE_BYTES, 512)
         && !image_io_in_window(1024, 128)
         && image_read_in_window(1024, 128)
-        && image_read_slice(1024, 128, 0).is_some_and(|s| s.lba == 2 && s.skip == 0 && s.take == 128)
+        && image_read_slice(1024, 128, 0)
+            .is_some_and(|s| s.lba == 2 && s.skip == 0 && s.take == 128)
         && image_read_slice(1152, 128, 0)
             .is_some_and(|s| s.lba == 2 && s.skip == 128 && s.take == 128)
-        && image_read_slice(400, 200, 0).is_some_and(|s| s.lba == 0 && s.skip == 400 && s.take == 112)
-        && image_read_slice(400, 200, 112).is_some_and(|s| s.lba == 1 && s.skip == 0 && s.take == 88)
+        && image_read_slice(400, 200, 0)
+            .is_some_and(|s| s.lba == 0 && s.skip == 400 && s.take == 112)
+        && image_read_slice(400, 200, 112)
+            .is_some_and(|s| s.lba == 1 && s.skip == 0 && s.take == 88)
         && image_read_slice(0, 0, 0).is_none()
         && image_backup_lba(&[0u8; 512]).is_none()
         && !image_backup_is_efi_part(&[0u8; 8])
@@ -2061,12 +2214,7 @@ enum ImagePresent {
 /// not rewrite those 8 GiB before the guest walk. A timeout stops here.
 /// An absent header falls through to the USB copy. No WRITE is posted.
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
-fn perc_image_spare_present(
-    bar: u64,
-    target: u8,
-    frame_phys: u64,
-    data_phys: u64,
-) -> ImagePresent {
+fn perc_image_spare_present(bar: u64, target: u8, frame_phys: u64, data_phys: u64) -> ImagePresent {
     let Some((rst, rto)) = issue_ld_read16(bar, target, 1, frame_phys, data_phys) else {
         return ImagePresent::Io;
     };
@@ -2229,18 +2377,57 @@ fn issue_ld_write16_image(
         return None;
     }
     let wr = pack_ld_write16_image(spare_bytes, target, lba, blocks, data_phys)?;
+    post_ld_write16(bar, frame_phys, data_phys, &wr, payload)
+}
+
+/// One polled tail WRITE(16). The packed CDB cannot address the 8 GiB window.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn issue_ld_write16_tail(
+    bar: u64,
+    target: u8,
+    spare_bytes: u64,
+    lba: u64,
+    frame_phys: u64,
+    data_phys: u64,
+    payload: &[u8],
+    spare_off: u64,
+    disk_bytes: u64,
+) -> Option<(u8, bool)> {
+    if payload.len() != 512 {
+        return None;
+    }
+    let wr = pack_ld_write16_tail(
+        spare_bytes,
+        target,
+        lba,
+        1,
+        data_phys,
+        spare_off,
+        disk_bytes,
+    )?;
+    post_ld_write16(bar, frame_phys, data_phys, &wr, payload)
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn post_ld_write16(
+    bar: u64,
+    frame_phys: u64,
+    data_phys: u64,
+    wr: &[u8],
+    payload: &[u8],
+) -> Option<(u8, bool)> {
     let desc = pack_mfa_descriptor(frame_phys)?;
     // SAFETY: both addresses are pages inside the eight-page frame-pool
     // allocation, identity-mapped after EBS. The payload is one image chunk
-    // (4096 bytes) or one guest sector (512). Sense is the next 32 bytes.
-    // The CDB is WRITE(16) inside the 8 GiB image. No doorbell store.
-    // KANI-TARGET: host tests cover pack_ld_write16_image, not this copy.
+    // or one guest sector. Sense is the next 32 bytes. The CDB was packed
+    // by the image or tail fence. No doorbell store.
+    // KANI-TARGET: host tests cover the packers, not this copy.
     unsafe {
         let frame = frame_phys as *mut u8;
         core::ptr::write_bytes(frame, 0, 4096);
         core::ptr::copy_nonoverlapping(wr.as_ptr(), frame, wr.len());
-        core::ptr::copy_nonoverlapping(payload.as_ptr(), data_phys as *mut u8, nbytes);
-        core::ptr::write_bytes((data_phys + nbytes as u64) as *mut u8, 0, 32);
+        core::ptr::copy_nonoverlapping(payload.as_ptr(), data_phys as *mut u8, payload.len());
+        core::ptr::write_bytes((data_phys + payload.len() as u64) as *mut u8, 0, 32);
     }
     core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
     // SAFETY: one 64-bit store to the low inbound queue port. Not doorbell 0x00.
@@ -2261,9 +2448,16 @@ fn issue_ld_write16_image(
 /// sector and copies the requested slice. One READ(16) per sector touched.
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn perc_image_read_uefi(off: u64, buf: &mut [u8]) -> bool {
-    if !PERC_IMAGE_BOOT.load(core::sync::atomic::Ordering::Acquire)
-        || !image_read_in_window(off, buf.len())
-    {
+    if !PERC_IMAGE_BOOT.load(core::sync::atomic::Ordering::Acquire) {
+        return false;
+    }
+    let (guest_end, spare_base) = guest_io_span();
+    let in_span = if spare_base == 0 {
+        image_read_in_window(off, buf.len())
+    } else {
+        image_guest_read_slice(guest_end, spare_base, off, buf.len(), 0).is_some()
+    };
+    if !in_span {
         return false;
     }
     let bar = PERC_SPARE_BAR.load(core::sync::atomic::Ordering::Acquire);
@@ -2276,7 +2470,11 @@ fn perc_image_read_uefi(off: u64, buf: &mut [u8]) -> bool {
     }
     let mut done = 0usize;
     while done < buf.len() {
-        let Some(slice) = image_read_slice(off, buf.len(), done) else {
+        let Some(slice) = (if spare_base == 0 {
+            image_read_slice(off, buf.len(), done)
+        } else {
+            image_guest_read_slice(guest_end, spare_base, off, buf.len(), done)
+        }) else {
             perc_image_io_fail(off / 512);
             return false;
         };
@@ -2307,8 +2505,23 @@ fn perc_image_read_uefi(off: u64, buf: &mut [u8]) -> bool {
 /// Install-disk write of the latched image. One WRITE(16) per sector.
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn perc_image_write_uefi(off: u64, buf: &[u8]) -> bool {
-    if !PERC_IMAGE_BOOT.load(core::sync::atomic::Ordering::Acquire)
-        || !image_io_in_window(off, buf.len())
+    if !PERC_IMAGE_BOOT.load(core::sync::atomic::Ordering::Acquire) {
+        return false;
+    }
+    let (guest_end, spare_base) = guest_io_span();
+    if spare_base == 0 && !image_io_in_window(off, buf.len()) {
+        return false;
+    }
+    if spare_base != 0
+        && tail_guest_to_lba(
+            TailPlacement {
+                spare_off: spare_base,
+                disk_bytes: guest_end,
+            },
+            off,
+            buf.len(),
+        )
+        .is_none()
     {
         return false;
     }
@@ -2323,16 +2536,42 @@ fn perc_image_write_uefi(off: u64, buf: &[u8]) -> bool {
     let mut done = 0usize;
     while done < buf.len() {
         let lba = off / 512 + (done as u64 / 512);
-        let Some((st, timed_out)) = issue_ld_write16_image(
-            bar,
-            target,
-            spare,
-            lba,
-            1,
-            frame,
-            data,
-            &buf[done..done + 512],
-        ) else {
+        let posted = if spare_base == 0 {
+            issue_ld_write16_image(
+                bar,
+                target,
+                spare,
+                lba,
+                1,
+                frame,
+                data,
+                &buf[done..done + 512],
+            )
+        } else {
+            let Some(spare_lba) = tail_guest_to_lba(
+                TailPlacement {
+                    spare_off: spare_base,
+                    disk_bytes: guest_end,
+                },
+                off + done as u64,
+                512,
+            ) else {
+                perc_image_io_fail(lba);
+                return false;
+            };
+            issue_ld_write16_tail(
+                bar,
+                target,
+                spare,
+                spare_lba,
+                frame,
+                data,
+                &buf[done..done + 512],
+                spare_base,
+                guest_end,
+            )
+        };
+        let Some((st, timed_out)) = posted else {
             perc_image_io_fail(lba);
             return false;
         };
@@ -2343,6 +2582,20 @@ fn perc_image_write_uefi(off: u64, buf: &[u8]) -> bool {
         done += 512;
     }
     true
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+/// Guest byte span for install-disk I/O.
+///
+/// No tail choice: the 8 GiB window at spare offset 0. A tail choice: the
+/// placed disk, whose guest LBA 0 is `spare_off` (the free tail).
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn guest_io_span() -> (u64, u64) {
+    if let Some((spare_off, disk_bytes)) = crate::mgmt::perc_boot_choice::armed_tail() {
+        (disk_bytes, spare_off)
+    } else {
+        (PERC_IMAGE_BYTES, 0)
+    }
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]

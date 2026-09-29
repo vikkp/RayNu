@@ -483,7 +483,8 @@ pub fn handle_http_request(
         }
     }
     // ADR-019: Guests lists the latched spare image and posts the same
-    // choice. A disk past the 8 GiB window is refused. Not an iron marker.
+    // choice. A disk past the free tail is refused. The 8 GiB window is not
+    // the tail disk. Not an iron marker.
     match crate::mgmt::guest_catalog::guest_catalog_rest(
         parsed.method,
         parsed.path,
