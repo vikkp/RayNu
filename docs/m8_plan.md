@@ -171,7 +171,7 @@ HDA + `site/hda.html` stay fresh: update `docs/hda.md`, then `./tools/sync-hda-s
 
 **Goal:** Operator can PUT/POST an ISO through the network UI. ESP-staged `linux.iso` stays valid.
 
-**Honesty:** [`UploadMode::HostReady`](../mgmt/iso_upload.rs) PUT/POST ISO bytes into a host datastore blob (`RAYNU-V-M8-ISO-UPLOAD-HOST-OK`). Firmware HTTP does not grow a coexist blob PUT. SPA has no upload widget (16 KiB). **ESP-staged stays valid**. Host/CI never print `RAYNU-V-M8-ISO-UPLOAD-OK`. Nested QEMU ≠ R640.
+**Honesty:** [`UploadMode::HostReady`](../mgmt/iso_upload.rs) PUT/POST ISO bytes into a host datastore blob (`RAYNU-V-M8-ISO-UPLOAD-HOST-OK`). Firmware HTTP does not grow a coexist blob PUT. SPA has no upload widget (16 KiB). **ESP-staged stays valid**. The iron destination is the RAYNU-SPARE library in [ADR-019](adr/ADR-019.md) decision 9, accepted and not built. Host/CI never print `RAYNU-V-M8-ISO-UPLOAD-OK`. Nested QEMU ≠ R640.
 
 ---
 

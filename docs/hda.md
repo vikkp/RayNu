@@ -354,11 +354,11 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-guest-iso-lived |
-| Summary | **Slice 3 lived on choice 3.** `752586b9` staged `ISO-BOOTX64` on the 10 GiB tail. The ISO motd offered `setup-alpine`. COM2 then printed `boot: perc SPA linux_iso — setup-disk withheld`. No scripted `setup-disk` line. Months **0.0 held**. Overall **99 held**. |
+| Commit | m8-iso-library-adr |
+| Summary | **ADR-019 decision 9 accepted, not built.** The operator chooses a local ISO on Guests. The bytes are stored unchanged in a high library on RAYNU-SPARE. The Cruzer file stays the boot media. Scores held. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
-| Gates touched | COM2 `752586b9`. No doorbell. No format of UBUNTU0. |
-| Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 60 held, perc 78 held, unmodified 20→25, overall LOI 73 held, months A 0.25 held, months B 1.5 held. |
+| Gates touched | ADR only. No doorbell. No format of UBUNTU0. Not a COM2 close. |
+| Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 60 held, perc 78 held, unmodified 25 held, overall LOI 73 held, months A 0.25 held, months B 1.5 held. |
 
 
 ## Blockers & risks (Everest-relevant)
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-29 | m8-iso-library-adr | 0.0 | 99 | **ADR-019 decision 9.** Operator ISO file on Guests, stored in a high library on RAYNU-SPARE, chunked over HTTPS. Cruzer `linux.iso` stays the lab media. Attach CD stays the mock. Not built. Scores held. months 0.0 held; overall 99 held |
 | 2026-09-29 | m8-guest-iso-lived | 0.0 | 99 | **Slice 3 lived.** `752586b9` `choice=3`, `ISO-BOOTX64`, `[vda]` 10.0 GiB, ISO motd `setup-alpine`, then `boot: perc SPA linux_iso — setup-disk withheld`. No scripted `setup-disk`. `ee851fd5` journal-recovered and unmounted. Unmodified media 20→25. The ISO is still patched. months 0.0 held; overall 99 held |
 | 2026-09-29 | m8-guest-iso-prompt | 0.0 | 99 | **Slice 3 packed, not lived.** Guests `linux_iso` stops before `setup-disk`. Login still gets `root`. COM2 line is `boot: perc SPA linux_iso — setup-disk withheld`. Unmodified media stays 20 until that line is on iron. `f44ba647` still types `setup-disk` on a new `linux_iso`. Scores held. months 0.0 held; overall 99 held |
 | 2026-09-29 | m8-guest-stop-linux | 0.0 | 99 | **Stop on the Linux exit path.** `f44ba647` Start of the 10 GiB guest lived: `choice=4`, `DISK-BOOTX64`, `ee851fd5`, `[vda]` 10.0 GiB, `localhost:~#`. Stop on that EFI did not reach the Linux exit loop. Packed, not lived. Scores held. months 0.0 held; overall 99 held |
