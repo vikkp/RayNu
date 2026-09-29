@@ -24,7 +24,7 @@ piece_tls_pct: 80
 piece_auth_pct: 38
 piece_console_pct: 82
 piece_perc_pct: 78
-piece_unmodified_pct: 20
+piece_unmodified_pct: 25
 ---
 
 # LOIHDA — Honest Distance to a Letter of Intent
@@ -43,9 +43,9 @@ Lived: [`docs/progress.md`](progress.md) · M8: [`docs/m8_plan.md`](m8_plan.md) 
 
 | Metric | Value | Meaning |
 |--------|------:|---------|
-| **Overall LOI readiness** | **73%** | Nearest honest conversation is still Bar A. `ee851fd5` reached `localhost:~#` on a 10 GiB `vda`. The 2.9 TB VD is not that disk. perc 78. Unmodified media 20. Overall held. |
+| **Overall LOI readiness** | **73%** | Nearest honest conversation is still Bar A. `752586b9` choice 3 reached the ISO prompt and withheld `setup-disk`. Unmodified media 20→25. The ISO is still serial-patched. perc 78. Overall held. |
 | **Bar A — dedicated-box** | **92%** | One PowerEdge we own or they dedicate. A1 Everest, A3 SKU, A4 TLS, A4s standing SPA **DONE**. A2 persist **repeated** (sixth `login:`, UUID `a0ad99ac-…`). A6 **lived once**. A5 parked. USB ≠ PERC. Held. |
-| **Bar B — RAID-fleet** | **60%** | `f44ba647` booted `ee851fd5` on a 10 GiB `vda` (`choice=4`, `DISK-BOOTX64`, `localhost:~#`). The 2.9 TB VD is not that disk. Slice 3 (no scripted `setup-disk` on a new `linux_iso`) is packed, not lived. |
+| **Bar B — RAID-fleet** | **60%** | `752586b9` choice 3 staged `ISO-BOOTX64` on the 10 GiB tail and stopped at the ISO prompt. `ee851fd5` was seen and unmounted. The 2.9 TB VD is not that disk. Held. |
 | **Months to Bar A** | **0.25** | Baseline 2026-09-14. ETA **2026-10**. Held. A6 lived once. A5 is parked, not closed. Do not go to 0. |
 | **Months to Bar B** | **1.5** | Held. The 10 GiB guest reached its own login. The spare VD is still not the guest disk. ETA **2026-12** held. |
 | **Confidence** | medium | Everest is high-confidence. A6 lived once. Iron `8ad2ac89` reinstalled the 8 GiB window, then booted that UUID after a new HV boot. The whole 2.9 TB VD is not the guest disk. A5 parked. |
@@ -158,11 +158,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 **Product effect.** This is the difference between a lab hypervisor and “extend the life of the fleet you already paid for.” This piece is **78%**. Bar B, the fleet conversation, is **60%**. On `8ad2ac89` the SPA waited. Choice 2 ran `setup-disk` on the 8 GiB window and replaced `a0ad99ac-…` with `d43dbf07-…`. A later HV boot, choice 1, printed `DISK-BOOTX64`, `RAYNU-V-M8-PERC-BOOT-OK`, and `localhost login:` from that UUID with `setup-disk` withheld. `vda2` was clean (`6377/521216` files) and remounted read/write. A guest `reboot` while the reinstall choice was still set returned to the ISO. `f44ba647` then booted `ee851fd5` (`choice=4`, `[vda]` 10.0 GiB, `localhost:~#`) with `setup-disk` withheld. The 2.9 TB VD is not that disk. The Toshiba was still attached. `vdb` is still the ISO. Do not format UBUNTU0. Do not open the H840. Do not type `setup-alpine` on this shell. Do not click Create on `f44ba647`. That click still types `setup-disk`.
 
-### 8. Unmodified media (Gen-1) — 20%
+### 8. Unmodified media (Gen-1) — 25%
 
 **What it is.** Iron Alpine still uses an ISO patcher + serial auto-answer. RayNu-F is the firmware; the guest is not yet a specified Generation 1 VM on stock ISOs.
 
-**Product effect.** Fine for a dedicated-box demo. A Bar B claim of “unmodified Linux ISO” is false until that patcher is gone. Slice 3 withholds the scripted `setup-disk` for a Guests `linux_iso`. That change is packed. This piece stays **20%** until COM2 shows `boot: perc SPA linux_iso — setup-disk withheld` and the ISO prompt, with no scripted `setup-disk` line. Windows is later still. **Not** a Bar A blocker if the SKU card says Alpine-on-virtio.
+**Product effect.** Fine for a dedicated-box demo. A Bar B claim of “unmodified Linux ISO” is false until that patcher is gone. `752586b9` choice 3 reached `localhost:~#` on the ISO, printed `You can setup the system with the command: setup-alpine`, and then `boot: perc SPA linux_iso — setup-disk withheld`. No scripted `setup-disk` line. The answerer still typed `root`. COM2 still says the ISO serial console is patched. This piece is **25%** (20→25). Windows is later still. **Not** a Bar A blocker if the SKU card says Alpine-on-virtio.
 
 ---
 
@@ -178,7 +178,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | **2026-09-25** | Bar A **A4s** | Page stays up after `login:` | **LIVED** (`1f33eeda72f9`, lease `.154`, one TCP accept, `HTTP keep-alive`, Host green, guest COM1 in Activity) |
 | **2026-09-27** | M8.7 spare read | COM2 `RAYNU-V-M8-PERC-LUN-OK` | **LIVED** (`9c37fcae`: `perc virtio rd lba=0 ok`, then `dd` of `/dev/vdc` returned 16 zero bytes) |
 | **2026-09-27** | M8.7 last-LBA write | COM2 `RAYNU-V-M8-PERC-WRITE-OK` | **LIVED** (`f0a7aabb`: `perc write status=0x00` at LBA `6190268927`, readback match, then the marker. LBA 0 stayed 16 zeros. Read-only virtio. Alpine still on the Toshiba.) |
-| **NOW** | Slice 3 packed | `ee851fd5` still at `localhost:~#` | Leave that shell. Do not click Create or Stop on `f44ba647`. Create still types `setup-disk`. Slice 3 is packed, not lived. Unmodified media stays 20. Bar B stays 60. See [ADR-019](adr/ADR-019.md) |
+| **NOW** | Slice 3 lived | ISO prompt on `752586b9` | Leave `localhost:~#`. Do not type `setup-alpine`. Choice 3 withheld `setup-disk`. `ee851fd5` was seen and unmounted. Unmodified media 20→25. Bar B stays 60. See [ADR-019](adr/ADR-019.md) |
 | later | Unmodified ISO | Gen-1 Phase 2 | named residual, not a fake close |
 
 ```
@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-guest-iso-prompt |
-| Summary | **Slice 3 packed, not lived.** A Guests `linux_iso` does not queue `setup-disk`. Login still gets `root`. The shell is the ISO prompt. `f44ba647` still types `setup-disk` on a new `linux_iso`. Scores held. |
+| Commit | m8-guest-iso-lived |
+| Summary | **Slice 3 lived on choice 3.** `752586b9` `PercSpaChoice choice=3`, `ISO-BOOTX64`, `[vda]` 10.0 GiB, `localhost login: root`, ISO motd `setup-alpine`, then `boot: perc SPA linux_iso — setup-disk withheld`. No scripted `setup-disk` line. `ee851fd5` journal-recovered and unmounted. |
 | Everest impact | none — HDA months 0.0 / 99% held |
-| LOI impact | Scores held. Bar A 92. Bar B 60. perc 78. Overall 73. Unmodified media stays 20 until COM2 shows the withhold line and the ISO prompt. |
-| Gates touched | Host answerer. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
+| LOI impact | Unmodified media 20→25. Bar A 92 held. Bar B 60 held. perc 78 held. Overall 73 held. The ISO is still serial-patched. `root` is still typed. |
+| Gates touched | COM2 on `752586b9`. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
 
 ---
 
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-29 | m8-guest-iso-lived | 92 | 60 | **Slice 3 lived.** `752586b9` choice 3, `ISO-BOOTX64`, `[vda]` 10.0 GiB, `localhost:~#`, ISO motd `setup-alpine`, then `boot: perc SPA linux_iso — setup-disk withheld`. No scripted `setup-disk`. `ee851fd5` was mounted read-only, journal-recovered, and unmounted. Unmodified media 20→25. The ISO is still serial-patched. `root` is still typed. Bar B stays 60. The 8192 MiB window reinstall was not clicked. |
 | 2026-09-29 | m8-guest-iso-prompt | 92 | 60 | **Slice 3 packed, not lived.** Guests `linux_iso` stops at the ISO prompt. `setup-disk` is not queued. Unmodified media stays 20 until COM2 shows `boot: perc SPA linux_iso — setup-disk withheld` and that prompt. `f44ba647` still types `setup-disk` on a new `linux_iso`. Scores held. Bar B stays 60. |
 | 2026-09-29 | m8-guest-stop-linux | 92 | 60 | **`f44ba647` booted `ee851fd5`.** `choice=4`, `DISK-BOOTX64`, `[vda]` 10.0 GiB, `localhost:~#`. Stop on that EFI did not run after Linux handoff. This fix is packed, not lived. Scores held. Bar B stays 60. The 2.9 TB VD is not the guest disk. Unmodified media stays 20. |
 | 2026-09-29 | m8-guest-rows | 92 | 60 | **Two Guests rows packed.** `67bdb0d9` COM2: `choice=3`, `tail_off=8589934592`, `[vda]` 10.0 GiB, `setup-disk` wrote `ee851fd5`. Reboot staged `ISO-BOOTX64` again. Scores held. Unmodified media stays 20. Bar B stays 60 until that UUID reaches its own login. |
@@ -336,7 +337,7 @@ LOI:           NOT OPEN. Tracker born 2026-09-14.
 Bar A:         92% · 0.25 months · dedicated-box non-prod
 Bar B:         60% · 1.5 months · PERC RAID fleet (8ad2ac89 reinstall then boot of d43dbf07; 8 GiB image; whole VD still hidden)
 Overall:       73% · confidence medium
-NOW:           Leave localhost:~# on ee851fd5 under f44ba647. Do not click Create or Stop on that EFI. Create still types setup-disk. Slice 3 (no scripted setup-disk on a new linux_iso) is packed, not lived. Do not F11 until that EFI's CI is green. Rollback v0.1.0-m8-perc-spa. Do not format UBUNTU0. Bar B stays 60. The 2.9 TB VD is not this disk. A5 parked. Bar A 92. Bar B 60. Overall 73. perc 78. unmodified 20. months A 0.25. months B 1.5. docs/adr/ADR-019.md
+NOW:           Leave localhost:~# on the ISO under 752586b9. Do not type setup-alpine. Choice 3 withheld setup-disk. The motd is the installer. ee851fd5 was seen and unmounted. Rollback v0.1.0-m8-perc-spa. Do not format UBUNTU0. Bar B stays 60. The 2.9 TB VD is not this disk. A5 parked. Bar A 92. Bar B 60. Overall 73. perc 78. unmodified 25. months A 0.25. months B 1.5. docs/adr/ADR-019.md
 Open:          boot a guest from a VD · iron AUTH-OK (parked) · unmodified ISO · cluster
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
 Rollback:      v0.1.0-m8-perc-spa → lived SPA choice (COM2 sha=8ad2ac89125e, CI 36362775808, SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849). v0.1.0-m8-a4s → older standing SPA (1f33eeda72f9, CI 36137732145). v0.1.0-m8-a6 → keyboard + power-off (fd2ca12e, CI 36166108942), not Latest. Everest Latest stays v0.1.0-everest-closed (f72b4276).

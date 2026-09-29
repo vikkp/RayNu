@@ -354,11 +354,11 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-guest-iso-prompt |
-| Summary | **Slice 3 packed, not lived.** A Guests `linux_iso` (window reinstall or a new tail disk) no longer queues `setup-disk`. The guest still gets `root` at `login:`. The shell is the ISO prompt. Start of an installed disk still withholds `setup-disk` and boots that disk. `f44ba647` still types `setup-disk` on a new `linux_iso`. Scores held. Months **0.0 held**. Overall **99 held**. |
+| Commit | m8-guest-iso-lived |
+| Summary | **Slice 3 lived on choice 3.** `752586b9` staged `ISO-BOOTX64` on the 10 GiB tail. The ISO motd offered `setup-alpine`. COM2 then printed `boot: perc SPA linux_iso — setup-disk withheld`. No scripted `setup-disk` line. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
-| Gates touched | Host answerer test. No doorbell. No format of UBUNTU0. Not a COM2 close. |
-| Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 60 held, perc 78 held, unmodified 20 held, overall LOI 73 held, months A 0.25 held, months B 1.5 held. |
+| Gates touched | COM2 `752586b9`. No doorbell. No format of UBUNTU0. |
+| Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 60 held, perc 78 held, unmodified 20→25, overall LOI 73 held, months A 0.25 held, months B 1.5 held. |
 
 
 ## Blockers & risks (Everest-relevant)
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-29 | m8-guest-iso-lived | 0.0 | 99 | **Slice 3 lived.** `752586b9` `choice=3`, `ISO-BOOTX64`, `[vda]` 10.0 GiB, ISO motd `setup-alpine`, then `boot: perc SPA linux_iso — setup-disk withheld`. No scripted `setup-disk`. `ee851fd5` journal-recovered and unmounted. Unmodified media 20→25. The ISO is still patched. months 0.0 held; overall 99 held |
 | 2026-09-29 | m8-guest-iso-prompt | 0.0 | 99 | **Slice 3 packed, not lived.** Guests `linux_iso` stops before `setup-disk`. Login still gets `root`. COM2 line is `boot: perc SPA linux_iso — setup-disk withheld`. Unmodified media stays 20 until that line is on iron. `f44ba647` still types `setup-disk` on a new `linux_iso`. Scores held. months 0.0 held; overall 99 held |
 | 2026-09-29 | m8-guest-stop-linux | 0.0 | 99 | **Stop on the Linux exit path.** `f44ba647` Start of the 10 GiB guest lived: `choice=4`, `DISK-BOOTX64`, `ee851fd5`, `[vda]` 10.0 GiB, `localhost:~#`. Stop on that EFI did not reach the Linux exit loop. Packed, not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-09-29 | m8-guest-rows | 0.0 | 99 | **Two Guests rows.** Id 1 is the 8 GiB window. Id 2 is a free-tail disk, with Start (`setup-disk` withheld) and Stop. `67bdb0d9` COM2: `choice=3`, `tail_off=8589934592`, `[vda]` 10.0 GiB, `ee851fd5` written, reboot returned to the ISO. Scores held. months 0.0 held; overall 99 held |
@@ -1042,7 +1043,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     Leave localhost:~# on ee851fd5 under f44ba647. Do not click Create or Stop on that EFI. Create still types setup-disk. Stop on that EFI never reached Linux. Slice 3 (setup-disk withheld for a new linux_iso) is packed, not lived. Do not F11 until that EFI's CI is green. Rollback is v0.1.0-m8-perc-spa. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/adr/ADR-019.md.
+Next move:     Leave localhost:~# on the ISO under 752586b9. Do not type setup-alpine. Choice 3 withheld setup-disk. ee851fd5 was seen and unmounted. The 8192 MiB window reinstall was not clicked. Rollback is v0.1.0-m8-perc-spa. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/adr/ADR-019.md.
 Rollback:      PERC SPA: v0.1.0-m8-perc-spa → CI 36362775808 / COM2 sha=8ad2ac89125e / EFI SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849
 Standing SPA:  v0.1.0-m8-a4s → CI 36137732145 / COM2 sha=1f33eeda72f9 / EFI SHA256 5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693
 Everest:       GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351 / EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc / COM2 build: sha=f72b4276d198
