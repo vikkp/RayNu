@@ -63,7 +63,7 @@
           id="loi-path"
           aria-label="Path to LOI"
         >
-          Everest 100% → Persist 93% → SKU 92% → TLS 80% → Auth 38% → Console 82% → PERC 78% → Unmodified 20% → Bar A 92% → Bar B 60% → Overall 73%
+          Everest 100% → Persist 93% → SKU 92% → TLS 80% → Auth 38% → Console 82% → PERC 78% → Unmodified 25% → Bar A 92% → Bar B 60% → Overall 73%
         </p>
       </div>
     </header>
@@ -345,18 +345,17 @@
             <li data-reveal>
               <header>
                 <span class="loi-pieces__name">Unmodified media</span>
-                <span class="loi-pieces__pct" data-piece="unmodified">20%</span>
+                <span class="loi-pieces__pct" data-piece="unmodified">25%</span>
               </header>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill" data-piece-fill="unmodified" style="width: 20%"></span>
+                <span class="hda-bar__fill" data-piece-fill="unmodified" style="width: 25%"></span>
               </div>
               <p>
-                Iron Alpine still rides an ISO patcher and serial auto-answer.
-                A Guests <code>linux_iso</code> in this tree no longer queues
-                <code>setup-disk</code>. That change is packed. This piece stays
-                <span data-loi-pct="pieces.unmodified">20%</span>
-                until COM2 shows the ISO prompt without that scripted line.
-                Fine for a dedicated-box demo if the SKU card says so. A fleet
+                Iron Alpine still rides an ISO patcher. <code>752586b9</code>
+                choice 3 reached the ISO prompt and withheld
+                <code>setup-disk</code>. This piece is
+                <span data-loi-pct="pieces.unmodified">25%</span>.
+                The answerer still types <code>root</code>. A fleet
                 claim of “unmodified Linux ISO” is false until that patcher is
                 gone. Windows is later still, and is not a peer of TLS.
               </p>
@@ -368,23 +367,22 @@
       <section class="section section--hda-com2" id="now">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>NOW · both SPA paths lived · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">60%</span> · overall <span data-loi-pct="overall">73%</span> · PERC <span data-loi-pct="pieces.perc">78%</span></p>
-          <h2 class="section__title">Leave the 10 GiB shell. Slice 3 is packed.</h2>
+          <h2 class="section__title">Leave the ISO prompt. Slice 3 lived.</h2>
           <p class="section__lede">
-            <code>f44ba647</code> Start on row 2 posted choice 4.
-            <code>DISK-BOOTX64</code> came up with
-            <code>root=UUID=ee851fd5-126e-4e44-9402-22fff99cc728</code>
-            and <code>[vda]</code> at 10.0 GiB. Leave
-            <code>localhost:~#</code>. Do not click Create or Stop on this EFI.
-            Create still types <code>setup-disk</code>. The next EFI withholds
-            that line for a new <code>linux_iso</code>. That change is packed,
-            not lived. Unmodified media stays
-            <span data-loi-pct="pieces.unmodified">20%</span>.
+            <code>752586b9</code> choice 3 staged <code>ISO-BOOTX64</code> on
+            the 10 GiB tail. The ISO motd offered <code>setup-alpine</code>.
+            COM2 then printed
+            <code>boot: perc SPA linux_iso — setup-disk withheld</code>.
+            Leave <code>localhost:~#</code>. Do not type
+            <code>setup-alpine</code>. <code>ee851fd5</code> was seen and
+            unmounted. Unmodified media is
+            <span data-loi-pct="pieces.unmodified">25%</span>.
             Bar A is 92. Bar B is 60. Overall is 73. PERC is 78.
           </p>
           <pre class="ship-code" data-reveal><code>boot:   UBUNTU0 ~400 GB · Ubuntu 26.04 · / and /boot/efi
-spare:  RAYNU-SPARE ~2.9 TB · 8 GiB d43dbf07 · 10 GiB ee851fd5 booted on f44ba647
+spare:  RAYNU-SPARE ~2.9 TB · 8 GiB d43dbf07 · 10 GiB ee851fd5 seen on 752586b9 · ISO prompt withheld setup-disk
 ctrl:   PERC H740P Mini only · do not open the H840
-next:   leave localhost:~# · do not Create on f44ba647 · unmodified <span data-loi-pct="pieces.unmodified">20%</span> · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">60%</span> · overall <span data-loi-pct="overall">73%</span> · PERC <span data-loi-pct="pieces.perc">78%</span>
+next:   leave localhost:~# · do not setup-alpine · unmodified <span data-loi-pct="pieces.unmodified">25%</span> · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">60%</span> · overall <span data-loi-pct="overall">73%</span> · PERC <span data-loi-pct="pieces.perc">78%</span>
 never:  format UBUNTU0 · format the whole spare · format the Toshiba · type setup-alpine on the live shell · curl Start
 read:   docs/runbooks/r640_perc_lab.md</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
