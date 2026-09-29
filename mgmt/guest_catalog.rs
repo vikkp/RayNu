@@ -19,8 +19,12 @@ use super::perc_boot_choice::{
 
 /// `GET` — spare bytes, the window, and the installed guest if the latch is set.
 pub const GUEST_CATALOG_PATH: &str = "/perc/guests";
-/// `POST` — boot the installed guest. `setup-disk` stays withheld.
+/// `POST` — boot the installed 8 GiB guest. `setup-disk` stays withheld.
 pub const GUEST_START_PATH: &str = "/perc/guests/1/start";
+/// `POST` — boot the free-tail guest. `setup-disk` stays withheld.
+pub const GUEST_TAIL_START_PATH: &str = "/perc/guests/2/start";
+/// `POST` — stop the running guest. The page stays up. Another Start needs a new boot.
+pub const GUEST_STOP_PATH: &str = "/perc/guests/stop";
 const LINUX_PREFIX: &str = "/perc/guests/1/linux/";
 const WINDOWS_PREFIX: &str = "/perc/guests/1/windows/";
 
@@ -178,7 +182,7 @@ fn mib_to_bytes(disk_mib: u32) -> Option<u64> {
 
 /// List JSON, including `cap` and `note`. Captions live here so the SPA
 /// shell stays inside `HTTP_RESPONSE_CAP`.
-const CATALOG_BODY_CAP: usize = 768;
+const CATALOG_BODY_CAP: usize = 1280;
 
 /// REST outcome. `Ready` carries a JSON body the HTTP layer writes as-is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -213,6 +217,24 @@ pub fn guest_catalog_rest(method: RestMethod, path: &str, authed: bool) -> Guest
             return ready(200, &body[..n], None);
         }
         Some(GuestRoute::Start) => CatalogAction::Start,
+        Some(GuestRoute::StartTail) => {
+            if !authed {
+                return GuestCatalogHttp::Unauthorized;
+            }
+            if !matches!(method, RestMethod::Post) {
+                return GuestCatalogHttp::BadMethod;
+            }
+            return start_tail();
+        }
+        Some(GuestRoute::Stop) => {
+            if !authed {
+                return GuestCatalogHttp::Unauthorized;
+            }
+            if !matches!(method, RestMethod::Post) {
+                return GuestCatalogHttp::BadMethod;
+            }
+            return stop_guest();
+        }
         Some(GuestRoute::Linux(mib)) => CatalogAction::Linux { disk_mib: mib },
         Some(GuestRoute::Windows(mib)) => CatalogAction::Windows { disk_mib: mib },
         Some(GuestRoute::Bad) => {
@@ -234,6 +256,8 @@ pub fn guest_catalog_rest(method: RestMethod, path: &str, authed: bool) -> Guest
 enum GuestRoute {
     List,
     Start,
+    StartTail,
+    Stop,
     Linux(u32),
     Windows(u32),
     Bad,
@@ -245,6 +269,12 @@ fn parse_guest_route(path: &str) -> Option<GuestRoute> {
     }
     if path == GUEST_START_PATH {
         return Some(GuestRoute::Start);
+    }
+    if path == GUEST_TAIL_START_PATH {
+        return Some(GuestRoute::StartTail);
+    }
+    if path == GUEST_STOP_PATH {
+        return Some(GuestRoute::Stop);
     }
     if let Some(rest) = path.strip_prefix(LINUX_PREFIX) {
         return Some(match parse_mib(rest) {
@@ -309,6 +339,40 @@ fn apply_action(action: CatalogAction) -> GuestCatalogHttp {
     }
 }
 
+fn start_tail() -> GuestCatalogHttp {
+    use super::perc_boot_choice::{apply_tail_boot_choice, guest_stopped, PercChoiceApply, CHOICE_TAIL_BOOT};
+    if guest_stopped() {
+        return ready(409, b"{\"ok\":false,\"reason\":\"stopped\"}", None);
+    }
+    let installed = crate::mgmt::megaraid::perc_image_boot_latched();
+    let spare = crate::mgmt::megaraid::perc_spare_bytes();
+    let disk_bytes = known_tail_bytes(spare, installed);
+    match apply_tail_boot_choice(installed, spare, disk_bytes) {
+        PercChoiceApply::Accepted => {
+            crate::boot::raynu_f_flag::request_installed_boot();
+            let mut body = [0u8; 128];
+            let mut w = JsonBuf::new(&mut body);
+            w.s("{\"ok\":true,\"choice\":\"tailboot\",\"spare_off\":");
+            w.u(crate::mgmt::megaraid::PERC_IMAGE_BYTES);
+            w.s(",\"disk_bytes\":");
+            w.u(disk_bytes);
+            w.s("}");
+            let n = if w.fit { w.n } else { 0 };
+            ready(200, &body[..n], Some(CHOICE_TAIL_BOOT))
+        }
+        PercChoiceApply::NoImage => ready(409, b"{\"ok\":false,\"reason\":\"notail\"}", None),
+        PercChoiceApply::AlreadyChosen => ready(409, b"{\"ok\":false,\"reason\":\"chosen\"}", None),
+    }
+}
+
+fn stop_guest() -> GuestCatalogHttp {
+    if crate::mgmt::perc_boot_choice::request_guest_stop() {
+        ready(200, b"{\"ok\":true,\"choice\":\"stop\"}", None)
+    } else {
+        ready(409, b"{\"ok\":false,\"reason\":\"idle\"}", None)
+    }
+}
+
 fn store_tail(
     installed: bool,
     spare_bytes: u64,
@@ -365,7 +429,72 @@ fn fill_list_json(buf: &mut [u8]) -> usize {
     let numbers = catalog_numbers(spare, SLICE1_WINDOW_BYTES, installed);
     let choice = perc_spa_choice();
     let waiting = perc_spa_wait_required(installed, choice);
-    write_list_json(buf, numbers, waiting, choice, installed)
+    let tail = if let Some((_, bytes)) = crate::mgmt::perc_boot_choice::armed_tail() {
+        bytes
+    } else {
+        discover_tail_bytes(spare, installed)
+    };
+    write_list_json(buf, numbers, waiting, choice, installed, tail)
+}
+
+/// One GPT header sector at guest LBA 1 of a disk that starts at the 8 GiB mark.
+/// `backup` LBA is at offset 32. Returns the guest disk size, or `None`.
+pub fn tail_bytes_from_gpt(sector: &[u8], spare_bytes: u64) -> Option<u64> {
+    if sector.len() < 40 || &sector[..8] != b"EFI PART" {
+        return None;
+    }
+    let backup = u64::from_le_bytes(sector[32..40].try_into().ok()?);
+    let bytes = backup.checked_add(1)?.checked_mul(512)?;
+    if bytes <= SLICE1_WINDOW_BYTES || bytes % 512 != 0 {
+        return None;
+    }
+    if SLICE1_WINDOW_BYTES.saturating_add(bytes) > spare_bytes {
+        return None;
+    }
+    Some(bytes)
+}
+
+fn known_tail_bytes(spare: u64, installed: bool) -> u64 {
+    if let Some((_, bytes)) = crate::mgmt::perc_boot_choice::armed_tail() {
+        bytes
+    } else {
+        discover_tail_bytes(spare, installed)
+    }
+}
+
+fn discover_tail_bytes(spare: u64, installed: bool) -> u64 {
+    if !installed || spare == 0 {
+        return 0;
+    }
+    #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+    {
+        cached_tail_probe(spare)
+    }
+    #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+    {
+        let _ = spare;
+        0
+    }
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn cached_tail_probe(spare: u64) -> u64 {
+    use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+    static PROBED: AtomicBool = AtomicBool::new(false);
+    static FOUND: AtomicU64 = AtomicU64::new(0);
+    if PROBED.load(Ordering::Acquire) {
+        return FOUND.load(Ordering::Acquire);
+    }
+    let lba = SLICE1_WINDOW_BYTES / 512 + 1;
+    let mut sector = [0u8; 512];
+    let found = if crate::mgmt::megaraid::perc_spare_read(lba, &mut sector) {
+        tail_bytes_from_gpt(&sector, spare).unwrap_or(0)
+    } else {
+        0
+    };
+    FOUND.store(found, Ordering::Release);
+    PROBED.store(true, Ordering::Release);
+    found
 }
 
 /// `cap` and `note` are the Guests sentences. The HTML shell prints them.
@@ -377,18 +506,27 @@ fn write_list_json(
     waiting: bool,
     choice: PercSpaChoice,
     installed: bool,
+    tail_bytes: u64,
 ) -> usize {
+    let stopped = crate::mgmt::perc_boot_choice::guest_stopped();
+    let used = numbers.used_bytes.saturating_add(tail_bytes);
+    let free = numbers.spare_bytes.saturating_sub(used);
+    let placeable = if numbers.spare_bytes > 0 && installed {
+        free
+    } else {
+        numbers.placeable_bytes
+    };
     let mut w = JsonBuf::new(buf);
     w.s("{\"spare_bytes\":");
     w.u(numbers.spare_bytes);
     w.s(",\"window_bytes\":");
     w.u(numbers.window_bytes);
     w.s(",\"used_bytes\":");
-    w.u(numbers.used_bytes);
+    w.u(used);
     w.s(",\"free_bytes\":");
-    w.u(numbers.free_bytes);
+    w.u(free);
     w.s(",\"placeable_bytes\":");
-    w.u(numbers.placeable_bytes);
+    w.u(placeable);
     w.s(",\"waiting\":");
     w.s(if waiting { "true" } else { "false" });
     w.s(",\"choice\":\"");
@@ -396,21 +534,56 @@ fn write_list_json(
     w.s("\",\"cap\":\"Spare ");
     w.u(numbers.spare_bytes / (1024 * 1024));
     w.s(" MiB. Used ");
-    w.u(numbers.used_bytes / (1024 * 1024));
+    w.u(used / (1024 * 1024));
     w.s(". Free ");
-    w.u(numbers.free_bytes / (1024 * 1024));
+    w.u(free / (1024 * 1024));
     w.s(". Placeable ");
-    w.u(numbers.placeable_bytes / (1024 * 1024));
+    w.u(placeable / (1024 * 1024));
     w.s(".\",\"note\":\"");
-    w.s(catalog_note(waiting, choice));
+    w.s(catalog_note(waiting, choice, stopped));
     w.s("\",\"guests\":[");
     if installed {
-        let disk_mib = numbers.used_bytes / (1024 * 1024);
+        let pending = matches!(choice, PercSpaChoice::Pending) && !stopped;
+        let active = matches!(
+            choice,
+            PercSpaChoice::BootInstalled | PercSpaChoice::CleanReinstall
+        ) && !stopped;
         w.s("{\"id\":1,\"name\":\"alpine\",\"state\":\"");
-        w.s(guest_state(installed, choice));
+        w.s(if stopped {
+            "stopped"
+        } else {
+            window_state(choice)
+        });
         w.s("\",\"disk_mib\":");
-        w.u(disk_mib);
-        w.s(",\"image_type\":\"linux_iso\"}");
+        w.u(numbers.used_bytes / (1024 * 1024));
+        w.s(",\"image_type\":\"linux_iso\",\"start\":");
+        w.s(if pending { "true" } else { "false" });
+        w.s(",\"stop\":");
+        w.s(if active { "true" } else { "false" });
+        w.s("}");
+    }
+    if tail_bytes > 0 {
+        if installed {
+            w.s(",");
+        }
+        let pending = matches!(choice, PercSpaChoice::Pending) && !stopped;
+        let active = matches!(
+            choice,
+            PercSpaChoice::Tail { .. } | PercSpaChoice::TailBoot { .. }
+        ) && !stopped;
+        w.s("{\"id\":2,\"name\":\"alpine\",\"state\":\"");
+        w.s(if stopped {
+            "stopped"
+        } else {
+            tail_row_state(choice)
+        });
+        w.s("\",\"disk_mib\":");
+        w.u(tail_bytes / (1024 * 1024));
+        w.s(",\"image_type\":\"linux_iso\",\"start\":");
+        w.s(if pending { "true" } else { "false" });
+        w.s(",\"stop\":");
+        w.s(if active { "true" } else { "false" });
+        w.s("}");
     }
     w.s("]}");
     if w.fit {
@@ -420,17 +593,23 @@ fn write_list_json(
     }
 }
 
-fn catalog_note(waiting: bool, choice: PercSpaChoice) -> &'static str {
+fn catalog_note(waiting: bool, choice: PercSpaChoice, stopped: bool) -> &'static str {
+    if stopped {
+        return "Guest stopped. F11 to start another.";
+    }
     if waiting {
-        "Start boots the installed guest. A larger Linux disk uses the free tail. 8192 MiB reinstalls the window."
+        "Start boots one installed guest. A larger Linux disk uses the free tail. 8192 MiB reinstalls the window."
     } else {
         match choice {
             PercSpaChoice::BootInstalled => {
-                "Booting the installed guest. setup-disk stays withheld."
+                "Booting the 8 GiB guest. setup-disk stays withheld."
             }
             PercSpaChoice::CleanReinstall => "Installing linux_iso on the 8 GiB window.",
             PercSpaChoice::Tail { .. } => {
                 "Installing linux_iso on a new free-tail disk. The 8 GiB window stays."
+            }
+            PercSpaChoice::TailBoot { .. } => {
+                "Booting the free-tail guest. setup-disk stays withheld."
             }
             PercSpaChoice::Pending => {
                 "No latched spare image. A new disk waits until one is present."
@@ -445,16 +624,24 @@ fn choice_name(choice: PercSpaChoice) -> &'static str {
         PercSpaChoice::BootInstalled => "boot",
         PercSpaChoice::CleanReinstall => "reinstall",
         PercSpaChoice::Tail { .. } => "tail",
+        PercSpaChoice::TailBoot { .. } => "tailboot",
     }
 }
 
-fn guest_state(installed: bool, choice: PercSpaChoice) -> &'static str {
-    match (installed, choice) {
-        (true, PercSpaChoice::BootInstalled) => "booting",
-        (true, PercSpaChoice::CleanReinstall) => "installing",
-        (true, PercSpaChoice::Tail { .. }) => "installing",
-        (true, PercSpaChoice::Pending) => "installed",
-        (false, _) => "absent",
+fn window_state(choice: PercSpaChoice) -> &'static str {
+    match choice {
+        PercSpaChoice::BootInstalled => "booting",
+        PercSpaChoice::CleanReinstall => "installing",
+        PercSpaChoice::Tail { .. } | PercSpaChoice::TailBoot { .. } => "stopped",
+        PercSpaChoice::Pending => "installed",
+    }
+}
+
+fn tail_row_state(choice: PercSpaChoice) -> &'static str {
+    match choice {
+        PercSpaChoice::Tail { .. } => "installing",
+        PercSpaChoice::TailBoot { .. } => "booting",
+        _ => "installed",
     }
 }
 
@@ -538,6 +725,8 @@ pub fn prop_guest_catalog() -> bool {
     let http = include_str!("http.rs");
     html.contains("spare-list")
         && html.contains(GUEST_START_PATH)
+        && html.contains("/perc/guests/2/start")
+        && html.contains("/perc/guests/stop")
         && html.contains("/perc/guests/1/linux/")
         && html.contains("/perc/guests/1/windows/")
         && !html.contains("btn-perc-boot")
@@ -574,17 +763,31 @@ mod guest_catalog_test {
         assert_eq!(host.placeable_bytes, SLICE1_WINDOW_BYTES);
         assert_eq!(host.free_bytes, 0);
         let mut buf = [0u8; CATALOG_BODY_CAP];
-        let n = write_list_json(&mut buf, n, true, PercSpaChoice::Pending, true);
+        let ten = 10_240u64 * 1024 * 1024;
+        let n = write_list_json(&mut buf, n, true, PercSpaChoice::Pending, true, ten);
         let body = core::str::from_utf8(&buf[..n]).unwrap_or("");
         assert!(body.ends_with("]}"), "{body}");
         assert!(n < buf.len(), "{n}");
         assert!(
             body.contains(
-                "\"cap\":\"Spare 3022592 MiB. Used 8192. Free 3014400. Placeable 3014400.\""
+                "\"cap\":\"Spare 3022592 MiB. Used 18432. Free 3004160. Placeable 3004160.\""
             ),
             "{body}"
         );
+        assert!(body.contains("\"id\":1"), "{body}");
+        assert!(body.contains("\"state\":\"installed\""), "{body}");
+        assert!(body.contains("\"disk_mib\":10240"), "{body}");
+        assert!(body.contains("\"start\":true"), "{body}");
         assert!(body.contains("free tail"), "{body}");
+        let mut sector = [0u8; 512];
+        sector[..8].copy_from_slice(b"EFI PART");
+        let backup = (ten / 512) - 1;
+        sector[32..40].copy_from_slice(&backup.to_le_bytes());
+        assert_eq!(
+            tail_bytes_from_gpt(&sector, IRON_LD1_BYTES),
+            Some(ten)
+        );
+        assert!(tail_bytes_from_gpt(&sector, SLICE1_WINDOW_BYTES).is_none());
         assert!(
             crate::mgmt::webui::webui_len() + 256 <= crate::mgmt::http::HTTP_RESPONSE_CAP
         );
@@ -697,6 +900,16 @@ mod guest_catalog_test {
         );
         assert_eq!(st, 409, "{body}");
         assert!(body.contains("noguest"), "{body}");
+        let (st, body) = exchange(
+            "POST /perc/guests/2/start HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
+        );
+        assert_eq!(st, 409, "{body}");
+        assert!(body.contains("notail"), "{body}");
+        let (st, body) = exchange(
+            "POST /perc/guests/stop HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
+        );
+        assert_eq!(st, 409, "{body}");
+        assert!(body.contains("idle"), "{body}");
         let (st, body) = exchange(
             "POST /perc/guests/1/linux/10240 HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
         );

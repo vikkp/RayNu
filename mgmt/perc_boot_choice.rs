@@ -31,6 +31,8 @@ pub const CHOICE_BOOT: u8 = 1;
 pub const CHOICE_REINSTALL: u8 = 2;
 /// New disk in the free tail. `AuditEvent::PercSpaChoice.choice`.
 pub const CHOICE_TAIL: u8 = 3;
+/// Boot the disk already placed in the free tail. `setup-disk` stays withheld.
+pub const CHOICE_TAIL_BOOT: u8 = 4;
 
 /// COM2 while the firmware waits. Not an iron marker.
 pub const PERC_SPA_WAIT_NOTE: &str =
@@ -44,14 +46,21 @@ pub const PERC_SPA_REINSTALL_NOTE: &str =
 /// COM2 after Guests Create with a disk in the free tail.
 pub const PERC_SPA_TAIL_NOTE: &str =
     "boot: perc SPA choice tail disk (free tail after the 8 GiB window; that window is not vda; UBUNTU0 untouched; not ISO-INSTALL-OK)";
+/// COM2 after Start on the free-tail guest.
+pub const PERC_SPA_TAIL_BOOT_NOTE: &str =
+    "boot: perc SPA choice tail boot (free tail is vda; setup-disk withheld; 8 GiB window stays; not ISO-INSTALL-OK)";
 
 /// JUSTIFICATION: one BSP latch. The coexist HTTP handler stores it; the
 /// boot wait and the RayNu-F stager load it. Not the Proven Core allocator.
 static CHOICE: AtomicU8 = AtomicU8::new(CHOICE_PENDING);
-/// Guest-visible size of a tail disk. Zero unless [`CHOICE_TAIL`] won the race.
+/// Guest-visible size of a tail disk. Zero unless a tail choice won the race.
 static TAIL_BYTES: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
 /// Spare byte offset of that disk. Zero unless it is the free tail.
 static TAIL_OFF: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+/// SPA Stop. The RayNu-F exit loop takes it and leaves the guest.
+static GUEST_STOP: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+/// Stop already landed. Start stays refused until the next hypervisor boot.
+static GUEST_STOPPED: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
 
 /// What the operator has posted, if anything.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -60,7 +69,12 @@ pub enum PercSpaChoice {
     BootInstalled,
     CleanReinstall,
     /// `disk_bytes` is the guest disk. It starts at the free tail.
+    /// This choice stages the installer.
     Tail {
+        disk_bytes: u64,
+    },
+    /// Same geometry as [`PercSpaChoice::Tail`]. The installed ESP boots.
+    TailBoot {
         disk_bytes: u64,
     },
 }
@@ -92,38 +106,53 @@ pub fn perc_spa_choice() -> PercSpaChoice {
     match CHOICE.load(Ordering::Acquire) {
         CHOICE_BOOT => PercSpaChoice::BootInstalled,
         CHOICE_REINSTALL => PercSpaChoice::CleanReinstall,
-        CHOICE_TAIL => {
-            let disk_bytes = TAIL_BYTES.load(Ordering::Acquire);
-            let spare_off = TAIL_OFF.load(Ordering::Acquire);
-            if disk_bytes > crate::mgmt::megaraid::PERC_IMAGE_BYTES
-                && spare_off >= crate::mgmt::megaraid::PERC_IMAGE_BYTES
-            {
-                PercSpaChoice::Tail { disk_bytes }
-            } else {
-                PercSpaChoice::Pending
-            }
-        }
+        CHOICE_TAIL => tail_choice(false),
+        CHOICE_TAIL_BOOT => tail_choice(true),
         _ => PercSpaChoice::Pending,
+    }
+}
+
+fn tail_choice(boot: bool) -> PercSpaChoice {
+    let disk_bytes = TAIL_BYTES.load(Ordering::Acquire);
+    let spare_off = TAIL_OFF.load(Ordering::Acquire);
+    if disk_bytes > crate::mgmt::megaraid::PERC_IMAGE_BYTES
+        && spare_off >= crate::mgmt::megaraid::PERC_IMAGE_BYTES
+    {
+        if boot {
+            PercSpaChoice::TailBoot { disk_bytes }
+        } else {
+            PercSpaChoice::Tail { disk_bytes }
+        }
+    } else {
+        PercSpaChoice::Pending
     }
 }
 
 /// `(spare_off, disk_bytes)` when a tail disk is the guest disk.
 ///
 /// `None` for boot-installed and for a window reinstall. The offset is
-/// never inside the 8 GiB window.
+/// never inside the 8 GiB window. True for an install and for a later Start.
 pub fn armed_tail() -> Option<(u64, u64)> {
     match perc_spa_choice() {
-        PercSpaChoice::Tail { disk_bytes } => Some((TAIL_OFF.load(Ordering::Acquire), disk_bytes)),
+        PercSpaChoice::Tail { disk_bytes } | PercSpaChoice::TailBoot { disk_bytes } => {
+            Some((TAIL_OFF.load(Ordering::Acquire), disk_bytes))
+        }
         _ => None,
     }
 }
 
-/// ISO staging for a window reinstall or a tail disk. Boot-as-is is false.
+/// ISO staging for a window reinstall or a new tail disk. Boot-as-is and
+/// Start of an existing tail disk are false.
 pub fn installer_iso_forced() -> bool {
     matches!(
         perc_spa_choice(),
         PercSpaChoice::CleanReinstall | PercSpaChoice::Tail { .. }
     )
+}
+
+/// `setup-disk` may erase the tail view only while that disk is being installed.
+pub fn tail_install_chosen() -> bool {
+    matches!(perc_spa_choice(), PercSpaChoice::Tail { .. })
 }
 
 /// True only after the reinstall POST.
@@ -239,6 +268,62 @@ pub fn apply_tail_choice(
     }
 }
 
+/// Start the disk already in the free tail. Same placement rules as an install.
+/// Does not stage the ISO and does not allow `setup-disk`.
+pub fn apply_tail_boot_choice(
+    image_latched: bool,
+    spare_bytes: u64,
+    disk_bytes: u64,
+) -> PercChoiceApply {
+    if guest_stopped() {
+        return PercChoiceApply::AlreadyChosen;
+    }
+    let Some(place) = crate::mgmt::megaraid::place_in_free_tail(
+        spare_bytes,
+        crate::mgmt::megaraid::PERC_IMAGE_BYTES,
+        image_latched,
+        disk_bytes,
+    ) else {
+        return PercChoiceApply::NoImage;
+    };
+    match CHOICE.compare_exchange(
+        CHOICE_PENDING,
+        CHOICE_TAIL_BOOT,
+        Ordering::AcqRel,
+        Ordering::Acquire,
+    ) {
+        Ok(_) => {
+            TAIL_OFF.store(place.spare_off, Ordering::Release);
+            TAIL_BYTES.store(place.disk_bytes, Ordering::Release);
+            PercChoiceApply::Accepted
+        }
+        Err(_) => PercChoiceApply::AlreadyChosen,
+    }
+}
+
+/// Arm Stop for the running guest. Pending and a second Stop are idle.
+pub fn request_guest_stop() -> bool {
+    if guest_stopped() || matches!(perc_spa_choice(), PercSpaChoice::Pending) {
+        return false;
+    }
+    GUEST_STOP.store(true, Ordering::Release);
+    true
+}
+
+/// RayNu-F exit loop. One-shot. Also latches [`guest_stopped`].
+pub fn take_guest_stop() -> bool {
+    if !GUEST_STOP.swap(false, Ordering::AcqRel) {
+        return false;
+    }
+    GUEST_STOPPED.store(true, Ordering::Release);
+    true
+}
+
+/// True after Stop has landed. Start stays refused for this hypervisor boot.
+pub fn guest_stopped() -> bool {
+    GUEST_STOPPED.load(Ordering::Acquire)
+}
+
 fn status_body() -> &'static [u8] {
     match (
         crate::mgmt::megaraid::perc_image_boot_latched(),
@@ -248,6 +333,7 @@ fn status_body() -> &'static [u8] {
         (_, PercSpaChoice::BootInstalled) => b"{\"choice\":\"boot\",\"waiting\":false}",
         (_, PercSpaChoice::CleanReinstall) => b"{\"choice\":\"reinstall\",\"waiting\":false}",
         (_, PercSpaChoice::Tail { .. }) => b"{\"choice\":\"tail\",\"waiting\":false}",
+        (_, PercSpaChoice::TailBoot { .. }) => b"{\"choice\":\"tailboot\",\"waiting\":false}",
         (false, PercSpaChoice::Pending) => b"{\"choice\":\"pending\",\"waiting\":false}",
     }
 }
@@ -358,6 +444,7 @@ fn firmware_wait() {
         PercSpaChoice::BootInstalled => serial::write_line(PERC_SPA_BOOT_NOTE),
         PercSpaChoice::CleanReinstall => serial::write_line(PERC_SPA_REINSTALL_NOTE),
         PercSpaChoice::Tail { .. } => serial::write_line(PERC_SPA_TAIL_NOTE),
+        PercSpaChoice::TailBoot { .. } => serial::write_line(PERC_SPA_TAIL_BOOT_NOTE),
         PercSpaChoice::Pending => {}
     }
 }
@@ -389,6 +476,8 @@ pub fn clear_perc_spa_choice_for_test() {
     CHOICE.store(CHOICE_PENDING, Ordering::Release);
     TAIL_BYTES.store(0, Ordering::Release);
     TAIL_OFF.store(0, Ordering::Release);
+    GUEST_STOP.store(false, Ordering::Release);
+    GUEST_STOPPED.store(false, Ordering::Release);
 }
 
 #[cfg(test)]
@@ -502,6 +591,23 @@ mod perc_boot_choice_test {
         );
         clear_perc_spa_choice_for_test();
         assert!(armed_tail().is_none());
+        assert!(!installer_iso_forced());
+        assert_eq!(
+            apply_tail_boot_choice(true, crate::mgmt::megaraid::IRON_LD1_BYTES, ten),
+            PercChoiceApply::Accepted
+        );
+        assert!(!installer_iso_forced());
+        assert!(!tail_install_chosen());
+        assert_eq!(
+            armed_tail(),
+            Some((crate::mgmt::megaraid::PERC_IMAGE_BYTES, ten))
+        );
+        assert!(request_guest_stop());
+        assert!(take_guest_stop());
+        assert!(guest_stopped());
+        assert!(!request_guest_stop());
+        clear_perc_spa_choice_for_test();
+        assert!(!guest_stopped());
         assert!(!installer_iso_forced());
         let (st, body) = exchange("GET /perc/boot HTTP/1.1\r\n\r\n");
         assert_eq!(st, 401, "{body}");

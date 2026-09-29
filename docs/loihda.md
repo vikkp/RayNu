@@ -178,7 +178,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | **2026-09-25** | Bar A **A4s** | Page stays up after `login:` | **LIVED** (`1f33eeda72f9`, lease `.154`, one TCP accept, `HTTP keep-alive`, Host green, guest COM1 in Activity) |
 | **2026-09-27** | M8.7 spare read | COM2 `RAYNU-V-M8-PERC-LUN-OK` | **LIVED** (`9c37fcae`: `perc virtio rd lba=0 ok`, then `dd` of `/dev/vdc` returned 16 zero bytes) |
 | **2026-09-27** | M8.7 last-LBA write | COM2 `RAYNU-V-M8-PERC-WRITE-OK` | **LIVED** (`f0a7aabb`: `perc write status=0x00` at LBA `6190268927`, readback match, then the marker. LBA 0 stayed 16 zeros. Read-only virtio. Alpine still on the Toshiba.) |
-| **NOW** | Slice 2 packed | A larger disk would be `vda` in the free tail | Leave `localhost:~#`. Do not type `setup-alpine`. Do not click Create on `5175b3da`. Do not flash `b330e28f` (SPA exceeded the 20 KiB reply). Captions are on `GET /perc/guests`. Slice 2 is not lived. Scores held. The guest disk is still 8 GiB. See [ADR-019](adr/ADR-019.md) |
+| **NOW** | Two guest rows packed | 8 GiB window and a 10 GiB tail disk | Leave `localhost:~#` on the live ISO. Do not type `setup-alpine`. `67bdb0d9` wrote `ee851fd5` on a 10 GiB `vda` at `tail_off=8589934592`. The reboot staged the ISO again. Scores held. Bar B stays 60 until that UUID boots. See [ADR-019](adr/ADR-019.md) |
 | later | Unmodified ISO | Gen-1 Phase 2 | named residual, not a fake close |
 
 ```
@@ -207,10 +207,10 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-guest-captions |
-| Summary | **Guests captions are JSON.** `cap` and `note` come from `GET /perc/guests`. The shell fits the 20 KiB HTTP reply. `b330e28f` is not a flash. Slice 2 stays packed, not lived. |
+| Commit | m8-guest-rows |
+| Summary | **Two Guests rows.** The 8 GiB window and a free-tail disk. Start on the tail disk withholds `setup-disk`. Stop ends the guest. `67bdb0d9` installed `ee851fd5` on 10 GiB `vda`. The reboot returned to the ISO. Scores held. |
 | Everest impact | none — HDA months 0.0 / 99% held |
-| LOI impact | Scores held. Bar A 92. Bar B 60. perc 78. Overall 73. Unmodified media stays 20. The guest disk is still 8 GiB until iron COM2. |
+| LOI impact | Scores held. Bar A 92. Bar B 60. perc 78. Overall 73. Unmodified media stays 20. `ee851fd5` is installed on 10 GiB `vda`. Bar B waits until that UUID boots. |
 | Gates touched | Host catalog. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
 
 ---
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-29 | m8-guest-rows | 92 | 60 | **Two Guests rows packed.** `67bdb0d9` COM2: `choice=3`, `tail_off=8589934592`, `[vda]` 10.0 GiB, `setup-disk` wrote `ee851fd5`. Reboot staged `ISO-BOOTX64` again. Scores held. Unmodified media stays 20. Bar B stays 60 until that UUID reaches its own login. |
 | 2026-09-29 | m8-guest-captions | 92 | 60 | **Guests captions moved onto `GET /perc/guests`.** The shell fits the 20 KiB HTTP reply. `b330e28f` crossed that reply and is not a flash. Slice 2 stays packed, not lived. Scores held. Unmodified media stays 20. The guest disk is still 8 GiB. |
 | 2026-09-28 | m8-guest-tail | 92 | 60 | **ADR-019 slice 2 packed, not lived.** Host tests place 10240 MiB at spare offset 8589934592 and refuse a write of the window. Not COM2. Scores held. Unmodified media stays 20. The guest disk is still 8 GiB. |
 | 2026-09-28 | m8-guest-start-lived | 92 | 60 | **Guests Start lived.** `5175b3da` `choice=1`, `DISK-BOOTX64`, `RAYNU-V-M8-PERC-BOOT-OK`, `localhost:~#` on `d43dbf07`. `vda` 8.00 GiB. `vda2` clean `6380/521216`. Page showed spare 3022592 MiB. Create was not clicked. Scores held. Unmodified media stays 20. |
@@ -333,7 +334,7 @@ LOI:           NOT OPEN. Tracker born 2026-09-14.
 Bar A:         92% · 0.25 months · dedicated-box non-prod
 Bar B:         60% · 1.5 months · PERC RAID fleet (8ad2ac89 reinstall then boot of d43dbf07; 8 GiB image; whole VD still hidden)
 Overall:       73% · confidence medium
-NOW:           Slice 2 is packed, not lived. Leave localhost:~# on d43dbf07. Do not type setup-alpine. Do not click Create guest on 5175b3da. A later EFI must show choice=3 and vda at the requested size. Rollback v0.1.0-m8-perc-spa. Do not format UBUNTU0. The guest disk is still the 8 GiB image. skip PERC stays. A5 parked. Bar A 92. Bar B 60. Overall 73. perc 78. unmodified 20. months A 0.25. months B 1.5. docs/adr/ADR-019.md
+NOW:           Leave localhost:~# on the live ISO. Do not type setup-alpine. 67bdb0d9 wrote ee851fd5 on a 10 GiB vda at tail_off=8589934592. The reboot staged the ISO again. Two-row list is packed, not on that EFI. Rollback v0.1.0-m8-perc-spa. Do not format UBUNTU0. Bar B stays 60 until ee851fd5 boots. skip PERC stays. A5 parked. Bar A 92. Bar B 60. Overall 73. perc 78. unmodified 20. months A 0.25. months B 1.5. docs/adr/ADR-019.md
 Open:          boot a guest from a VD · iron AUTH-OK (parked) · unmodified ISO · cluster
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
 Rollback:      v0.1.0-m8-perc-spa → lived SPA choice (COM2 sha=8ad2ac89125e, CI 36362775808, SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849). v0.1.0-m8-a4s → older standing SPA (1f33eeda72f9, CI 36137732145). v0.1.0-m8-a6 → keyboard + power-off (fd2ca12e, CI 36166108942), not Latest. Everest Latest stays v0.1.0-everest-closed (f72b4276).
