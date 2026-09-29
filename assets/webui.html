@@ -210,10 +210,14 @@ box.className="";box.innerHTML="";
 g.forEach(function(vm){
 const row=document.createElement("div");row.className="row";
 row.innerHTML='<span class="id">'+vm.id+'</span><span><div class="meta">'+(vm.image_type||"")+" "+(vm.disk_mib||0)+" MiB</div><div class=\"st\">"+(vm.state||"")+'</div></span><span class="acts"></span>';
-const a=document.createElement("button");a.className="pri";a.textContent="Start";a.onclick=guestStart;row.querySelector(".acts").appendChild(a);box.appendChild(row);
+const acts=row.querySelector(".acts");
+if(vm.start){const a=document.createElement("button");a.className="pri";a.textContent="Start";a.onclick=function(){guestStart(vm.id)};acts.appendChild(a)}
+if(vm.stop){const b=document.createElement("button");b.className="ghost";b.textContent="Stop";b.onclick=guestStop;acts.appendChild(b)}
+box.appendChild(row);
 });
 }
-async function guestStart(){setS("Starting installed guest…");const res=await api("POST","/perc/guests/1/start");setS(res.ok?"Booting installed guest":"Start refused ("+res.status+")");loadSpare()}
+async function guestStart(id){const path=id===2?"/perc/guests/2/start":"/perc/guests/1/start";setS("Starting "+id+"…");const res=await api("POST",path);setS(res.ok?("Booting guest "+id):("Start refused ("+res.status+")"));loadSpare()}
+async function guestStop(){setS("Stopping guest…");const res=await api("POST","/perc/guests/stop");setS(res.ok?"Guest stopped":"Stop refused ("+res.status+")");loadSpare()}
 async function loadSpare(){
 let r;try{r=await api("GET","/perc/guests")}catch(e){return}
 hostOk=r.ok||hostOk;if(!r.ok)return;

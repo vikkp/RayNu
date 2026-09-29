@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-guest-captions |
-| Summary | **Guests captions moved onto `GET /perc/guests`.** The HTML shell prints `cap` and `note` and fits the 20 KiB HTTP reply. `b330e28f` crossed that reply and is not a flash. Slice 2 stays packed, not lived. Months **0.0 held**. Overall **99 held**. |
+| Commit | m8-guest-rows |
+| Summary | **Guests lists the 8 GiB window and a free-tail disk.** Start on the tail disk boots it with `setup-disk` withheld. Stop ends the guest; another Start needs F11. `67bdb0d9` already installed `ee851fd5` on a 10 GiB `vda` at `tail_off=8589934592`. The reboot stayed on the ISO. Scores held. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
 | Gates touched | Host placement tests. No doorbell. No format of UBUNTU0. Not a COM2 close. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 56→60, perc 74→78, months B 1.75→1.5, overall LOI 73 held, months A 0.25 held. |
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-29 | m8-guest-rows | 0.0 | 99 | **Two Guests rows.** Id 1 is the 8 GiB window. Id 2 is a free-tail disk, with Start (`setup-disk` withheld) and Stop. `67bdb0d9` COM2: `choice=3`, `tail_off=8589934592`, `[vda]` 10.0 GiB, `ee851fd5` written, reboot returned to the ISO. Scores held. months 0.0 held; overall 99 held |
 | 2026-09-29 | m8-guest-captions | 0.0 | 99 | **Guests captions are `cap` and `note` on `GET /perc/guests`.** The shell fits the 20 KiB HTTP reply. `b330e28f` crossed that reply and is not a flash. Slice 2 stays packed, not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-09-28 | m8-guest-tail | 0.0 | 99 | **ADR-019 slice 2 packed, not lived.** `linux_iso` past 8 GiB and inside the free tail is choice 3. Guest LBA 0 is spare offset 8589934592. Window writes do not pack. 8192 MiB is still the window reinstall. Not COM2. Scores held. months 0.0 held; overall 99 held |
 | 2026-09-28 | m8-guest-start-lived | 0.0 | 99 | **Guests Start lived.** `5175b3da` waited on SPA Guests, `PercSpaChoice choice=1`, `DISK-BOOTX64`, `RAYNU-V-M8-PERC-BOOT-OK`, `localhost:~#` on `d43dbf07`. `vda` 8.00 GiB. Page showed spare 3022592 MiB, used 8192, placeable 8192. The 10240 MiB refusal was not clicked. Scores held. months 0.0 held; overall 99 held |
@@ -1039,7 +1040,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     Leave localhost:~# on d43dbf07. Do not type setup-alpine. Do not click Create guest on 5175b3da. Do not flash b330e28f (SPA exceeded the 20 KiB reply). Slice 2 stays packed until a later green EFI shows choice=3 and vda at the requested size. Rollback is v0.1.0-m8-perc-spa. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/adr/ADR-019.md.
+Next move:     Leave localhost:~# on the live ISO. Do not type setup-alpine. 67bdb0d9 installed ee851fd5 on a 10 GiB vda at tail_off=8589934592; the reboot stayed on the ISO. The two-row list is packed, not on that EFI. Rollback is v0.1.0-m8-perc-spa. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/adr/ADR-019.md.
 Rollback:      PERC SPA: v0.1.0-m8-perc-spa → CI 36362775808 / COM2 sha=8ad2ac89125e / EFI SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849
 Standing SPA:  v0.1.0-m8-a4s → CI 36137732145 / COM2 sha=1f33eeda72f9 / EFI SHA256 5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693
 Everest:       GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351 / EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc / COM2 build: sha=f72b4276d198

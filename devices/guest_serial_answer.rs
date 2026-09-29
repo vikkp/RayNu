@@ -260,7 +260,7 @@ pub fn setup_wipe_allowed(lun_serving: bool, spa_started: bool, efi_part_seen: b
 }
 
 fn wipe_allowed_now() -> bool {
-    if crate::mgmt::perc_boot_choice::armed_tail().is_some()
+    if crate::mgmt::perc_boot_choice::tail_install_chosen()
         && crate::mgmt::megaraid::perc_image_boot_latched()
     {
         // vda is the free tail. setup-disk writes that geometry. The

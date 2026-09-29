@@ -333,7 +333,10 @@
                 This piece is
                 <span data-loi-pct="pieces.perc">78%</span>.
                 Bar B is <span data-loi-pct="bars.b">60%</span>.
-                The guest disk is that 8 GiB window, not the 2.9 TB VD.
+                <code>67bdb0d9</code> also wrote <code>ee851fd5</code> on a 10 GiB
+                <code>vda</code> in the free tail. The reboot returned to the ISO.
+                Bar B stays 60 until that UUID reaches its own login.
+                The 2.9 TB VD is not the guest disk.
                 The mailbox probe LBA 0 is not written. The H840 was not
                 mapped. The mapper still prints <code>skip PERC</code>.
                 Do not format UBUNTU0.
@@ -361,18 +364,18 @@
       <section class="section section--hda-com2" id="now">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>NOW · both SPA paths lived · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">60%</span> · overall <span data-loi-pct="overall">73%</span> · PERC <span data-loi-pct="pieces.perc">78%</span></p>
-          <h2 class="section__title">Both SPA paths lived on the 8 GiB window.</h2>
+          <h2 class="section__title">A 10 GiB disk was installed in the free tail.</h2>
           <p class="section__lede">
-            <code>8ad2ac89</code> waited for the SPA. Choice 2 reinstalled
-            the 8 GiB window. A later boot, choice 1, reached
-            <code>localhost login: root</code> from
-            <code>d43dbf07</code> and withheld <code>setup-disk</code>.
-            An unattended boot does not install. UBUNTU0 is not touched.
-            Leave this shell. Do not type <code>setup-alpine</code> there.
-            Auth is parked. Bar A is 92. Bar B is 60. Overall is 73. PERC is 78.
+            <code>67bdb0d9</code> posted choice 3. <code>vda</code> was 10.0 GiB
+            at spare offset <code>8589934592</code>. <code>setup-disk</code>
+            wrote <code>ee851fd5</code>. The guest reboot staged the ISO again,
+            so the prompt is the live image. The 8 GiB window
+            <code>d43dbf07</code> stays. Leave this shell. Do not type
+            <code>setup-alpine</code>. Bar A is 92. Bar B is 60. Overall is 73.
+            PERC is 78.
           </p>
           <pre class="ship-code" data-reveal><code>boot:   UBUNTU0 ~400 GB · Ubuntu 26.04 · / and /boot/efi
-spare:  RAYNU-SPARE ~2.9 TB · 8 GiB image d43dbf07 booted after SPA reinstall · whole VD hidden
+spare:  RAYNU-SPARE ~2.9 TB · 8 GiB d43dbf07 · 10 GiB ee851fd5 at offset 8589934592 · reboot returned to the ISO
 ctrl:   PERC H740P Mini only · do not open the H840
 next:   leave localhost:~# · do not setup-alpine · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">60%</span> · overall <span data-loi-pct="overall">73%</span> · PERC <span data-loi-pct="pieces.perc">78%</span>
 never:  format UBUNTU0 · format the whole spare · format the Toshiba · type setup-alpine on the live shell · curl Start

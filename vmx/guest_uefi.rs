@@ -7433,9 +7433,13 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
     // SPA clean reinstall forces the ISO even when this disk already has
     // an ESP. Steady state keeps disk-before-ISO.
     let force_iso = crate::mgmt::perc_boot_choice::installer_iso_forced();
-    if crate::mgmt::perc_boot_choice::armed_tail().is_some() {
+    if crate::mgmt::perc_boot_choice::tail_install_chosen() {
         serial::write_line(
             "boot: perc SPA tail — stage ISO; vda is the free tail; the 8 GiB window stays (not ISO-INSTALL-OK)",
+        );
+    } else if crate::mgmt::perc_boot_choice::armed_tail().is_some() {
+        serial::write_line(
+            "boot: perc SPA tail boot — vda is the free tail; setup-disk withheld; the 8 GiB window stays (not ISO-INSTALL-OK)",
         );
     } else if crate::mgmt::perc_boot_choice::clean_reinstall_chosen() {
         serial::write_line(
@@ -8631,6 +8635,9 @@ unsafe fn raynu_f_stop(why: &str) -> ! {
 #[cfg(target_os = "uefi")]
 unsafe fn raynu_f_vmexit(reason: u32, qual: u64, rip: u64, intr: u64) -> ! {
     crate::mgmt::maybe_tick_standing_spa();
+    if crate::mgmt::perc_boot_choice::take_guest_stop() {
+        raynu_f_stop("spa-stop");
+    }
     // Do not poll_host_rx / reassert_irq on every RayNu-F vmexit.
     // Iron b5e290be did host COM2 LSR+RBR inb at GRUB (~2M exits/s) and
     // the chassis powered off. RayNu-F SOL RX to guest COM1 (GRUB serial)
