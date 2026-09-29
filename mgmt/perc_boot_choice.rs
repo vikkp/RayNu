@@ -155,6 +155,16 @@ pub fn tail_install_chosen() -> bool {
     matches!(perc_spa_choice(), PercSpaChoice::Tail { .. })
 }
 
+/// Guests chose a `linux_iso` install (window reinstall or a new tail disk).
+/// Start of an already installed disk is not this. Slice 3 does not type
+/// `setup-disk` for these choices.
+pub fn guests_linux_iso_chosen() -> bool {
+    matches!(
+        perc_spa_choice(),
+        PercSpaChoice::CleanReinstall | PercSpaChoice::Tail { .. }
+    )
+}
+
 /// True only after the reinstall POST.
 pub fn clean_reinstall_chosen() -> bool {
     matches!(perc_spa_choice(), PercSpaChoice::CleanReinstall)

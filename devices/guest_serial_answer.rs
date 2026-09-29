@@ -186,6 +186,7 @@ pub fn reset() {
     MOUNT_LOG.store(false, Ordering::Release);
     REBOOT_SENT.store(false, Ordering::Release);
     SETUP_WITHHELD_LOG.store(false, Ordering::Release);
+    WITHHOLD_GUESTS_ISO.store(false, Ordering::Release);
     // SECOND_BOOT is sticky on UEFI so a uart reset after `begin_second_boot`
     // cannot re-arm SETUP. Host tests start from a clean first-boot flag.
     #[cfg(test)]
@@ -237,6 +238,8 @@ fn is_shell_prompt(win: &[u8], wlen: usize) -> bool {
 
 /// One-shot COM2 note: `SETUP` was withheld by [`setup_wipe_allowed`].
 static SETUP_WITHHELD_LOG: AtomicBool = AtomicBool::new(false);
+/// The withhold was a Guests `linux_iso` (Slice 3), not the durable-LUN policy.
+static WITHHOLD_GUESTS_ISO: AtomicBool = AtomicBool::new(false);
 
 /// Phase 0 (M8 recovery) wipe policy for the installer auto-answer.
 ///
@@ -285,6 +288,13 @@ fn wipe_allowed_now() -> bool {
 /// Enqueue `SETUP` if the wipe policy allows; otherwise park in `PHASE_DONE`
 /// and arm the one-shot COM2 note. Returns whether `SETUP` was queued.
 fn enqueue_setup_or_withhold(a: &mut Answer) -> bool {
+    if crate::mgmt::perc_boot_choice::guests_linux_iso_chosen() {
+        // ADR-019 slice 3. The ISO's own prompt is the installer.
+        WITHHOLD_GUESTS_ISO.store(true, Ordering::Release);
+        SETUP_WITHHELD_LOG.store(true, Ordering::Release);
+        PHASE.store(PHASE_DONE, Ordering::Release);
+        return false;
+    }
     if wipe_allowed_now() {
         enqueue(a, SETUP);
         PHASE.store(PHASE_CONFIRM, Ordering::Release);
@@ -304,6 +314,22 @@ pub fn take_setup_withheld_log() -> bool {
 /// COM2 text for the withheld note.
 pub const SETUP_WITHHELD_NOTE: &str =
     "boot: auto-answer setup-disk WITHHELD (durable LUN attached; no SPA Start or EFI PART seen; do not wipe persist; not ISO-INSTALL-OK)";
+
+/// COM2 when Guests chose `linux_iso`. The scripted `setup-disk` is not sent.
+pub const GUESTS_ISO_SETUP_NOTE: &str =
+    "boot: perc SPA linux_iso — setup-disk withheld; ISO prompt is the installer (not a scripted install)";
+
+/// One-shot line for the withheld `setup-disk`, if any.
+pub fn take_setup_withheld_line() -> Option<&'static str> {
+    if !take_setup_withheld_log() {
+        return None;
+    }
+    if WITHHOLD_GUESTS_ISO.swap(false, Ordering::AcqRel) {
+        Some(GUESTS_ISO_SETUP_NOTE)
+    } else {
+        Some(SETUP_WITHHELD_NOTE)
+    }
+}
 
 fn enqueue(a: &mut Answer, bytes: &[u8]) {
     for &b in bytes {
