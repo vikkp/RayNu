@@ -43,11 +43,11 @@ Lived: [`docs/progress.md`](progress.md) · M8: [`docs/m8_plan.md`](m8_plan.md) 
 
 | Metric | Value | Meaning |
 |--------|------:|---------|
-| **Overall LOI readiness** | **73%** | Nearest honest conversation is still Bar A. Both SPA paths lived on `8ad2ac89`. The guest disk is still the 8 GiB window. perc 78. Overall held. |
+| **Overall LOI readiness** | **73%** | Nearest honest conversation is still Bar A. `ee851fd5` reached `localhost:~#` on a 10 GiB `vda`. The 2.9 TB VD is not that disk. perc 78. Unmodified media 20. Overall held. |
 | **Bar A — dedicated-box** | **92%** | One PowerEdge we own or they dedicate. A1 Everest, A3 SKU, A4 TLS, A4s standing SPA **DONE**. A2 persist **repeated** (sixth `login:`, UUID `a0ad99ac-…`). A6 **lived once**. A5 parked. USB ≠ PERC. Held. |
-| **Bar B — RAID-fleet** | **60%** | `8ad2ac89` choice 2 reinstalled the 8 GiB window (`d43dbf07-…`). A later HV boot, choice 1, reached `localhost login:` from that UUID with `setup-disk` withheld. The Toshiba was still attached. The 2.9 TB VD stays hidden. |
+| **Bar B — RAID-fleet** | **60%** | `f44ba647` booted `ee851fd5` on a 10 GiB `vda` (`choice=4`, `DISK-BOOTX64`, `localhost:~#`). The 2.9 TB VD is not that disk. Slice 3 (no scripted `setup-disk` on a new `linux_iso`) is packed, not lived. |
 | **Months to Bar A** | **0.25** | Baseline 2026-09-14. ETA **2026-10**. Held. A6 lived once. A5 is parked, not closed. Do not go to 0. |
-| **Months to Bar B** | **1.5** | 1.75→1.5. Both SPA buttons lived. The guest disk is still 8 GiB, not the spare VD. ETA **2026-12** held. |
+| **Months to Bar B** | **1.5** | Held. The 10 GiB guest reached its own login. The spare VD is still not the guest disk. ETA **2026-12** held. |
 | **Confidence** | medium | Everest is high-confidence. A6 lived once. Iron `8ad2ac89` reinstalled the 8 GiB window, then booted that UUID after a new HV boot. The whole 2.9 TB VD is not the guest disk. A5 parked. |
 
 ```
@@ -69,7 +69,7 @@ There are **two** LOIs. Treating them as one conversation overstates what is rea
 | Bar | Who signs | What they are buying | Close when |
 |-----|-----------|----------------------|------------|
 | **A — dedicated-box** | A lab / innovation / “spare R640” owner | One binary on a box they can afford to dedicate. Guest disk survives Force Off. HTTPS they can show InfoSec. | M8.0-mech on COM2 + SKU card + TLS path |
-| **B — RAID-fleet** | Someone whose disks already live on PERC H740P | “Keep the iron, replace the licensed hypervisor.” USB is not this. | A guest reaches `login:` from a spare VD. Bar B is 60%. The PERC piece is 78%. `8ad2ac89` reinstalled the 8 GiB window, then a later boot logged in from `d43dbf07-…`. The 2.9 TB VD is not the guest disk. |
+| **B — RAID-fleet** | Someone whose disks already live on PERC H740P | “Keep the iron, replace the licensed hypervisor.” USB is not this. | A guest reaches `login:` from a spare VD. Bar B is 60%. The PERC piece is 78%. `f44ba647` logged in from `ee851fd5` on a 10 GiB `vda`. The 2.9 TB VD is not the guest disk. |
 
 **Bar B stays out of commercial conversation until its close criteria are met.** A USB persist demonstration is the Bar A mechanism. It is not evidence that RayNu-V runs on the customer’s RAID virtual disks.
 
@@ -101,7 +101,7 @@ A2 is **repeated on iron** (`36d3b559`, two Force Offs, same UUID). History: it 
 | # | Criterion | Done when | Product effect |
 |---|-----------|-----------|----------------|
 | B1 | Bar A honest | Bar A criteria closed or explicitly waived in the SKU card | Do not skip A to sell B. |
-| B2 | **PERC virtual disk I/O** | **LIVED reinstall, then a chosen disk boot** (`8ad2ac89` choice 2 wrote `d43dbf07-…`; choice 1 then `DISK-BOOTX64`, `root=UUID=d43dbf07-…`, `localhost login:`). Piece score **78%**. Bar B is a different score (**60%**). | Most R640 fleets boot guests from RAID. This login is the 8 GiB window, not the 2.9 TB VD. |
+| B2 | **PERC virtual disk I/O** | **LIVED reinstall, then a chosen disk boot** (`8ad2ac89` choice 2 wrote `d43dbf07-…`; `f44ba647` then `DISK-BOOTX64`, `root=UUID=ee851fd5-…`, `localhost:~#` on a 10 GiB `vda`). Piece score **78%**. Bar B is a different score (**60%**). | Most R640 fleets boot guests from RAID. This login is a slice of RAYNU-SPARE, not the 2.9 TB VD. |
 | B3 | Census skip ≠ product policy | Mapper still refuses the **lab** Ubuntu VD; product talks to a **spare** VD | UBUNTU0 stays the lab OS. RAYNU-SPARE is the only future target. Formatting either is not an LOI strategy. See [`runbooks/r640_perc_lab.md`](runbooks/r640_perc_lab.md). |
 
 ---
@@ -156,13 +156,13 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 **What it is.** The lab H740P Mini (`0000:18:00.0`) has two RAID-6 VDs: **UBUNTU0** (~400 GB, Ubuntu 26.04, boot) and **RAYNU-SPARE** (~2.9 TB). Iron `bda7a59b` hid `00:04.0` and reached `localhost login:` from `vda` (8.00 GiB, `vda2` UUID `a0ad99ac`). The guest disk is the copied image in the first 8 GiB of the spare. The rest of the 2.9 TB VD is not offered. **M8.7** is the Fusion mailbox milestone: scratch-pad status, one IOC init, one LD list, LBA 0 then the last LBA, then the image window. The host slice packs frames and refuses the Ubuntu-sized LD (`RAYNU-V-M8-PERC-HOST-OK`). Iron `2dd2b412` mapped the Mini (`1028:1fcd`, BAR `0x9d800000`) and left the H840 (`3b:00.0`, `1028:1fc9`) unmapped. Iron `22ce3728` read scratch pad 0 as `0xb73c0fed` (READY, max commands 4077, `mapped=1`). Iron `7577f934` posted IOC init and the LD list (`status=0x00`, `n=2`, `pick=1`). Iron `985495bef9fa` lived both host READs and Linux `[vdc]`. Iron `9c37fcae` then printed `boot: perc virtio rd lba=0 ok` and `RAYNU-V-M8-PERC-LUN-OK`. Iron `f0a7aabb` posted one WRITE(16) of the spare's last LBA (`6190268927`) and the readback matched (`RAYNU-V-M8-PERC-WRITE-OK`). LBA 0 of the probe was not written. Iron `0739edd0` copied the 8 GiB image. Iron `40ec12fc` started GRUB from it. Iron `bda7a59b` logged in. The DurableLun mapper still prints `skip PERC`. PRE-EBS UEFI RAID BlockIo dies at ExitBootServices. Map: [`runbooks/r640_perc_lab.md`](runbooks/r640_perc_lab.md).
 
-**Product effect.** This is the difference between a lab hypervisor and “extend the life of the fleet you already paid for.” This piece is **78%**. Bar B, the fleet conversation, is **60%**. On `8ad2ac89` the SPA waited. Choice 2 ran `setup-disk` on the 8 GiB window and replaced `a0ad99ac-…` with `d43dbf07-…`. A later HV boot, choice 1, printed `DISK-BOOTX64`, `RAYNU-V-M8-PERC-BOOT-OK`, and `localhost login:` from that UUID with `setup-disk` withheld. `vda2` was clean (`6377/521216` files) and remounted read/write. A guest `reboot` while the reinstall choice was still set returned to the ISO. The whole VD is still hidden. The Toshiba was still attached. `vdb` is still the ISO. Do not format UBUNTU0. Do not open the H840. Do not type `setup-alpine` on this shell.
+**Product effect.** This is the difference between a lab hypervisor and “extend the life of the fleet you already paid for.” This piece is **78%**. Bar B, the fleet conversation, is **60%**. On `8ad2ac89` the SPA waited. Choice 2 ran `setup-disk` on the 8 GiB window and replaced `a0ad99ac-…` with `d43dbf07-…`. A later HV boot, choice 1, printed `DISK-BOOTX64`, `RAYNU-V-M8-PERC-BOOT-OK`, and `localhost login:` from that UUID with `setup-disk` withheld. `vda2` was clean (`6377/521216` files) and remounted read/write. A guest `reboot` while the reinstall choice was still set returned to the ISO. `f44ba647` then booted `ee851fd5` (`choice=4`, `[vda]` 10.0 GiB, `localhost:~#`) with `setup-disk` withheld. The 2.9 TB VD is not that disk. The Toshiba was still attached. `vdb` is still the ISO. Do not format UBUNTU0. Do not open the H840. Do not type `setup-alpine` on this shell. Do not click Create on `f44ba647`. That click still types `setup-disk`.
 
 ### 8. Unmodified media (Gen-1) — 20%
 
 **What it is.** Iron Alpine still uses an ISO patcher + serial auto-answer. RayNu-F is the firmware; the guest is not yet a specified Generation 1 VM on stock ISOs.
 
-**Product effect.** Fine for a dedicated-box demo. A Bar B claim of “unmodified Linux ISO” is false until that patcher is gone. Windows is later still. **Not** a Bar A blocker if the SKU card says Alpine-on-virtio.
+**Product effect.** Fine for a dedicated-box demo. A Bar B claim of “unmodified Linux ISO” is false until that patcher is gone. Slice 3 withholds the scripted `setup-disk` for a Guests `linux_iso`. That change is packed. This piece stays **20%** until COM2 shows `boot: perc SPA linux_iso — setup-disk withheld` and the ISO prompt, with no scripted `setup-disk` line. Windows is later still. **Not** a Bar A blocker if the SKU card says Alpine-on-virtio.
 
 ---
 
@@ -178,7 +178,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | **2026-09-25** | Bar A **A4s** | Page stays up after `login:` | **LIVED** (`1f33eeda72f9`, lease `.154`, one TCP accept, `HTTP keep-alive`, Host green, guest COM1 in Activity) |
 | **2026-09-27** | M8.7 spare read | COM2 `RAYNU-V-M8-PERC-LUN-OK` | **LIVED** (`9c37fcae`: `perc virtio rd lba=0 ok`, then `dd` of `/dev/vdc` returned 16 zero bytes) |
 | **2026-09-27** | M8.7 last-LBA write | COM2 `RAYNU-V-M8-PERC-WRITE-OK` | **LIVED** (`f0a7aabb`: `perc write status=0x00` at LBA `6190268927`, readback match, then the marker. LBA 0 stayed 16 zeros. Read-only virtio. Alpine still on the Toshiba.) |
-| **NOW** | Tail guest booted | `ee851fd5` on 10 GiB `vda` | Leave `localhost:~#`. Do not type `setup-alpine`. Do not click Stop on `f44ba647` (Linux never read it). Bar B stays 60. The 2.9 TB VD is not this disk. See [ADR-019](adr/ADR-019.md) |
+| **NOW** | Slice 3 packed | `ee851fd5` still at `localhost:~#` | Leave that shell. Do not click Create or Stop on `f44ba647`. Create still types `setup-disk`. Slice 3 is packed, not lived. Unmodified media stays 20. Bar B stays 60. See [ADR-019](adr/ADR-019.md) |
 | later | Unmodified ISO | Gen-1 Phase 2 | named residual, not a fake close |
 
 ```
@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-guest-stop-linux |
-| Summary | **Stop on the Linux exit path.** `f44ba647` booted `ee851fd5`. Stop on that EFI did not run after Linux handoff. Packed, not lived. Scores held. |
+| Commit | m8-guest-iso-prompt |
+| Summary | **Slice 3 packed, not lived.** A Guests `linux_iso` does not queue `setup-disk`. Login still gets `root`. The shell is the ISO prompt. `f44ba647` still types `setup-disk` on a new `linux_iso`. Scores held. |
 | Everest impact | none — HDA months 0.0 / 99% held |
-| LOI impact | Scores held. Bar A 92. Bar B 60. perc 78. Overall 73. Unmodified media stays 20. `ee851fd5` reached `localhost:~#` on a 10 GiB `vda`. The 2.9 TB VD is not that disk. |
-| Gates touched | Host catalog. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
+| LOI impact | Scores held. Bar A 92. Bar B 60. perc 78. Overall 73. Unmodified media stays 20 until COM2 shows the withhold line and the ISO prompt. |
+| Gates touched | Host answerer. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
 
 ---
 
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-29 | m8-guest-iso-prompt | 92 | 60 | **Slice 3 packed, not lived.** Guests `linux_iso` stops at the ISO prompt. `setup-disk` is not queued. Unmodified media stays 20 until COM2 shows `boot: perc SPA linux_iso — setup-disk withheld` and that prompt. `f44ba647` still types `setup-disk` on a new `linux_iso`. Scores held. Bar B stays 60. |
 | 2026-09-29 | m8-guest-stop-linux | 92 | 60 | **`f44ba647` booted `ee851fd5`.** `choice=4`, `DISK-BOOTX64`, `[vda]` 10.0 GiB, `localhost:~#`. Stop on that EFI did not run after Linux handoff. This fix is packed, not lived. Scores held. Bar B stays 60. The 2.9 TB VD is not the guest disk. Unmodified media stays 20. |
 | 2026-09-29 | m8-guest-rows | 92 | 60 | **Two Guests rows packed.** `67bdb0d9` COM2: `choice=3`, `tail_off=8589934592`, `[vda]` 10.0 GiB, `setup-disk` wrote `ee851fd5`. Reboot staged `ISO-BOOTX64` again. Scores held. Unmodified media stays 20. Bar B stays 60 until that UUID reaches its own login. |
 | 2026-09-29 | m8-guest-captions | 92 | 60 | **Guests captions moved onto `GET /perc/guests`.** The shell fits the 20 KiB HTTP reply. `b330e28f` crossed that reply and is not a flash. Slice 2 stays packed, not lived. Scores held. Unmodified media stays 20. The guest disk is still 8 GiB. |
@@ -335,7 +336,7 @@ LOI:           NOT OPEN. Tracker born 2026-09-14.
 Bar A:         92% · 0.25 months · dedicated-box non-prod
 Bar B:         60% · 1.5 months · PERC RAID fleet (8ad2ac89 reinstall then boot of d43dbf07; 8 GiB image; whole VD still hidden)
 Overall:       73% · confidence medium
-NOW:           Leave localhost:~# on the live ISO. Do not type setup-alpine. 67bdb0d9 wrote ee851fd5 on a 10 GiB vda at tail_off=8589934592. The reboot staged the ISO again. Two-row list is packed, not on that EFI. Rollback v0.1.0-m8-perc-spa. Do not format UBUNTU0. Bar B stays 60 until ee851fd5 boots. skip PERC stays. A5 parked. Bar A 92. Bar B 60. Overall 73. perc 78. unmodified 20. months A 0.25. months B 1.5. docs/adr/ADR-019.md
+NOW:           Leave localhost:~# on ee851fd5 under f44ba647. Do not click Create or Stop on that EFI. Create still types setup-disk. Slice 3 (no scripted setup-disk on a new linux_iso) is packed, not lived. Do not F11 until that EFI's CI is green. Rollback v0.1.0-m8-perc-spa. Do not format UBUNTU0. Bar B stays 60. The 2.9 TB VD is not this disk. A5 parked. Bar A 92. Bar B 60. Overall 73. perc 78. unmodified 20. months A 0.25. months B 1.5. docs/adr/ADR-019.md
 Open:          boot a guest from a VD · iron AUTH-OK (parked) · unmodified ISO · cluster
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
 Rollback:      v0.1.0-m8-perc-spa → lived SPA choice (COM2 sha=8ad2ac89125e, CI 36362775808, SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849). v0.1.0-m8-a4s → older standing SPA (1f33eeda72f9, CI 36137732145). v0.1.0-m8-a6 → keyboard + power-off (fd2ca12e, CI 36166108942), not Latest. Everest Latest stays v0.1.0-everest-closed (f72b4276).

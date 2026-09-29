@@ -1,8 +1,8 @@
 use super::{
     apk_media_mounted, apk_overlay_needs_pit, apk_packages_overlay_active, begin_second_boot,
-    note_tx, queued, reset, second_boot, setup_wipe_allowed, take_rx, take_setup_withheld_log,
-    BOOTLOADER, DISK, GRUB_ENTER, MOUNT_EXIT, NO, PROVE, REBOOT, ROOT, SETUP,
-    SETUP_WITHHELD_NOTE, SYS, YES,
+    note_tx, queued, reset, second_boot, setup_wipe_allowed, take_rx, take_setup_withheld_line,
+    take_setup_withheld_log, BOOTLOADER, DISK, GRUB_ENTER, GUESTS_ISO_SETUP_NOTE, MOUNT_EXIT, NO,
+    PROVE, REBOOT, ROOT, SETUP, SETUP_WITHHELD_NOTE, SYS, YES,
 };
 
 #[test]
@@ -526,6 +526,85 @@ fn setup_wipe_policy_fails_safe_on_a_durable_lun() {
     assert!(!setup_wipe_allowed(true, false, true));
     assert!(SETUP_WITHHELD_NOTE.contains("WITHHELD"));
     assert!(!SETUP_WITHHELD_NOTE.contains("RAYNU-V-M7-ISO-INSTALL-OK"));
+    assert!(GUESTS_ISO_SETUP_NOTE.contains("setup-disk withheld"));
+    assert!(!GUESTS_ISO_SETUP_NOTE.contains("RAYNU-V-M7-ISO-INSTALL-OK"));
+}
+
+#[test]
+fn guests_linux_iso_stops_at_the_iso_prompt() {
+    use crate::mgmt::megaraid::IRON_LD1_BYTES;
+    use crate::mgmt::perc_boot_choice::{
+        apply_spa_choice, apply_tail_choice, clear_perc_spa_choice_for_test, guests_linux_iso_chosen,
+        PercChoiceApply, CHOICE_REINSTALL,
+    };
+    clear_perc_spa_choice_for_test();
+    assert!(!guests_linux_iso_chosen());
+    assert_eq!(
+        apply_spa_choice(true, CHOICE_REINSTALL),
+        PercChoiceApply::Accepted
+    );
+    assert!(guests_linux_iso_chosen());
+    reset();
+    for &b in b"localhost login:" {
+        note_tx(b);
+    }
+    let mut got = Vec::new();
+    while let Some(b) = take_rx() {
+        got.push(b);
+    }
+    assert_eq!(got, ROOT);
+    for &b in b"localhost:~# " {
+        note_tx(b);
+    }
+    got.clear();
+    while let Some(b) = take_rx() {
+        got.push(b);
+    }
+    assert!(got.is_empty(), "{}", core::str::from_utf8(&got).unwrap_or(""));
+    assert_eq!(
+        take_setup_withheld_line(),
+        Some(GUESTS_ISO_SETUP_NOTE)
+    );
+    clear_perc_spa_choice_for_test();
+    let ten = 10_240u64 * 1024 * 1024;
+    assert_eq!(
+        apply_tail_choice(true, IRON_LD1_BYTES, ten),
+        PercChoiceApply::Accepted
+    );
+    reset();
+    for &b in b"login:" {
+        note_tx(b);
+    }
+    while take_rx().is_some() {}
+    for &b in b"~# " {
+        note_tx(b);
+    }
+    got.clear();
+    while let Some(b) = take_rx() {
+        got.push(b);
+    }
+    assert!(got.is_empty());
+    assert_eq!(
+        take_setup_withheld_line(),
+        Some(GUESTS_ISO_SETUP_NOTE)
+    );
+    clear_perc_spa_choice_for_test();
+    reset();
+    for &b in b"login:" {
+        note_tx(b);
+    }
+    while take_rx().is_some() {}
+    for &b in b"~# " {
+        note_tx(b);
+    }
+    got.clear();
+    while let Some(b) = take_rx() {
+        got.push(b);
+    }
+    let text = core::str::from_utf8(&got).unwrap_or("");
+    assert!(text.contains("setup-disk"), "{text}");
+    clear_perc_spa_choice_for_test();
+    reset();
 }
 
 /// Host has no durable LUN, so the live shell still queues SETUP and the

@@ -13689,8 +13689,8 @@ unsafe fn try_inject_guest_irq() {
         let virtio_need = crate::devices::guest_virtio_blk::virtio_needs_pit_over_uart();
         let probe = crate::devices::guest_virtio_blk::virtio_linux_probe_started();
         let both_ok = crate::devices::guest_virtio_blk::virtio_both_driver_ok();
-        if crate::devices::guest_serial_answer::take_setup_withheld_log() {
-            serial::write_line_nowait(crate::devices::guest_serial_answer::SETUP_WITHHELD_NOTE);
+        if let Some(note) = crate::devices::guest_serial_answer::take_setup_withheld_line() {
+            serial::write_line_nowait(note);
         }
         if crate::devices::guest_serial_answer::take_media_mounted_log() {
             serial::write_line_nowait(

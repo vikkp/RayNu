@@ -333,9 +333,9 @@
                 This piece is
                 <span data-loi-pct="pieces.perc">78%</span>.
                 Bar B is <span data-loi-pct="bars.b">60%</span>.
-                <code>67bdb0d9</code> also wrote <code>ee851fd5</code> on a 10 GiB
-                <code>vda</code> in the free tail. The reboot returned to the ISO.
-                Bar B stays 60 until that UUID reaches its own login.
+                <code>f44ba647</code> then booted <code>ee851fd5</code> on a 10 GiB
+                <code>vda</code>. Bar B stays
+                <span data-loi-pct="bars.b">60%</span>.
                 The 2.9 TB VD is not the guest disk.
                 The mailbox probe LBA 0 is not written. The H840 was not
                 mapped. The mapper still prints <code>skip PERC</code>.
@@ -352,6 +352,10 @@
               </div>
               <p>
                 Iron Alpine still rides an ISO patcher and serial auto-answer.
+                A Guests <code>linux_iso</code> in this tree no longer queues
+                <code>setup-disk</code>. That change is packed. This piece stays
+                <span data-loi-pct="pieces.unmodified">20%</span>
+                until COM2 shows the ISO prompt without that scripted line.
                 Fine for a dedicated-box demo if the SKU card says so. A fleet
                 claim of “unmodified Linux ISO” is false until that patcher is
                 gone. Windows is later still, and is not a peer of TLS.
@@ -364,21 +368,23 @@
       <section class="section section--hda-com2" id="now">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>NOW · both SPA paths lived · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">60%</span> · overall <span data-loi-pct="overall">73%</span> · PERC <span data-loi-pct="pieces.perc">78%</span></p>
-          <h2 class="section__title">The 10 GiB guest reached its own login.</h2>
+          <h2 class="section__title">Leave the 10 GiB shell. Slice 3 is packed.</h2>
           <p class="section__lede">
             <code>f44ba647</code> Start on row 2 posted choice 4.
             <code>DISK-BOOTX64</code> came up with
             <code>root=UUID=ee851fd5-126e-4e44-9402-22fff99cc728</code>
-            and <code>[vda]</code> at 10.0 GiB. <code>setup-disk</code> stayed
-            withheld. Stop on that EFI did not run after Linux handoff. Leave
-            <code>localhost:~#</code>. Do not type <code>setup-alpine</code>.
-            Do not click Stop on this EFI. Bar A is 92. Bar B is 60. Overall is
-            73. PERC is 78.
+            and <code>[vda]</code> at 10.0 GiB. Leave
+            <code>localhost:~#</code>. Do not click Create or Stop on this EFI.
+            Create still types <code>setup-disk</code>. The next EFI withholds
+            that line for a new <code>linux_iso</code>. That change is packed,
+            not lived. Unmodified media stays
+            <span data-loi-pct="pieces.unmodified">20%</span>.
+            Bar A is 92. Bar B is 60. Overall is 73. PERC is 78.
           </p>
           <pre class="ship-code" data-reveal><code>boot:   UBUNTU0 ~400 GB · Ubuntu 26.04 · / and /boot/efi
-spare:  RAYNU-SPARE ~2.9 TB · 8 GiB d43dbf07 · 10 GiB ee851fd5 at offset 8589934592 · reboot returned to the ISO
+spare:  RAYNU-SPARE ~2.9 TB · 8 GiB d43dbf07 · 10 GiB ee851fd5 booted on f44ba647
 ctrl:   PERC H740P Mini only · do not open the H840
-next:   leave localhost:~# · do not setup-alpine · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">60%</span> · overall <span data-loi-pct="overall">73%</span> · PERC <span data-loi-pct="pieces.perc">78%</span>
+next:   leave localhost:~# · do not Create on f44ba647 · unmodified <span data-loi-pct="pieces.unmodified">20%</span> · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">60%</span> · overall <span data-loi-pct="overall">73%</span> · PERC <span data-loi-pct="pieces.perc">78%</span>
 never:  format UBUNTU0 · format the whole spare · format the Toshiba · type setup-alpine on the live shell · curl Start
 read:   docs/runbooks/r640_perc_lab.md</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>

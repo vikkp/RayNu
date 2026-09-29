@@ -550,7 +550,7 @@ pub fn phase0_failsafe_surface_present() -> bool {
         && answer.contains("setup-disk WITHHELD")
         && !answer.contains("=> {\n                enqueue(a, SETUP);")
         && flag.contains("fn spa_started(")
-        && guest.contains("take_setup_withheld_log()")
+        && guest.contains("take_setup_withheld_line()")
         // Time-bounded waits + heartbeat + dump.
         && xhci.contains("pub const USB_RW_DEADLINE_MS")
         && xhci.contains("pub const BOT_SETTLE_MS")
