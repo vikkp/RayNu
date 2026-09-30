@@ -337,6 +337,10 @@ code {
   }
 }
 
+.journey__era--span {
+  grid-column: 1 / -1;
+}
+
 .journey__era-title {
   margin: 0 0 0.85rem;
   font-family: var(--font-mono);

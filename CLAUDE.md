@@ -301,7 +301,7 @@ All ADRs live in `docs/adr/`. Format: numbered, dated, context/decision/rational
 | 016   | RayNu-F — be the guest firmware for E5 | Be the guest UEFI boot env ourselves (own EFI system table + boot services over virtio-blk/CD) instead of puppeting OVMF; RayNu-F is a subsystem in the single binary, outside Proven Core; disable the 3k–3o OVMF forcing (self-inflicted the 9474ab6/4e16b59 NULL-event #PF + CpuDeadLoop); **No third-party firmware state mutation**; do not claim ISO-INSTALL-OK |
 | 017   | Guest reset under RayNu-F (F7)        | Disk-before-ISO; `reset_keep_disk`; CF9/KBC/TF; cap=1; HANDLE_DISK Vendor path; nested `fe4785a` reboot-to-disk (`DISK-BOOT-OK` + `root=UUID=`); do not claim ISO-INSTALL-OK |
 | 018   | Post-Everest M8 operator hardening    | Everest CLOSED on iron `f72b4276`; rollback kit `v0.1.0-everest-closed`; M8 = persist/TLS/auth/console/upload/catalog/Windows-later; cluster → **M9**; no Proven Core expansion |
-| 019   | Guests screen is the spare boot policy | Guests lists the latched spare image and chooses boot or `linux_iso`. Slice 1 places only the 8 GiB window. Windows is refused. Rollback `v0.1.0-m8-perc-spa` |
+| 019   | Guests screen is the spare boot policy | Guests lists the latched spare image and chooses boot or `linux_iso`. Slice 1 places only the 8 GiB window. Windows is refused. Decision 9 reserves an ISO library at the high end of RAYNU-SPARE (accepted, not built). Rollback `v0.1.0-m8-perc-spa` |
 
 **Rule:** Any new ADR is added here AND to `docs/adr/ADR-NNN.md`.
 
@@ -347,7 +347,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 | M5.5 | VMware Migration Workstream     | 60–70  | 10+ VMs migrated from vCenter in one command           |
 | M6   | Production Ready                | 68–100 | HA, security hardened, 72-hr soak, external audit      |
 | M7   | Mount Everest (single-host ship)| 101–   | iDRAC boot on real R640 + network UI + Linux ISO install (**CLOSED on iron 2026-09-11**, ADR-018) |
-| M8   | Operator product hardening      | after M7 | Persist → TLS → auth → console → ISO upload → catalog → Windows. **M8.7** PERC Fusion mailbox on RAYNU-SPARE; scratch pad 0 lived READY on `22ce3728`; IOC init posts to `0xC0`; no doorbell (ADR-018) |
+| M8   | Operator product hardening      | after M7 | Persist → TLS → auth → console → ISO upload → catalog → Windows. **M8.7** PERC Fusion mailbox on RAYNU-SPARE. **M8.8** Ubuntu ISO library on the spare (M8.8.1–M8.8.4, ADR-019 decision 9, accepted, not built). No doorbell (ADR-018) |
 | M9   | Cluster / elasticity (sketch)   | after M8 | vMotion-like, DRS-like placement, hot-add (not M7/M8 blockers) |
 
 **M0 note (lived):** Boot gates through M6 closed on **Latitude + QEMU**. The original “boots on R640” claim is the hard **M7.5** iron gate (`RAYNU-V-R640-BOOT-OK`) — see ADR-009.

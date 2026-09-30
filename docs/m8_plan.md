@@ -75,6 +75,9 @@ M8.5  UEFI catalog persist (SFS/NVMe write)
 M8.6  Windows / multi-distro (ADR-014 later)
 M8.7  PERC mailbox on RAYNU-SPARE (Fusion: status, IOC init, one last-LBA write lived)
       M8.4–M8.6 stay open. Bar B does not wait on them.
+M8.8  Ubuntu ISO library on RAYNU-SPARE (ADR-019 decision 9)
+      M8.8.1 placement · M8.8.2 upload · M8.8.3 boot · M8.8.4 install and reclaim
+      M8.4's 256-byte host blob is not this. M8.4–M8.6 stay open.
 
 → M9 sketch: vMotion-like · DRS-like · hot-add
 ```
@@ -171,7 +174,7 @@ HDA + `site/hda.html` stay fresh: update `docs/hda.md`, then `./tools/sync-hda-s
 
 **Goal:** Operator can PUT/POST an ISO through the network UI. ESP-staged `linux.iso` stays valid.
 
-**Honesty:** [`UploadMode::HostReady`](../mgmt/iso_upload.rs) PUT/POST ISO bytes into a host datastore blob (`RAYNU-V-M8-ISO-UPLOAD-HOST-OK`). Firmware HTTP does not grow a coexist blob PUT. SPA has no upload widget (16 KiB). **ESP-staged stays valid**. Host/CI never print `RAYNU-V-M8-ISO-UPLOAD-OK`. Nested QEMU ≠ R640.
+**Honesty:** [`UploadMode::HostReady`](../mgmt/iso_upload.rs) PUT/POST ISO bytes into a host datastore blob (`RAYNU-V-M8-ISO-UPLOAD-HOST-OK`). Firmware HTTP does not grow a coexist blob PUT. SPA has no upload widget (16 KiB). **ESP-staged stays valid**. The iron destination is the RAYNU-SPARE library in [ADR-019](adr/ADR-019.md) decision 9, accepted and not built. Host/CI never print `RAYNU-V-M8-ISO-UPLOAD-OK`. Nested QEMU ≠ R640.
 
 ---
 
@@ -215,6 +218,23 @@ The H740P Mini is not a classic MFI doorbell device. Linux `megasas_set_adapter_
 | M8.7 image copy | Copy the 8 GiB Toshiba guest window onto RAYNU-SPARE with WRITE(16), eight sectors at a time, only after a USB peek shows `EFI PART`. Heartbeats are `boot: perc copy`. The mailbox probe LBA 0 is not written. Install-disk reads accept a byte range inside a sector (GPT entries are 128 bytes). A spare that already has a CRC-valid header and an `EFI PART` backup sector prints `boot: perc copy skip present` and is not rewritten. When that latch is set, `00:04.0` stays hidden so initramfs does not mount the read-only whole spare. UBUNTU0 is refused. After HTTPS is up, the firmware waits for `POST /perc/boot/installed` or `POST /perc/boot/reinstall`. Reinstall stages the ISO and may run `setup-disk` on that 8 GiB window only. Boot-as-is keeps the disk and withholds `setup-disk`. | **Both SPA paths lived** on `8ad2ac89`. Choice 2 wrote `d43dbf07-…`. Choice 1 then logged in from that UUID with `setup-disk` withheld. The guest disk is the 8 GiB window, not the 2.9 TB VD. Host/CI never print the marker. |
 
 The fence accepts one LD of ~2.5–3.1 TiB and refuses ~300–512 GiB. Scratch pad 1's extended field (bits 21:14, plus one) is the Ventura reply-queue count. Bit `0x00800000` is RDPQ. Iron printed 128 queues and RDPQ. Those numbers size this IOC init (one queue, not 128). They are not a menu of registers to try next. If scratch pads 0–3 are all zero, COM2 prints `mapped=0` and `queues=na` and the IOC post is skipped. Adapter reset (`MFI_RESET_ADAPTER` to `inbound_msg_0`, diagnostic reset) is not an allowed command. The doorbell is not stored. Bus master is set on the Mini only when a descriptor is about to be posted. QEMU has no H740P. A nonzero IOC status or a 4-second poll timeout stops the image. A spare pick posts one READ(16) of LBA 0. If that status is 0, it posts one READ(16) of the last LBA. If that status is also 0, it arms read-only virtio at `00:04.0`. Ubuntu-sized targets do not. A nonzero status or a timeout stops that stage. After both reads return 0, one WRITE(16) of the last LBA is posted, then one READ(16) of that same LBA. LBA 0 is not written. There is no retry and no second target. A write miss still arms the read-only virtio device. Guest OUT on `00:04.0` stays rejected. Iron `0739edd0` ran the image copy: the 8 GiB Toshiba guest window, eight sectors per WRITE(16), after a USB peek showed `EFI PART`. COM2 printed `boot: perc copy` through `perc copy done` and `perc copy gpt ok`. The mailbox probe LBA 0 is not written. That copy is the Toshiba GPT at spare LBA 0. It is not `setup-disk`. UBUNTU0 is refused. The guest walk then failed `gpt_err=1` because partition entries are 128 bytes and the reader required a multiple of 512. This EFI copies a sector slice for those reads. If LBA 1 is a CRC-valid GPT header and the alternate LBA starts with `EFI PART`, COM2 prints `boot: perc copy skip present` and the USB rewrite does not run. A READ timeout prints `boot: perc copy present skip status` and does not start the rewrite. A failed copy still arms read-only virtio and the guest still boots the Toshiba. `RAYNU-V-M8-PERC-BOOT-OK` prints when the guest starts from the copied image. Host/CI never print it. Iron `40ec12fc` printed it at GRUB StartImage, then initramfs mounted read-only `vdc2`. Iron `bda7a59b` hides `00:04.0` and reached `localhost login:` from `vda2`. The whole VD stays hidden.
+
+---
+
+### M8.8 — Ubuntu ISO library on RAYNU-SPARE
+
+**Status: accepted, not built** ([ADR-019](adr/ADR-019.md) decision 9). The running EFI is still `752586b9` at the Alpine ISO prompt. Leave that `localhost:~#`. Do not type `setup-alpine`.
+
+**Goal:** The operator picks `ubuntu-26.04-live-server-amd64.iso` on Guests. The hypervisor stores that file unchanged in a high library on RAYNU-SPARE, boots it as a CD, and deletes the library file after the installed guest has booted from its own disk.
+
+M8.4 stays the host 256-byte blob. M8.8 is the product path and may proceed while M8.4–M8.6 stay open. No doorbell. Do not format UBUNTU0. Do not lay the new `vda` on `ee851fd5` or the 8 GiB window. VNC is not this milestone. Subiquity is watched on serial.
+
+| Step | What | Close when |
+|------|------|------------|
+| M8.8.1 placement | Library at the high end of RAYNU-SPARE, below the last-LBA probe. A new guest disk starts after disks already on the spare. Placeable shrinks by both. An overlap is refused. | Host tests. Not COM2. |
+| M8.8.2 upload | Guests file button. Chunked HTTPS copy into the library. Bytes unchanged. Alpine patcher does not run. | COM2 names the file, its size, and its spare offset. |
+| M8.8.3 boot | That file is a CD. This boot adds `console=ttyS0` and does not rewrite the stored bytes. The answerer types neither `root` nor `setup-disk`. | COM2 shows `ISO-BOOT` from the library offset, then Subiquity on the serial line. |
+| M8.8.4 install and reclaim | Subiquity installs onto the new `vda`. After that guest boots from the installed disk, the library file is deleted, the catalog row goes away, and Placeable grows back. A failed install keeps the file. The installer reboot still has the CD. | COM2 shows the installed-disk boot, then the library object gone. UBUNTU0 and `ee851fd5` stay. |
 
 ---
 

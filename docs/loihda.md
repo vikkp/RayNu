@@ -1,6 +1,6 @@
 ---
 loihda_version: 1
-last_updated: 2026-09-29
+last_updated: 2026-09-30
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-guest-iso-lived |
-| Summary | **Slice 3 lived on choice 3.** `752586b9` `PercSpaChoice choice=3`, `ISO-BOOTX64`, `[vda]` 10.0 GiB, `localhost login: root`, ISO motd `setup-alpine`, then `boot: perc SPA linux_iso — setup-disk withheld`. No scripted `setup-disk` line. `ee851fd5` journal-recovered and unmounted. |
+| Commit | m8-iso-library-adr |
+| Summary | **LOI page matches the spare.** A 10 GiB login, the ISO prompt, and M8.8 not built. Scores held. Bar B stays 60. Unmodified stays 25. |
 | Everest impact | none — HDA months 0.0 / 99% held |
-| LOI impact | Unmodified media 20→25. Bar A 92 held. Bar B 60 held. perc 78 held. Overall 73 held. The ISO is still serial-patched. `root` is still typed. |
-| Gates touched | COM2 on `752586b9`. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
+| LOI impact | Scores held. Bar A 92. Bar B 60. perc 78. Overall 73. Unmodified media stays 25. The library is not on the running EFI. |
+| Gates touched | ADR only. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
 
 ---
 
@@ -219,6 +219,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-30 | site-past-summit | 92 | 60 | **LOI page.** The current chapter is the spare: `ee851fd5` on 10 GiB, slice 3 withheld `setup-disk`, M8.8 not built. Bar B stays 60. Unmodified media stays 25. The 2.9 TB VD is not the guest disk. |
+| 2026-09-29 | m8-iso-library-adr | 92 | 60 | **M8.8.1–M8.8.4 numbered, not built.** Placement, upload, CD boot, install, then delete `ubuntu-26.04-live-server-amd64.iso` after the installed-disk boot. UBUNTU0 and `ee851fd5` stay. Unmodified media stays 25. Bar B stays 60. Scores held. |
 | 2026-09-29 | m8-guest-iso-lived | 92 | 60 | **Slice 3 lived.** `752586b9` choice 3, `ISO-BOOTX64`, `[vda]` 10.0 GiB, `localhost:~#`, ISO motd `setup-alpine`, then `boot: perc SPA linux_iso — setup-disk withheld`. No scripted `setup-disk`. `ee851fd5` was mounted read-only, journal-recovered, and unmounted. Unmodified media 20→25. The ISO is still serial-patched. `root` is still typed. Bar B stays 60. The 8192 MiB window reinstall was not clicked. |
 | 2026-09-29 | m8-guest-iso-prompt | 92 | 60 | **Slice 3 packed, not lived.** Guests `linux_iso` stops at the ISO prompt. `setup-disk` is not queued. Unmodified media stays 20 until COM2 shows `boot: perc SPA linux_iso — setup-disk withheld` and that prompt. `f44ba647` still types `setup-disk` on a new `linux_iso`. Scores held. Bar B stays 60. |
 | 2026-09-29 | m8-guest-stop-linux | 92 | 60 | **`f44ba647` booted `ee851fd5`.** `choice=4`, `DISK-BOOTX64`, `[vda]` 10.0 GiB, `localhost:~#`. Stop on that EFI did not run after Linux handoff. This fix is packed, not lived. Scores held. Bar B stays 60. The 2.9 TB VD is not the guest disk. Unmodified media stays 20. |
@@ -337,7 +339,7 @@ LOI:           NOT OPEN. Tracker born 2026-09-14.
 Bar A:         92% · 0.25 months · dedicated-box non-prod
 Bar B:         60% · 1.5 months · PERC RAID fleet (8ad2ac89 reinstall then boot of d43dbf07; 8 GiB image; whole VD still hidden)
 Overall:       73% · confidence medium
-NOW:           Leave localhost:~# on the ISO under 752586b9. Do not type setup-alpine. Choice 3 withheld setup-disk. The motd is the installer. ee851fd5 was seen and unmounted. Rollback v0.1.0-m8-perc-spa. Do not format UBUNTU0. Bar B stays 60. The 2.9 TB VD is not this disk. A5 parked. Bar A 92. Bar B 60. Overall 73. perc 78. unmodified 25. months A 0.25. months B 1.5. docs/adr/ADR-019.md
+NOW:           Leave localhost:~# on the ISO under 752586b9. Do not type setup-alpine. Choice 3 withheld setup-disk. ADR-019 decision 9 (ISO library on the spare) is accepted and not built. The Cruzer file is still the boot media. Rollback v0.1.0-m8-perc-spa. Do not format UBUNTU0. Bar B stays 60. The 2.9 TB VD is not this disk. A5 parked. Bar A 92. Bar B 60. Overall 73. perc 78. unmodified 25. months A 0.25. months B 1.5. docs/adr/ADR-019.md
 Open:          boot a guest from a VD · iron AUTH-OK (parked) · unmodified ISO · cluster
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
 Rollback:      v0.1.0-m8-perc-spa → lived SPA choice (COM2 sha=8ad2ac89125e, CI 36362775808, SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849). v0.1.0-m8-a4s → older standing SPA (1f33eeda72f9, CI 36137732145). v0.1.0-m8-a6 → keyboard + power-off (fd2ca12e, CI 36166108942), not Latest. Everest Latest stays v0.1.0-everest-closed (f72b4276).
