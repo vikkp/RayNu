@@ -1,6 +1,6 @@
 ---
 hda_version: 1
-last_updated: 2026-09-29
+last_updated: 2026-09-30
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
@@ -355,7 +355,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | m8-iso-library-adr |
-| Summary | **M8.8.1–M8.8.4 numbered, not built.** Placement, upload, CD boot, then install and delete `ubuntu-26.04-live-server-amd64.iso` after the installed-disk boot. Scores held. Months **0.0 held**. Overall **99 held**. |
+| Summary | **Public pages lead with the spare, not only the summit.** Everest stays closed at 99%. The homepage and LOI page now record the 10 GiB login, the withheld `setup-disk`, and M8.8 as not built. Scores held. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
 | Gates touched | ADR only. No doorbell. No format of UBUNTU0. Not a COM2 close. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 60 held, perc 78 held, unmodified 25 held, overall LOI 73 held, months A 0.25 held, months B 1.5 held. |
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-30 | site-past-summit | 0.0 | 99 | **Homepage and LOI page.** Everest stays closed. The current chapter is Guests on the spare: 10 GiB `ee851fd5`, slice 3 withhold, M8.8 Ubuntu library not built. The HDA bottom line no longer says the latest boot stopped at GRUB. Scores held. months 0.0 held; overall 99 held |
 | 2026-09-29 | m8-iso-library-adr | 0.0 | 99 | **M8.8.1–M8.8.4.** Placement, chunked upload, CD boot with `console=ttyS0`, then install and delete `ubuntu-26.04-live-server-amd64.iso` after the installed-disk boot. Not built. Scores held. months 0.0 held; overall 99 held |
 | 2026-09-29 | m8-guest-iso-lived | 0.0 | 99 | **Slice 3 lived.** `752586b9` `choice=3`, `ISO-BOOTX64`, `[vda]` 10.0 GiB, ISO motd `setup-alpine`, then `boot: perc SPA linux_iso — setup-disk withheld`. No scripted `setup-disk`. `ee851fd5` journal-recovered and unmounted. Unmodified media 20→25. The ISO is still patched. months 0.0 held; overall 99 held |
 | 2026-09-29 | m8-guest-iso-prompt | 0.0 | 99 | **Slice 3 packed, not lived.** Guests `linux_iso` stops before `setup-disk`. Login still gets `root`. COM2 line is `boot: perc SPA linux_iso — setup-disk withheld`. Unmodified media stays 20 until that line is on iron. `f44ba647` still types `setup-disk` on a new `linux_iso`. Scores held. months 0.0 held; overall 99 held |

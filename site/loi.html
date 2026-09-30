@@ -11,7 +11,7 @@
     <meta property="og:title" content="RayNu-V · Path to LOI" />
     <meta
       property="og:description"
-              content="Bar A 92%. Bar B 60%. Overall 73%. PERC piece 78%. SKU piece 92%. TLS piece 80%. Both SPA paths lived on the 8 GiB spare window. The 2.9 TB VD stays hidden. Auth is parked. USB is not PERC."
+              content="Bar A 92%. Bar B 60%. Overall 73%. PERC 78%. A 10 GiB guest on RAYNU-SPARE reached login. A new Linux ISO stops at its own prompt. The 2.9 TB VD is not that disk. Unmodified media is 25%."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -53,10 +53,13 @@
           The next mountain is a letter of intent
         </h1>
         <p class="hda-mast__lede reveal reveal--delay-2">
-          Everest asked whether the loop works on a real PowerEdge: EFI, network
-          UI, Linux ISO, reboot to login. That answer is yes. An LOI asks a
+          Everest asked whether the loop works on a real PowerEdge. That answer
+          is yes, and the work since then is already on the PERC spare: Guests
+          lists the disks, a 10 GiB guest reached <code>localhost:~#</code>,
+          and a new Linux ISO stops at its own prompt. An LOI still asks a
           different question — would a fleet owner put <em>non-production
-          intent</em> in writing? HDA 99% is not that answer.
+          intent</em> in writing? HDA 99% is not that answer. The 2.9 TB
+          virtual disk is not the guest disk.
         </p>
         <p
           class="hda-path reveal reveal--delay-3"
@@ -138,9 +141,11 @@
             Bar B is <span data-loi-pct="bars.b">60%</span>. Overall is
             <span data-loi-pct="overall">73%</span>. The PERC piece is
             <span data-loi-pct="pieces.perc">78%</span>.
-            Iron <code>bda7a59b</code> reached <code>localhost login:</code>
-            from the 8 GiB image on RAYNU-SPARE. That window is not the
-            2.9 TB VD. Auth is parked.
+            A 10 GiB guest, <code>ee851fd5</code>, reached
+            <code>localhost:~#</code> from RAYNU-SPARE. The 8 GiB window is
+            still there. The 2.9 TB virtual disk is not either disk. Auth is
+            parked. Unmodified media is
+            <span data-loi-pct="pieces.unmodified">25%</span>.
           </p>
         </div>
       </section>
@@ -185,8 +190,9 @@
               <p class="loi-card__effect">
                 <strong>Product effect:</strong> this is the “extend the life
                 of the fleet you already paid for” pitch. A guest logged in
-                from an 8 GiB window on the spare. The 2.9 TB VD is not that
-                disk, so this conversation stays partial.
+                from a 10 GiB slice of the spare, and from the 8 GiB window
+                before that. The 2.9 TB virtual disk is not that disk, so
+                this conversation stays partial.
               </p>
             </article>
           </div>
@@ -326,7 +332,7 @@
               <p>
                 The lab H740P Mini has two RAID-6 virtual disks.
                 <strong>UBUNTU0</strong> (~400 GB) is Ubuntu 26.04 and the boot
-                device.                 Iron <code>8ad2ac89</code> reinstalled the first 8 GiB of
+                device. Iron <code>8ad2ac89</code> reinstalled the first 8 GiB of
                 <strong>RAYNU-SPARE</strong>, then a later boot reached
                 <code>localhost login:</code> from <code>d43dbf07</code>.
                 <code>vdc</code> stayed hidden.
@@ -366,26 +372,26 @@
 
       <section class="section section--hda-com2" id="now">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>NOW · both SPA paths lived · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">60%</span> · overall <span data-loi-pct="overall">73%</span> · PERC <span data-loi-pct="pieces.perc">78%</span></p>
-          <h2 class="section__title">Leave the ISO prompt. Slice 3 lived.</h2>
+          <p class="milestone-kicker" data-reveal>NOW · past the summit · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">60%</span> · overall <span data-loi-pct="overall">73%</span> · PERC <span data-loi-pct="pieces.perc">78%</span> · unmodified <span data-loi-pct="pieces.unmodified">25%</span></p>
+          <h2 class="section__title">Guests runs the spare. Ubuntu is next, and not built.</h2>
           <p class="section__lede">
-            <code>752586b9</code> choice 3 staged <code>ISO-BOOTX64</code> on
-            the 10 GiB tail. The ISO motd offered <code>setup-alpine</code>.
-            COM2 then printed
-            <code>boot: perc SPA linux_iso — setup-disk withheld</code>.
-            Leave <code>localhost:~#</code>. Do not type
-            <code>setup-alpine</code>. <code>ee851fd5</code> was seen and
-            unmounted. An ISO library on the spare is accepted in ADR-019
-            and is not on this EFI. Unmodified media is
+            Start on <code>f44ba647</code> booted <code>ee851fd5</code> from a
+            10 GiB disk on RAYNU-SPARE. <code>752586b9</code> then opened a
+            new Linux ISO and stopped at that ISO’s own prompt, without
+            typing <code>setup-disk</code>. The 8 GiB window
+            (<code>d43dbf07</code>) is still there. M8.8 will let the page
+            take <code>ubuntu-26.04-live-server-amd64.iso</code>, store it on
+            the spare, and delete it after that guest boots from its own
+            disk. That slice is accepted and not on the running EFI.
+            Unmodified media is
             <span data-loi-pct="pieces.unmodified">25%</span>.
             Bar A is 92. Bar B is 60. Overall is 73. PERC is 78.
           </p>
-          <pre class="ship-code" data-reveal><code>boot:   UBUNTU0 ~400 GB · Ubuntu 26.04 · / and /boot/efi
-spare:  RAYNU-SPARE ~2.9 TB · 8 GiB d43dbf07 · 10 GiB ee851fd5 seen on 752586b9 · ISO prompt withheld setup-disk
-ctrl:   PERC H740P Mini only · do not open the H840
-next:   leave localhost:~# · do not setup-alpine · unmodified <span data-loi-pct="pieces.unmodified">25%</span> · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">60%</span> · overall <span data-loi-pct="overall">73%</span> · PERC <span data-loi-pct="pieces.perc">78%</span>
-never:  format UBUNTU0 · format the whole spare · format the Toshiba · type setup-alpine on the live shell · curl Start
-read:   docs/runbooks/r640_perc_lab.md</code></pre>
+          <pre class="ship-code" data-reveal><code>lived:  8 GiB d43dbf07 · 10 GiB ee851fd5 · ISO prompt withheld setup-disk
+spare:  RAYNU-SPARE ~2.9 TB · the guest disk is a slice, not the whole VD
+host:   UBUNTU0 ~400 GB · Ubuntu 26.04 · do not format
+next:   M8.8.1 placement · M8.8.2 upload · M8.8.3 CD boot · M8.8.4 install, then delete the ISO
+scores: unmodified <span data-loi-pct="pieces.unmodified">25%</span> · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">60%</span> · overall <span data-loi-pct="overall">73%</span> · PERC <span data-loi-pct="pieces.perc">78%</span></code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
             Rollback remains GitHub Latest
             <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed"
