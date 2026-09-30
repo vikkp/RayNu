@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-iso-library-adr |
-| Summary | **M8.8 upload packed, not lived.** The page can send the ISO. Iron has not stored one. Unmodified media stays 25. Bar B stays 60. |
+| Commit | m8-8-library-spa-strings |
+| Summary | **CI string fix, not lived.** The page again names the host serial log, and the library file input stays. Iron has not stored an ISO. Unmodified media stays 25. Bar B stays 60. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Scores held. Bar A 92. Bar B 60. perc 78. Overall 73. Unmodified media stays 25. The library is not on the running EFI. |
-| Gates touched | ADR only. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
+| Gates touched | Host SPA strings. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
 
 ---
 
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-30 | m8-8-library-spa-strings | 92 | 60 | **CI string fix, not lived.** Host serial log is back on the page. The library file input stays. `/blob` stays off the page. Not flashed. Unmodified media stays 25. Bar B stays 60. |
 | 2026-09-30 | m8-8-library-upload | 92 | 60 | **M8.8 upload packed, not lived.** Guests posts the file in 4 KiB chunks onto the spare library. Not flashed. Unmodified media stays 25. Bar B stays 60. |
 | 2026-09-30 | m8-8-library-place | 92 | 60 | **M8.8 policy packed, not lived.** Placement, chunk plan, quiet CD boot, reclaim after disk boot. The firmware does not yet copy `ubuntu-26.04-live-server-amd64.iso` onto the spare. Unmodified media stays 25. Bar B stays 60. |
 | 2026-09-30 | site-past-summit | 92 | 60 | **LOI page.** The current chapter is the spare: `ee851fd5` on 10 GiB, slice 3 withheld `setup-disk`, M8.8 not built. Bar B stays 60. Unmodified media stays 25. The 2.9 TB VD is not the guest disk. |
