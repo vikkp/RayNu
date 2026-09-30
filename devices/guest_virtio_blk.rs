@@ -497,6 +497,19 @@ pub fn present() -> bool {
                     b.iso.queue_size = QUEUE_MAX;
                     b.iso.readonly = true;
                 }
+            } else if crate::mgmt::iso_library::present_as_cd() {
+                let n = (crate::mgmt::iso_library::held_bytes() as usize) & !(SECTOR - 1);
+                if n >= SECTOR {
+                    ISO_PTR.store(1, Ordering::Release);
+                    ISO_LEN.store(n as u64, Ordering::Release);
+                    b.iso.visible = true;
+                    b.iso.bar0 = GUEST_VIRTIO_ISO_BAR0_DEFAULT;
+                    b.iso.default_bar = GUEST_VIRTIO_ISO_BAR0_DEFAULT;
+                    b.iso.cap_kind = 1;
+                    b.iso.queues_armed = true;
+                    b.iso.queue_size = QUEUE_MAX;
+                    b.iso.readonly = true;
+                }
             }
             let spare_bytes = crate::mgmt::megaraid::perc_spare_bytes();
             if crate::mgmt::megaraid::spare_virtio_offered(
@@ -1323,6 +1336,20 @@ fn blk_sector_rw_with(
     if ty == VIRTIO_BLK_T_FLUSH {
         return VIRTIO_BLK_S_OK;
     }
+    if !allow_lun && crate::mgmt::iso_library::present_as_cd() {
+        if ty != VIRTIO_BLK_T_IN || buf.is_empty() || buf.len() % SECTOR != 0 {
+            return VIRTIO_BLK_S_IOERR;
+        }
+        let off = match sector.checked_mul(SECTOR as u64) {
+            Some(o) => o,
+            None => return VIRTIO_BLK_S_IOERR,
+        };
+        return if crate::mgmt::iso_library::read_at(off, buf) {
+            VIRTIO_BLK_S_OK
+        } else {
+            VIRTIO_BLK_S_IOERR
+        };
+    }
     if PERC_XFER.load(Ordering::Acquire) {
         if ty != VIRTIO_BLK_T_IN || buf.is_empty() || buf.len() % SECTOR != 0 {
             return VIRTIO_BLK_S_IOERR;
@@ -2039,6 +2066,40 @@ fn drain_iso(translate: &impl Fn(u64) -> Option<u64>) {
     }
     let ptr = ISO_PTR.load(Ordering::Acquire);
     let ilen = ISO_LEN.load(Ordering::Acquire) as usize;
+    if crate::mgmt::iso_library::present_as_cd() {
+        let mut dummy = [0u8; 0];
+        let mut last_avail = last;
+        let mut used_idx = used_i;
+        let mut last_req = LastReq::default();
+        let (n, nreq, avail_seen) = process_blk_queue(
+            qsize,
+            &mut last_avail,
+            &mut used_idx,
+            desc,
+            avail,
+            used,
+            &mut dummy,
+            translate,
+            true,
+            &mut last_req,
+        );
+        with_iso(|v| {
+            v.last_avail = last_avail;
+            v.used_idx = used_idx;
+            v.seen_avail = avail_seen;
+            note_last_req(v, &last_req);
+            if nreq > 0 {
+                v.isr = 1;
+            }
+        });
+        if notified || nreq > 0 {
+            crate::devices::guest_irq::raise_virtio_iso();
+        }
+        if n > 0 {
+            ISO_READ.fetch_add(u64::from(n), Ordering::AcqRel);
+        }
+        return;
+    }
     if ptr == 0 || ilen == 0 {
         if notified {
             crate::devices::guest_irq::raise_virtio_iso();

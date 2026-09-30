@@ -235,11 +235,260 @@ fn clear_held() {
     CD_BOOT.store(false, Ordering::Release);
 }
 
+/// One POST body. Fits the 8 KiB coexist receive buffer with the headers.
+pub const LIBRARY_HTTP_CHUNK: usize = 4096;
+
+static RECEIVED: AtomicU64 = AtomicU64::new(0);
+
+/// Bytes of the file received so far.
+pub fn received_bytes() -> u64 {
+    RECEIVED.load(Ordering::Acquire)
+}
+
+/// Read `buf` from the stored file. Host and QEMU have no spare, so this
+/// returns false there. Iron reads the library LBAs.
+pub fn read_at(off: u64, buf: &mut [u8]) -> bool {
+    let Some(place) = held() else {
+        return false;
+    };
+    if buf.is_empty() || off % 512 != 0 || buf.len() % 512 != 0 {
+        return false;
+    }
+    let end = match off.checked_add(buf.len() as u64) {
+        Some(e) => e,
+        None => return false,
+    };
+    if end > place.bytes {
+        return false;
+    }
+    let mut done = 0usize;
+    while done < buf.len() {
+        let Some(lba) = library_chunk_lba(off + done as u64) else {
+            return false;
+        };
+        if !crate::mgmt::megaraid::perc_spare_read(lba, &mut buf[done..done + 512]) {
+            return false;
+        }
+        done += 512;
+    }
+    true
+}
+
+/// Accept one aligned chunk of the operator's ISO.
+///
+/// `off == 0` starts the library. Chunks must arrive in order. The last
+/// chunk arms the CD boot and leaves the Alpine answerer quiet. The bytes
+/// are not patched. On iron each sector is a PERC write. Host tests accept
+/// the plan without a controller.
+pub fn accept_upload(off: u64, total: u64, body: &[u8]) -> Result<(), &'static str> {
+    if total == 0 || total % 512 != 0 || body.is_empty() || body.len() % 512 != 0 {
+        return Err("align");
+    }
+    if body.len() > LIBRARY_HTTP_CHUNK {
+        return Err("chunk");
+    }
+    if off == 0 {
+        clear_held();
+        RECEIVED.store(0, Ordering::Release);
+        let spare = spare_for_upload();
+        let occupied = crate::mgmt::guest_catalog::occupied_guest_end();
+        if begin_library(spare, occupied, total).is_none() {
+            return Err("place");
+        }
+    }
+    if off != RECEIVED.load(Ordering::Acquire) {
+        return Err("order");
+    }
+    let Some(place) = held() else {
+        return Err("empty");
+    };
+    if place.bytes != total {
+        return Err("size");
+    }
+    let mut done = 0usize;
+    while done < body.len() {
+        let at = off + done as u64;
+        if library_chunk_lba(at).is_none() {
+            return Err("lba");
+        }
+        if !write_upload_sector(at, &body[done..done + 512]) {
+            return Err("write");
+        }
+        done += 512;
+    }
+    let next = off + body.len() as u64;
+    RECEIVED.store(next, Ordering::Release);
+    if next == total {
+        let _ = arm_cd_boot();
+        note_library_stored();
+    }
+    Ok(())
+}
+
+fn spare_for_upload() -> u64 {
+    let live = crate::mgmt::megaraid::perc_spare_bytes();
+    if live != 0 {
+        live
+    } else {
+        crate::mgmt::megaraid::IRON_LD1_BYTES
+    }
+}
+
+fn write_upload_sector(off: u64, sector: &[u8]) -> bool {
+    #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+    {
+        crate::mgmt::megaraid::perc_library_write(off, sector)
+    }
+    #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+    {
+        let _ = (off, sector);
+        true
+    }
+}
+
+fn note_library_stored() {
+    #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+    {
+        crate::boot::serial::write_line_nowait(
+            "boot: M8.8 library CD stored (ubuntu-26.04-live-server-amd64.iso; bytes unchanged)",
+        );
+    }
+}
+
+/// `POST /perc/library/{off}/{total}` with a raw body. `None` when this is
+/// not that request. Binary bodies never go through the UTF-8 HTTP parser.
+pub fn library_http_response(raw: &[u8], out: &mut [u8]) -> Option<usize> {
+    if !raw.starts_with(b"POST /perc/library/") {
+        return None;
+    }
+    let header_end = raw.windows(4).position(|w| w == b"\r\n\r\n")?;
+    let head = core::str::from_utf8(&raw[..header_end]).ok()?;
+    let body = &raw[header_end + 4..];
+    if !library_authorized(head) {
+        return Some(library_status(401, b"{\"ok\":false,\"reason\":\"auth\"}", out));
+    }
+    let (off, total) = match library_path_off(head) {
+        Some(v) => v,
+        None => return Some(library_status(400, b"{\"ok\":false,\"reason\":\"path\"}", out)),
+    };
+    match accept_upload(off, total, body) {
+        Ok(()) => {
+            let armed: &[u8] = if answerer_quiet() { b"true" } else { b"false" };
+            let mut msg = [0u8; 80];
+            let prefix = b"{\"ok\":true,\"received\":";
+            msg[..prefix.len()].copy_from_slice(prefix);
+            let mut n = prefix.len();
+            n += write_u64_dec(&mut msg[n..], received_bytes());
+            let mid = b",\"cd\":";
+            msg[n..n + mid.len()].copy_from_slice(mid);
+            n += mid.len();
+            msg[n..n + armed.len()].copy_from_slice(armed);
+            n += armed.len();
+            msg[n] = b'}';
+            n += 1;
+            Some(library_status(200, &msg[..n], out))
+        }
+        Err(reason) => {
+            let mut msg = [0u8; 64];
+            let prefix = b"{\"ok\":false,\"reason\":\"";
+            msg[..prefix.len()].copy_from_slice(prefix);
+            let mut n = prefix.len();
+            let rb = reason.as_bytes();
+            msg[n..n + rb.len()].copy_from_slice(rb);
+            n += rb.len();
+            msg[n..n + 2].copy_from_slice(b"\"}");
+            n += 2;
+            Some(library_status(409, &msg[..n], out))
+        }
+    }
+}
+
+fn library_authorized(head: &str) -> bool {
+    let token = head.lines().find_map(|line| {
+        let rest = line
+            .strip_prefix("Authorization:")
+            .or_else(|| line.strip_prefix("authorization:"))?;
+        let rest = rest.trim();
+        crate::mgmt::http::extract_bearer_token(rest)
+    });
+    crate::mgmt::api::auth_allows(token)
+}
+
+fn library_path_off(head: &str) -> Option<(u64, u64)> {
+    let line = head.lines().next()?;
+    let path = line.split_whitespace().nth(1)?;
+    let rest = path.strip_prefix("/perc/library/")?;
+    let (off_s, total_s) = rest.split_once('/')?;
+    let off = parse_u64(off_s)?;
+    let total = parse_u64(total_s)?;
+    Some((off, total))
+}
+
+fn parse_u64(s: &str) -> Option<u64> {
+    if s.is_empty() || s.len() > 20 || !s.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    s.parse().ok()
+}
+
+fn write_u64_dec(buf: &mut [u8], mut n: u64) -> usize {
+    let mut tmp = [0u8; 20];
+    let mut i = 20;
+    if n == 0 {
+        buf[0] = b'0';
+        return 1;
+    }
+    while n > 0 {
+        i -= 1;
+        tmp[i] = b'0' + (n % 10) as u8;
+        n /= 10;
+    }
+    let digits = &tmp[i..];
+    buf[..digits.len()].copy_from_slice(digits);
+    digits.len()
+}
+
+fn library_status(status: u16, body: &[u8], out: &mut [u8]) -> usize {
+    let reason = if status == 200 {
+        "OK"
+    } else if status == 401 {
+        "Unauthorized"
+    } else if status == 409 {
+        "Conflict"
+    } else {
+        "Bad Request"
+    };
+    let mut head = [0u8; 160];
+    let mut n = 0;
+    let p = b"HTTP/1.1 ";
+    head[n..n + p.len()].copy_from_slice(p);
+    n += p.len();
+    n += write_u64_dec(&mut head[n..], u64::from(status));
+    head[n] = b' ';
+    n += 1;
+    head[n..n + reason.len()].copy_from_slice(reason.as_bytes());
+    n += reason.len();
+    let mid = b"\r\nContent-Type: application/json\r\nContent-Length: ";
+    head[n..n + mid.len()].copy_from_slice(mid);
+    n += mid.len();
+    n += write_u64_dec(&mut head[n..], body.len() as u64);
+    let end = b"\r\nConnection: keep-alive\r\n\r\n";
+    head[n..n + end.len()].copy_from_slice(end);
+    n += end.len();
+    if n + body.len() > out.len() {
+        return 0;
+    }
+    out[..n].copy_from_slice(&head[..n]);
+    out[n..n + body.len()].copy_from_slice(body);
+    n + body.len()
+}
+
 /// Host tests only.
 #[cfg(test)]
 pub fn clear_library_for_test() {
     clear_held();
     DISK_BOOTED.store(false, Ordering::Release);
+    RECEIVED.store(0, Ordering::Release);
 }
 
 #[cfg(test)]
@@ -307,6 +556,38 @@ mod iso_library_test {
         assert_eq!(held_bytes(), 0);
         assert!(!answerer_quiet());
         assert!(!note_installed_disk_booted());
+        clear_library_for_test();
+    }
+
+    #[test]
+    fn m88_http_chunk_arms_the_cd_without_utf8() {
+        clear_library_for_test();
+        let total = 1024u64;
+        let mut sector = [0xA5u8; 512];
+        sector[0] = 0xFF;
+        let mut raw = Vec::new();
+        raw.extend_from_slice(
+            b"POST /perc/library/0/1024 HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\nContent-Length: 512\r\n\r\n",
+        );
+        raw.extend_from_slice(&sector);
+        let mut out = [0u8; 512];
+        let n = library_http_response(&raw, &mut out).unwrap();
+        let text = core::str::from_utf8(&out[..n]).unwrap_or("");
+        assert!(text.contains("200"), "{text}");
+        assert_eq!(received_bytes(), 512);
+        assert!(!answerer_quiet());
+        raw.clear();
+        raw.extend_from_slice(
+            b"POST /perc/library/512/1024 HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
+        );
+        raw.extend_from_slice(&sector);
+        let n = library_http_response(&raw, &mut out).unwrap();
+        let text = core::str::from_utf8(&out[..n]).unwrap_or("");
+        assert!(text.contains("\"cd\":true"), "{text}");
+        assert!(answerer_quiet());
+        assert!(present_as_cd());
+        let mut got = [0u8; 512];
+        assert!(!read_at(0, &mut got));
         clear_library_for_test();
     }
 }

@@ -123,6 +123,28 @@ fn wrap_session_try_exchange(
     if !sock.can_send() {
         return None;
     }
+    if let Some(n) = crate::mgmt::iso_library::library_http_response(raw_bytes, out) {
+        if n == 0 {
+            return None;
+        }
+        let nwrap = session.wrap_http(&out[..n], wrap);
+        if nwrap == 0 {
+            return None;
+        }
+        let mut off = 0;
+        while off < nwrap && sock.can_send() {
+            match sock.send_slice(&wrap[off..nwrap]) {
+                Ok(0) => break,
+                Ok(k) => off += k,
+                Err(_) => break,
+            }
+        }
+        if off != nwrap {
+            return None;
+        }
+        session.clear_http();
+        return Some(false);
+    }
     let raw = core::str::from_utf8(raw_bytes).unwrap_or("");
     // SAFETY: BSP-only coexist; PRE-EBS tables leaked for the HTTP codec.
     // KANI-TARGET: host HTTP tests cover the codec; this wrap is firmware-only.

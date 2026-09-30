@@ -157,6 +157,20 @@ pub fn perc_image_read(off: u64, buf: &mut [u8]) -> bool {
     }
 }
 
+/// Write one 512-byte sector of the M8.8 library file.
+/// `off` is the offset within the ISO. Host and QEMU return false.
+pub fn perc_library_write(off: u64, buf: &[u8]) -> bool {
+    #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+    {
+        perc_library_write_uefi(off, buf)
+    }
+    #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+    {
+        let _ = (off, buf);
+        false
+    }
+}
+
 /// Write the latched image, one sector at a time. Offsets outside the window fail.
 /// Host and QEMU return false.
 pub fn perc_image_write(off: u64, buf: &[u8]) -> bool {
@@ -2378,6 +2392,40 @@ fn issue_ld_write16_image(
     }
     let wr = pack_ld_write16_image(spare_bytes, target, lba, blocks, data_phys)?;
     post_ld_write16(bar, frame_phys, data_phys, &wr, payload)
+}
+
+/// Library file write. One sector, addressed in the high library range.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn perc_library_write_uefi(off: u64, buf: &[u8]) -> bool {
+    if buf.len() != 512 || off % 512 != 0 {
+        return false;
+    }
+    let Some(place) = crate::mgmt::iso_library::held() else {
+        return false;
+    };
+    let Some(lba) = crate::mgmt::iso_library::library_chunk_lba(off) else {
+        return false;
+    };
+    let bar = PERC_SPARE_BAR.load(core::sync::atomic::Ordering::Acquire);
+    let data = PERC_SPARE_DATA.load(core::sync::atomic::Ordering::Acquire);
+    let frame = PERC_SPARE_FRAME.load(core::sync::atomic::Ordering::Acquire);
+    let target = PERC_SPARE_TARGET.load(core::sync::atomic::Ordering::Acquire);
+    let spare = PERC_SPARE_BYTES.load(core::sync::atomic::Ordering::Acquire);
+    if bar == 0 || data == 0 || frame == 0 || spare < PERC_IMAGE_BYTES {
+        return false;
+    }
+    issue_ld_write16_tail(
+        bar,
+        target,
+        spare,
+        lba,
+        frame,
+        data,
+        buf,
+        place.spare_off,
+        place.bytes,
+    )
+    .is_some_and(|(status, _)| status == 0)
 }
 
 /// One polled tail WRITE(16). The packed CDB cannot address the 8 GiB window.

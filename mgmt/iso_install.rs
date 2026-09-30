@@ -720,6 +720,16 @@ pub fn clear_product_iso_retain() {
     }
 }
 
+/// M8.8 library file is the CD. The ESP Alpine image stays the fallback.
+pub fn present_boot_iso() -> bool {
+    if crate::mgmt::iso_library::present_as_cd() {
+        if let Some(place) = crate::mgmt::iso_library::held() {
+            return crate::devices::ide_cdrom::present_length(place.bytes as usize);
+        }
+    }
+    present_product_iso_if_retained()
+}
+
 /// Present retained product ISO on the guest ATAPI function (no placeholder).
 pub fn present_product_iso_if_retained() -> bool {
     let Some(bytes) = product_iso_retained_bytes() else {

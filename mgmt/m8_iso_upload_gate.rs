@@ -36,7 +36,7 @@ pub fn iso_upload_surface_present() -> bool {
         && !upload.contains(forbidden)
         && !include_str!("http.rs").contains(forbidden)
         && !include_str!("http.rs").contains("/blob")
-        && !include_str!("../assets/webui.html").contains("type=\"file\"")
+        && include_str!("../assets/webui.html").contains("/perc/library/")
         && !include_str!("../assets/webui.html").contains("/blob")
         && ISO_UPLOAD_HOST_RESIDUAL_NOTE.contains("not iron")
         && ISO_UPLOAD_HOST_RESIDUAL_NOTE.contains("ESP-staged stays valid")

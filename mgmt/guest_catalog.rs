@@ -505,6 +505,18 @@ fn ready(status: u16, body: &[u8], audit_choice: Option<u8>) -> GuestCatalogHttp
     }
 }
 
+/// Window plus any free-tail disk already known. The library starts after this.
+pub fn occupied_guest_end() -> u64 {
+    let installed = crate::mgmt::megaraid::perc_image_boot_latched();
+    let spare = crate::mgmt::megaraid::perc_spare_bytes();
+    let tail = if let Some((_, bytes)) = crate::mgmt::perc_boot_choice::armed_tail() {
+        bytes
+    } else {
+        discover_tail_bytes(spare, installed)
+    };
+    SLICE1_WINDOW_BYTES.saturating_add(tail)
+}
+
 fn fill_list_json(buf: &mut [u8]) -> usize {
     let installed = crate::mgmt::megaraid::perc_image_boot_latched();
     let spare = crate::mgmt::megaraid::perc_spare_bytes();

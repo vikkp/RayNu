@@ -355,7 +355,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | m8-iso-library-adr |
-| Summary | **M8.8.1–M8.8.4 policy packed, not lived.** The next guest disk starts after disks already on the spare. The Ubuntu file sits at the high end. Chunks are not patched. The answerer stays quiet on that CD boot. The file is deleted only after the installed disk boots. No iron upload yet. Scores held. Months **0.0 held**. Overall **99 held**. |
+| Summary | **M8.8 upload path packed, not lived.** Guests can POST the ISO in 4 KiB chunks. Iron writes those sectors into the high library. The CD and virtio ISO read from that file. The answerer stays quiet. Not on the running EFI. Scores held. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
 | Gates touched | ADR only. No doorbell. No format of UBUNTU0. Not a COM2 close. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 60 held, perc 78 held, unmodified 25 held, overall LOI 73 held, months A 0.25 held, months B 1.5 held. |
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-30 | m8-8-library-upload | 0.0 | 99 | **M8.8 upload packed, not lived.** `POST /perc/library/{off}/{total}` stores 4 KiB chunks. Iron PERC write. Guest CD and virtio ISO read those LBAs. Answerer stays quiet. Not flashed. Scores held. months 0.0 held; overall 99 held |
 | 2026-09-30 | m8-8-library-place | 0.0 | 99 | **M8.8 policy packed, not lived.** Next disk after the existing tail. ISO at the high end, below the probe sector. Answerer quiet on the library CD. Reclaim only after the installed-disk boot. Firmware chunk writer and the CD device are still open. Scores held. months 0.0 held; overall 99 held |
 | 2026-09-30 | site-past-summit | 0.0 | 99 | **Homepage and LOI page.** Everest stays closed. The current chapter is Guests on the spare: 10 GiB `ee851fd5`, slice 3 withhold, M8.8 Ubuntu library not built. The HDA bottom line no longer says the latest boot stopped at GRUB. Scores held. months 0.0 held; overall 99 held |
 | 2026-09-29 | m8-iso-library-adr | 0.0 | 99 | **M8.8.1–M8.8.4.** Placement, chunked upload, CD boot with `console=ttyS0`, then install and delete `ubuntu-26.04-live-server-amd64.iso` after the installed-disk boot. Not built. Scores held. months 0.0 held; overall 99 held |

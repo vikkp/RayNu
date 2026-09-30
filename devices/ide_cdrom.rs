@@ -708,6 +708,23 @@ pub fn make_visible() -> bool {
     ok
 }
 
+/// Library CD: advertise `len` bytes with no RAM window. Sector reads use
+/// [`crate::mgmt::iso_library::read_at`].
+pub fn present_length(len: usize) -> bool {
+    if len <= GUEST_CD_ISO_CAP || len % 512 != 0 {
+        return false;
+    }
+    with_cd(|m| {
+        m.ext_ptr = core::ptr::null();
+        m.ext_len = len;
+        m.len = len;
+        m.iso_id = 1;
+    });
+    ISO_ID.store(1, Ordering::Release);
+    ISO_LEN.store(len as u64, Ordering::Release);
+    make_visible()
+}
+
 /// Present retained (or supplied) media on the guest PCI IDE function.
 pub fn present(iso: &[u8], iso_id: u64) -> bool {
     if !retain(iso, iso_id) {
@@ -1871,7 +1888,12 @@ fn fill_read_drq(m: &mut CdMedia) {
     }
     let ext_ptr = m.ext_ptr;
     let ext_len = m.ext_len;
-    if ext_len > GUEST_CD_ISO_CAP && !ext_ptr.is_null() {
+    if crate::mgmt::iso_library::present_as_cd() {
+        if !crate::mgmt::iso_library::read_at(start as u64, &mut m.data[..bytes]) {
+            packet_error(m, SCSI_SENSE_ILLEGAL, 0x11);
+            return;
+        }
+    } else if ext_len > GUEST_CD_ISO_CAP && !ext_ptr.is_null() {
         copy_product_iso_range(ext_ptr, start, bytes, &mut m.data[..bytes]);
     } else {
         m.data[..bytes].copy_from_slice(&m.iso[start..start + bytes]);

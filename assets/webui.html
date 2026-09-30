@@ -78,19 +78,18 @@ input.token{min-width:12rem}
 <p id="story">Opening the control panel…</p>
 <section class="pg on" data-pg="overview">
 <h2>What you are looking at</h2>
-<p class="empty">Green = working. Yellow = in progress. Red = could not answer. Create a guest, attach a Linux ISO, then start it.</p>
+<p class="empty">Green = working. Yellow = in progress. Red = could not answer.</p>
 <div class="steps">
-<div><i>1</i>Host turns green when this page reaches the hypervisor.</div>
-<div><i>2</i>Create a guest (CPU, memory, disk).</div>
-<div><i>3</i>Load a typed ISO — UEFI-first.</div>
-<div><i>4</i>Start. Activity is guest keys + host serial log.</div>
+<div><i>1</i>Host turns green.</div>
+<div><i>2</i>Upload an ISO, then create.</div>
+<div><i>3</i>Start.</div>
 </div>
 <div class="card" id="perc-choice">
 <b>Spare</b>
 <p class="empty" id="perc-note">Guests</p>
 </div>
 <div class="toolbar"><button class="danger" id="btn-poweroff" type="button">Power off host</button></div>
-<p class="empty">Power off host turns this chassis off after the page answers. It is not a guest command.</p>
+<p class="empty">Power off host turns the chassis off. It is not a guest command.</p>
 </section>
 <section class="pg" data-pg="guests">
 <h2>Guests</h2>
@@ -110,6 +109,8 @@ input.token{min-width:12rem}
 <option value="generic_uefi">generic_uefi</option>
 </select>
 </label>
+<input id="f-file" type="file" accept=".iso"/>
+<button class="ghost" id="btn-lib" type="button">Upload ISO</button>
 <button class="pri" id="btn-create" data-action="create">Create guest</button>
 <button class="ghost" id="btn-refresh" data-action="list">Refresh</button>
 </div>
@@ -133,7 +134,7 @@ input.token{min-width:12rem}
 <pre id="serial-log" class="empty">No log loaded yet. GET /logs/guest</pre>
 </section>
 <p id="status"></p>
-<p class="note">Guest COM1 is GET /logs/guest (not iDRAC SOL). Host serial log is HV UART. Guest keys POST /console/keys (not VNC). extract-boot is lab. Host attach is El Torito (not guest UEFI). Firmware arm is not VMLAUNCH. FW box/load is not OVMF. RayNu-F. Auth: ESP or bring-up.</p>
+<p class="note">UEFI-first. extract-boot is lab. Host attach is not guest UEFI. Firmware arm is not OVMF. RayNu-F. not VNC.</p>
 </main>
 <script>
 (function(){
@@ -150,6 +151,7 @@ function setS(m){S.textContent=msg(m)}
 function msg(m){return m||""}
 function num(id,f){const v=parseInt(document.getElementById(id).value,10);return isNaN(v)?f:v}
 async function api(m,p){return fetch(p,{method:m,headers:{"Accept":"application/json, text/plain","Authorization":auth()}})}
+async function uploadIso(){const inp=document.getElementById("f-file");const f=inp&&inp.files&&inp.files[0];if(!f){setS("Choose ISO");return}if(f.size%512){setS("ISO align");return}const n=4096;for(let off=0;off<f.size;off+=n){const end=Math.min(off+n,f.size);const chunk=await f.slice(off,end).arrayBuffer();setS("ISO "+off+"/"+f.size);const res=await fetch("/perc/library/"+off+"/"+f.size,{method:"POST",headers:{"Authorization":auth()},body:chunk});if(!res.ok){setS("ISO refused "+res.status);return}}setS("ISO stored")}
 function remember(id){if(known.indexOf(id)<0)known.push(id);saveK()}
 function dot(id,c,t){document.getElementById("d-"+id).className="dot"+(c?" "+c:"");document.getElementById("t-"+id).textContent=t}
 function paint(){
@@ -242,6 +244,7 @@ if(run)a.disabled=true;if(!run)b.disabled=true;acts.appendChild(a);acts.appendCh
 document.getElementById("btn-save-token").onclick=function(){saveT(T.value||def());setS("Token saved for this browser session")};
 document.getElementById("btn-refresh").onclick=listVms;
 document.getElementById("btn-create").onclick=createVm;
+document.getElementById("btn-lib").onclick=uploadIso;
 document.getElementById("btn-images").onclick=listImages;
 document.getElementById("btn-iso-deploy").onclick=deployIso;
 document.getElementById("btn-iso-install").onclick=installIso;
