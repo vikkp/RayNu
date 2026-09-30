@@ -288,6 +288,10 @@ fn wipe_allowed_now() -> bool {
 /// Enqueue `SETUP` if the wipe policy allows; otherwise park in `PHASE_DONE`
 /// and arm the one-shot COM2 note. Returns whether `SETUP` was queued.
 fn enqueue_setup_or_withhold(a: &mut Answer) -> bool {
+    if crate::mgmt::iso_library::answerer_quiet() {
+        PHASE.store(PHASE_DONE, Ordering::Release);
+        return false;
+    }
     if crate::mgmt::perc_boot_choice::guests_linux_iso_chosen() {
         // ADR-019 slice 3. The ISO's own prompt is the installer.
         WITHHOLD_GUESTS_ISO.store(true, Ordering::Release);
@@ -371,12 +375,16 @@ pub fn note_tx(b: u8) {
         }
         match phase {
             PHASE_LOGIN
-                if !GRUB_SENT.load(Ordering::Acquire) && ends_with(&a.win, a.wlen, GRUB) =>
+                if !crate::mgmt::iso_library::answerer_quiet()
+                    && !GRUB_SENT.load(Ordering::Acquire)
+                    && ends_with(&a.win, a.wlen, GRUB) =>
             {
                 enqueue(a, GRUB_ENTER);
                 GRUB_SENT.store(true, Ordering::Release);
             }
-            PHASE_LOGIN if ends_with(&a.win, a.wlen, LOGIN) => {
+            PHASE_LOGIN
+                if !crate::mgmt::iso_library::answerer_quiet() && ends_with(&a.win, a.wlen, LOGIN) =>
+            {
                 enqueue(a, ROOT);
                 PHASE.store(PHASE_SHELL, Ordering::Release);
             }

@@ -208,7 +208,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | Field | Value |
 |-------|-------|
 | Commit | m8-iso-library-adr |
-| Summary | **LOI page matches the spare.** A 10 GiB login, the ISO prompt, and M8.8 not built. Scores held. Bar B stays 60. Unmodified stays 25. |
+| Summary | **M8.8.1–M8.8.4 policy packed, not lived.** No iron upload. Unmodified media stays 25. Bar B stays 60. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Scores held. Bar A 92. Bar B 60. perc 78. Overall 73. Unmodified media stays 25. The library is not on the running EFI. |
 | Gates touched | ADR only. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-30 | m8-8-library-place | 92 | 60 | **M8.8 policy packed, not lived.** Placement, chunk plan, quiet CD boot, reclaim after disk boot. The firmware does not yet copy `ubuntu-26.04-live-server-amd64.iso` onto the spare. Unmodified media stays 25. Bar B stays 60. |
 | 2026-09-30 | site-past-summit | 92 | 60 | **LOI page.** The current chapter is the spare: `ee851fd5` on 10 GiB, slice 3 withheld `setup-disk`, M8.8 not built. Bar B stays 60. Unmodified media stays 25. The 2.9 TB VD is not the guest disk. |
 | 2026-09-29 | m8-iso-library-adr | 92 | 60 | **M8.8.1–M8.8.4 numbered, not built.** Placement, upload, CD boot, install, then delete `ubuntu-26.04-live-server-amd64.iso` after the installed-disk boot. UBUNTU0 and `ee851fd5` stay. Unmodified media stays 25. Bar B stays 60. Scores held. |
 | 2026-09-29 | m8-guest-iso-lived | 92 | 60 | **Slice 3 lived.** `752586b9` choice 3, `ISO-BOOTX64`, `[vda]` 10.0 GiB, `localhost:~#`, ISO motd `setup-alpine`, then `boot: perc SPA linux_iso — setup-disk withheld`. No scripted `setup-disk`. `ee851fd5` was mounted read-only, journal-recovered, and unmounted. Unmodified media 20→25. The ISO is still serial-patched. `root` is still typed. Bar B stays 60. The 8192 MiB window reinstall was not clicked. |

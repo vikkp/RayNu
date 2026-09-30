@@ -607,6 +607,32 @@ fn guests_linux_iso_stops_at_the_iso_prompt() {
     reset();
 }
 
+#[test]
+fn library_cd_does_not_type_root_or_setup_disk() {
+    use crate::mgmt::iso_library::{
+        arm_cd_boot, begin_library, clear_library_for_test, answerer_quiet,
+    };
+    use crate::mgmt::megaraid::{IRON_LD1_BYTES, PERC_IMAGE_BYTES};
+    clear_library_for_test();
+    let ten = 10_240u64 * 1024 * 1024;
+    let iso = 2u64 * 1024 * 1024 * 1024;
+    begin_library(IRON_LD1_BYTES, PERC_IMAGE_BYTES + ten, iso).unwrap();
+    assert!(arm_cd_boot());
+    assert!(answerer_quiet());
+    reset();
+    for &b in b"localhost login:" {
+        note_tx(b);
+    }
+    assert!(take_rx().is_none());
+    for &b in b"localhost:~# " {
+        note_tx(b);
+    }
+    assert!(take_rx().is_none());
+    assert!(take_setup_withheld_line().is_none());
+    clear_library_for_test();
+    reset();
+}
+
 /// Host has no durable LUN, so the live shell still queues SETUP and the
 /// withheld note is not armed.
 #[test]
