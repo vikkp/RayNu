@@ -857,8 +857,13 @@ pub fn pack_ld_write16_tail(
     if classify_ld_bytes(spare_bytes) != LdClass::Spare {
         return None;
     }
-    if blocks != 1 || spare_off < PERC_IMAGE_BYTES || spare_off % 512 != 0 || disk_bytes % 512 != 0
-    {
+    if spare_off < PERC_IMAGE_BYTES || spare_off % 512 != 0 || disk_bytes % 512 != 0 {
+        return None;
+    }
+    if blocks != 1 && blocks != PERC_IMAGE_CHUNK_SECTORS {
+        return None;
+    }
+    if blocks == PERC_IMAGE_CHUNK_SECTORS && lba % u64::from(PERC_IMAGE_CHUNK_SECTORS) != 0 {
         return None;
     }
     let lo = spare_off / 512;
@@ -2394,10 +2399,10 @@ fn issue_ld_write16_image(
     post_ld_write16(bar, frame_phys, data_phys, &wr, payload)
 }
 
-/// Library file write. One sector, addressed in the high library range.
+/// Library file write. 512 bytes, or 4096 on an 8-sector boundary.
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn perc_library_write_uefi(off: u64, buf: &[u8]) -> bool {
-    if buf.len() != 512 || off % 512 != 0 {
+    if (buf.len() != 512 && buf.len() != PERC_IMAGE_CHUNK_BYTES as usize) || off % 512 != 0 {
         return false;
     }
     let Some(place) = crate::mgmt::iso_library::held() else {
@@ -2441,14 +2446,15 @@ fn issue_ld_write16_tail(
     spare_off: u64,
     disk_bytes: u64,
 ) -> Option<(u8, bool)> {
-    if payload.len() != 512 {
+    let blocks = u32::try_from(payload.len() / 512).ok()?;
+    if payload.len() != blocks as usize * 512 {
         return None;
     }
     let wr = pack_ld_write16_tail(
         spare_bytes,
         target,
         lba,
-        1,
+        blocks,
         data_phys,
         spare_off,
         disk_bytes,

@@ -241,7 +241,9 @@ fn clear_held() {
 }
 
 /// One POST body. Fits the 8 KiB coexist receive buffer with the headers.
-pub const LIBRARY_HTTP_CHUNK: usize = 4096;
+/// One Guests POST. 64 KiB, 512-byte aligned, inside the TLS accumulator.
+pub const LIBRARY_HTTP_CHUNK: usize = 64 * 1024;
+const _: () = assert!(LIBRARY_HTTP_CHUNK + 8 * 1024 <= crate::mgmt::tls_coexist::COEXIST_RX_ACC_N);
 
 static RECEIVED: AtomicU64 = AtomicU64::new(0);
 
@@ -313,13 +315,14 @@ pub fn accept_upload(off: u64, total: u64, body: &[u8]) -> Result<(), &'static s
     let mut done = 0usize;
     while done < body.len() {
         let at = off + done as u64;
-        if library_chunk_lba(at).is_none() {
+        let Some(lba) = library_chunk_lba(at) else {
             return Err("lba");
-        }
-        if !write_upload_sector(at, &body[done..done + 512]) {
+        };
+        let n = upload_write_len(lba, body.len() - done);
+        if !write_upload_bytes(at, &body[done..done + n]) {
             return Err("write");
         }
-        done += 512;
+        done += n;
     }
     let next = off + body.len() as u64;
     RECEIVED.store(next, Ordering::Release);
@@ -356,14 +359,24 @@ fn spare_for_upload() -> u64 {
     }
 }
 
-fn write_upload_sector(off: u64, sector: &[u8]) -> bool {
+/// 4096 when the spare LBA is 8-sector aligned and that many bytes remain.
+fn upload_write_len(lba: u64, remain: usize) -> usize {
+    let chunk = crate::mgmt::megaraid::PERC_IMAGE_CHUNK_BYTES as usize;
+    if remain >= chunk && lba % u64::from(crate::mgmt::megaraid::PERC_IMAGE_CHUNK_SECTORS) == 0 {
+        chunk
+    } else {
+        512
+    }
+}
+
+fn write_upload_bytes(off: u64, bytes: &[u8]) -> bool {
     #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
     {
-        crate::mgmt::megaraid::perc_library_write(off, sector)
+        crate::mgmt::megaraid::perc_library_write(off, bytes)
     }
     #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
     {
-        let _ = (off, sector);
+        let _ = (off, bytes);
         true
     }
 }
@@ -628,6 +641,8 @@ mod iso_library_test {
         assert!(html.contains("if(listBusy||up)return"));
         assert!(html.contains("if(up)return"));
         assert!(html.contains("ISO dropped"));
+        assert!(html.contains("n=65536"));
+        assert_eq!(LIBRARY_HTTP_CHUNK, 65536);
         assert!(!answerer_quiet());
         raw.clear();
         raw.extend_from_slice(

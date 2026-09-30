@@ -223,7 +223,7 @@ The fence accepts one LD of ~2.5–3.1 TiB and refuses ~300–512 GiB. Scratch p
 
 ### M8.8 — Ubuntu ISO library on RAYNU-SPARE
 
-**Status: packed, not lived** ([ADR-019](adr/ADR-019.md) decision 9). `27357846` accepted the first chunks of `ubuntu-26.04-live-server-amd64.iso` (2,918,598,656 bytes) and reserved the file (Used 21215, Placeable 3001376). The copy stopped. COM2 never printed `boot: M8.8 library CD stored`. The page poll shares the one TCP slot, and the VM list replaces the counter with `Empty (create one)`. Do not click Upload again on `27357846`. Leave Create and Start alone. The 8 GiB window and `ee851fd5` were not written.
+**Status: packed, not lived** ([ADR-019](adr/ADR-019.md) decision 9). `51f1f168` kept the upload alive, at 4 KiB per HTTPS post. That is hours for `ubuntu-26.04-live-server-amd64.iso`, not an iDRAC virtual-media copy. Close that tab. Do not click Create or Start. The next EFI posts 64 KiB and writes the PERC in 4 KiB commands, the same size as the image copy. Do not flash until that CI is green. The 8 GiB window and `ee851fd5` stay.
 
 **Goal:** The operator picks `ubuntu-26.04-live-server-amd64.iso` on Guests. The hypervisor stores that file unchanged in a high library on RAYNU-SPARE, boots it as a CD, and deletes the library file after the installed guest has booted from its own disk.
 

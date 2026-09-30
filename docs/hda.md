@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-8-library-one-socket |
-| Summary | **Upload stopped on iron, fix packed.** `27357846` reserved the Ubuntu file and copied the first chunks. No `library CD stored` line. The next page keeps the upload as the only request and leaves the counter up. COM2 prints every 64 MiB. Do not flash until CI is green. Scores held. Months **0.0 held**. Overall **99 held**. |
+| Commit | m8-8-library-64k |
+| Summary | **4 KiB posts are too slow.** `51f1f168` is copying, far behind iDRAC. Close that tab. The next EFI posts 64 KiB and writes 4 KiB PERC commands. Do not flash until CI is green. Scores held. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
-| Gates touched | SPA upload poll. No doorbell. No format of UBUNTU0. Not a COM2 close. |
+| Gates touched | 64 KiB library posts. No doorbell. No format of UBUNTU0. Not a COM2 close. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 60 held, perc 78 held, unmodified 25 held, overall LOI 73 held, months A 0.25 held, months B 1.5 held. |
 
 
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-30 | m8-8-library-64k | 0.0 | 99 | **4 KiB posts are too slow on `51f1f168`.** Close that upload. Next EFI uses 64 KiB posts and 4 KiB PERC writes. Not flashed. Scores held. months 0.0 held; overall 99 held |
 | 2026-09-30 | m8-8-library-one-socket | 0.0 | 99 | **Upload stopped on `27357846`.** First chunks of the 2.72 GiB Ubuntu ISO were accepted. No `library CD stored` line. The page poll and the VM list hid the counter. Next EFI keeps one request and prints every 64 MiB. Do not flash yet. Scores held. months 0.0 held; overall 99 held |
 | 2026-09-30 | m8-8-library-spa-strings | 0.0 | 99 | **CI string fix, not lived.** `5a205364` dropped `Host serial log` and the M8.4 test still forbade a file input. Both restored. `/blob` stays off the page. Do not flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-09-30 | m8-8-library-upload | 0.0 | 99 | **M8.8 upload packed, not lived.** `POST /perc/library/{off}/{total}` stores 4 KiB chunks. Iron PERC write. Guest CD and virtio ISO read those LBAs. Answerer stays quiet. Not flashed. Scores held. months 0.0 held; overall 99 held |

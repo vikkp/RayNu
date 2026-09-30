@@ -152,7 +152,7 @@ function setS(m){S.textContent=msg(m)}
 function msg(m){return m||""}
 function num(id,f){const v=parseInt(document.getElementById(id).value,10);return isNaN(v)?f:v}
 async function api(m,p){return fetch(p,{method:m,headers:{"Accept":"application/json, text/plain","Authorization":auth()}})}
-async function uploadIso(){if(up)return;const inp=document.getElementById("f-file");const f=inp&&inp.files&&inp.files[0];if(!f){setS("Choose ISO");return}if(f.size%512){setS("ISO align");return}up=1;const n=4096;try{for(let off=0;off<f.size;off+=n){const end=Math.min(off+n,f.size);const chunk=await f.slice(off,end).arrayBuffer();setS("ISO "+off+"/"+f.size);const res=await fetch("/perc/library/"+off+"/"+f.size,{method:"POST",headers:{"Authorization":auth()},body:chunk});if(!res.ok){setS("ISO refused "+res.status);up=0;return}}setS("ISO stored")}catch(e){setS("ISO dropped")}up=0}
+async function uploadIso(){if(up)return;const inp=document.getElementById("f-file");const f=inp&&inp.files&&inp.files[0];if(!f){setS("Choose ISO");return}if(f.size%512){setS("ISO align");return}up=1;const n=65536;try{for(let off=0;off<f.size;off+=n){const end=Math.min(off+n,f.size);const chunk=await f.slice(off,end).arrayBuffer();setS("ISO "+off+"/"+f.size);const res=await fetch("/perc/library/"+off+"/"+f.size,{method:"POST",headers:{"Authorization":auth()},body:chunk});if(!res.ok){setS("ISO refused "+res.status);up=0;return}}setS("ISO stored")}catch(e){setS("ISO dropped")}up=0}
 function remember(id){if(known.indexOf(id)<0)known.push(id);saveK()}
 function dot(id,c,t){document.getElementById("d-"+id).className="dot"+(c?" "+c:"");document.getElementById("t-"+id).textContent=t}
 function paint(){

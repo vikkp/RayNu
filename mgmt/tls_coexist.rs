@@ -15,7 +15,13 @@
 //! `RAYNU-V-M8-TLS-OK` is not this module.
 
 /// Coexist RX accumulator size (must match `host_nic_listen` scratch).
-pub const COEXIST_RX_ACC_N: usize = 8192;
+/// Plaintext HTTP accumulator and one TLS record.
+///
+/// A library POST carries 64 KiB plus headers. A TLS 1.2 record can be
+/// 16 KiB of plaintext plus the explicit IV and tag, so the receive side
+/// has to hold that record before it can be opened. The TCP window stays
+/// smaller; the listen loop reads until this buffer has a whole request.
+pub const COEXIST_RX_ACC_N: usize = 96 * 1024;
 /// HTTP response / TLS ciphertext drain size (must match coexist HTTP out).
 pub const COEXIST_HTTP_OUT_N: usize = crate::mgmt::http::HTTP_RESPONSE_CAP;
 
