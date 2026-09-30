@@ -208,7 +208,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | Field | Value |
 |-------|-------|
 | Commit | m8-iso-library-adr |
-| Summary | **ADR-019 decision 9 accepted, not built.** A local ISO chosen on Guests is stored unchanged in a high library on RAYNU-SPARE. The Cruzer file remains the boot media. |
+| Summary | **M8.8.1–M8.8.4 numbered, not built.** The Ubuntu library file is deleted only after the installed-disk boot. Scores held. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Scores held. Bar A 92. Bar B 60. perc 78. Overall 73. Unmodified media stays 25. The library is not on the running EFI. |
 | Gates touched | ADR only. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
@@ -219,7 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
-| 2026-09-29 | m8-iso-library-adr | 92 | 60 | **ADR-019 decision 9 accepted, not built.** Guests will take a local ISO and store it in a high library on RAYNU-SPARE. Cruzer `linux.iso` stays the boot media. Unmodified media stays 25. Bar B stays 60. Scores held. |
+| 2026-09-29 | m8-iso-library-adr | 92 | 60 | **M8.8.1–M8.8.4 numbered, not built.** Placement, upload, CD boot, install, then delete `ubuntu-26.04-live-server-amd64.iso` after the installed-disk boot. UBUNTU0 and `ee851fd5` stay. Unmodified media stays 25. Bar B stays 60. Scores held. |
 | 2026-09-29 | m8-guest-iso-lived | 92 | 60 | **Slice 3 lived.** `752586b9` choice 3, `ISO-BOOTX64`, `[vda]` 10.0 GiB, `localhost:~#`, ISO motd `setup-alpine`, then `boot: perc SPA linux_iso — setup-disk withheld`. No scripted `setup-disk`. `ee851fd5` was mounted read-only, journal-recovered, and unmounted. Unmodified media 20→25. The ISO is still serial-patched. `root` is still typed. Bar B stays 60. The 8192 MiB window reinstall was not clicked. |
 | 2026-09-29 | m8-guest-iso-prompt | 92 | 60 | **Slice 3 packed, not lived.** Guests `linux_iso` stops at the ISO prompt. `setup-disk` is not queued. Unmodified media stays 20 until COM2 shows `boot: perc SPA linux_iso — setup-disk withheld` and that prompt. `f44ba647` still types `setup-disk` on a new `linux_iso`. Scores held. Bar B stays 60. |
 | 2026-09-29 | m8-guest-stop-linux | 92 | 60 | **`f44ba647` booted `ee851fd5`.** `choice=4`, `DISK-BOOTX64`, `[vda]` 10.0 GiB, `localhost:~#`. Stop on that EFI did not run after Linux handoff. This fix is packed, not lived. Scores held. Bar B stays 60. The 2.9 TB VD is not the guest disk. Unmodified media stays 20. |

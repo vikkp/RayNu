@@ -347,7 +347,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 | M5.5 | VMware Migration Workstream     | 60–70  | 10+ VMs migrated from vCenter in one command           |
 | M6   | Production Ready                | 68–100 | HA, security hardened, 72-hr soak, external audit      |
 | M7   | Mount Everest (single-host ship)| 101–   | iDRAC boot on real R640 + network UI + Linux ISO install (**CLOSED on iron 2026-09-11**, ADR-018) |
-| M8   | Operator product hardening      | after M7 | Persist → TLS → auth → console → ISO upload → catalog → Windows. **M8.7** PERC Fusion mailbox on RAYNU-SPARE; scratch pad 0 lived READY on `22ce3728`; IOC init posts to `0xC0`; no doorbell (ADR-018) |
+| M8   | Operator product hardening      | after M7 | Persist → TLS → auth → console → ISO upload → catalog → Windows. **M8.7** PERC Fusion mailbox on RAYNU-SPARE. **M8.8** Ubuntu ISO library on the spare (M8.8.1–M8.8.4, ADR-019 decision 9, accepted, not built). No doorbell (ADR-018) |
 | M9   | Cluster / elasticity (sketch)   | after M8 | vMotion-like, DRS-like placement, hot-add (not M7/M8 blockers) |
 
 **M0 note (lived):** Boot gates through M6 closed on **Latitude + QEMU**. The original “boots on R640” claim is the hard **M7.5** iron gate (`RAYNU-V-R640-BOOT-OK`) — see ADR-009.
