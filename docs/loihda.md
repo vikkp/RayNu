@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-8-library-spa-strings |
-| Summary | **CI string fix, not lived.** The page again names the host serial log, and the library file input stays. Iron has not stored an ISO. Unmodified media stays 25. Bar B stays 60. |
+| Commit | m8-8-library-one-socket |
+| Summary | **Upload stopped on iron.** `27357846` reserved the Ubuntu file and did not finish it. The next page does not poll during the copy. Unmodified media stays 25. Bar B stays 60. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Scores held. Bar A 92. Bar B 60. perc 78. Overall 73. Unmodified media stays 25. The library is not on the running EFI. |
-| Gates touched | Host SPA strings. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
+| Gates touched | SPA upload poll. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
 
 ---
 
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-09-30 | m8-8-library-one-socket | 92 | 60 | **Upload stopped on `27357846`.** The Ubuntu file was reserved and not stored. Unmodified media stays 25. Bar B stays 60. |
 | 2026-09-30 | m8-8-library-spa-strings | 92 | 60 | **CI string fix, not lived.** Host serial log is back on the page. The library file input stays. `/blob` stays off the page. Not flashed. Unmodified media stays 25. Bar B stays 60. |
 | 2026-09-30 | m8-8-library-upload | 92 | 60 | **M8.8 upload packed, not lived.** Guests posts the file in 4 KiB chunks onto the spare library. Not flashed. Unmodified media stays 25. Bar B stays 60. |
 | 2026-09-30 | m8-8-library-place | 92 | 60 | **M8.8 policy packed, not lived.** Placement, chunk plan, quiet CD boot, reclaim after disk boot. The firmware does not yet copy `ubuntu-26.04-live-server-amd64.iso` onto the spare. Unmodified media stays 25. Bar B stays 60. |

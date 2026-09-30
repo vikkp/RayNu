@@ -32,6 +32,11 @@ static LIB_OFF: AtomicU64 = AtomicU64::new(0);
 static LIB_LEN: AtomicU64 = AtomicU64::new(0);
 static CD_BOOT: AtomicBool = AtomicBool::new(false);
 static DISK_BOOTED: AtomicBool = AtomicBool::new(false);
+/// One library POST should not print the per-exchange SOL lines.
+static LOG_QUIET: AtomicBool = AtomicBool::new(false);
+
+/// COM2 progress step during a multi-gigabyte copy. Not every 4 KiB chunk.
+const LIBRARY_PROGRESS_STEP: u64 = 64 * 1024 * 1024;
 
 /// Where one library file sits on the spare.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -318,11 +323,28 @@ pub fn accept_upload(off: u64, total: u64, body: &[u8]) -> Result<(), &'static s
     }
     let next = off + body.len() as u64;
     RECEIVED.store(next, Ordering::Release);
+    if library_progress_due(off, next, total) {
+        note_library_progress(next, total);
+    }
     if next == total {
         let _ = arm_cd_boot();
         note_library_stored();
     }
     Ok(())
+}
+
+/// True when `next` crosses a 64 MiB mark and is not the final byte.
+/// The final byte prints `library CD stored` instead.
+pub fn library_progress_due(prev: u64, next: u64, total: u64) -> bool {
+    if next == 0 || next >= total || LIBRARY_PROGRESS_STEP == 0 {
+        return false;
+    }
+    prev / LIBRARY_PROGRESS_STEP != next / LIBRARY_PROGRESS_STEP
+}
+
+/// The listen loop calls this once per exchange. True only for a library POST.
+pub fn take_exchange_quiet() -> bool {
+    LOG_QUIET.swap(false, Ordering::AcqRel)
 }
 
 fn spare_for_upload() -> u64 {
@@ -346,6 +368,27 @@ fn write_upload_sector(off: u64, sector: &[u8]) -> bool {
     }
 }
 
+fn note_library_progress(got: u64, total: u64) {
+    #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+    {
+        let mut line = [0u8; 72];
+        let prefix = b"boot: M8.8 library ";
+        line[..prefix.len()].copy_from_slice(prefix);
+        let mut n = prefix.len();
+        n += write_u64_dec(&mut line[n..], got);
+        line[n] = b'/';
+        n += 1;
+        n += write_u64_dec(&mut line[n..], total);
+        if let Ok(text) = core::str::from_utf8(&line[..n]) {
+            crate::boot::serial::write_line_nowait(text);
+        }
+    }
+    #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+    {
+        let _ = (got, total);
+    }
+}
+
 fn note_library_stored() {
     #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
     {
@@ -361,6 +404,7 @@ pub fn library_http_response(raw: &[u8], out: &mut [u8]) -> Option<usize> {
     if !raw.starts_with(b"POST /perc/library/") {
         return None;
     }
+    LOG_QUIET.store(true, Ordering::Release);
     let header_end = raw.windows(4).position(|w| w == b"\r\n\r\n")?;
     let head = core::str::from_utf8(&raw[..header_end]).ok()?;
     let body = &raw[header_end + 4..];
@@ -489,6 +533,7 @@ pub fn clear_library_for_test() {
     clear_held();
     DISK_BOOTED.store(false, Ordering::Release);
     RECEIVED.store(0, Ordering::Release);
+    LOG_QUIET.store(false, Ordering::Release);
 }
 
 #[cfg(test)]
@@ -574,7 +619,15 @@ mod iso_library_test {
         let n = library_http_response(&raw, &mut out).unwrap();
         let text = core::str::from_utf8(&out[..n]).unwrap_or("");
         assert!(text.contains("200"), "{text}");
+        assert!(take_exchange_quiet());
+        assert!(!take_exchange_quiet());
         assert_eq!(received_bytes(), 512);
+        assert!(!library_progress_due(0, 4096, 2_918_598_656));
+        assert!(library_progress_due(64 * 1024 * 1024 - 4096, 64 * 1024 * 1024, 2_918_598_656));
+        let html = include_str!("../assets/webui.html");
+        assert!(html.contains("if(listBusy||up)return"));
+        assert!(html.contains("if(up)return"));
+        assert!(html.contains("ISO dropped"));
         assert!(!answerer_quiet());
         raw.clear();
         raw.extend_from_slice(

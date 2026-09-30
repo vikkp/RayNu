@@ -223,7 +223,7 @@ The fence accepts one LD of ~2.5–3.1 TiB and refuses ~300–512 GiB. Scratch p
 
 ### M8.8 — Ubuntu ISO library on RAYNU-SPARE
 
-**Status: packed, not lived** ([ADR-019](adr/ADR-019.md) decision 9). Host placement and the 4 KiB upload are in tree. `5a205364` failed host tests and M7.4 UI-OK: the page had dropped `Host serial log`, and the M8.4 test still forbade a file input. Do not flash until those jobs are green. The running EFI is still `752586b9` at the Alpine ISO prompt. Leave that `localhost:~#`. Do not type `setup-alpine`.
+**Status: packed, not lived** ([ADR-019](adr/ADR-019.md) decision 9). `27357846` accepted the first chunks of `ubuntu-26.04-live-server-amd64.iso` (2,918,598,656 bytes) and reserved the file (Used 21215, Placeable 3001376). The copy stopped. COM2 never printed `boot: M8.8 library CD stored`. The page poll shares the one TCP slot, and the VM list replaces the counter with `Empty (create one)`. Do not click Upload again on `27357846`. Leave Create and Start alone. The 8 GiB window and `ee851fd5` were not written.
 
 **Goal:** The operator picks `ubuntu-26.04-live-server-amd64.iso` on Guests. The hypervisor stores that file unchanged in a high library on RAYNU-SPARE, boots it as a CD, and deletes the library file after the installed guest has booted from its own disk.
 
