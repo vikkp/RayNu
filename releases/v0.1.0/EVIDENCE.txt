@@ -1,0 +1,10 @@
+RayNu-V boot-media evidence (auto-verified)
+version=0.1.0
+efi_sha256=1c7a9be01f1a70852e4965744b5334b556e0ce26f33ccaa2dd648e9d5bece1c3
+img_sha256=91a378625cc30a77b7e3219d4d84e12774482ff6de0d3280f272be4d6dbd84b1
+iso_sha256=3703dc347b72c8d1b035e2cce84c058958b2ac06f785f9cbe9e5e40dd7dbb7a3
+img=raynu-v-0.1.0-uefi-boot.img
+iso=raynu-v-0.1.0-uefi-boot.iso
+layout=EFI/BOOT/BOOTX64.EFI
+verified=kit sha256sum -c OK (EFI sidecar + SHA256SUMS when present)
+built_utc=2026-08-15T03:14:28Z
