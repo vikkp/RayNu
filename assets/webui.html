@@ -48,11 +48,9 @@ input.token{min-width:12rem}
 .acts{display:flex;gap:.35rem}
 .note,#status{font-size:.86rem;margin-top:1rem}
 .note{max-width:44rem;font-size:.8rem;color:rgba(12,26,34,.5)}
-.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:.6rem;margin:.7rem 0}
-.steps div{background:rgba(255,255,255,.7);border:1px solid var(--line);padding:.7rem}
-.steps i{display:block;color:var(--sea);font-style:normal;font-weight:700}
-#serial-log{max-height:16rem;overflow:auto;font:12px/1.4 monospace;white-space:pre-wrap;padding:.75rem;border:1px solid var(--line);background:rgba(255,255,255,.7)}
-@media(max-width:820px){.strip,.steps{grid-template-columns:1fr 1fr}}
+#serial-log{max-height:16rem;overflow:auto;font:12px monospace;white-space:pre-wrap;padding:.4rem;border:1px solid var(--line);background:rgba(255,255,255,.7)}
+#iso-bar{height:8px;background:#c5d5dc;margin:.4rem 0}#iso-fill{height:8px;width:0;background:var(--sea)}
+@media(max-width:820px){.strip{grid-template-columns:1fr 1fr}}
 </style>
 </head>
 <body data-raynu-webui="1" data-raynu-api="/vms" data-raynu-m7-ui="1" data-raynu-e4="1" data-raynu-phase-b="1" data-raynu-m8-console="1" data-raynu-perc-choice="1">
@@ -75,21 +73,14 @@ input.token{min-width:12rem}
 <div class="card"><div class="dot" id="d-guest"></div><b>Guest</b><span id="t-guest">No guest yet</span></div>
 <div class="card"><div class="dot" id="d-iso"></div><b>Install media</b><span id="t-iso">No ISO yet</span></div>
 </div>
-<p id="story">Opening the control panel…</p>
+<p id="story"></p>
 <section class="pg on" data-pg="overview">
-<h2>What you are looking at</h2>
-<p class="empty">Green = working. Yellow = in progress. Red = could not answer.</p>
-<div class="steps">
-<div><i>1</i>Host turns green.</div>
-<div><i>2</i>Upload an ISO, then create.</div>
-<div><i>3</i>Start.</div>
-</div>
+<h2>Overview</h2>
 <div class="card" id="perc-choice">
 <b>Spare</b>
 <p class="empty" id="perc-note">Guests</p>
 </div>
 <div class="toolbar"><button class="danger" id="btn-poweroff" type="button">Power off host</button></div>
-<p class="empty">Power off host turns the chassis off. It is not a guest command.</p>
 </section>
 <section class="pg" data-pg="guests">
 <h2>Guests</h2>
@@ -132,15 +123,16 @@ input.token{min-width:12rem}
 <h2>Guest console</h2>
 <p class="empty">Host serial log</p>
 <div class="toolbar"><input id="g-keys" autocomplete="off"/><button class="pri" id="btn-keys" data-action="keys">Send</button><button class="ghost" id="btn-logs" data-action="logs">Refresh log</button></div>
-<pre id="serial-log" class="empty">No log loaded yet. GET /logs/guest</pre>
+<pre id="serial-log" class="empty">GET /logs/guest</pre>
 </section>
+<div id="iso-bar"><div id="iso-fill"></div></div>
 <p id="status"></p>
 <p class="note">UEFI-first. extract-boot is lab. Host attach is not guest UEFI. Firmware arm is not OVMF. RayNu-F. not VNC.</p>
 </main>
 <script>
 (function(){
 const L=document.getElementById("vm-list"),I=document.getElementById("img-list"),G=document.getElementById("serial-log"),S=document.getElementById("status"),T=document.getElementById("f-token"),A="/vms",TK="raynu-v-token",KK="raynu-v-known";
-let known=[],hostOk=0,items=[],isoP="idle",isoN="No ISO yet",listBusy=0,up=0;
+let known=[],hostOk=0,items=[],isoP="idle",isoN="No ISO yet",listBusy=0,up=0,hold=0;
 function def(){return"raynu-v-bringup"}
 function loadT(){try{const t=sessionStorage.getItem(TK);return t&&t.length?t:def()}catch(e){return def()}}
 function saveT(t){try{sessionStorage.setItem(TK,t)}catch(e){}}
@@ -152,7 +144,7 @@ function setS(m){S.textContent=msg(m)}
 function msg(m){return m||""}
 function num(id,f){const v=parseInt(document.getElementById(id).value,10);return isNaN(v)?f:v}
 async function api(m,p){return fetch(p,{method:m,headers:{"Accept":"application/json, text/plain","Authorization":auth()}})}
-async function uploadIso(){if(up)return;const inp=document.getElementById("f-file");const f=inp&&inp.files&&inp.files[0];if(!f){setS("Choose ISO");return}if(f.size%512){setS("ISO align");return}up=1;const n=65536;try{for(let off=0;off<f.size;off+=n){const end=Math.min(off+n,f.size);const chunk=await f.slice(off,end).arrayBuffer();setS("ISO "+off+"/"+f.size);const res=await fetch("/perc/library/"+off+"/"+f.size,{method:"POST",headers:{"Authorization":auth()},body:chunk});if(!res.ok){setS("ISO refused "+res.status);up=0;return}}setS("ISO stored")}catch(e){setS("ISO dropped")}up=0}
+async function uploadIso(){if(up)return;const inp=document.getElementById("f-file");const f=inp&&inp.files&&inp.files[0];if(!f){setS("Choose ISO");return}if(f.size%512){setS("ISO align");return}up=1;hold=1;const n=65536;const bar=document.getElementById("iso-fill");try{let off=0;while(off<f.size){const end=Math.min(off+n,f.size);const chunk=await f.slice(off,end).arrayBuffer();const pct=Math.floor(off*100/f.size);setS("ISO "+pct+"%");if(bar)bar.style.width=pct+"%";const res=await fetch("/perc/library/"+off+"/"+f.size,{method:"POST",headers:{"Authorization":auth()},body:chunk});if(!res.ok){setS("ISO refused "+res.status);up=0;return}let got=end;try{const j=await res.json();if(j.received>got)got=j.received}catch(e){}off=got}setS("ISO 100%");if(bar)bar.style.width="100%"}catch(e){setS("ISO dropped")}up=0}
 function remember(id){if(known.indexOf(id)<0)known.push(id);saveK()}
 function dot(id,c,t){document.getElementById("d-"+id).className="dot"+(c?" "+c:"");document.getElementById("t-"+id).textContent=t}
 function paint(){
@@ -178,18 +170,18 @@ document.querySelectorAll("nav [data-go]").forEach(function(el){el.onclick=funct
 async function listVms(){
 if(listBusy||up)return;
 listBusy=1;
-setS("Listing…");
+if(!hold)setS("Listing…");
 try{
-let res;try{res=await api("GET",A)}catch(e){hostOk=false;setS("List failed");paint();return}
+let res;try{res=await api("GET",A)}catch(e){hostOk=false;if(!hold)setS("List failed");paint();return}
 hostOk=res.ok;
-if(!res.ok){setS("List failed ("+res.status+")");paint();return}
+if(!res.ok){if(!hold)setS("List failed ("+res.status+")");paint();return}
 const out=[];
 for(let i=0;i<known.length;i++){
 const id=known[i],g=await api("GET",A+"/"+id);if(!g.ok)continue;
 let b=null;try{b=await g.json()}catch(e){}
 out.push({guest_id:id,state:(b&&b.state)?b.state:(b&&b.record?"defined":"?"),cpu:b&&b.cpu,ram_mib:b&&b.ram_mib,disk_mib:b&&b.disk_mib,iso_id:b&&b.iso_id,nics:b&&b.nics,image_type:b&&b.image_type,firmware:b&&b.firmware});
 }
-items=out;render(out);paint();setS(out.length?out.length+" guest(s)":"Empty (create one)");
+items=out;render(out);paint();if(!hold)setS(out.length?out.length+" guest(s)":"Empty (create one)");
 }finally{listBusy=0}
 }
 async function createVm(){if(up)return;const id=num("f-id",1),cpu=num("f-cpu",1),ram=num("f-ram",512),disk=num("f-disk",1024),iso=num("f-iso",0),typ=(document.getElementById("f-image")||{}).value||"none";if(typ==="linux_iso"||typ==="windows_iso"){const path=(typ==="linux_iso"?"/perc/guests/1/linux/":"/perc/guests/1/windows/")+disk;setS("Choosing "+typ+"…");const res=await api("POST",path);let t="";try{t=await res.text()}catch(e){}setS(res.ok?"Choice accepted":("Refused ("+res.status+") "+t));await loadSpare();return}let path=A+"/"+id+"/spec/"+cpu+"/"+ram+"/"+disk+"/"+iso;if(iso!==0&&typ&&typ!=="none")path+="/"+typ;setS("Creating "+id+"…");const res=await api("POST",path);if(res.ok)remember(id);setS(res.ok?("Created "+id):("Create failed ("+res.status+")"));await listVms()}

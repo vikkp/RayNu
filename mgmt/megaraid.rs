@@ -75,6 +75,9 @@ pub const PERC_IMAGE_BYTES: u64 = 8 * 1024 * 1024 * 1024;
 /// in the LD DMA page with 32 bytes of sense. USB still splits below this.
 pub const PERC_IMAGE_CHUNK_SECTORS: u32 = 8;
 pub const PERC_IMAGE_CHUNK_BYTES: u32 = PERC_IMAGE_CHUNK_SECTORS * 512;
+/// One library POST. 64 KiB, so the PERC command matches the HTTPS body.
+pub const LIBRARY_WRITE_SECTORS: u32 = 128;
+pub const LIBRARY_DMA_PAGES: u64 = 17;
 /// COM2 heartbeat. One line per 64 MiB of the 8 GiB image.
 pub const PERC_IMAGE_HEARTBEAT_SECTORS: u64 = (64 * 1024 * 1024) / 512;
 
@@ -88,6 +91,8 @@ pub const M8_PERC_HOST_OK_MARKER: &str = "RAYNU-V-M8-PERC-HOST-OK";
 static PERC_SPARE_BAR: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
 static PERC_SPARE_BYTES: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
 static PERC_SPARE_DATA: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+/// 17 frame-pool pages for one 64 KiB library WRITE(16) plus sense.
+static PERC_LIB_DATA: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
 static PERC_SPARE_FRAME: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
 static PERC_SPARE_TARGET: core::sync::atomic::AtomicU8 = core::sync::atomic::AtomicU8::new(0);
 static PERC_SPARE_GUEST_OK: core::sync::atomic::AtomicBool =
@@ -157,8 +162,14 @@ pub fn perc_image_read(off: u64, buf: &mut [u8]) -> bool {
     }
 }
 
-/// Write one 512-byte sector of the M8.8 library file.
-/// `off` is the offset within the ISO. Host and QEMU return false.
+/// Remember the 64 KiB library DMA page. Host tests leave it at zero.
+pub fn perc_library_dma_store(phys: u64) {
+    PERC_LIB_DATA.store(phys, core::sync::atomic::Ordering::Release);
+}
+
+/// Write one library chunk. `off` is the offset within the ISO.
+/// 64 KiB uses the library DMA pages. Smaller chunks use the 4 KiB IO page.
+/// Host and QEMU return false.
 pub fn perc_library_write(off: u64, buf: &[u8]) -> bool {
     #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
     {
@@ -860,10 +871,13 @@ pub fn pack_ld_write16_tail(
     if spare_off < PERC_IMAGE_BYTES || spare_off % 512 != 0 || disk_bytes % 512 != 0 {
         return None;
     }
-    if blocks != 1 && blocks != PERC_IMAGE_CHUNK_SECTORS {
+    if blocks != 1 && blocks != PERC_IMAGE_CHUNK_SECTORS && blocks != LIBRARY_WRITE_SECTORS {
         return None;
     }
     if blocks == PERC_IMAGE_CHUNK_SECTORS && lba % u64::from(PERC_IMAGE_CHUNK_SECTORS) != 0 {
+        return None;
+    }
+    if blocks == LIBRARY_WRITE_SECTORS && lba % u64::from(LIBRARY_WRITE_SECTORS) != 0 {
         return None;
     }
     let lo = spare_off / 512;
@@ -2402,7 +2416,10 @@ fn issue_ld_write16_image(
 /// Library file write. 512 bytes, or 4096 on an 8-sector boundary.
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn perc_library_write_uefi(off: u64, buf: &[u8]) -> bool {
-    if (buf.len() != 512 && buf.len() != PERC_IMAGE_CHUNK_BYTES as usize) || off % 512 != 0 {
+    let big = (LIBRARY_WRITE_SECTORS as usize) * 512;
+    if (buf.len() != 512 && buf.len() != PERC_IMAGE_CHUNK_BYTES as usize && buf.len() != big)
+        || off % 512 != 0
+    {
         return false;
     }
     let Some(place) = crate::mgmt::iso_library::held() else {
@@ -2412,7 +2429,11 @@ fn perc_library_write_uefi(off: u64, buf: &[u8]) -> bool {
         return false;
     };
     let bar = PERC_SPARE_BAR.load(core::sync::atomic::Ordering::Acquire);
-    let data = PERC_SPARE_DATA.load(core::sync::atomic::Ordering::Acquire);
+    let data = if buf.len() == big {
+        PERC_LIB_DATA.load(core::sync::atomic::Ordering::Acquire)
+    } else {
+        PERC_SPARE_DATA.load(core::sync::atomic::Ordering::Acquire)
+    };
     let frame = PERC_SPARE_FRAME.load(core::sync::atomic::Ordering::Acquire);
     let target = PERC_SPARE_TARGET.load(core::sync::atomic::Ordering::Acquire);
     let spare = PERC_SPARE_BYTES.load(core::sync::atomic::Ordering::Acquire);

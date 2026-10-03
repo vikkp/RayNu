@@ -61,7 +61,7 @@ static mut COEXIST_IFACE: MaybeUninit<Interface> = MaybeUninit::uninit();
 static mut COEXIST_SOCK_STORAGE: [SocketStorage<'static>; 1] = [SocketStorage::EMPTY; 1];
 static mut COEXIST_SOCKETS: MaybeUninit<SocketSet<'static>> = MaybeUninit::uninit();
 static mut COEXIST_TCP_HANDLE: MaybeUninit<SocketHandle> = MaybeUninit::uninit();
-static mut COEXIST_TCP_RX: [u8; TCP_RX_N] = [0; TCP_RX_N];
+static mut COEXIST_TCP_RX: [u8; COEXIST_TCP_RX_N] = [0; COEXIST_TCP_RX_N];
 static mut COEXIST_TCP_TX: [u8; TCP_TX_N] = [0; TCP_TX_N];
 static mut COEXIST_LISTEN: Tls12Listen = Tls12Listen::empty();
 static mut COEXIST_LISTEN_READY: bool = false;
@@ -92,6 +92,9 @@ static mut COEXIST_POWEROFF_EMPTY_AT_MS: i64 = 0;
 static mut LAST_SPA_TICK_TSC: u64 = 0;
 
 const TCP_RX_N: usize = 8192;
+/// Standing SPA window. One 64 KiB library post fits here. The QEMU listen
+/// path keeps [`TCP_RX_N`] so the management arena stays 80 KiB.
+const COEXIST_TCP_RX_N: usize = 96 * 1024;
 const TCP_TX_N: usize = COEXIST_HTTP_OUT_N;
 const RX_ACC_N: usize = COEXIST_RX_ACC_N;
 const HTTP_OUT_N: usize = COEXIST_HTTP_OUT_N;

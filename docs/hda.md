@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-8-library-64k |
-| Summary | **4 KiB posts are too slow.** `51f1f168` is copying, far behind iDRAC. Close that tab. The next EFI posts 64 KiB and writes 4 KiB PERC commands. Do not flash until CI is green. Scores held. Months **0.0 held**. Overall **99 held**. |
+| Commit | m8-8-library-resume |
+| Summary | **64 KiB copy stopped before stored.** Next EFI shows percent, resumes, one 64 KiB PERC write per post, and keeps the result on screen. Do not flash until CI is green. Do not use SPA power off. Scores held. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
-| Gates touched | 64 KiB library posts. No doorbell. No format of UBUNTU0. Not a COM2 close. |
+| Gates touched | Library resume and percent. No doorbell. No format of UBUNTU0. Not a COM2 close. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 60 held, perc 78 held, unmodified 25 held, overall LOI 73 held, months A 0.25 held, months B 1.5 held. |
 
 
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-03 | m8-8-library-resume | 0.0 | 99 | **`42148ca9` copy stopped before `library CD stored`.** Next EFI has a percent bar, resume, one 64 KiB PERC write, and leaves the result on the page. SPA power off stays an RSOD. Not flashed. Scores held. months 0.0 held; overall 99 held |
 | 2026-09-30 | m8-8-library-64k | 0.0 | 99 | **4 KiB posts are too slow on `51f1f168`.** Close that upload. Next EFI uses 64 KiB posts and 4 KiB PERC writes. Not flashed. Scores held. months 0.0 held; overall 99 held |
 | 2026-09-30 | m8-8-library-one-socket | 0.0 | 99 | **Upload stopped on `27357846`.** First chunks of the 2.72 GiB Ubuntu ISO were accepted. No `library CD stored` line. The page poll and the VM list hid the counter. Next EFI keeps one request and prints every 64 MiB. Do not flash yet. Scores held. months 0.0 held; overall 99 held |
 | 2026-09-30 | m8-8-library-spa-strings | 0.0 | 99 | **CI string fix, not lived.** `5a205364` dropped `Host serial log` and the M8.4 test still forbade a file input. Both restored. `/blob` stays off the page. Do not flash. Scores held. months 0.0 held; overall 99 held |

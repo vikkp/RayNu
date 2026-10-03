@@ -58,7 +58,14 @@ pub fn library_floor(spare_bytes: u64, library_bytes: u64) -> Option<u64> {
     if end % 512 != 0 {
         return None;
     }
-    end.checked_sub(library_bytes)
+    let raw = end.checked_sub(library_bytes)?;
+    if library_bytes == 0 {
+        return Some(raw);
+    }
+    // One 64 KiB PERC write needs a 64 KiB-aligned start. Aligning down
+    // keeps the file below the probe sector.
+    let align = LIBRARY_HTTP_CHUNK as u64;
+    Some(raw & !(align - 1))
 }
 
 /// Place `iso_bytes` against the high end, growing downward.
@@ -283,28 +290,39 @@ pub fn read_at(off: u64, buf: &mut [u8]) -> bool {
 
 /// Accept one aligned chunk of the operator's ISO.
 ///
-/// `off == 0` starts the library. Chunks must arrive in order. The last
-/// chunk arms the CD boot and leaves the Alpine answerer quiet. The bytes
-/// are not patched. On iron each sector is a PERC write. Host tests accept
-/// the plan without a controller.
+/// `off == 0` starts the library, unless the same file is already held.
+/// A repeat of a prefix returns the bytes already stored so the page can
+/// continue. Chunks after that must arrive in order. The last chunk arms
+/// the CD. The bytes are not patched. Host tests accept the plan without
+/// a controller.
 pub fn accept_upload(off: u64, total: u64, body: &[u8]) -> Result<(), &'static str> {
     if total == 0 || total % 512 != 0 || body.is_empty() || body.len() % 512 != 0 {
-        return Err("align");
+        return fail_upload(total, "align");
     }
     if body.len() > LIBRARY_HTTP_CHUNK {
-        return Err("chunk");
+        return fail_upload(total, "chunk");
     }
     if off == 0 {
+        if let Some(place) = held() {
+            let got = RECEIVED.load(Ordering::Acquire);
+            if place.bytes == total && got > 0 && got < total {
+                return Ok(());
+            }
+        }
         clear_held();
         RECEIVED.store(0, Ordering::Release);
         let spare = spare_for_upload();
         let occupied = crate::mgmt::guest_catalog::occupied_guest_end();
         if begin_library(spare, occupied, total).is_none() {
-            return Err("place");
+            return fail_upload(total, "place");
         }
     }
-    if off != RECEIVED.load(Ordering::Acquire) {
-        return Err("order");
+    let got = RECEIVED.load(Ordering::Acquire);
+    if off.saturating_add(body.len() as u64) <= got {
+        return Ok(());
+    }
+    if off != got {
+        return fail_upload(total, "order");
     }
     let Some(place) = held() else {
         return Err("empty");
@@ -320,7 +338,7 @@ pub fn accept_upload(off: u64, total: u64, body: &[u8]) -> Result<(), &'static s
         };
         let n = upload_write_len(lba, body.len() - done);
         if !write_upload_bytes(at, &body[done..done + n]) {
-            return Err("write");
+            return fail_upload(total, "write");
         }
         done += n;
     }
@@ -359,14 +377,23 @@ fn spare_for_upload() -> u64 {
     }
 }
 
-/// 4096 when the spare LBA is 8-sector aligned and that many bytes remain.
+/// 64 KiB when the spare LBA is aligned for one write, else 4 KiB, else 512.
 fn upload_write_len(lba: u64, remain: usize) -> usize {
+    let big = LIBRARY_HTTP_CHUNK;
+    if remain >= big && lba % (big as u64 / 512) == 0 {
+        return big;
+    }
     let chunk = crate::mgmt::megaraid::PERC_IMAGE_CHUNK_BYTES as usize;
     if remain >= chunk && lba % u64::from(crate::mgmt::megaraid::PERC_IMAGE_CHUNK_SECTORS) == 0 {
         chunk
     } else {
         512
     }
+}
+
+fn fail_upload(total: u64, reason: &'static str) -> Result<(), &'static str> {
+    note_library_stopped(RECEIVED.load(Ordering::Acquire), total);
+    Err(reason)
 }
 
 fn write_upload_bytes(off: u64, bytes: &[u8]) -> bool {
@@ -378,6 +405,27 @@ fn write_upload_bytes(off: u64, bytes: &[u8]) -> bool {
     {
         let _ = (off, bytes);
         true
+    }
+}
+
+fn note_library_stopped(got: u64, total: u64) {
+    #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+    {
+        let mut line = [0u8; 80];
+        let prefix = b"boot: M8.8 library stopped ";
+        line[..prefix.len()].copy_from_slice(prefix);
+        let mut n = prefix.len();
+        n += write_u64_dec(&mut line[n..], got);
+        line[n] = b'/';
+        n += 1;
+        n += write_u64_dec(&mut line[n..], total);
+        if let Ok(text) = core::str::from_utf8(&line[..n]) {
+            crate::boot::serial::write_line_nowait(text);
+        }
+    }
+    #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+    {
+        let _ = (got, total);
     }
 }
 
@@ -569,7 +617,9 @@ mod iso_library_test {
         let iso = 2u64 * 1024 * 1024 * 1024;
         let lib = place_iso_library(spare, occupied, iso).unwrap();
         assert_eq!(lib.bytes, iso);
-        assert_eq!(lib.spare_off + lib.bytes, spare - PROBE_RESERVE);
+        assert!(lib.spare_off + lib.bytes <= spare - PROBE_RESERVE);
+        assert_eq!(lib.spare_off % LIBRARY_HTTP_CHUNK as u64, 0);
+        assert!(spare - PROBE_RESERVE - (lib.spare_off + lib.bytes) < LIBRARY_HTTP_CHUNK as u64);
         assert!(lib.spare_off >= occupied);
         assert!(place_guest_after_occupied(spare, window, true, occupied, iso, ten).is_some());
         let huge = lib.spare_off - occupied;
@@ -635,6 +685,11 @@ mod iso_library_test {
         assert!(take_exchange_quiet());
         assert!(!take_exchange_quiet());
         assert_eq!(received_bytes(), 512);
+        let again = library_http_response(&raw, &mut out).unwrap();
+        let again_text = core::str::from_utf8(&out[..again]).unwrap_or("");
+        assert!(again_text.contains("\"received\":512"), "{again_text}");
+        assert_eq!(received_bytes(), 512);
+        let _ = take_exchange_quiet();
         assert!(!library_progress_due(0, 4096, 2_918_598_656));
         assert!(library_progress_due(64 * 1024 * 1024 - 4096, 64 * 1024 * 1024, 2_918_598_656));
         let html = include_str!("../assets/webui.html");
@@ -642,6 +697,9 @@ mod iso_library_test {
         assert!(html.contains("if(up)return"));
         assert!(html.contains("ISO dropped"));
         assert!(html.contains("n=65536"));
+        assert!(html.contains("iso-fill"));
+        assert!(html.contains("ISO \"+pct+\"%"));
+        assert!(html.contains("if(!hold)setS"));
         assert_eq!(LIBRARY_HTTP_CHUNK, 65536);
         assert!(!answerer_quiet());
         raw.clear();
