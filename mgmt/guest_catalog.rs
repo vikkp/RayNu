@@ -117,6 +117,74 @@ pub fn catalog_numbers(spare_bytes: u64, window_bytes: u64, installed: bool) -> 
     }
 }
 
+/// Guests policy with tails already on the spare and a library file.
+///
+/// `occupied_end == window_bytes` and `library_bytes == 0` matches [`decide`].
+/// A later disk starts at `occupied_end`. The library, when held, shortens
+/// the free tail from the high end.
+pub fn decide_with_layout(
+    spare_bytes: u64,
+    window_bytes: u64,
+    installed: bool,
+    occupied_end: u64,
+    library_bytes: u64,
+    action: CatalogAction,
+) -> CatalogDecision {
+    if occupied_end == window_bytes && library_bytes == 0 {
+        return decide(spare_bytes, window_bytes, installed, action);
+    }
+    match action {
+        CatalogAction::Start => {
+            if installed {
+                CatalogDecision::BootInstalled
+            } else {
+                CatalogDecision::Refuse(CatalogRefuse::NoGuest)
+            }
+        }
+        CatalogAction::Windows { .. } => CatalogDecision::Refuse(CatalogRefuse::WindowsLater),
+        CatalogAction::Linux { disk_mib } => {
+            let Some(disk_bytes) = mib_to_bytes(disk_mib) else {
+                return CatalogDecision::Refuse(CatalogRefuse::BadDisk);
+            };
+            let window_cap = if spare_bytes == 0 {
+                window_bytes
+            } else {
+                window_bytes.min(spare_bytes)
+            };
+            if disk_bytes <= window_cap {
+                return CatalogDecision::InstallLinux { disk_bytes };
+            }
+            if let Some(place) = crate::mgmt::iso_library::place_guest_after_occupied(
+                spare_bytes,
+                window_bytes,
+                installed,
+                occupied_end,
+                library_bytes,
+                disk_bytes,
+            ) {
+                return CatalogDecision::PlaceTail {
+                    spare_off: place.spare_off,
+                    disk_bytes: place.disk_bytes,
+                };
+            }
+            let limit = crate::mgmt::iso_library::library_floor(spare_bytes, library_bytes)
+                .unwrap_or(0);
+            let placeable = limit.saturating_sub(occupied_end);
+            if spare_bytes > 0 && installed {
+                CatalogDecision::Refuse(CatalogRefuse::LargerThanTail {
+                    disk_bytes,
+                    placeable_bytes: placeable,
+                })
+            } else {
+                CatalogDecision::Refuse(CatalogRefuse::LargerThanWindow {
+                    disk_bytes,
+                    placeable_bytes: window_cap,
+                })
+            }
+        }
+    }
+}
+
 /// Guests policy. Does not touch the choice latch and does not format.
 pub fn decide(
     spare_bytes: u64,
@@ -304,7 +372,21 @@ fn parse_mib(s: &str) -> Option<u32> {
 fn apply_action(action: CatalogAction) -> GuestCatalogHttp {
     let installed = crate::mgmt::megaraid::perc_image_boot_latched();
     let spare = crate::mgmt::megaraid::perc_spare_bytes();
-    match decide(spare, SLICE1_WINDOW_BYTES, installed, action) {
+    let tail = if let Some((_, bytes)) = crate::mgmt::perc_boot_choice::armed_tail() {
+        bytes
+    } else {
+        known_tail_bytes(spare, installed)
+    };
+    let library = crate::mgmt::iso_library::held_bytes();
+    let occupied = SLICE1_WINDOW_BYTES.saturating_add(tail);
+    match decide_with_layout(
+        spare,
+        SLICE1_WINDOW_BYTES,
+        installed,
+        occupied,
+        library,
+        action,
+    ) {
         CatalogDecision::BootInstalled => store_choice(CHOICE_BOOT, installed),
         CatalogDecision::InstallLinux { .. } => store_choice(CHOICE_REINSTALL, installed),
         CatalogDecision::PlaceTail {
@@ -423,6 +505,18 @@ fn ready(status: u16, body: &[u8], audit_choice: Option<u8>) -> GuestCatalogHttp
     }
 }
 
+/// Window plus any free-tail disk already known. The library starts after this.
+pub fn occupied_guest_end() -> u64 {
+    let installed = crate::mgmt::megaraid::perc_image_boot_latched();
+    let spare = crate::mgmt::megaraid::perc_spare_bytes();
+    let tail = if let Some((_, bytes)) = crate::mgmt::perc_boot_choice::armed_tail() {
+        bytes
+    } else {
+        discover_tail_bytes(spare, installed)
+    };
+    SLICE1_WINDOW_BYTES.saturating_add(tail)
+}
+
 fn fill_list_json(buf: &mut [u8]) -> usize {
     let installed = crate::mgmt::megaraid::perc_image_boot_latched();
     let spare = crate::mgmt::megaraid::perc_spare_bytes();
@@ -509,8 +603,13 @@ fn write_list_json(
     tail_bytes: u64,
 ) -> usize {
     let stopped = crate::mgmt::perc_boot_choice::guest_stopped();
-    let used = numbers.used_bytes.saturating_add(tail_bytes);
-    let free = numbers.spare_bytes.saturating_sub(used);
+    let library = crate::mgmt::iso_library::held_bytes();
+    let used = numbers
+        .used_bytes
+        .saturating_add(tail_bytes)
+        .saturating_add(library);
+    let reserve = if library > 0 { 512 } else { 0 };
+    let free = numbers.spare_bytes.saturating_sub(used).saturating_sub(reserve);
     let placeable = if numbers.spare_bytes > 0 && installed {
         free
     } else {
@@ -852,6 +951,40 @@ mod guest_catalog_test {
             CatalogDecision::Refuse(CatalogRefuse::LargerThanTail { .. })
         ));
         assert!(prop_guest_catalog());
+    }
+
+    #[test]
+    fn m88_next_disk_starts_after_the_existing_tail() {
+        let spare = IRON_LD1_BYTES;
+        let window = SLICE1_WINDOW_BYTES;
+        let ten = 10_240u64 * 1024 * 1024;
+        let occupied = window + ten;
+        assert_eq!(
+            decide_with_layout(
+                spare,
+                window,
+                true,
+                occupied,
+                0,
+                CatalogAction::Linux { disk_mib: 20480 }
+            ),
+            CatalogDecision::PlaceTail {
+                spare_off: occupied,
+                disk_bytes: 20_480u64 * 1024 * 1024
+            }
+        );
+        let iso = 2u64 * 1024 * 1024 * 1024;
+        assert!(matches!(
+            decide_with_layout(
+                spare,
+                window,
+                true,
+                crate::mgmt::iso_library::library_floor(spare, iso).unwrap(),
+                iso,
+                CatalogAction::Linux { disk_mib: 10240 }
+            ),
+            CatalogDecision::Refuse(CatalogRefuse::LargerThanTail { .. })
+        ));
     }
 
     fn exchange(raw: &str) -> (u16, String) {

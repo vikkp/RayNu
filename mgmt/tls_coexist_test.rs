@@ -167,7 +167,7 @@ fn serve_http(raw: &[u8], out: &mut [u8]) -> usize {
 
 #[test]
 fn plaintext_listen_matches_coexist_buffers() {
-    assert_eq!(COEXIST_RX_ACC_N, 8192);
+    assert_eq!(COEXIST_RX_ACC_N, 96 * 1024);
     assert_eq!(COEXIST_HTTP_OUT_N, crate::mgmt::http::HTTP_RESPONSE_CAP);
     assert_eq!(COEXIST_HTTP_OUT_N, 20480);
     let mut s = PlaintextListen::new();

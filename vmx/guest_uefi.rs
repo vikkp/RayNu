@@ -5223,7 +5223,7 @@ pub unsafe fn attach_persist_keep_on_vmx_skip(alloc: &mut FrameAllocator) {
         if !keep {
             return;
         }
-        let _ = crate::mgmt::iso_install::present_product_iso_if_retained();
+        let _ = crate::mgmt::iso_install::present_boot_iso();
         attach_product_iso_install_disk(alloc, true);
         if crate::devices::guest_virtio_blk::disk_bytes() != 0 {
             return;
@@ -5248,7 +5248,7 @@ pub unsafe fn attach_persist_keep_on_vmx_skip(alloc: &mut FrameAllocator) {
     }
     // Guest-UEFI present happens on VMLAUNCH. Skip-path still needs the
     // product ISO window armed so virtio-blk attach is allowed.
-    let _ = crate::mgmt::iso_install::present_product_iso_if_retained();
+    let _ = crate::mgmt::iso_install::present_boot_iso();
     attach_product_iso_install_disk(alloc, true);
     if crate::devices::guest_virtio_blk::disk_bytes() != 0 {
         return;
@@ -5398,7 +5398,7 @@ unsafe fn launch_uefi(
         // Arm the product ISO window *before* disk attach. Iron COM2: first
         // attach was a no-op (window idle), then report-RAM ate the 512 MiB
         // pool and the late attach got 1 MiB.
-        let _ = crate::mgmt::iso_install::present_product_iso_if_retained();
+        let _ = crate::mgmt::iso_install::present_boot_iso();
         // Reserve the install disk first (before scratch *and* report-RAM).
         // Do not invent HPA on GPA miss (ADR-004).
         attach_product_iso_install_disk(alloc, false);
@@ -5501,7 +5501,7 @@ unsafe fn launch_uefi(
         }
         // Stage 46: present the retained product ISO before the HPET 2 MiB
         // leaf so IOAPIC can be a 4 KiB trap instead of sink zeros.
-        let _ = crate::mgmt::iso_install::present_product_iso_if_retained();
+        let _ = crate::mgmt::iso_install::present_boot_iso();
         // Present EPT leaves so early hole walks do not EPT-fault.
         // Iron 5837243: pre-scratch of 0xC0000000..0xC0E00000 plus a
         // read-walk of 0xC1000000..0xC3A00000 filled pool=32; cap at
@@ -5619,7 +5619,7 @@ unsafe fn launch_uefi(
     write_hex(guard);
     serial::write_line(" (guest-UEFI host stack guard; not ISO-INSTALL-OK)");
 
-    let _ = crate::mgmt::iso_install::present_product_iso_if_retained();
+    let _ = crate::mgmt::iso_install::present_boot_iso();
     if crate::devices::ide_cdrom::present_placeholder_if_idle() {
         serial::write_str("boot: guest-UEFI CD GuestVisible iso=");
         write_dec(crate::devices::ide_cdrom::retained_iso_id());
