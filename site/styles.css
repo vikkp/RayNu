@@ -1345,3 +1345,305 @@ figure[id] {
 .loi-locks li {
   margin: 0.4rem 0;
 }
+
+/* Roadmap after Everest. Scoped to the page. Homepage chrome stays.
+   The shared .brand color is the dark-hero ink. On this light mast it
+   becomes steel so the wordmark stays readable. */
+
+.page-roadmap .brand {
+  color: var(--steel);
+  font-size: clamp(2.4rem, 5vw, 3.8rem);
+}
+
+.page-roadmap .road-pace {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.page-roadmap .road-pace article {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(16, 24, 32, 0.12);
+  border-top: 3px solid var(--teal);
+  padding: 1rem 1rem 1.1rem;
+}
+
+.page-roadmap .road-pace article:nth-child(2) {
+  border-top-color: var(--copper);
+}
+
+.page-roadmap .road-pace article:nth-child(3) {
+  border-top-color: var(--steel);
+}
+
+.page-roadmap .road-pace__n {
+  margin: 0 0 0.35rem;
+  font-family: var(--font-brand);
+  font-weight: 800;
+  font-size: clamp(1.6rem, 2.4vw, 2.1rem);
+  letter-spacing: -0.03em;
+  color: var(--steel);
+}
+
+.page-roadmap .road-pace p:last-child {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.98rem;
+}
+
+.page-roadmap .road-note {
+  margin: 1.25rem 0 0;
+  max-width: 68ch;
+  color: var(--muted);
+}
+
+.page-roadmap .road-note--lead {
+  margin: 0 0 1.5rem;
+  color: var(--ink-soft);
+}
+
+.page-roadmap .road-ruler {
+  margin-top: 1.75rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.page-roadmap .road-ruler__head,
+.page-roadmap .road-ruler__row {
+  display: grid;
+  grid-template-columns: 9.5rem repeat(8, 1fr);
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.page-roadmap .road-ruler__head span {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: center;
+}
+
+.page-roadmap .road-ruler__name {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+}
+
+.page-roadmap .road-bar {
+  display: flex;
+  align-items: center;
+  min-height: 1.7rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  color: var(--hero-ink);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.page-roadmap .road-bar--now {
+  background: var(--copper);
+}
+
+.page-roadmap .road-bar--loi {
+  background: var(--teal);
+}
+
+.page-roadmap .road-bar--fw {
+  background: var(--steel);
+}
+
+.page-roadmap .road-bar--later {
+  background: #5c6b75;
+}
+
+.page-roadmap .road-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 1.5rem;
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.page-roadmap .road-legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.page-roadmap .road-swatch {
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.page-roadmap .road-swatch--now {
+  background: var(--copper);
+}
+
+.page-roadmap .road-swatch--loi {
+  background: var(--teal);
+}
+
+.page-roadmap .road-swatch--fw {
+  background: var(--steel);
+}
+
+.page-roadmap .road-swatch--later {
+  background: #5c6b75;
+}
+
+.page-roadmap .road-lived {
+  list-style: none;
+  margin: 1.25rem 0 0;
+  padding: 0;
+}
+
+.page-roadmap .road-lived li {
+  padding: 0.85rem 0 0.85rem 1rem;
+  border-left: 3px solid var(--teal);
+  margin: 0 0 0.65rem;
+  background: rgba(255, 255, 255, 0.45);
+  color: var(--ink-soft);
+}
+
+.page-roadmap .road-lived--open li {
+  border-left-color: var(--copper);
+}
+
+.page-roadmap .road-list {
+  list-style: none;
+  margin: 1.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0;
+}
+
+.page-roadmap .road-list li {
+  display: grid;
+  grid-template-columns: 9.5rem 1fr;
+  gap: 0.35rem 1.25rem;
+  padding: 1.15rem 0;
+  border-top: 1px solid rgba(16, 24, 32, 0.12);
+}
+
+.page-roadmap .road-list__when {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+
+.page-roadmap .road-list h3,
+.page-roadmap .road-list li > p:not(.road-list__when) {
+  grid-column: 2;
+}
+
+.page-roadmap .road-list__when {
+  margin: 0.2rem 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--copper);
+}
+
+.page-roadmap .road-list h3 {
+  margin: 0 0 0.35rem;
+  font-family: var(--font-brand);
+  font-size: 1.25rem;
+  letter-spacing: -0.02em;
+  color: var(--steel);
+}
+
+.page-roadmap .road-list p:last-child {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.page-roadmap .road-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.page-roadmap .road-split--3 {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.page-roadmap .road-card {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(16, 24, 32, 0.12);
+  padding: 1.15rem 1.2rem 1.25rem;
+}
+
+.page-roadmap .road-card__kicker {
+  margin: 0 0 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--teal);
+}
+
+.page-roadmap .road-card h3 {
+  margin: 0 0 0.45rem;
+  font-family: var(--font-brand);
+  font-size: 1.45rem;
+  color: var(--steel);
+}
+
+.page-roadmap .road-card p:last-child {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.page-roadmap .section--road-loi {
+  background: linear-gradient(180deg, rgba(15, 110, 106, 0.06), transparent 70%);
+}
+
+.page-roadmap .section--road-later {
+  background: linear-gradient(180deg, rgba(26, 58, 74, 0.06), transparent 72%);
+}
+
+.page-roadmap .road-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 1.5rem;
+  margin-top: 1.25rem;
+  font-family: var(--font-brand);
+  font-weight: 700;
+}
+
+@media (max-width: 900px) {
+  .page-roadmap .road-pace,
+  .page-roadmap .road-split,
+  .page-roadmap .road-split--3 {
+    grid-template-columns: 1fr;
+  }
+
+  .page-roadmap .road-ruler {
+    display: none;
+  }
+
+  .page-roadmap .road-list li {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+
+  .page-roadmap .road-list__when,
+  .page-roadmap .road-list h3,
+  .page-roadmap .road-list li > p:not(.road-list__when) {
+    grid-column: 1;
+    grid-row: auto;
+  }
+}
