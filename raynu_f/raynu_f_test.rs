@@ -716,6 +716,20 @@ fn raynu_f_memory_events_timer_services() {
     assert_eq!(dispatch(ServiceId::FreePool, ServiceArgs::regs(pbuf, 0, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_SUCCESS);
     // Header magic was cleared: second free is rejected.
     assert_eq!(dispatch(ServiceId::FreePool, ServiceArgs::regs(pbuf, 0, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_INVALID_PARAMETER);
+    // Ubuntu BOOTX64 on `5cb54836` passed pool type 0. That call gets memory.
+    let d = dispatch(
+        ServiceId::AllocatePool,
+        ServiceArgs::regs(EFI_RESERVED_MEMORY_TYPE as u64, 0x1a2, p_out, 0),
+        &guest,
+        &mut sink,
+        &mut st,
+        &clk,
+        SLAB,
+    );
+    assert_eq!(d.status, EFI_SUCCESS);
+    let preserved = guest.u64_at(p_out);
+    assert_ne!(preserved, 0);
+    assert_eq!(dispatch(ServiceId::FreePool, ServiceArgs::regs(preserved, 0, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_SUCCESS);
 
     // --- GetMemoryMap / ExitBootServices ----------------------------------
     // 5th arg (DescriptorVersion*) lives on the fake stack at [rsp+0x28].
