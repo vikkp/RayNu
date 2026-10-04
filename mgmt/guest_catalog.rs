@@ -463,6 +463,7 @@ fn store_tail(
 ) -> GuestCatalogHttp {
     match apply_tail_choice(installed, spare_bytes, spare_off, disk_bytes) {
         PercChoiceApply::Accepted => {
+            let _ = crate::mgmt::iso_library::choose_held_library();
             crate::boot::raynu_f_flag::request_from_spa();
             let mut body = [0u8; 576];
             let n = fill_tail_ok(&mut body, spare_off, disk_bytes);
@@ -477,6 +478,7 @@ fn store_choice(choice: u8, installed: bool) -> GuestCatalogHttp {
     match apply_spa_choice(installed, choice) {
         PercChoiceApply::Accepted => {
             if choice == CHOICE_REINSTALL {
+                let _ = crate::mgmt::iso_library::choose_held_library();
                 crate::boot::raynu_f_flag::request_from_spa();
             } else {
                 crate::boot::raynu_f_flag::request_installed_boot();
@@ -604,6 +606,7 @@ fn write_list_json(
 ) -> usize {
     let stopped = crate::mgmt::perc_boot_choice::guest_stopped();
     let library = crate::mgmt::iso_library::held_bytes();
+    let iso_ready = crate::mgmt::iso_library::library_complete();
     let used = numbers
         .used_bytes
         .saturating_add(tail_bytes)
@@ -683,6 +686,20 @@ fn write_list_json(
         w.s(",\"stop\":");
         w.s(if active { "true" } else { "false" });
         w.s("}");
+    }
+    if iso_ready {
+        if installed || tail_bytes > 0 {
+            w.s(",");
+        }
+        let chosen = crate::mgmt::iso_library::present_as_cd();
+        let pending = matches!(choice, PercSpaChoice::Pending) && !stopped && !chosen;
+        w.s("{\"id\":3,\"name\":\"ubuntu\",\"state\":\"");
+        w.s(if chosen { "loading" } else { "waiting" });
+        w.s("\",\"disk_mib\":");
+        w.u(library / (1024 * 1024));
+        w.s(",\"image_type\":\"ubuntu\",\"start\":");
+        w.s(if pending { "true" } else { "false" });
+        w.s(",\"stop\":false}");
     }
     w.s("]}");
     if w.fit {
@@ -861,6 +878,7 @@ mod guest_catalog_test {
         let host = catalog_numbers(0, SLICE1_WINDOW_BYTES, false);
         assert_eq!(host.placeable_bytes, SLICE1_WINDOW_BYTES);
         assert_eq!(host.free_bytes, 0);
+        crate::mgmt::iso_library::clear_library_for_test();
         let mut buf = [0u8; CATALOG_BODY_CAP];
         let ten = 10_240u64 * 1024 * 1024;
         let n = write_list_json(&mut buf, n, true, PercSpaChoice::Pending, true, ten);
@@ -890,6 +908,42 @@ mod guest_catalog_test {
         assert!(
             crate::mgmt::webui::webui_len() + 256 <= crate::mgmt::http::HTTP_RESPONSE_CAP
         );
+    }
+
+    #[test]
+    fn waiting_iso_is_a_row_until_guests_chooses_it() {
+        crate::mgmt::iso_library::clear_library_for_test();
+        clear_perc_spa_choice_for_test();
+        let sector = [0x11u8; 512];
+        assert!(crate::mgmt::iso_library::accept_upload(0, 1024, &sector).is_ok());
+        assert!(!crate::mgmt::iso_library::library_complete());
+        let numbers = catalog_numbers(IRON_LD1_BYTES, SLICE1_WINDOW_BYTES, true);
+        let ten = 10_240u64 * 1024 * 1024;
+        let mut buf = [0u8; CATALOG_BODY_CAP];
+        let n = write_list_json(&mut buf, numbers, true, PercSpaChoice::Pending, true, ten);
+        let early = core::str::from_utf8(&buf[..n]).unwrap_or("");
+        assert!(!early.contains("\"id\":3"), "{early}");
+        assert!(crate::mgmt::iso_library::accept_upload(512, 1024, &sector).is_ok());
+        assert!(crate::mgmt::iso_library::library_complete());
+        assert!(!crate::mgmt::iso_library::present_as_cd());
+        let n = write_list_json(&mut buf, numbers, true, PercSpaChoice::Pending, true, ten);
+        assert!(n > 0, "catalog caption did not fit");
+        let body = core::str::from_utf8(&buf[..n]).unwrap_or("");
+        assert!(body.contains("\"id\":1"), "{body}");
+        assert!(body.contains("\"id\":2"), "{body}");
+        assert!(body.contains("\"id\":3"), "{body}");
+        assert!(body.contains("\"state\":\"waiting\""), "{body}");
+        assert!(body.contains("\"image_type\":\"ubuntu\""), "{body}");
+        assert!(body.contains("\"start\":true"), "{body}");
+        assert!(crate::mgmt::iso_library::choose_held_library());
+        let n = write_list_json(&mut buf, numbers, true, PercSpaChoice::Pending, true, ten);
+        let chosen = core::str::from_utf8(&buf[..n]).unwrap_or("");
+        assert!(
+            chosen.contains("\"state\":\"loading\",\"disk_mib\":0,\"image_type\":\"ubuntu\",\"start\":false"),
+            "{chosen}"
+        );
+        crate::mgmt::iso_library::clear_library_for_test();
+        clear_perc_spa_choice_for_test();
     }
 
     #[test]

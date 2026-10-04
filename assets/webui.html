@@ -29,9 +29,8 @@ main{padding:.5rem 1.25rem 2rem;max-width:1080px;margin:0 auto}
 .card b{display:block;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:rgba(12,26,34,.55);margin:.15rem 0}
 .dot{width:10px;height:11px;border-radius:50%;background:var(--off)}
 .dot.ok{background:var(--ok)}
-.dot.wn{background:var(--wn);animation:p 1.1s infinite}
+.dot.wn{background:var(--wn)}
 .dot.bad{background:var(--bad)}
-@keyframes p{50%{opacity:.4}}
 #story,.empty,.note,#status{color:rgba(12,26,34,.6)}
 #story{margin:0 0 1rem}
 h2{font-family:var(--font-brand);font-size:1.25rem;font-weight:600;margin:0 0 .65rem;color:var(--sea-deep)}
@@ -110,7 +109,7 @@ input.token{min-width:12rem}
 </section>
 <section class="pg" data-pg="media">
 <h2>Install media</h2>
-<p class="empty">Typed Linux ISO for a real install. extract-boot is lab. ISO id 0 is the demo shell.</p>
+<p class="empty">extract-boot is lab.</p>
 <div class="toolbar">
 <button class="ghost" id="btn-images" data-action="images">List images</button>
 <button class="pri" id="btn-iso-attach" data-action="iso-attach">Attach CD</button>
@@ -207,12 +206,12 @@ g.forEach(function(vm){
 const row=document.createElement("div");row.className="row";
 row.innerHTML='<span class="id">'+vm.id+'</span><span><div class="meta">'+(vm.image_type||"")+" "+(vm.disk_mib||0)+" MiB</div><div class=\"st\">"+(vm.state||"")+'</div></span><span class="acts"></span>';
 const acts=row.querySelector(".acts");
-if(vm.start){const a=document.createElement("button");a.className="pri";a.textContent="Start";a.onclick=function(){guestStart(vm.id)};acts.appendChild(a)}
+if(vm.start){const a=document.createElement("button");a.className="pri";a.textContent=vm.id==3?"ISO":"Start";a.onclick=function(){guestStart(vm.id)};acts.appendChild(a)}
 if(vm.stop){const b=document.createElement("button");b.className="ghost";b.textContent="Stop";b.onclick=guestStop;acts.appendChild(b)}
 box.appendChild(row);
 });
 }
-async function guestStart(id){if(up)return;const path=id===2?"/perc/guests/2/start":"/perc/guests/1/start";setS("Starting "+id+"…");const res=await api("POST",path);setS(res.ok?("Booting guest "+id):("Start refused ("+res.status+")"));loadSpare()}
+async function guestStart(id){if(up)return;const path=id==3?"/perc/guests/1/linux/"+num("f-disk",10240):id===2?"/perc/guests/2/start":"/perc/guests/1/start";setS("Starting "+id+"…");const res=await api("POST",path);setS(res.ok?("Booting guest "+id):("Start refused ("+res.status+")"));loadSpare()}
 async function guestStop(){if(up)return;setS("Stopping guest…");const res=await api("POST","/perc/guests/stop");setS(res.ok?"Guest stopped":"Stop refused ("+res.status+")");loadSpare()}
 async function loadSpare(){
 if(up)return;let r;try{r=await api("GET","/perc/guests")}catch(e){return}

@@ -39,35 +39,59 @@ pub struct ElToritoImage {
 /// - Does not mutate `iso`
 /// - Rejects a catalog that is not 0x55AA-keyed
 pub fn parse_el_torito(iso: &[u8]) -> Result<ElToritoImage, ElToritoError> {
-    let boot_lba = find_boot_record_lba(iso)?;
-    let br = sector(iso, boot_lba)?;
-    if br[0] != 0 || &br[1..6] != b"CD001" {
-        return Err(ElToritoError::NoBootRecord);
-    }
-    if !id_starts_with(&br[7..39], b"EL TORITO SPECIFICATION") {
-        return Err(ElToritoError::NoBootRecord);
-    }
-    let catalog_lba = u32::from_le_bytes([br[71], br[72], br[73], br[74]]);
-    if catalog_lba == 0 {
-        return Err(ElToritoError::BadCatalog);
-    }
-    let cat = sector(iso, catalog_lba)?;
-    parse_catalog(cat, catalog_lba)
+    parse_el_torito_read(|lba, buf| copy_iso_sector(iso, lba, buf))
 }
 
-fn find_boot_record_lba(iso: &[u8]) -> Result<u32, ElToritoError> {
+/// Parse El Torito by reading one 2048-byte sector at a time.
+///
+/// The library ISO lives on the spare. RayNu-F does not copy it into RAM.
+/// `read_sector` writes `ISO_SECTOR` bytes and returns false when the sector
+/// is outside the file.
+pub fn parse_el_torito_read<F>(mut read_sector: F) -> Result<ElToritoImage, ElToritoError>
+where
+    F: FnMut(u32, &mut [u8]) -> bool,
+{
+    let mut sec = [0u8; ISO_SECTOR];
+    let mut boot_lba = None;
     for s in VD_START_SECTOR..VD_START_SECTOR + VD_SCAN_SECTORS {
-        let Some(sec) = sector(iso, s as u32).ok() else {
+        if !read_sector(s as u32, &mut sec) {
             break;
-        };
+        }
         if sec[0] == 0xFF {
             break;
         }
         if sec[0] == 0 && &sec[1..6] == b"CD001" {
-            return Ok(s as u32);
+            boot_lba = Some(s as u32);
+            break;
         }
     }
-    Err(ElToritoError::NoBootRecord)
+    let Some(boot_lba) = boot_lba else {
+        return Err(ElToritoError::NoBootRecord);
+    };
+    if !id_starts_with(&sec[7..39], b"EL TORITO SPECIFICATION") {
+        return Err(ElToritoError::NoBootRecord);
+    }
+    let catalog_lba = u32::from_le_bytes([sec[71], sec[72], sec[73], sec[74]]);
+    if catalog_lba == 0 {
+        return Err(ElToritoError::BadCatalog);
+    }
+    if !read_sector(catalog_lba, &mut sec) {
+        return Err(ElToritoError::Truncated);
+    }
+    parse_catalog(&sec, catalog_lba)
+}
+
+fn copy_iso_sector(iso: &[u8], lba: u32, buf: &mut [u8]) -> bool {
+    if buf.len() < ISO_SECTOR {
+        return false;
+    }
+    let start = (lba as usize).saturating_mul(ISO_SECTOR);
+    let end = start.saturating_add(ISO_SECTOR);
+    if end > iso.len() {
+        return false;
+    }
+    buf[..ISO_SECTOR].copy_from_slice(&iso[start..end]);
+    true
 }
 
 fn parse_catalog(cat: &[u8], catalog_lba: u32) -> Result<ElToritoImage, ElToritoError> {
@@ -127,15 +151,6 @@ fn parse_catalog(cat: &[u8], catalog_lba: u32) -> Result<ElToritoImage, ElTorito
         sector_count,
         efi,
     })
-}
-
-fn sector(iso: &[u8], lba: u32) -> Result<&[u8], ElToritoError> {
-    let start = (lba as usize).saturating_mul(ISO_SECTOR);
-    let end = start.saturating_add(ISO_SECTOR);
-    if end > iso.len() {
-        return Err(ElToritoError::Truncated);
-    }
-    Ok(&iso[start..end])
 }
 
 fn id_starts_with(field: &[u8], prefix: &[u8]) -> bool {

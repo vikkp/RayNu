@@ -7,8 +7,9 @@
 //! M8.8.1 places the next guest disk after disks already on the spare, and
 //! places the ISO at the high end, below the last-LBA mailbox probe.
 //! M8.8.2 accepts aligned chunks into that range and does not patch them.
-//! M8.8.3 presents the file as a CD and keeps the Alpine answerer quiet.
-//! M8.8.4 deletes the library file only after the installed disk has booted.
+//! M8.8.3 presents the file as a CD after Guests chooses it. Adopt leaves
+//! it waiting. Start of an Alpine disk does not attach it.
+//! M8.8.4 deletes the library file only from the Guests Clear ISO button.
 //!
 //! The firmware chunk writer and the CD device are the iron half. This
 //! module is the placement and the policy. A failed install keeps the file.
@@ -216,7 +217,7 @@ const ISO_PVD_OFF: u64 = 32768;
 /// Host and QEMU have no spare read, so this stays false there.
 pub fn adopt_stored_ubuntu(spare_bytes: u64, occupied_end: u64) -> bool {
     if held().is_some() {
-        return present_as_cd();
+        return library_complete();
     }
     if begin_library(spare_bytes, occupied_end, STORED_UBUNTU_BYTES).is_none() {
         return false;
@@ -229,14 +230,28 @@ pub fn adopt_stored_ubuntu(spare_bytes: u64, occupied_end: u64) -> bool {
         return false;
     }
     RECEIVED.store(STORED_UBUNTU_BYTES, Ordering::Release);
-    arm_cd_boot();
     #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
     {
         crate::boot::serial::write_line_nowait(
-            "boot: M8.8 library CD kept (ubuntu-26.04-live-server-amd64.iso; bytes unchanged)",
+            "boot: M8.8 library ISO waiting (ubuntu-26.04-live-server-amd64.iso; bytes unchanged)",
         );
     }
     true
+}
+
+/// The stored file is complete. A partial upload is not a boot CD.
+pub fn library_complete() -> bool {
+    let n = held_bytes();
+    n > 0 && received_bytes() >= n
+}
+
+/// Guests chose this file. `vdb` and the RayNu-F CD are this file.
+/// A partial upload stays waiting. Start of an Alpine disk does not call this.
+pub fn choose_held_library() -> bool {
+    if !library_complete() {
+        return false;
+    }
+    arm_cd_boot()
 }
 
 /// M8.8.3. The next guest boot uses the library file as a CD.
@@ -245,7 +260,15 @@ pub fn arm_cd_boot() -> bool {
     if held().is_none() {
         return false;
     }
-    CD_BOOT.store(true, Ordering::Release);
+    let first = !CD_BOOT.swap(true, Ordering::AcqRel);
+    if first {
+        #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+        {
+            crate::boot::serial::write_line_nowait(
+                "boot: M8.8 library CD chosen (ubuntu-26.04-live-server-amd64.iso; bytes unchanged)",
+            );
+        }
+    }
     true
 }
 
@@ -346,13 +369,41 @@ pub fn read_at(off: u64, buf: &mut [u8]) -> bool {
     true
 }
 
+/// Read `buf` from the stored file. The offset and length need not be
+/// 512-byte aligned. Host and QEMU have no spare, so this returns false there.
+pub fn read_bytes(off: u64, buf: &mut [u8]) -> bool {
+    if buf.is_empty() || held().is_none() {
+        return false;
+    }
+    let Some(end) = off.checked_add(buf.len() as u64) else {
+        return false;
+    };
+    if end > held_bytes() {
+        return false;
+    }
+    let mut done = 0usize;
+    while done < buf.len() {
+        let at = off + done as u64;
+        let aligned = at & !511;
+        let skip = (at - aligned) as usize;
+        let mut sector = [0u8; 512];
+        if !read_at(aligned, &mut sector) {
+            return false;
+        }
+        let n = (512 - skip).min(buf.len() - done);
+        buf[done..done + n].copy_from_slice(&sector[skip..skip + n]);
+        done += n;
+    }
+    true
+}
+
 /// Accept one aligned chunk of the operator's ISO.
 ///
 /// `off == 0` starts the library, unless the same file is already held.
 /// A repeat of a prefix returns the bytes already stored so the page can
-/// continue. Chunks after that must arrive in order. The last chunk arms
-/// the CD. The bytes are not patched. Host tests accept the plan without
-/// a controller.
+/// continue. Chunks after that must arrive in order. The last chunk leaves
+/// the file waiting. Guests chooses it before it becomes a CD. The bytes
+/// are not patched. Host tests accept the plan without a controller.
 pub fn accept_upload(off: u64, total: u64, body: &[u8]) -> Result<(), &'static str> {
     if total == 0 || total % 512 != 0 || body.is_empty() || body.len() % 512 != 0 {
         return fail_upload(total, "align");
@@ -406,7 +457,6 @@ pub fn accept_upload(off: u64, total: u64, body: &[u8]) -> Result<(), &'static s
         note_library_progress(next, total);
     }
     if next == total {
-        let _ = arm_cd_boot();
         note_library_stored();
     }
     Ok(())
@@ -755,6 +805,9 @@ mod iso_library_test {
         assert!(take_exchange_quiet());
         assert!(!take_exchange_quiet());
         assert_eq!(received_bytes(), 512);
+        assert!(!library_complete());
+        assert!(!choose_held_library());
+        assert!(!present_as_cd());
         let again = library_http_response(&raw, &mut out).unwrap();
         let again_text = core::str::from_utf8(&out[..again]).unwrap_or("");
         assert!(again_text.contains("\"received\":512"), "{again_text}");
@@ -780,9 +833,13 @@ mod iso_library_test {
         raw.extend_from_slice(&sector);
         let n = library_http_response(&raw, &mut out).unwrap();
         let text = core::str::from_utf8(&out[..n]).unwrap_or("");
-        assert!(text.contains("\"cd\":true"), "{text}");
-        assert!(answerer_quiet());
+        assert!(text.contains("\"cd\":false"), "{text}");
+        assert!(!answerer_quiet());
+        assert!(!present_as_cd());
+        assert!(library_complete());
+        assert!(choose_held_library());
         assert!(present_as_cd());
+        assert!(html.contains("id==3"));
         let mut got = [0u8; 512];
         assert!(!read_at(0, &mut got));
         raw.clear();
