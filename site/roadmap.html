@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RayNu-V — Roadmap after Everest</title>
+    <meta
+      name="description"
+      content="Pace reading after Mount Everest closed on 11 September 2026. The ISO on the spare, the letter of intent, RayNu-F Generation 1, then hot-add and the cluster sketch."
+    />
+    <meta property="og:title" content="RayNu-V · Roadmap after Everest" />
+    <meta
+      property="og:description"
+      content="Twenty-three days of lived iron set the pace. October is the Ubuntu ISO. LOI Bar A is this month, Bar B is December. Generation 1 runs through 2027. Hot-add is the 2028 sketch."
+    />
+    <meta property="og:type" content="website" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="assets/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="page-hda page-roadmap">
+    <nav class="site-nav site-nav--solid" aria-label="Site">
+      <a class="site-nav__brand" href="index.html">RayNu-V</a>
+      <div class="site-nav__links">
+        <a href="index.html#status" data-hide-sm>Status</a>
+        <a href="index.html#console" data-hide-sm>Console</a>
+        <a href="loi.html">LOI</a>
+        <a href="roadmap.html" aria-current="page">Roadmap</a>
+        <a href="hda.html">Everest</a>
+        <a href="paper.html">Paper</a>
+        <a href="ciospeak.html">CIO View</a>
+        <a href="https://github.com/vikkp/RayNu" data-hide-sm>GitHub</a>
+      </div>
+    </nav>
+
+    <header class="hda-mast">
+      <div class="hda-mast__inner">
+        <p class="hda-mast__nav">
+          <a href="index.html">RayNu-V</a>
+          <span aria-hidden="true">·</span>
+          <span>Roadmap after the summit</span>
+        </p>
+        <p class="brand reveal">RayNu-V</p>
+        <p class="hda-mast__kicker reveal">4 October 2026 · pace from iron, not from the plan</p>
+        <h1 class="hda-mast__title reveal reveal--delay-1">
+          After Everest, in the order the iron will bear
+        </h1>
+        <p class="hda-mast__lede reveal reveal--delay-2">
+          The loop closed on a real PowerEdge on 11 September. The twenty-three
+          days since then put Guests on the PERC spare, logged in from an 8 GiB
+          window and a 10 GiB tail, and stored an unmodified Ubuntu ISO. They
+          did not boot that ISO, and they did not retire one line of the Alpine
+          patcher. The months below are that pace.
+        </p>
+      </div>
+    </header>
+
+    <main>
+      <section class="section section--road-pace" id="pace">
+        <div class="section__inner">
+          <p class="milestone-kicker">How the dates were set</p>
+          <h2 class="section__title">One lived operator slice in a few boots. One firmware phase is a quarter.</h2>
+          <div class="road-pace">
+            <article>
+              <p class="road-pace__n">23 days</p>
+              <p>11 September to 4 October. PERC mailbox, both SPA paths, two installed disks, the Ubuntu file on the spare.</p>
+            </article>
+            <article>
+              <p class="road-pace__n">0.25 mo</p>
+              <p>Bar A, dedicated-box LOI. The tracker ETA is October 2026. Auth stays parked. The keyboard lived once.</p>
+            </article>
+            <article>
+              <p class="road-pace__n">1.5 mo</p>
+              <p>Bar B, RAID-fleet LOI. Held at December 2026. The guest disk is still a slice of the spare.</p>
+            </article>
+            <article>
+              <p class="road-pace__n">25%</p>
+              <p>Unmodified media. Generation 1 phases 1–5 have not started. A stored ISO is bytes, not a boot.</p>
+            </article>
+          </div>
+          <p class="road-note">
+            A COM2 marker moves a date. A design note does not. Host tests and nested QEMU do not. HDA stays 99%. GitHub Latest stays the Everest close.
+          </p>
+        </div>
+      </section>
+
+      <section class="section" id="ruler" aria-labelledby="ruler-title">
+        <div class="section__inner">
+          <p class="milestone-kicker">The span</p>
+          <h2 class="section__title" id="ruler-title">October 2026 through the 2028 sketch</h2>
+          <div class="road-ruler" role="img" aria-label="Roadmap from October 2026 to 2028">
+            <div class="road-ruler__head" aria-hidden="true">
+              <span></span>
+              <span>Oct</span>
+              <span>Nov</span>
+              <span>Dec</span>
+              <span>Q1 27</span>
+              <span>Q2</span>
+              <span>Q3</span>
+              <span>Q4</span>
+              <span>2028</span>
+            </div>
+            <div class="road-ruler__row">
+              <span class="road-ruler__name">ISO on the spare</span>
+              <span class="road-bar road-bar--now" style="grid-column: 2 / 4">M8.8.3–4 · SSH</span>
+            </div>
+            <div class="road-ruler__row">
+              <span class="road-ruler__name">LOI Bar A</span>
+              <span class="road-bar road-bar--loi" style="grid-column: 2 / 3">92% · Oct</span>
+            </div>
+            <div class="road-ruler__row">
+              <span class="road-ruler__name">LOI Bar B</span>
+              <span class="road-bar road-bar--loi" style="grid-column: 2 / 5">slice → spare · Dec</span>
+            </div>
+            <div class="road-ruler__row">
+              <span class="road-ruler__name">RayNu-F phase 0–1</span>
+              <span class="road-bar road-bar--fw" style="grid-column: 2 / 6">freeze, then split</span>
+            </div>
+            <div class="road-ruler__row">
+              <span class="road-ruler__name">Phase 2 devices</span>
+              <span class="road-bar road-bar--fw" style="grid-column: 5 / 6">stock Alpine</span>
+            </div>
+            <div class="road-ruler__row">
+              <span class="road-ruler__name">Phase 3 runtime</span>
+              <span class="road-bar road-bar--fw" style="grid-column: 6 / 7">Ubuntu, Debian</span>
+            </div>
+            <div class="road-ruler__row">
+              <span class="road-ruler__name">Phase 4 v1.0</span>
+              <span class="road-bar road-bar--fw" style="grid-column: 7 / 8">four ISOs in CI</span>
+            </div>
+            <div class="road-ruler__row">
+              <span class="road-ruler__name">Phase 5</span>
+              <span class="road-bar road-bar--later" style="grid-column: 8 / 10">Windows, Secure Boot</span>
+            </div>
+            <div class="road-ruler__row">
+              <span class="road-ruler__name">Hot-add, M9</span>
+              <span class="road-bar road-bar--later" style="grid-column: 9 / 10">after v1.0</span>
+            </div>
+          </div>
+          <ul class="road-legend">
+            <li><i class="road-swatch road-swatch--now"></i> This iron</li>
+            <li><i class="road-swatch road-swatch--loi"></i> Letter of intent</li>
+            <li><i class="road-swatch road-swatch--fw"></i> RayNu-F Generation 1</li>
+            <li><i class="road-swatch road-swatch--later"></i> After v1.0</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="section section--road-lived" id="lived">
+        <div class="section__inner">
+          <p class="milestone-kicker">Already on COM2</p>
+          <h2 class="section__title">Since the summit</h2>
+          <ul class="road-lived">
+            <li><strong>M8.0</strong> Install disk survived a hypervisor reboot. Evidence close. The minted persist line is still quiet.</li>
+            <li><strong>M8.1</strong> TLS on the standing SPA. <code>RAYNU-V-M8-TLS-OK</code>.</li>
+            <li><strong>M8.3</strong> One command typed from the SPA Activity page. Lived once. The log still mixes the host UART.</li>
+            <li><strong>M8.7</strong> H740P Mini mailbox. Login from the 8 GiB window, then from the 10 GiB tail. The 2.9 TB virtual disk stays hidden.</li>
+            <li><strong>M8.8.1–2</strong> The Ubuntu file sits at the high end of the spare, bytes unchanged. Upload lived. About eleven hours for 2.72 GiB.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="section" id="iso">
+        <div class="section__inner">
+          <p class="milestone-kicker">Chapter 1 · October 2026</p>
+          <h2 class="section__title">The ISO the operator chose</h2>
+          <ol class="road-list">
+            <li>
+              <p class="road-list__when">This boot</p>
+              <h3>M8.8.3 — the PERC ISO is the CD</h3>
+              <p>Guests shows the 8 GiB Alpine, the 10 GiB Alpine, and the waiting ISO. The ISO button publishes <code>vdb</code> and loads <code>\EFI\BOOT\BOOTX64.EFI</code> from that file. The previous boot attached the file as <code>vdb</code> and still started the Cruzer Alpine image.</p>
+            </li>
+            <li>
+              <p class="road-list__when">October</p>
+              <h3>See the installer</h3>
+              <p>The kernel line is still the one stored in the Ubuntu file. <code>console=ttyS0</code> is not injected, and the stored bytes stay unchanged. Subiquity is the close, on the serial line or on a framebuffer the firmware actually provides.</p>
+            </li>
+            <li>
+              <p class="road-list__when">October</p>
+              <h3>M8.8.4 — install, then Clear ISO</h3>
+              <p>Subiquity writes the new tail disk. The file stays until Guests presses Clear ISO. That click wipes the signature sector. The 8 GiB window, <code>ee851fd5</code>, and UBUNTU0 stay.</p>
+            </li>
+            <li>
+              <p class="road-list__when">After the disk boots</p>
+              <h3>Guest SSH on the other LOM port</h3>
+              <p>A virtio NIC with its own MAC. Frames leave <code>01:00.1</code>. The SPA stays on the port it already has. Customer DHCP, or an address they set. Recorded, not built.</p>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="section section--road-loi" id="loi">
+        <div class="section__inner">
+          <p class="milestone-kicker">Chapter 2 · October through December 2026</p>
+          <h2 class="section__title">Letter of intent, two bars</h2>
+          <div class="road-split">
+            <article class="road-card">
+              <p class="road-card__kicker">Bar A · 92% · October</p>
+              <h3>Dedicated box</h3>
+              <p>One PowerEdge they can spare. Everest, the SKU card, TLS, and a standing SPA are done. Persist has repeated. The keyboard lived once. Auth beyond the lab latch is parked on purpose. The conversation window is this month. The score does not go to 100 while that latch is the product default.</p>
+            </article>
+            <article class="road-card">
+              <p class="road-card__kicker">Bar B · 60% · December</p>
+              <h3>RAID fleet</h3>
+              <p>The buyer already keeps disks on a PERC. The close is a login from the spare virtual disk, not from an 8 GiB or 10 GiB slice cut out of it. The tracker holds 1.5 months. A Ubuntu install that stays on a 10 GiB tail leaves December where it is, and the date slips into 2027 if the slice is still the disk in December.</p>
+            </article>
+          </div>
+          <ul class="road-lived road-lived--open">
+            <li><strong>M8.2</strong> Operator auth. Host package exists. The chassis still answers the bring-up token. Piece score 38.</li>
+            <li><strong>M8.5</strong> UEFI catalog persist. The firmware write is still the open half. It sits beside the ISO work. It does not block the October boot.</li>
+            <li><strong>M8.6</strong> Windows and the later distros. Same UEFI plus virtio shape. It waits on Generation 1 runtime services. It is phase 5, not this quarter.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="section" id="raynu-f">
+        <div class="section__inner">
+          <p class="milestone-kicker">Chapter 3 · late 2026 through 2027</p>
+          <h2 class="section__title">RayNu-F, Generation 1</h2>
+          <p class="road-note road-note--lead">
+            One firmware, one virtual machine, unmodified media. The last twenty-three days closed operator slices and left every Generation 1 phase except a patched Alpine reboot unstarted. The quarter-per-phase spacing is that fact. ADR-020 set the phases. This page is the first place they have months.
+          </p>
+          <ol class="road-list">
+            <li>
+              <p class="road-list__when">Oct–Nov 2026</p>
+              <h3>Phase 0 — stop adding Alpine glue</h3>
+              <p>Half closed. Iron already rebooted a patched Alpine disk to a login. The other half is freezing the patcher and the auto-answer behind the lab path. No new guest-side patch on the product ISO.</p>
+            </li>
+            <li>
+              <p class="road-list__when">Nov 2026 – Jan 2027</p>
+              <h3>Phase 1 — split the monolith</h3>
+              <p><code>guest_uefi.rs</code> becomes the exit loop, one module per Generation 1 device, and <code>raynu_f/</code>. Alpine install on iron still passes. The OVMF launch path comes out.</p>
+            </li>
+            <li>
+              <p class="road-list__when">Q1 2027</p>
+              <h3>Phase 2 — devices that make the knobs unnecessary</h3>
+              <p>PIIX goes. Timers keep time. The console is chosen once, serial or a linear framebuffer. CPUID, ACPI, and SMBIOS match the contract. Virtio is modern only: block, net, console, rng. A stock Alpine extended ISO reaches <code>login:</code> with the <code>grub.cfg</code> as shipped. The patcher is deleted. This is the first unmodified-media close.</p>
+            </li>
+            <li>
+              <p class="road-list__when">Q2 2027</p>
+              <h3>Phase 3 — runtime services</h3>
+              <p>Variable store, <code>ResetSystem</code>, <code>GetTime</code>, and <code>SetVirtualAddressMap</code> through the guest page tables. Ubuntu Server and Debian netinst reach their installers with <code>efi=noruntime</code> absent. A missing service prints the service name.</p>
+            </li>
+            <li>
+              <p class="road-list__when">Q3 2027</p>
+              <h3>Phase 4 — freeze v1.0</h3>
+              <p>One document: CPUID, memory map, PCI addresses, ACPI, SMBIOS, console, and the refusals. CI installs Alpine extended, Ubuntu Server, Debian netinst, and Rocky, reboots each to its disk, and reaches a login. VM config carries generation 1.</p>
+            </li>
+            <li>
+              <p class="road-list__when">Late 2027 – 2028</p>
+              <h3>Phase 5 — after the freeze</h3>
+              <p>Secure Boot, a virtual TPM, firmware-phase SMP, HTTP and PXE boot, Windows, and the UEFI self-certification tests as an outside oracle. None of these is a v1.0 exit. Windows is M8.6 landing here, once runtime services exist.</p>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="section section--road-later" id="later">
+        <div class="section__inner">
+          <p class="milestone-kicker">Chapter 4 · 2028 sketch</p>
+          <h2 class="section__title">Hot-add, and the cluster that waits for it</h2>
+          <p class="road-note road-note--lead">
+            ADR-018 moved this off M8. A single host that still patches Alpine is the wrong place to add a CPU to a running guest. The start line is Generation 1 frozen and one unmodified install lived on the spare.
+          </p>
+          <div class="road-split road-split--3">
+            <article class="road-card">
+              <p class="road-card__kicker">M9</p>
+              <h3>Hot-add</h3>
+              <p>CPU and memory on a running guest. The firmware has to advertise the slots before the OS will take them. That advertisement is a Generation 1 contract, which is why this sits after phase 4.</p>
+            </article>
+            <article class="road-card">
+              <p class="road-card__kicker">M9</p>
+              <h3>Live migrate</h3>
+              <p>A vMotion-shaped move of one guest. The page-transfer proof work from M6 stays substrate. It is not a second host, and it does not start while the ISO chapter is open.</p>
+            </article>
+            <article class="road-card">
+              <p class="road-card__kicker">M9</p>
+              <h3>Placement</h3>
+              <p>A DRS-shaped choice of where a guest runs. It needs more than one RayNu-V host that already boots the same generation. One R640 is the whole lab today.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section--close" id="read">
+        <div class="section__inner">
+          <p class="milestone-kicker">How to read this</p>
+          <h2 class="section__title">Under-claim, then move the month when COM2 agrees</h2>
+          <p>
+            October is busy on purpose: the ISO boot, the installer, Clear ISO, guest SSH, and the Bar A window share it. December is Bar B only if the guest disk stops being a slice. 2027 is RayNu-F. 2028 is hot-add and the cluster sketch. If a quarter produces another operator slice and no firmware phase, the Generation 1 bars slide right and the page says so.
+          </p>
+          <p class="road-links">
+            <a href="hda.html">Everest tracker</a>
+            <a href="loi.html">LOI tracker</a>
+            <a href="sku.html">SKU card</a>
+          </p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
