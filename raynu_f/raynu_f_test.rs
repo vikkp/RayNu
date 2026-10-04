@@ -2603,3 +2603,74 @@ fn esp_grub_cfg_prefers_boot_path_and_reports_size() {
         Err(FatError::NotFound)
     );
 }
+
+#[test]
+fn raynu_f_mok_variable_roundtrip() {
+    use super::services::STACK_ARG5_OFF;
+    let base = 0x1000u64;
+    let guest = MockGuest::new(base, vec![0u8; 0x2000]);
+    let name = "MokListRT";
+    for (i, c) in name.encode_utf16().enumerate() {
+        guest.write(base + 0x100 + i as u64 * 2, &c.to_le_bytes());
+    }
+    let guid = [0x11u8; 16];
+    guest.write(base + 0x180, &guid);
+    let payload = b"mok-bytes";
+    guest.write(base + 0x200, payload);
+    guest.put_u64(base + 0x300 + STACK_ARG5_OFF, base + 0x200);
+    let mut st = FirmwareState::new();
+    let mut sink = CaptureSink::default();
+    let clk = ManualClock { now: Cell::new(0), step: 1 };
+    let set = ServiceArgs {
+        a1: base + 0x100,
+        a2: base + 0x180,
+        a3: 0x6,
+        a4: payload.len() as u64,
+        rsp: base + 0x300,
+    };
+    assert_eq!(dispatch(ServiceId::SetVariable, set, &guest, &mut sink, &mut st, &clk, 0x4000).status, EFI_SUCCESS);
+    guest.put_u64(base + 0x400, 64);
+    guest.put_u64(base + 0x300 + STACK_ARG5_OFF, base + 0x500);
+    let get = ServiceArgs {
+        a1: base + 0x100,
+        a2: base + 0x180,
+        a3: base + 0x410,
+        a4: base + 0x400,
+        rsp: base + 0x300,
+    };
+    assert_eq!(dispatch(ServiceId::GetVariable, get, &guest, &mut sink, &mut st, &clk, 0x4000).status, EFI_SUCCESS);
+    assert_eq!(guest.u64_at(base + 0x400), payload.len() as u64);
+    let mut got = [0u8; 9];
+    assert_eq!(guest.read(base + 0x500, &mut got), 9);
+    assert_eq!(&got, payload);
+    guest.put_u64(base + 0x400, 1);
+    assert_eq!(
+        dispatch(ServiceId::GetVariable, get, &guest, &mut sink, &mut st, &clk, 0x4000).status,
+        super::memory::EFI_BUFFER_TOO_SMALL
+    );
+    let q = ServiceArgs {
+        a1: 0x6,
+        a2: base + 0x600,
+        a3: base + 0x608,
+        a4: base + 0x610,
+        rsp: 0,
+    };
+    assert_eq!(
+        dispatch(ServiceId::QueryVariableInfo, q, &guest, &mut sink, &mut st, &clk, 0x4000).status,
+        EFI_SUCCESS
+    );
+    assert!(guest.u64_at(base + 0x610) >= payload.len() as u64);
+    guest.put_u64(base + 0x700, 0);
+    let install = ServiceArgs {
+        a1: base + 0x700,
+        a2: base + 0x180,
+        a3: 0,
+        a4: base + 0x800,
+        rsp: 0,
+    };
+    assert_eq!(
+        dispatch(ServiceId::InstallProtocolInterface, install, &guest, &mut sink, &mut st, &clk, 0x4000).status,
+        EFI_SUCCESS
+    );
+    assert_ne!(guest.u64_at(base + 0x700), 0);
+}

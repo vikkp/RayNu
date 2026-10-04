@@ -167,6 +167,8 @@ impl ServiceId {
     pub const SetVirtualAddressMap: ServiceId = ServiceId(0x304);
     pub const GetVariable: ServiceId = ServiceId(0x306);
     pub const GetNextVariableName: ServiceId = ServiceId(0x307);
+    pub const SetVariable: ServiceId = ServiceId(0x308);
+    pub const QueryVariableInfo: ServiceId = ServiceId(0x30d);
 
     /// Runtime service `i` in `EFI_RUNTIME_SERVICES` spec order (0 = GetTime).
     pub const fn runtime_service(i: usize) -> ServiceId {
@@ -284,6 +286,8 @@ impl ServiceId {
             ServiceId::SetVirtualAddressMap => "RT.SetVirtualAddressMap",
             ServiceId::GetVariable => "RT.GetVariable",
             ServiceId::GetNextVariableName => "RT.GetNextVariableName",
+            ServiceId::SetVariable => "RT.SetVariable",
+            ServiceId::QueryVariableInfo => "RT.QueryVariableInfo",
             ServiceId(v) if (Self::BOOT_BASE..Self::BOOT_BASE + 44).contains(&v) => "BootServices",
             ServiceId(v) if (Self::RUNTIME_BASE..Self::RUNTIME_BASE + 14).contains(&v) => {
                 "RuntimeServices"
@@ -442,6 +446,8 @@ pub struct FirmwareState {
     /// Successful block reads / writes (host bookkeeping for markers).
     pub block_reads: u32,
     pub block_writes: u32,
+    /// Mok and other variables for this firmware boot. Not on disk.
+    pub vars: super::vars::VarStore,
 }
 
 impl FirmwareState {
@@ -474,6 +480,7 @@ impl FirmwareState {
             image_started: false,
             block_reads: 0,
             block_writes: 0,
+            vars: super::vars::VarStore::new(),
         }
     }
 
@@ -1545,14 +1552,28 @@ pub fn dispatch(
         ServiceId::UninstallMultipleProtocolInterfaces => uninstall_multiple(st, mem, a),
         ServiceId::InstallProtocolInterface => {
             // (*Handle, *Guid, InterfaceType, Interface)
-            let Some(handle) = read_u64(mem, a.a1) else {
+            // `*Handle == 0` mints a handle, same as InstallMultiple.
+            // Shim's security protocol does that. Only EFI_NATIVE_INTERFACE.
+            let Some(mut handle) = read_u64(mem, a.a1) else {
                 return finish(out, EFI_INVALID_PARAMETER);
             };
-            match read_guid(mem, a.a2) {
-                // Only EFI_NATIVE_INTERFACE (0) exists.
-                Some(g) if a.a3 == 0 && handle != 0 => st.protocols.install(handle, g, a.a4),
-                _ => EFI_INVALID_PARAMETER,
+            let Some(g) = read_guid(mem, a.a2) else {
+                return finish(out, EFI_INVALID_PARAMETER);
+            };
+            if a.a3 != 0 {
+                return finish(out, EFI_INVALID_PARAMETER);
             }
+            if handle == 0 {
+                match st.protocols.new_handle() {
+                    Some(h) => handle = h,
+                    None => return finish(out, EFI_OUT_OF_RESOURCES),
+                }
+            }
+            let status = st.protocols.install(handle, g, a.a4);
+            if status == EFI_SUCCESS && !write_u64(mem, a.a1, handle) {
+                return finish(out, EFI_INVALID_PARAMETER);
+            }
+            status
         }
 
         // ---- BlockIo (F4) ----------------------------------------------
@@ -1785,26 +1806,10 @@ pub fn dispatch(
                 EFI_SUCCESS
             }
         }
-        ServiceId::GetVariable => {
-            // (Name*, Guid*, Attributes*, DataSize*, Data*). RayNu-F has no
-            // variable store, so every variable is honestly absent —
-            // EFI_NOT_FOUND, which is what "SecureBoot not set" means to a
-            // loader (UNSUPPORTED made the Linux stub print "Could not
-            // determine UEFI Secure Boot status").
-            if a.a1 == 0 || a.a2 == 0 || a.a4 == 0 {
-                EFI_INVALID_PARAMETER
-            } else {
-                PROTO_NOT_FOUND
-            }
-        }
-        ServiceId::GetNextVariableName => {
-            // (*NameSize, Name*, Guid*): an empty store ends immediately.
-            if a.a1 == 0 || a.a2 == 0 || a.a3 == 0 {
-                EFI_INVALID_PARAMETER
-            } else {
-                PROTO_NOT_FOUND
-            }
-        }
+        ServiceId::GetVariable => get_variable(st, mem, a),
+        ServiceId::GetNextVariableName => get_next_variable_name(st, mem, a),
+        ServiceId::SetVariable => set_variable(st, mem, a),
+        ServiceId::QueryVariableInfo => query_variable_info(st, mem, a),
         ServiceId::Exit => {
             // (ImageHandle, ExitStatus, ExitDataSize, *ExitData). The Linux
             // EFI stub calls this when efi_stub_entry() fails (nested
@@ -1835,4 +1840,153 @@ pub fn dispatch(
 fn finish(mut out: Dispatched, status: u64) -> Dispatched {
     out.status = status;
     out
+}
+
+fn read_char16_name(mem: &dyn GuestMem, addr: u64) -> Result<([u16; super::vars::VAR_NAME_MAX], usize), u64> {
+    if addr == 0 {
+        return Err(EFI_INVALID_PARAMETER);
+    }
+    let mut name = [0u16; super::vars::VAR_NAME_MAX];
+    for i in 0..super::vars::VAR_NAME_MAX {
+        let mut b = [0u8; 2];
+        if mem.read(addr + (i as u64) * 2, &mut b) < 2 {
+            return Err(EFI_INVALID_PARAMETER);
+        }
+        let c = u16::from_le_bytes(b);
+        if c == 0 {
+            return Ok((name, i));
+        }
+        name[i] = c;
+    }
+    Err(EFI_INVALID_PARAMETER)
+}
+
+fn get_variable(st: &FirmwareState, mem: &dyn GuestMem, a: ServiceArgs) -> u64 {
+    // (Name*, Guid*, Attributes* optional, *DataSize, Data* optional on the stack)
+    if a.a1 == 0 || a.a2 == 0 || a.a4 == 0 {
+        return EFI_INVALID_PARAMETER;
+    }
+    let (name, nlen) = match read_char16_name(mem, a.a1) {
+        Ok(v) => v,
+        Err(s) => return s,
+    };
+    if nlen == 0 {
+        return EFI_INVALID_PARAMETER;
+    }
+    let Some(guid) = read_guid(mem, a.a2) else {
+        return EFI_INVALID_PARAMETER;
+    };
+    let Some(have) = read_u64(mem, a.a4) else {
+        return EFI_INVALID_PARAMETER;
+    };
+    let Some((attrs, data)) = st.vars.get(&guid, &name[..nlen]) else {
+        return PROTO_NOT_FOUND;
+    };
+    if !write_u64(mem, a.a4, data.len() as u64) {
+        return EFI_INVALID_PARAMETER;
+    }
+    if have < data.len() as u64 {
+        return EFI_BUFFER_TOO_SMALL;
+    }
+    if a.a3 != 0 && !write_u32(mem, a.a3, attrs) {
+        return EFI_INVALID_PARAMETER;
+    }
+    let Some(data_ptr) = stack_arg(mem, a.rsp, 5) else {
+        return EFI_INVALID_PARAMETER;
+    };
+    if data_ptr == 0 || mem.write(data_ptr, data) != data.len() {
+        return EFI_INVALID_PARAMETER;
+    }
+    EFI_SUCCESS
+}
+
+fn get_next_variable_name(st: &FirmwareState, mem: &dyn GuestMem, a: ServiceArgs) -> u64 {
+    if a.a1 == 0 || a.a2 == 0 || a.a3 == 0 {
+        return EFI_INVALID_PARAMETER;
+    }
+    let Some(have) = read_u64(mem, a.a1) else {
+        return EFI_INVALID_PARAMETER;
+    };
+    let (name, nlen) = match read_char16_name(mem, a.a2) {
+        Ok(v) => v,
+        Err(s) => return s,
+    };
+    let guid = if nlen == 0 {
+        [0u8; 16]
+    } else {
+        match read_guid(mem, a.a3) {
+            Some(g) => g,
+            None => return EFI_INVALID_PARAMETER,
+        }
+    };
+    match st.vars.next(&guid, &name[..nlen]) {
+        Err(()) => EFI_INVALID_PARAMETER,
+        Ok(None) => PROTO_NOT_FOUND,
+        Ok(Some((g, next))) => {
+            let bytes = (next.len() + 1) * 2;
+            if have < bytes as u64 {
+                let _ = write_u64(mem, a.a1, bytes as u64);
+                return EFI_BUFFER_TOO_SMALL;
+            }
+            let mut raw = [0u8; super::vars::VAR_NAME_MAX * 2];
+            for (i, c) in next.iter().enumerate() {
+                raw[i * 2..i * 2 + 2].copy_from_slice(&c.to_le_bytes());
+            }
+            if mem.write(a.a2, &raw[..bytes]) != bytes || mem.write(a.a3, &g) != 16 {
+                return EFI_INVALID_PARAMETER;
+            }
+            let _ = write_u64(mem, a.a1, bytes as u64);
+            EFI_SUCCESS
+        }
+    }
+}
+
+fn set_variable(st: &mut FirmwareState, mem: &dyn GuestMem, a: ServiceArgs) -> u64 {
+    // (Name*, Guid*, Attributes, DataSize, Data* on the stack)
+    if a.a1 == 0 || a.a2 == 0 {
+        return EFI_INVALID_PARAMETER;
+    }
+    let (name, nlen) = match read_char16_name(mem, a.a1) {
+        Ok(v) => v,
+        Err(s) => return s,
+    };
+    let Some(guid) = read_guid(mem, a.a2) else {
+        return EFI_INVALID_PARAMETER;
+    };
+    if a.a4 == 0 {
+        return st.vars.set(guid, &name[..nlen], a.a3 as u32, &[]);
+    }
+    let Some(data_ptr) = stack_arg(mem, a.rsp, 5) else {
+        return EFI_INVALID_PARAMETER;
+    };
+    if data_ptr == 0 || a.a4 > super::vars::VAR_DATA_MAX as u64 {
+        return if a.a4 > super::vars::VAR_DATA_MAX as u64 {
+            EFI_OUT_OF_RESOURCES
+        } else {
+            EFI_INVALID_PARAMETER
+        };
+    }
+    let mut buf = [0u8; super::vars::VAR_DATA_MAX];
+    let n = a.a4 as usize;
+    if mem.read(data_ptr, &mut buf[..n]) != n {
+        return EFI_INVALID_PARAMETER;
+    }
+    st.vars.set(guid, &name[..nlen], a.a3 as u32, &buf[..n])
+}
+
+fn query_variable_info(st: &FirmwareState, mem: &dyn GuestMem, a: ServiceArgs) -> u64 {
+    // (Attributes, *MaximumStorage, *Remaining, *MaximumVariableSize)
+    if a.a2 == 0 || a.a3 == 0 || a.a4 == 0 {
+        return EFI_INVALID_PARAMETER;
+    }
+    match st.vars.query(a.a1 as u32) {
+        Err(s) => s,
+        Ok((max, left, one)) => {
+            if write_u64(mem, a.a2, max) && write_u64(mem, a.a3, left) && write_u64(mem, a.a4, one) {
+                EFI_SUCCESS
+            } else {
+                EFI_INVALID_PARAMETER
+            }
+        }
+    }
 }
