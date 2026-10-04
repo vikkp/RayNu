@@ -4299,6 +4299,8 @@ static RAYNU_F_TIMER_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_MEM_LOGGED: AtomicBool = AtomicBool::new(false);
 /// One line when Ubuntu's loader asks for pool type 0 and receives memory.
 static RAYNU_F_POOL0_LOGGED: AtomicBool = AtomicBool::new(false);
+/// One line when `SetVariable` stores a Mok variable.
+static RAYNU_F_SETVAR_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_EBS_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_BLOCKIO_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_FS_LOGGED: AtomicBool = AtomicBool::new(false);
@@ -7846,6 +7848,7 @@ unsafe fn raynu_f_reset_relaunch(_src: crate::devices::guest_platform::ResetSrc)
     RAYNU_F_TIMER_LOGGED.store(false, Ordering::Release);
     RAYNU_F_MEM_LOGGED.store(false, Ordering::Release);
     RAYNU_F_POOL0_LOGGED.store(false, Ordering::Release);
+    RAYNU_F_SETVAR_LOGGED.store(false, Ordering::Release);
     RAYNU_F_EBS_LOGGED.store(false, Ordering::Release);
     RAYNU_F_BLOCKIO_LOGGED.store(false, Ordering::Release);
     RAYNU_F_FS_LOGGED.store(false, Ordering::Release);
@@ -12010,6 +12013,14 @@ unsafe fn handle_raynu_f_service() -> bool {
     {
         serial::write_line(
             "boot: RayNu-F AllocatePool type 0 served as loader data (Ubuntu BOOTX64; not ISO-INSTALL-OK)",
+        );
+    }
+    if id == crate::raynu_f::ServiceId::SetVariable
+        && d.status == 0
+        && !RAYNU_F_SETVAR_LOGGED.swap(true, Ordering::AcqRel)
+    {
+        serial::write_line(
+            "boot: RayNu-F SetVariable ok (Mok store; not ISO-INSTALL-OK)",
         );
     }
     if matches!(d.wait, Some(crate::raynu_f::WaitOutcome::TimerFired(_)))

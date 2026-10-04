@@ -31,6 +31,7 @@ pub mod protocol;
 pub mod services;
 pub mod tables;
 pub mod testapp;
+pub mod vars;
 
 #[cfg(test)]
 #[path = "raynu_f_test.rs"]
