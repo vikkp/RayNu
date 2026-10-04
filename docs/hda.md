@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-iso-library-adr |
-| Summary | **Public pages lead with the spare, not only the summit.** Everest stays closed at 99%. The homepage and LOI page now record the 10 GiB login, the withheld `setup-disk`, and M8.8 as not built. Scores held. Months **0.0 held**. Overall **99 held**. |
+| Commit | adr-020-gen1 |
+| Summary | **ADR-020 RayNu VM Generation 1.** Unmodified media is the bar. Phases 0–5. Patched Alpine lived. The patcher is still the product path. Not built past that. Scores held. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
-| Gates touched | ADR only. No doorbell. No format of UBUNTU0. Not a COM2 close. |
+| Gates touched | ADR-020 only. No doorbell. No format of UBUNTU0. Not a COM2 close. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 60 held, perc 78 held, unmodified 25 held, overall LOI 73 held, months A 0.25 held, months B 1.5 held. |
 
 
@@ -381,6 +381,16 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-04 | adr-020-gen1 | 0.0 | 99 | **ADR-020.** RayNu VM Generation 1. Unmodified ISO is the bar. Phases 0–5. Patched Alpine reboot-to-disk lived. Patcher and auto-answer still on the product path. Not built past that. Scores held. months 0.0 held; overall 99 held |
+| 2026-10-04 | m8-8-guest-lom | 0.0 | 99 | **ADR-013 Appendix C.** Guest virtio NIC egress is `01:00.1` MAC `b0:26:28:5c:5a:39`. SPA stays `:38`. After M8.8. Not built. Scores held. months 0.0 held; overall 99 held |
+| 2026-10-04 | m8-8-library-clear | 0.0 | 99 | **Clear ISO is a button.** The 11-hour file stays until Guests posts `/perc/library/clear`. That wipes the signature sector, not the guest disks. Not flashed. Scores held. months 0.0 held; overall 99 held |
+| 2026-10-04 | m8-8-library-next-disk | 0.0 | 99 | **Ubuntu ISO stored on `93088c32`.** Page stayed `ISO 100%`. COM2 had `library CD stored`. Leave that session up. Next EFI places a disk after the 10 GiB tail and adopts `CD001`. Not flashed. Scores held. months 0.0 held; overall 99 held |
+| 2026-10-03 | m8-8-library-resume | 0.0 | 99 | **`42148ca9` copy stopped before `library CD stored`.** Next EFI has a percent bar, resume, one 64 KiB PERC write, and leaves the result on the page. SPA power off stays an RSOD. Not flashed. Scores held. months 0.0 held; overall 99 held |
+| 2026-09-30 | m8-8-library-64k | 0.0 | 99 | **4 KiB posts are too slow on `51f1f168`.** Close that upload. Next EFI uses 64 KiB posts and 4 KiB PERC writes. Not flashed. Scores held. months 0.0 held; overall 99 held |
+| 2026-09-30 | m8-8-library-one-socket | 0.0 | 99 | **Upload stopped on `27357846`.** First chunks of the 2.72 GiB Ubuntu ISO were accepted. No `library CD stored` line. The page poll and the VM list hid the counter. Next EFI keeps one request and prints every 64 MiB. Do not flash yet. Scores held. months 0.0 held; overall 99 held |
+| 2026-09-30 | m8-8-library-spa-strings | 0.0 | 99 | **CI string fix, not lived.** `5a205364` dropped `Host serial log` and the M8.4 test still forbade a file input. Both restored. `/blob` stays off the page. Do not flash. Scores held. months 0.0 held; overall 99 held |
+| 2026-09-30 | m8-8-library-upload | 0.0 | 99 | **M8.8 upload packed, not lived.** `POST /perc/library/{off}/{total}` stores 4 KiB chunks. Iron PERC write. Guest CD and virtio ISO read those LBAs. Answerer stays quiet. Not flashed. Scores held. months 0.0 held; overall 99 held |
+| 2026-09-30 | m8-8-library-place | 0.0 | 99 | **M8.8 policy packed, not lived.** Next disk after the existing tail. ISO at the high end, below the probe sector. Answerer quiet on the library CD. Reclaim only after the installed-disk boot. Firmware chunk writer and the CD device are still open. Scores held. months 0.0 held; overall 99 held |
 | 2026-09-30 | site-past-summit | 0.0 | 99 | **Homepage and LOI page.** Everest stays closed. The current chapter is Guests on the spare: 10 GiB `ee851fd5`, slice 3 withhold, M8.8 Ubuntu library not built. The HDA bottom line no longer says the latest boot stopped at GRUB. Scores held. months 0.0 held; overall 99 held |
 | 2026-09-29 | m8-iso-library-adr | 0.0 | 99 | **M8.8.1–M8.8.4.** Placement, chunked upload, CD boot with `console=ttyS0`, then install and delete `ubuntu-26.04-live-server-amd64.iso` after the installed-disk boot. Not built. Scores held. months 0.0 held; overall 99 held |
 | 2026-09-29 | m8-guest-iso-lived | 0.0 | 99 | **Slice 3 lived.** `752586b9` `choice=3`, `ISO-BOOTX64`, `[vda]` 10.0 GiB, ISO motd `setup-alpine`, then `boot: perc SPA linux_iso — setup-disk withheld`. No scripted `setup-disk`. `ee851fd5` journal-recovered and unmounted. Unmodified media 20→25. The ISO is still patched. months 0.0 held; overall 99 held |

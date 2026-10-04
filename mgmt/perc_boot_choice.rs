@@ -248,19 +248,35 @@ pub fn apply_spa_choice(image_latched: bool, choice: u8) -> PercChoiceApply {
 
 /// Store a free-tail disk. A second post does not replace the first.
 ///
-/// Refuses a size that [`crate::mgmt::megaraid::place_in_free_tail`] would
-/// not place, so the installed window cannot become this disk.
+/// `spare_off ==` the 8 GiB window is the first tail. A larger `spare_off`
+/// is the next disk, after tails already on the spare. The window itself
+/// is never this disk.
 pub fn apply_tail_choice(
     image_latched: bool,
     spare_bytes: u64,
+    spare_off: u64,
     disk_bytes: u64,
 ) -> PercChoiceApply {
-    let Some(place) = crate::mgmt::megaraid::place_in_free_tail(
-        spare_bytes,
-        crate::mgmt::megaraid::PERC_IMAGE_BYTES,
-        image_latched,
-        disk_bytes,
-    ) else {
+    if !image_latched {
+        return PercChoiceApply::NoImage;
+    }
+    let window = crate::mgmt::megaraid::PERC_IMAGE_BYTES;
+    let placed = if spare_off == window {
+        crate::mgmt::megaraid::place_in_free_tail(spare_bytes, window, true, disk_bytes)
+    } else {
+        crate::mgmt::iso_library::place_guest_after_occupied(
+            spare_bytes,
+            window,
+            true,
+            spare_off,
+            crate::mgmt::iso_library::held_bytes(),
+            disk_bytes,
+        )
+    };
+    let Some(place) = placed else {
+        return PercChoiceApply::NoImage;
+    };
+    if place.spare_off != spare_off || place.disk_bytes != disk_bytes {
         return PercChoiceApply::NoImage;
     };
     match CHOICE.compare_exchange(
@@ -413,6 +429,9 @@ pub fn wait_perc_spa_choice_if_latched() {
 #[cfg(feature = "uefi-bin")]
 fn firmware_wait() {
     use crate::boot::serial;
+    let spare = crate::mgmt::megaraid::perc_spare_bytes();
+    let occupied = crate::mgmt::guest_catalog::occupied_guest_end();
+    let _ = crate::mgmt::iso_library::adopt_stored_ubuntu(spare, occupied);
     serial::write_line(PERC_SPA_WAIT_NOTE);
     if !crate::mgmt::host_nic_listen::coexist_session_armed() {
         serial::write_line(
@@ -578,11 +597,21 @@ mod perc_boot_choice_test {
         clear_perc_spa_choice_for_test();
         let ten = 10_240u64 * 1024 * 1024;
         assert_eq!(
-            apply_tail_choice(false, crate::mgmt::megaraid::IRON_LD1_BYTES, ten),
+            apply_tail_choice(
+                false,
+                crate::mgmt::megaraid::IRON_LD1_BYTES,
+                crate::mgmt::megaraid::PERC_IMAGE_BYTES,
+                ten
+            ),
             PercChoiceApply::NoImage
         );
         assert_eq!(
-            apply_tail_choice(true, crate::mgmt::megaraid::IRON_LD1_BYTES, ten),
+            apply_tail_choice(
+                true,
+                crate::mgmt::megaraid::IRON_LD1_BYTES,
+                crate::mgmt::megaraid::PERC_IMAGE_BYTES,
+                ten
+            ),
             PercChoiceApply::Accepted
         );
         assert!(installer_iso_forced());
@@ -602,6 +631,20 @@ mod perc_boot_choice_test {
         clear_perc_spa_choice_for_test();
         assert!(armed_tail().is_none());
         assert!(!installer_iso_forced());
+        assert_eq!(
+            apply_tail_choice(
+                true,
+                crate::mgmt::megaraid::IRON_LD1_BYTES,
+                crate::mgmt::megaraid::PERC_IMAGE_BYTES + ten,
+                ten
+            ),
+            PercChoiceApply::Accepted
+        );
+        assert_eq!(
+            armed_tail(),
+            Some((crate::mgmt::megaraid::PERC_IMAGE_BYTES + ten, ten))
+        );
+        clear_perc_spa_choice_for_test();
         assert_eq!(
             apply_tail_boot_choice(true, crate::mgmt::megaraid::IRON_LD1_BYTES, ten),
             PercChoiceApply::Accepted

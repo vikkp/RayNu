@@ -61,7 +61,7 @@ static mut COEXIST_IFACE: MaybeUninit<Interface> = MaybeUninit::uninit();
 static mut COEXIST_SOCK_STORAGE: [SocketStorage<'static>; 1] = [SocketStorage::EMPTY; 1];
 static mut COEXIST_SOCKETS: MaybeUninit<SocketSet<'static>> = MaybeUninit::uninit();
 static mut COEXIST_TCP_HANDLE: MaybeUninit<SocketHandle> = MaybeUninit::uninit();
-static mut COEXIST_TCP_RX: [u8; TCP_RX_N] = [0; TCP_RX_N];
+static mut COEXIST_TCP_RX: [u8; COEXIST_TCP_RX_N] = [0; COEXIST_TCP_RX_N];
 static mut COEXIST_TCP_TX: [u8; TCP_TX_N] = [0; TCP_TX_N];
 static mut COEXIST_LISTEN: Tls12Listen = Tls12Listen::empty();
 static mut COEXIST_LISTEN_READY: bool = false;
@@ -92,6 +92,9 @@ static mut COEXIST_POWEROFF_EMPTY_AT_MS: i64 = 0;
 static mut LAST_SPA_TICK_TSC: u64 = 0;
 
 const TCP_RX_N: usize = 8192;
+/// Standing SPA window. One 64 KiB library post fits here. The QEMU listen
+/// path keeps [`TCP_RX_N`] so the management arena stays 80 KiB.
+const COEXIST_TCP_RX_N: usize = 96 * 1024;
 const TCP_TX_N: usize = COEXIST_HTTP_OUT_N;
 const RX_ACC_N: usize = COEXIST_RX_ACC_N;
 const HTTP_OUT_N: usize = COEXIST_HTTP_OUT_N;
@@ -122,6 +125,28 @@ fn wrap_session_try_exchange(
     let raw_bytes = session.take_http()?;
     if !sock.can_send() {
         return None;
+    }
+    if let Some(n) = crate::mgmt::iso_library::library_http_response(raw_bytes, out) {
+        if n == 0 {
+            return None;
+        }
+        let nwrap = session.wrap_http(&out[..n], wrap);
+        if nwrap == 0 {
+            return None;
+        }
+        let mut off = 0;
+        while off < nwrap && sock.can_send() {
+            match sock.send_slice(&wrap[off..nwrap]) {
+                Ok(0) => break,
+                Ok(k) => off += k,
+                Err(_) => break,
+            }
+        }
+        if off != nwrap {
+            return None;
+        }
+        session.clear_http();
+        return Some(false);
     }
     let raw = core::str::from_utf8(raw_bytes).unwrap_or("");
     // SAFETY: BSP-only coexist; PRE-EBS tables leaked for the HTTP codec.
@@ -597,8 +622,11 @@ pub fn tick_bcm5720_coexist() {
         {
             do_close = true;
         }
+        let library_exchange = crate::mgmt::iso_library::take_exchange_quiet();
         if did_exchange {
-            serial::write_line_nowait("boot: HOST-NIC HTTP exchange ok");
+            if !library_exchange {
+                serial::write_line_nowait("boot: HOST-NIC HTTP exchange ok");
+            }
             let _ = maybe_print_iron_tls_ok(true, true);
             if take_spa_keys_injected() {
                 let _ = maybe_print_iron_console_ok(true, true);
@@ -612,9 +640,11 @@ pub fn tick_bcm5720_coexist() {
                 do_close = false;
             }
             let _ = iface.poll(Instant::from_millis(millis + 1), device, sockets);
-            pci_census::print_host_nic_exchange_ok_marker();
+            if !library_exchange {
+                pci_census::print_host_nic_exchange_ok_marker();
+            }
         }
-        if did_keepalive {
+        if did_keepalive && !library_exchange {
             serial::write_line_nowait("boot: HOST-NIC HTTP keep-alive");
         }
         if do_close && !COEXIST_PENDING_POWEROFF {

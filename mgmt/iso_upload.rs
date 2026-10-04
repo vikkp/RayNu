@@ -318,7 +318,7 @@ pub fn prop_iso_upload_host_package() -> bool {
         && ISO_UPLOAD_HOST_RESIDUAL_NOTE.contains("ESP-staged stays valid")
         && plan.contains("M8.4")
         && plan.contains("ESP-staged stays valid")
-        && !html.contains("type=\"file\"")
+        && html.contains("/perc/library/")
         && !html.contains("/blob")
         && !http.contains("/blob")
         && !http.contains("put_iso_blob")

@@ -222,6 +222,9 @@ pub unsafe fn leave_firmware() -> Handoff {
                 crate::mgmt::megaraid::perc_post_disarm();
             }
         }
+        if let Some(base) = frames.alloc_pages(crate::mgmt::megaraid::LIBRARY_DMA_PAGES) {
+            crate::mgmt::megaraid::perc_library_dma_store(base);
+        }
     }
 
     if crate::mgmt::iso_install::product_iso_retained_bytes().is_some() {

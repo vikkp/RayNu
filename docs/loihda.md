@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-iso-library-adr |
-| Summary | **LOI page matches the spare.** A 10 GiB login, the ISO prompt, and M8.8 not built. Scores held. Bar B stays 60. Unmodified stays 25. |
+| Commit | adr-020-gen1 |
+| Summary | **ADR-020 records Generation 1.** Unmodified media is the bar. Not built past patched Alpine. Unmodified media stays 25. Bar B stays 60. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Scores held. Bar A 92. Bar B 60. perc 78. Overall 73. Unmodified media stays 25. The library is not on the running EFI. |
-| Gates touched | ADR only. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
+| Gates touched | ADR-020 only. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
 
 ---
 
@@ -219,6 +219,16 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-10-04 | adr-020-gen1 | 92 | 60 | **ADR-020.** Generation 1 is unmodified media. Patched Alpine lived. The patcher is still the product path. Unmodified media stays 25. Bar B stays 60. |
+| 2026-10-04 | m8-8-guest-lom | 92 | 60 | **Guest SSH recorded, not built.** ADR-013 Appendix C: virtio NIC out `01:00.1` / `:39`. SPA stays `:38`. After M8.8. Unmodified media stays 25. Bar B stays 60. |
+| 2026-10-04 | m8-8-library-clear | 92 | 60 | **Clear ISO is a button.** The 11-hour file stays until that click. Unmodified media stays 25. Bar B stays 60. |
+| 2026-10-04 | m8-8-library-next-disk | 92 | 60 | **Ubuntu file stored on `93088c32`.** `ISO 100%` and `library CD stored`. Leave that session up. Unmodified media stays 25. Bar B stays 60. |
+| 2026-10-03 | m8-8-library-resume | 92 | 60 | **`42148ca9` did not store the Ubuntu file.** Next EFI shows percent and can continue. Unmodified media stays 25. Bar B stays 60. |
+| 2026-09-30 | m8-8-library-64k | 92 | 60 | **4 KiB posts are too slow on `51f1f168`.** Close that tab. Next EFI posts 64 KiB. Unmodified media stays 25. Bar B stays 60. |
+| 2026-09-30 | m8-8-library-one-socket | 92 | 60 | **Upload stopped on `27357846`.** The Ubuntu file was reserved and not stored. Unmodified media stays 25. Bar B stays 60. |
+| 2026-09-30 | m8-8-library-spa-strings | 92 | 60 | **CI string fix, not lived.** Host serial log is back on the page. The library file input stays. `/blob` stays off the page. Not flashed. Unmodified media stays 25. Bar B stays 60. |
+| 2026-09-30 | m8-8-library-upload | 92 | 60 | **M8.8 upload packed, not lived.** Guests posts the file in 4 KiB chunks onto the spare library. Not flashed. Unmodified media stays 25. Bar B stays 60. |
+| 2026-09-30 | m8-8-library-place | 92 | 60 | **M8.8 policy packed, not lived.** Placement, chunk plan, quiet CD boot, reclaim after disk boot. The firmware does not yet copy `ubuntu-26.04-live-server-amd64.iso` onto the spare. Unmodified media stays 25. Bar B stays 60. |
 | 2026-09-30 | site-past-summit | 92 | 60 | **LOI page.** The current chapter is the spare: `ee851fd5` on 10 GiB, slice 3 withheld `setup-disk`, M8.8 not built. Bar B stays 60. Unmodified media stays 25. The 2.9 TB VD is not the guest disk. |
 | 2026-09-29 | m8-iso-library-adr | 92 | 60 | **M8.8.1–M8.8.4 numbered, not built.** Placement, upload, CD boot, install, then delete `ubuntu-26.04-live-server-amd64.iso` after the installed-disk boot. UBUNTU0 and `ee851fd5` stay. Unmodified media stays 25. Bar B stays 60. Scores held. |
 | 2026-09-29 | m8-guest-iso-lived | 92 | 60 | **Slice 3 lived.** `752586b9` choice 3, `ISO-BOOTX64`, `[vda]` 10.0 GiB, `localhost:~#`, ISO motd `setup-alpine`, then `boot: perc SPA linux_iso — setup-disk withheld`. No scripted `setup-disk`. `ee851fd5` was mounted read-only, journal-recovered, and unmounted. Unmodified media 20→25. The ISO is still serial-patched. `root` is still typed. Bar B stays 60. The 8192 MiB window reinstall was not clicked. |

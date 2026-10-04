@@ -405,6 +405,46 @@ fn fwstate_load_is_one_harpoon_and_does_not_bus_master() {
         place.disk_bytes,
     )
     .unwrap();
+    assert!(super::pack_ld_write16_tail(
+        super::IRON_LD1_BYTES,
+        1,
+        tail_lba,
+        super::PERC_IMAGE_CHUNK_SECTORS,
+        0x1006000,
+        place.spare_off,
+        place.disk_bytes,
+    )
+    .is_some());
+    assert!(super::pack_ld_write16_tail(
+        super::IRON_LD1_BYTES,
+        1,
+        tail_lba + 1,
+        super::PERC_IMAGE_CHUNK_SECTORS,
+        0x1006000,
+        place.spare_off,
+        place.disk_bytes,
+    )
+    .is_none());
+    assert!(super::pack_ld_write16_tail(
+        super::IRON_LD1_BYTES,
+        1,
+        tail_lba,
+        super::LIBRARY_WRITE_SECTORS,
+        0x1006000,
+        place.spare_off,
+        place.disk_bytes,
+    )
+    .is_some());
+    assert!(super::pack_ld_write16_tail(
+        super::IRON_LD1_BYTES,
+        1,
+        tail_lba + 1,
+        super::LIBRARY_WRITE_SECTORS,
+        0x1006000,
+        place.spare_off,
+        place.disk_bytes,
+    )
+    .is_none());
     assert_eq!(
         u64::from_be_bytes(packed[0x22..0x2A].try_into().unwrap()),
         tail_lba

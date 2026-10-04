@@ -295,13 +295,14 @@ All ADRs live in `docs/adr/`. Format: numbered, dated, context/decision/rational
 | 010   | Living Verification Paper              | Progressive public audit artifact; evidence-only sections (ADR-010)          |
 | 011   | Evidence Mode ESP Flag                 | `paperverbose.txt` triggers L1 evidence bundle on serial                     |
 | 012   | UEFI NIC HTTP Listen (E3)              | In-binary Tcp4/SNP HTTP PRE-EBS; M7.6; post-EBS SNP rejected 2026-08-17 |
-| 013   | Management Network Architecture        | Native NIC + smoltcp for lifetime HTTP (E3b); Stage 1 0–G closed; shared LOM accepted; SNP bring-up only |
+| 013   | Management Network Architecture        | Native NIC + smoltcp for lifetime HTTP (E3b); SPA stays on BCM5720 `:38`. Appendix C (2026-10-04): guest SSH egress is the other LOM port `:39`, after M8.8, not built |
 | 014   | Multi-guest-OS image and install path  | Typed ISO (`linux_iso`/`windows_iso`/`generic_uefi`); UEFI+virtio product boot; bzImage = lab G0 only |
 | 015   | Stage 46 close path is PR #229         | Park PR #231; Stage 46 closes on #229 only; COMMAND/CF8/ROM/hide-slot0/retaddr/ConIn/callsite/WFE-return closed; 9474ab6 state4 poke dest=0x7ff18340 then #PF cr2=0xffffffffffffffb8 rip=0x7ff0e018 still ataio=0; firmware WFE event #PF; do not claim ISO-INSTALL-OK |
 | 016   | RayNu-F — be the guest firmware for E5 | Be the guest UEFI boot env ourselves (own EFI system table + boot services over virtio-blk/CD) instead of puppeting OVMF; RayNu-F is a subsystem in the single binary, outside Proven Core; disable the 3k–3o OVMF forcing (self-inflicted the 9474ab6/4e16b59 NULL-event #PF + CpuDeadLoop); **No third-party firmware state mutation**; do not claim ISO-INSTALL-OK |
 | 017   | Guest reset under RayNu-F (F7)        | Disk-before-ISO; `reset_keep_disk`; CF9/KBC/TF; cap=1; HANDLE_DISK Vendor path; nested `fe4785a` reboot-to-disk (`DISK-BOOT-OK` + `root=UUID=`); do not claim ISO-INSTALL-OK |
 | 018   | Post-Everest M8 operator hardening    | Everest CLOSED on iron `f72b4276`; rollback kit `v0.1.0-everest-closed`; M8 = persist/TLS/auth/console/upload/catalog/Windows-later; cluster → **M9**; no Proven Core expansion |
 | 019   | Guests screen is the spare boot policy | Guests lists the latched spare image and chooses boot or `linux_iso`. Slice 1 places only the 8 GiB window. Windows is refused. Decision 9 reserves an ISO library at the high end of RAYNU-SPARE (accepted, not built). Rollback `v0.1.0-m8-perc-spa` |
+| 020   | RayNu VM Generation 1                  | One specified VM that boots unmodified OS media. RayNu-F stays host-side and outside the Proven Core. Phases 0–5. Patched Alpine reboot-to-disk lived; the patcher is still on the product path. Not built past that. |
 
 **Rule:** Any new ADR is added here AND to `docs/adr/ADR-NNN.md`.
 
@@ -347,7 +348,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 | M5.5 | VMware Migration Workstream     | 60–70  | 10+ VMs migrated from vCenter in one command           |
 | M6   | Production Ready                | 68–100 | HA, security hardened, 72-hr soak, external audit      |
 | M7   | Mount Everest (single-host ship)| 101–   | iDRAC boot on real R640 + network UI + Linux ISO install (**CLOSED on iron 2026-09-11**, ADR-018) |
-| M8   | Operator product hardening      | after M7 | Persist → TLS → auth → console → ISO upload → catalog → Windows. **M8.7** PERC Fusion mailbox on RAYNU-SPARE. **M8.8** Ubuntu ISO library on the spare (M8.8.1–M8.8.4, ADR-019 decision 9, accepted, not built). No doorbell (ADR-018) |
+| M8   | Operator product hardening      | after M7 | Persist → TLS → auth → console → ISO upload → catalog → Windows. **M8.7** PERC Fusion mailbox on RAYNU-SPARE. **M8.8** Ubuntu ISO library on the spare (M8.8.1–M8.8.4, ADR-019 decision 9, packed, not lived). No doorbell (ADR-018) |
 | M9   | Cluster / elasticity (sketch)   | after M8 | vMotion-like, DRS-like placement, hot-add (not M7/M8 blockers) |
 
 **M0 note (lived):** Boot gates through M6 closed on **Latitude + QEMU**. The original “boots on R640” claim is the hard **M7.5** iron gate (`RAYNU-V-R640-BOOT-OK`) — see ADR-009.

@@ -6,12 +6,12 @@
     <title>RayNu-V — Single-binary hypervisor, designed for proof</title>
     <meta
       name="description"
-      content="RayNu-V is a single-binary Type-1 hypervisor. Mount Everest closed on a real PowerEdge R640. Since then Guests boots disks on the PERC spare, including a 10 GiB Alpine login. Next is an operator-chosen Ubuntu ISO."
+      content="RayNu-V is a single-binary Type-1 hypervisor. Mount Everest closed on a real PowerEdge R640. Since then Guests boots disks on the PERC spare, including a 10 GiB Alpine login. An operator-chosen Ubuntu ISO is packed and not flashed."
     />
     <meta property="og:title" content="RayNu-V — past Mount Everest, on the PERC spare" />
     <meta
       property="og:description"
-      content="Everest closed on a real R640. Guests then booted an 8 GiB spare disk and a 10 GiB tail to login. A new Linux ISO stops at its own prompt. Next build is an Ubuntu ISO chosen on the page."
+      content="Everest closed on a real R640. Guests then booted an 8 GiB spare disk and a 10 GiB tail to login. A new Linux ISO stops at its own prompt. An Ubuntu ISO chosen on the page is packed and not on the running EFI."
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://raynuv.com/" />
@@ -153,9 +153,9 @@
             ISO stopped at the ISO’s own prompt and did not type
             <code>setup-disk</code>. TLS
             (<code>RAYNU-V-M8-TLS-OK</code>) and a standing page are already
-            behind that. The next build is M8.8: choose
+            behind that. M8.8 is packed and not flashed: choose
             <code>ubuntu-26.04-live-server-amd64.iso</code> on Guests, store
-            it on the spare, install, then delete that file. M8.8 is not on
+            it on the spare, install, then delete that file. It is not on
             the running EFI. The 2.9 TB virtual disk is not the guest disk.
             Auth is still open.
             Summit rollback remains
@@ -732,8 +732,8 @@ You can setup the system with the command: setup-alpine</code></pre>
                 Same R640. TLS and a standing SPA came first. Guests then
                 became the spare’s boot policy. A 10 GiB disk reached its own
                 login. A new Linux ISO now stops at the installer prompt.
-                M8.8, the Ubuntu file chosen on the page, is accepted and not
-                built.
+                M8.8, the Ubuntu file chosen on the page, is packed and not
+                on the running EFI.
               </p>
               <ol class="journey__list">
                 <li>
@@ -764,8 +764,8 @@ You can setup the system with the command: setup-alpine</code></pre>
                   <span class="journey__gate">M8.8</span>
                   <span class="journey__text"
                     >Ubuntu 26.04 live-server ISO from Guests, stored on the
-                    spare, deleted after the installed disk boots. Not
-                    built.</span
+                    spare, deleted after the installed disk boots. Packed.
+                    Not on the running EFI.</span
                   >
                 </li>
               </ol>

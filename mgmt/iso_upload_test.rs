@@ -80,8 +80,9 @@ fn host_ready_iso_blob_roundtrip() {
     .unwrap_or(0);
     let spa = core::str::from_utf8(&http_out[..hn]).unwrap_or("");
     assert!(spa.contains("HTTP/1.1 200"), "{spa}");
+    assert!(spa.contains("/perc/library/"), "{spa}");
+    assert!(spa.contains("type=\"file\""), "{spa}");
     assert!(!spa.contains("/blob"), "{spa}");
-    assert!(!spa.contains("type=\"file\""), "{spa}");
     assert_eq!(
         dispatch_iso_upload_host(
             UploadMode::EspStaged,
