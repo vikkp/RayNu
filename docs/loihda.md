@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-8-library-clear |
-| Summary | **Clear ISO is a Guests button.** The stored file is not deleted by a boot. Unmodified media stays 25. Bar B stays 60. |
+| Commit | m8-8-guest-lom |
+| Summary | **Guest SSH is ADR-013 Appendix C.** Egress `01:00.1` / `:39`. SPA stays `:38`. After M8.8. Not built. Unmodified media stays 25. Bar B stays 60. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Scores held. Bar A 92. Bar B 60. perc 78. Overall 73. Unmodified media stays 25. The library is not on the running EFI. |
-| Gates touched | Clear ISO button. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
+| Gates touched | ADR-013 Appendix C only. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
 
 ---
 
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-10-04 | m8-8-guest-lom | 92 | 60 | **Guest SSH recorded, not built.** ADR-013 Appendix C: virtio NIC out `01:00.1` / `:39`. SPA stays `:38`. After M8.8. Unmodified media stays 25. Bar B stays 60. |
 | 2026-10-04 | m8-8-library-clear | 92 | 60 | **Clear ISO is a button.** The 11-hour file stays until that click. Unmodified media stays 25. Bar B stays 60. |
 | 2026-10-04 | m8-8-library-next-disk | 92 | 60 | **Ubuntu file stored on `93088c32`.** `ISO 100%` and `library CD stored`. Leave that session up. Unmodified media stays 25. Bar B stays 60. |
 | 2026-10-03 | m8-8-library-resume | 92 | 60 | **`42148ca9` did not store the Ubuntu file.** Next EFI shows percent and can continue. Unmodified media stays 25. Bar B stays 60. |

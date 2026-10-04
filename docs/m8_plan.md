@@ -236,6 +236,8 @@ M8.4 stays the host 256-byte blob. M8.8 is the product path and may proceed whil
 | M8.8.3 boot | That file is a CD. This boot adds `console=ttyS0` and does not rewrite the stored bytes. The answerer types neither `root` nor `setup-disk`. | COM2 shows `ISO-BOOT` from the library offset, then Subiquity on the serial line. |
 | M8.8.4 install and clear | Subiquity installs onto the new `vda`. The ISO stays until the operator clicks **Clear ISO**. That click returns Placeable and wipes the signature sector. A boot of the installed disk does not delete the file. | COM2 shows the installed-disk boot with the library still held, and `boot: M8.8 library ISO cleared` only after the button. UBUNTU0 and `ee851fd5` stay. |
 
+Guest SSH is not a row in this table. It is [ADR-013](adr/ADR-013.md) Appendix C: virtio NIC, own MAC, egress `01:00.1` / `b0:26:28:5c:5a:39`. The SPA stays on `:38`. After M8.8. Not built.
+
 ---
 
 ## M9 sketch (out of scope)

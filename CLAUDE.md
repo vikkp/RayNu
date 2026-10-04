@@ -295,7 +295,7 @@ All ADRs live in `docs/adr/`. Format: numbered, dated, context/decision/rational
 | 010   | Living Verification Paper              | Progressive public audit artifact; evidence-only sections (ADR-010)          |
 | 011   | Evidence Mode ESP Flag                 | `paperverbose.txt` triggers L1 evidence bundle on serial                     |
 | 012   | UEFI NIC HTTP Listen (E3)              | In-binary Tcp4/SNP HTTP PRE-EBS; M7.6; post-EBS SNP rejected 2026-08-17 |
-| 013   | Management Network Architecture        | Native NIC + smoltcp for lifetime HTTP (E3b); Stage 1 0–G closed; shared LOM accepted; SNP bring-up only |
+| 013   | Management Network Architecture        | Native NIC + smoltcp for lifetime HTTP (E3b); SPA stays on BCM5720 `:38`. Appendix C (2026-10-04): guest SSH egress is the other LOM port `:39`, after M8.8, not built |
 | 014   | Multi-guest-OS image and install path  | Typed ISO (`linux_iso`/`windows_iso`/`generic_uefi`); UEFI+virtio product boot; bzImage = lab G0 only |
 | 015   | Stage 46 close path is PR #229         | Park PR #231; Stage 46 closes on #229 only; COMMAND/CF8/ROM/hide-slot0/retaddr/ConIn/callsite/WFE-return closed; 9474ab6 state4 poke dest=0x7ff18340 then #PF cr2=0xffffffffffffffb8 rip=0x7ff0e018 still ataio=0; firmware WFE event #PF; do not claim ISO-INSTALL-OK |
 | 016   | RayNu-F — be the guest firmware for E5 | Be the guest UEFI boot env ourselves (own EFI system table + boot services over virtio-blk/CD) instead of puppeting OVMF; RayNu-F is a subsystem in the single binary, outside Proven Core; disable the 3k–3o OVMF forcing (self-inflicted the 9474ab6/4e16b59 NULL-event #PF + CpuDeadLoop); **No third-party firmware state mutation**; do not claim ISO-INSTALL-OK |
