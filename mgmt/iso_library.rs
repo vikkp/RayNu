@@ -259,14 +259,38 @@ pub fn present_as_cd() -> bool {
     answerer_quiet()
 }
 
-/// M8.8.4. The installed disk has booted, so the ISO can leave the spare.
-/// Returns true when a held file was deleted.
+/// M8.8.4 records that the installed disk booted. The ISO stays.
+/// The operator clears it with the Guests button. An 11-hour upload
+/// is not deleted by the boot.
 pub fn note_installed_disk_booted() -> bool {
-    if !CD_BOOT.load(Ordering::Acquire) || held().is_none() {
+    if held().is_none() {
         return false;
     }
     DISK_BOOTED.store(true, Ordering::Release);
+    true
+}
+
+/// Guests Clear ISO. Detaches the CD and wipes the ISO signature sector
+/// so a later boot does not adopt the file. Does not scrub the whole
+/// file and does not touch UBUNTU0, the 8 GiB window, or an installed tail.
+/// Returns false when no file is held or the signature wipe fails.
+pub fn clear_library_operator() -> bool {
+    if held().is_none() {
+        return false;
+    }
+    let zeros = [0u8; 512];
+    if !write_upload_bytes(ISO_PVD_OFF, &zeros) {
+        return false;
+    }
     clear_held();
+    RECEIVED.store(0, Ordering::Release);
+    DISK_BOOTED.store(false, Ordering::Release);
+    #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+    {
+        crate::boot::serial::write_line_nowait(
+            "boot: M8.8 library ISO cleared (signature sector only; disks unchanged)",
+        );
+    }
     true
 }
 
@@ -506,6 +530,13 @@ pub fn library_http_response(raw: &[u8], out: &mut [u8]) -> Option<usize> {
     if !library_authorized(head) {
         return Some(library_status(401, b"{\"ok\":false,\"reason\":\"auth\"}", out));
     }
+    if head.lines().next().is_some_and(|line| line.starts_with("POST /perc/library/clear ")) {
+        return Some(if clear_library_operator() {
+            library_status(200, b"{\"ok\":true,\"cleared\":true}", out)
+        } else {
+            library_status(409, b"{\"ok\":false,\"reason\":\"empty\"}", out)
+        });
+    }
     let (off, total) = match library_path_off(head) {
         Some(v) => v,
         None => return Some(library_status(400, b"{\"ok\":false,\"reason\":\"path\"}", out)),
@@ -697,9 +728,12 @@ mod iso_library_test {
         note_install_failed();
         assert_eq!(held_bytes(), iso);
         assert!(note_installed_disk_booted());
+        assert_eq!(held_bytes(), iso);
+        assert!(present_as_cd());
+        assert!(clear_library_operator());
         assert_eq!(held_bytes(), 0);
-        assert!(!answerer_quiet());
-        assert!(!note_installed_disk_booted());
+        assert!(!present_as_cd());
+        assert!(!clear_library_operator());
         clear_library_for_test();
     }
 
@@ -735,7 +769,8 @@ mod iso_library_test {
         assert!(html.contains("n=65536"));
         assert!(html.contains("iso-fill"));
         assert!(html.contains("ISO \"+pct+\"%"));
-        assert!(html.contains("if(!hold)setS"));
+        assert!(html.contains("btn-clr"));
+        assert!(html.contains("/perc/library/clear"));
         assert_eq!(LIBRARY_HTTP_CHUNK, 65536);
         assert!(!answerer_quiet());
         raw.clear();
@@ -750,6 +785,14 @@ mod iso_library_test {
         assert!(present_as_cd());
         let mut got = [0u8; 512];
         assert!(!read_at(0, &mut got));
+        raw.clear();
+        raw.extend_from_slice(
+            b"POST /perc/library/clear HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
+        );
+        let n = library_http_response(&raw, &mut out).unwrap();
+        let text = core::str::from_utf8(&out[..n]).unwrap_or("");
+        assert!(text.contains("\"cleared\":true"), "{text}");
+        assert_eq!(held_bytes(), 0);
         clear_library_for_test();
     }
 }

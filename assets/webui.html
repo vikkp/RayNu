@@ -102,6 +102,7 @@ input.token{min-width:12rem}
 </label>
 <input id="f-file" type="file" accept=".iso"/>
 <button class="ghost" id="btn-lib" type="button">Upload ISO</button>
+<button class="ghost" id="btn-clr" type="button">Clear ISO</button>
 <button class="pri" id="btn-create" data-action="create">Create guest</button>
 <button class="ghost" id="btn-refresh" data-action="list">Refresh</button>
 </div>
@@ -238,6 +239,7 @@ document.getElementById("btn-save-token").onclick=function(){saveT(T.value||def(
 document.getElementById("btn-refresh").onclick=listVms;
 document.getElementById("btn-create").onclick=createVm;
 document.getElementById("btn-lib").onclick=uploadIso;
+document.getElementById("btn-clr").onclick=async function(){if(up||!confirm("Clear ISO?"))return;setS((await api("POST","/perc/library/clear")).ok?"ISO cleared":"Clear refused")};
 document.getElementById("btn-images").onclick=listImages;
 document.getElementById("btn-iso-deploy").onclick=deployIso;
 document.getElementById("btn-iso-install").onclick=installIso;

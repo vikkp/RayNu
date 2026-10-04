@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-8-library-next-disk |
-| Summary | **Ubuntu file stored on `93088c32`.** Leave that session up. Next EFI places the new disk after the 10 GiB tail and adopts the file from `CD001`. Do not flash until CI is green. Do not click Create. Scores held. Months **0.0 held**. Overall **99 held**. |
+| Commit | m8-8-library-clear |
+| Summary | **Clear ISO is a Guests button.** The installed-disk boot does not delete the 11-hour file. The button drops the hold and wipes the signature sector. Disks stay. Do not flash until CI is green. Scores held. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
-| Gates touched | Next disk after the 10 GiB tail. No doorbell. No format of UBUNTU0. Not a COM2 close. |
+| Gates touched | Clear ISO button. No doorbell. No format of UBUNTU0. Not a COM2 close. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 60 held, perc 78 held, unmodified 25 held, overall LOI 73 held, months A 0.25 held, months B 1.5 held. |
 
 
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-04 | m8-8-library-clear | 0.0 | 99 | **Clear ISO is a button.** The 11-hour file stays until Guests posts `/perc/library/clear`. That wipes the signature sector, not the guest disks. Not flashed. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-04 | m8-8-library-next-disk | 0.0 | 99 | **Ubuntu ISO stored on `93088c32`.** Page stayed `ISO 100%`. COM2 had `library CD stored`. Leave that session up. Next EFI places a disk after the 10 GiB tail and adopts `CD001`. Not flashed. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-03 | m8-8-library-resume | 0.0 | 99 | **`42148ca9` copy stopped before `library CD stored`.** Next EFI has a percent bar, resume, one 64 KiB PERC write, and leaves the result on the page. SPA power off stays an RSOD. Not flashed. Scores held. months 0.0 held; overall 99 held |
 | 2026-09-30 | m8-8-library-64k | 0.0 | 99 | **4 KiB posts are too slow on `51f1f168`.** Close that upload. Next EFI uses 64 KiB posts and 4 KiB PERC writes. Not flashed. Scores held. months 0.0 held; overall 99 held |
