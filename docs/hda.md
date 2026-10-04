@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-8-guest-lom |
-| Summary | **ADR-013 Appendix C.** Guest SSH leaves on BCM5720 `01:00.1` / `:39`. The SPA stays on `:38`. After M8.8, not built. Scores held. Months **0.0 held**. Overall **99 held**. |
+| Commit | adr-020-gen1 |
+| Summary | **ADR-020 RayNu VM Generation 1.** Unmodified media is the bar. Phases 0–5. Patched Alpine lived. The patcher is still the product path. Not built past that. Scores held. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
-| Gates touched | ADR-013 Appendix C only. No doorbell. No format of UBUNTU0. Not a COM2 close. |
+| Gates touched | ADR-020 only. No doorbell. No format of UBUNTU0. Not a COM2 close. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 60 held, perc 78 held, unmodified 25 held, overall LOI 73 held, months A 0.25 held, months B 1.5 held. |
 
 
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-04 | adr-020-gen1 | 0.0 | 99 | **ADR-020.** RayNu VM Generation 1. Unmodified ISO is the bar. Phases 0–5. Patched Alpine reboot-to-disk lived. Patcher and auto-answer still on the product path. Not built past that. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-04 | m8-8-guest-lom | 0.0 | 99 | **ADR-013 Appendix C.** Guest virtio NIC egress is `01:00.1` MAC `b0:26:28:5c:5a:39`. SPA stays `:38`. After M8.8. Not built. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-04 | m8-8-library-clear | 0.0 | 99 | **Clear ISO is a button.** The 11-hour file stays until Guests posts `/perc/library/clear`. That wipes the signature sector, not the guest disks. Not flashed. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-04 | m8-8-library-next-disk | 0.0 | 99 | **Ubuntu ISO stored on `93088c32`.** Page stayed `ISO 100%`. COM2 had `library CD stored`. Leave that session up. Next EFI places a disk after the 10 GiB tail and adopts `CD001`. Not flashed. Scores held. months 0.0 held; overall 99 held |

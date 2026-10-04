@@ -302,6 +302,7 @@ All ADRs live in `docs/adr/`. Format: numbered, dated, context/decision/rational
 | 017   | Guest reset under RayNu-F (F7)        | Disk-before-ISO; `reset_keep_disk`; CF9/KBC/TF; cap=1; HANDLE_DISK Vendor path; nested `fe4785a` reboot-to-disk (`DISK-BOOT-OK` + `root=UUID=`); do not claim ISO-INSTALL-OK |
 | 018   | Post-Everest M8 operator hardening    | Everest CLOSED on iron `f72b4276`; rollback kit `v0.1.0-everest-closed`; M8 = persist/TLS/auth/console/upload/catalog/Windows-later; cluster → **M9**; no Proven Core expansion |
 | 019   | Guests screen is the spare boot policy | Guests lists the latched spare image and chooses boot or `linux_iso`. Slice 1 places only the 8 GiB window. Windows is refused. Decision 9 reserves an ISO library at the high end of RAYNU-SPARE (accepted, not built). Rollback `v0.1.0-m8-perc-spa` |
+| 020   | RayNu VM Generation 1                  | One specified VM that boots unmodified OS media. RayNu-F stays host-side and outside the Proven Core. Phases 0–5. Patched Alpine reboot-to-disk lived; the patcher is still on the product path. Not built past that. |
 
 **Rule:** Any new ADR is added here AND to `docs/adr/ADR-NNN.md`.
 
