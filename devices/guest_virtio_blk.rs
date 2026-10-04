@@ -484,10 +484,10 @@ pub fn present() -> bool {
         b.disk.queues_armed = queues;
         b.disk.queue_size = QUEUE_MAX;
         if queues {
-            if let Some((ptr, len)) = iso_win {
-                let n = len & !(SECTOR - 1);
-                if n >= SECTOR && !ptr.is_null() {
-                    ISO_PTR.store(ptr as u64, Ordering::Release);
+            if crate::mgmt::iso_library::present_as_cd() {
+                let n = (crate::mgmt::iso_library::held_bytes() as usize) & !(SECTOR - 1);
+                if n >= SECTOR {
+                    ISO_PTR.store(1, Ordering::Release);
                     ISO_LEN.store(n as u64, Ordering::Release);
                     b.iso.visible = true;
                     b.iso.bar0 = GUEST_VIRTIO_ISO_BAR0_DEFAULT;
@@ -497,10 +497,10 @@ pub fn present() -> bool {
                     b.iso.queue_size = QUEUE_MAX;
                     b.iso.readonly = true;
                 }
-            } else if crate::mgmt::iso_library::present_as_cd() {
-                let n = (crate::mgmt::iso_library::held_bytes() as usize) & !(SECTOR - 1);
-                if n >= SECTOR {
-                    ISO_PTR.store(1, Ordering::Release);
+            } else if let Some((ptr, len)) = iso_win {
+                let n = len & !(SECTOR - 1);
+                if n >= SECTOR && !ptr.is_null() {
+                    ISO_PTR.store(ptr as u64, Ordering::Release);
                     ISO_LEN.store(n as u64, Ordering::Release);
                     b.iso.visible = true;
                     b.iso.bar0 = GUEST_VIRTIO_ISO_BAR0_DEFAULT;

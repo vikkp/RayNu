@@ -223,7 +223,7 @@ The fence accepts one LD of ~2.5–3.1 TiB and refuses ~300–512 GiB. Scratch p
 
 ### M8.8 — Ubuntu ISO library on RAYNU-SPARE
 
-**Status: file stored on `93088c32`, boot not lived.** COM2 showed `boot: M8.8 library CD stored` for `ubuntu-26.04-live-server-amd64.iso` (2,918,598,656 bytes) and the page stayed at `ISO 100%`. Leave that session up. Do not click Create, Start, Upload, or Power off host. The next EFI places a new disk after the 10 GiB tail and, after an iDRAC power off, adopts the file when sector 16 reads `CD001`. Do not flash until CI is green. `ee851fd5` and the 8 GiB window stay.
+**Status: file stored, boot CD still the Cruzer Alpine image.** `93088c32` stored `ubuntu-26.04-live-server-amd64.iso` (2,918,598,656 bytes). `27d4e540` adopted it (`library CD kept`, Used 21215) and Create placed a new disk at `tail_off=19327352832`. Virtio `vdb` was that file. RayNu-F BlockIo stayed the Cruzer Alpine ISO (`cd_bytes=1042284544`, `image=ISO-BOOTX64`, Alpine initramfs `~ #`). This EFI leaves the file waiting until Guests presses **ISO** on that row. That click is `vdb` and the RayNu-F CD. Start on an Alpine row does not attach it. `console=ttyS0` is still the file's own kernel line. Do not flash until CI is green. Do not click Stop or Clear ISO on the `27d4e540` page. Reboot to UBUNTU0 is the flash path.
 
 **Goal:** The operator picks `ubuntu-26.04-live-server-amd64.iso` on Guests. The hypervisor stores that file unchanged in a high library on RAYNU-SPARE and boots it as a CD. The file stays after install. **Clear ISO** on Guests drops the catalog hold and wipes the ISO signature sector. It does not scrub the whole file and it does not touch an installed disk.
 
@@ -233,7 +233,7 @@ M8.4 stays the host 256-byte blob. M8.8 is the product path and may proceed whil
 |------|------|------------|
 | M8.8.1 placement | Library at the high end of RAYNU-SPARE, below the last-LBA probe. A new guest disk starts after disks already on the spare. Placeable shrinks by both. An overlap is refused. | Host tests. Not COM2. |
 | M8.8.2 upload | Guests file button. Chunked HTTPS copy into the library. Bytes unchanged. Alpine patcher does not run. | COM2 names the file, its size, and its spare offset. |
-| M8.8.3 boot | That file is a CD. This boot adds `console=ttyS0` and does not rewrite the stored bytes. The answerer types neither `root` nor `setup-disk`. | COM2 shows `ISO-BOOT` from the library offset, then Subiquity on the serial line. |
+| M8.8.3 boot | The file stays waiting until Guests chooses it. That choice is virtio `vdb` and the RayNu-F CD (`\EFI\BOOT\BOOTX64.EFI` from the library El Torito). Start on an Alpine row does not attach it. This boot does not rewrite the stored bytes. The answerer types neither `root` nor `setup-disk`. `console=ttyS0` is still the file's own kernel line. | COM2 shows `library CD chosen`, then `cd_bytes=2918598656` and `ISO-BOOT` from that file. |
 | M8.8.4 install and clear | Subiquity installs onto the new `vda`. The ISO stays until the operator clicks **Clear ISO**. That click returns Placeable and wipes the signature sector. A boot of the installed disk does not delete the file. | COM2 shows the installed-disk boot with the library still held, and `boot: M8.8 library ISO cleared` only after the button. UBUNTU0 and `ee851fd5` stay. |
 
 Guest SSH is not a row in this table. It is [ADR-013](adr/ADR-013.md) Appendix C: virtio NIC, own MAC, egress `01:00.1` / `b0:26:28:5c:5a:39`. The SPA stays on `:38`. After M8.8. Not built.

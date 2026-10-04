@@ -8005,6 +8005,9 @@ fn raynu_f_cd_bytes() -> Option<&'static [u8]> {
 fn raynu_f_read_backing(media_id: u32, off: u64, buf: &mut [u8]) -> bool {
     match media_id {
         crate::raynu_f::MEDIA_ID_CD => {
+            if crate::mgmt::iso_library::present_as_cd() {
+                return crate::mgmt::iso_library::read_bytes(off, buf);
+            }
             let Some(iso) = raynu_f_cd_bytes() else {
                 return false;
             };
@@ -8401,6 +8404,134 @@ unsafe fn raynu_f_stage_disk_bootloader(
     Some(loaded)
 }
 
+/// `VolumeRead` over the library ISO on the spare. `base` is the El Torito
+/// FAT image, in bytes from the start of the file.
+#[cfg(target_os = "uefi")]
+struct LibraryIsoVol {
+    base: u64,
+}
+
+#[cfg(target_os = "uefi")]
+impl crate::raynu_f::fat::VolumeRead for LibraryIsoVol {
+    fn read_at(&self, off: u64, buf: &mut [u8]) -> bool {
+        crate::mgmt::iso_library::read_bytes(self.base.saturating_add(off), buf)
+    }
+}
+
+/// One 2048-byte sector of the chosen library ISO.
+#[cfg(target_os = "uefi")]
+fn library_iso_sector(lba: u32, buf: &mut [u8]) -> bool {
+    if buf.len() < crate::mgmt::el_torito::ISO_SECTOR {
+        return false;
+    }
+    let off = u64::from(lba).saturating_mul(crate::mgmt::el_torito::ISO_SECTOR as u64);
+    crate::mgmt::iso_library::read_bytes(off, &mut buf[..crate::mgmt::el_torito::ISO_SECTOR])
+}
+
+/// F5 for the Guests-chosen library file. El Torito and `\EFI\BOOT\BOOTX64.EFI`
+/// come from that file. The Cruzer Alpine image stays unread on this path.
+#[cfg(target_os = "uefi")]
+unsafe fn raynu_f_stage_library_bootloader(
+    layout: &crate::raynu_f::FirmwareImageLayout,
+    ram_hpa: u64,
+) -> Option<u64> {
+    serial::write_line(
+        "boot: RayNu-F library CD (ubuntu-26.04-live-server-amd64.iso; bytes unchanged)",
+    );
+    let et = match crate::mgmt::el_torito::parse_el_torito_read(library_iso_sector) {
+        Ok(v) => v,
+        Err(_) => {
+            serial::write_line(
+                "boot: RayNu-F no El Torito catalog in the library ISO (test app stays)",
+            );
+            return None;
+        }
+    };
+    let fat_off = u64::from(et.load_lba) * crate::mgmt::el_torito::ISO_SECTOR as u64;
+    let mut boot = [0u8; 512];
+    let vol_reader = LibraryIsoVol { base: fat_off };
+    if !crate::raynu_f::fat::VolumeRead::read_at(&vol_reader, 0, &mut boot) {
+        serial::write_line("boot: RayNu-F El Torito extent outside the library ISO (test app stays)");
+        return None;
+    }
+    let vol = match crate::raynu_f::fat::parse_bpb(&boot) {
+        Ok(v) => v,
+        Err(_) => {
+            serial::write_str("boot: RayNu-F library El Torito image is not FAT lba=");
+            write_dec(u64::from(et.load_lba));
+            serial::write_line(" (test app stays)");
+            return None;
+        }
+    };
+    // SAFETY: BSP-only firmware state; guest not yet launched.
+    // KANI-TARGET: RayNu-F library FS mount (outside Proven Core).
+    {
+        let st = unsafe { &mut *core::ptr::addr_of_mut!(RAYNU_F_STATE) };
+        st.fs.volume = Some(vol);
+        st.fat_volume_off = fat_off;
+        st.fat_media_id = crate::raynu_f::MEDIA_ID_CD;
+        st.file_proto_base = layout.file_proto_base;
+        st.sfs = layout.sfs;
+        st.loaded_image_proto = layout.loaded_image;
+        st.system_table = layout.system_table;
+        let _ = st.protocols.install(
+            crate::raynu_f::HANDLE_CD,
+            crate::raynu_f::protocol::GUID_SIMPLE_FILE_SYSTEM,
+            layout.sfs,
+        );
+        let mut dp = [0u8; crate::raynu_f::protocol::DEVICE_PATH_BYTES];
+        crate::raynu_f::protocol::encode_cd_device_path(
+            1,
+            u64::from(et.load_lba),
+            u64::from(et.sector_count),
+            &mut dp,
+        );
+        let mem_dp = SlabMem {
+            hpa: ram_hpa,
+            len: GUEST_UEFI_LOW_RAM_BYTES,
+        };
+        if crate::raynu_f::GuestMem::write(&mem_dp, layout.device_path, &dp) == dp.len() {
+            st.device_path = layout.device_path;
+            st.device_handle = crate::raynu_f::HANDLE_CD;
+            let _ = st.protocols.install(
+                crate::raynu_f::HANDLE_CD,
+                crate::raynu_f::protocol::GUID_DEVICE_PATH,
+                layout.device_path,
+            );
+        }
+    }
+    serial::write_str("boot: RayNu-F FAT ESP mounted lba=");
+    write_dec(u64::from(et.load_lba));
+    serial::write_str(" efi=");
+    write_dec(et.efi as u64);
+    serial::write_line(" (library ISO; not ISO-INSTALL-OK)");
+    let entry = match crate::raynu_f::fat::resolve_path(
+        &vol,
+        &vol_reader,
+        b"\\EFI\\BOOT\\BOOTX64.EFI",
+    ) {
+        Ok(e) => e,
+        Err(_) => {
+            serial::write_line(
+                "boot: RayNu-F no \\EFI\\BOOT\\BOOTX64.EFI on the library ISO (test app stays)",
+            );
+            return None;
+        }
+    };
+    serial::write_str("boot: RayNu-F found \\EFI\\BOOT\\BOOTX64.EFI bytes=");
+    write_dec(u64::from(entry.size));
+    serial::write_line(" (library ISO; not ISO-INSTALL-OK)");
+    raynu_f_stage_bootloader_from_volume(
+        &vol,
+        &vol_reader,
+        entry,
+        layout,
+        ram_hpa,
+        "ISO",
+        "(library ISO; not ISO-INSTALL-OK)",
+    )
+}
+
 /// F5: mount the FAT ESP inside the retained ISO's El Torito boot image and
 /// stage its `\EFI\BOOT\BOOTX64.EFI` as the guest image. Returns the loaded
 /// entry point on success; `None` leaves the built-in test app as the guest.
@@ -8409,6 +8540,9 @@ unsafe fn raynu_f_stage_iso_bootloader(
     layout: &crate::raynu_f::FirmwareImageLayout,
     ram_hpa: u64,
 ) -> Option<u64> {
+    if crate::mgmt::iso_library::present_as_cd() {
+        return raynu_f_stage_library_bootloader(layout, ram_hpa);
+    }
     let iso = raynu_f_cd_bytes()?;
     let et = match crate::mgmt::el_torito::parse_el_torito(iso) {
         Ok(v) => v,
@@ -8509,7 +8643,11 @@ unsafe fn raynu_f_publish_block_devices(
     layout: &crate::raynu_f::FirmwareImageLayout,
     img: &mut [u8],
 ) {
-    let iso_bytes = raynu_f_cd_bytes().map_or(0, |b| b.len() as u64);
+    let iso_bytes = if crate::mgmt::iso_library::present_as_cd() {
+        crate::mgmt::iso_library::held_bytes()
+    } else {
+        raynu_f_cd_bytes().map_or(0, |b| b.len() as u64)
+    };
     let disk_bytes = crate::devices::guest_virtio_blk::disk_bytes();
     let media_cd = crate::raynu_f::BlockMedia::cd(iso_bytes);
     let media_disk = crate::raynu_f::BlockMedia::disk(disk_bytes);
