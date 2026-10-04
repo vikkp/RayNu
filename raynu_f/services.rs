@@ -1365,12 +1365,22 @@ pub fn dispatch(
         ServiceId::FreePages => st.pool.free_pages_at(a.a1, a.a2),
         ServiceId::AllocatePool => {
             // (PoolType, Size, **Buffer)
+            // Iron `5cb54836`: Ubuntu `\EFI\BOOT\BOOTX64.EFI` called this with
+            // pool type 0 (`EfiReservedMemoryType`) in a tight loop. The spec
+            // rejects that type, and the loader spun until the 180 s wall cap
+            // (`svc_err` ≈ `svc`, `blk_rd=0`, `conout_ok=0`). Serve type 0 as
+            // loader data. `AllocatePages` still rejects Reserved.
             if a.a3 == 0 {
                 EFI_INVALID_PARAMETER
             } else {
+                let mem_type = if a.a1 as u32 == super::memory::EFI_RESERVED_MEMORY_TYPE {
+                    super::memory::EFI_LOADER_DATA
+                } else {
+                    a.a1 as u32
+                };
                 let pages = PagePool::pool_pages_for(a.a2);
                 let (status, base) =
-                    st.pool.allocate_pages(super::memory::ALLOCATE_ANY_PAGES, a.a1 as u32, pages, 0);
+                    st.pool.allocate_pages(super::memory::ALLOCATE_ANY_PAGES, mem_type, pages, 0);
                 if status != EFI_SUCCESS {
                     status
                 } else {

@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-8-iso-choose |
-| Summary | **Guests chooses the PERC ISO before RayNu-F opens a CD.** `27d4e540` showed the Ubuntu file as `vdb` and still booted the Cruzer Alpine BlockIo. This EFI leaves the file waiting (row id 3) until the ISO button. That click is `vdb` and `\EFI\BOOT\BOOTX64.EFI` from the library. Start on an Alpine row does not attach it. Not flashed. Scores held. Months **0.0 held**. Overall **99 held**. |
+| Commit | m8-8-pool0 |
+| Summary | **`5cb54836` staged Ubuntu `BOOTX64.EFI` and the 180 s wall cap stopped it.** `svc_err` matched `svc`, `blk_rd=0`, `conout_ok=0`. The loader called `AllocatePool` with type 0. This EFI serves that call as loader data. M8.8.3 is not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
-| Gates touched | M8.8.3 packed, not lived. No doorbell. No format of UBUNTU0. Not a COM2 close. |
+| Gates touched | M8.8.3 still open. No doorbell. No format of UBUNTU0. Not a COM2 close. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 60 held, perc 78 held, unmodified 25 held, overall LOI 73 held, months A 0.25 held, months B 1.5 held. |
 
 
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-04 | m8-8-pool0 | 0.0 | 99 | **`5cb54836` wall-cap.** Ubuntu `BOOTX64.EFI` ran 180 s, `blk_rd=0`, `AllocatePool` type 0. Next EFI serves that call as loader data. M8.8.3 not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-04 | m8-8-iso-choose | 0.0 | 99 | **Guests chooses the PERC ISO.** `27d4e540` attached the Ubuntu file as `vdb` and booted Cruzer Alpine (`cd_bytes=1042284544`). This EFI waits for the ISO row. That click is `vdb` and the RayNu-F CD. Not flashed. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-04 | adr-020-gen1 | 0.0 | 99 | **ADR-020.** RayNu VM Generation 1. Unmodified ISO is the bar. Phases 0–5. Patched Alpine reboot-to-disk lived. Patcher and auto-answer still on the product path. Not built past that. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-04 | m8-8-guest-lom | 0.0 | 99 | **ADR-013 Appendix C.** Guest virtio NIC egress is `01:00.1` MAC `b0:26:28:5c:5a:39`. SPA stays `:38`. After M8.8. Not built. Scores held. months 0.0 held; overall 99 held |
