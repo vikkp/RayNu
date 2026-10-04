@@ -461,7 +461,7 @@ fn store_tail(
     spare_off: u64,
     disk_bytes: u64,
 ) -> GuestCatalogHttp {
-    match apply_tail_choice(installed, spare_bytes, disk_bytes) {
+    match apply_tail_choice(installed, spare_bytes, spare_off, disk_bytes) {
         PercChoiceApply::Accepted => {
             crate::boot::raynu_f_flag::request_from_spa();
             let mut body = [0u8; 576];

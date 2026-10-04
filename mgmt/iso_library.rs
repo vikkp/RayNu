@@ -205,6 +205,40 @@ pub fn pack_library_chunk(
     )
 }
 
+/// Byte size of the Ubuntu file stored on 2026-10-04 (`93088c32`).
+pub const STORED_UBUNTU_BYTES: u64 = 2_918_598_656;
+
+/// ISO 9660 primary volume descriptor, sector 16.
+const ISO_PVD_OFF: u64 = 32768;
+
+/// If this boot has no library in RAM, adopt the file already written at the
+/// high end of the spare when sector 16 starts with the ISO signature.
+/// Host and QEMU have no spare read, so this stays false there.
+pub fn adopt_stored_ubuntu(spare_bytes: u64, occupied_end: u64) -> bool {
+    if held().is_some() {
+        return present_as_cd();
+    }
+    if begin_library(spare_bytes, occupied_end, STORED_UBUNTU_BYTES).is_none() {
+        return false;
+    }
+    let mut sector = [0u8; 512];
+    let iso = read_at(ISO_PVD_OFF, &mut sector) && sector.len() >= 6 && &sector[1..6] == b"CD001";
+    if !iso {
+        clear_held();
+        RECEIVED.store(0, Ordering::Release);
+        return false;
+    }
+    RECEIVED.store(STORED_UBUNTU_BYTES, Ordering::Release);
+    arm_cd_boot();
+    #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+    {
+        crate::boot::serial::write_line_nowait(
+            "boot: M8.8 library CD kept (ubuntu-26.04-live-server-amd64.iso; bytes unchanged)",
+        );
+    }
+    true
+}
+
 /// M8.8.3. The next guest boot uses the library file as a CD.
 /// The Alpine answerer does not type `root` or `setup-disk`.
 pub fn arm_cd_boot() -> bool {
@@ -305,7 +339,7 @@ pub fn accept_upload(off: u64, total: u64, body: &[u8]) -> Result<(), &'static s
     if off == 0 {
         if let Some(place) = held() {
             let got = RECEIVED.load(Ordering::Acquire);
-            if place.bytes == total && got > 0 && got < total {
+            if place.bytes == total && got > 0 {
                 return Ok(());
             }
         }
@@ -628,6 +662,8 @@ mod iso_library_test {
         assert!(place_iso_library(LAB_UBUNTU0_BYTES, window, iso).is_none());
         assert!(place_guest_after_occupied(spare, window, false, window, 0, ten).is_none());
         assert!(place_guest_after_occupied(spare, window, true, window, 0, window).is_none());
+        assert!(!adopt_stored_ubuntu(spare, occupied));
+        assert_eq!(held_bytes(), 0);
     }
 
     #[test]

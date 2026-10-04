@@ -568,7 +568,12 @@ fn guests_linux_iso_stops_at_the_iso_prompt() {
     clear_perc_spa_choice_for_test();
     let ten = 10_240u64 * 1024 * 1024;
     assert_eq!(
-        apply_tail_choice(true, IRON_LD1_BYTES, ten),
+        apply_tail_choice(
+            true,
+            IRON_LD1_BYTES,
+            crate::mgmt::megaraid::PERC_IMAGE_BYTES,
+            ten
+        ),
         PercChoiceApply::Accepted
     );
     reset();
