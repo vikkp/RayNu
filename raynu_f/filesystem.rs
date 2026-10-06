@@ -11,7 +11,9 @@
 //! Scope (honest): read-only. `Write`, `Delete`, `SetInfo` and directory
 //! enumeration via `Read` on a directory return `EFI_UNSUPPORTED` /
 //! `EFI_WRITE_PROTECTED` rather than pretending. A loader that only needs to
-//! open and read `\EFI\BOOT\BOOTX64.EFI` is fully served.
+//! open and read `\EFI\BOOT\BOOTX64.EFI` is fully served. A relative
+//! `File.Open` is resolved against the directory in `This`. An empty name
+//! duplicates that handle.
 
 use super::fat::{FatEntry, FatError, FatVolume};
 
@@ -170,7 +172,21 @@ impl FileSystem {
         (EFI_SUCCESS, Self::handle_for(s))
     }
 
+    fn duplicate(&mut self, slot: usize) -> (u64, u64) {
+        let Some(s) = self.alloc_slot() else {
+            return (EFI_OUT_OF_RESOURCES, 0);
+        };
+        let mut copy = self.slots[slot];
+        copy.position = 0;
+        self.slots[s] = copy;
+        (EFI_SUCCESS, Self::handle_for(s))
+    }
+
     /// `Open(This, *New, FileName, OpenMode, Attributes)` — read-only.
+    ///
+    /// An empty `FileName` duplicates `This` (UEFI 2.10 §13.5). A path that
+    /// starts with `\` or `/` is from the volume root. Any other path is
+    /// relative to the directory `This`.
     pub fn open<R: super::fat::VolumeRead>(
         &mut self,
         this: u64,
@@ -181,17 +197,29 @@ impl FileSystem {
         let Some(vol) = self.volume else {
             return (EFI_NOT_FOUND, 0);
         };
-        if self.slot_of(this).is_none() {
+        let Some(this_slot) = self.slot_of(this) else {
             return (EFI_INVALID_PARAMETER, 0);
-        }
+        };
         if mode & (EFI_FILE_MODE_WRITE | EFI_FILE_MODE_CREATE) != 0 {
             // Honest: the CD volume is read-only.
             return (EFI_WRITE_PROTECTED, 0);
         }
-        if mode & EFI_FILE_MODE_READ == 0 || path.is_empty() {
+        if mode & EFI_FILE_MODE_READ == 0 {
             return (EFI_INVALID_PARAMETER, 0);
         }
-        match super::fat::resolve_path(&vol, r, path) {
+        if path.is_empty() {
+            return self.duplicate(this_slot);
+        }
+        let start = if path[0] == b'\\' || path[0] == b'/' {
+            0
+        } else if self.slots[this_slot].is_root {
+            0
+        } else if self.slots[this_slot].entry.is_dir() {
+            self.slots[this_slot].entry.first_cluster
+        } else {
+            return (EFI_INVALID_PARAMETER, 0);
+        };
+        match super::fat::resolve_in(&vol, r, start, path) {
             Ok(entry) => {
                 let Some(s) = self.alloc_slot() else {
                     return (EFI_OUT_OF_RESOURCES, 0);
@@ -351,6 +379,15 @@ impl FileSystem {
         }
         (EFI_SUCCESS, need)
     }
+}
+
+/// True when the last path component is `grubx64.efi` (any case).
+pub fn path_is_grubx64(path: &[u8]) -> bool {
+    let name = match path.iter().rposition(|&c| c == b'\\' || c == b'/') {
+        Some(i) => &path[i + 1..],
+        None => path,
+    };
+    name.eq_ignore_ascii_case(b"grubx64.efi")
 }
 
 /// Convert a guest CHAR16 path to ASCII bytes for the FAT lookup.

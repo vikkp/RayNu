@@ -79,6 +79,9 @@ pub const LOADED_IMAGE_REVISION: u32 = 0x1000;
 /// header(4) + BootEntry u32 + PartitionStart u64 + PartitionSize u64.
 pub const DP_TYPE_MEDIA: u8 = 0x04;
 pub const DP_SUBTYPE_CDROM: u8 = 0x02;
+/// Media / File Path (subtype 4). Header (4) + NUL-terminated CHAR16 path.
+/// This is `EFI_LOADED_IMAGE_PROTOCOL.FilePath`, not the device's path.
+pub const DP_SUBTYPE_FILEPATH: u8 = 0x04;
 /// Media / HardDrive (subtype 1), length 0x2A (UEFI 2.10 Table 10-12):
 /// header(4) + PartitionNumber u32 + PartitionStart u64 + PartitionSize u64
 /// + Signature[16] + MBRType u8 + SignatureType u8.
@@ -181,6 +184,36 @@ pub fn encode_whole_disk_device_path(out: &mut [u8; DEVICE_PATH_BYTES]) {
     out[DP_VENDOR_LEN + 1] = DP_SUBTYPE_END_ENTIRE;
     out[DP_VENDOR_LEN + 2..DP_VENDOR_LEN + 4]
         .copy_from_slice(&(DP_END_LEN as u16).to_le_bytes());
+}
+
+/// Media/FilePath node + End Entire for an ASCII `\` path (no trailing NUL).
+///
+/// `LoadedImage.FilePath` is this node alone. Shim's `DevicePathToStr`
+/// joins every node with `/` and then uses that string as a directory
+/// prefix. A CDROM node in front becomes `CDROM(...)/\EFI\BOOT\...`, and
+/// the `grubx64.efi` open is not a FAT path (`8822dbfa`).
+///
+/// Returns the number of bytes written, or `None` when `out` is short.
+pub fn encode_filepath_device_path(ascii: &[u8], out: &mut [u8]) -> Option<usize> {
+    let chars = ascii.len().checked_add(1)?;
+    let node_len = 4usize.checked_add(chars.checked_mul(2)?)?;
+    let total = node_len.checked_add(DP_END_LEN)?;
+    if node_len > u16::MAX as usize || out.len() < total {
+        return None;
+    }
+    for b in out[..total].iter_mut() {
+        *b = 0;
+    }
+    out[0] = DP_TYPE_MEDIA;
+    out[1] = DP_SUBTYPE_FILEPATH;
+    out[2..4].copy_from_slice(&(node_len as u16).to_le_bytes());
+    for (i, &c) in ascii.iter().enumerate() {
+        out[4 + i * 2] = c;
+    }
+    out[node_len] = DP_TYPE_END;
+    out[node_len + 1] = DP_SUBTYPE_END_ENTIRE;
+    out[node_len + 2..node_len + 4].copy_from_slice(&(DP_END_LEN as u16).to_le_bytes());
+    Some(total)
 }
 
 /// Walk `path` looking for a Media/HardDrive or Media/CDROM node. GRUB

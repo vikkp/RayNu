@@ -423,14 +423,26 @@ pub fn find_in_dir<R: VolumeRead>(
     }
 }
 
-/// Resolve a `\`-separated path (e.g. `\EFI\BOOT\BOOTX64.EFI`) to its entry.
+/// Resolve a `\`-separated path (e.g. `\EFI\BOOT\BOOTX64.EFI`) from the root.
 /// Leading/duplicate separators are ignored; `/` is accepted too.
 pub fn resolve_path<R: VolumeRead>(
     vol: &FatVolume,
     r: &R,
     path: &[u8],
 ) -> Result<FatEntry, FatError> {
-    let mut dir_cluster = 0u32; // root
+    resolve_in(vol, r, 0, path)
+}
+
+/// Like [`resolve_path`], but the first component is looked up in `start_dir`.
+/// `0` is the volume root. A relative `File.Open` passes the directory
+/// handle's cluster so `grubx64.efi` is not searched from the root.
+pub fn resolve_in<R: VolumeRead>(
+    vol: &FatVolume,
+    r: &R,
+    start_dir: u32,
+    path: &[u8],
+) -> Result<FatEntry, FatError> {
+    let mut dir_cluster = start_dir;
     let mut last: Option<FatEntry> = None;
     let mut comps = 0usize;
     let mut i = 0usize;

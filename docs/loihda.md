@@ -1,6 +1,6 @@
 ---
 loihda_version: 1
-last_updated: 2026-10-04
+last_updated: 2026-10-06
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-8-iso-choose |
-| Summary | **The PERC ISO stays waiting until Guests chooses it.** `27d4e540` booted the Cruzer Alpine image. Unmodified media stays 25. Bar B stays 60. |
+| Commit | m8-8-grub-path |
+| Summary | **`8822dbfa` did not open `grubx64.efi`.** This EFI gives shim a file path for `\EFI\BOOT\BOOTX64.EFI`. Unmodified media stays 25. Bar B stays 60. M8.8.3 is not lived. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Scores held. Bar A 92. Bar B 60. perc 78. Overall 73. Unmodified media stays 25. The library boot is not lived. |
 | Gates touched | M8.8.3 packed, not lived. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-10-06 | m8-8-grub-path | 92 | 60 | **`8822dbfa` stopped before GRUB.** Shim looked up `grubx64.efi` in the FAT root. Next EFI publishes the bootloader's file path. Unmodified media stays 25. Bar B stays 60. M8.8.3 not lived. |
 | 2026-10-04 | m8-8-iso-choose | 92 | 60 | **ISO row waits for a click.** `27d4e540` booted Cruzer Alpine while the Ubuntu file was `vdb`. Choosing the row is the RayNu-F CD. Not flashed. Unmodified media stays 25. Bar B stays 60. |
 | 2026-10-04 | adr-020-gen1 | 92 | 60 | **ADR-020.** Generation 1 is unmodified media. Patched Alpine lived. The patcher is still the product path. Unmodified media stays 25. Bar B stays 60. |
 | 2026-10-04 | m8-8-guest-lom | 92 | 60 | **Guest SSH recorded, not built.** ADR-013 Appendix C: virtio NIC out `01:00.1` / `:39`. SPA stays `:38`. After M8.8. Unmodified media stays 25. Bar B stays 60. |

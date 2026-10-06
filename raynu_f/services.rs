@@ -431,6 +431,10 @@ pub struct FirmwareState {
     pub loaded_image_proto: u64,
     /// Device path published for the boot volume, and the handle owning it.
     pub device_path: u64,
+    /// Guest GPA of a Media/FilePath node for the staged library loader.
+    /// Zero means `LoadedImage.FilePath` is [`Self::device_path`]. A buffer
+    /// `LoadImage` clears this so the next image does not inherit the shim path.
+    pub image_file_path: u64,
     pub device_handle: u64,
     pub image_handle: u64,
     pub image_base: u64,
@@ -470,6 +474,7 @@ impl FirmwareState {
             fat_media_id: super::blockio::MEDIA_ID_CD,
             loaded_image_proto: 0,
             device_path: 0,
+            image_file_path: 0,
             device_handle: 0,
             image_handle: 0,
             image_base: 0,
@@ -519,6 +524,8 @@ pub struct Dispatched {
     /// returning to the caller. The caller's return address stays on the
     /// stack, so the image's `ret` lands back after the `StartImage` call.
     pub start_image: Option<(u64, u64)>,
+    /// `File.Open` succeeded and the path's last component is `grubx64.efi`.
+    pub opened_grub: bool,
     /// `Exit(ImageHandle, ExitStatus, …)` from the started image: the host
     /// must unwind the guest to the `StartImage` caller (its saved RSP /
     /// callee-saved GPRs) and return `ExitStatus` in RAX there.
@@ -1198,7 +1205,15 @@ pub fn publish_loaded_image(st: &mut FirmwareState, mem: &dyn GuestMem, parent: 
         && write_u64(mem, li + super::protocol::LOADED_IMAGE_SYSTEM_TABLE_OFF as u64, st.system_table)
         && write_u64(mem, li + super::protocol::LOADED_IMAGE_IMAGE_BASE_OFF as u64, st.image_base)
         && write_u64(mem, li + super::protocol::LOADED_IMAGE_DEVICE_HANDLE_OFF as u64, st.device_handle)
-        && write_u64(mem, li + super::protocol::LOADED_IMAGE_FILE_PATH_OFF as u64, st.device_path)
+        && write_u64(
+            mem,
+            li + super::protocol::LOADED_IMAGE_FILE_PATH_OFF as u64,
+            if st.image_file_path != 0 {
+                st.image_file_path
+            } else {
+                st.device_path
+            },
+        )
         && write_u64(mem, li + super::protocol::LOADED_IMAGE_IMAGE_SIZE_OFF as u64, st.image_size);
     if !ok {
         return false;
@@ -1254,6 +1269,9 @@ fn load_image(st: &mut FirmwareState, mem: &dyn GuestMem, a: ServiceArgs) -> (u6
     st.image_size = u64::from(loaded.size_of_image);
     st.image_entry = loaded.entry;
     st.image_handle = super::protocol::HANDLE_IMAGE;
+    // A buffer load has no file node. Do not leave the shim's FilePath on
+    // the image this call just replaced.
+    st.image_file_path = 0;
     if !publish_loaded_image(st, mem, a.a2) {
         let _ = st.pool.free_pages_at(base, pages);
         return (EFI_INVALID_PARAMETER, false);
@@ -1290,6 +1308,7 @@ pub fn dispatch(
         image_loaded: false,
         start_image: None,
         exit_image: None,
+        opened_grub: false,
     };
     let a = args;
     out.status = match id {
@@ -1638,6 +1657,9 @@ pub fn dispatch(
             let this_handle = FileSystem::handle_for(slot);
             let (status, handle) = st.fs.open(this_handle, &path[..n], a.a4, &r);
             if status == EFI_SUCCESS {
+                if super::filesystem::path_is_grubx64(&path[..n]) {
+                    out.opened_grub = true;
+                }
                 let ns = (handle & 0xFFF) as u64;
                 let newthis =
                     st.file_proto_base + ns * super::tables::IMAGE_FILE_PROTO_STRIDE as u64;
