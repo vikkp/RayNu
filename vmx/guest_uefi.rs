@@ -4301,6 +4301,10 @@ static RAYNU_F_MEM_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_POOL0_LOGGED: AtomicBool = AtomicBool::new(false);
 /// One line when `SetVariable` stores a Mok variable.
 static RAYNU_F_SETVAR_LOGGED: AtomicBool = AtomicBool::new(false);
+/// One line when shim's `File.Open` of `grubx64.efi` succeeds.
+static RAYNU_F_GRUB_OPEN_LOGGED: AtomicBool = AtomicBool::new(false);
+/// One line when the first `BlockIo` read completes (`blk_rd` leaves zero).
+static RAYNU_F_BLKRD_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_EBS_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_BLOCKIO_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_FS_LOGGED: AtomicBool = AtomicBool::new(false);
@@ -7790,7 +7794,7 @@ unsafe fn raynu_f_reapply_host_xsave() {
 /// | `RAYNU_F_LINUX_HANDOFF` | RESET | false until next EBS |
 /// | `LINUX_EFER_NX_HOLD` | RESET | false until next EBS |
 /// | `RAYNU_F_EXITS/CALLS/SVC_ERRS/ENTRY` | RESET | firmware counters |
-/// | `RAYNU_F_*_LOGGED` (CONOUT/TIMER/MEM/EBS/BLOCKIO/FS/START_IMAGE) | RESET | DISK-BOOT-OK must print again |
+/// | `RAYNU_F_*_LOGGED` (CONOUT/TIMER/MEM/EBS/BLOCKIO/FS/START_IMAGE/GRUB_OPEN/BLKRD) | RESET | DISK-BOOT-OK must print again |
 /// | `RAYNU_F_STAGED_FROM_DISK` | RESET | launch decides disk vs ISO |
 /// | `RAYNU_F_START_CTX` / `PENDING_RX` / `CLOCK_WARNED` | RESET | StartImage/ConIn latches |
 /// | `RAYNU_F_CPUID_LOGGED` | RESET | firmware CPUID log cap |
@@ -7849,6 +7853,8 @@ unsafe fn raynu_f_reset_relaunch(_src: crate::devices::guest_platform::ResetSrc)
     RAYNU_F_MEM_LOGGED.store(false, Ordering::Release);
     RAYNU_F_POOL0_LOGGED.store(false, Ordering::Release);
     RAYNU_F_SETVAR_LOGGED.store(false, Ordering::Release);
+    RAYNU_F_GRUB_OPEN_LOGGED.store(false, Ordering::Release);
+    RAYNU_F_BLKRD_LOGGED.store(false, Ordering::Release);
     RAYNU_F_EBS_LOGGED.store(false, Ordering::Release);
     RAYNU_F_BLOCKIO_LOGGED.store(false, Ordering::Release);
     RAYNU_F_FS_LOGGED.store(false, Ordering::Release);
@@ -8133,8 +8139,41 @@ impl crate::raynu_f::GuestMem for SlabMem {
     }
 }
 
+/// One pool page holding the Media/FilePath node for `\EFI\BOOT\BOOTX64.EFI`.
+/// The CD handle keeps its CDROM device path. Shim reads this node, not that
+/// device path, when it builds `\EFI\BOOT\grubx64.efi`.
+#[cfg(target_os = "uefi")]
+fn raynu_f_alloc_shim_file_path(
+    st: &mut crate::raynu_f::FirmwareState,
+    mem: &SlabMem,
+) -> Option<u64> {
+    let mut buf = [0u8; 64];
+    let n = crate::raynu_f::protocol::encode_filepath_device_path(
+        b"\\EFI\\BOOT\\BOOTX64.EFI",
+        &mut buf,
+    )?;
+    let (status, gpa) = st.pool.allocate_pages(
+        crate::raynu_f::memory::ALLOCATE_ANY_PAGES,
+        crate::raynu_f::memory::EFI_LOADER_DATA,
+        1,
+        0,
+    );
+    if status != 0 {
+        return None;
+    }
+    if crate::raynu_f::GuestMem::write(mem, gpa, &buf[..n]) == n {
+        Some(gpa)
+    } else {
+        None
+    }
+}
+
 /// Stage a resolved FAT file into pool pages and `load_pe32plus`. Shared by
 /// the ISO El Torito path and the F7 disk ESP path.
+///
+/// `shim_file_path` publishes LoadedImage `FilePath` as the file node
+/// `\EFI\BOOT\BOOTX64.EFI`. The library CD sets it. Alpine GRUB and the
+/// disk ESP do not: those loaders find the volume by `DeviceHandle`.
 #[cfg(target_os = "uefi")]
 unsafe fn raynu_f_stage_bootloader_from_volume<R: crate::raynu_f::fat::VolumeRead>(
     vol: &crate::raynu_f::fat::FatVolume,
@@ -8144,6 +8183,7 @@ unsafe fn raynu_f_stage_bootloader_from_volume<R: crate::raynu_f::fat::VolumeRea
     ram_hpa: u64,
     kind: &str,
     note: &str,
+    shim_file_path: bool,
 ) -> Option<u64> {
     let size = u64::from(entry.size);
     // SAFETY: BSP-only firmware state; guest not yet launched.
@@ -8227,6 +8267,22 @@ unsafe fn raynu_f_stage_bootloader_from_volume<R: crate::raynu_f::fat::VolumeRea
     st.image_size = u64::from(loaded.size_of_image);
     st.image_entry = loaded.entry;
     st.image_handle = crate::raynu_f::protocol::HANDLE_IMAGE;
+    st.image_file_path = 0;
+    if shim_file_path {
+        match raynu_f_alloc_shim_file_path(st, &mem) {
+            Some(gpa) => {
+                st.image_file_path = gpa;
+                serial::write_line(
+                    "boot: RayNu-F LoadedImage FilePath \\EFI\\BOOT\\BOOTX64.EFI (Ubuntu shim; not ISO-INSTALL-OK)",
+                );
+            }
+            None => {
+                serial::write_line(
+                    "boot: RayNu-F WARN LoadedImage FilePath not published (shim may not find grubx64.efi)",
+                );
+            }
+        }
+    }
     if !crate::raynu_f::publish_loaded_image(st, &mem, 0) {
         serial::write_line(
             "boot: RayNu-F WARN LoadedImage publish failed (loader may not find its volume)",
@@ -8404,6 +8460,7 @@ unsafe fn raynu_f_stage_disk_bootloader(
         ram_hpa,
         "disk",
         "(F7; not ISO-INSTALL-OK)",
+        false,
     )?;
     RAYNU_F_STAGED_FROM_DISK.store(true, Ordering::Release);
     crate::devices::guest_serial_answer::begin_second_boot();
@@ -8535,6 +8592,7 @@ unsafe fn raynu_f_stage_library_bootloader(
         ram_hpa,
         "ISO",
         "(library ISO; not ISO-INSTALL-OK)",
+        true,
     )
 }
 
@@ -8639,6 +8697,7 @@ unsafe fn raynu_f_stage_iso_bootloader(
         ram_hpa,
         "ISO",
         "(F5; not ISO-INSTALL-OK)",
+        false,
     )
 }
 
@@ -12021,6 +12080,19 @@ unsafe fn handle_raynu_f_service() -> bool {
     {
         serial::write_line(
             "boot: RayNu-F SetVariable ok (Mok store; not ISO-INSTALL-OK)",
+        );
+    }
+    if d.opened_grub && !RAYNU_F_GRUB_OPEN_LOGGED.swap(true, Ordering::AcqRel) {
+        serial::write_line(
+            "boot: RayNu-F opened grubx64.efi (Ubuntu shim; not ISO-INSTALL-OK)",
+        );
+    }
+    if id == crate::raynu_f::ServiceId::BlockIoReadBlocks
+        && d.status == 0
+        && !RAYNU_F_BLKRD_LOGGED.swap(true, Ordering::AcqRel)
+    {
+        serial::write_line(
+            "boot: RayNu-F blk_rd left zero (GRUB reading the CD; not ISO-INSTALL-OK)",
         );
     }
     if matches!(d.wait, Some(crate::raynu_f::WaitOutcome::TimerFired(_)))

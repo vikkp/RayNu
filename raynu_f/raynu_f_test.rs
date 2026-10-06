@@ -1484,6 +1484,28 @@ fn raynu_f_fat_and_simple_filesystem() {
     assert_eq!(fs.open(root, b"\\EFI", 0, &vol).0, EFI_INVALID_PARAMETER);
     assert_eq!(fs.open(0xDEAD, b"\\EFI", EFI_FILE_MODE_READ, &vol).0, EFI_INVALID_PARAMETER);
     assert_eq!(fs.open(root, b"\\NOPE", EFI_FILE_MODE_READ, &vol).0, EFI_NOT_FOUND);
+    // Empty name duplicates This (UEFI Open of "").
+    let (st, dup_root) = fs.open(root, b"", EFI_FILE_MODE_READ, &vol);
+    assert_eq!(st, EFI_SUCCESS);
+    assert_ne!(dup_root, root);
+    assert_eq!(fs.is_directory(dup_root), Some(true));
+    // Relative to \EFI\BOOT, not the volume root. Shim opens grubx64.efi this way
+    // when FilePath names the directory; the same name from the root is absent.
+    let (st, bootdir) = fs.open(root, b"\\EFI\\BOOT", EFI_FILE_MODE_READ, &vol);
+    assert_eq!(st, EFI_SUCCESS);
+    assert_eq!(fs.is_directory(bootdir), Some(true));
+    let (st, rel) = fs.open(bootdir, b"BOOTX64.EFI", EFI_FILE_MODE_READ, &vol);
+    assert_eq!(st, EFI_SUCCESS);
+    assert_eq!(fs.size_of(rel), Some(app.len() as u64));
+    assert_eq!(fs.open(root, b"BOOTX64.EFI", EFI_FILE_MODE_READ, &vol).0, EFI_NOT_FOUND);
+    assert_eq!(fs.open(fh, b"BOOTX64.EFI", EFI_FILE_MODE_READ, &vol).0, EFI_INVALID_PARAMETER);
+    let (st, dup_file) = fs.open(fh, b"", EFI_FILE_MODE_READ, &vol);
+    assert_eq!(st, EFI_SUCCESS);
+    assert_eq!(fs.size_of(dup_file), Some(app.len() as u64));
+    assert!(super::filesystem::path_is_grubx64(b"\\EFI\\BOOT\\grubx64.efi"));
+    assert!(super::filesystem::path_is_grubx64(b"GRUBX64.EFI"));
+    assert!(!super::filesystem::path_is_grubx64(b"\\EFI\\BOOT\\BOOTX64.EFI"));
+    assert!(!super::filesystem::path_is_grubx64(b""));
 
     // Sequential reads reassemble the whole PE, and the position advances.
     let mut acc = Vec::new();
@@ -1885,6 +1907,36 @@ fn raynu_f_filesystem_loadimage_startimage() {
         assert_eq!(dispatch(ServiceId::LoadImage, again, &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_SUCCESS);
         assert_eq!(guest.u64_at(li + LOADED_IMAGE_DEVICE_HANDLE_OFF as u64), super::HANDLE_CD);
         assert_eq!(guest.u64_at(li + LOADED_IMAGE_FILE_PATH_OFF as u64), layout.device_path);
+        // Shim's FilePath is the file node alone. A later buffer LoadImage
+        // drops it and points FilePath back at the device path.
+        {
+            use super::protocol::{encode_filepath_device_path, DP_SUBTYPE_FILEPATH};
+            let path = b"\\EFI\\BOOT\\BOOTX64.EFI";
+            let mut fp = [0u8; 80];
+            let n = encode_filepath_device_path(path, &mut fp).expect("fits");
+            assert!(n <= 64);
+            assert_eq!(fp[0], DP_TYPE_MEDIA);
+            assert_eq!(fp[1], DP_SUBTYPE_FILEPATH);
+            let node_len = u16::from_le_bytes([fp[2], fp[3]]) as usize;
+            assert_eq!(node_len, 4 + (path.len() + 1) * 2);
+            for (i, &c) in path.iter().enumerate() {
+                assert_eq!(fp[4 + i * 2], c);
+                assert_eq!(fp[4 + i * 2 + 1], 0);
+            }
+            assert_eq!(fp[node_len], DP_TYPE_END);
+            assert_eq!(fp[node_len + 1], DP_SUBTYPE_END_ENTIRE);
+            assert!(encode_filepath_device_path(path, &mut [0u8; 8]).is_none());
+            st.image_file_path = 0x1111_0000;
+            assert!(super::services::publish_loaded_image(&mut st, &guest, 0));
+            assert_eq!(guest.u64_at(li + LOADED_IMAGE_FILE_PATH_OFF as u64), 0x1111_0000);
+            assert_eq!(guest.u64_at(li + LOADED_IMAGE_DEVICE_HANDLE_OFF as u64), super::HANDLE_CD);
+            guest.put_u64(stack + STACK_ARG5_OFF, app.len() as u64);
+            guest.put_u64(stack + STACK_ARG5_OFF + 8, p_handle);
+            let drop_fp = ServiceArgs { a1: 0, a2: 0, a3: 0, a4: buf, rsp: stack };
+            assert_eq!(dispatch(ServiceId::LoadImage, drop_fp, &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_SUCCESS);
+            assert_eq!(st.image_file_path, 0);
+            assert_eq!(guest.u64_at(li + LOADED_IMAGE_FILE_PATH_OFF as u64), layout.device_path);
+        }
         // And the loader can look the device path up on that handle.
         guest.write(p_guid + 0x60, &GUID_DEVICE_PATH);
         guest.put_u64(p_root, 0);

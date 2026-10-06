@@ -11,7 +11,10 @@ pub const VAR_SLOTS: usize = 16;
 /// CHAR16 units including the trailing NUL.
 pub const VAR_NAME_MAX: usize = 32;
 /// Bytes of variable data. Shim's `MokListRT` on this ISO was 0x464.
-pub const VAR_DATA_MAX: usize = 4096;
+/// 2048 leaves headroom and keeps `FirmwareState` under 128 KiB. That cap
+/// is the F7 host stack: the state is copied from `.rdata`, and a stack
+/// copy of a larger struct overflows the 32-page stack (`59ac070`).
+pub const VAR_DATA_MAX: usize = 2048;
 
 const ATTR_NV: u32 = 0x1;
 const ATTR_BS: u32 = 0x2;
