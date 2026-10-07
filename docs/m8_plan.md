@@ -223,7 +223,7 @@ The fence accepts one LD of ~2.5–3.1 TiB and refuses ~300–512 GiB. Scratch p
 
 ### M8.8 — Ubuntu ISO library on RAYNU-SPARE
 
-**Status: GRUB menu lived, wall cap stopped it.** `93088c32` stored `ubuntu-26.04-live-server-amd64.iso` (2,918,598,656 bytes). Guests **ISO** on row id 3 makes that file both virtio `vdb` and the RayNu-F CD. `90f64bcf` opened `grubx64.efi`, printed GNU GRUB 2.14 (**Try or Install Ubuntu Server**), and `blk_rd` left zero. The countdown was at 22 s when `wall_ms=180007` stopped the guest. The kernel was not read. This EFI raises the RayNu-F wall cap from 180 s to 600 s. M8.8.3 is not lived. `console=ttyS0` is still the file's own kernel line. Do not flash until CI is green.
+**Status: GRUB menu clock is slow.** `93088c32` stored `ubuntu-26.04-live-server-amd64.iso` (2,918,598,656 bytes). Guests **ISO** on row id 3 makes that file both virtio `vdb` and the RayNu-F CD. `9147cad0` opened `grubx64.efi` and painted GNU GRUB 2.14. The countdown reached 1 s when `wall_ms=600005` stopped the guest. `blk_rd=17`. Each GRUB second was about 20 wall seconds, because speaker port `0x61` read `0xFF` and GRUB's PIT calibration did not wait. This EFI holds channel 2 for a real 55 ms so that calibration matches wall time. The 600 s cap stays. M8.8.3 is not lived. `console=ttyS0` is still the file's own kernel line. Do not flash until CI is green.
 
 **Goal:** The operator picks `ubuntu-26.04-live-server-amd64.iso` on Guests. The hypervisor stores that file unchanged in a high library on RAYNU-SPARE and boots it as a CD. The file stays after install. **Clear ISO** on Guests drops the catalog hold and wipes the ISO signature sector. It does not scrub the whole file and it does not touch an installed disk.
 

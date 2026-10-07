@@ -37,7 +37,7 @@
 //! empty-slot scan). PIRQ `0x60-0x63` reset `0x80` (disabled) matches
 //! QEMU so IRQ assign is not IRQ0.
 
-use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, Ordering};
 
 /// Must match [`crate::memory::ept_hw::GUEST_UEFI_LOW_RAM_BYTES`] (32 MiB).
 /// Kept local so this module does not import the Proven Core EPT builder.
@@ -1316,6 +1316,87 @@ pub fn acpi_pm_timer_reads() -> u32 {
 /// `MicroSecondDelay` / BdsWait takes ~55 INs; ~300 waits burned the
 /// cap before AtaAtapiPassThru. One step ≥ 1 s of PM ticks.
 pub const ACPI_PM_STEP: u32 = 0x0040_0000;
+
+/// i8254 frequency. Channel 2 loaded with `0xFFFF` is the ~55 ms interval
+/// GRUB's `grub_tsc_calibrate_from_pit` measures.
+pub const PIT_HZ: u64 = 1_193_182;
+/// Counts GRUB writes to counter 2 (`0xFFFF` means 65536 ticks).
+pub const PIT2_GRUB_COUNTS: u64 = 0x1_0000;
+
+struct Pit2Gate {
+    /// Speaker port bit 0. Rising edge starts the 55 ms count.
+    on: AtomicBool,
+    start: AtomicU64,
+}
+
+static PIT2: Pit2Gate = Pit2Gate {
+    on: AtomicBool::new(false),
+    start: AtomicU64::new(0),
+};
+
+/// TSC ticks for GRUB's channel-2 wait at `tsc_hz` (0 → 2.1 GHz).
+pub fn pit2_grub_wait_ticks(tsc_hz: u64) -> u64 {
+    let hz = if tsc_hz == 0 { 2_100_000_000 } else { tsc_hz };
+    hz.saturating_mul(PIT2_GRUB_COUNTS) / PIT_HZ
+}
+
+/// Clear the RayNu-F PIT channel-2 gate. Call at each RayNu-F launch.
+pub fn raynu_f_pit2_reset() {
+    PIT2.on.store(false, Ordering::Release);
+    PIT2.start.store(0, Ordering::Release);
+}
+
+/// RayNu-F PIT for GRUB's TSC calibration.
+///
+/// On this path every other IN is `0xFF`, so `grub_pit_wait` used to see
+/// speaker bit 5 already set and skip the wait. The measured TSC delta was
+/// a handful of exits, GRUB's rate came out about 20× high, and each menu
+/// second lasted about 20 wall seconds (`9147cad0`: countdown `1s` at
+/// `wall_ms=600005`). Channel 2 now runs for a real ~55 ms after the gate
+/// rises. Bit 5 stays clear until that interval ends.
+///
+/// Returns the new RAX for an IN, or `Some(rax)` for an OUT we consume.
+/// `None` means this port is not the calibrator.
+pub fn raynu_f_pit2_io(
+    port: u16,
+    is_in: bool,
+    size: u8,
+    rax: u64,
+    tsc: u64,
+    tsc_hz: u64,
+) -> Option<u64> {
+    if !is_in && (port == 0x42 || port == 0x43) {
+        return Some(rax);
+    }
+    if port != 0x61 {
+        return None;
+    }
+    if !is_in {
+        let gate = (rax as u8) & 0x01 != 0;
+        if gate && !PIT2.on.swap(true, Ordering::AcqRel) {
+            PIT2.start.store(tsc, Ordering::Release);
+        } else if !gate {
+            PIT2.on.store(false, Ordering::Release);
+        }
+        return Some(rax);
+    }
+    let on = PIT2.on.load(Ordering::Acquire);
+    let start = PIT2.start.load(Ordering::Acquire);
+    let done = on && tsc.wrapping_sub(start) >= pit2_grub_wait_ticks(tsc_hz);
+    let mut v = 0u8;
+    if on {
+        v |= 0x01;
+    }
+    if done {
+        v |= 0x20;
+    }
+    let mask = match size {
+        1 => 0xffu64,
+        2 => 0xffff,
+        _ => 0xffff_ffff,
+    };
+    Some((rax & !mask) | (u64::from(v) & mask))
+}
 
 fn tick_pm_timer(p: &mut Platform) -> u32 {
     ACPI_PM.fetch_add(1, Ordering::AcqRel);

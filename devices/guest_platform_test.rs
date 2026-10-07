@@ -683,3 +683,43 @@ fn reset_request_from_io_cf9_and_kbc() {
     assert_eq!(ResetSrc::Kbc.as_str(), "kbc");
     assert_eq!(ResetSrc::Tf.as_str(), "tf");
 }
+
+#[test]
+fn raynu_f_pit2_waits_one_grub_second_scale() {
+    use super::{pit2_grub_wait_ticks, raynu_f_pit2_io, raynu_f_pit2_reset, PIT_HZ};
+    let hz = 2_100_000_000u64;
+    raynu_f_pit2_reset();
+    let wait = pit2_grub_wait_ticks(hz);
+    // 65536 counts at 1.193182 MHz is the ~55 ms GRUB divides by.
+    let ms = wait.saturating_mul(1000) / hz;
+    assert!((54..=56).contains(&ms), "wait is {ms} ms");
+    // GRUB: rate = (55 << 32) / tsc_delta. Within 1% of a true 2.1 GHz.
+    let rate = (55u128 << 32) / wait as u128;
+    let ideal = (1u128 << 32) * 1000 / hz as u128;
+    let diff = rate.abs_diff(ideal);
+    assert!(diff * 100 < ideal, "rate {rate} vs {ideal}");
+    assert_eq!(PIT_HZ, 1_193_182);
+
+    // inb before the gate: output low.
+    assert_eq!(raynu_f_pit2_io(0x61, true, 1, 0, 1_000, hz), Some(0));
+    // Program channel 2 (consumed, not 0xFF).
+    assert_eq!(raynu_f_pit2_io(0x43, false, 1, 0xB0, 1_000, hz), Some(0xB0));
+    assert_eq!(raynu_f_pit2_io(0x42, false, 1, 0xFF, 1_000, hz), Some(0xFF));
+    // Gate rises. The sample GRUB takes immediately is still low.
+    assert_eq!(raynu_f_pit2_io(0x61, false, 1, 0x01, 5_000, hz), Some(0x01));
+    assert_eq!(raynu_f_pit2_io(0x61, true, 1, 0, 5_000, hz), Some(0x01));
+    // One tick before the interval ends, still low. At the interval, bit 5.
+    assert_eq!(
+        raynu_f_pit2_io(0x61, true, 1, 0, 5_000 + wait - 1, hz),
+        Some(0x01)
+    );
+    assert_eq!(
+        raynu_f_pit2_io(0x61, true, 1, 0, 5_000 + wait, hz),
+        Some(0x21)
+    );
+    // Gate off clears the output.
+    assert_eq!(raynu_f_pit2_io(0x61, false, 1, 0x00, 9_000, hz), Some(0));
+    assert_eq!(raynu_f_pit2_io(0x61, true, 1, 0, 9_000, hz), Some(0));
+    assert_eq!(raynu_f_pit2_io(0x3F8, true, 1, 0, 0, hz), None);
+    raynu_f_pit2_reset();
+}
