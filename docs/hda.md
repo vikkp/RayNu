@@ -1,6 +1,6 @@
 ---
 hda_version: 1
-last_updated: 2026-10-06
+last_updated: 2026-10-07
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-8-grub-path |
-| Summary | **`8822dbfa` opened `grubx64.efi` from the FAT root and got Not Found.** LoadedImage `FilePath` was the CDROM node. This EFI publishes the file node `\EFI\BOOT\BOOTX64.EFI` and resolves a relative `File.Open` against that directory. Mok variable data is capped at 2048 bytes so `FirmwareState` stays under 128 KiB. M8.8.3 is not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
+| Commit | m8-8-wall-cap |
+| Summary | **`90f64bcf` reached GNU GRUB 2.14 and the 180 s cap stopped it at countdown 22 s.** `blk_rd=17`. The kernel was not read. This EFI raises the RayNu-F wall cap to 600 s so the 30 s Ubuntu menu can finish and GRUB can read `vmlinuz` and the initrd. M8.8.3 is not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
 | Gates touched | M8.8.3 still open. No doorbell. No format of UBUNTU0. Not a COM2 close. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 60 held, perc 78 held, unmodified 25 held, overall LOI 73 held, months A 0.25 held, months B 1.5 held. |
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-07 | m8-8-wall-cap | 0.0 | 99 | **`90f64bcf` GRUB menu, then wall cap.** GNU GRUB 2.14 countdown was at 22 s when `wall_ms=180007` and `blk_rd=17`. Next EFI uses a 600 s cap so the 30 s menu and the kernel read can finish. M8.8.3 not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-06 | m8-8-grub-path | 0.0 | 99 | **`8822dbfa` stopped on `grubx64.efi` Not Found.** FilePath was the CDROM node, so shim looked the file up in the FAT root. Next EFI publishes `\EFI\BOOT\BOOTX64.EFI` as the file node and opens relative names against the directory handle. Mok data cap 2048 keeps `FirmwareState` under 128 KiB. M8.8.3 not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-04 | m8-8-mok-var | 0.0 | 99 | **`0aa0a78d` shim stopped on `MokListRT`.** `SetVariable` was unsupported. Next EFI keeps a boot-long variable store and mints a null protocol handle. M8.8.3 not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-04 | m8-8-pool0 | 0.0 | 99 | **`5cb54836` wall-cap.** Ubuntu `BOOTX64.EFI` ran 180 s, `blk_rd=0`, `AllocatePool` type 0. Next EFI serves that call as loader data. M8.8.3 not lived. Scores held. months 0.0 held; overall 99 held |

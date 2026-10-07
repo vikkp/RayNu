@@ -3520,6 +3520,8 @@ fn raynu_f_wall_cap_bounds_the_loader_phase_by_time_not_exits() {
     assert_eq!(raynu_f_wall_elapsed_ms(1_000, 1_000 + hz / 2, hz), 500);
     assert_eq!(raynu_f_wall_elapsed_ms(5_000, 1_000, hz), 0, "saturating");
     assert!(!raynu_f_wall_cap_hit(1_000, 1_000 + 2 * hz, hz, RAYNU_F_WALL_CAP_S), "2 s GRUB timeout survives");
+    assert!(!raynu_f_wall_cap_hit(1_000, 1_000 + 30 * hz, hz, RAYNU_F_WALL_CAP_S), "Ubuntu 30 s menu survives");
+    assert!(!raynu_f_wall_cap_hit(1_000, 1_000 + 180 * hz, hz, RAYNU_F_WALL_CAP_S), "90f64bcf 180 s stop must not repeat");
     assert!(!raynu_f_wall_cap_hit(1_000, 1_000 + RAYNU_F_WALL_CAP_S * hz, hz, RAYNU_F_WALL_CAP_S), "exactly cap: not hit");
     assert!(raynu_f_wall_cap_hit(1_000, 1_000 + (RAYNU_F_WALL_CAP_S + 1) * hz, hz, RAYNU_F_WALL_CAP_S));
     assert!(!raynu_f_wall_cap_hit(0, u64::MAX, hz, RAYNU_F_WALL_CAP_S), "unarmed base never trips");
