@@ -4281,11 +4281,12 @@ static RAYNU_F_EXITS: AtomicU32 = AtomicU32::new(0);
 /// ([`RAYNU_F_WALL_CAP_S`]); this count only guards a u32 wrap.
 pub const RAYNU_F_EXIT_CAP: u32 = 1 << 30;
 /// RayNu-F wall cap: seconds of firmware phase (launch → `ExitBootServices`)
-/// before `raynu_f_stop("wall-cap")`. GRUB timeout (Alpine default 2 s) +
-/// kernel/initrd `ReadBlocks` + `StartImage` is a few seconds; nested KVM
-/// took well under a minute. Bounded so a runaway loader cannot hang the
-/// host, but long enough that iron speed cannot trip it.
-pub const RAYNU_F_WALL_CAP_S: u64 = 180;
+/// before `raynu_f_stop("wall-cap")`. Alpine's menu is 2 s. Ubuntu's is 30 s.
+/// Iron `90f64bcf` painted GNU GRUB 2.14 and was still counting (`22s`) when
+/// `wall_ms=180007` stopped the guest (`blk_rd=17`, kernel not read). 600 s
+/// covers that countdown plus `vmlinuz` and the initrd. Still bounded: a
+/// runaway loader cannot sit on the host longer than this.
+pub const RAYNU_F_WALL_CAP_S: u64 = 600;
 /// Exits between wall-cap checks (`rdtsc` on the RayNu-F hot path only every
 /// 4096 exits).
 pub const RAYNU_F_WALL_CHECK_MASK: u32 = 0xFFF;
@@ -7590,6 +7591,8 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
     } else {
         " image=test-app"
     });
+    serial::write_str(" wall_cap_s=");
+    write_dec(RAYNU_F_WALL_CAP_S);
     serial::write_line(" (F2b/F5; not ISO-INSTALL-OK)");
     raynu_f_vmlaunch();
 }
