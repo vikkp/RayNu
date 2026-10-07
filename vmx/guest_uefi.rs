@@ -4306,6 +4306,8 @@ static RAYNU_F_SETVAR_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_GRUB_OPEN_LOGGED: AtomicBool = AtomicBool::new(false);
 /// One line when the first `BlockIo` read completes (`blk_rd` leaves zero).
 static RAYNU_F_BLKRD_LOGGED: AtomicBool = AtomicBool::new(false);
+/// One line when GRUB's PIT channel-2 calibration wait completes.
+static RAYNU_F_PIT2_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_EBS_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_BLOCKIO_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_FS_LOGGED: AtomicBool = AtomicBool::new(false);
@@ -7573,6 +7575,7 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
     SAVED_R14 = 0;
     SAVED_R15 = 0;
     RAYNU_F_EXITS.store(0, Ordering::Release);
+    crate::devices::guest_platform::raynu_f_pit2_reset();
     RAYNU_F_LAUNCH_TSC.store(cpu::rdtsc().max(1), Ordering::Release);
     RAYNU_F_ENTRY.store(entry, Ordering::Release);
     RAYNU_F_LINUX_HANDOFF.store(false, Ordering::Release);
@@ -7858,6 +7861,7 @@ unsafe fn raynu_f_reset_relaunch(_src: crate::devices::guest_platform::ResetSrc)
     RAYNU_F_SETVAR_LOGGED.store(false, Ordering::Release);
     RAYNU_F_GRUB_OPEN_LOGGED.store(false, Ordering::Release);
     RAYNU_F_BLKRD_LOGGED.store(false, Ordering::Release);
+    RAYNU_F_PIT2_LOGGED.store(false, Ordering::Release);
     RAYNU_F_EBS_LOGGED.store(false, Ordering::Release);
     RAYNU_F_BLOCKIO_LOGGED.store(false, Ordering::Release);
     RAYNU_F_FS_LOGGED.store(false, Ordering::Release);
@@ -8893,6 +8897,22 @@ unsafe fn raynu_f_vmexit(reason: u32, qual: u64, rip: u64, intr: u64) -> ! {
                 handle_uart(port, is_in, size);
             } else if is_debugcon_port(port) {
                 handle_debugcon(is_in, size);
+            } else if let Some(new_rax) = crate::devices::guest_platform::raynu_f_pit2_io(
+                port,
+                is_in,
+                size as u8,
+                SAVED_RAX,
+                cpu::rdtsc(),
+                crate::boot::raynu_f_flag::tsc_hz(),
+            ) {
+                if is_in {
+                    SAVED_RAX = new_rax;
+                    if new_rax & 0x20 != 0 && !RAYNU_F_PIT2_LOGGED.swap(true, Ordering::AcqRel) {
+                        serial::write_line(
+                            "boot: RayNu-F PIT2 55ms (GRUB clock; not ISO-INSTALL-OK)",
+                        );
+                    }
+                }
             } else {
                 if n < 16 {
                     serial::write_str("boot: RayNu-F io unhandled port=0x");

@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-8-wall-cap |
-| Summary | **`90f64bcf` reached GNU GRUB 2.14 and the 180 s cap stopped it at countdown 22 s.** `blk_rd=17`. The kernel was not read. This EFI raises the RayNu-F wall cap to 600 s so the 30 s Ubuntu menu can finish and GRUB can read `vmlinuz` and the initrd. M8.8.3 is not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
+| Commit | m8-8-grub-clock |
+| Summary | **`9147cad0` reached GRUB's last displayed second and the 600 s cap stopped it.** Each GRUB second was about 20 wall seconds. `blk_rd=17`. This EFI runs PIT channel 2 for a real 55 ms so GRUB's TSC calibration matches wall time. M8.8.3 is not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
 | Gates touched | M8.8.3 still open. No doorbell. No format of UBUNTU0. Not a COM2 close. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 60 held, perc 78 held, unmodified 25 held, overall LOI 73 held, months A 0.25 held, months B 1.5 held. |
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-07 | m8-8-grub-clock | 0.0 | 99 | **`9147cad0` died at GRUB `1s`.** `wall_ms=600005`, `blk_rd=17`. A GRUB second was about 20 wall seconds because PIT channel 2 did not wait. Next EFI waits a real 55 ms on that counter. M8.8.3 not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-07 | m8-8-wall-cap | 0.0 | 99 | **`90f64bcf` GRUB menu, then wall cap.** GNU GRUB 2.14 countdown was at 22 s when `wall_ms=180007` and `blk_rd=17`. Next EFI uses a 600 s cap so the 30 s menu and the kernel read can finish. M8.8.3 not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-06 | m8-8-grub-path | 0.0 | 99 | **`8822dbfa` stopped on `grubx64.efi` Not Found.** FilePath was the CDROM node, so shim looked the file up in the FAT root. Next EFI publishes `\EFI\BOOT\BOOTX64.EFI` as the file node and opens relative names against the directory handle. Mok data cap 2048 keeps `FirmwareState` under 128 KiB. M8.8.3 not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-04 | m8-8-mok-var | 0.0 | 99 | **`0aa0a78d` shim stopped on `MokListRT`.** `SetVariable` was unsupported. Next EFI keeps a boot-long variable store and mints a null protocol handle. M8.8.3 not lived. Scores held. months 0.0 held; overall 99 held |
