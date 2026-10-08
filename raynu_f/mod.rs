@@ -20,6 +20,7 @@
 //! it. It is **not** `RAYNU-V-M7-ISO-INSTALL-OK`.
 
 pub mod blockio;
+pub mod cd_serial;
 pub mod events;
 pub mod fat;
 pub mod filesystem;

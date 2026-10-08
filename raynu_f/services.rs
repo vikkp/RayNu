@@ -450,8 +450,13 @@ pub struct FirmwareState {
     /// Library CD only. `StartImage` appends `console=ttyS0` to LoadOptions
     /// for this boot. `LoadImage` does not clear it: the shim is VMLAUNCHed,
     /// and the kernel `StartImage` is a later buffer load. Alpine disk boot
-    /// leaves this false. The stored ISO is not rewritten.
+    /// leaves this false. The stored ISO is not rewritten. The same flag
+    /// arms the `BlockIo` view of ISO9660 `grub.cfg` (`4e9ebcdb`).
     pub append_kernel_serial: bool,
+    /// A library-CD `ReadBlocks` grew a menu file's `linux` line.
+    pub cd_linux_serial: bool,
+    /// That menu file did not fit in the sector pad. The line stayed stock.
+    pub cd_linux_skip: bool,
     /// Successful block reads / writes (host bookkeeping for markers).
     pub block_reads: u32,
     pub block_writes: u32,
@@ -489,6 +494,8 @@ impl FirmwareState {
             config_table: 0,
             image_started: false,
             append_kernel_serial: false,
+            cd_linux_serial: false,
+            cd_linux_skip: false,
             block_reads: 0,
             block_writes: 0,
             vars: super::vars::VarStore::new(),
@@ -544,6 +551,10 @@ pub struct Dispatched {
     pub grub_cfg_serial: bool,
     /// That `grub.cfg` did not fit in the serial view. Reads stay original.
     pub grub_cfg_serial_skip: bool,
+    /// Library-CD `ReadBlocks` amended an ISO9660/Joliet menu file.
+    pub cd_linux_serial: bool,
+    /// That menu file had no room in its last sector.
+    pub cd_linux_skip: bool,
 }
 
 fn read_u64(mem: &dyn GuestMem, addr: u64) -> Option<u64> {
@@ -1142,9 +1153,23 @@ fn block_transfer(
             let Some(r) = st.read_blocks else {
                 return BLK_DEVICE_ERROR;
             };
-            if !r(media_id, off + done, &mut buf[..chunk])
-                || mem.write(buffer + done, &buf[..chunk]) != chunk
-            {
+            if !r(media_id, off + done, &mut buf[..chunk]) {
+                return BLK_DEVICE_ERROR;
+            }
+            if st.append_kernel_serial && media.media_id == super::blockio::MEDIA_ID_CD {
+                let touch = super::cd_serial::amend_library_cd_chunk(
+                    &mut buf[..chunk],
+                    off + done,
+                    &mut |at, dst| r(media_id, at, dst),
+                );
+                if touch.amended {
+                    st.cd_linux_serial = true;
+                }
+                if touch.skipped {
+                    st.cd_linux_skip = true;
+                }
+            }
+            if mem.write(buffer + done, &buf[..chunk]) != chunk {
                 return BLK_DEVICE_ERROR;
             }
         }
@@ -1465,6 +1490,8 @@ pub fn dispatch(
         serial_appended: false,
         grub_cfg_serial: false,
         grub_cfg_serial_skip: false,
+        cd_linux_serial: false,
+        cd_linux_skip: false,
     };
     let a = args;
     out.status = match id {
@@ -1759,7 +1786,12 @@ pub fn dispatch(
                 EFI_INVALID_PARAMETER
             }
         }
-        ServiceId::BlockIoReadBlocks => block_transfer(st, mem, a, false),
+        ServiceId::BlockIoReadBlocks => {
+            let status = block_transfer(st, mem, a, false);
+            out.cd_linux_serial = st.cd_linux_serial;
+            out.cd_linux_skip = st.cd_linux_skip;
+            status
+        }
         ServiceId::BlockIoWriteBlocks => block_transfer(st, mem, a, true),
         ServiceId::BlockIoFlushBlocks => {
             // Writes reach the backing store synchronously (WriteCaching=0).

@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-8-grubcfg-view |
-| Summary | **`6865b5ab` reached EBS and virtio `DRIVER_OK` with no serial line.** GRUB 2.14 started the kernel by the handover jump, so `StartImage` never ran. This EFI adds `console=ttyS0` to the `linux` line in the `grub.cfg` bytes GRUB reads. The stored file is not rewritten. M8.8.3 is not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
+| Commit | m8-8-cd-linux |
+| Summary | **`4e9ebcdb` reached EBS with no `grub.cfg` line.** GRUB read the menu from the ISO through `BlockIo`, not `File.Open`. This EFI grows that `linux` line in the CD sectors GRUB reads and bumps the directory length so the extra bytes are kept. The stored file is not rewritten. M8.8.3 is not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
 | Gates touched | M8.8.3 still open. No doorbell. No format of UBUNTU0. Not a COM2 close. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 60 held, perc 78 held, unmodified 25 held, overall LOI 73 held, months A 0.25 held, months B 1.5 held. |
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-08 | m8-8-cd-linux | 0.0 | 99 | **`4e9ebcdb` EBS and virtio `DRIVER_OK`, no `grub.cfg` line and no `Linux version`.** The menu file came through `BlockIo`. This EFI amends that ISO9660 `linux` line and its directory length. The stored file stays. M8.8.3 not lived. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-08 | m8-8-grubcfg-view | 0.0 | 99 | **`6865b5ab` EBS and virtio `DRIVER_OK`, no `Linux version` and no kernel-line line.** GRUB handed the kernel over without `StartImage`. This EFI amends the `grub.cfg` read view for the library CD. The stored file stays. M8.8.3 not lived. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-08 | m8-8-kernel-serial | 0.0 | 99 | **`87979e32` EBS and virtio `DRIVER_OK`, no `Linux version`.** PIT2 ran the GRUB menu in wall time. The stock kernel line has no serial console. This EFI appends `console=ttyS0` at `StartImage` for the library CD only. The stored file is not rewritten. M8.8.3 not lived. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-07 | m8-8-grub-clock | 0.0 | 99 | **`9147cad0` died at GRUB `1s`.** `wall_ms=600005`, `blk_rd=17`. A GRUB second was about 20 wall seconds because PIT channel 2 did not wait. Next EFI waits a real 55 ms on that counter. M8.8.3 not lived. Scores held. months 0.0 held; overall 99 held |
