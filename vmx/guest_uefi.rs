@@ -4314,6 +4314,10 @@ static RAYNU_F_SERIAL_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_GRUBCFG_LOGGED: AtomicBool = AtomicBool::new(false);
 /// One line when that view is skipped because the file does not fit.
 static RAYNU_F_GRUBCFG_SKIP_LOGGED: AtomicBool = AtomicBool::new(false);
+/// One line when a library-CD `ReadBlocks` grows the ISO9660 menu file.
+static RAYNU_F_CD_LINUX_LOGGED: AtomicBool = AtomicBool::new(false);
+/// One line when that menu file does not fit in its last sector.
+static RAYNU_F_CD_LINUX_SKIP_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_EBS_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_BLOCKIO_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_FS_LOGGED: AtomicBool = AtomicBool::new(false);
@@ -7871,7 +7875,10 @@ unsafe fn raynu_f_reset_relaunch(_src: crate::devices::guest_platform::ResetSrc)
     RAYNU_F_SERIAL_LOGGED.store(false, Ordering::Release);
     RAYNU_F_GRUBCFG_LOGGED.store(false, Ordering::Release);
     RAYNU_F_GRUBCFG_SKIP_LOGGED.store(false, Ordering::Release);
+    RAYNU_F_CD_LINUX_LOGGED.store(false, Ordering::Release);
+    RAYNU_F_CD_LINUX_SKIP_LOGGED.store(false, Ordering::Release);
     crate::raynu_f::filesystem::reset_library_grub_cfg_view();
+    crate::raynu_f::cd_serial::reset_cd_linux_view();
     RAYNU_F_EBS_LOGGED.store(false, Ordering::Release);
     RAYNU_F_BLOCKIO_LOGGED.store(false, Ordering::Release);
     RAYNU_F_FS_LOGGED.store(false, Ordering::Release);
@@ -12137,6 +12144,20 @@ unsafe fn handle_raynu_f_service() -> bool {
     if d.grub_cfg_serial_skip && !RAYNU_F_GRUBCFG_SKIP_LOGGED.swap(true, Ordering::AcqRel) {
         serial::write_line(
             "boot: RayNu-F WARN grub.cfg serial view skipped (file larger than the view; kernel line unchanged)",
+        );
+    }
+    if d.cd_linux_serial && !RAYNU_F_CD_LINUX_LOGGED.swap(true, Ordering::AcqRel) {
+        serial::write_str("boot: RayNu-F CD grub.cfg console=ttyS0 len=");
+        if let Some((orig, new_len)) = crate::raynu_f::cd_serial::cd_linux_lens() {
+            write_dec(u64::from(orig));
+            serial::write_str("->");
+            write_dec(u64::from(new_len));
+        }
+        serial::write_line(" (this boot only; library file unchanged; not ISO-INSTALL-OK)");
+    }
+    if d.cd_linux_skip && !RAYNU_F_CD_LINUX_SKIP_LOGGED.swap(true, Ordering::AcqRel) {
+        serial::write_line(
+            "boot: RayNu-F WARN CD grub.cfg has no room for console=ttyS0 (kernel line unchanged)",
         );
     }
     if id == crate::raynu_f::ServiceId::BlockIoReadBlocks

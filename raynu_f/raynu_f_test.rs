@@ -3081,3 +3081,65 @@ fn raynu_f_library_grub_cfg_read_view_adds_console() {
     assert_eq!(&head, b"linux /casper/vmlinuz ---\n");
     reset_library_grub_cfg_view();
 }
+
+/// ISO9660 `grub.cfg` read through `BlockIo` grows the `linux` line.
+/// `4e9ebcdb` never opened that file with `File.Open`.
+#[test]
+fn raynu_f_cd_blockio_grows_grub_cfg_linux_line() {
+    use super::cd_serial::{amend_library_cd_chunk, reset_cd_linux_view};
+
+    reset_cd_linux_view();
+    let file = b"set timeout=30\nlinux /casper/vmlinuz ---\ninitrd /casper/initrd\n";
+    let mut iso = vec![0u8; 4096];
+    let name = b"GRUB.CFG;1";
+    let rec_len = 33 + name.len();
+    iso[0] = rec_len as u8;
+    iso[2..6].copy_from_slice(&1u32.to_le_bytes());
+    iso[6..10].copy_from_slice(&1u32.to_be_bytes());
+    iso[10..14].copy_from_slice(&(file.len() as u32).to_le_bytes());
+    iso[14..18].copy_from_slice(&(file.len() as u32).to_be_bytes());
+    iso[32] = name.len() as u8;
+    iso[33..33 + name.len()].copy_from_slice(name);
+    iso[2048..2048 + file.len()].copy_from_slice(file);
+    let backing = iso.clone();
+    let mut read_at = |off: u64, dst: &mut [u8]| -> bool {
+        let s = off as usize;
+        if s + dst.len() > backing.len() {
+            return false;
+        }
+        dst.copy_from_slice(&backing[s..s + dst.len()]);
+        true
+    };
+    let mut image = backing.clone();
+    let touch = amend_library_cd_chunk(&mut image, 0, &mut read_at);
+    assert!(touch.amended);
+    assert!(!touch.skipped);
+    let new_len = u32::from_le_bytes(image[10..14].try_into().unwrap());
+    assert_eq!(new_len, (file.len() + b" console=ttyS0".len()) as u32);
+    assert_eq!(
+        u32::from_be_bytes(image[14..18].try_into().unwrap()),
+        new_len
+    );
+    let got = &image[2048..2048 + new_len as usize];
+    assert!(got.windows(b"console=ttyS0".len()).any(|w| w == b"console=ttyS0"));
+    assert!(got
+        .windows(b"initrd /casper/initrd".len())
+        .any(|w| w == b"initrd /casper/initrd"));
+    assert_eq!(&backing[2048..2048 + file.len()], file);
+
+    let mut again = backing.clone();
+    let touch = amend_library_cd_chunk(&mut again, 0, &mut read_at);
+    assert!(touch.amended);
+    assert_eq!(&again[2048..2048 + new_len as usize], got);
+
+    let mut file_only = backing[2048..4096].to_vec();
+    let touch = amend_library_cd_chunk(&mut file_only, 2048, &mut read_at);
+    assert!(touch.amended);
+    assert_eq!(&file_only[..new_len as usize], got);
+
+    let mut plain = *b"linux /casper/vmlinuz ---\n";
+    let touch = amend_library_cd_chunk(&mut plain, 100 * 2048, &mut read_at);
+    assert!(!touch.amended);
+    assert_eq!(&plain, b"linux /casper/vmlinuz ---\n");
+    reset_cd_linux_view();
+}
