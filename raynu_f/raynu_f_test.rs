@@ -1933,8 +1933,11 @@ fn raynu_f_filesystem_loadimage_startimage() {
             guest.put_u64(stack + STACK_ARG5_OFF, app.len() as u64);
             guest.put_u64(stack + STACK_ARG5_OFF + 8, p_handle);
             let drop_fp = ServiceArgs { a1: 0, a2: 0, a3: 0, a4: buf, rsp: stack };
+            st.append_kernel_serial = true;
             assert_eq!(dispatch(ServiceId::LoadImage, drop_fp, &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_SUCCESS);
             assert_eq!(st.image_file_path, 0);
+            assert!(st.append_kernel_serial);
+            st.append_kernel_serial = false;
             assert_eq!(guest.u64_at(li + LOADED_IMAGE_FILE_PATH_OFF as u64), layout.device_path);
         }
         // And the loader can look the device path up on that handle.
@@ -1948,6 +1951,7 @@ fn raynu_f_filesystem_loadimage_startimage() {
     let d = dispatch(ServiceId::StartImage, ServiceArgs::regs(HANDLE_IMAGE, 0, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB);
     assert_eq!(d.status, EFI_SUCCESS);
     assert_eq!(d.start_image, Some((st.image_entry, HANDLE_IMAGE)));
+    assert!(!d.serial_appended);
     // A wrong handle does not redirect.
     let d = dispatch(ServiceId::StartImage, ServiceArgs::regs(0xDEAD, 0, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB);
     assert_eq!(d.status, EFI_INVALID_PARAMETER);
@@ -2725,4 +2729,238 @@ fn raynu_f_mok_variable_roundtrip() {
         EFI_SUCCESS
     );
     assert_ne!(guest.u64_at(base + 0x700), 0);
+}
+
+/// Library-CD `StartImage` appends `console=ttyS0` in a new pool buffer.
+/// The caller's LoadOptions bytes stay put. The flag defaults off, so an
+/// Alpine disk boot is unchanged. A line longer than the read cap still starts.
+#[test]
+fn raynu_f_startimage_appends_console_on_library_cd() {
+    use super::memory::{POOL_BASE, POOL_END};
+    use super::protocol::{
+        HANDLE_IMAGE, LOADED_IMAGE_LOAD_OPTIONS_OFF, LOADED_IMAGE_LOAD_OPTIONS_SIZE_OFF,
+    };
+    use super::services::{
+        dispatch, library_serial_load_options, FirmwareState, ServiceArgs, ServiceId,
+        EFI_SUCCESS, LOAD_OPTIONS_READ_CAP,
+    };
+
+    fn units(text: &str) -> Vec<u16> {
+        text.encode_utf16().collect()
+    }
+    fn put_units(guest: &MockGuest, addr: u64, text: &[u16]) {
+        for (i, unit) in text.iter().enumerate() {
+            assert_eq!(guest.write(addr + (i as u64) * 2, &unit.to_le_bytes()), 2);
+        }
+    }
+    fn read_units(guest: &MockGuest, addr: u64, nbytes: u32) -> Vec<u16> {
+        let n = ((nbytes & !1) / 2) as usize;
+        let mut out = Vec::with_capacity(n);
+        for i in 0..n {
+            let mut b = [0u8; 2];
+            assert_eq!(guest.read(addr + (i as u64) * 2, &mut b), 2);
+            out.push(u16::from_le_bytes(b));
+        }
+        out
+    }
+    fn set_opts(guest: &MockGuest, li: u64, ptr: u64, text: &[u16]) {
+        let size = (text.len() * 2) as u32;
+        assert_eq!(
+            guest.write(
+                li + LOADED_IMAGE_LOAD_OPTIONS_SIZE_OFF as u64,
+                &size.to_le_bytes(),
+            ),
+            4
+        );
+        guest.put_u64(li + LOADED_IMAGE_LOAD_OPTIONS_OFF as u64, ptr);
+        if ptr != 0 && !text.is_empty() {
+            put_units(guest, ptr, text);
+        }
+    }
+    fn opt_size(guest: &MockGuest, li: u64) -> u32 {
+        let mut b = [0u8; 4];
+        assert_eq!(
+            guest.read(li + LOADED_IMAGE_LOAD_OPTIONS_SIZE_OFF as u64, &mut b),
+            4
+        );
+        u32::from_le_bytes(b)
+    }
+    fn opt_ptr(guest: &MockGuest, li: u64) -> u64 {
+        guest.u64_at(li + LOADED_IMAGE_LOAD_OPTIONS_OFF as u64)
+    }
+
+    let mut out = [0u16; 64];
+    let n = library_serial_load_options(&[], &mut out).unwrap();
+    assert_eq!(&out[..n], units("console=ttyS0\0").as_slice());
+    let n = library_serial_load_options(&units("---"), &mut out).unwrap();
+    assert_eq!(&out[..n], units("--- console=ttyS0\0").as_slice());
+    let n = library_serial_load_options(&units("quiet "), &mut out).unwrap();
+    assert_eq!(&out[..n], units("quiet console=ttyS0\0").as_slice());
+    assert!(library_serial_load_options(&units("--- console=ttyS0"), &mut out).is_none());
+    assert!(library_serial_load_options(&units("console=ttyS0,115200"), &mut out).is_none());
+    assert!(library_serial_load_options(&units("---"), &mut [0u16; 4]).is_none());
+    let mut marked = units("caf");
+    marked.push(0x00E9);
+    let n = library_serial_load_options(&marked, &mut out).unwrap();
+    let mut expect = marked.clone();
+    expect.extend(units(" console=ttyS0\0"));
+    assert_eq!(&out[..n], expect.as_slice());
+    assert_eq!(
+        crate::mgmt::iso_library::LIBRARY_SERIAL_ARG,
+        "console=ttyS0"
+    );
+
+    let guest = MockGuest::new(0, vec![0u8; SLAB as usize]);
+    let mut sink = CaptureSink::default();
+    let clk = ManualClock {
+        now: Cell::new(1_000),
+        step: 1_000,
+    };
+    let mut st = FirmwareState::new();
+    let li = 0x3000u64;
+    st.loaded_image_proto = li;
+    st.image_handle = HANDLE_IMAGE;
+    st.image_entry = 0x2000;
+
+    let src = 0x4000u64;
+    let line = units("---\0");
+    set_opts(&guest, li, src, &line);
+    let d = dispatch(
+        ServiceId::StartImage,
+        ServiceArgs::regs(HANDLE_IMAGE, 0, 0, 0),
+        &guest,
+        &mut sink,
+        &mut st,
+        &clk,
+        SLAB,
+    );
+    assert_eq!(d.status, EFI_SUCCESS);
+    assert!(d.start_image.is_some());
+    assert!(!d.serial_appended);
+    assert!(!st.append_kernel_serial);
+    assert_eq!(opt_ptr(&guest, li), src);
+
+    st.append_kernel_serial = true;
+    let d = dispatch(
+        ServiceId::StartImage,
+        ServiceArgs::regs(HANDLE_IMAGE, 0, 0, 0),
+        &guest,
+        &mut sink,
+        &mut st,
+        &clk,
+        SLAB,
+    );
+    assert_eq!(d.status, EFI_SUCCESS);
+    assert!(d.serial_appended);
+    let new_ptr = opt_ptr(&guest, li);
+    assert_ne!(new_ptr, src);
+    assert!(new_ptr >= POOL_BASE && new_ptr < POOL_END);
+    assert_eq!(new_ptr & 0xfff, 0);
+    let new_size = opt_size(&guest, li);
+    assert_eq!(
+        read_units(&guest, new_ptr, new_size),
+        units("--- console=ttyS0\0")
+    );
+    assert_eq!(read_units(&guest, src, (line.len() * 2) as u32), line);
+
+    let held = opt_ptr(&guest, li);
+    let d = dispatch(
+        ServiceId::StartImage,
+        ServiceArgs::regs(HANDLE_IMAGE, 0, 0, 0),
+        &guest,
+        &mut sink,
+        &mut st,
+        &clk,
+        SLAB,
+    );
+    assert_eq!(d.status, EFI_SUCCESS);
+    assert!(!d.serial_appended);
+    assert_eq!(opt_ptr(&guest, li), held);
+
+    set_opts(&guest, li, 0, &[]);
+    let d = dispatch(
+        ServiceId::StartImage,
+        ServiceArgs::regs(HANDLE_IMAGE, 0, 0, 0),
+        &guest,
+        &mut sink,
+        &mut st,
+        &clk,
+        SLAB,
+    );
+    assert!(d.serial_appended);
+    let empty_ptr = opt_ptr(&guest, li);
+    assert_eq!(
+        read_units(&guest, empty_ptr, opt_size(&guest, li)),
+        units("console=ttyS0\0")
+    );
+
+    let kernel = 0x5000u64;
+    let again = units("---\0");
+    set_opts(&guest, li, kernel, &again);
+    let d = dispatch(
+        ServiceId::StartImage,
+        ServiceArgs::regs(HANDLE_IMAGE, 0, 0, 0),
+        &guest,
+        &mut sink,
+        &mut st,
+        &clk,
+        SLAB,
+    );
+    assert!(d.serial_appended);
+    let kernel_ptr = opt_ptr(&guest, li);
+    assert_ne!(kernel_ptr, kernel);
+    assert_eq!(
+        read_units(&guest, kernel_ptr, opt_size(&guest, li)),
+        units("--- console=ttyS0\0")
+    );
+    assert_eq!(read_units(&guest, kernel, (again.len() * 2) as u32), again);
+
+    put_units(&guest, 0x6000, &units("---"));
+    let odd = 7u32;
+    assert_eq!(
+        guest.write(
+            li + LOADED_IMAGE_LOAD_OPTIONS_SIZE_OFF as u64,
+            &odd.to_le_bytes(),
+        ),
+        4
+    );
+    guest.put_u64(li + LOADED_IMAGE_LOAD_OPTIONS_OFF as u64, 0x6000);
+    let d = dispatch(
+        ServiceId::StartImage,
+        ServiceArgs::regs(HANDLE_IMAGE, 0, 0, 0),
+        &guest,
+        &mut sink,
+        &mut st,
+        &clk,
+        SLAB,
+    );
+    assert!(d.serial_appended);
+    assert_eq!(
+        read_units(&guest, opt_ptr(&guest, li), opt_size(&guest, li)),
+        units("--- console=ttyS0\0")
+    );
+
+    let big = ((LOAD_OPTIONS_READ_CAP + 1) * 2) as u32;
+    assert_eq!(
+        guest.write(
+            li + LOADED_IMAGE_LOAD_OPTIONS_SIZE_OFF as u64,
+            &big.to_le_bytes(),
+        ),
+        4
+    );
+    guest.put_u64(li + LOADED_IMAGE_LOAD_OPTIONS_OFF as u64, 0x7000);
+    let d = dispatch(
+        ServiceId::StartImage,
+        ServiceArgs::regs(HANDLE_IMAGE, 0, 0, 0),
+        &guest,
+        &mut sink,
+        &mut st,
+        &clk,
+        SLAB,
+    );
+    assert_eq!(d.status, EFI_SUCCESS);
+    assert!(d.start_image.is_some());
+    assert!(!d.serial_appended);
+    assert_eq!(opt_ptr(&guest, li), 0x7000);
+    assert_eq!(opt_size(&guest, li), big);
 }

@@ -1,6 +1,6 @@
 ---
 hda_version: 1
-last_updated: 2026-10-07
+last_updated: 2026-10-08
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-8-grub-clock |
-| Summary | **`9147cad0` reached GRUB's last displayed second and the 600 s cap stopped it.** Each GRUB second was about 20 wall seconds. `blk_rd=17`. This EFI runs PIT channel 2 for a real 55 ms so GRUB's TSC calibration matches wall time. M8.8.3 is not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
+| Commit | m8-8-kernel-serial |
+| Summary | **`87979e32` reached EBS and Linux virtio `DRIVER_OK`.** GRUB counted down in wall time. COM2 did not show `Linux version`. The stock kernel line has no serial console. This EFI appends `console=ttyS0` at `StartImage` for the library CD only. The stored file is not rewritten. M8.8.3 is not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
 | Gates touched | M8.8.3 still open. No doorbell. No format of UBUNTU0. Not a COM2 close. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 60 held, perc 78 held, unmodified 25 held, overall LOI 73 held, months A 0.25 held, months B 1.5 held. |
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-08 | m8-8-kernel-serial | 0.0 | 99 | **`87979e32` EBS and virtio `DRIVER_OK`, no `Linux version`.** PIT2 ran the GRUB menu in wall time. The stock kernel line has no serial console. This EFI appends `console=ttyS0` at `StartImage` for the library CD only. The stored file is not rewritten. M8.8.3 not lived. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-07 | m8-8-grub-clock | 0.0 | 99 | **`9147cad0` died at GRUB `1s`.** `wall_ms=600005`, `blk_rd=17`. A GRUB second was about 20 wall seconds because PIT channel 2 did not wait. Next EFI waits a real 55 ms on that counter. M8.8.3 not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-07 | m8-8-wall-cap | 0.0 | 99 | **`90f64bcf` GRUB menu, then wall cap.** GNU GRUB 2.14 countdown was at 22 s when `wall_ms=180007` and `blk_rd=17`. Next EFI uses a 600 s cap so the 30 s menu and the kernel read can finish. M8.8.3 not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-06 | m8-8-grub-path | 0.0 | 99 | **`8822dbfa` stopped on `grubx64.efi` Not Found.** FilePath was the CDROM node, so shim looked the file up in the FAT root. Next EFI publishes `\EFI\BOOT\BOOTX64.EFI` as the file node and opens relative names against the directory handle. Mok data cap 2048 keeps `FirmwareState` under 128 KiB. M8.8.3 not lived. Scores held. months 0.0 held; overall 99 held |

@@ -4308,6 +4308,8 @@ static RAYNU_F_GRUB_OPEN_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_BLKRD_LOGGED: AtomicBool = AtomicBool::new(false);
 /// One line when GRUB's PIT channel-2 calibration wait completes.
 static RAYNU_F_PIT2_LOGGED: AtomicBool = AtomicBool::new(false);
+/// One line when StartImage appends `console=ttyS0` for the library CD.
+static RAYNU_F_SERIAL_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_EBS_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_BLOCKIO_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_FS_LOGGED: AtomicBool = AtomicBool::new(false);
@@ -7800,7 +7802,7 @@ unsafe fn raynu_f_reapply_host_xsave() {
 /// | `RAYNU_F_LINUX_HANDOFF` | RESET | false until next EBS |
 /// | `LINUX_EFER_NX_HOLD` | RESET | false until next EBS |
 /// | `RAYNU_F_EXITS/CALLS/SVC_ERRS/ENTRY` | RESET | firmware counters |
-/// | `RAYNU_F_*_LOGGED` (CONOUT/TIMER/MEM/EBS/BLOCKIO/FS/START_IMAGE/GRUB_OPEN/BLKRD) | RESET | DISK-BOOT-OK must print again |
+/// | `RAYNU_F_*_LOGGED` (CONOUT/TIMER/MEM/EBS/BLOCKIO/FS/START_IMAGE/GRUB_OPEN/BLKRD/PIT2/SERIAL) | RESET | DISK-BOOT-OK must print again |
 /// | `RAYNU_F_STAGED_FROM_DISK` | RESET | launch decides disk vs ISO |
 /// | `RAYNU_F_START_CTX` / `PENDING_RX` / `CLOCK_WARNED` | RESET | StartImage/ConIn latches |
 /// | `RAYNU_F_CPUID_LOGGED` | RESET | firmware CPUID log cap |
@@ -7862,6 +7864,7 @@ unsafe fn raynu_f_reset_relaunch(_src: crate::devices::guest_platform::ResetSrc)
     RAYNU_F_GRUB_OPEN_LOGGED.store(false, Ordering::Release);
     RAYNU_F_BLKRD_LOGGED.store(false, Ordering::Release);
     RAYNU_F_PIT2_LOGGED.store(false, Ordering::Release);
+    RAYNU_F_SERIAL_LOGGED.store(false, Ordering::Release);
     RAYNU_F_EBS_LOGGED.store(false, Ordering::Release);
     RAYNU_F_BLOCKIO_LOGGED.store(false, Ordering::Release);
     RAYNU_F_FS_LOGGED.store(false, Ordering::Release);
@@ -8179,8 +8182,9 @@ fn raynu_f_alloc_shim_file_path(
 /// the ISO El Torito path and the F7 disk ESP path.
 ///
 /// `shim_file_path` publishes LoadedImage `FilePath` as the file node
-/// `\EFI\BOOT\BOOTX64.EFI`. The library CD sets it. Alpine GRUB and the
-/// disk ESP do not: those loaders find the volume by `DeviceHandle`.
+/// `\EFI\BOOT\BOOTX64.EFI` and arms `append_kernel_serial`. The library CD
+/// sets it. Alpine GRUB and the disk ESP do not: those loaders find the
+/// volume by `DeviceHandle`, and their kernel line is not amended.
 #[cfg(target_os = "uefi")]
 unsafe fn raynu_f_stage_bootloader_from_volume<R: crate::raynu_f::fat::VolumeRead>(
     vol: &crate::raynu_f::fat::FatVolume,
@@ -8275,6 +8279,9 @@ unsafe fn raynu_f_stage_bootloader_from_volume<R: crate::raynu_f::fat::VolumeRea
     st.image_entry = loaded.entry;
     st.image_handle = crate::raynu_f::protocol::HANDLE_IMAGE;
     st.image_file_path = 0;
+    // Survives LoadImage. The shim is entered by VMLAUNCH; StartImage is
+    // GRUB, then the kernel. Only the library CD amends the kernel line.
+    st.append_kernel_serial = shim_file_path;
     if shim_file_path {
         match raynu_f_alloc_shim_file_path(st, &mem) {
             Some(gpa) => {
@@ -12108,6 +12115,11 @@ unsafe fn handle_raynu_f_service() -> bool {
     if d.opened_grub && !RAYNU_F_GRUB_OPEN_LOGGED.swap(true, Ordering::AcqRel) {
         serial::write_line(
             "boot: RayNu-F opened grubx64.efi (Ubuntu shim; not ISO-INSTALL-OK)",
+        );
+    }
+    if d.serial_appended && !RAYNU_F_SERIAL_LOGGED.swap(true, Ordering::AcqRel) {
+        serial::write_line(
+            "boot: RayNu-F kernel line console=ttyS0 (this boot only; library file unchanged; not ISO-INSTALL-OK)",
         );
     }
     if id == crate::raynu_f::ServiceId::BlockIoReadBlocks
