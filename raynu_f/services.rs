@@ -447,6 +447,11 @@ pub struct FirmwareState {
     /// `StartImage` has handed control to `image_handle` and it has not
     /// `Exit`ed yet (so `Exit` knows there is a caller to unwind to).
     pub image_started: bool,
+    /// Library CD only. `StartImage` appends `console=ttyS0` to LoadOptions
+    /// for this boot. `LoadImage` does not clear it: the shim is VMLAUNCHed,
+    /// and the kernel `StartImage` is a later buffer load. Alpine disk boot
+    /// leaves this false. The stored ISO is not rewritten.
+    pub append_kernel_serial: bool,
     /// Successful block reads / writes (host bookkeeping for markers).
     pub block_reads: u32,
     pub block_writes: u32,
@@ -483,6 +488,7 @@ impl FirmwareState {
             system_table: 0,
             config_table: 0,
             image_started: false,
+            append_kernel_serial: false,
             block_reads: 0,
             block_writes: 0,
             vars: super::vars::VarStore::new(),
@@ -530,6 +536,9 @@ pub struct Dispatched {
     /// must unwind the guest to the `StartImage` caller (its saved RSP /
     /// callee-saved GPRs) and return `ExitStatus` in RAX there.
     pub exit_image: Option<u64>,
+    /// `StartImage` appended `console=ttyS0` to LoadOptions on this call.
+    /// The stored library file was not rewritten.
+    pub serial_appended: bool,
 }
 
 fn read_u64(mem: &dyn GuestMem, addr: u64) -> Option<u64> {
@@ -549,6 +558,17 @@ fn write_u64(mem: &dyn GuestMem, addr: u64, v: u64) -> bool {
 
 fn write_u32(mem: &dyn GuestMem, addr: u64, v: u32) -> bool {
     addr != 0 && mem.write(addr, &v.to_le_bytes()) == 4
+}
+
+fn read_u32(mem: &dyn GuestMem, addr: u64) -> Option<u32> {
+    if addr == 0 {
+        return None;
+    }
+    let mut b = [0u8; 4];
+    if mem.read(addr, &mut b) < 4 {
+        return None;
+    }
+    Some(u32::from_le_bytes(b))
 }
 
 /// Stack argument `n` (5-based) at the `OUT` exit.
@@ -1222,6 +1242,132 @@ pub fn publish_loaded_image(st: &mut FirmwareState, mem: &dyn GuestMem, parent: 
     true
 }
 
+/// CHAR16 units of an existing LoadOptions line `StartImage` will read.
+/// A longer line is left unchanged so the image still starts.
+pub const LOAD_OPTIONS_READ_CAP: usize = 512;
+
+fn utf16_has_ascii(hay: &[u16], needle: &[u8]) -> bool {
+    if needle.is_empty() || hay.len() < needle.len() {
+        return false;
+    }
+    hay.windows(needle.len()).any(|window| {
+        window
+            .iter()
+            .zip(needle.iter())
+            .all(|(&unit, &byte)| unit == u16::from(byte))
+    })
+}
+
+/// CHAR16 LoadOptions for one library-CD `StartImage`, including the trailing NUL.
+///
+/// `existing` has trailing NULs already removed. Returns `None` when
+/// [`crate::mgmt::iso_library::LIBRARY_SERIAL_ARG`] is already present, or
+/// when `out` cannot hold the result. The stored ISO is not an input.
+pub fn library_serial_load_options(existing: &[u16], out: &mut [u16]) -> Option<usize> {
+    let arg = crate::mgmt::iso_library::LIBRARY_SERIAL_ARG.as_bytes();
+    if utf16_has_ascii(existing, arg) {
+        return None;
+    }
+    let need_space = match existing.last() {
+        Some(&unit) => unit != u16::from(b' '),
+        None => false,
+    };
+    let space = if need_space { 1 } else { 0 };
+    let n = existing.len() + space + arg.len() + 1;
+    if out.len() < n {
+        return None;
+    }
+    out[..existing.len()].copy_from_slice(existing);
+    let mut i = existing.len();
+    if need_space {
+        out[i] = u16::from(b' ');
+        i += 1;
+    }
+    for &byte in arg {
+        out[i] = u16::from(byte);
+        i += 1;
+    }
+    out[i] = 0;
+    Some(i + 1)
+}
+
+/// Library CD only. Replace LoadOptions with a pool page that ends in
+/// `console=ttyS0`. A miss leaves the caller's buffer alone and `StartImage`
+/// still runs. `LoadImage` does not clear the flag: the shim is entered by
+/// VMLAUNCH, and the kernel is a later buffer load.
+fn append_library_serial(st: &mut FirmwareState, mem: &dyn GuestMem) -> bool {
+    if !st.append_kernel_serial {
+        return false;
+    }
+    let li = st.loaded_image_proto;
+    if li == 0 {
+        return false;
+    }
+    let Some(size) = read_u32(
+        mem,
+        li + super::protocol::LOADED_IMAGE_LOAD_OPTIONS_SIZE_OFF as u64,
+    ) else {
+        return false;
+    };
+    let ptr = read_u64(
+        mem,
+        li + super::protocol::LOADED_IMAGE_LOAD_OPTIONS_OFF as u64,
+    )
+    .unwrap_or(0);
+    let units_claimed = ((size & !1) as usize) / 2;
+    if units_claimed > LOAD_OPTIONS_READ_CAP {
+        return false;
+    }
+    if units_claimed > 0 && ptr == 0 {
+        return false;
+    }
+    let mut existing = [0u16; LOAD_OPTIONS_READ_CAP];
+    for i in 0..units_claimed {
+        let mut b = [0u8; 2];
+        if mem.read(ptr + (i as u64) * 2, &mut b) < 2 {
+            return false;
+        }
+        existing[i] = u16::from_le_bytes(b);
+    }
+    let mut n = units_claimed;
+    while n > 0 && existing[n - 1] == 0 {
+        n -= 1;
+    }
+    let mut built = [0u16; LOAD_OPTIONS_READ_CAP + 32];
+    let Some(written) = library_serial_load_options(&existing[..n], &mut built) else {
+        return false;
+    };
+    let (status, gpa) = st.pool.allocate_pages(
+        super::memory::ALLOCATE_ANY_PAGES,
+        super::memory::EFI_LOADER_DATA,
+        1,
+        0,
+    );
+    if status != EFI_SUCCESS {
+        return false;
+    }
+    for (i, &unit) in built[..written].iter().enumerate() {
+        if mem.write(gpa + (i as u64) * 2, &unit.to_le_bytes()) != 2 {
+            let _ = st.pool.free_pages_at(gpa, 1);
+            return false;
+        }
+    }
+    let new_size = (written * 2) as u32;
+    if !write_u32(
+        mem,
+        li + super::protocol::LOADED_IMAGE_LOAD_OPTIONS_SIZE_OFF as u64,
+        new_size,
+    ) || !write_u64(
+        mem,
+        li + super::protocol::LOADED_IMAGE_LOAD_OPTIONS_OFF as u64,
+        gpa,
+    ) {
+        let _ = st.pool.free_pages_at(gpa, 1);
+        return false;
+    }
+    true
+}
+
 /// Only the `SourceBuffer` form is supported; a `DevicePath`-only load needs
 /// device-path parsing we do not publish (honest `EFI_UNSUPPORTED`).
 fn load_image(st: &mut FirmwareState, mem: &dyn GuestMem, a: ServiceArgs) -> (u64, bool) {
@@ -1272,6 +1418,8 @@ fn load_image(st: &mut FirmwareState, mem: &dyn GuestMem, a: ServiceArgs) -> (u6
     // A buffer load has no file node. Do not leave the shim's FilePath on
     // the image this call just replaced.
     st.image_file_path = 0;
+    // `append_kernel_serial` stays set. This call is GRUB or the kernel.
+    // The library line is amended at StartImage, not here.
     if !publish_loaded_image(st, mem, a.a2) {
         let _ = st.pool.free_pages_at(base, pages);
         return (EFI_INVALID_PARAMETER, false);
@@ -1309,6 +1457,7 @@ pub fn dispatch(
         start_image: None,
         exit_image: None,
         opened_grub: false,
+        serial_appended: false,
     };
     let a = args;
     out.status = match id {
@@ -1801,6 +1950,11 @@ pub fn dispatch(
                 }
                 if a.a3 != 0 {
                     let _ = write_u64(mem, a.a3, 0);
+                }
+                // Library CD: amend the line GRUB just wrote. Alpine and the
+                // disk ESP leave `append_kernel_serial` false.
+                if append_library_serial(st, mem) {
+                    out.serial_appended = true;
                 }
                 out.start_image = Some((st.image_entry, st.image_handle));
                 st.image_started = true;
