@@ -15,6 +15,9 @@
 //! `File.Open` is resolved against the directory in `This`. An empty name
 //! duplicates that handle.
 
+use core::cell::UnsafeCell;
+use core::sync::atomic::{AtomicU32, Ordering};
+
 use super::fat::{FatEntry, FatError, FatVolume};
 
 /// `EFI_SIMPLE_FILE_SYSTEM_PROTOCOL`: Revision + OpenVolume.
@@ -92,6 +95,9 @@ struct OpenFile {
     is_root: bool,
     entry: FatEntry,
     position: u64,
+    /// Non-zero: this handle reads the library `grub.cfg` serial view of
+    /// this length. The FAT bytes stay the original file.
+    view_len: u32,
 }
 
 const NO_ENTRY: FatEntry = FatEntry {
@@ -107,6 +113,7 @@ const EMPTY: OpenFile = OpenFile {
     is_root: false,
     entry: NO_ENTRY,
     position: 0,
+    view_len: 0,
 };
 
 /// Mounted FAT volume + open-file table.
@@ -168,6 +175,7 @@ impl FileSystem {
             is_root: true,
             entry: NO_ENTRY,
             position: 0,
+            view_len: 0,
         };
         (EFI_SUCCESS, Self::handle_for(s))
     }
@@ -229,6 +237,7 @@ impl FileSystem {
                     is_root: false,
                     entry,
                     position: 0,
+                    view_len: 0,
                 };
                 (EFI_SUCCESS, Self::handle_for(s))
             }
@@ -249,14 +258,22 @@ impl FileSystem {
         }
     }
 
-    /// Size of an open file (0 for the root).
+    /// Size of an open file (0 for the root). A library serial view reports
+    /// the amended length. The FAT directory entry stays the original size.
     pub fn size_of(&self, handle: u64) -> Option<u64> {
         let s = self.slot_of(handle)?;
-        Some(if self.slots[s].is_root {
+        Some(self.logical_size(s))
+    }
+
+    fn logical_size(&self, slot: usize) -> u64 {
+        let f = &self.slots[slot];
+        if f.is_root {
             0
+        } else if f.view_len != 0 {
+            u64::from(f.view_len)
         } else {
-            u64::from(self.slots[s].entry.size)
-        })
+            u64::from(f.entry.size)
+        }
     }
 
     pub fn is_directory(&self, handle: u64) -> Option<bool> {
@@ -283,7 +300,7 @@ impl FileSystem {
                 EFI_UNSUPPORTED
             };
         }
-        let size = u64::from(self.slots[s].entry.size);
+        let size = self.logical_size(s);
         self.slots[s].position = if pos == u64::MAX { size } else { pos };
         EFI_SUCCESS
     }
@@ -305,6 +322,9 @@ impl FileSystem {
         if self.slots[s].is_root || self.slots[s].entry.is_dir() {
             // Directory enumeration is not implemented (honest).
             return (EFI_UNSUPPORTED, 0);
+        }
+        if self.slots[s].view_len != 0 {
+            return self.read_serial_view(s, buf);
         }
         let size = u64::from(self.slots[s].entry.size);
         let pos = self.slots[s].position;
@@ -337,8 +357,26 @@ impl FileSystem {
         let Some(s) = self.slot_of(handle) else {
             return (EFI_INVALID_PARAMETER, 0);
         };
-        let f = &self.slots[s];
-        let name = if f.is_root { b"\\".as_slice() } else { f.entry.name_bytes() };
+        let mut name_buf = [0u8; 12];
+        let name_len;
+        let is_root;
+        let is_dir;
+        let attr_bits;
+        {
+            let f = &self.slots[s];
+            is_root = f.is_root;
+            is_dir = f.entry.is_dir();
+            attr_bits = f.entry.attr;
+            if is_root {
+                name_buf[0] = b'\\';
+                name_len = 1;
+            } else {
+                let raw = f.entry.name_bytes();
+                name_len = raw.len().min(name_buf.len());
+                name_buf[..name_len].copy_from_slice(&raw[..name_len]);
+            }
+        }
+        let name = &name_buf[..name_len];
         // FileName is CHAR16 + NUL.
         let need = FILE_INFO_NAME_OFF as u64 + (name.len() as u64 + 1) * 2;
         if (out.len() as u64) < need {
@@ -347,7 +385,7 @@ impl FileSystem {
         for b in out[..need as usize].iter_mut() {
             *b = 0;
         }
-        let size = if f.is_root { 0 } else { u64::from(f.entry.size) };
+        let size = self.logical_size(s);
         out[FILE_INFO_SIZE_OFF..FILE_INFO_SIZE_OFF + 8].copy_from_slice(&need.to_le_bytes());
         out[FILE_INFO_FILE_SIZE_OFF..FILE_INFO_FILE_SIZE_OFF + 8]
             .copy_from_slice(&size.to_le_bytes());
@@ -356,19 +394,19 @@ impl FileSystem {
         // EFI_TIME fields stay zero: the FAT timestamps are not plumbed
         // through and inventing them would be a lie.
         let mut attr = 0u64;
-        if f.is_root || f.entry.is_dir() {
+        if is_root || is_dir {
             attr |= EFI_FILE_DIRECTORY;
         }
-        if f.entry.attr & super::fat::ATTR_READ_ONLY != 0 {
+        if attr_bits & super::fat::ATTR_READ_ONLY != 0 {
             attr |= EFI_FILE_READ_ONLY;
         }
-        if f.entry.attr & super::fat::ATTR_HIDDEN != 0 {
+        if attr_bits & super::fat::ATTR_HIDDEN != 0 {
             attr |= EFI_FILE_HIDDEN;
         }
-        if f.entry.attr & super::fat::ATTR_SYSTEM != 0 {
+        if attr_bits & super::fat::ATTR_SYSTEM != 0 {
             attr |= EFI_FILE_SYSTEM;
         }
-        if f.entry.attr & super::fat::ATTR_ARCHIVE != 0 {
+        if attr_bits & super::fat::ATTR_ARCHIVE != 0 {
             attr |= EFI_FILE_ARCHIVE;
         }
         out[FILE_INFO_ATTRIBUTE_OFF..FILE_INFO_ATTRIBUTE_OFF + 8]
@@ -379,6 +417,143 @@ impl FileSystem {
         }
         (EFI_SUCCESS, need)
     }
+
+    fn read_serial_view(&mut self, slot: usize, buf: &mut [u8]) -> (u64, usize) {
+        let view_len = self.slots[slot].view_len;
+        let cluster = self.slots[slot].entry.first_cluster;
+        let pos = self.slots[slot].position;
+        let size = u64::from(view_len);
+        if pos >= size {
+            return (EFI_SUCCESS, 0);
+        }
+        if LIBRARY_GRUB_CFG.cluster.load(Ordering::Acquire) != cluster
+            || LIBRARY_GRUB_CFG.len.load(Ordering::Acquire) != view_len
+        {
+            return (EFI_DEVICE_ERROR, 0);
+        }
+        let want = buf.len().min((size - pos) as usize);
+        if want == 0 {
+            return (EFI_SUCCESS, 0);
+        }
+        // SAFETY: BSP-only firmware dispatch, or one host test thread. The
+        // view bytes are published before `len`/`cluster`, and this read
+        // copies them out before any later arm replaces the buffer.
+        // KANI-TARGET: library grub.cfg serial view read (outside Proven Core).
+        unsafe {
+            let src = &*LIBRARY_GRUB_CFG.bytes.get();
+            let start = pos as usize;
+            buf[..want].copy_from_slice(&src[start..start + want]);
+        }
+        self.slots[slot].position = pos + want as u64;
+        self.file_reads = self.file_reads.saturating_add(1);
+        (EFI_SUCCESS, want)
+    }
+
+    /// Build the library-CD `grub.cfg` view for this handle.
+    ///
+    /// `linux` / `linuxefi` lines gain `console=ttyS0` in the bytes later
+    /// `Read` calls return. The FAT chain is not written. A file that does
+    /// not need the argument stays on the original size. A file that does
+    /// not fit in the view is left unchanged (`TooBig`).
+    pub fn arm_library_serial_view<R: super::fat::VolumeRead>(
+        &mut self,
+        handle: u64,
+        r: &R,
+    ) -> SerialView {
+        let Some(s) = self.slot_of(handle) else {
+            return SerialView::Unchanged;
+        };
+        if self.slots[s].is_root || self.slots[s].entry.is_dir() {
+            return SerialView::Unchanged;
+        }
+        let orig = self.slots[s].entry.size as usize;
+        if orig == 0 {
+            return SerialView::Unchanged;
+        }
+        if orig > GRUB_CFG_VIEW_CAP - GRUB_CFG_SERIAL_SLACK {
+            return SerialView::TooBig;
+        }
+        let cluster = self.slots[s].entry.first_cluster;
+        let vol = match self.volume {
+            Some(v) => v,
+            None => return SerialView::Unchanged,
+        };
+        // SAFETY: same BSP / single-thread owner as `read_serial_view`. The
+        // raw buffer is private until `amend_grub_cfg_serial` finishes, and
+        // the view is published only after it is complete.
+        // KANI-TARGET: library grub.cfg serial view build (outside Proven Core).
+        let raw = unsafe { &mut *LIBRARY_GRUB_CFG.raw.get() };
+        let mut filled = 0usize;
+        while filled < orig {
+            let chunk = (orig - filled).min(4096);
+            match super::fat::read_chain(&vol, r, cluster, filled as u64, &mut raw[filled..filled + chunk])
+            {
+                Ok(n) if n == chunk => filled += n,
+                _ => return SerialView::Unchanged,
+            }
+        }
+        let view = unsafe { &mut *LIBRARY_GRUB_CFG.bytes.get() };
+        let needs = cfg_line_needs_serial(&raw[..orig]);
+        let Some(n) = amend_grub_cfg_serial(&raw[..orig], view) else {
+            return if needs {
+                SerialView::TooBig
+            } else {
+                SerialView::Unchanged
+            };
+        };
+        LIBRARY_GRUB_CFG.len.store(n as u32, Ordering::Release);
+        LIBRARY_GRUB_CFG.cluster.store(cluster, Ordering::Release);
+        self.slots[s].view_len = n as u32;
+        self.slots[s].position = 0;
+        SerialView::Amended
+    }
+}
+
+/// How `arm_library_serial_view` left the open `grub.cfg`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SerialView {
+    /// No `linux` line needed the argument, or the handle was not a file.
+    Unchanged,
+    /// Later reads return the amended bytes. The FAT file was not written.
+    Amended,
+    /// The file does not fit in the view. Reads stay on the original bytes.
+    TooBig,
+}
+
+/// Bytes reserved so a handful of `linux` lines can grow inside the view.
+pub const GRUB_CFG_SERIAL_SLACK: usize = 512;
+/// One amended `grub.cfg`. The El Torito menu file is a few kilobytes.
+pub const GRUB_CFG_VIEW_CAP: usize = 16 * 1024;
+
+struct LibraryGrubCfg {
+    cluster: AtomicU32,
+    len: AtomicU32,
+    bytes: UnsafeCell<[u8; GRUB_CFG_VIEW_CAP]>,
+    raw: UnsafeCell<[u8; GRUB_CFG_VIEW_CAP]>,
+}
+
+// SAFETY: the firmware dispatcher is BSP-only. Host tests take the suite
+// one thread at a time. The buffer is not shared with the guest.
+// KANI-TARGET: library grub.cfg view static (outside Proven Core).
+unsafe impl Sync for LibraryGrubCfg {}
+
+static LIBRARY_GRUB_CFG: LibraryGrubCfg = LibraryGrubCfg {
+    cluster: AtomicU32::new(0),
+    len: AtomicU32::new(0),
+    bytes: UnsafeCell::new([0; GRUB_CFG_VIEW_CAP]),
+    raw: UnsafeCell::new([0; GRUB_CFG_VIEW_CAP]),
+};
+
+/// Drop the amended view. File handles are cleared with `FirmwareState`.
+pub fn reset_library_grub_cfg_view() {
+    LIBRARY_GRUB_CFG.cluster.store(0, Ordering::Release);
+    LIBRARY_GRUB_CFG.len.store(0, Ordering::Release);
+}
+
+/// True when the last path component is `grub.cfg` (any case).
+pub fn path_is_grub_cfg(path: &[u8]) -> bool {
+    let name = path_tail(path);
+    name.eq_ignore_ascii_case(b"grub.cfg")
 }
 
 /// True when the last path component is `grubx64.efi` (any case).
@@ -388,6 +563,135 @@ pub fn path_is_grubx64(path: &[u8]) -> bool {
         None => path,
     };
     name.eq_ignore_ascii_case(b"grubx64.efi")
+}
+
+fn path_tail(path: &[u8]) -> &[u8] {
+    match path.iter().rposition(|&c| c == b'\\' || c == b'/') {
+        Some(i) => &path[i + 1..],
+        None => path,
+    }
+}
+
+fn trim_ascii_start(s: &[u8]) -> &[u8] {
+    let mut i = 0;
+    while i < s.len() && (s[i] == b' ' || s[i] == b'\t') {
+        i += 1;
+    }
+    &s[i..]
+}
+
+fn bytes_contains(hay: &[u8], needle: &[u8]) -> bool {
+    !needle.is_empty() && hay.windows(needle.len()).any(|w| w == needle)
+}
+
+/// First token is `linux` or `linuxefi`, and the line does not already name
+/// the serial console. `linux16` and comments stay as they are.
+fn line_needs_serial(line: &[u8]) -> bool {
+    let s = trim_ascii_start(line);
+    if !has_token(s, b"linuxefi") && !has_token(s, b"linux") {
+        return false;
+    }
+    !bytes_contains(s, crate::mgmt::iso_library::LIBRARY_SERIAL_ARG.as_bytes())
+}
+
+fn has_token(s: &[u8], token: &[u8]) -> bool {
+    s.len() >= token.len()
+        && s.starts_with(token)
+        && (s.len() == token.len()
+            || s[token.len()] == b' '
+            || s[token.len()] == b'\t')
+}
+
+fn cfg_line_needs_serial(src: &[u8]) -> bool {
+    let mut i = 0;
+    while i < src.len() {
+        let start = i;
+        while i < src.len() && src[i] != b'\n' {
+            i += 1;
+        }
+        let mut end = i;
+        if end > start && src[end - 1] == b'\r' {
+            end -= 1;
+        }
+        if line_needs_serial(&src[start..end]) {
+            return true;
+        }
+        if i < src.len() {
+            i += 1;
+        }
+    }
+    false
+}
+
+/// Append `console=ttyS0` to each `linux` / `linuxefi` line that lacks it.
+///
+/// Returns the amended length, including the original newlines. `None` when
+/// no line changes, or when the result does not fit in `out` (nothing is
+/// written in that case).
+pub fn amend_grub_cfg_serial(src: &[u8], out: &mut [u8]) -> Option<usize> {
+    let arg = crate::mgmt::iso_library::LIBRARY_SERIAL_ARG.as_bytes();
+    let mut n = 0usize;
+    let mut changed = false;
+    let mut i = 0usize;
+    while i < src.len() {
+        let start = i;
+        while i < src.len() && src[i] != b'\n' {
+            i += 1;
+        }
+        let mut end = i;
+        let has_nl = i < src.len();
+        if end > start && src[end - 1] == b'\r' {
+            end -= 1;
+        }
+        let extra = if line_needs_serial(&src[start..end]) {
+            changed = true;
+            1 + arg.len()
+        } else {
+            0
+        };
+        n = n.saturating_add(end - start).saturating_add(extra);
+        if end < i {
+            n = n.saturating_add(1); // CR
+        }
+        if has_nl {
+            n = n.saturating_add(1);
+            i += 1;
+        }
+    }
+    if !changed || n > out.len() {
+        return None;
+    }
+    let mut w = 0usize;
+    i = 0;
+    while i < src.len() {
+        let start = i;
+        while i < src.len() && src[i] != b'\n' {
+            i += 1;
+        }
+        let mut end = i;
+        let has_nl = i < src.len();
+        if end > start && src[end - 1] == b'\r' {
+            end -= 1;
+        }
+        out[w..w + (end - start)].copy_from_slice(&src[start..end]);
+        w += end - start;
+        if line_needs_serial(&src[start..end]) {
+            out[w] = b' ';
+            w += 1;
+            out[w..w + arg.len()].copy_from_slice(arg);
+            w += arg.len();
+        }
+        if end < i {
+            out[w] = b'\r';
+            w += 1;
+        }
+        if has_nl {
+            out[w] = b'\n';
+            w += 1;
+            i += 1;
+        }
+    }
+    Some(w)
 }
 
 /// Convert a guest CHAR16 path to ASCII bytes for the FAT lookup.

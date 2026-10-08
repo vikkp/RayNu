@@ -4310,6 +4310,10 @@ static RAYNU_F_BLKRD_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_PIT2_LOGGED: AtomicBool = AtomicBool::new(false);
 /// One line when StartImage appends `console=ttyS0` for the library CD.
 static RAYNU_F_SERIAL_LOGGED: AtomicBool = AtomicBool::new(false);
+/// One line when the library `grub.cfg` read view gains `console=ttyS0`.
+static RAYNU_F_GRUBCFG_LOGGED: AtomicBool = AtomicBool::new(false);
+/// One line when that view is skipped because the file does not fit.
+static RAYNU_F_GRUBCFG_SKIP_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_EBS_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_BLOCKIO_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_FS_LOGGED: AtomicBool = AtomicBool::new(false);
@@ -7802,7 +7806,7 @@ unsafe fn raynu_f_reapply_host_xsave() {
 /// | `RAYNU_F_LINUX_HANDOFF` | RESET | false until next EBS |
 /// | `LINUX_EFER_NX_HOLD` | RESET | false until next EBS |
 /// | `RAYNU_F_EXITS/CALLS/SVC_ERRS/ENTRY` | RESET | firmware counters |
-/// | `RAYNU_F_*_LOGGED` (CONOUT/TIMER/MEM/EBS/BLOCKIO/FS/START_IMAGE/GRUB_OPEN/BLKRD/PIT2/SERIAL) | RESET | DISK-BOOT-OK must print again |
+/// | `RAYNU_F_*_LOGGED` (CONOUT/TIMER/MEM/EBS/BLOCKIO/FS/START_IMAGE/GRUB_OPEN/BLKRD/PIT2/SERIAL/GRUBCFG) | RESET | DISK-BOOT-OK must print again |
 /// | `RAYNU_F_STAGED_FROM_DISK` | RESET | launch decides disk vs ISO |
 /// | `RAYNU_F_START_CTX` / `PENDING_RX` / `CLOCK_WARNED` | RESET | StartImage/ConIn latches |
 /// | `RAYNU_F_CPUID_LOGGED` | RESET | firmware CPUID log cap |
@@ -7865,6 +7869,9 @@ unsafe fn raynu_f_reset_relaunch(_src: crate::devices::guest_platform::ResetSrc)
     RAYNU_F_BLKRD_LOGGED.store(false, Ordering::Release);
     RAYNU_F_PIT2_LOGGED.store(false, Ordering::Release);
     RAYNU_F_SERIAL_LOGGED.store(false, Ordering::Release);
+    RAYNU_F_GRUBCFG_LOGGED.store(false, Ordering::Release);
+    RAYNU_F_GRUBCFG_SKIP_LOGGED.store(false, Ordering::Release);
+    crate::raynu_f::filesystem::reset_library_grub_cfg_view();
     RAYNU_F_EBS_LOGGED.store(false, Ordering::Release);
     RAYNU_F_BLOCKIO_LOGGED.store(false, Ordering::Release);
     RAYNU_F_FS_LOGGED.store(false, Ordering::Release);
@@ -12120,6 +12127,16 @@ unsafe fn handle_raynu_f_service() -> bool {
     if d.serial_appended && !RAYNU_F_SERIAL_LOGGED.swap(true, Ordering::AcqRel) {
         serial::write_line(
             "boot: RayNu-F kernel line console=ttyS0 (this boot only; library file unchanged; not ISO-INSTALL-OK)",
+        );
+    }
+    if d.grub_cfg_serial && !RAYNU_F_GRUBCFG_LOGGED.swap(true, Ordering::AcqRel) {
+        serial::write_line(
+            "boot: RayNu-F grub.cfg console=ttyS0 (this boot only; library file unchanged; not ISO-INSTALL-OK)",
+        );
+    }
+    if d.grub_cfg_serial_skip && !RAYNU_F_GRUBCFG_SKIP_LOGGED.swap(true, Ordering::AcqRel) {
+        serial::write_line(
+            "boot: RayNu-F WARN grub.cfg serial view skipped (file larger than the view; kernel line unchanged)",
         );
     }
     if id == crate::raynu_f::ServiceId::BlockIoReadBlocks

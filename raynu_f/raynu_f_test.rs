@@ -1246,6 +1246,10 @@ fn raynu_f_protocols_and_blockio() {
 /// Build a real FAT12 volume containing `\EFI\BOOT\BOOTX64.EFI`.
 /// Geometry: 512 B sectors, 1 sector/cluster, 1 FAT, 64 root entries.
 fn build_fat12_esp(payload: &[u8]) -> Vec<u8> {
+    build_fat12_named(b"BOOTX64 EFI", payload)
+}
+
+fn build_fat12_named(name11: &[u8; 11], payload: &[u8]) -> Vec<u8> {
     const SEC: usize = 512;
     const TOTAL: usize = 512; // 512 sectors = 256 KiB
     const RESERVED: usize = 1;
@@ -1316,7 +1320,7 @@ fn build_fat12_esp(payload: &[u8]) -> Vec<u8> {
     v[boot_off..boot_off + 32].copy_from_slice(&mk_ent(b".          ", 0x10, cl_boot as u16, 0));
     v[boot_off + 32..boot_off + 64].copy_from_slice(&mk_ent(b"..         ", 0x10, cl_efi as u16, 0));
     v[boot_off + 64..boot_off + 96].copy_from_slice(&mk_ent(
-        b"BOOTX64 EFI",
+        name11,
         0x20,
         cl_file as u16,
         payload.len() as u32,
@@ -2963,4 +2967,117 @@ fn raynu_f_startimage_appends_console_on_library_cd() {
     assert!(!d.serial_appended);
     assert_eq!(opt_ptr(&guest, li), 0x7000);
     assert_eq!(opt_size(&guest, li), big);
+}
+
+/// Library-CD `grub.cfg` reads gain `console=ttyS0` on `linux` lines.
+/// The FAT bytes stay the file GRUB would have read on `6865b5ab`.
+#[test]
+fn raynu_f_library_grub_cfg_read_view_adds_console() {
+    use super::fat::parse_bpb;
+    use super::filesystem::{
+        amend_grub_cfg_serial, path_is_grub_cfg, reset_library_grub_cfg_view, FileSystem,
+        SerialView, EFI_FILE_MODE_READ, FILE_INFO_FILE_SIZE_OFF, GRUB_CFG_SERIAL_SLACK,
+        GRUB_CFG_VIEW_CAP,
+    };
+
+    reset_library_grub_cfg_view();
+    assert!(path_is_grub_cfg(b"\\EFI\\BOOT\\grub.cfg"));
+    assert!(path_is_grub_cfg(b"grub.cfg"));
+    assert!(path_is_grub_cfg(b"GRUB.CFG"));
+    assert!(!path_is_grub_cfg(b"\\EFI\\BOOT\\grubx64.efi"));
+
+    let src = b"set timeout=30\nlinux /casper/vmlinuz quiet ---\ninitrd /casper/initrd\n";
+    let mut out = [0u8; 256];
+    let n = amend_grub_cfg_serial(src, &mut out).unwrap();
+    assert_eq!(
+        &out[..n],
+        b"set timeout=30\nlinux /casper/vmlinuz quiet --- console=ttyS0\ninitrd /casper/initrd\n"
+    );
+    assert!(amend_grub_cfg_serial(&out[..n], &mut [0u8; 256]).is_none());
+    let crlf = b"\tlinuxefi /casper/vmlinuz ---\r\n# linux /skip\nlinux16 /old\n";
+    let n = amend_grub_cfg_serial(crlf, &mut out).unwrap();
+    assert_eq!(
+        &out[..n],
+        b"\tlinuxefi /casper/vmlinuz --- console=ttyS0\r\n# linux /skip\nlinux16 /old\n"
+    );
+    let both = b"linux /a ---\nlinux /b ---\n";
+    let n = amend_grub_cfg_serial(both, &mut out).unwrap();
+    assert_eq!(
+        &out[..n],
+        b"linux /a --- console=ttyS0\nlinux /b --- console=ttyS0\n"
+    );
+    assert!(amend_grub_cfg_serial(b"set timeout=1\n", &mut out).is_none());
+
+    let cfg = b"set timeout=30\nlinux /casper/vmlinuz quiet ---\ninitrd /casper/initrd\n";
+    let disk = build_fat12_named(b"GRUB    CFG", cfg);
+    let orig_at = disk.windows(cfg.len()).position(|w| w == cfg).unwrap();
+    let vol = VecVol(disk);
+    let mut fs = FileSystem::new();
+    fs.volume = Some(parse_bpb(&vol.0[..512]).unwrap());
+    let (st, root) = fs.open_volume();
+    assert_eq!(st, 0);
+    let (st, fh) = fs.open(root, b"\\EFI\\BOOT\\grub.cfg", EFI_FILE_MODE_READ, &vol);
+    assert_eq!(st, 0);
+    assert_eq!(fs.size_of(fh), Some(cfg.len() as u64));
+    assert_eq!(
+        fs.arm_library_serial_view(fh, &vol),
+        SerialView::Amended
+    );
+    let amended = b"set timeout=30\nlinux /casper/vmlinuz quiet --- console=ttyS0\ninitrd /casper/initrd\n";
+    assert_eq!(fs.size_of(fh), Some(amended.len() as u64));
+    let mut info = [0u8; 128];
+    let (st, need) = fs.file_info(fh, &mut info);
+    assert_eq!(st, 0);
+    assert!(need > 8);
+    assert_eq!(
+        u64::from_le_bytes(info[FILE_INFO_FILE_SIZE_OFF..FILE_INFO_FILE_SIZE_OFF + 8].try_into().unwrap()),
+        amended.len() as u64
+    );
+    let mut got = Vec::new();
+    let mut chunk = [0u8; 7];
+    loop {
+        let (st, n) = fs.read(fh, &mut chunk, &vol);
+        assert_eq!(st, 0);
+        if n == 0 {
+            break;
+        }
+        got.extend_from_slice(&chunk[..n]);
+    }
+    assert_eq!(got, amended);
+    assert_eq!(&vol.0[orig_at..orig_at + cfg.len()], cfg);
+    assert_eq!(fs.set_position(fh, u64::MAX), 0);
+    assert_eq!(fs.position(fh), Some(amended.len() as u64));
+    assert_eq!(fs.read(fh, &mut chunk, &vol).1, 0);
+
+    let (st, plain) = fs.open(root, b"\\EFI\\BOOT\\GRUB.CFG", EFI_FILE_MODE_READ, &vol);
+    assert_eq!(st, 0);
+    assert_eq!(fs.size_of(plain), Some(cfg.len() as u64));
+    let mut raw = vec![0u8; cfg.len()];
+    assert_eq!(fs.read(plain, &mut raw, &vol), (0, cfg.len()));
+    assert_eq!(raw, cfg);
+
+    let quiet = b"linux /casper/vmlinuz console=ttyS0 ---\n";
+    let disk = build_fat12_named(b"GRUB    CFG", quiet);
+    let vol = VecVol(disk);
+    let mut fs = FileSystem::new();
+    fs.volume = Some(parse_bpb(&vol.0[..512]).unwrap());
+    let (_, root) = fs.open_volume();
+    let (_, fh) = fs.open(root, b"\\EFI\\BOOT\\grub.cfg", EFI_FILE_MODE_READ, &vol);
+    assert_eq!(fs.arm_library_serial_view(fh, &vol), SerialView::Unchanged);
+    assert_eq!(fs.size_of(fh), Some(quiet.len() as u64));
+
+    let mut big = b"linux /casper/vmlinuz ---\n".to_vec();
+    big.resize(GRUB_CFG_VIEW_CAP - GRUB_CFG_SERIAL_SLACK + 1, b' ');
+    let disk = build_fat12_named(b"GRUB    CFG", &big);
+    let vol = VecVol(disk);
+    let mut fs = FileSystem::new();
+    fs.volume = Some(parse_bpb(&vol.0[..512]).unwrap());
+    let (_, root) = fs.open_volume();
+    let (_, fh) = fs.open(root, b"\\EFI\\BOOT\\grub.cfg", EFI_FILE_MODE_READ, &vol);
+    assert_eq!(fs.arm_library_serial_view(fh, &vol), SerialView::TooBig);
+    assert_eq!(fs.size_of(fh), Some(big.len() as u64));
+    let mut head = [0u8; 26];
+    assert_eq!(fs.read(fh, &mut head, &vol).1, 26);
+    assert_eq!(&head, b"linux /casper/vmlinuz ---\n");
+    reset_library_grub_cfg_view();
 }

@@ -23,8 +23,9 @@ use crate::mgmt::megaraid::{
 /// The file Guests will upload. Size is whatever the operator sends.
 pub const UBUNTU_2604_LIVE_SERVER_NAME: &str = "ubuntu-26.04-live-server-amd64.iso";
 
-/// Added on the kernel command line at `StartImage` for the library CD.
-/// The stored ISO is not rewritten. Alpine disk boot does not get this.
+/// Added on the kernel command line for the library CD. GRUB 2.14 reads it
+/// from the `grub.cfg` view (`6865b5ab` never called `StartImage`). The
+/// stored ISO is not rewritten. Alpine disk boot does not get this.
 pub const LIBRARY_SERIAL_ARG: &str = "console=ttyS0";
 
 /// Last sector of RAYNU-SPARE stays the mailbox probe.
