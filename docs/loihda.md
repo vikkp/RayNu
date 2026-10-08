@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-8-kernel-serial |
-| Summary | **`87979e32` reached the kernel with no serial console.** This EFI appends `console=ttyS0` at `StartImage` for the library CD only. The stored file is not rewritten. Unmodified media stays 25. Bar B stays 60. M8.8.3 is not lived. |
+| Commit | m8-8-grubcfg-view |
+| Summary | **`6865b5ab` reached the kernel with no serial console.** GRUB did not call `StartImage`. This EFI adds `console=ttyS0` to the `linux` line GRUB reads from `grub.cfg`. The stored file is not rewritten. Unmodified media stays 25. Bar B stays 60. M8.8.3 is not lived. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Scores held. Bar A 92. Bar B 60. perc 78. Overall 73. Unmodified media stays 25. The library boot is not lived. |
 | Gates touched | M8.8.3 packed, not lived. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-10-08 | m8-8-grubcfg-view | 92 | 60 | **`6865b5ab` EBS and virtio `DRIVER_OK`.** No `Linux version`. No kernel-line line. This EFI amends the `grub.cfg` read view. The stored file stays. Unmodified media stays 25. Bar B stays 60. M8.8.3 not lived. |
 | 2026-10-08 | m8-8-kernel-serial | 92 | 60 | **`87979e32` EBS and virtio `DRIVER_OK`.** No `Linux version`. This EFI appends `console=ttyS0` at `StartImage` for the library CD. The stored file stays. Unmodified media stays 25. Bar B stays 60. M8.8.3 not lived. |
 | 2026-10-07 | m8-8-grub-clock | 92 | 60 | **`9147cad0` GRUB `1s` at the 600 s cap.** The menu clock was about 20× slow. Next EFI calibrates it from a real PIT wait. Unmodified media stays 25. Bar B stays 60. M8.8.3 not lived. |
 | 2026-10-07 | m8-8-wall-cap | 92 | 60 | **`90f64bcf` GRUB menu, then the 180 s cap.** Countdown 22 s, `blk_rd=17`. Next EFI allows 600 s. Unmodified media stays 25. Bar B stays 60. M8.8.3 not lived. |

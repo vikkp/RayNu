@@ -539,6 +539,11 @@ pub struct Dispatched {
     /// `StartImage` appended `console=ttyS0` to LoadOptions on this call.
     /// The stored library file was not rewritten.
     pub serial_appended: bool,
+    /// `File.Open` of `grub.cfg` on the library CD amended the read view.
+    /// The stored file was not rewritten.
+    pub grub_cfg_serial: bool,
+    /// That `grub.cfg` did not fit in the serial view. Reads stay original.
+    pub grub_cfg_serial_skip: bool,
 }
 
 fn read_u64(mem: &dyn GuestMem, addr: u64) -> Option<u64> {
@@ -1458,6 +1463,8 @@ pub fn dispatch(
         exit_image: None,
         opened_grub: false,
         serial_appended: false,
+        grub_cfg_serial: false,
+        grub_cfg_serial_skip: false,
     };
     let a = args;
     out.status = match id {
@@ -1808,6 +1815,16 @@ pub fn dispatch(
             if status == EFI_SUCCESS {
                 if super::filesystem::path_is_grubx64(&path[..n]) {
                     out.opened_grub = true;
+                }
+                // GRUB 2.14 starts the Ubuntu kernel by the EFI handover
+                // jump, which never calls StartImage (`6865b5ab`). The
+                // `linux` line it jumps with is the one in this file.
+                if st.append_kernel_serial && super::filesystem::path_is_grub_cfg(&path[..n]) {
+                    match st.fs.arm_library_serial_view(handle, &r) {
+                        super::filesystem::SerialView::Amended => out.grub_cfg_serial = true,
+                        super::filesystem::SerialView::TooBig => out.grub_cfg_serial_skip = true,
+                        super::filesystem::SerialView::Unchanged => {}
+                    }
                 }
                 let ns = (handle & 0xFFF) as u64;
                 let newthis =
