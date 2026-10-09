@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-8-self-ipi-lived |
-| Summary | **`6d630acc` injected `self-ipi vec=0xf6` and reached `Welcome to Ubuntu 26.04 LTS!`.** The ttyS0 unit is `Subiquity, the installer for Ubuntu Server`. The log then shows `waiting for cloud-init`. No `synchronize_srcu` hung task. The language screen is not in the log. M8.8.3 is not closed. Scores held. Months **0.0 held**. Overall **99 held**. |
+| Commit | m8-8-nocloud |
+| Summary | **`6d630acc` reached `waiting for cloud-init...`, then only HTTP keep-alives.** The guest has no NIC. A rerun did the same. This EFI adds `ds=nocloud cloud-init=disabled` on the library `linux` line. The stored ISO stays. The language screen is not lived. M8.8.3 is not closed. Scores held. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
 | Gates touched | M8.8.3 still open. No doorbell. No format of UBUNTU0. Not a COM2 close. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 60 held, perc 78 held, unmodified 25 held, overall LOI 73 held, months A 0.25 held, months B 1.5 held. |
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-09 | m8-8-nocloud | 0.0 | 99 | **`6d630acc` Subiquity ttyS0, then `waiting for cloud-init` and only HTTP keep-alives.** No guest NIC. Next EFI disables cloud-init on the library kernel line. Stored ISO stays. Language screen not lived. M8.8.3 not closed. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-09 | m8-8-self-ipi-lived | 0.0 | 99 | **`6d630acc` `self-ipi vec=0xf6` four times, then `Welcome to Ubuntu 26.04 LTS!` and the Subiquity ttyS0 unit.** Screen was `waiting for cloud-init` when the log was cut. No SRCU hang. Language screen not in the log. M8.8.3 not closed. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-09 | m8-8-self-ipi | 0.0 | 99 | **`1b01c2d8` libc accepted the CPU and udev started, then fsnotify waited forever in `synchronize_srcu`.** Linux 7 arms that grace period with a self-IPI. This EFI delivers it. Subiquity not reached. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-09 | m8-8-cpuid-vendor | 0.0 | 99 | **`8c6bfa85` XCR0 `0x2ff` lived; libc still refused the ISA level.** Leaf 0 vendor was `GenuineIntEl` for userspace because X2APIC was masked on every leaf. This EFI masks leaf 1 only and routes post-handoff userspace through the Linux CPUID view. Subiquity not reached. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |

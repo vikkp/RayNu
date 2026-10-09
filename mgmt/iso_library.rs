@@ -27,6 +27,10 @@ pub const UBUNTU_2604_LIVE_SERVER_NAME: &str = "ubuntu-26.04-live-server-amd64.i
 /// menu file from the ISO through `BlockIo` (`4e9ebcdb`). The stored ISO is
 /// not rewritten. Alpine disk boot does not get this.
 pub const LIBRARY_SERIAL_ARG: &str = "console=ttyS0";
+/// No metadata network. `6d630acc` reached `waiting for cloud-init` with no
+/// guest NIC, then COM2 was only HTTP keep-alives. The stored ISO is not
+/// rewritten.
+pub const LIBRARY_CLOUD_INIT_ARG: &str = "ds=nocloud cloud-init=disabled";
 
 /// Last sector of RAYNU-SPARE stays the mailbox probe.
 const PROBE_RESERVE: u64 = 512;

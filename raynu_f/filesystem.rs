@@ -630,6 +630,8 @@ fn cfg_line_needs_serial(src: &[u8]) -> bool {
 /// written in that case).
 pub fn amend_grub_cfg_serial(src: &[u8], out: &mut [u8]) -> Option<usize> {
     let arg = crate::mgmt::iso_library::LIBRARY_SERIAL_ARG.as_bytes();
+    let cloud = crate::mgmt::iso_library::LIBRARY_CLOUD_INIT_ARG.as_bytes();
+    let extra_len = 1 + arg.len() + 1 + cloud.len();
     let mut n = 0usize;
     let mut changed = false;
     let mut i = 0usize;
@@ -645,7 +647,7 @@ pub fn amend_grub_cfg_serial(src: &[u8], out: &mut [u8]) -> Option<usize> {
         }
         let extra = if line_needs_serial(&src[start..end]) {
             changed = true;
-            1 + arg.len()
+            extra_len
         } else {
             0
         };
@@ -680,6 +682,10 @@ pub fn amend_grub_cfg_serial(src: &[u8], out: &mut [u8]) -> Option<usize> {
             w += 1;
             out[w..w + arg.len()].copy_from_slice(arg);
             w += arg.len();
+            out[w] = b' ';
+            w += 1;
+            out[w..w + cloud.len()].copy_from_slice(cloud);
+            w += cloud.len();
         }
         if end < i {
             out[w] = b'\r';
