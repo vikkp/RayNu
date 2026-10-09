@@ -401,6 +401,28 @@ pub fn xsetbv_masked_xcr0(value: u64, host_mask: u64) -> u64 {
     v
 }
 
+/// CPUID.1:ECX bit 27. The processor raises it from CR4.OSXSAVE of whichever
+/// CPU executes CPUID. A VM exit runs CPUID on the host, and HOST_CR4 is
+/// captured once at VMCS setup, so the bit follows the host, not the guest.
+/// Guest CR4.OSXSAVE is host-owned and kept set. Report that.
+pub const CPUID_ECX_OSXSAVE: u32 = 1 << 27;
+
+/// XCR0 x87 | SSE | AVX. glibc marks AVX usable only when XGETBV returns
+/// bits 2:1 set. `6a7e72b1` unpacked the initrd, ran `/init`, then
+/// `libc.so.6: CPU ISA level is lower than required`.
+pub const XCR0_X87_SSE_AVX: u64 = 0x7;
+
+/// XCR0 to publish for the Ubuntu guest: every bit host CPUID.0D:0 allows.
+/// x87 stays set. AVX in the mask brings SSE with it.
+pub fn linux_guest_xcr0(host_mask: u64) -> u64 {
+    xsetbv_masked_xcr0(host_mask, host_mask)
+}
+
+/// Leaf-1 ECX with the guest OSXSAVE bit set. Other bits are unchanged.
+pub fn cpuid_ecx_with_guest_osxsave(ecx: u32) -> u32 {
+    ecx | CPUID_ECX_OSXSAVE
+}
+
 /// Host XCR0 to write after guest-UEFI. Uncaptured → x87 only (reset).
 /// Nested Intel `73ed589`: ATAPI-OK then E4 Linux `#DF` vec=8 because
 /// `handle_xsetbv` wrote host XCR0 and E4 copied host CR4.OSXSAVE.
@@ -519,6 +541,10 @@ pub fn guest_uefi_filter_cpuid(leaf: u32, subleaf: u32) -> CpuidRegs {
             r.ebx = (r.ebx & 0xFFFF) | (1 << 16);
             r.edx &= !CPUID_EDX_HTT;
             r.ecx |= CPUID_ECX_HYPERVISOR;
+            // Userspace CPUID (RIP below the high half) uses this filter.
+            // `6a7e72b1` hid OSXSAVE because host CR4 was clear, so glibc
+            // never treated AVX as usable.
+            r.ecx = cpuid_ecx_with_guest_osxsave(r.ecx);
         }
         // Linux `intel_cacheinfo` loops `cpuid_count(4, i)` until EAX[4:0]=0.
         // If ECX is stale (MSR leftover `0xc0000101` on n=1) every probe
@@ -7591,6 +7617,9 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
     RAYNU_F_LINUX_HANDOFF.store(false, Ordering::Release);
     LINUX_EFER_NX_HOLD.store(false, Ordering::Release);
     RAYNU_F_MODE.store(true, Ordering::Release);
+    // Before shim/GRUB/the kernel. Guest CR4.OSXSAVE and XCR0 must already
+    // match the CPUID bit or XGETBV #UDs.
+    publish_linux_xsave();
     serial::write_str("boot: RayNu-F VMLAUNCH entry=0x");
     write_hex(entry);
     serial::write_str(" system_table=0x");
@@ -7660,6 +7689,9 @@ unsafe fn raynu_f_linux_handoff() {
         EXCEPTION_BITMAP,
         u64::from(guest_uefi_raynu_f_handoff_exception_bitmap()),
     );
+    // Re-publish before the kernel's own XSETBV. The line has to land
+    // before earlycon share, which drops blocking HV writes.
+    publish_linux_xsave();
     // Kernel printk (earlycon on the guest UART) and hypervisor lines now
     // share COM; identity-RIP earlycon would otherwise be cut (iron b983ef8).
     serial::set_linux_earlycon_share(true);
@@ -15409,18 +15441,59 @@ unsafe fn handle_xsetbv() -> bool {
         let r = cpu::cpuid(0xD, 0);
         ((r.edx as u64) << 32) | (r.eax as u64)
     };
-    let v = xsetbv_masked_xcr0(value, host_mask);
+    // Keep x87|SSE|AVX when the host has them. A later XSETBV must not
+    // drop YMM out from under glibc (`6a7e72b1`).
+    let v = xsetbv_masked_xcr0(value | (host_mask & XCR0_X87_SSE_AVX), host_mask);
     force_guest_cr4_osxsave();
     // SAFETY: CR4.OSXSAVE is set; v is masked to CPUID.0D:0 with x87 set.
     // KANI-TARGET: guest-UEFI XSETBV XCR0 mask (outside Proven Core).
     cpu::xsetbv(0, v);
     let n = XSETBV_N.fetch_add(1, Ordering::AcqRel);
     if n < 2 {
-        serial::write_str("boot: guest-UEFI XSETBV xcr0=0x");
-        write_hex(v);
-        serial::write_byte(b'\n');
+        // nowait: earlycon share drops blocking writes, which hid the
+        // kernel XSETBV on `6a7e72b1`.
+        serial::write_str_nowait("boot: guest-UEFI XSETBV xcr0=0x");
+        write_hex_nowait(v);
+        serial::write_byte_nowait(b'\n');
     }
     skip_insn()
+}
+
+/// Guest CR4.OSXSAVE plus an XCR0 glibc can use for x86-64-v3.
+///
+/// HOST_CR4 is reloaded from the VMCS on every exit. If that field lacks
+/// OSXSAVE, host CPUID hides the bit even after `write_cr4`. Set both.
+#[cfg(target_os = "uefi")]
+unsafe fn publish_linux_xsave() {
+    let host_mask = {
+        let r = cpu::cpuid(0xD, 0);
+        ((r.edx as u64) << 32) | (r.eax as u64)
+    };
+    let xcr0 = linux_guest_xcr0(host_mask);
+    let gcr4 = apply_guest_cr4_write(
+        ops::vmread(GUEST_CR4).unwrap_or(0) | cpu::CR4_OSFXSR | cpu::CR4_OSXMMEXCPT,
+    );
+    let _ = ops::vmwrite(GUEST_CR4, gcr4);
+    let _ = ops::vmwrite(CR4_READ_SHADOW, guest_cr4_read_shadow(gcr4));
+    let hcr4 = ops::vmread(HOST_CR4).unwrap_or(0)
+        | cpu::CR4_OSXSAVE
+        | cpu::CR4_OSFXSR
+        | cpu::CR4_OSXMMEXCPT;
+    let _ = ops::vmwrite(HOST_CR4, hcr4);
+    let live = cpu::read_cr4();
+    if live & (cpu::CR4_OSXSAVE | cpu::CR4_OSFXSR | cpu::CR4_OSXMMEXCPT)
+        != (cpu::CR4_OSXSAVE | cpu::CR4_OSFXSR | cpu::CR4_OSXMMEXCPT)
+    {
+        // SAFETY: these CR4 bits are not fixed0-forbidden on this CPU.
+        // KANI-TARGET: RayNu-F publish host OSXSAVE (outside Proven Core).
+        cpu::write_cr4(live | cpu::CR4_OSXSAVE | cpu::CR4_OSFXSR | cpu::CR4_OSXMMEXCPT);
+    }
+    // SAFETY: host CR4.OSXSAVE is set; xcr0 is masked to CPUID.0D:0.
+    // KANI-TARGET: RayNu-F publish guest XCR0 (outside Proven Core).
+    cpu::xsetbv(0, xcr0);
+    serial::write_str("boot: RayNu-F linux xcr0=0x");
+    write_hex(xcr0);
+    serial::write_line(" (x86-64-v3 usable; not ISO-INSTALL-OK)");
 }
 
 /// High-half Linux, RayNu-F EBS handoff, `#PF` deliver, or a prior hold

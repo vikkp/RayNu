@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-8-guest-ram |
-| Summary | **`a71fbb3d` printed `Linux version 7.0.0-14-generic` with `console=ttyS0`, then `Initramfs unpacking failed: write error`.** The map gave the guest 256 MiB while ~2 GiB was already premapped. This EFI puts that tail in the memory map and keeps `AllocateAddress` honest. The per-page bitmap stays 256 MiB. M8.8.3 is not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
+| Commit | m8-8-xcr0-v3 |
+| Summary | **`6a7e72b1` unpacked the initrd (`Freeing initrd memory: 97388K`, `Memory: 1117420K/2091552K`) and ran `/init`, then `libc.so.6: CPU ISA level is lower than required`.** e820 showed `[0x2000000-0x7fffffff]`. This EFI sets guest `XCR0` to the host CPUID.0D mask (XMM and YMM when the CPU has them) and reports CPUID.1 OSXSAVE from guest CR4. M8.8.3 is not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
 | Gates touched | M8.8.3 still open. No doorbell. No format of UBUNTU0. Not a COM2 close. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 60 held, perc 78 held, unmodified 25 held, overall LOI 73 held, months A 0.25 held, months B 1.5 held. |
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-09 | m8-8-xcr0-v3 | 0.0 | 99 | **`6a7e72b1` unpacked the initrd and panicked in `/init`: `CPU ISA level is lower than required`.** RAM tail lived (`bytes=2113929216 tail=1845493760`). This EFI publishes `XCR0` and CPUID OSXSAVE so glibc can treat AVX as usable. Subiquity not reached. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-09 | m8-8-guest-ram | 0.0 | 99 | **`a71fbb3d` showed `Linux version 7.0.0-14-generic` and `console=ttyS0`, then initrd unpack `write error`.** Guest RAM was 256 MiB of ~2 GiB premapped. This EFI advertises the tail and can allocate it. Bitmap stays 256 MiB. Subiquity not reached. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-08 | m8-8-cd-linux | 0.0 | 99 | **`4e9ebcdb` EBS and virtio `DRIVER_OK`, no `grub.cfg` line and no `Linux version`.** The menu file came through `BlockIo`. This EFI amends that ISO9660 `linux` line and its directory length. The stored file stays. M8.8.3 not lived. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-08 | m8-8-grubcfg-view | 0.0 | 99 | **`6865b5ab` EBS and virtio `DRIVER_OK`, no `Linux version` and no kernel-line line.** GRUB handed the kernel over without `StartImage`. This EFI amends the `grub.cfg` read view for the library CD. The stored file stays. M8.8.3 not lived. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |

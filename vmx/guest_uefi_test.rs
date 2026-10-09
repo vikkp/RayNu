@@ -391,6 +391,17 @@ fn marker_and_residual_honest() {
     assert_eq!(xsetbv_masked_xcr0(0, 0x7), 1);
     assert_eq!(xsetbv_masked_xcr0(0x4, 0x7), 0x7);
     assert_eq!(xsetbv_masked_xcr0(0x7, 0x3), 0x3);
+    // `6a7e72b1`: glibc refused libc until XCR0 had XMM|YMM and CPUID
+    // reported OSXSAVE. Host mask is what CPUID.0D:0 allows.
+    assert_eq!(super::linux_guest_xcr0(0x2ff), 0x2ff);
+    assert_eq!(super::linux_guest_xcr0(0x7), 0x7);
+    assert_eq!(super::linux_guest_xcr0(1), 1);
+    assert_eq!(
+        super::cpuid_ecx_with_guest_osxsave(0),
+        super::CPUID_ECX_OSXSAVE
+    );
+    assert_eq!(super::CPUID_ECX_OSXSAVE, 1 << 27);
+    assert_eq!(super::XCR0_X87_SSE_AVX, 0x7);
     assert_eq!(e4_restore_xcr0_value(0, false, 0x7), 1);
     assert_eq!(e4_restore_xcr0_value(0x7, true, 0x7), 0x7);
     assert_eq!(e4_restore_xcr0_value(0x4, true, 0x7), 0x7);
@@ -412,6 +423,7 @@ fn marker_and_residual_honest() {
     let leaf1 = guest_uefi_filter_cpuid(1, 0);
     assert_eq!(leaf1.ecx & crate::arch::cpu::CPUID_ECX_VMX, 0);
     assert_eq!(leaf1.ecx & crate::arch::cpu::CPUID_ECX_X2APIC, 0);
+    assert_eq!(leaf1.ecx & super::CPUID_ECX_OSXSAVE, super::CPUID_ECX_OSXSAVE);
     assert!(guest_uefi_cpuid_has_hypervisor(leaf1.ecx));
     assert!(guest_uefi_cpuid_leaf1_is_uniprocessor(leaf1.ebx, leaf1.edx));
     let kvm = guest_uefi_filter_cpuid(GUEST_UEFI_KVM_CPUID_LEAF, 0);
@@ -419,6 +431,7 @@ fn marker_and_residual_honest() {
     assert_eq!(kvm.eax, GUEST_UEFI_KVM_CPUID_LEAF + 1);
     let linux1 = guest_uefi_filter_cpuid_for_linux(1, 0);
     assert!(!guest_uefi_cpuid_has_hypervisor(linux1.ecx));
+    assert_eq!(linux1.ecx & super::CPUID_ECX_OSXSAVE, super::CPUID_ECX_OSXSAVE);
     assert!(guest_uefi_cpuid_leaf1_is_uniprocessor(linux1.ebx, linux1.edx));
     let linux_kvm = guest_uefi_filter_cpuid_for_linux(GUEST_UEFI_KVM_CPUID_LEAF, 0);
     assert_eq!(linux_kvm.eax, 0);
