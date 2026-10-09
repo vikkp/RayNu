@@ -1,6 +1,6 @@
 ---
 loihda_version: 1
-last_updated: 2026-10-08
+last_updated: 2026-10-09
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-8-cd-linux |
-| Summary | **`4e9ebcdb` reached the kernel with no serial console.** The menu file was an ISO `BlockIo` read. This EFI adds `console=ttyS0` there and bumps the directory length. The stored file is not rewritten. Unmodified media stays 25. Bar B stays 60. M8.8.3 is not lived. |
+| Commit | m8-8-guest-ram |
+| Summary | **`a71fbb3d` reached `Linux version 7.0.0-14-generic` on `ttyS0`, then the initrd unpack failed.** The guest map was 256 MiB. This EFI publishes the premapped tail. Unmodified media stays 25. Bar B stays 60. Subiquity is not lived. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Scores held. Bar A 92. Bar B 60. perc 78. Overall 73. Unmodified media stays 25. The library boot is not lived. |
 | Gates touched | M8.8.3 packed, not lived. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-10-09 | m8-8-guest-ram | 92 | 60 | **`a71fbb3d` `Linux version 7.0.0-14-generic` and `console=ttyS0`, then initrd `write error`.** Next EFI gives the kernel the premapped tail. Unmodified media stays 25. Bar B stays 60. Subiquity not lived. |
 | 2026-10-08 | m8-8-cd-linux | 92 | 60 | **`4e9ebcdb` EBS and virtio `DRIVER_OK`.** No `Linux version`. No `grub.cfg` line. This EFI amends the ISO `linux` line GRUB reads with `BlockIo`. The stored file stays. Unmodified media stays 25. Bar B stays 60. M8.8.3 not lived. |
 | 2026-10-08 | m8-8-grubcfg-view | 92 | 60 | **`6865b5ab` EBS and virtio `DRIVER_OK`.** No `Linux version`. No kernel-line line. This EFI amends the `grub.cfg` read view. The stored file stays. Unmodified media stays 25. Bar B stays 60. M8.8.3 not lived. |
 | 2026-10-08 | m8-8-kernel-serial | 92 | 60 | **`87979e32` EBS and virtio `DRIVER_OK`.** No `Linux version`. This EFI appends `console=ttyS0` at `StartImage` for the library CD. The stored file stays. Unmodified media stays 25. Bar B stays 60. M8.8.3 not lived. |

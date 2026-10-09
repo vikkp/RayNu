@@ -7636,6 +7636,8 @@ unsafe fn raynu_f_configure_high_ram() {
     write_hex(base);
     serial::write_str(" bytes=");
     write_dec((pages as u64) * 4096);
+    serial::write_str(" tail=");
+    write_dec(st.pool.tail_pages().saturating_mul(4096));
     serial::write_str(" premapped=");
     write_dec(bytes);
     serial::write_line(" (F6-prep; not ISO-INSTALL-OK)");
