@@ -450,6 +450,18 @@ fn marker_and_residual_honest() {
     assert!(guest_uefi_cpuid_is_genuine_intel(
         linux0.ebx, linux0.edx, linux0.ecx
     ));
+    // `8c6bfa85`: the X2APIC mask ran on every leaf, so ld.so read
+    // "GenuineIntEl", skipped leaf 1, and rejected the ISA level.
+    // SAFETY: CPUID leaf 0 is architectural on every x86_64 host.
+    let host0 = unsafe { crate::arch::cpu::cpuid(0, 0) };
+    let fw0 = guest_uefi_filter_cpuid(0, 0);
+    assert_eq!((fw0.ebx, fw0.edx, fw0.ecx), (host0.ebx, host0.edx, host0.ecx));
+    if guest_uefi_cpuid_is_genuine_intel(host0.ebx, host0.edx, host0.ecx) {
+        assert_eq!(fw0.ecx, super::CPUID_GENUINEINTEL_ECX);
+    }
+    let src = include_str!("guest_uefi.rs");
+    assert!(src.contains("let linux_user = !guest_uefi_pf_should_deliver_to_guest(rip)"));
+    assert!(src.contains("boot: RayNu-F user cpuid vendor ebx=0x"));
     let linux_nx = guest_uefi_filter_cpuid_for_linux(0x8000_0001, 0);
     assert_ne!(linux_nx.edx & CPUID_80000001_EDX_NX, 0);
     assert_eq!(linux_nx.edx & CPUID_80000001_EDX_PAGE1GB, 0);

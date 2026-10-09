@@ -535,9 +535,13 @@ pub fn guest_uefi_filter_cpuid(leaf: u32, subleaf: u32) -> CpuidRegs {
         };
     }
     let mut r = msr_firewall::filter_cpuid(leaf, subleaf);
-    r.ecx &= !CPUID_ECX_X2APIC;
     match leaf {
         1 => {
+            // X2APIC is ECX bit 21 of leaf 1 only. Masking every leaf turned
+            // leaf-0 "ntel" into "ntEl"; glibc then took `arch_kind_other`,
+            // never read leaf 1, and `/init` died "CPU ISA level is lower
+            // than required" (`6a7e72b1`, `8c6bfa85`).
+            r.ecx &= !CPUID_ECX_X2APIC;
             r.ebx = (r.ebx & 0xFFFF) | (1 << 16);
             r.edx &= !CPUID_EDX_HTT;
             r.ecx |= CPUID_ECX_HYPERVISOR;
@@ -4414,6 +4418,8 @@ static IO_STRING_N: AtomicU32 = AtomicU32::new(0);
 static KBC_WR_N: AtomicU32 = AtomicU32::new(0);
 #[cfg(target_os = "uefi")]
 static XSETBV_N: AtomicU32 = AtomicU32::new(0);
+#[cfg(target_os = "uefi")]
+static USER_CPUID_VENDOR_N: AtomicU32 = AtomicU32::new(0);
 #[cfg(target_os = "uefi")]
 static UD_XSAVE_RETRY: AtomicU32 = AtomicU32::new(0);
 #[cfg(target_os = "uefi")]
@@ -15251,11 +15257,23 @@ unsafe fn handle_cpuid() -> bool {
         write_hex(u64::from(sub));
         serial::write_byte(b'\n');
     }
-    let r = if guest_uefi_pf_should_deliver_to_guest(rip) {
+    let linux_user = !guest_uefi_pf_should_deliver_to_guest(rip)
+        && RAYNU_F_LINUX_HANDOFF.load(Ordering::Acquire);
+    // Linux userspace (ld.so) must see the same CPU as the kernel.
+    let r = if guest_uefi_pf_should_deliver_to_guest(rip) || linux_user {
         guest_uefi_filter_cpuid_for_linux(leaf, sub)
     } else {
         guest_uefi_filter_cpuid(leaf, sub)
     };
+    if linux_user && leaf == 0 && USER_CPUID_VENDOR_N.fetch_add(1, Ordering::AcqRel) < 2 {
+        serial::write_str_nowait("boot: RayNu-F user cpuid vendor ebx=0x");
+        write_hex_nowait(u64::from(r.ebx));
+        serial::write_str_nowait(" edx=0x");
+        write_hex_nowait(u64::from(r.edx));
+        serial::write_str_nowait(" ecx=0x");
+        write_hex_nowait(u64::from(r.ecx));
+        serial::write_byte_nowait(b'\n');
+    }
     SAVED_RAX = r.eax as u64;
     SAVED_RBX = r.ebx as u64;
     SAVED_RCX = r.ecx as u64;
