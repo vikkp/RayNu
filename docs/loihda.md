@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-8-self-ipi |
-| Summary | **`1b01c2d8` passed the libc ISA check and started systemd-udevd, then `udevadm` stuck in SRCU.** This EFI delivers the local-APIC self-IPI Linux 7 uses to start that grace period. Unmodified media stays 25. Bar B stays 60. Subiquity is not lived. |
+| Commit | m8-8-self-ipi-lived |
+| Summary | **`6d630acc` booted the unmodified Ubuntu ISO to `Welcome to Ubuntu 26.04 LTS!` and started the Subiquity ttyS0 unit.** The log ends on `waiting for cloud-init`. Unmodified media stays 25. Bar B stays 60. M8.8.3 is not closed. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Scores held. Bar A 92. Bar B 60. perc 78. Overall 73. Unmodified media stays 25. The library boot is not lived. |
 | Gates touched | M8.8.3 packed, not lived. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-10-09 | m8-8-self-ipi-lived | 92 | 60 | **`6d630acc` `Welcome to Ubuntu 26.04 LTS!` and Subiquity on ttyS0.** Still `waiting for cloud-init` in the cut log. No SRCU hang. Unmodified media stays 25. Bar B stays 60. M8.8.3 not closed. |
 | 2026-10-09 | m8-8-self-ipi | 92 | 60 | **`1b01c2d8` GenuineIntel and `Starting systemd-udevd`, then `synchronize_srcu` at 122s/245s/368s.** Next EFI injects the self-IPI that starts the grace period. Unmodified media stays 25. Bar B stays 60. Subiquity not lived. |
 | 2026-10-09 | m8-8-cpuid-vendor | 92 | 60 | **`8c6bfa85` `xcr0=0x2ff` twice, then the same libc ISA line.** Leaf 0 was `GenuineIntEl` to userspace. Next EFI keeps the vendor intact. Unmodified media stays 25. Bar B stays 60. Subiquity not lived. |
 | 2026-10-09 | m8-8-xcr0-v3 | 92 | 60 | **`6a7e72b1` `Freeing initrd memory: 97388K`, then `/init` died: `CPU ISA level is lower than required`.** Next EFI sets `XCR0` and CPUID OSXSAVE. Unmodified media stays 25. Bar B stays 60. Subiquity not lived. |

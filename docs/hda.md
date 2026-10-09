@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-8-self-ipi |
-| Summary | **`1b01c2d8` showed GenuineIntel, `/init`, and systemd-udevd, then `udevadm` stuck in `synchronize_srcu` for 368s.** Linux 7 starts that SRCU grace period with `irq_work` (a local-APIC self-IPI). ICR writes were dropped. This EFI injects a fixed self-IPI ahead of the PIC. M8.8.3 is not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
+| Commit | m8-8-self-ipi-lived |
+| Summary | **`6d630acc` injected `self-ipi vec=0xf6` and reached `Welcome to Ubuntu 26.04 LTS!`.** The ttyS0 unit is `Subiquity, the installer for Ubuntu Server`. The log then shows `waiting for cloud-init`. No `synchronize_srcu` hung task. The language screen is not in the log. M8.8.3 is not closed. Scores held. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
 | Gates touched | M8.8.3 still open. No doorbell. No format of UBUNTU0. Not a COM2 close. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 60 held, perc 78 held, unmodified 25 held, overall LOI 73 held, months A 0.25 held, months B 1.5 held. |
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-09 | m8-8-self-ipi-lived | 0.0 | 99 | **`6d630acc` `self-ipi vec=0xf6` four times, then `Welcome to Ubuntu 26.04 LTS!` and the Subiquity ttyS0 unit.** Screen was `waiting for cloud-init` when the log was cut. No SRCU hang. Language screen not in the log. M8.8.3 not closed. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-09 | m8-8-self-ipi | 0.0 | 99 | **`1b01c2d8` libc accepted the CPU and udev started, then fsnotify waited forever in `synchronize_srcu`.** Linux 7 arms that grace period with a self-IPI. This EFI delivers it. Subiquity not reached. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-09 | m8-8-cpuid-vendor | 0.0 | 99 | **`8c6bfa85` XCR0 `0x2ff` lived; libc still refused the ISA level.** Leaf 0 vendor was `GenuineIntEl` for userspace because X2APIC was masked on every leaf. This EFI masks leaf 1 only and routes post-handoff userspace through the Linux CPUID view. Subiquity not reached. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-09 | m8-8-xcr0-v3 | 0.0 | 99 | **`6a7e72b1` unpacked the initrd and panicked in `/init`: `CPU ISA level is lower than required`.** RAM tail lived (`bytes=2113929216 tail=1845493760`). This EFI publishes `XCR0` and CPUID OSXSAVE so glibc can treat AVX as usable. Subiquity not reached. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
