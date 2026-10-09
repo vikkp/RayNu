@@ -2047,11 +2047,15 @@ fn raynu_f_high_ram_and_launch_loaded_image() {
     assert_eq!(pool.set_high_region(HIGH_BASE + 1, 16), 0);
     assert_eq!(pool.set_high_region(HIGH_BASE, 0), 0);
     assert_eq!(pool.high_region(), None);
-    // 2 GiB pre-mapped is clamped to the 256 MiB we manage.
-    assert_eq!(pool.set_high_region(HIGH_BASE, (0x8000_0000 - 0x0200_0000) / 4096), HIGH_MAX_PAGES);
+    // Iron premapped ~2 GiB stays in the map. The per-page bitmap is 256 MiB;
+    // the rest is the tail (`a71fbb3d` initrd unpack write error).
+    let big = (0x8000_0000 - 0x0200_0000) / 4096;
+    assert_eq!(pool.set_high_region(HIGH_BASE, big), big);
+    assert_eq!(pool.tail_pages() as usize, big - HIGH_MAX_PAGES);
     // Nested-size: 64 MiB of report-RAM.
     let high_pages = (64 * 1024 * 1024) / 4096;
     assert_eq!(pool.set_high_region(HIGH_BASE, high_pages), high_pages);
+    assert_eq!(pool.tail_pages(), 0);
     assert_eq!(pool.high_region(), Some((HIGH_BASE, high_pages)));
     assert_eq!(pool.free_pages(), POOL_PAGES + BELOW1M_PAGES + high_pages);
     assert_eq!(pool.free_low_pages(), POOL_PAGES);
@@ -2185,6 +2189,69 @@ fn raynu_f_high_ram_and_launch_loaded_image() {
         EFI_SUCCESS
     );
     assert_eq!(guest.u64_at(p_out), li);
+}
+
+/// `a71fbb3d`: premapped report-RAM was ~2 GiB and the map stopped at 256 MiB.
+/// The tail must be conventional and `AllocateAddress` at its high end must
+/// succeed, which is how GRUB claims a heap.
+#[test]
+fn raynu_f_premapped_tail_is_allocatable() {
+    use super::memory::{
+        MemRun, PagePool, ALLOCATE_ADDRESS, EFI_CONVENTIONAL_MEMORY, EFI_LOADER_CODE,
+        EFI_SUCCESS, HIGH_MAX_PAGES, MAX_DESCRIPTORS,
+    };
+
+    const HIGH_BASE: u64 = 0x0200_0000;
+    let big = ((0x8000_0000u64 - HIGH_BASE) / 4096) as usize;
+    let mut pool = PagePool::new();
+    assert_eq!(pool.set_high_region(HIGH_BASE, big), big);
+    assert_eq!(pool.high_region(), Some((HIGH_BASE, HIGH_MAX_PAGES)));
+    assert_eq!(pool.tail_pages() as usize, big - HIGH_MAX_PAGES);
+
+    let mut runs = [MemRun { typ: 0, start: 0, pages: 0 }; MAX_DESCRIPTORS];
+    let n = pool.memory_map(0x0200_0000, &mut runs);
+    let mut cursor = 0u64;
+    let mut high_conv = 0u64;
+    for r in &runs[..n] {
+        assert_eq!(r.start, cursor, "gap before {r:?}");
+        cursor = r.start + r.pages * 4096;
+        if r.typ == EFI_CONVENTIONAL_MEMORY && r.start >= HIGH_BASE {
+            high_conv += r.pages;
+        }
+    }
+    let end = HIGH_BASE + big as u64 * 4096;
+    assert_eq!(cursor, end);
+    assert_eq!(high_conv, big as u64);
+
+    // GRUB takes its heap from the top of the largest conventional run.
+    let take = (1600 * 1024 * 1024) / 4096;
+    let at = end - take as u64 * 4096;
+    assert!(at >= HIGH_BASE + HIGH_MAX_PAGES as u64 * 4096);
+    let (status, got) = pool.allocate_pages(ALLOCATE_ADDRESS, EFI_LOADER_CODE, take as u64, at);
+    assert_eq!(status, EFI_SUCCESS);
+    assert_eq!(got, at);
+    assert_eq!(pool.free_pages_at(at, take as u64), EFI_SUCCESS);
+    assert_eq!(pool.free_pages_at(at, take as u64), super::memory::EFI_NOT_FOUND);
+
+    let (status, got) = pool.allocate_pages(ALLOCATE_ADDRESS, EFI_LOADER_CODE, take as u64, at);
+    assert_eq!((status, got), (EFI_SUCCESS, at));
+    let n = pool.memory_map(0x0200_0000, &mut runs);
+    let mut cursor = 0u64;
+    let mut loader = 0u64;
+    let mut conv = 0u64;
+    for r in &runs[..n] {
+        assert_eq!(r.start, cursor);
+        cursor = r.start + r.pages * 4096;
+        if r.start >= HIGH_BASE && r.typ == EFI_LOADER_CODE {
+            loader += r.pages;
+        }
+        if r.start >= HIGH_BASE && r.typ == EFI_CONVENTIONAL_MEMORY {
+            conv += r.pages;
+        }
+    }
+    assert_eq!(cursor, end);
+    assert_eq!(loader, take as u64);
+    assert_eq!(conv, big as u64 - take as u64);
 }
 
 /// Nested `033bc0d`: Linux 6.12.13-virt reached `start_kernel` on RayNu-F

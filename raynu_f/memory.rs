@@ -53,10 +53,15 @@ pub const POOL_END: u64 = 0x01F0_0000;
 pub const POOL_PAGES: usize = ((POOL_END - POOL_BASE) / 4096) as usize; // 5120
 const BITMAP_WORDS: usize = POOL_PAGES / 64;
 
-/// Upper bound on the high region we manage: 256 MiB (65536 pages). More
-/// report-RAM may be EPT-mapped; we only advertise what we can allocate.
-/// Bitmap 8 KiB + type bytes 64 KiB live in `.bss` (the state is a static).
+/// Per-page bitmap for the first 256 MiB of report-RAM. `a71fbb3d` had
+/// ~2 GiB EPT-mapped and only this bitmap in the memory map, so the Ubuntu
+/// initrd unpack failed with `write error`. Bytes past this stay allocatable
+/// as a handful of spans ([`TAIL_SPANS`]) so `AllocateAddress` still matches
+/// every conventional descriptor. The bitmap stays here: a per-page map of
+/// 2 GiB would push `FirmwareState` over 128 KiB.
 pub const HIGH_MAX_PAGES: usize = 65536;
+/// Allocations in the report-RAM tail (past [`HIGH_MAX_PAGES`]).
+const TAIL_SPANS: usize = 8;
 const HIGH_BITMAP_WORDS: usize = HIGH_MAX_PAGES / 64;
 
 /// `EFI_MEMORY_TYPE`.
@@ -129,6 +134,22 @@ enum Region {
     High,
 }
 
+/// One `AllocatePages` in the report-RAM tail. Page index is within the tail.
+#[derive(Clone, Copy)]
+struct TailSpan {
+    start: u32,
+    pages: u32,
+    typ: u8,
+    used: bool,
+}
+
+const NO_SPAN: TailSpan = TailSpan {
+    start: 0,
+    pages: 0,
+    typ: 0,
+    used: false,
+};
+
 /// Host-side page allocator over the below-1M trampoline window, the low
 /// slab pool, and the optional high report-RAM region.
 #[derive(Clone)]
@@ -142,6 +163,9 @@ pub struct PagePool {
     high_pages: usize,
     high_used: [u64; HIGH_BITMAP_WORDS],
     high_typ: [u8; HIGH_MAX_PAGES],
+    /// Pages of premapped report-RAM past the per-page bitmap.
+    tail_pages: u64,
+    tail_spans: [TailSpan; TAIL_SPANS],
     /// Incremented on every `GetMemoryMap`; `ExitBootServices` must match.
     map_key: u64,
     /// Set once `ExitBootServices` succeeded.
@@ -161,6 +185,8 @@ impl PagePool {
             high_pages: 0,
             high_used: [0; HIGH_BITMAP_WORDS],
             high_typ: [0; HIGH_MAX_PAGES],
+            tail_pages: 0,
+            tail_spans: [NO_SPAN; TAIL_SPANS],
             map_key: 0,
             exited: false,
             allocs: 0,
@@ -168,30 +194,47 @@ impl PagePool {
     }
 
     /// Configure the high region from what the hypervisor has EPT-mapped.
-    /// `base` must be page-aligned and at or above [`POOL_END`]; `pages` is
-    /// clamped to [`HIGH_MAX_PAGES`]. Returns the page count in effect.
-    /// Only legal before any high allocation (launcher, pre-VMLAUNCH).
+    /// `base` must be page-aligned and at or above [`POOL_END`]. The first
+    /// [`HIGH_MAX_PAGES`] use the per-page bitmap. The rest is the tail:
+    /// still in the memory map, still `AllocateAddress`-honest. Returns the
+    /// page count in effect. Only legal before any high allocation.
     pub fn set_high_region(&mut self, base: u64, pages: usize) -> usize {
         if base & 0xfff != 0 || base < POOL_END || pages == 0 {
-            self.high_base = 0;
-            self.high_pages = 0;
+            self.clear_high();
             return 0;
         }
-        let n = pages.min(HIGH_MAX_PAGES);
         // Never let the region wrap or run past a 52-bit physical space.
-        let Some(end) = base.checked_add((n as u64) * 4096) else {
-            self.high_base = 0;
-            self.high_pages = 0;
+        let Some(end) = base.checked_add((pages as u64).saturating_mul(4096)) else {
+            self.clear_high();
             return 0;
         };
         if end > (1u64 << 52) {
-            self.high_base = 0;
-            self.high_pages = 0;
+            self.clear_high();
             return 0;
         }
+        let bitmap = pages.min(HIGH_MAX_PAGES);
         self.high_base = base;
-        self.high_pages = n;
-        n
+        self.high_pages = bitmap;
+        self.tail_pages = (pages - bitmap) as u64;
+        self.tail_spans = [NO_SPAN; TAIL_SPANS];
+        pages
+    }
+
+    fn clear_high(&mut self) {
+        self.high_base = 0;
+        self.high_pages = 0;
+        self.tail_pages = 0;
+        self.tail_spans = [NO_SPAN; TAIL_SPANS];
+    }
+
+    /// Pages of report-RAM past the per-page bitmap. Zero when the mapped
+    /// region fits in [`HIGH_MAX_PAGES`].
+    pub fn tail_pages(&self) -> u64 {
+        self.tail_pages
+    }
+
+    fn tail_base(&self) -> u64 {
+        self.high_base + (self.high_pages as u64) * 4096
     }
 
     pub fn high_region(&self) -> Option<(u64, usize)> {
@@ -270,11 +313,19 @@ impl PagePool {
 
     /// Free pages across every managed region (below-1M + slab pool + high).
     pub fn free_pages(&self) -> usize {
+        let tail_used: usize = self
+            .tail_spans
+            .iter()
+            .filter(|s| s.used)
+            .map(|s| s.pages as usize)
+            .sum();
         BELOW1M_PAGES - self.used_in(Region::Below1m)
             + POOL_PAGES
             - self.used_in(Region::Low)
             + self.high_pages
             - self.used_in(Region::High)
+            + self.tail_pages as usize
+            - tail_used
     }
 
     /// Free pages in the low slab pool only.
@@ -361,7 +412,12 @@ impl PagePool {
         pages: u64,
         memory: u64,
     ) -> (u64, u64) {
-        let max_run = POOL_PAGES.max(self.high_pages).max(BELOW1M_PAGES);
+        let tail_us = self.tail_pages.min(usize::MAX as u64) as usize;
+        let max_run = POOL_PAGES
+            .max(self.high_pages)
+            .max(BELOW1M_PAGES)
+            .max(tail_us)
+            .max(self.high_pages.saturating_add(tail_us));
         if pages == 0 || pages as usize > max_run {
             return (EFI_INVALID_PARAMETER, memory);
         }
@@ -394,20 +450,38 @@ impl PagePool {
                 }
             }
             ALLOCATE_ADDRESS => {
-                let Some((r, p)) = self.page_of(memory) else {
-                    return (EFI_NOT_FOUND, memory);
-                };
-                if p + n > self.pages_in(r) {
+                if let Some((r, p)) = self.page_of(memory) {
+                    if p + n <= self.pages_in(r) {
+                        if (p..p + n).any(|i| self.is_used(r, i)) {
+                            return (EFI_NOT_FOUND, memory);
+                        }
+                        Some((r, p))
+                    } else if r == Region::High {
+                        return self.allocate_across_tail(p, n, mem_type, memory);
+                    } else {
+                        return (EFI_NOT_FOUND, memory);
+                    }
+                } else if self.tail_index(memory, pages).is_some() {
+                    return self.allocate_tail_at(memory, pages, mem_type);
+                } else {
                     return (EFI_NOT_FOUND, memory);
                 }
-                if (p..p + n).any(|i| self.is_used(r, i)) {
-                    return (EFI_NOT_FOUND, memory);
-                }
-                Some((r, p))
             }
             _ => return (EFI_INVALID_PARAMETER, memory),
         };
         let Some((r, first)) = found else {
+            if alloc_type == ALLOCATE_ANY_PAGES {
+                if let Some(addr) = self.tail_first_fit(pages, mem_type) {
+                    self.allocs = self.allocs.saturating_add(1);
+                    return (EFI_SUCCESS, addr);
+                }
+            }
+            if alloc_type == ALLOCATE_MAX_ADDRESS {
+                if let Some(addr) = self.tail_fit_below(pages, memory, mem_type) {
+                    self.allocs = self.allocs.saturating_add(1);
+                    return (EFI_SUCCESS, addr);
+                }
+            }
             return if alloc_type == ALLOCATE_MAX_ADDRESS {
                 (EFI_NOT_FOUND, memory)
             } else {
@@ -422,8 +496,12 @@ impl PagePool {
     /// `FreePages`.
     pub fn free_pages_at(&mut self, memory: u64, pages: u64) -> u64 {
         let Some((r, p)) = self.page_of(memory) else {
-            return EFI_NOT_FOUND;
+            return self.free_tail_at(memory, pages);
         };
+        let n_early = pages as usize;
+        if r == Region::High && n_early > 0 && p + n_early > self.high_pages {
+            return self.free_across_tail(p, n_early);
+        }
         let n = pages as usize;
         if n == 0 || p + n > self.pages_in(r) || (p..p + n).any(|i| !self.is_used(r, i)) {
             return EFI_NOT_FOUND;
@@ -433,6 +511,230 @@ impl PagePool {
             self.set_typ(r, i, 0);
         }
         EFI_SUCCESS
+    }
+
+    fn tail_index(&self, addr: u64, pages: u64) -> Option<u64> {
+        if self.tail_pages == 0 || pages == 0 || addr & 0xfff != 0 {
+            return None;
+        }
+        let base = self.tail_base();
+        if addr < base {
+            return None;
+        }
+        let start = (addr - base) / 4096;
+        if start.saturating_add(pages) > self.tail_pages {
+            return None;
+        }
+        Some(start)
+    }
+
+    fn tail_busy(&self, start: u64, pages: u64) -> bool {
+        let end = start + pages;
+        self.tail_spans.iter().any(|s| {
+            s.used && start < s.start as u64 + u64::from(s.pages) && end > u64::from(s.start)
+        })
+    }
+
+    fn tail_insert(&mut self, start: u64, pages: u64, typ: u32) -> bool {
+        if start > u64::from(u32::MAX) || pages > u64::from(u32::MAX) || pages == 0 {
+            return false;
+        }
+        if let Some(slot) = self.tail_spans.iter_mut().find(|s| !s.used) {
+            *slot = TailSpan {
+                start: start as u32,
+                pages: pages as u32,
+                typ: typ as u8,
+                used: true,
+            };
+            true
+        } else {
+            false
+        }
+    }
+
+    fn allocate_tail_at(&mut self, addr: u64, pages: u64, typ: u32) -> (u64, u64) {
+        let Some(start) = self.tail_index(addr, pages) else {
+            return (EFI_NOT_FOUND, addr);
+        };
+        if self.tail_busy(start, pages) || !self.tail_insert(start, pages, typ) {
+            return (EFI_NOT_FOUND, addr);
+        }
+        self.allocs = self.allocs.saturating_add(1);
+        (EFI_SUCCESS, addr)
+    }
+
+    fn allocate_across_tail(&mut self, page: usize, pages: usize, typ: u32, addr: u64) -> (u64, u64) {
+        if page >= self.high_pages {
+            return (EFI_NOT_FOUND, addr);
+        }
+        let in_bitmap = self.high_pages - page;
+        if pages <= in_bitmap {
+            return (EFI_NOT_FOUND, addr);
+        }
+        let in_tail = pages - in_bitmap;
+        if in_tail as u64 > self.tail_pages {
+            return (EFI_NOT_FOUND, addr);
+        }
+        if (page..self.high_pages).any(|i| self.is_used(Region::High, i)) || self.tail_busy(0, in_tail as u64)
+        {
+            return (EFI_NOT_FOUND, addr);
+        }
+        if !self.tail_insert(0, in_tail as u64, typ) {
+            return (EFI_OUT_OF_RESOURCES, addr);
+        }
+        self.mark(Region::High, page, in_bitmap, typ);
+        self.allocs = self.allocs.saturating_add(1);
+        (EFI_SUCCESS, addr)
+    }
+
+    fn tail_first_fit(&mut self, pages: u64, typ: u32) -> Option<u64> {
+        self.tail_fit_below(pages, u64::MAX, typ)
+    }
+
+    /// First free tail run of `pages` whose last byte is `<= max_addr`.
+    fn tail_fit_below(&mut self, pages: u64, max_addr: u64, typ: u32) -> Option<u64> {
+        if self.tail_pages == 0 || pages == 0 || pages > self.tail_pages {
+            return None;
+        }
+        let mut order = [0usize; TAIL_SPANS];
+        let mut n = 0usize;
+        for (i, span) in self.tail_spans.iter().enumerate() {
+            if span.used {
+                order[n] = i;
+                n += 1;
+            }
+        }
+        for i in 1..n {
+            let mut j = i;
+            while j > 0
+                && self.tail_spans[order[j]].start < self.tail_spans[order[j - 1]].start
+            {
+                order.swap(j, j - 1);
+                j -= 1;
+            }
+        }
+        let base = self.tail_base();
+        let mut cursor = 0u64;
+        let try_gap = |this: &mut Self, cursor: u64| -> Option<u64> {
+            let addr = base + cursor * 4096;
+            let last = addr + pages * 4096 - 1;
+            if last > max_addr {
+                return None;
+            }
+            if this.tail_insert(cursor, pages, typ) {
+                Some(addr)
+            } else {
+                None
+            }
+        };
+        for k in 0..n {
+            let start = u64::from(self.tail_spans[order[k]].start);
+            if start > cursor && start - cursor >= pages {
+                if let Some(addr) = try_gap(self, cursor) {
+                    return Some(addr);
+                }
+            }
+            let span = self.tail_spans[order[k]];
+            cursor = u64::from(span.start) + u64::from(span.pages);
+        }
+        if self.tail_pages - cursor >= pages {
+            return try_gap(self, cursor);
+        }
+        None
+    }
+
+    fn free_tail_at(&mut self, memory: u64, pages: u64) -> u64 {
+        let Some(start) = self.tail_index(memory, pages) else {
+            return EFI_NOT_FOUND;
+        };
+        let end = start + pages;
+        for span in &mut self.tail_spans {
+            if !span.used {
+                continue;
+            }
+            let ss = u64::from(span.start);
+            let se = ss + u64::from(span.pages);
+            if start < ss || end > se {
+                continue;
+            }
+            if start == ss && end == se {
+                span.used = false;
+                return EFI_SUCCESS;
+            }
+            if start == ss {
+                span.start = end as u32;
+                span.pages = (se - end) as u32;
+                return EFI_SUCCESS;
+            }
+            if end == se {
+                span.pages = (start - ss) as u32;
+                return EFI_SUCCESS;
+            }
+            return EFI_NOT_FOUND;
+        }
+        EFI_NOT_FOUND
+    }
+
+    fn free_across_tail(&mut self, page: usize, pages: usize) -> u64 {
+        if page >= self.high_pages || pages <= self.high_pages - page {
+            return EFI_NOT_FOUND;
+        }
+        let in_bitmap = self.high_pages - page;
+        let in_tail = pages - in_bitmap;
+        if (page..self.high_pages).any(|i| !self.is_used(Region::High, i)) {
+            return EFI_NOT_FOUND;
+        }
+        if self.free_tail_at(self.tail_base(), in_tail as u64) != EFI_SUCCESS {
+            return EFI_NOT_FOUND;
+        }
+        for i in page..self.high_pages {
+            self.set_used(Region::High, i, false);
+            self.set_typ(Region::High, i, 0);
+        }
+        EFI_SUCCESS
+    }
+
+    fn emit_tail(&self, push: &mut dyn FnMut(u32, u64, u64)) {
+        let mut order = [0usize; TAIL_SPANS];
+        let mut n = 0usize;
+        for (i, span) in self.tail_spans.iter().enumerate() {
+            if span.used {
+                order[n] = i;
+                n += 1;
+            }
+        }
+        for i in 1..n {
+            let mut j = i;
+            while j > 0
+                && self.tail_spans[order[j]].start < self.tail_spans[order[j - 1]].start
+            {
+                order.swap(j, j - 1);
+                j -= 1;
+            }
+        }
+        let base = self.tail_base();
+        let mut cursor = 0u64;
+        for k in 0..n {
+            let span = self.tail_spans[order[k]];
+            let start = u64::from(span.start);
+            if start > cursor {
+                push(
+                    EFI_CONVENTIONAL_MEMORY,
+                    base + cursor * 4096,
+                    base + start * 4096,
+                );
+            }
+            let end = start + u64::from(span.pages);
+            push(u32::from(span.typ), base + start * 4096, base + end * 4096);
+            cursor = end;
+        }
+        if cursor < self.tail_pages {
+            push(
+                EFI_CONVENTIONAL_MEMORY,
+                base + cursor * 4096,
+                base + self.tail_pages * 4096,
+            );
+        }
     }
 
     /// Pages needed for an `AllocatePool(size)` including the header.
@@ -524,6 +826,9 @@ impl PagePool {
         push(EFI_RESERVED_MEMORY_TYPE, POOL_END, slab_bytes);
         if self.high_pages != 0 {
             self.region_runs(Region::High, &mut push);
+        }
+        if self.tail_pages != 0 {
+            self.emit_tail(&mut push);
         }
         n
     }
