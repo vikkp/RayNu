@@ -3058,20 +3058,20 @@ fn raynu_f_library_grub_cfg_read_view_adds_console() {
     let n = amend_grub_cfg_serial(src, &mut out).unwrap();
     assert_eq!(
         &out[..n],
-        b"set timeout=30\nlinux /casper/vmlinuz quiet --- console=ttyS0\ninitrd /casper/initrd\n"
+        b"set timeout=30\nlinux /casper/vmlinuz quiet --- console=ttyS0 ds=nocloud cloud-init=disabled\ninitrd /casper/initrd\n"
     );
     assert!(amend_grub_cfg_serial(&out[..n], &mut [0u8; 256]).is_none());
     let crlf = b"\tlinuxefi /casper/vmlinuz ---\r\n# linux /skip\nlinux16 /old\n";
     let n = amend_grub_cfg_serial(crlf, &mut out).unwrap();
     assert_eq!(
         &out[..n],
-        b"\tlinuxefi /casper/vmlinuz --- console=ttyS0\r\n# linux /skip\nlinux16 /old\n"
+        b"\tlinuxefi /casper/vmlinuz --- console=ttyS0 ds=nocloud cloud-init=disabled\r\n# linux /skip\nlinux16 /old\n"
     );
     let both = b"linux /a ---\nlinux /b ---\n";
     let n = amend_grub_cfg_serial(both, &mut out).unwrap();
     assert_eq!(
         &out[..n],
-        b"linux /a --- console=ttyS0\nlinux /b --- console=ttyS0\n"
+        b"linux /a --- console=ttyS0 ds=nocloud cloud-init=disabled\nlinux /b --- console=ttyS0 ds=nocloud cloud-init=disabled\n"
     );
     assert!(amend_grub_cfg_serial(b"set timeout=1\n", &mut out).is_none());
 
@@ -3090,7 +3090,7 @@ fn raynu_f_library_grub_cfg_read_view_adds_console() {
         fs.arm_library_serial_view(fh, &vol),
         SerialView::Amended
     );
-    let amended = b"set timeout=30\nlinux /casper/vmlinuz quiet --- console=ttyS0\ninitrd /casper/initrd\n";
+    let amended = b"set timeout=30\nlinux /casper/vmlinuz quiet --- console=ttyS0 ds=nocloud cloud-init=disabled\ninitrd /casper/initrd\n";
     assert_eq!(fs.size_of(fh), Some(amended.len() as u64));
     let mut info = [0u8; 128];
     let (st, need) = fs.file_info(fh, &mut info);
@@ -3182,7 +3182,10 @@ fn raynu_f_cd_blockio_grows_grub_cfg_linux_line() {
     assert!(touch.amended);
     assert!(!touch.skipped);
     let new_len = u32::from_le_bytes(image[10..14].try_into().unwrap());
-    assert_eq!(new_len, (file.len() + b" console=ttyS0".len()) as u32);
+    assert_eq!(
+        new_len,
+        (file.len() + b" console=ttyS0 ds=nocloud cloud-init=disabled".len()) as u32
+    );
     assert_eq!(
         u32::from_be_bytes(image[14..18].try_into().unwrap()),
         new_len

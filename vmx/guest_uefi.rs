@@ -12187,7 +12187,7 @@ unsafe fn handle_raynu_f_service() -> bool {
         );
     }
     if d.cd_linux_serial && !RAYNU_F_CD_LINUX_LOGGED.swap(true, Ordering::AcqRel) {
-        serial::write_str("boot: RayNu-F CD grub.cfg console=ttyS0 len=");
+        serial::write_str("boot: RayNu-F CD grub.cfg console=ttyS0 ds=nocloud len=");
         if let Some((orig, new_len)) = crate::raynu_f::cd_serial::cd_linux_lens() {
             write_dec(u64::from(orig));
             serial::write_str("->");
