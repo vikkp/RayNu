@@ -199,3 +199,31 @@ fn firmware_lapic_timer_expiry_keeps_unmasked_vector() {
     assert_eq!(v, 0x27);
     assert!(wrmsr(0x80B, 0).is_some());
 }
+
+#[test]
+fn icr_self_ipi_latches_irr_and_take_moves_to_isr() {
+    reset();
+    assert!(wrmsr(0x80F, 0x1FF).is_some());
+    // Shorthand self (bit 18), assert (bit 14), fixed, vector 0xf6 (irq_work).
+    let icr = (1u32 << 18) | (1 << 14) | 0xf6;
+    assert!(mmio_access(APIC_GPA + 0x300, true, icr).is_some());
+    let v = take_self_ipi().expect("self-IPI");
+    assert_eq!(v, 0xf6);
+    assert!(take_self_ipi().is_none());
+    assert!(mmio_access(APIC_GPA + 0xB0, true, 0).is_some());
+    // All-excluding-self is not this CPU.
+    let excl = (3u32 << 18) | (1 << 14) | 0xfd;
+    assert!(mmio_access(APIC_GPA + 0x300, true, excl).is_some());
+    assert!(take_self_ipi().is_none());
+    // INIT delivery is not a fixed interrupt.
+    let init = (1u32 << 18) | (5 << 8) | 0xf6;
+    assert!(mmio_access(APIC_GPA + 0x300, true, init).is_some());
+    assert!(take_self_ipi().is_none());
+    // No shorthand, destination APIC ID 0, is self.
+    assert!(mmio_access(APIC_GPA + 0x310, true, 0).is_some());
+    let noshort = (1u32 << 14) | 0xec;
+    assert!(mmio_access(APIC_GPA + 0x300, true, noshort).is_some());
+    assert_eq!(take_self_ipi(), Some(0xec));
+    assert!(mmio_access(APIC_GPA + 0xB0, true, 0).is_some());
+    reset();
+}

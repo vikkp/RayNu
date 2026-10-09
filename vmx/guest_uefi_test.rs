@@ -462,6 +462,8 @@ fn marker_and_residual_honest() {
     let src = include_str!("guest_uefi.rs");
     assert!(src.contains("let linux_user = !guest_uefi_pf_should_deliver_to_guest(rip)"));
     assert!(src.contains("boot: RayNu-F user cpuid vendor ebx=0x"));
+    assert!(src.contains("take_self_ipi()"));
+    assert!(src.contains("boot: RayNu-F lapic self-ipi vec=0x"));
     let linux_nx = guest_uefi_filter_cpuid_for_linux(0x8000_0001, 0);
     assert_ne!(linux_nx.edx & CPUID_80000001_EDX_NX, 0);
     assert_eq!(linux_nx.edx & CPUID_80000001_EDX_PAGE1GB, 0);
