@@ -38,6 +38,9 @@ const REG_LVT_TIMER: u32 = 0x320;
 const REG_INIT_COUNT: u32 = 0x380;
 const REG_CUR_COUNT: u32 = 0x390;
 const REG_DIVIDE: u32 = 0x3E0;
+/// ICR low triggers a send. ICR high holds the destination (xAPIC bits 31:24).
+const REG_ICR_LOW: u32 = 0x300;
+const REG_ICR_HIGH: u32 = 0x310;
 
 const LVT_MASKED: u32 = 1 << 16;
 const LVT_PERIODIC: u32 = 1 << 17;
@@ -68,6 +71,11 @@ static mut PENDING_VECTOR: Option<u8> = None;
 /// TSC when INIT_COUNT was last written (countdown base).
 static mut TIMER_START_TSC: u64 = 0;
 static mut TIMER_RUNNING: bool = false;
+/// Last ICR high (destination). A following ICR low sends the IPI.
+static mut APIC_ICR_HIGH: u32 = 0;
+/// Vectors latched by a fixed self-IPI. Linux 7 `irq_work` starts SRCU
+/// grace periods this way (`1b01c2d8`: fsnotify workers never woke).
+static mut SELF_IPI_MASK: [u32; 8] = [0; 8];
 
 pub fn is_x2apic_msr(index: u32) -> bool {
     (X2APIC_MSR_BASE..=X2APIC_MSR_LAST).contains(&index)
@@ -153,6 +161,66 @@ fn bit_is_set(regs: *const [u32; 8], vec: u8) -> bool {
 
 fn set_irr(vec: u8) {
     bit_set(core::ptr::addr_of_mut!(APIC_IRR), vec)
+}
+
+/// Fixed ICR send aimed at this CPU. Linux 7 queues `process_srcu` from
+/// `irq_work`, and x86 raises that with a local-APIC self-IPI. Dropping
+/// the write left fsnotify in `synchronize_srcu` (`1b01c2d8`).
+/// Not `ISO-INSTALL-OK`.
+fn accept_icr_low(val: u32) {
+    let shorthand = (val >> 18) & 0x3;
+    let mode = (val >> 8) & 0x7;
+    let vector = (val & 0xFF) as u8;
+    if mode != 0 || vector < 32 {
+        return;
+    }
+    // SAFETY: VMEXIT path; ICR high was stored by the preceding write.
+    let to_self = unsafe {
+        let dest = APIC_ICR_HIGH >> 24;
+        let apic_id = APIC_ID >> 24;
+        shorthand == 0b01 || shorthand == 0b10 || (shorthand == 0 && dest == apic_id)
+    };
+    if !to_self {
+        return;
+    }
+    // SAFETY: VMEXIT path.
+    unsafe {
+        set_irr(vector);
+        bit_set(core::ptr::addr_of_mut!(SELF_IPI_MASK), vector);
+    }
+}
+
+fn highest_self_ipi() -> Option<u8> {
+    // SAFETY: VMEXIT path.
+    unsafe {
+        for i in (0..8).rev() {
+            let w = SELF_IPI_MASK[i] & APIC_IRR[i];
+            if w != 0 {
+                let bit = 31 - w.leading_zeros();
+                return Some((i as u8) * 32 + bit as u8);
+            }
+        }
+        None
+    }
+}
+
+/// Move one pending self-IPI from IRR into ISR. PIC timer stays pending.
+/// Not `ISO-INSTALL-OK`.
+pub fn take_self_ipi() -> Option<u32> {
+    let vec = highest_self_ipi()?;
+    // SAFETY: VMEXIT path.
+    let blocked = unsafe {
+        let ppr = processor_priority() & 0xF0;
+        ((vec as u32) & 0xF0) <= ppr
+    };
+    if blocked {
+        return None;
+    }
+    // SAFETY: VMEXIT path.
+    unsafe {
+        bit_clear(core::ptr::addr_of_mut!(SELF_IPI_MASK), vec);
+    }
+    take_irr_vec(vec, false)
 }
 
 /// APIC TPR (8-bit). CR8 is bits 7:4.
@@ -329,6 +397,8 @@ fn write_reg(reg: u32, val: u32) {
             }
             REG_DIVIDE => APIC_DIVIDE = val & 0b1011,
             REG_INIT_COUNT => start_countdown(val),
+            REG_ICR_HIGH => APIC_ICR_HIGH = val,
+            REG_ICR_LOW => accept_icr_low(val),
             REG_ID | REG_VERSION | REG_CUR_COUNT | REG_PPR => {}
             _ => {
                 // ISR/IRR are read-only; ignore guest stores.
@@ -602,6 +672,8 @@ pub fn reset() {
         APIC_INIT_COUNT = 0;
         APIC_ISR = [0; 8];
         APIC_IRR = [0; 8];
+        APIC_ICR_HIGH = 0;
+        SELF_IPI_MASK = [0; 8];
         HOST_TIMER_FOR_GUEST = false;
         GTIMER3_OK = false;
         GTIMER3_PRINT = false;

@@ -14170,7 +14170,17 @@ unsafe fn try_inject_guest_irq() {
         let _ = set_guest_uefi_interrupt_window(true);
         return;
     }
-    let Some(vec) = (if use_pic {
+    // Linux 7 starts an SRCU grace period with irq_work → self-IPI.
+    // PIC stays pending; this vector is the one fsnotify is waiting on.
+    let self_vec = if linux {
+        crate::devices::lapic_virt::take_self_ipi()
+    } else {
+        None
+    };
+    let from_self = self_vec.is_some();
+    let Some(vec) = (if let Some(v) = self_vec {
+        Some(v)
+    } else if use_pic {
         crate::devices::guest_irq::take_pic_vector().map(u32::from)
     } else if prefer_ata {
         crate::devices::lapic_virt::take_irr_vec(ata_vec, true).or_else(|| {
@@ -14220,6 +14230,14 @@ unsafe fn try_inject_guest_irq() {
             serial::write_str_nowait("boot: Stage 46 inject vec=0x");
             write_hex_nowait(u64::from(vec));
             serial::write_line_nowait(" (not ISO-INSTALL-OK)");
+        }
+        if from_self {
+            static SELF_IPI_LOG: AtomicU32 = AtomicU32::new(0);
+            if SELF_IPI_LOG.fetch_add(1, Ordering::AcqRel) < 4 {
+                serial::write_str_nowait("boot: RayNu-F lapic self-ipi vec=0x");
+                write_hex_nowait(u64::from(vec));
+                serial::write_byte_nowait(b'\n');
+            }
         }
         if linux
             && use_pic
