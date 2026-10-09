@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-8-xcr0-v3 |
-| Summary | **`6a7e72b1` ran `/init` after a successful initrd unpack, then libc refused the CPU ISA level.** This EFI publishes `XCR0` with XMM and YMM and reports OSXSAVE. Unmodified media stays 25. Bar B stays 60. Subiquity is not lived. |
+| Commit | m8-8-cpuid-vendor |
+| Summary | **`8c6bfa85` set `XCR0=0x2ff`, then libc refused the CPU ISA level again.** Userspace read vendor `GenuineIntEl` because X2APIC was masked on every CPUID leaf. This EFI masks leaf 1 only. Unmodified media stays 25. Bar B stays 60. Subiquity is not lived. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Scores held. Bar A 92. Bar B 60. perc 78. Overall 73. Unmodified media stays 25. The library boot is not lived. |
 | Gates touched | M8.8.3 packed, not lived. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-10-09 | m8-8-cpuid-vendor | 92 | 60 | **`8c6bfa85` `xcr0=0x2ff` twice, then the same libc ISA line.** Leaf 0 was `GenuineIntEl` to userspace. Next EFI keeps the vendor intact. Unmodified media stays 25. Bar B stays 60. Subiquity not lived. |
 | 2026-10-09 | m8-8-xcr0-v3 | 92 | 60 | **`6a7e72b1` `Freeing initrd memory: 97388K`, then `/init` died: `CPU ISA level is lower than required`.** Next EFI sets `XCR0` and CPUID OSXSAVE. Unmodified media stays 25. Bar B stays 60. Subiquity not lived. |
 | 2026-10-09 | m8-8-guest-ram | 92 | 60 | **`a71fbb3d` `Linux version 7.0.0-14-generic` and `console=ttyS0`, then initrd `write error`.** Next EFI gives the kernel the premapped tail. Unmodified media stays 25. Bar B stays 60. Subiquity not lived. |
 | 2026-10-08 | m8-8-cd-linux | 92 | 60 | **`4e9ebcdb` EBS and virtio `DRIVER_OK`.** No `Linux version`. No `grub.cfg` line. This EFI amends the ISO `linux` line GRUB reads with `BlockIo`. The stored file stays. Unmodified media stays 25. Bar B stays 60. M8.8.3 not lived. |

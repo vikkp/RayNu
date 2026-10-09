@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-8-xcr0-v3 |
-| Summary | **`6a7e72b1` unpacked the initrd (`Freeing initrd memory: 97388K`, `Memory: 1117420K/2091552K`) and ran `/init`, then `libc.so.6: CPU ISA level is lower than required`.** e820 showed `[0x2000000-0x7fffffff]`. This EFI sets guest `XCR0` to the host CPUID.0D mask (XMM and YMM when the CPU has them) and reports CPUID.1 OSXSAVE from guest CR4. M8.8.3 is not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
+| Commit | m8-8-cpuid-vendor |
+| Summary | **`8c6bfa85` printed `RayNu-F linux xcr0=0x2ff` and kernel `XSETBV xcr0=0x2ff`, then the same `CPU ISA level is lower than required`.** XCR0 was not the cause. The CPUID filter cleared X2APIC (ECX bit 21) on every leaf, so leaf 0 read `GenuineIntEl` for userspace and glibc never read leaf 1. This EFI clears that bit on leaf 1 only and gives post-handoff userspace the kernel's CPUID. M8.8.3 is not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
 | Gates touched | M8.8.3 still open. No doorbell. No format of UBUNTU0. Not a COM2 close. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 60 held, perc 78 held, unmodified 25 held, overall LOI 73 held, months A 0.25 held, months B 1.5 held. |
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-09 | m8-8-cpuid-vendor | 0.0 | 99 | **`8c6bfa85` XCR0 `0x2ff` lived; libc still refused the ISA level.** Leaf 0 vendor was `GenuineIntEl` for userspace because X2APIC was masked on every leaf. This EFI masks leaf 1 only and routes post-handoff userspace through the Linux CPUID view. Subiquity not reached. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-09 | m8-8-xcr0-v3 | 0.0 | 99 | **`6a7e72b1` unpacked the initrd and panicked in `/init`: `CPU ISA level is lower than required`.** RAM tail lived (`bytes=2113929216 tail=1845493760`). This EFI publishes `XCR0` and CPUID OSXSAVE so glibc can treat AVX as usable. Subiquity not reached. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-09 | m8-8-guest-ram | 0.0 | 99 | **`a71fbb3d` showed `Linux version 7.0.0-14-generic` and `console=ttyS0`, then initrd unpack `write error`.** Guest RAM was 256 MiB of ~2 GiB premapped. This EFI advertises the tail and can allocate it. Bitmap stays 256 MiB. Subiquity not reached. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-08 | m8-8-cd-linux | 0.0 | 99 | **`4e9ebcdb` EBS and virtio `DRIVER_OK`, no `grub.cfg` line and no `Linux version`.** The menu file came through `BlockIo`. This EFI amends that ISO9660 `linux` line and its directory length. The stored file stays. M8.8.3 not lived. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
