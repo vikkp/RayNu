@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-8-console-quiet |
-| Summary | **`5f24b74ef3db` finished cloud-init and did not draw the language list.** This EFI disables cloud-init so the no-NIC load is skipped, and quiets COM2 after Linux starts. Unmodified media stays 25. Bar B stays 60. M8.8.3 is not closed. |
+| Commit | m8-8-exit-cap |
+| Summary | **Subiquity's language list lived, then the extract hit the 16M exit cap.** This EFI raises that cap to 256M. The install is not finished. Unmodified media stays 25. Bar B stays 60. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Scores held. Bar A 92. Bar B 60. perc 78. Overall 73. Unmodified media stays 25. The library boot is not lived. |
 | Gates touched | M8.8.3 packed, not lived. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-10-10 | m8-8-exit-cap | 92 | 60 | **Language list lived. Curtin extract then `Stage 46 hold`.** Next EFI raises the exit cap 16M→256M. Install not finished. Unmodified media stays 25. Bar B stays 60. |
 | 2026-10-10 | m8-8-console-quiet | 92 | 60 | **`5f24b74ef3db` `boot stage final`, no language list.** Next EFI disables cloud-init and hushes HTTP keep-alives after Linux. Unmodified media stays 25. Bar B stays 60. M8.8.3 not closed. |
 | 2026-10-09 | m8-8-cloud-done | 92 | 60 | **`9df8d68aa7ea` `len=394->439` and `cloud-init=disabled`, spinner stayed.** Next EFI uses `ci.ds=None` and masks the checksum and snap seed. Unmodified media stays 25. Bar B stays 60. M8.8.3 not closed. |
 | 2026-10-09 | m8-8-nocloud | 92 | 60 | **`6d630acc` `waiting for cloud-init`, then only HTTP keep-alives.** Next EFI adds `ds=nocloud cloud-init=disabled` on the library kernel line. Unmodified media stays 25. Bar B stays 60. M8.8.3 not closed. |
