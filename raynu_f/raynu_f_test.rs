@@ -3054,25 +3054,36 @@ fn raynu_f_library_grub_cfg_read_view_adds_console() {
     assert!(!path_is_grub_cfg(b"\\EFI\\BOOT\\grubx64.efi"));
 
     let src = b"set timeout=30\nlinux /casper/vmlinuz quiet ---\ninitrd /casper/initrd\n";
-    let mut out = [0u8; 256];
+    let mut out = [0u8; 1024];
     let n = amend_grub_cfg_serial(src, &mut out).unwrap();
-    assert_eq!(
-        &out[..n],
-        b"set timeout=30\nlinux /casper/vmlinuz quiet --- console=ttyS0 ds=nocloud cloud-init=disabled\ninitrd /casper/initrd\n"
+    let suffix = format!(
+        " {} {}",
+        crate::mgmt::iso_library::LIBRARY_SERIAL_ARG,
+        crate::mgmt::iso_library::LIBRARY_CLOUD_INIT_ARG
     );
-    assert!(amend_grub_cfg_serial(&out[..n], &mut [0u8; 256]).is_none());
+    assert_eq!(
+        crate::mgmt::iso_library::LIBRARY_CLOUD_INIT_ARG,
+        "fsck.mode=skip systemd.mask=casper-md5check.service systemd.mask=snapd.seeded.service network-config=disabled ci.ds=None"
+    );
+    let mut expect = b"set timeout=30\nlinux /casper/vmlinuz quiet ---".to_vec();
+    expect.extend_from_slice(suffix.as_bytes());
+    expect.extend_from_slice(b"\ninitrd /casper/initrd\n");
+    assert_eq!(&out[..n], expect.as_slice());
+    assert!(amend_grub_cfg_serial(&out[..n], &mut [0u8; 1024]).is_none());
     let crlf = b"\tlinuxefi /casper/vmlinuz ---\r\n# linux /skip\nlinux16 /old\n";
     let n = amend_grub_cfg_serial(crlf, &mut out).unwrap();
-    assert_eq!(
-        &out[..n],
-        b"\tlinuxefi /casper/vmlinuz --- console=ttyS0 ds=nocloud cloud-init=disabled\r\n# linux /skip\nlinux16 /old\n"
-    );
+    let mut expect = b"\tlinuxefi /casper/vmlinuz ---".to_vec();
+    expect.extend_from_slice(suffix.as_bytes());
+    expect.extend_from_slice(b"\r\n# linux /skip\nlinux16 /old\n");
+    assert_eq!(&out[..n], expect.as_slice());
     let both = b"linux /a ---\nlinux /b ---\n";
     let n = amend_grub_cfg_serial(both, &mut out).unwrap();
-    assert_eq!(
-        &out[..n],
-        b"linux /a --- console=ttyS0 ds=nocloud cloud-init=disabled\nlinux /b --- console=ttyS0 ds=nocloud cloud-init=disabled\n"
-    );
+    let mut expect = b"linux /a ---".to_vec();
+    expect.extend_from_slice(suffix.as_bytes());
+    expect.extend_from_slice(b"\nlinux /b ---");
+    expect.extend_from_slice(suffix.as_bytes());
+    expect.extend_from_slice(b"\n");
+    assert_eq!(&out[..n], expect.as_slice());
     assert!(amend_grub_cfg_serial(b"set timeout=1\n", &mut out).is_none());
 
     let cfg = b"set timeout=30\nlinux /casper/vmlinuz quiet ---\ninitrd /casper/initrd\n";
@@ -3090,7 +3101,14 @@ fn raynu_f_library_grub_cfg_read_view_adds_console() {
         fs.arm_library_serial_view(fh, &vol),
         SerialView::Amended
     );
-    let amended = b"set timeout=30\nlinux /casper/vmlinuz quiet --- console=ttyS0 ds=nocloud cloud-init=disabled\ninitrd /casper/initrd\n";
+    let suffix = format!(
+        " {} {}",
+        crate::mgmt::iso_library::LIBRARY_SERIAL_ARG,
+        crate::mgmt::iso_library::LIBRARY_CLOUD_INIT_ARG
+    );
+    let mut amended = b"set timeout=30\nlinux /casper/vmlinuz quiet ---".to_vec();
+    amended.extend_from_slice(suffix.as_bytes());
+    amended.extend_from_slice(b"\ninitrd /casper/initrd\n");
     assert_eq!(fs.size_of(fh), Some(amended.len() as u64));
     let mut info = [0u8; 128];
     let (st, need) = fs.file_info(fh, &mut info);
@@ -3184,7 +3202,13 @@ fn raynu_f_cd_blockio_grows_grub_cfg_linux_line() {
     let new_len = u32::from_le_bytes(image[10..14].try_into().unwrap());
     assert_eq!(
         new_len,
-        (file.len() + b" console=ttyS0 ds=nocloud cloud-init=disabled".len()) as u32
+        (file.len()
+            + format!(
+                " {} {}",
+                crate::mgmt::iso_library::LIBRARY_SERIAL_ARG,
+                crate::mgmt::iso_library::LIBRARY_CLOUD_INIT_ARG
+            )
+            .len()) as u32
     );
     assert_eq!(
         u32::from_be_bytes(image[14..18].try_into().unwrap()),
