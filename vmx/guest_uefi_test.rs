@@ -200,7 +200,7 @@ fn marker_and_residual_honest() {
     assert_eq!(GUEST_UEFI_SEC_TAIL_GPA, 0xFFFF_0000);
     assert_eq!(GUEST_UEFI_RESUME_CAP, 262144);
     assert_eq!(GUEST_UEFI_NESTED_RESUME_CAP, 65536);
-    assert_eq!(GUEST_UEFI_PRODUCT_ISO_RESUME_CAP, 16_777_216);
+    assert_eq!(GUEST_UEFI_PRODUCT_ISO_RESUME_CAP, 268_435_456);
     assert_eq!(GUEST_UEFI_REPORT_RAM_SLOTS, 32);
     assert_eq!(super::GUEST_UEFI_REPORT_RAM_PRODUCT_EXTRA, 976);
     assert_eq!(guest_uefi_resume_cap(false), 262144);

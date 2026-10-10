@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-8-console-quiet |
-| Summary | **`5f24b74ef3db` finished cloud-init and the tty stayed on `waiting for cloud-init`.** This EFI disables cloud-init again so Subiquity skips the no-NIC cloud-config load, and it stops HTTP keep-alives on COM2 once Linux is up. The stored ISO stays. The language screen is not lived. M8.8.3 is not closed. Scores held. Months **0.0 held**. Overall **99 held**. |
+| Commit | m8-8-exit-cap |
+| Summary | **The language list lived on `674f74c8`, then curtin extract hit the 16M exit cap.** COM2 showed `restore host xcr0` and `Stage 46 hold alive`. This EFI raises the product-ISO resume cap to 256M. The `vda` image is incomplete. `ISO-INSTALL-OK` is not printed. Scores held. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
 | Gates touched | M8.8.3 still open. No doorbell. No format of UBUNTU0. Not a COM2 close. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 60 held, perc 78 held, unmodified 25 held, overall LOI 73 held, months A 0.25 held, months B 1.5 held. |
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-10 | m8-8-exit-cap | 0.0 | 99 | **Language list lived, then `Stage 46 hold` during `curtin extract`.** `674f74c8` stopped at the 16M exit cap. Next EFI uses 256M. `vda` is incomplete. Not `ISO-INSTALL-OK`. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-10 | m8-8-console-quiet | 0.0 | 99 | **`5f24b74ef3db` cloud-init final lived, language list did not.** Next EFI uses `cloud-init=disabled` with the masks, and hushes HTTP keep-alives after Linux starts. Stored ISO stays. M8.8.3 not closed. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-09 | m8-8-cloud-done | 0.0 | 99 | **`9df8d68aa7ea` kernel line had `cloud-init=disabled` and the tty stayed on `waiting for cloud-init`.** Next EFI uses `ci.ds=None` and masks casper-md5check and snapd.seeded. Stored ISO stays. Language screen not lived. M8.8.3 not closed. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-09 | m8-8-nocloud | 0.0 | 99 | **`6d630acc` Subiquity ttyS0, then `waiting for cloud-init` and only HTTP keep-alives.** No guest NIC. Next EFI disables cloud-init on the library kernel line. Stored ISO stays. Language screen not lived. M8.8.3 not closed. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |

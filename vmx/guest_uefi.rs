@@ -107,7 +107,11 @@ pub const GUEST_UEFI_RESUME_CAP: u32 = 262144;
 /// Product ISO (Stage 46): stay in guest-UEFI past the lab RN-ELT stop.
 /// Used whenever the window is armed (iron **and** nested QEMU `PRODUCT_ISO=`).
 /// Lab-stub nested still uses [`GUEST_UEFI_NESTED_RESUME_CAP`]. Not `ISO-INSTALL-OK`.
-pub const GUEST_UEFI_PRODUCT_ISO_RESUME_CAP: u32 = 16_777_216;
+/// `674f74c8` reached Subiquity and curtin extract, then `restore host xcr0`
+/// and the Stage 46 hold at this 16M cap (`reason=0x20` during
+/// `curtin extract`). The extract had only just started. 256M covers the
+/// rest of the write. A later hold still prints `stop n=` and `cap=`.
+pub const GUEST_UEFI_PRODUCT_ISO_RESUME_CAP: u32 = 268_435_456;
 /// Nested KVM **lab stub** only. Iron ATAPI is n≈30769; El Torito StartImage is n=197992.
 /// Nested CI that walks El Torito then Linux init SIGSEGV (CR2 in freed
 /// report-RAM). 65536 keeps BOTH+ATAPI and returns to E4 before StartImage.
