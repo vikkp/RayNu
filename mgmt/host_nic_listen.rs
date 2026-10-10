@@ -623,8 +623,10 @@ pub fn tick_bcm5720_coexist() {
             do_close = true;
         }
         let library_exchange = crate::mgmt::iso_library::take_exchange_quiet();
+        // Linux owns COM2 for the installer. SPA polls stay on the socket.
+        let guest_console = serial::linux_high_half();
         if did_exchange {
-            if !library_exchange {
+            if !library_exchange && !guest_console {
                 serial::write_line_nowait("boot: HOST-NIC HTTP exchange ok");
             }
             let _ = maybe_print_iron_tls_ok(true, true);
@@ -640,11 +642,11 @@ pub fn tick_bcm5720_coexist() {
                 do_close = false;
             }
             let _ = iface.poll(Instant::from_millis(millis + 1), device, sockets);
-            if !library_exchange {
+            if !library_exchange && !guest_console {
                 pci_census::print_host_nic_exchange_ok_marker();
             }
         }
-        if did_keepalive && !library_exchange {
+        if did_keepalive && !library_exchange && !guest_console {
             serial::write_line_nowait("boot: HOST-NIC HTTP keep-alive");
         }
         if do_close && !COEXIST_PENDING_POWEROFF {

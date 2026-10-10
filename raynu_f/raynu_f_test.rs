@@ -3063,7 +3063,7 @@ fn raynu_f_library_grub_cfg_read_view_adds_console() {
     );
     assert_eq!(
         crate::mgmt::iso_library::LIBRARY_CLOUD_INIT_ARG,
-        "fsck.mode=skip systemd.mask=casper-md5check.service systemd.mask=snapd.seeded.service network-config=disabled ci.ds=None"
+        "fsck.mode=skip systemd.mask=casper-md5check.service systemd.mask=snapd.seeded.service cloud-init=disabled"
     );
     let mut expect = b"set timeout=30\nlinux /casper/vmlinuz quiet ---".to_vec();
     expect.extend_from_slice(suffix.as_bytes());
