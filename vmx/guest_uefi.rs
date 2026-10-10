@@ -1406,6 +1406,13 @@ pub fn guest_uefi_virtio_mmio_heartbeat(n: u32) -> bool {
     n < 32 || n % 64 == 0
 }
 
+/// Stop virtio MMIO COM2 lines once Linux has been handed the VMCS and the
+/// probe log is long enough. Later lines share the SOL FIFO with Subiquity.
+/// `5f24b74e` left the language screen under `HTTP keep-alive`.
+pub fn guest_uefi_installer_console_quiet(handoff: bool, mmio_n: u32) -> bool {
+    handoff && mmio_n >= 8192
+}
+
 /// After usbdelay, print every ISR ACK and queue notify so apk overlay
 /// I/O is not hidden in the 64-hit gap. Iron `34968f7` / `34224368343`
 /// last printed `n=1345` disk ISR after ISO notify `n=1281`; silent hits
@@ -12187,7 +12194,9 @@ unsafe fn handle_raynu_f_service() -> bool {
         );
     }
     if d.cd_linux_serial && !RAYNU_F_CD_LINUX_LOGGED.swap(true, Ordering::AcqRel) {
-        serial::write_str("boot: RayNu-F CD grub.cfg console=ttyS0 ci.ds=None len=");
+        serial::write_str(
+            "boot: RayNu-F CD grub.cfg console=ttyS0 cloud-init=disabled len=",
+        );
         if let Some((orig, new_len)) = crate::raynu_f::cd_serial::cd_linux_lens() {
             write_dec(u64::from(orig));
             serial::write_str("->");
@@ -13255,7 +13264,19 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
         LAST_KICK_LINE_TSC.load(Ordering::Acquire),
         VIRTIO_MMIO_KICK_LINE_MIN_TSC,
     );
-    if guest_uefi_virtio_mmio_heartbeat_kick(n, (gpa.wrapping_sub(bar)) as u16, overlay, kick_due)
+    // After the installer is up, these lines share COM2 with urwid and
+    // scroll the language screen off. The early probe lines stay.
+    let installer_quiet = guest_uefi_installer_console_quiet(
+        RAYNU_F_LINUX_HANDOFF.load(Ordering::Acquire),
+        n,
+    );
+    if !installer_quiet
+        && guest_uefi_virtio_mmio_heartbeat_kick(
+            n,
+            (gpa.wrapping_sub(bar)) as u16,
+            overlay,
+            kick_due,
+        )
     {
         LAST_KICK_LINE_TSC.store(now, Ordering::Release);
         serial::write_str_nowait("boot: guest-UEFI virtio MMIO gpa=0x");

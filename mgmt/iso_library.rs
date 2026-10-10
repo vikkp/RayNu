@@ -27,13 +27,14 @@ pub const UBUNTU_2604_LIVE_SERVER_NAME: &str = "ubuntu-26.04-live-server-amd64.i
 /// menu file from the ISO through `BlockIo` (`4e9ebcdb`). The stored ISO is
 /// not rewritten. Alpine disk boot does not get this.
 pub const LIBRARY_SERIAL_ARG: &str = "console=ttyS0";
-/// Let cloud-init finish with no NIC. `9df8d68a` put `cloud-init=disabled`
-/// on the kernel line. The units never started, Subiquity stayed on
-/// `waiting for cloud-init`, and no status file was written. `ci.ds=None`
-/// is the local datasource. `fsck.mode=skip` and the two masks keep the
-/// live-media checksum and snap seed from holding `cloud-final.service`.
-/// `network-config=disabled` skips DHCP. The stored ISO is not rewritten.
-pub const LIBRARY_CLOUD_INIT_ARG: &str = "fsck.mode=skip systemd.mask=casper-md5check.service systemd.mask=snapd.seeded.service network-config=disabled ci.ds=None";
+/// Skip Subiquity's cloud-config load. `5f24b74e` ran cloud-init through
+/// `boot stage final` with `ci.ds=None`. The tty stayed on
+/// `waiting for cloud-init` because a finished status then calls
+/// `stages.Init()` with no NIC. `cloud-init=disabled` makes that status
+/// contain `disabled` and the load is skipped. The masks keep the live-media
+/// checksum and snap seed off the multi-user barrier. The stored ISO is
+/// not rewritten.
+pub const LIBRARY_CLOUD_INIT_ARG: &str = "fsck.mode=skip systemd.mask=casper-md5check.service systemd.mask=snapd.seeded.service cloud-init=disabled";
 
 /// Last sector of RAYNU-SPARE stays the mailbox probe.
 const PROBE_RESERVE: u64 = 512;
