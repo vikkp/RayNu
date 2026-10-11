@@ -8214,19 +8214,17 @@ impl crate::raynu_f::GuestMem for SlabMem {
     }
 }
 
-/// One pool page holding the Media/FilePath node for `\EFI\BOOT\BOOTX64.EFI`.
-/// The CD handle keeps its CDROM device path. Shim reads this node, not that
-/// device path, when it builds `\EFI\BOOT\grubx64.efi`.
+/// One pool page holding the Media/FilePath node for `path`.
+/// The device handle keeps its own device path. Shim reads this node, not that
+/// device path, when it builds `grubx64.efi` in the same directory.
 #[cfg(target_os = "uefi")]
-fn raynu_f_alloc_shim_file_path(
+fn raynu_f_alloc_file_path(
     st: &mut crate::raynu_f::FirmwareState,
     mem: &SlabMem,
+    path: &[u8],
 ) -> Option<u64> {
     let mut buf = [0u8; 64];
-    let n = crate::raynu_f::protocol::encode_filepath_device_path(
-        b"\\EFI\\BOOT\\BOOTX64.EFI",
-        &mut buf,
-    )?;
+    let n = crate::raynu_f::protocol::encode_filepath_device_path(path, &mut buf)?;
     let (status, gpa) = st.pool.allocate_pages(
         crate::raynu_f::memory::ALLOCATE_ANY_PAGES,
         crate::raynu_f::memory::EFI_LOADER_DATA,
@@ -8246,10 +8244,11 @@ fn raynu_f_alloc_shim_file_path(
 /// Stage a resolved FAT file into pool pages and `load_pe32plus`. Shared by
 /// the ISO El Torito path and the F7 disk ESP path.
 ///
-/// `shim_file_path` publishes LoadedImage `FilePath` as the file node
-/// `\EFI\BOOT\BOOTX64.EFI` and arms `append_kernel_serial`. The library CD
-/// sets it. Alpine GRUB and the disk ESP do not: those loaders find the
-/// volume by `DeviceHandle`, and their kernel line is not amended.
+/// `file_path` publishes LoadedImage `FilePath` as that Media/FilePath node.
+/// Shim opens `grubx64.efi` in the same directory. `None` leaves FilePath as
+/// the device path (Alpine GRUB finds the volume by `DeviceHandle`).
+/// `append_kernel_serial` is the library CD only. A disk boot does not amend
+/// the installed kernel line.
 #[cfg(target_os = "uefi")]
 unsafe fn raynu_f_stage_bootloader_from_volume<R: crate::raynu_f::fat::VolumeRead>(
     vol: &crate::raynu_f::fat::FatVolume,
@@ -8259,7 +8258,8 @@ unsafe fn raynu_f_stage_bootloader_from_volume<R: crate::raynu_f::fat::VolumeRea
     ram_hpa: u64,
     kind: &str,
     note: &str,
-    shim_file_path: bool,
+    file_path: Option<&[u8]>,
+    append_kernel_serial: bool,
 ) -> Option<u64> {
     let size = u64::from(entry.size);
     // SAFETY: BSP-only firmware state; guest not yet launched.
@@ -8346,14 +8346,20 @@ unsafe fn raynu_f_stage_bootloader_from_volume<R: crate::raynu_f::fat::VolumeRea
     st.image_file_path = 0;
     // Survives LoadImage. The shim is entered by VMLAUNCH; StartImage is
     // GRUB, then the kernel. Only the library CD amends the kernel line.
-    st.append_kernel_serial = shim_file_path;
-    if shim_file_path {
-        match raynu_f_alloc_shim_file_path(st, &mem) {
+    st.append_kernel_serial = append_kernel_serial;
+    if let Some(path) = file_path {
+        match raynu_f_alloc_file_path(st, &mem, path) {
             Some(gpa) => {
                 st.image_file_path = gpa;
-                serial::write_line(
-                    "boot: RayNu-F LoadedImage FilePath \\EFI\\BOOT\\BOOTX64.EFI (Ubuntu shim; not ISO-INSTALL-OK)",
-                );
+                serial::write_str("boot: RayNu-F LoadedImage FilePath ");
+                for &b in path {
+                    serial::write_byte(b);
+                }
+                if path == b"\\EFI\\BOOT\\BOOTX64.EFI" {
+                    serial::write_line(" (Ubuntu shim; not ISO-INSTALL-OK)");
+                } else {
+                    serial::write_line(" (disk; not ISO-INSTALL-OK)");
+                }
             }
             None => {
                 serial::write_line(
@@ -8397,20 +8403,26 @@ fn raynu_f_disk_gpt_miss(code: u64) {
 }
 
 /// Directory lookup of the ESP menu file. Does not read the file body.
+/// An Ubuntu loader reports `\EFI\ubuntu\grub.cfg` when that file is present.
 #[cfg(target_os = "uefi")]
 fn raynu_f_note_esp_grub_cfg<R: crate::raynu_f::fat::VolumeRead>(
     vol: &crate::raynu_f::fat::FatVolume,
     r: &R,
+    loader: &[u8],
 ) {
-    let boot_path = b"\\EFI\\BOOT\\grub.cfg";
-    let alpine_path = b"\\EFI\\alpine\\grub.cfg";
     let file = |path: &[u8]| match crate::raynu_f::fat::resolve_path(vol, r, path) {
         Ok(e) if !e.is_dir() => Some(e),
         _ => None,
     };
-    let boot = file(boot_path);
-    let alpine = file(alpine_path);
-    match crate::raynu_f::fat::pick_grub_cfg(boot.as_ref(), alpine.as_ref()) {
+    let ubuntu = file(crate::raynu_f::fat::GRUB_CFG_PATH_UBUNTU);
+    let boot = file(crate::raynu_f::fat::GRUB_CFG_PATH_BOOT);
+    let alpine = file(crate::raynu_f::fat::GRUB_CFG_PATH_ALPINE);
+    match crate::raynu_f::fat::pick_grub_cfg_for_loader(
+        loader,
+        ubuntu.as_ref(),
+        boot.as_ref(),
+        alpine.as_ref(),
+    ) {
         Some((path, bytes)) => {
             serial::write_str("boot: RayNu-F grubcfg=yes path=");
             for &b in path {
@@ -8426,10 +8438,14 @@ fn raynu_f_note_esp_grub_cfg<R: crate::raynu_f::fat::VolumeRead>(
     }
 }
 
-/// F7: mount the GPT ESP on the install disk and stage `\EFI\BOOT\BOOTX64.EFI`
-/// (fallback `\EFI\alpine\grubx64.efi`). Publishes a Hardware/Vendor whole-disk
-/// path on `HANDLE_DISK` (not Media/HardDrive — GRUB `efidisk` would skip
-/// that as a partition child). `None` leaves El Torito / test app.
+/// F7: mount the GPT ESP on the install disk and stage its loader.
+/// Ubuntu: `\EFI\ubuntu\shimx64.efi` with that path as LoadedImage `FilePath`,
+/// so a relative `grubx64.efi` open stays in `\EFI\ubuntu\`. Else
+/// `\EFI\ubuntu\grubx64.efi`. Alpine: `\EFI\BOOT\BOOTX64.EFI`, else
+/// `\EFI\alpine\grubx64.efi`, with no FilePath node. Publishes a
+/// Hardware/Vendor whole-disk path on `HANDLE_DISK` (not Media/HardDrive —
+/// GRUB `efidisk` would skip that as a partition child). `None` leaves
+/// El Torito / test app.
 #[cfg(target_os = "uefi")]
 unsafe fn raynu_f_stage_disk_bootloader(
     layout: &crate::raynu_f::FirmwareImageLayout,
@@ -8503,26 +8519,28 @@ unsafe fn raynu_f_stage_disk_bootloader(
             );
         }
     }
-    let paths: [&[u8]; 2] = [b"\\EFI\\BOOT\\BOOTX64.EFI", b"\\EFI\\alpine\\grubx64.efi"];
-    let mut found = None;
-    for p in paths {
-        match crate::raynu_f::fat::resolve_path(&vol, &vol_reader, p) {
-            Ok(e) => {
-                found = Some((e, p));
-                break;
-            }
-            Err(_) => {}
-        }
-    }
-    let (entry, path) = match found {
-        Some(v) => v,
-        None => {
+    let choice = crate::raynu_f::fat::pick_disk_bootloader(|p| {
+        matches!(
+            crate::raynu_f::fat::resolve_path(&vol, &vol_reader, p),
+            Ok(e) if !e.is_dir()
+        )
+    });
+    let Some(choice) = choice else {
+        serial::write_line(
+            "boot: RayNu-F no \\EFI\\BOOT\\BOOTX64.EFI on the disk ESP (F7; not ISO-INSTALL-OK)",
+        );
+        return None;
+    };
+    let entry = match crate::raynu_f::fat::resolve_path(&vol, &vol_reader, choice.path) {
+        Ok(e) if !e.is_dir() => e,
+        _ => {
             serial::write_line(
                 "boot: RayNu-F no \\EFI\\BOOT\\BOOTX64.EFI on the disk ESP (F7; not ISO-INSTALL-OK)",
             );
             return None;
         }
     };
+    let path = choice.path;
     serial::write_str("boot: RayNu-F found ");
     for &b in path {
         serial::write_byte(b);
@@ -8530,7 +8548,12 @@ unsafe fn raynu_f_stage_disk_bootloader(
     serial::write_str(" bytes=");
     write_dec(u64::from(entry.size));
     serial::write_line(" (F7 disk; not ISO-INSTALL-OK)");
-    raynu_f_note_esp_grub_cfg(&vol, &vol_reader);
+    raynu_f_note_esp_grub_cfg(&vol, &vol_reader, path);
+    let file_path = if choice.publish_file_path {
+        Some(path)
+    } else {
+        None
+    };
     let loaded = raynu_f_stage_bootloader_from_volume(
         &vol,
         &vol_reader,
@@ -8539,6 +8562,7 @@ unsafe fn raynu_f_stage_disk_bootloader(
         ram_hpa,
         "disk",
         "(F7; not ISO-INSTALL-OK)",
+        file_path,
         false,
     )?;
     RAYNU_F_STAGED_FROM_DISK.store(true, Ordering::Release);
@@ -8671,6 +8695,7 @@ unsafe fn raynu_f_stage_library_bootloader(
         ram_hpa,
         "ISO",
         "(library ISO; not ISO-INSTALL-OK)",
+        Some(b"\\EFI\\BOOT\\BOOTX64.EFI"),
         true,
     )
 }
@@ -8776,6 +8801,7 @@ unsafe fn raynu_f_stage_iso_bootloader(
         ram_hpa,
         "ISO",
         "(F5; not ISO-INSTALL-OK)",
+        None,
         false,
     )
 }
