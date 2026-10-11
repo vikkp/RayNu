@@ -223,7 +223,7 @@ The fence accepts one LD of ~2.5–3.1 TiB and refuses ~300–512 GiB. Scratch p
 
 ### M8.8 — Ubuntu ISO library on RAYNU-SPARE
 
-**Status: `806d8961` reached Installing system, then the screen stayed on `apply_autoinstall_config` for about 14 hours.** No new journal line. No `Stage 46 hold`. The guest was inside virtio I/O, and each sector was its own PERC command. This EFI posts 64 KiB on a 128-sector boundary, else 4 KiB, else one sector, and the virtio bounce is 64 KiB. The exit cap stays 256M. `ISO-INSTALL-OK` is not printed. M8.8.4 is not closed. Scores held. Do not flash until CI is green.
+**Status: `c4a3ef1b` copied the system, then GRUB failed.** Partitioning, extract, the kernel, and `fstab` finished. dmesg says `efi: Unable to switch EFI into virtual mode (status=8000000000000003)`. That is `SetVirtualAddressMap` returning unsupported, so Linux disabled EFI runtime and the boot entry was not registered. This EFI accepts that call and rewrites the runtime pointers. `ISO-INSTALL-OK` is not printed. M8.8.4 is not closed. Scores held. Do not flash until CI is green.
 
 **Goal:** The operator picks `ubuntu-26.04-live-server-amd64.iso` on Guests. The hypervisor stores that file unchanged in a high library on RAYNU-SPARE and boots it as a CD. The file stays after install. **Clear ISO** on Guests drops the catalog hold and wipes the ISO signature sector. It does not scrub the whole file and it does not touch an installed disk.
 

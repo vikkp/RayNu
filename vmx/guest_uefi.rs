@@ -12169,6 +12169,9 @@ unsafe fn handle_raynu_f_service() -> bool {
             "boot: RayNu-F AllocatePool type 0 served as loader data (Ubuntu BOOTX64; not ISO-INSTALL-OK)",
         );
     }
+    if id == crate::raynu_f::ServiceId::SetVirtualAddressMap && d.status == 0 {
+        serial::write_line("boot: RayNu-F virtual mode (EFI runtime; not ISO-INSTALL-OK)");
+    }
     if id == crate::raynu_f::ServiceId::SetVariable
         && d.status == 0
         && !RAYNU_F_SETVAR_LOGGED.swap(true, Ordering::AcqRel)

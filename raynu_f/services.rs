@@ -462,6 +462,8 @@ pub struct FirmwareState {
     pub block_writes: u32,
     /// Mok and other variables for this firmware boot. Not on disk.
     pub vars: super::vars::VarStore,
+    /// `SetVirtualAddressMap` has run. A second call is `EFI_UNSUPPORTED`.
+    pub virtual_mode: bool,
 }
 
 impl FirmwareState {
@@ -499,6 +501,7 @@ impl FirmwareState {
             block_reads: 0,
             block_writes: 0,
             vars: super::vars::VarStore::new(),
+            virtual_mode: false,
         }
     }
 
@@ -2031,6 +2034,7 @@ pub fn dispatch(
                 EFI_SUCCESS
             }
         }
+        ServiceId::SetVirtualAddressMap => set_virtual_address_map(st, mem, a),
         ServiceId::GetVariable => get_variable(st, mem, a),
         ServiceId::GetNextVariableName => get_next_variable_name(st, mem, a),
         ServiceId::SetVariable => set_variable(st, mem, a),
@@ -2084,6 +2088,144 @@ fn read_char16_name(mem: &dyn GuestMem, addr: u64) -> Result<([u16; super::vars:
         name[i] = c;
     }
     Err(EFI_INVALID_PARAMETER)
+}
+
+/// One runtime descriptor from the caller's virtual map.
+#[derive(Clone, Copy)]
+struct VirtDesc {
+    typ: u32,
+    phys: u64,
+    virt: u64,
+    pages: u64,
+}
+
+/// `SetVirtualAddressMap` failed because a runtime range had no virtual address.
+const EFI_NO_MAPPING: u64 = 0x8000_0000_0000_0011;
+const EFI_MEMORY_DESCRIPTOR_VERSION: u64 = 1;
+const VIRT_MAP_MAX: usize = 64;
+
+/// Virtual address for `ptr` using the runtime map. A pointer outside every
+/// range stays put. A runtime range with `VirtualStart == 0` is `EFI_NO_MAPPING`.
+fn virt_of(ptr: u64, descs: &[VirtDesc]) -> Result<u64, u64> {
+    if ptr == 0 {
+        return Ok(0);
+    }
+    for d in descs {
+        let Some(bytes) = d.pages.checked_mul(4096) else {
+            continue;
+        };
+        let Some(end) = d.phys.checked_add(bytes) else {
+            continue;
+        };
+        if ptr >= d.phys && ptr < end {
+            if d.virt == 0 {
+                if d.typ == super::memory::EFI_RUNTIME_SERVICES_CODE
+                    || d.typ == super::memory::EFI_RUNTIME_SERVICES_DATA
+                {
+                    return Err(EFI_NO_MAPPING);
+                }
+                return Ok(ptr);
+            }
+            return Ok(d.virt.wrapping_add(ptr - d.phys));
+        }
+    }
+    Ok(ptr)
+}
+
+fn relocate_u64(mem: &dyn GuestMem, addr: u64, descs: &[VirtDesc]) -> u64 {
+    let Some(p) = read_u64(mem, addr) else {
+        return EFI_INVALID_PARAMETER;
+    };
+    match virt_of(p, descs) {
+        Ok(v) => {
+            if write_u64(mem, addr, v) {
+                EFI_SUCCESS
+            } else {
+                EFI_INVALID_PARAMETER
+            }
+        }
+        Err(s) => s,
+    }
+}
+
+/// `SetVirtualAddressMap(MemoryMapSize, DescriptorSize, DescriptorVersion, *VirtualMap)`.
+///
+/// Linux 7 calls this once after `ExitBootServices`. `c4a3ef1b` returned
+/// `EFI_UNSUPPORTED` (`status=8000000000000003`) and the kernel disabled EFI
+/// runtime, so `efibootmgr` could not register the Ubuntu boot entry.
+/// The trampolines are position-independent. This rewrites the runtime
+/// function pointers to the virtual addresses in the caller's map. The store
+/// itself stays in host memory.
+fn set_virtual_address_map(st: &mut FirmwareState, mem: &dyn GuestMem, a: ServiceArgs) -> u64 {
+    if st.virtual_mode || !st.pool.exited() {
+        return EFI_UNSUPPORTED;
+    }
+    let map_size = a.a1;
+    let desc_size = a.a2;
+    let version = a.a3;
+    let map = a.a4;
+    if version != EFI_MEMORY_DESCRIPTOR_VERSION
+        || desc_size < 40
+        || desc_size > 4096
+        || map == 0
+        || map_size < desc_size
+        || map_size % desc_size != 0
+    {
+        return EFI_INVALID_PARAMETER;
+    }
+    let count = (map_size / desc_size) as usize;
+    if count == 0 || count > VIRT_MAP_MAX {
+        return EFI_INVALID_PARAMETER;
+    }
+    let mut descs = [VirtDesc { typ: 0, phys: 0, virt: 0, pages: 0 }; VIRT_MAP_MAX];
+    for i in 0..count {
+        let at = map + (i as u64) * desc_size;
+        let mut raw = [0u8; 32];
+        if mem.read(at, &mut raw) < 32 {
+            return EFI_INVALID_PARAMETER;
+        }
+        descs[i] = VirtDesc {
+            typ: u32::from_le_bytes(raw[0..4].try_into().unwrap_or([0; 4])),
+            phys: u64::from_le_bytes(raw[8..16].try_into().unwrap_or([0; 8])),
+            virt: u64::from_le_bytes(raw[16..24].try_into().unwrap_or([0; 8])),
+            pages: u64::from_le_bytes(raw[24..32].try_into().unwrap_or([0; 8])),
+        };
+        if (descs[i].typ == super::memory::EFI_RUNTIME_SERVICES_CODE
+            || descs[i].typ == super::memory::EFI_RUNTIME_SERVICES_DATA)
+            && descs[i].pages > 0
+            && descs[i].virt == 0
+        {
+            return EFI_NO_MAPPING;
+        }
+    }
+    let descs = &descs[..count];
+    if st.system_table != 0 {
+        let rt_slot = st.system_table + super::tables::SYSTEM_TABLE_RUNTIME_SERVICES_OFF as u64;
+        let Some(rt) = read_u64(mem, rt_slot) else {
+            return EFI_INVALID_PARAMETER;
+        };
+        if rt != 0 {
+            for i in 0..super::tables::RUNTIME_SERVICES_FN_COUNT {
+                let slot = rt + super::tables::EFI_TABLE_HEADER_SIZE as u64 + (i as u64) * 8;
+                let stt = relocate_u64(mem, slot, descs);
+                if stt != EFI_SUCCESS {
+                    return stt;
+                }
+            }
+        }
+        for off in [
+            super::tables::SYSTEM_TABLE_FIRMWARE_VENDOR_OFF,
+            super::tables::SYSTEM_TABLE_RUNTIME_SERVICES_OFF,
+            super::tables::SYSTEM_TABLE_CONFIG_TABLE_OFF,
+        ] {
+            let stt = relocate_u64(mem, st.system_table + off as u64, descs);
+            if stt != EFI_SUCCESS {
+                return stt;
+            }
+        }
+    }
+    st.virtual_mode = true;
+    EFI_SUCCESS
 }
 
 fn get_variable(st: &FirmwareState, mem: &dyn GuestMem, a: ServiceArgs) -> u64 {

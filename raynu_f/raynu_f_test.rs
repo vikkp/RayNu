@@ -3237,3 +3237,70 @@ fn raynu_f_cd_blockio_grows_grub_cfg_linux_line() {
     assert_eq!(&plain, b"linux /casper/vmlinuz ---\n");
     reset_cd_linux_view();
 }
+
+#[test]
+fn set_virtual_address_map_relocates_runtime_pointers() {
+    let base = 0x1000u64;
+    let guest = MockGuest::new(base, vec![0u8; 0x3000]);
+    let systab = base + 0x100;
+    let rt = base + 0x200;
+    let tramp = base + 0x800;
+    let map = base + 0x1000;
+    let virt_base = 0xFFFF_8000_0000_0000 + base;
+    guest.put_u64(systab + SYSTEM_TABLE_RUNTIME_SERVICES_OFF as u64, rt);
+    guest.put_u64(systab + SYSTEM_TABLE_FIRMWARE_VENDOR_OFF as u64, base + 0x180);
+    let slot = rt + EFI_TABLE_HEADER_SIZE as u64;
+    guest.put_u64(slot, tramp);
+    let mut desc = [0u8; 40];
+    desc[0..4].copy_from_slice(&super::memory::EFI_RUNTIME_SERVICES_CODE.to_le_bytes());
+    desc[8..16].copy_from_slice(&base.to_le_bytes());
+    desc[16..24].copy_from_slice(&virt_base.to_le_bytes());
+    desc[24..32].copy_from_slice(&2u64.to_le_bytes());
+    assert_eq!(guest.write(map, &desc), desc.len());
+    let mut st = FirmwareState::new();
+    st.system_table = systab;
+    let mut sink = CaptureSink::default();
+    let clk = ManualClock { now: Cell::new(0), step: 1 };
+    let args = ServiceArgs { a1: 40, a2: 40, a3: 1, a4: map, rsp: 0 };
+    assert_eq!(
+        dispatch(ServiceId::SetVirtualAddressMap, args, &guest, &mut sink, &mut st, &clk, 0x4000)
+            .status,
+        EFI_UNSUPPORTED
+    );
+    let key = st.pool.next_map_key();
+    assert_eq!(st.pool.exit_boot_services(key), EFI_SUCCESS);
+    assert_eq!(
+        dispatch(ServiceId::SetVirtualAddressMap, args, &guest, &mut sink, &mut st, &clk, 0x4000)
+            .status,
+        EFI_SUCCESS
+    );
+    assert!(st.virtual_mode);
+    assert_eq!(guest.u64_at(slot), virt_base + (tramp - base));
+    assert_eq!(
+        guest.u64_at(systab + SYSTEM_TABLE_RUNTIME_SERVICES_OFF as u64),
+        virt_base + (rt - base)
+    );
+    assert_eq!(
+        guest.u64_at(systab + SYSTEM_TABLE_FIRMWARE_VENDOR_OFF as u64),
+        virt_base + 0x180
+    );
+    assert_eq!(
+        dispatch(ServiceId::SetVirtualAddressMap, args, &guest, &mut sink, &mut st, &clk, 0x4000)
+            .status,
+        EFI_UNSUPPORTED
+    );
+
+    let mut bare = FirmwareState::new();
+    let key = bare.pool.next_map_key();
+    assert_eq!(bare.pool.exit_boot_services(key), EFI_SUCCESS);
+    let mut zero = desc;
+    zero[16..24].copy_from_slice(&0u64.to_le_bytes());
+    zero[0..4].copy_from_slice(&super::memory::EFI_RUNTIME_SERVICES_DATA.to_le_bytes());
+    assert_eq!(guest.write(map, &zero), zero.len());
+    assert_eq!(
+        dispatch(ServiceId::SetVirtualAddressMap, args, &guest, &mut sink, &mut bare, &clk, 0x4000)
+            .status,
+        0x8000_0000_0000_0011
+    );
+    assert!(!bare.virtual_mode);
+}

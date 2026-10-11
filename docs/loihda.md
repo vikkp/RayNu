@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-8-disk-path |
-| Summary | **`806d8961` sat on Installing system for about 14 hours.** No `Stage 46 hold`. This EFI batches PERC I/O to 64 KiB. The install is not finished. Unmodified media stays 25. Bar B stays 60. |
+| Commit | m8-8-svam |
+| Summary | **`c4a3ef1b` copied the system, then GRUB failed on EFI virtual mode.** This EFI accepts `SetVirtualAddressMap`. The install is not finished. Unmodified media stays 25. Bar B stays 60. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Scores held. Bar A 92. Bar B 60. perc 78. Overall 73. Unmodified media stays 25. The library boot is not lived. |
 | Gates touched | M8.8.3 packed, not lived. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-10-11 | m8-8-svam | 92 | 60 | **`c4a3ef1b` copied Ubuntu, then GRUB failed.** dmesg `status=8000000000000003`. Next EFI accepts virtual mode. Install not finished. Unmodified media stays 25. Bar B stays 60. |
 | 2026-10-11 | m8-8-disk-path | 92 | 60 | **`806d8961` Installing system did not move for about 14 hours.** Next EFI posts 64 KiB PERC commands. Install not finished. Unmodified media stays 25. Bar B stays 60. |
 | 2026-10-10 | m8-8-exit-cap | 92 | 60 | **Language list lived. Curtin extract then `Stage 46 hold`.** Next EFI raises the exit cap 16M→256M. Install not finished. Unmodified media stays 25. Bar B stays 60. |
 | 2026-10-10 | m8-8-console-quiet | 92 | 60 | **`5f24b74ef3db` `boot stage final`, no language list.** Next EFI disables cloud-init and hushes HTTP keep-alives after Linux. Unmodified media stays 25. Bar B stays 60. M8.8.3 not closed. |
