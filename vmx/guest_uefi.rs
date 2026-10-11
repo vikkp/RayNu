@@ -4345,6 +4345,8 @@ static RAYNU_F_POOL0_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_SETVAR_LOGGED: AtomicBool = AtomicBool::new(false);
 /// One line when shim's `File.Open` of `grubx64.efi` succeeds.
 static RAYNU_F_GRUB_OPEN_LOGGED: AtomicBool = AtomicBool::new(false);
+/// One line when that open's path is published on GRUB's LoadedImage.
+static RAYNU_F_GRUB_PREFIX_LOGGED: AtomicBool = AtomicBool::new(false);
 /// One line when the first `BlockIo` read completes (`blk_rd` leaves zero).
 static RAYNU_F_BLKRD_LOGGED: AtomicBool = AtomicBool::new(false);
 /// One line when GRUB's PIT channel-2 calibration wait completes.
@@ -7921,6 +7923,7 @@ unsafe fn raynu_f_reset_relaunch(_src: crate::devices::guest_platform::ResetSrc)
     RAYNU_F_POOL0_LOGGED.store(false, Ordering::Release);
     RAYNU_F_SETVAR_LOGGED.store(false, Ordering::Release);
     RAYNU_F_GRUB_OPEN_LOGGED.store(false, Ordering::Release);
+    RAYNU_F_GRUB_PREFIX_LOGGED.store(false, Ordering::Release);
     RAYNU_F_BLKRD_LOGGED.store(false, Ordering::Release);
     RAYNU_F_PIT2_LOGGED.store(false, Ordering::Release);
     RAYNU_F_SERIAL_LOGGED.store(false, Ordering::Release);
@@ -8348,6 +8351,7 @@ unsafe fn raynu_f_stage_bootloader_from_volume<R: crate::raynu_f::fat::VolumeRea
     // GRUB, then the kernel. Only the library CD amends the kernel line.
     st.append_kernel_serial = append_kernel_serial;
     if let Some(path) = file_path {
+        st.note_staged_loader(path);
         match raynu_f_alloc_file_path(st, &mem, path) {
             Some(gpa) => {
                 st.image_file_path = gpa;
@@ -12210,6 +12214,15 @@ unsafe fn handle_raynu_f_service() -> bool {
         serial::write_line(
             "boot: RayNu-F opened grubx64.efi (Ubuntu shim; not ISO-INSTALL-OK)",
         );
+    }
+    if d.grub_prefixed && !RAYNU_F_GRUB_PREFIX_LOGGED.swap(true, Ordering::AcqRel) {
+        serial::write_str("boot: RayNu-F GRUB FilePath ");
+        let n = st.grub_open_len as usize;
+        let n = n.min(st.grub_open_path.len());
+        for &b in &st.grub_open_path[..n] {
+            serial::write_byte(b);
+        }
+        serial::write_line(" (prefix; not ISO-INSTALL-OK)");
     }
     if d.serial_appended && !RAYNU_F_SERIAL_LOGGED.swap(true, Ordering::AcqRel) {
         serial::write_line(

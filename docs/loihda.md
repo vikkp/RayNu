@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-8-ubuntu-shim |
-| Summary | **@18432 Start loaded the removable shim and missed `grubx64.efi`.** This EFI stages `\EFI\ubuntu\shimx64.efi` with that FilePath. Unmodified media stays 25. Bar B stays 60. |
+| Commit | m8-8-grub-prefix |
+| Summary | **`252c04cd` reached GNU GRUB 2.14 `grub>`.** Next EFI gives that image the `\EFI\ubuntu\grubx64.efi` path. Unmodified media stays 25. Bar B stays 60. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Scores held. Bar A 92. Bar B 60. perc 78. Overall 73. Unmodified media stays 25. The library boot is not lived. |
 | Gates touched | M8.8.3 packed, not lived. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-10-11 | m8-8-grub-prefix | 92 | 60 | **`252c04cd` opened `grubx64.efi` and stopped at `grub>`.** Next EFI publishes that path on the GRUB image. Install boot not lived. Unmodified media stays 25. Bar B stays 60. |
 | 2026-10-11 | m8-8-ubuntu-shim | 92 | 60 | **@18432 Start: shim `Failed to open grubx64.efi`, then Stage 46 hold.** Next EFI publishes `\EFI\ubuntu\shimx64.efi` as FilePath. Install boot not lived. Unmodified media stays 25. Bar B stays 60. |
 | 2026-10-11 | m8-8-guest-list | 92 | 60 | **Installation complete lived. Row 2 Start was Alpine `ee851fd5`.** Next EFI lists the later disk. Install boot not lived. Unmodified media stays 25. Bar B stays 60. |
 | 2026-10-11 | m8-8-svam | 92 | 60 | **`c4a3ef1b` copied Ubuntu, then GRUB failed.** dmesg `status=8000000000000003`. Next EFI accepts virtual mode. Install not finished. Unmodified media stays 25. Bar B stays 60. |
