@@ -1943,6 +1943,55 @@ fn raynu_f_filesystem_loadimage_startimage() {
             assert!(st.append_kernel_serial);
             st.append_kernel_serial = false;
             assert_eq!(guest.u64_at(li + LOADED_IMAGE_FILE_PATH_OFF as u64), layout.device_path);
+            // Install disk: shim opened grubx64.efi beside itself. The next
+            // LoadImage is GRUB and keeps that path. The one after is the
+            // kernel and drops it.
+            st.fat_media_id = super::MEDIA_ID_DISK;
+            st.note_staged_loader(b"\\EFI\\ubuntu\\shimx64.efi");
+            st.note_grub_open(b"grubx64.efi");
+            assert!(st.grub_open_pending);
+            assert_eq!(
+                &st.grub_open_path[..st.grub_open_len as usize],
+                b"\\EFI\\ubuntu\\grubx64.efi"
+            );
+            st.fat_media_id = super::MEDIA_ID_CD;
+            st.note_grub_open(b"\\EFI\\BOOT\\grubx64.efi");
+            assert!(st.grub_open_pending, "a CD open must not replace the disk path");
+            assert_eq!(
+                &st.grub_open_path[..st.grub_open_len as usize],
+                b"\\EFI\\ubuntu\\grubx64.efi"
+            );
+            guest.put_u64(stack + STACK_ARG5_OFF, app.len() as u64);
+            guest.put_u64(stack + STACK_ARG5_OFF + 8, p_handle);
+            let grub_li = ServiceArgs { a1: 0, a2: 0, a3: 0, a4: buf, rsp: stack };
+            let pref = dispatch(ServiceId::LoadImage, grub_li, &guest, &mut sink, &mut st, &clk, SLAB);
+            assert_eq!(pref.status, EFI_SUCCESS);
+            assert!(pref.grub_prefixed);
+            assert!(!st.grub_open_pending);
+            let fp = guest.u64_at(li + LOADED_IMAGE_FILE_PATH_OFF as u64);
+            assert_eq!(fp, st.image_file_path);
+            assert_ne!(fp, layout.device_path);
+            let mut node = [0u8; 64];
+            assert!(guest.read(fp, &mut node) >= 56);
+            let encoded = {
+                let mut expect = [0u8; 64];
+                let n = super::protocol::encode_filepath_device_path(
+                    b"\\EFI\\ubuntu\\grubx64.efi",
+                    &mut expect,
+                )
+                .expect("fits");
+                assert_eq!(&node[..n], &expect[..n]);
+                n
+            };
+            let _ = encoded;
+            guest.put_u64(stack + STACK_ARG5_OFF, app.len() as u64);
+            guest.put_u64(stack + STACK_ARG5_OFF + 8, p_handle);
+            let kernel = ServiceArgs { a1: 0, a2: 0, a3: 0, a4: buf, rsp: stack };
+            let kern = dispatch(ServiceId::LoadImage, kernel, &guest, &mut sink, &mut st, &clk, SLAB);
+            assert_eq!(kern.status, EFI_SUCCESS);
+            assert!(!kern.grub_prefixed);
+            assert_eq!(st.image_file_path, 0);
+            assert_eq!(guest.u64_at(li + LOADED_IMAGE_FILE_PATH_OFF as u64), layout.device_path);
         }
         // And the loader can look the device path up on that handle.
         guest.write(p_guid + 0x60, &GUID_DEVICE_PATH);
@@ -2729,6 +2778,36 @@ fn esp_grub_cfg_prefers_boot_path_and_reports_size() {
         resolve_path(&vol, &neither, GRUB_CFG_PATH_ALPINE),
         Err(FatError::NotFound)
     );
+}
+
+#[test]
+fn grub_load_path_joins_a_relative_open_to_the_ubuntu_shim_dir() {
+    use super::services::join_grub_load_path;
+    let mut out = [0u8; 80];
+    let n = join_grub_load_path(
+        b"\\EFI\\ubuntu\\shimx64.efi",
+        b"grubx64.efi",
+        &mut out,
+    )
+    .expect("joins");
+    assert_eq!(&out[..n], b"\\EFI\\ubuntu\\grubx64.efi");
+    let n = join_grub_load_path(
+        b"\\EFI\\ubuntu\\shimx64.efi",
+        b"\\EFI\\ubuntu\\grubx64.efi",
+        &mut out,
+    )
+    .expect("absolute");
+    assert_eq!(&out[..n], b"\\EFI\\ubuntu\\grubx64.efi");
+    let n = join_grub_load_path(b"\\EFI\\BOOT\\BOOTX64.EFI", b"/EFI/BOOT/grubx64.efi", &mut out)
+        .expect("slashes");
+    assert_eq!(&out[..n], b"\\EFI\\BOOT\\grubx64.efi");
+    assert!(join_grub_load_path(b"", b"grubx64.efi", &mut out).is_none());
+    assert!(join_grub_load_path(b"\\EFI\\ubuntu\\shimx64.efi", b"", &mut out).is_none());
+    let mut st = FirmwareState::new();
+    st.fat_media_id = super::MEDIA_ID_CD;
+    st.note_staged_loader(b"\\EFI\\BOOT\\BOOTX64.EFI");
+    st.note_grub_open(b"grubx64.efi");
+    assert!(!st.grub_open_pending);
 }
 
 /// Ubuntu copies shim to `\EFI\BOOT\BOOTX64.EFI` and leaves `grubx64.efi` in

@@ -223,7 +223,7 @@ The fence accepts one LD of ~2.5–3.1 TiB and refuses ~300–512 GiB. Scratch p
 
 ### M8.8 — Ubuntu ISO library on RAYNU-SPARE
 
-**Status: Start on 10240 MiB@18432 loaded `\EFI\BOOT\BOOTX64.EFI`.** Shim printed `Failed to open grubx64.efi - Not Found`, then `#GP` at rip 0 and the Stage 46 hold. Ubuntu's GRUB is `\EFI\ubuntu\grubx64.efi`. This EFI stages `\EFI\ubuntu\shimx64.efi` and publishes that path as LoadedImage `FilePath`, so the relative open stays in `\EFI\ubuntu\`. Alpine `\EFI\BOOT\BOOTX64.EFI` stays the fallback and does not publish a FilePath node. M8.8.4 is not closed. Scores held. Do not flash until CI is green.
+**Status: `252c04cd` opened `grubx64.efi` and reached GNU GRUB 2.14 `grub>`.** Shim found the file. The buffer `LoadImage` then cleared FilePath, so GRUB had no prefix and did not open `\EFI\ubuntu\grub.cfg`. This EFI publishes that path on the GRUB image. The following LoadImage, the kernel, still drops it. The library CD is unchanged. M8.8.4 is not closed. Scores held. Do not flash until CI is green.
 
 **Goal:** The operator picks `ubuntu-26.04-live-server-amd64.iso` on Guests. The hypervisor stores that file unchanged in a high library on RAYNU-SPARE and boots it as a CD. The file stays after install. **Clear ISO** on Guests drops the catalog hold and wipes the ISO signature sector. It does not scrub the whole file and it does not touch an installed disk.
 

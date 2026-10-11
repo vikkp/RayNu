@@ -403,6 +403,9 @@ impl ServiceArgs {
 pub type BlockReadFn = fn(u32, u64, &mut [u8]) -> bool;
 pub type BlockWriteFn = fn(u32, u64, &[u8]) -> bool;
 
+/// ASCII capacity for a staged loader path and the opened `grubx64.efi` path.
+pub const GRUB_PATH_CAP: usize = 80;
+
 /// All RayNu-F firmware state the dispatcher mutates. Lives in the hypervisor
 /// as a single BSP-owned instance; host tests build their own.
 pub struct FirmwareState {
@@ -433,8 +436,18 @@ pub struct FirmwareState {
     pub device_path: u64,
     /// Guest GPA of a Media/FilePath node for the staged library loader.
     /// Zero means `LoadedImage.FilePath` is [`Self::device_path`]. A buffer
-    /// `LoadImage` clears this so the next image does not inherit the shim path.
+    /// `LoadImage` clears this so the kernel does not inherit the shim path.
+    /// The disk `LoadImage` of `grubx64.efi` is the exception: that image
+    /// keeps the path shim opened, so GRUB's prefix is that directory.
     pub image_file_path: u64,
+    /// ASCII path of the VMLAUNCH'd loader, when it has a file node.
+    pub staged_loader: [u8; GRUB_PATH_CAP],
+    pub staged_loader_len: u8,
+    /// Absolute path of the `grubx64.efi` shim just opened on the disk ESP.
+    pub grub_open_path: [u8; GRUB_PATH_CAP],
+    pub grub_open_len: u8,
+    /// The next disk `LoadImage` publishes [`Self::grub_open_path`].
+    pub grub_open_pending: bool,
     pub device_handle: u64,
     pub image_handle: u64,
     pub image_base: u64,
@@ -487,6 +500,11 @@ impl FirmwareState {
             loaded_image_proto: 0,
             device_path: 0,
             image_file_path: 0,
+            staged_loader: [0; GRUB_PATH_CAP],
+            staged_loader_len: 0,
+            grub_open_path: [0; GRUB_PATH_CAP],
+            grub_open_len: 0,
+            grub_open_pending: false,
             device_handle: 0,
             image_handle: 0,
             image_base: 0,
@@ -503,6 +521,37 @@ impl FirmwareState {
             vars: super::vars::VarStore::new(),
             virtual_mode: false,
         }
+    }
+
+    /// Remember the VMLAUNCH'd loader path so a relative `grubx64.efi` open
+    /// can be joined to that directory.
+    pub fn note_staged_loader(&mut self, path: &[u8]) {
+        let n = path.len().min(self.staged_loader.len());
+        self.staged_loader[..n].copy_from_slice(&path[..n]);
+        for b in &mut self.staged_loader[n..] {
+            *b = 0;
+        }
+        self.staged_loader_len = n as u8;
+    }
+
+    /// Disk only. The next `LoadImage` publishes this absolute path.
+    /// The library CD keeps the buffer-load clear so its GRUB stays on the
+    /// CDROM device path.
+    pub fn note_grub_open(&mut self, opened: &[u8]) {
+        if self.fat_media_id != super::MEDIA_ID_DISK {
+            return;
+        }
+        let staged = &self.staged_loader[..self.staged_loader_len as usize];
+        let mut buf = [0u8; GRUB_PATH_CAP];
+        let Some(n) = join_grub_load_path(staged, opened, &mut buf) else {
+            return;
+        };
+        self.grub_open_path[..n].copy_from_slice(&buf[..n]);
+        for b in &mut self.grub_open_path[n..] {
+            *b = 0;
+        }
+        self.grub_open_len = n as u8;
+        self.grub_open_pending = true;
     }
 
     /// Resolve a `This` pointer to its media description.
@@ -542,6 +591,8 @@ pub struct Dispatched {
     pub start_image: Option<(u64, u64)>,
     /// `File.Open` succeeded and the path's last component is `grubx64.efi`.
     pub opened_grub: bool,
+    /// Disk `LoadImage` published that path as `LoadedImage.FilePath`.
+    pub grub_prefixed: bool,
     /// `Exit(ImageHandle, ExitStatus, …)` from the started image: the host
     /// must unwind the guest to the `StartImage` caller (its saved RSP /
     /// callee-saved GPRs) and return `ExitStatus` in RAX there.
@@ -1240,6 +1291,71 @@ fn read_guest_path(mem: &dyn GuestMem, addr: u64, out: &mut [u8; MAX_PATH_BYTES]
     super::filesystem::utf16_path_to_ascii(&units, out)
 }
 
+/// Absolute FAT path of the `grubx64.efi` shim opened.
+///
+/// An absolute `opened` is copied with `/` folded to `\`. A relative name is
+/// joined to the directory of `staged` (`\EFI\ubuntu\shimx64.efi` +
+/// `grubx64.efi` → `\EFI\ubuntu\grubx64.efi`). `None` when it does not fit.
+pub fn join_grub_load_path(staged: &[u8], opened: &[u8], out: &mut [u8]) -> Option<usize> {
+    if opened.is_empty() {
+        return None;
+    }
+    let absolute = opened[0] == b'\\' || opened[0] == b'/';
+    if absolute {
+        if opened.len() > out.len() {
+            return None;
+        }
+        for (i, &c) in opened.iter().enumerate() {
+            out[i] = if c == b'/' { b'\\' } else { c };
+        }
+        return Some(opened.len());
+    }
+    let slash = staged.iter().rposition(|&c| c == b'\\' || c == b'/')?;
+    let parent = &staged[..slash];
+    if parent.is_empty() {
+        return None;
+    }
+    let need = parent.len().checked_add(1)?.checked_add(opened.len())?;
+    if need > out.len() {
+        return None;
+    }
+    for (i, &c) in parent.iter().enumerate() {
+        out[i] = if c == b'/' { b'\\' } else { c };
+    }
+    out[parent.len()] = b'\\';
+    for (i, &c) in opened.iter().enumerate() {
+        out[parent.len() + 1 + i] = if c == b'/' { b'\\' } else { c };
+    }
+    Some(need)
+}
+
+fn publish_grub_open_path(st: &mut FirmwareState, mem: &dyn GuestMem) -> bool {
+    let n = st.grub_open_len as usize;
+    if n == 0 || n > st.grub_open_path.len() {
+        return false;
+    }
+    let mut buf = [0u8; 96];
+    let Some(bytes) = super::protocol::encode_filepath_device_path(&st.grub_open_path[..n], &mut buf)
+    else {
+        return false;
+    };
+    let (status, gpa) = st.pool.allocate_pages(
+        super::memory::ALLOCATE_ANY_PAGES,
+        super::memory::EFI_LOADER_DATA,
+        1,
+        0,
+    );
+    if status != EFI_SUCCESS {
+        return false;
+    }
+    if mem.write(gpa, &buf[..bytes]) != bytes {
+        let _ = st.pool.free_pages_at(gpa, 1);
+        return false;
+    }
+    st.image_file_path = gpa;
+    true
+}
+
 /// `LoadImage(BootPolicy, Parent, DevicePath, SourceBuffer, SourceSize, *ImageHandle)`.
 /// Publish `EFI_LOADED_IMAGE_PROTOCOL` on `st.image_handle` for the image
 /// described by `st.image_*` (UEFI 2.10 §9.1). A loader's first call is
@@ -1403,29 +1519,29 @@ fn append_library_serial(st: &mut FirmwareState, mem: &dyn GuestMem) -> bool {
 
 /// Only the `SourceBuffer` form is supported; a `DevicePath`-only load needs
 /// device-path parsing we do not publish (honest `EFI_UNSUPPORTED`).
-fn load_image(st: &mut FirmwareState, mem: &dyn GuestMem, a: ServiceArgs) -> (u64, bool) {
+fn load_image(st: &mut FirmwareState, mem: &dyn GuestMem, a: ServiceArgs) -> (u64, bool, bool) {
     let Some(src_size) = stack_arg(mem, a.rsp, 5) else {
-        return (EFI_INVALID_PARAMETER, false);
+        return (EFI_INVALID_PARAMETER, false, false);
     };
     let Some(p_handle) = stack_arg(mem, a.rsp, 6) else {
-        return (EFI_INVALID_PARAMETER, false);
+        return (EFI_INVALID_PARAMETER, false, false);
     };
     let src = a.a4;
     if src == 0 || src_size == 0 {
-        return (EFI_UNSUPPORTED, false);
+        return (EFI_UNSUPPORTED, false, false);
     }
     if p_handle == 0 {
-        return (EFI_INVALID_PARAMETER, false);
+        return (EFI_INVALID_PARAMETER, false, false);
     }
     // Parse enough to size the image, then allocate from our pool.
     let mut hdr = [0u8; super::pe::MAX_HEADER_BYTES];
     let take = (src_size as usize).min(super::pe::MAX_HEADER_BYTES);
     if take < 0x40 || mem.read(src, &mut hdr[..take]) < take {
-        return (EFI_INVALID_PARAMETER, false);
+        return (EFI_INVALID_PARAMETER, false, false);
     }
     let Ok(pe) = super::pe::parse_pe32plus(&hdr[..take]) else {
         // Not a PE32+ x64 EFI application.
-        return (0x8000_0000_0000_0012, false); // EFI_LOAD_ERROR
+        return (0x8000_0000_0000_0012, false, false); // EFI_LOAD_ERROR
     };
     let pages = (u64::from(pe.size_of_image) + 4095) / 4096;
     let (status, base) = st.pool.allocate_pages(
@@ -1435,33 +1551,48 @@ fn load_image(st: &mut FirmwareState, mem: &dyn GuestMem, a: ServiceArgs) -> (u6
         0,
     );
     if status != EFI_SUCCESS {
-        return (status, false);
+        return (status, false, false);
     }
     let loaded = match super::pe::load_pe32plus_guest(mem, src, src_size, base, pages * 4096) {
         Ok(l) => l,
         Err(_) => {
             let _ = st.pool.free_pages_at(base, pages);
-            return (0x8000_0000_0000_0012, false); // EFI_LOAD_ERROR
+            return (0x8000_0000_0000_0012, false, false); // EFI_LOAD_ERROR
         }
     };
     st.image_base = loaded.load_base;
     st.image_size = u64::from(loaded.size_of_image);
     st.image_entry = loaded.entry;
     st.image_handle = super::protocol::HANDLE_IMAGE;
-    // A buffer load has no file node. Do not leave the shim's FilePath on
-    // the image this call just replaced.
+    // A buffer load has no file node of its own. Drop the shim path so the
+    // kernel does not inherit it. On the install disk, the LoadImage that
+    // follows shim's open of grubx64.efi is GRUB: give it that path so its
+    // prefix is `\EFI\ubuntu` and it opens `grub.cfg` there.
     st.image_file_path = 0;
+    let mut prefixed = false;
+    if st.grub_open_pending {
+        st.grub_open_pending = false;
+        prefixed = publish_grub_open_path(st, mem);
+    }
     // `append_kernel_serial` stays set. This call is GRUB or the kernel.
     // The library line is amended at StartImage, not here.
     if !publish_loaded_image(st, mem, a.a2) {
+        if prefixed {
+            st.image_file_path = 0;
+            st.grub_open_pending = true;
+        }
         let _ = st.pool.free_pages_at(base, pages);
-        return (EFI_INVALID_PARAMETER, false);
+        return (EFI_INVALID_PARAMETER, false, false);
     }
     if !write_u64(mem, p_handle, st.image_handle) {
+        if prefixed {
+            st.image_file_path = 0;
+            st.grub_open_pending = true;
+        }
         let _ = st.pool.free_pages_at(base, pages);
-        return (EFI_INVALID_PARAMETER, false);
+        return (EFI_INVALID_PARAMETER, false, false);
     }
-    (EFI_SUCCESS, true)
+    (EFI_SUCCESS, true, prefixed)
 }
 
 /// Dispatch one RayNu-F service call. Console, memory, event/timer, TPL,
@@ -1490,6 +1621,7 @@ pub fn dispatch(
         start_image: None,
         exit_image: None,
         opened_grub: false,
+        grub_prefixed: false,
         serial_appended: false,
         grub_cfg_serial: false,
         grub_cfg_serial_skip: false,
@@ -1850,6 +1982,7 @@ pub fn dispatch(
             if status == EFI_SUCCESS {
                 if super::filesystem::path_is_grubx64(&path[..n]) {
                     out.opened_grub = true;
+                    st.note_grub_open(&path[..n]);
                 }
                 // GRUB 2.14 starts the Ubuntu kernel by the EFI handover
                 // jump, which never calls StartImage (`6865b5ab`). The
@@ -1987,8 +2120,9 @@ pub fn dispatch(
 
         // ---- image services (F5) ---------------------------------------
         ServiceId::LoadImage => {
-            let (status, ok) = load_image(st, mem, a);
+            let (status, ok, prefixed) = load_image(st, mem, a);
             out.image_loaded = ok;
+            out.grub_prefixed = prefixed;
             status
         }
         ServiceId::StartImage => {
