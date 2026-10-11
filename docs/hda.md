@@ -175,7 +175,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 2026-07 ████████  HDA + M6 closed (Latitude)
 2026-08 ████████  R640 boot (E2) + E3b HTTP-OK
 2026-09 ████████  E5 + Phase B — **Mount Everest CLOSED** (`f72b4276`)  ← months_to_everest = 0.0
-2026-10 ███████░  M8.8 language list lived; Installing system stalled on 512-byte PERC I/O; 64 KiB path packed; scores held
+2026-10 ███████░  M8.8 extract lived on c4a3ef1b; GRUB failed on EFI virtual mode; scores held
 2026-11 ░░░░░░░░  operator picks boot or reinstall in the SPA; mailbox probe LBA 0 stays unwritten; `skip PERC` stays
 ```
 
@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-8-disk-path |
-| Summary | **`806d8961` drew the language list and then sat on Installing system for about 14 hours.** No `Stage 46 hold`. Guest disk and library CD I/O was one 512-byte PERC command per sector. This EFI posts 64 KiB when the spare LBA is 128-sector aligned, else 4 KiB, else one sector. The virtio bounce is 64 KiB. The exit cap stays 256M. `ISO-INSTALL-OK` is not printed. Scores held. Months **0.0 held**. Overall **99 held**. |
+| Commit | m8-8-svam |
+| Summary | **`c4a3ef1b` copied Ubuntu onto `vda`, then GRUB failed.** dmesg: `Unable to switch EFI into virtual mode (status=8000000000000003)`. This EFI accepts `SetVirtualAddressMap`. `ISO-INSTALL-OK` is not printed. Scores held. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
 | Gates touched | M8.8.3 still open. No doorbell. No format of UBUNTU0. Not a COM2 close. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 60 held, perc 78 held, unmodified 25 held, overall LOI 73 held, months A 0.25 held, months B 1.5 held. |
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-11 | m8-8-svam | 0.0 | 99 | **`c4a3ef1b` finished extract and the kernel, then GRUB failed.** dmesg `status=8000000000000003` is `SetVirtualAddressMap` unsupported. This EFI accepts it. Not `ISO-INSTALL-OK`. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-11 | m8-8-disk-path | 0.0 | 99 | **`806d8961` Installing system froze for about 14 hours.** No `Stage 46 hold`. Each sector was its own PERC command. This EFI posts 64 KiB, else 4 KiB, else one sector. Virtio bounce is 64 KiB. Exit cap stays 256M. Not `ISO-INSTALL-OK`. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-10 | m8-8-exit-cap | 0.0 | 99 | **Language list lived, then `Stage 46 hold` during `curtin extract`.** `674f74c8` stopped at the 16M exit cap. Next EFI uses 256M. `vda` is incomplete. Not `ISO-INSTALL-OK`. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-10 | m8-8-console-quiet | 0.0 | 99 | **`5f24b74ef3db` cloud-init final lived, language list did not.** Next EFI uses `cloud-init=disabled` with the masks, and hushes HTTP keep-alives after Linux starts. Stored ISO stays. M8.8.3 not closed. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
