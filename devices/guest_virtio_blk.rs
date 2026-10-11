@@ -111,6 +111,10 @@ const OFF_DEVICE: u16 = 0x200;
 const OFF_NOTIFY: u16 = 0x300;
 const QUEUE_MAX: u16 = 128;
 const SECTOR: usize = 512;
+/// One virtio data copy. Matches a 64 KiB PERC READ/WRITE(16). A smaller
+/// descriptor still completes; this only stops a curtin bio from bouncing
+/// 4 KiB at a time into one-sector MegaRAID commands.
+pub const VIRTIO_XFER_CHUNK: usize = 64 * 1024;
 const VRING_DESC_F_NEXT: u16 = 1;
 const VRING_DESC_F_WRITE: u16 = 2;
 /// Linux blk-mq maps each bio_vec as a descriptor. Cap at the vq size so
@@ -1741,6 +1745,15 @@ fn write_u16(translate: &impl Fn(u64) -> Option<u64>, gpa: u64, val: u16) -> boo
     write_bytes(translate, gpa, &val.to_le_bytes())
 }
 
+struct XferBounce([u8; VIRTIO_XFER_CHUNK]);
+static mut XFER_BOUNCE: XferBounce = XferBounce([0; VIRTIO_XFER_CHUNK]);
+
+fn xfer_bounce_ptr() -> *mut u8 {
+    // SAFETY: one virtio drain runs at a time. Host tests use
+    // `--test-threads=1`. `addr_of_mut` avoids a `static mut` reference.
+    unsafe { core::ptr::addr_of_mut!(XFER_BOUNCE.0) as *mut u8 }
+}
+
 fn xfer_data_seg(
     disk: &mut [u8],
     translate: &impl Fn(u64) -> Option<u64>,
@@ -1753,22 +1766,26 @@ fn xfer_data_seg(
     allow_lun: bool,
 ) -> (u8, u32) {
     let n = len as usize;
-    let mut buf = [0u8; 4096];
+    let bounce = xfer_bounce_ptr();
     let mut done = 0usize;
     let mut wrote = 0u32;
     while done < n {
-        let take = core::cmp::min(n - done, buf.len());
+        let take = core::cmp::min(n - done, VIRTIO_XFER_CHUNK);
         let sec = sector.saturating_add(((byte_off + done) / SECTOR) as u64);
+        // SAFETY: `bounce` is the BSS chunk above, `take` stays inside it,
+        // and this drain does not re-enter. KANI-TARGET: virtio data bounce
+        // (outside Proven Core).
+        let buf = unsafe { core::slice::from_raw_parts_mut(bounce, take) };
         if device_write {
-            let status = blk_sector_rw_with(disk, ty, sec, &mut buf[..take], allow_lun);
+            let status = blk_sector_rw_with(disk, ty, sec, buf, allow_lun);
             if status != VIRTIO_BLK_S_OK {
                 return (status, wrote);
             }
-            if !write_bytes(translate, gpa + done as u64, &buf[..take]) {
+            if !write_bytes(translate, gpa + done as u64, buf) {
                 return (VIRTIO_BLK_S_IOERR, wrote);
             }
-        } else if read_bytes(translate, gpa + done as u64, &mut buf[..take]) {
-            let status = blk_sector_rw_with(disk, ty, sec, &mut buf[..take], allow_lun);
+        } else if read_bytes(translate, gpa + done as u64, buf) {
+            let status = blk_sector_rw_with(disk, ty, sec, buf, allow_lun);
             if status != VIRTIO_BLK_S_OK {
                 return (status, wrote);
             }

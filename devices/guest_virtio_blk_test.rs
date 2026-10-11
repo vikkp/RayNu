@@ -4,15 +4,15 @@ use super::{
     mmio_effective_len, mmio_insn_bytes_this_page, mmio_read, mmio_read_iso, mmio_write,
     mmio_write_iso, pci_addr_selects_owned, pci_addr_selects_slot0, pci_addr_selects_virtio,
     pci_addr_selects_virtio_iso, pci_addr_selects_virtio_spare, pci_config_addr,
-    pci_config_addr_iso, pci_config_addr_slot0, pci_config_addr_spare,
-    pci_enumerated, pci_read_data, pci_write_addr, pci_write_data, pei_host_bridge_did, present,
+    pci_config_addr_iso, pci_config_addr_slot0, pci_config_addr_spare, pci_enumerated,
+    pci_read_data, pci_write_addr, pci_write_data, pei_host_bridge_did, present,
     process_blk_queue_in, process_iso_queue_in, queues_armed, raynu_f_disk_read,
     raynu_f_disk_write, reset, reset_keep_disk, take_marker, virtio_disk_evidence,
     virtio_needs_pit_over_uart, GUEST_VIRTIO_BAR0_DEFAULT, GUEST_VIRTIO_BAR0_SIZE_MASK,
     GUEST_VIRTIO_ISO_BAR0_DEFAULT, GUEST_VIRTIO_PCI_DEVICE, GUEST_VIRTIO_PCI_VENDOR,
     M7_E5_OVMF_VIRTIO_OK_MARKER, VIRTIO_BLK_F_RO, VIRTIO_BLK_S_IOERR, VIRTIO_BLK_S_OK,
     VIRTIO_BLK_T_FLUSH, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, VIRTIO_F_VERSION_1,
-    VIRTIO_PCI_CAP_COMMON, VIRTIO_PCI_CAP_NOTIFY, VIRTIO_PCI_CAP_VNDR,
+    VIRTIO_PCI_CAP_COMMON, VIRTIO_PCI_CAP_NOTIFY, VIRTIO_PCI_CAP_VNDR, VIRTIO_XFER_CHUNK,
 };
 use crate::devices::guest_platform::{
     boot_order_cd_then_disk, pci_bdf, HOST_BRIDGE_DEVICE, HOST_BRIDGE_VENDOR,
@@ -335,6 +335,41 @@ fn blk_queue_out_writes_full_8k() {
     assert_eq!(guest[st_gpa as usize], VIRTIO_BLK_S_OK);
     assert_eq!(disk[0], 0x3C);
     assert_eq!(disk[8191], 0x3C);
+}
+
+#[test]
+fn blk_queue_out_writes_one_64k_chunk() {
+    assert_eq!(VIRTIO_XFER_CHUNK, 64 * 1024);
+    let data_gpa = 0x1000u64;
+    let st_gpa = data_gpa + VIRTIO_XFER_CHUNK as u64;
+    let mut guest = vec![0u8; st_gpa as usize + 16];
+    let qsize = 4u16;
+    let desc = 0u64;
+    let avail = 256u64;
+    let used = 512u64;
+    let hdr_gpa = 0x300u64;
+    guest[hdr_gpa as usize..hdr_gpa as usize + 4].copy_from_slice(&VIRTIO_BLK_T_OUT.to_le_bytes());
+    guest[hdr_gpa as usize + 8..hdr_gpa as usize + 16].copy_from_slice(&0u64.to_le_bytes());
+    guest[data_gpa as usize..data_gpa as usize + VIRTIO_XFER_CHUNK].fill(0xA5);
+    guest[st_gpa as usize] = 0xFF;
+    fn put_desc(mem: &mut [u8], i: u16, addr: u64, len: u32, flags: u16, next: u16) {
+        let o = (i as usize) * 16;
+        mem[o..o + 8].copy_from_slice(&addr.to_le_bytes());
+        mem[o + 8..o + 12].copy_from_slice(&len.to_le_bytes());
+        mem[o + 12..o + 14].copy_from_slice(&flags.to_le_bytes());
+        mem[o + 14..o + 16].copy_from_slice(&next.to_le_bytes());
+    }
+    put_desc(&mut guest, 0, hdr_gpa, 16, 1, 1);
+    put_desc(&mut guest, 1, data_gpa, VIRTIO_XFER_CHUNK as u32, 1, 2);
+    put_desc(&mut guest, 2, st_gpa, 1, 2, 0);
+    guest[avail as usize + 2..avail as usize + 4].copy_from_slice(&1u16.to_le_bytes());
+    guest[avail as usize + 4..avail as usize + 6].copy_from_slice(&0u16.to_le_bytes());
+    let mut last = 0u16;
+    let mut disk = vec![0u8; VIRTIO_XFER_CHUNK];
+    let n = process_blk_queue_in(&mut guest, &mut disk, qsize, &mut last, desc, avail, used);
+    assert_eq!(n, VIRTIO_XFER_CHUNK as u32);
+    assert_eq!(guest[st_gpa as usize], VIRTIO_BLK_S_OK);
+    assert!(disk.iter().all(|b| *b == 0xA5));
 }
 
 #[test]

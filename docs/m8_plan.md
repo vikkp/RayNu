@@ -223,7 +223,7 @@ The fence accepts one LD of ~2.5–3.1 TiB and refuses ~300–512 GiB. Scratch p
 
 ### M8.8 — Ubuntu ISO library on RAYNU-SPARE
 
-**Status: the language screen lived, then curtin extract hit the 16M exit cap.** `674f74c8` drew Subiquity's language list. Curtin configured `disk-vda` and started `curtin extract`, then COM2 showed `restore host xcr0` and `Stage 46 hold alive — Force Off to retry`. The guest is stopped. The `vda` image is incomplete. This EFI raises the product-ISO resume cap from 16M to 256M. `ISO-INSTALL-OK` is not printed. M8.8.4 is not closed. Scores held. Do not flash until CI is green.
+**Status: `806d8961` reached Installing system, then the screen stayed on `apply_autoinstall_config` for about 14 hours.** No new journal line. No `Stage 46 hold`. The guest was inside virtio I/O, and each sector was its own PERC command. This EFI posts 64 KiB on a 128-sector boundary, else 4 KiB, else one sector, and the virtio bounce is 64 KiB. The exit cap stays 256M. `ISO-INSTALL-OK` is not printed. M8.8.4 is not closed. Scores held. Do not flash until CI is green.
 
 **Goal:** The operator picks `ubuntu-26.04-live-server-amd64.iso` on Guests. The hypervisor stores that file unchanged in a high library on RAYNU-SPARE and boots it as a CD. The file stays after install. **Clear ISO** on Guests drops the catalog hold and wipes the ISO signature sector. It does not scrub the whole file and it does not touch an installed disk.
 

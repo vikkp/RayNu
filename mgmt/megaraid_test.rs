@@ -503,3 +503,52 @@ fn fwstate_load_is_one_harpoon_and_does_not_bus_master() {
     assert!(!super::h740p_mini_subsys(0x1028, 0x1fc9));
     assert!(!super::h740p_mini_subsys(0x1028, 0x1fcb));
 }
+
+#[test]
+fn perc_io_chunk_steps_64k_then_4k_then_sector() {
+    let big = super::PERC_GUEST_XFER_MAX;
+    let mid = super::PERC_IMAGE_CHUNK_BYTES as usize;
+    assert_eq!(big, 64 * 1024);
+    assert_eq!(mid, 4096);
+    assert_eq!(super::perc_io_chunk(0, big, big), big);
+    assert_eq!(super::perc_io_chunk(128, big, big), big);
+    assert_eq!(super::perc_io_chunk(8, big, big), mid);
+    assert_eq!(super::perc_io_chunk(1, big, big), 512);
+    assert_eq!(super::perc_io_chunk(0, big, mid), mid);
+    assert_eq!(super::perc_io_chunk(0, mid, big), mid);
+    assert_eq!(super::perc_io_chunk(0, 512, big), 512);
+    assert_eq!(super::perc_io_chunk(0, 1000, big), 0);
+    assert_eq!(super::perc_io_chunk(0, 0, big), 0);
+}
+
+#[test]
+fn pack_ld_read16_chunk_is_a_read_of_one_4k_or_64k() {
+    let one = super::pack_ld_read16_chunk(1, 7, 1, 0x1006000).unwrap();
+    assert!(super::frame_is_read(&one));
+    assert!(!super::frame_is_write(&one));
+    assert_eq!(one[0], super::MFI_CMD_LD_SCSI_IO);
+    assert_eq!(one[0x20], super::SCSI_READ_16);
+    assert_eq!(u32::from_le_bytes(one[0x38..0x3C].try_into().unwrap()), 512);
+    let four =
+        super::pack_ld_read16_chunk(1, 16, super::PERC_IMAGE_CHUNK_SECTORS, 0x1006000).unwrap();
+    assert_eq!(
+        u32::from_le_bytes(four[0x38..0x3C].try_into().unwrap()),
+        super::PERC_IMAGE_CHUNK_BYTES
+    );
+    assert!(
+        super::pack_ld_read16_chunk(1, 1, super::PERC_IMAGE_CHUNK_SECTORS, 0x1006000).is_none()
+    );
+    let big = super::pack_ld_read16_chunk(1, 256, super::LIBRARY_WRITE_SECTORS, 0x2000000).unwrap();
+    assert!(super::frame_is_read(&big));
+    assert_eq!(
+        u32::from_le_bytes(big[0x38..0x3C].try_into().unwrap()),
+        super::PERC_GUEST_XFER_MAX as u32
+    );
+    assert_eq!(
+        u64::from_le_bytes(big[0x18..0x20].try_into().unwrap()),
+        0x2000000 + 65536
+    );
+    assert!(super::pack_ld_read16_chunk(1, 64, super::LIBRARY_WRITE_SECTORS, 0x2000000).is_none());
+    assert!(super::pack_ld_read16_chunk(1, 0, 2, 0x1006000).is_none());
+    assert!(super::pack_ld_read16_chunk(1, 0, 1, 0).is_none());
+}

@@ -371,10 +371,18 @@ pub fn read_at(off: u64, buf: &mut [u8]) -> bool {
         let Some(lba) = library_chunk_lba(off + done as u64) else {
             return false;
         };
-        if !crate::mgmt::megaraid::perc_spare_read(lba, &mut buf[done..done + 512]) {
+        let n = crate::mgmt::megaraid::perc_io_chunk(
+            lba,
+            buf.len() - done,
+            crate::mgmt::megaraid::PERC_GUEST_XFER_MAX,
+        );
+        if n == 0 {
             return false;
         }
-        done += 512;
+        if !crate::mgmt::megaraid::perc_spare_read(lba, &mut buf[done..done + n]) {
+            return false;
+        }
+        done += n;
     }
     true
 }
