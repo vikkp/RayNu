@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-8-svam |
-| Summary | **`c4a3ef1b` copied Ubuntu onto `vda`, then GRUB failed.** dmesg: `Unable to switch EFI into virtual mode (status=8000000000000003)`. This EFI accepts `SetVirtualAddressMap`. `ISO-INSTALL-OK` is not printed. Scores held. Months **0.0 held**. Overall **99 held**. |
+| Commit | m8-8-guest-list |
+| Summary | **Subiquity finished. Start on the 10240 MiB row booted Alpine `ee851fd5`.** The Ubuntu disk is the next GPT. This EFI lists each tail with its own Start. Scores held. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
 | Gates touched | M8.8.3 still open. No doorbell. No format of UBUNTU0. Not a COM2 close. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 60 held, perc 78 held, unmodified 25 held, overall LOI 73 held, months A 0.25 held, months B 1.5 held. |
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-11 | m8-8-guest-list | 0.0 | 99 | **Installation complete lived. The 10240 MiB Start booted Alpine `ee851fd5`.** Ubuntu sits on the next GPT. This EFI lists every tail. Not an install close. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-11 | m8-8-svam | 0.0 | 99 | **`c4a3ef1b` finished extract and the kernel, then GRUB failed.** dmesg `status=8000000000000003` is `SetVirtualAddressMap` unsupported. This EFI accepts it. Not `ISO-INSTALL-OK`. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-11 | m8-8-disk-path | 0.0 | 99 | **`806d8961` Installing system froze for about 14 hours.** No `Stage 46 hold`. Each sector was its own PERC command. This EFI posts 64 KiB, else 4 KiB, else one sector. Virtio bounce is 64 KiB. Exit cap stays 256M. Not `ISO-INSTALL-OK`. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-10 | m8-8-exit-cap | 0.0 | 99 | **Language list lived, then `Stage 46 hold` during `curtin extract`.** `674f74c8` stopped at the 16M exit cap. Next EFI uses 256M. `vda` is incomplete. Not `ISO-INSTALL-OK`. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
