@@ -223,7 +223,7 @@ The fence accepts one LD of ~2.5–3.1 TiB and refuses ~300–512 GiB. Scratch p
 
 ### M8.8 — Ubuntu ISO library on RAYNU-SPARE
 
-**Status: `c4a3ef1b` copied the system, then GRUB failed.** Partitioning, extract, the kernel, and `fstab` finished. dmesg says `efi: Unable to switch EFI into virtual mode (status=8000000000000003)`. That is `SetVirtualAddressMap` returning unsupported, so Linux disabled EFI runtime and the boot entry was not registered. This EFI accepts that call and rewrites the runtime pointers. `ISO-INSTALL-OK` is not printed. M8.8.4 is not closed. Scores held. Do not flash until CI is green.
+**Status: Subiquity reached Installation complete, then Start on the 10240 MiB row booted Alpine `ee851fd5`.** That row is the first tail, at 8 GiB. The Ubuntu disk is the next GPT, at 18 GiB, and the page had no Start for it. This EFI lists every GPT tail with its own Start. `ISO-INSTALL-OK` on that Alpine boot was the FAT repair, not the Ubuntu close. M8.8.4 is not closed. Scores held. Do not flash until CI is green.
 
 **Goal:** The operator picks `ubuntu-26.04-live-server-amd64.iso` on Guests. The hypervisor stores that file unchanged in a high library on RAYNU-SPARE and boots it as a CD. The file stays after install. **Clear ISO** on Guests drops the catalog hold and wipes the ISO signature sector. It does not scrub the whole file and it does not touch an installed disk.
 

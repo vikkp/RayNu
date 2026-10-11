@@ -294,6 +294,58 @@ pub fn apply_tail_choice(
     }
 }
 
+/// Start one installed tail. `spare_off` is that disk's first byte.
+///
+/// The first tail sits on the 8 GiB boundary. A later disk, such as the
+/// Ubuntu install after `ee851fd5`, passes its own offset. Does not stage
+/// the ISO and does not allow `setup-disk`.
+pub fn apply_tail_boot_at(
+    image_latched: bool,
+    spare_bytes: u64,
+    spare_off: u64,
+    disk_bytes: u64,
+) -> PercChoiceApply {
+    if guest_stopped() {
+        return PercChoiceApply::AlreadyChosen;
+    }
+    if !image_latched {
+        return PercChoiceApply::NoImage;
+    }
+    let window = crate::mgmt::megaraid::PERC_IMAGE_BYTES;
+    if spare_off == window {
+        return apply_tail_boot_choice(image_latched, spare_bytes, disk_bytes);
+    }
+    if spare_off < window || spare_off % 512 != 0 || disk_bytes % 512 != 0 {
+        return PercChoiceApply::NoImage;
+    }
+    let Some(place) = crate::mgmt::iso_library::place_guest_after_occupied(
+        spare_bytes,
+        window,
+        true,
+        spare_off,
+        crate::mgmt::iso_library::held_bytes(),
+        disk_bytes,
+    ) else {
+        return PercChoiceApply::NoImage;
+    };
+    if place.spare_off != spare_off || place.disk_bytes != disk_bytes {
+        return PercChoiceApply::NoImage;
+    }
+    match CHOICE.compare_exchange(
+        CHOICE_PENDING,
+        CHOICE_TAIL_BOOT,
+        Ordering::AcqRel,
+        Ordering::Acquire,
+    ) {
+        Ok(_) => {
+            TAIL_OFF.store(place.spare_off, Ordering::Release);
+            TAIL_BYTES.store(place.disk_bytes, Ordering::Release);
+            PercChoiceApply::Accepted
+        }
+        Err(_) => PercChoiceApply::AlreadyChosen,
+    }
+}
+
 /// Start the disk already in the free tail. Same placement rules as an install.
 /// Does not stage the ISO and does not allow `setup-disk`.
 pub fn apply_tail_boot_choice(

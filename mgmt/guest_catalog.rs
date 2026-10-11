@@ -250,7 +250,7 @@ fn mib_to_bytes(disk_mib: u32) -> Option<u64> {
 
 /// List JSON, including `cap` and `note`. Captions live here so the SPA
 /// shell stays inside `HTTP_RESPONSE_CAP`.
-const CATALOG_BODY_CAP: usize = 1280;
+const CATALOG_BODY_CAP: usize = 2048;
 
 /// REST outcome. `Ready` carries a JSON body the HTTP layer writes as-is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -294,6 +294,15 @@ pub fn guest_catalog_rest(method: RestMethod, path: &str, authed: bool) -> Guest
             }
             return start_tail();
         }
+        Some(GuestRoute::StartDisk(off)) => {
+            if !authed {
+                return GuestCatalogHttp::Unauthorized;
+            }
+            if !matches!(method, RestMethod::Post) {
+                return GuestCatalogHttp::BadMethod;
+            }
+            return start_disk_at(off);
+        }
         Some(GuestRoute::Stop) => {
             if !authed {
                 return GuestCatalogHttp::Unauthorized;
@@ -325,6 +334,7 @@ enum GuestRoute {
     List,
     Start,
     StartTail,
+    StartDisk(u64),
     Stop,
     Linux(u32),
     Windows(u32),
@@ -340,6 +350,9 @@ fn parse_guest_route(path: &str) -> Option<GuestRoute> {
     }
     if path == GUEST_TAIL_START_PATH {
         return Some(GuestRoute::StartTail);
+    }
+    if let Some(off) = parse_disk_off(path) {
+        return Some(GuestRoute::StartDisk(off));
     }
     if path == GUEST_STOP_PATH {
         return Some(GuestRoute::Stop);
@@ -362,6 +375,15 @@ fn parse_guest_route(path: &str) -> Option<GuestRoute> {
     None
 }
 
+fn parse_disk_off(path: &str) -> Option<u64> {
+    let rest = path.strip_prefix("/perc/guests/disk/")?;
+    let off = rest.strip_suffix("/start")?;
+    if off.is_empty() || off.len() > 20 || !off.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    off.parse().ok()
+}
+
 fn parse_mib(s: &str) -> Option<u32> {
     if s.is_empty() || s.len() > 7 || !s.bytes().all(|b| b.is_ascii_digit()) {
         return None;
@@ -372,13 +394,8 @@ fn parse_mib(s: &str) -> Option<u32> {
 fn apply_action(action: CatalogAction) -> GuestCatalogHttp {
     let installed = crate::mgmt::megaraid::perc_image_boot_latched();
     let spare = crate::mgmt::megaraid::perc_spare_bytes();
-    let tail = if let Some((_, bytes)) = crate::mgmt::perc_boot_choice::armed_tail() {
-        bytes
-    } else {
-        known_tail_bytes(spare, installed)
-    };
     let library = crate::mgmt::iso_library::held_bytes();
-    let occupied = SLICE1_WINDOW_BYTES.saturating_add(tail);
+    let occupied = occupied_guest_end();
     match decide_with_layout(
         spare,
         SLICE1_WINDOW_BYTES,
@@ -447,6 +464,37 @@ fn start_tail() -> GuestCatalogHttp {
     }
 }
 
+fn start_disk_at(spare_off: u64) -> GuestCatalogHttp {
+    use super::perc_boot_choice::{
+        apply_tail_boot_at, guest_stopped, PercChoiceApply, CHOICE_TAIL_BOOT,
+    };
+    if guest_stopped() {
+        return ready(409, b"{\"ok\":false,\"reason\":\"stopped\"}", None);
+    }
+    let installed = crate::mgmt::megaraid::perc_image_boot_latched();
+    let spare = crate::mgmt::megaraid::perc_spare_bytes();
+    let (tails, n) = discovered_tails();
+    let Some(disk) = tails[..n].iter().find(|d| d.spare_off == spare_off) else {
+        return ready(409, b"{\"ok\":false,\"reason\":\"nodisk\"}", None);
+    };
+    match apply_tail_boot_at(installed, spare, disk.spare_off, disk.disk_bytes) {
+        PercChoiceApply::Accepted => {
+            crate::boot::raynu_f_flag::request_installed_boot();
+            let mut body = [0u8; 192];
+            let mut w = JsonBuf::new(&mut body);
+            w.s("{\"ok\":true,\"choice\":\"tailboot\",\"spare_off\":");
+            w.u(disk.spare_off);
+            w.s(",\"disk_bytes\":");
+            w.u(disk.disk_bytes);
+            w.s("}");
+            let len = if w.fit { w.n } else { 0 };
+            ready(200, &body[..len], Some(CHOICE_TAIL_BOOT))
+        }
+        PercChoiceApply::NoImage => ready(409, b"{\"ok\":false,\"reason\":\"notail\"}", None),
+        PercChoiceApply::AlreadyChosen => ready(409, b"{\"ok\":false,\"reason\":\"chosen\"}", None),
+    }
+}
+
 fn stop_guest() -> GuestCatalogHttp {
     if crate::mgmt::perc_boot_choice::request_guest_stop() {
         ready(200, b"{\"ok\":true,\"choice\":\"stop\"}", None)
@@ -509,14 +557,15 @@ fn ready(status: u16, body: &[u8], audit_choice: Option<u8>) -> GuestCatalogHttp
 
 /// Window plus any free-tail disk already known. The library starts after this.
 pub fn occupied_guest_end() -> u64 {
-    let installed = crate::mgmt::megaraid::perc_image_boot_latched();
-    let spare = crate::mgmt::megaraid::perc_spare_bytes();
-    let tail = if let Some((_, bytes)) = crate::mgmt::perc_boot_choice::armed_tail() {
-        bytes
-    } else {
-        discover_tail_bytes(spare, installed)
-    };
-    SLICE1_WINDOW_BYTES.saturating_add(tail)
+    let (tails, n) = discovered_tails();
+    let mut end = occupied_from_tails(&tails[..n]);
+    if let Some((off, bytes)) = crate::mgmt::perc_boot_choice::armed_tail() {
+        let armed_end = off.saturating_add(bytes);
+        if armed_end > end {
+            end = armed_end;
+        }
+    }
+    end
 }
 
 fn fill_list_json(buf: &mut [u8]) -> usize {
@@ -525,12 +574,8 @@ fn fill_list_json(buf: &mut [u8]) -> usize {
     let numbers = catalog_numbers(spare, SLICE1_WINDOW_BYTES, installed);
     let choice = perc_spa_choice();
     let waiting = perc_spa_wait_required(installed, choice);
-    let tail = if let Some((_, bytes)) = crate::mgmt::perc_boot_choice::armed_tail() {
-        bytes
-    } else {
-        discover_tail_bytes(spare, installed)
-    };
-    write_list_json(buf, numbers, waiting, choice, installed, tail)
+    let (tails, n) = discovered_tails();
+    write_list_json(buf, numbers, waiting, choice, installed, &tails[..n])
 }
 
 /// One GPT header sector at guest LBA 1 of a disk that starts at the 8 GiB mark.
@@ -550,6 +595,70 @@ pub fn tail_bytes_from_gpt(sector: &[u8], spare_bytes: u64) -> Option<u64> {
     Some(bytes)
 }
 
+/// One installed guest disk. `spare_off` is its first byte on RAYNU-SPARE.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FoundDisk {
+    pub spare_off: u64,
+    pub disk_bytes: u64,
+}
+
+pub const GUEST_DISK_MAX: usize = 4;
+
+/// Disk size from a GPT header at `cursor`, if the disk ends at or before `limit`.
+///
+/// `lba1` is the header sector (guest LBA 1). The backup LBA is the last
+/// sector of that disk, not a spare LBA. A disk that is not larger than the
+/// 8 GiB window is not a tail.
+pub fn disk_bytes_at(cursor: u64, lba1: &[u8], limit: u64) -> Option<u64> {
+    if lba1.len() < 40 || &lba1[..8] != b"EFI PART" || cursor % 512 != 0 || limit < cursor {
+        return None;
+    }
+    let backup = u64::from_le_bytes(lba1[32..40].try_into().ok()?);
+    let bytes = backup.checked_add(1)?.checked_mul(512)?;
+    if bytes <= SLICE1_WINDOW_BYTES || bytes % 512 != 0 {
+        return None;
+    }
+    let end = cursor.checked_add(bytes)?;
+    if end > limit {
+        return None;
+    }
+    Some(bytes)
+}
+
+/// Walk GPT disks from `start` until a header is missing or the library floor.
+///
+/// `read_lba1(cursor, sector)` fills guest LBA 1 of the disk that begins at
+/// `cursor`. The first hit on this spare is the Alpine tail at 8 GiB. The
+/// next hit is the disk after it.
+pub fn walk_gpt_disks(
+    start: u64,
+    limit: u64,
+    mut read_lba1: impl FnMut(u64, &mut [u8; 512]) -> bool,
+) -> ([FoundDisk; GUEST_DISK_MAX], usize) {
+    let mut out = [FoundDisk {
+        spare_off: 0,
+        disk_bytes: 0,
+    }; GUEST_DISK_MAX];
+    let mut n = 0usize;
+    let mut cursor = start;
+    while n < GUEST_DISK_MAX && cursor.saturating_add(1024) <= limit {
+        let mut sector = [0u8; 512];
+        if !read_lba1(cursor, &mut sector) {
+            break;
+        }
+        let Some(bytes) = disk_bytes_at(cursor, &sector, limit) else {
+            break;
+        };
+        out[n] = FoundDisk {
+            spare_off: cursor,
+            disk_bytes: bytes,
+        };
+        n += 1;
+        cursor = cursor.saturating_add(bytes);
+    }
+    (out, n)
+}
+
 fn known_tail_bytes(spare: u64, installed: bool) -> u64 {
     if let Some((_, bytes)) = crate::mgmt::perc_boot_choice::armed_tail() {
         bytes
@@ -558,39 +667,94 @@ fn known_tail_bytes(spare: u64, installed: bool) -> u64 {
     }
 }
 
+/// Every GPT tail after the 8 GiB window, in order. Host tests see none.
+fn discovered_tails() -> ([FoundDisk; GUEST_DISK_MAX], usize) {
+    #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+    {
+        cached_tails()
+    }
+    #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+    {
+        (
+            [FoundDisk {
+                spare_off: 0,
+                disk_bytes: 0,
+            }; GUEST_DISK_MAX],
+            0,
+        )
+    }
+}
+
+/// First free byte after the window and every discovered tail.
+fn occupied_from_tails(tails: &[FoundDisk]) -> u64 {
+    let mut end = SLICE1_WINDOW_BYTES;
+    for d in tails {
+        if d.disk_bytes == 0 {
+            continue;
+        }
+        let disk_end = d.spare_off.saturating_add(d.disk_bytes);
+        if disk_end > end {
+            end = disk_end;
+        }
+    }
+    end
+}
+
 fn discover_tail_bytes(spare: u64, installed: bool) -> u64 {
     if !installed || spare == 0 {
         return 0;
     }
-    #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
-    {
-        cached_tail_probe(spare)
-    }
-    #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
-    {
-        let _ = spare;
+    let (tails, n) = discovered_tails();
+    if n == 0 {
         0
+    } else {
+        tails[0].disk_bytes
     }
 }
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
-fn cached_tail_probe(spare: u64) -> u64 {
-    use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+fn cached_tails() -> ([FoundDisk; GUEST_DISK_MAX], usize) {
+    use core::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
     static PROBED: AtomicBool = AtomicBool::new(false);
-    static FOUND: AtomicU64 = AtomicU64::new(0);
-    if PROBED.load(Ordering::Acquire) {
-        return FOUND.load(Ordering::Acquire);
+    static N: AtomicU8 = AtomicU8::new(0);
+    static OFFS: [AtomicU64; GUEST_DISK_MAX] = [const { AtomicU64::new(0) }; GUEST_DISK_MAX];
+    static BYTES: [AtomicU64; GUEST_DISK_MAX] = [const { AtomicU64::new(0) }; GUEST_DISK_MAX];
+    if !PROBED.load(Ordering::Acquire) {
+        let spare = crate::mgmt::megaraid::perc_spare_bytes();
+        let installed = crate::mgmt::megaraid::perc_image_boot_latched();
+        let limit = if installed {
+            crate::mgmt::iso_library::library_floor(
+                spare,
+                crate::mgmt::iso_library::held_bytes(),
+            )
+            .unwrap_or(spare)
+        } else {
+            0
+        };
+        let (found, n) = walk_gpt_disks(SLICE1_WINDOW_BYTES, limit, |cursor, sector| {
+            let lba = cursor / 512 + 1;
+            crate::mgmt::megaraid::perc_spare_read(lba, sector)
+        });
+        let n = n.min(GUEST_DISK_MAX);
+        for i in 0..n {
+            OFFS[i].store(found[i].spare_off, Ordering::Release);
+            BYTES[i].store(found[i].disk_bytes, Ordering::Release);
+        }
+        N.store(n as u8, Ordering::Release);
+        PROBED.store(true, Ordering::Release);
     }
-    let lba = SLICE1_WINDOW_BYTES / 512 + 1;
-    let mut sector = [0u8; 512];
-    let found = if crate::mgmt::megaraid::perc_spare_read(lba, &mut sector) {
-        tail_bytes_from_gpt(&sector, spare).unwrap_or(0)
-    } else {
-        0
-    };
-    FOUND.store(found, Ordering::Release);
-    PROBED.store(true, Ordering::Release);
-    found
+    let n = (N.load(Ordering::Acquire) as usize).min(GUEST_DISK_MAX);
+    let mut out = [FoundDisk {
+        spare_off: 0,
+        disk_bytes: 0,
+    }; GUEST_DISK_MAX];
+    for i in 0..n {
+        out[i] = FoundDisk {
+            spare_off: OFFS[i].load(Ordering::Acquire),
+            disk_bytes: BYTES[i].load(Ordering::Acquire),
+        };
+    }
+    (out, n)
 }
 
 /// `cap` and `note` are the Guests sentences. The HTML shell prints them.
@@ -602,11 +766,12 @@ fn write_list_json(
     waiting: bool,
     choice: PercSpaChoice,
     installed: bool,
-    tail_bytes: u64,
+    tails: &[FoundDisk],
 ) -> usize {
     let stopped = crate::mgmt::perc_boot_choice::guest_stopped();
     let library = crate::mgmt::iso_library::held_bytes();
     let iso_ready = crate::mgmt::iso_library::library_complete();
+    let tail_bytes: u64 = tails.iter().map(|d| d.disk_bytes).sum();
     let used = numbers
         .used_bytes
         .saturating_add(tail_bytes)
@@ -662,44 +827,70 @@ fn write_list_json(
         w.s(if pending { "true" } else { "false" });
         w.s(",\"stop\":");
         w.s(if active { "true" } else { "false" });
-        w.s("}");
+        w.s(",\"boot\":\"/perc/guests/1/start\"}");
     }
-    if tail_bytes > 0 {
-        if installed {
+    let armed_off = match choice {
+        PercSpaChoice::Tail { .. } | PercSpaChoice::TailBoot { .. } => {
+            crate::mgmt::perc_boot_choice::armed_tail().map(|(off, _)| off)
+        }
+        _ => None,
+    };
+    let mut next_id = if installed { 2u64 } else { 1 };
+    let mut any_guest = installed;
+    for disk in tails {
+        if disk.disk_bytes == 0 {
+            continue;
+        }
+        if any_guest {
             w.s(",");
         }
+        any_guest = true;
         let pending = matches!(choice, PercSpaChoice::Pending) && !stopped;
-        let active = matches!(
-            choice,
-            PercSpaChoice::Tail { .. } | PercSpaChoice::TailBoot { .. }
-        ) && !stopped;
-        w.s("{\"id\":2,\"name\":\"alpine\",\"state\":\"");
+        let mine = armed_off == Some(disk.spare_off);
+        let active = mine
+            && matches!(
+                choice,
+                PercSpaChoice::Tail { .. } | PercSpaChoice::TailBoot { .. }
+            )
+            && !stopped;
+        w.s("{\"id\":");
+        w.u(next_id);
+        next_id += 1;
+        w.s(",\"name\":\"disk\",\"state\":\"");
         w.s(if stopped {
             "stopped"
+        } else if !mine {
+            "installed"
         } else {
             tail_row_state(choice)
         });
         w.s("\",\"disk_mib\":");
-        w.u(tail_bytes / (1024 * 1024));
+        w.u(disk.disk_bytes / (1024 * 1024));
+        w.s(",\"off_mib\":");
+        w.u(disk.spare_off / (1024 * 1024));
         w.s(",\"image_type\":\"linux_iso\",\"start\":");
         w.s(if pending { "true" } else { "false" });
         w.s(",\"stop\":");
         w.s(if active { "true" } else { "false" });
-        w.s("}");
+        w.s(",\"boot\":\"/perc/guests/disk/");
+        w.u(disk.spare_off);
+        w.s("/start\"}");
     }
     if iso_ready {
-        if installed || tail_bytes > 0 {
+        if any_guest {
             w.s(",");
         }
         let chosen = crate::mgmt::iso_library::present_as_cd();
         let pending = matches!(choice, PercSpaChoice::Pending) && !stopped && !chosen;
-        w.s("{\"id\":3,\"name\":\"ubuntu\",\"state\":\"");
+        w.s("{\"id\":");
+        w.u(next_id);
+        w.s(",\"name\":\"ubuntu\",\"state\":\"");
         w.s(if chosen { "loading" } else { "waiting" });
         w.s("\",\"disk_mib\":");
         w.u(library / (1024 * 1024));
         w.s(",\"image_type\":\"ubuntu\",\"start\":");
         w.s(if pending { "true" } else { "false" });
-        w.s(",\"stop\":false}");
+        w.s(",\"stop\":false,\"act\":\"ISO\"}");
     }
     w.s("]}");
     if w.fit {
@@ -881,7 +1072,11 @@ mod guest_catalog_test {
         crate::mgmt::iso_library::clear_library_for_test();
         let mut buf = [0u8; CATALOG_BODY_CAP];
         let ten = 10_240u64 * 1024 * 1024;
-        let n = write_list_json(&mut buf, n, true, PercSpaChoice::Pending, true, ten);
+        let disks = [FoundDisk {
+            spare_off: SLICE1_WINDOW_BYTES,
+            disk_bytes: ten,
+        }];
+        let n = write_list_json(&mut buf, n, true, PercSpaChoice::Pending, true, &disks);
         let body = core::str::from_utf8(&buf[..n]).unwrap_or("");
         assert!(body.ends_with("]}"), "{body}");
         assert!(n < buf.len(), "{n}");
@@ -894,7 +1089,44 @@ mod guest_catalog_test {
         assert!(body.contains("\"id\":1"), "{body}");
         assert!(body.contains("\"state\":\"installed\""), "{body}");
         assert!(body.contains("\"disk_mib\":10240"), "{body}");
+        assert!(body.contains("\"off_mib\":8192"), "{body}");
+        assert!(
+            body.contains("\"boot\":\"/perc/guests/disk/8589934592/start\""),
+            "{body}"
+        );
         assert!(body.contains("\"start\":true"), "{body}");
+        let mut gpt = [0u8; 512];
+        gpt[..8].copy_from_slice(b"EFI PART");
+        let backup_lba = (ten / 512) - 1;
+        gpt[32..40].copy_from_slice(&backup_lba.to_le_bytes());
+        let limit = IRON_LD1_BYTES;
+        let (walked, wn) = walk_gpt_disks(SLICE1_WINDOW_BYTES, limit, |cursor, sector| {
+            if cursor == SLICE1_WINDOW_BYTES || cursor == SLICE1_WINDOW_BYTES + ten {
+                sector.copy_from_slice(&gpt);
+                true
+            } else {
+                false
+            }
+        });
+        assert_eq!(wn, 2, "{wn}");
+        assert_eq!(walked[1].spare_off, SLICE1_WINDOW_BYTES + ten);
+        assert_eq!(walked[1].disk_bytes, ten);
+        let mut buf2 = [0u8; CATALOG_BODY_CAP];
+        let n2 = write_list_json(
+            &mut buf2,
+            catalog_numbers(IRON_LD1_BYTES, SLICE1_WINDOW_BYTES, true),
+            true,
+            PercSpaChoice::Pending,
+            true,
+            &walked[..wn],
+        );
+        let two = core::str::from_utf8(&buf2[..n2]).unwrap_or("");
+        assert!(n2 > 0 && n2 < buf2.len(), "{n2} {two}");
+        assert!(
+            two.contains("\"boot\":\"/perc/guests/disk/19327352832/start\""),
+            "{two}"
+        );
+        assert!(two.contains("\"off_mib\":18432"), "{two}");
         assert!(body.contains("free tail"), "{body}");
         let mut sector = [0u8; 512];
         sector[..8].copy_from_slice(b"EFI PART");
@@ -919,14 +1151,18 @@ mod guest_catalog_test {
         assert!(!crate::mgmt::iso_library::library_complete());
         let numbers = catalog_numbers(IRON_LD1_BYTES, SLICE1_WINDOW_BYTES, true);
         let ten = 10_240u64 * 1024 * 1024;
+        let disks = [FoundDisk {
+            spare_off: SLICE1_WINDOW_BYTES,
+            disk_bytes: ten,
+        }];
         let mut buf = [0u8; CATALOG_BODY_CAP];
-        let n = write_list_json(&mut buf, numbers, true, PercSpaChoice::Pending, true, ten);
+        let n = write_list_json(&mut buf, numbers, true, PercSpaChoice::Pending, true, &disks);
         let early = core::str::from_utf8(&buf[..n]).unwrap_or("");
         assert!(!early.contains("\"id\":3"), "{early}");
         assert!(crate::mgmt::iso_library::accept_upload(512, 1024, &sector).is_ok());
         assert!(crate::mgmt::iso_library::library_complete());
         assert!(!crate::mgmt::iso_library::present_as_cd());
-        let n = write_list_json(&mut buf, numbers, true, PercSpaChoice::Pending, true, ten);
+        let n = write_list_json(&mut buf, numbers, true, PercSpaChoice::Pending, true, &disks);
         assert!(n > 0, "catalog caption did not fit");
         let body = core::str::from_utf8(&buf[..n]).unwrap_or("");
         assert!(body.contains("\"id\":1"), "{body}");
@@ -936,7 +1172,7 @@ mod guest_catalog_test {
         assert!(body.contains("\"image_type\":\"ubuntu\""), "{body}");
         assert!(body.contains("\"start\":true"), "{body}");
         assert!(crate::mgmt::iso_library::choose_held_library());
-        let n = write_list_json(&mut buf, numbers, true, PercSpaChoice::Pending, true, ten);
+        let n = write_list_json(&mut buf, numbers, true, PercSpaChoice::Pending, true, &disks);
         let chosen = core::str::from_utf8(&buf[..n]).unwrap_or("");
         assert!(
             chosen.contains("\"state\":\"loading\",\"disk_mib\":0,\"image_type\":\"ubuntu\",\"start\":false"),
@@ -1092,6 +1328,11 @@ mod guest_catalog_test {
         );
         assert_eq!(st, 409, "{body}");
         assert!(body.contains("notail"), "{body}");
+        let (st, body) = exchange(
+            "POST /perc/guests/disk/19327352832/start HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
+        );
+        assert_eq!(st, 409, "{body}");
+        assert!(body.contains("nodisk"), "{body}");
         let (st, body) = exchange(
             "POST /perc/guests/stop HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
         );
