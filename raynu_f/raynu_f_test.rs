@@ -2731,6 +2731,211 @@ fn esp_grub_cfg_prefers_boot_path_and_reports_size() {
     );
 }
 
+/// Ubuntu copies shim to `\EFI\BOOT\BOOTX64.EFI` and leaves `grubx64.efi` in
+/// `\EFI\ubuntu\`. A relative open from the removable directory misses it.
+/// The disk picker stages the ubuntu shim and publishes that directory.
+#[test]
+fn disk_bootloader_prefers_ubuntu_shim_so_grub_stays_beside_it() {
+    use super::fat::{
+        parse_bpb, pick_disk_bootloader, pick_grub_cfg_for_loader, resolve_path, FatEntry,
+        FatError, ATTR_ARCHIVE, DISK_BOOT_ALPINE_GRUB, DISK_BOOT_REMOVABLE, DISK_BOOT_UBUNTU_GRUB,
+        DISK_BOOT_UBUNTU_SHIM, GRUB_CFG_PATH_ALPINE, GRUB_CFG_PATH_BOOT, GRUB_CFG_PATH_UBUNTU,
+    };
+    use super::filesystem::{FileSystem, EFI_FILE_MODE_READ};
+
+    let present = |names: &[&[u8]]| pick_disk_bootloader(|p| names.iter().any(|n| *n == p));
+    let shim = present(&[
+        DISK_BOOT_UBUNTU_SHIM,
+        DISK_BOOT_UBUNTU_GRUB,
+        DISK_BOOT_REMOVABLE,
+    ])
+    .expect("ubuntu shim");
+    assert_eq!(shim.path, DISK_BOOT_UBUNTU_SHIM);
+    assert!(shim.publish_file_path);
+    assert!(shim.path.starts_with(b"\\EFI\\ubuntu\\"));
+    assert!(!shim.path.starts_with(b"\\EFI\\BOOT\\"));
+
+    let grub = present(&[DISK_BOOT_UBUNTU_GRUB, DISK_BOOT_REMOVABLE]).expect("ubuntu grub");
+    assert_eq!(grub.path, DISK_BOOT_UBUNTU_GRUB);
+    assert!(grub.publish_file_path);
+
+    let alpine = present(&[DISK_BOOT_REMOVABLE, DISK_BOOT_ALPINE_GRUB]).expect("alpine");
+    assert_eq!(alpine.path, DISK_BOOT_REMOVABLE);
+    assert!(!alpine.publish_file_path);
+    let alpine_grub = present(&[DISK_BOOT_ALPINE_GRUB]).expect("alpine grub");
+    assert_eq!(alpine_grub.path, DISK_BOOT_ALPINE_GRUB);
+    assert!(!alpine_grub.publish_file_path);
+    assert!(present(&[]).is_none());
+
+    let mut node = [0u8; 64];
+    assert!(super::protocol::encode_filepath_device_path(DISK_BOOT_UBUNTU_SHIM, &mut node).is_some());
+    assert!(super::protocol::encode_filepath_device_path(DISK_BOOT_UBUNTU_GRUB, &mut node).is_some());
+
+    let file = |size: u32| FatEntry {
+        name: [0; 12],
+        name_len: 0,
+        attr: ATTR_ARCHIVE,
+        first_cluster: 2,
+        size,
+    };
+    assert_eq!(
+        pick_grub_cfg_for_loader(
+            DISK_BOOT_UBUNTU_SHIM,
+            Some(&file(120)),
+            Some(&file(8)),
+            None,
+        ),
+        Some((GRUB_CFG_PATH_UBUNTU, 120))
+    );
+    assert_eq!(
+        pick_grub_cfg_for_loader(DISK_BOOT_REMOVABLE, Some(&file(120)), Some(&file(8)), None),
+        Some((GRUB_CFG_PATH_BOOT, 8))
+    );
+    assert_eq!(
+        pick_grub_cfg_for_loader(DISK_BOOT_ALPINE_GRUB, None, None, Some(&file(77))),
+        Some((GRUB_CFG_PATH_ALPINE, 77))
+    );
+
+    let bytes = build_fat12_ubuntu_esp();
+    let vol = VecVol(bytes);
+    let mut boot = [0u8; 512];
+    assert!(super::fat::VolumeRead::read_at(&vol, 0, &mut boot));
+    let fv = parse_bpb(&boot).expect("BPB");
+    let picked = pick_disk_bootloader(|p| {
+        matches!(resolve_path(&fv, &vol, p), Ok(e) if !e.is_dir())
+    })
+    .expect("shim on the volume");
+    assert_eq!(picked.path, DISK_BOOT_UBUNTU_SHIM);
+    assert!(picked.publish_file_path);
+    assert_eq!(
+        resolve_path(&fv, &vol, b"\\EFI\\BOOT\\grubx64.efi"),
+        Err(FatError::NotFound)
+    );
+    assert!(resolve_path(&fv, &vol, DISK_BOOT_UBUNTU_GRUB).is_ok());
+    assert!(resolve_path(&fv, &vol, DISK_BOOT_REMOVABLE).is_ok());
+
+    const EFI_SUCCESS: u64 = 0;
+    const EFI_NOT_FOUND: u64 = 0x8000_0000_0000_000E;
+    let mut fs = FileSystem::new();
+    fs.volume = Some(fv);
+    let (st, root) = fs.open_volume();
+    assert_eq!(st, EFI_SUCCESS);
+    let (st, boot_dir) = fs.open(root, b"\\EFI\\BOOT", EFI_FILE_MODE_READ, &vol);
+    assert_eq!(st, EFI_SUCCESS);
+    assert_eq!(
+        fs.open(boot_dir, b"grubx64.efi", EFI_FILE_MODE_READ, &vol).0,
+        EFI_NOT_FOUND
+    );
+    let (st, ubuntu_dir) = fs.open(root, b"\\EFI\\ubuntu", EFI_FILE_MODE_READ, &vol);
+    assert_eq!(st, EFI_SUCCESS);
+    let (st, grub) = fs.open(ubuntu_dir, b"grubx64.efi", EFI_FILE_MODE_READ, &vol);
+    assert_eq!(st, EFI_SUCCESS);
+    assert_eq!(fs.size_of(grub), Some(4));
+}
+
+fn build_fat12_ubuntu_esp() -> Vec<u8> {
+    const SEC: usize = 512;
+    const TOTAL: usize = 512;
+    const RESERVED: usize = 1;
+    const FAT_SECS: usize = 2;
+    const ROOT_ENTS: usize = 64;
+    let root_secs = ROOT_ENTS * 32 / SEC;
+    let mut v = vec![0u8; TOTAL * SEC];
+    v[0] = 0xEB;
+    v[1] = 0x3C;
+    v[2] = 0x90;
+    v[3..11].copy_from_slice(b"RAYNUF  ");
+    v[11..13].copy_from_slice(&(SEC as u16).to_le_bytes());
+    v[13] = 1;
+    v[14..16].copy_from_slice(&(RESERVED as u16).to_le_bytes());
+    v[16] = 1;
+    v[17..19].copy_from_slice(&(ROOT_ENTS as u16).to_le_bytes());
+    v[19..21].copy_from_slice(&(TOTAL as u16).to_le_bytes());
+    v[21] = 0xF8;
+    v[22..24].copy_from_slice(&(FAT_SECS as u16).to_le_bytes());
+    v[510] = 0x55;
+    v[511] = 0xAA;
+
+    let fat_start = RESERVED;
+    let root_start = fat_start + FAT_SECS;
+    let data_start = root_start + root_secs;
+    let set_fat = |v: &mut [u8], cl: usize, val: u16| {
+        let off = fat_start * SEC + cl * 3 / 2;
+        let cur = u16::from_le_bytes([v[off], v[off + 1]]);
+        let new = if cl & 1 == 0 {
+            (cur & 0xF000) | (val & 0x0FFF)
+        } else {
+            (cur & 0x000F) | (val << 4)
+        };
+        v[off..off + 2].copy_from_slice(&new.to_le_bytes());
+    };
+    let mk_ent = |name: &[u8; 11], attr: u8, cluster: u16, size: u32| {
+        let mut e = [0u8; 32];
+        e[..11].copy_from_slice(name);
+        e[11] = attr;
+        e[26..28].copy_from_slice(&cluster.to_le_bytes());
+        e[28..32].copy_from_slice(&size.to_le_bytes());
+        e
+    };
+    set_fat(&mut v, 0, 0xFF8);
+    set_fat(&mut v, 1, 0xFFF);
+    let cl_efi = 2usize;
+    let cl_boot = 3usize;
+    let cl_ubuntu = 4usize;
+    let cl_bootx = 5usize;
+    let cl_shim = 6usize;
+    let cl_grub = 7usize;
+    for cl in [cl_efi, cl_boot, cl_ubuntu, cl_bootx, cl_shim, cl_grub] {
+        set_fat(&mut v, cl, 0xFFF);
+    }
+    let root_off = root_start * SEC;
+    v[root_off..root_off + 32].copy_from_slice(&mk_ent(b"EFI        ", 0x10, cl_efi as u16, 0));
+    let place = |v: &mut [u8], cl: usize, ents: &[[u8; 32]]| {
+        let off = (data_start + cl - 2) * SEC;
+        for (i, ent) in ents.iter().enumerate() {
+            let at = off + i * 32;
+            v[at..at + 32].copy_from_slice(ent);
+        }
+    };
+    place(
+        &mut v,
+        cl_efi,
+        &[
+            mk_ent(b".          ", 0x10, cl_efi as u16, 0),
+            mk_ent(b"..         ", 0x10, 0, 0),
+            mk_ent(b"BOOT       ", 0x10, cl_boot as u16, 0),
+            mk_ent(b"UBUNTU     ", 0x10, cl_ubuntu as u16, 0),
+        ],
+    );
+    place(
+        &mut v,
+        cl_boot,
+        &[
+            mk_ent(b".          ", 0x10, cl_boot as u16, 0),
+            mk_ent(b"..         ", 0x10, cl_efi as u16, 0),
+            mk_ent(b"BOOTX64 EFI", 0x20, cl_bootx as u16, 4),
+        ],
+    );
+    place(
+        &mut v,
+        cl_ubuntu,
+        &[
+            mk_ent(b".          ", 0x10, cl_ubuntu as u16, 0),
+            mk_ent(b"..         ", 0x10, cl_efi as u16, 0),
+            mk_ent(b"SHIMX64 EFI", 0x20, cl_shim as u16, 4),
+            mk_ent(b"GRUBX64 EFI", 0x20, cl_grub as u16, 4),
+        ],
+    );
+    let poke = |v: &mut [u8], cl: usize, bytes: &[u8]| {
+        let off = (data_start + cl - 2) * SEC;
+        v[off..off + bytes.len()].copy_from_slice(bytes);
+    };
+    poke(&mut v, cl_bootx, b"BOOT");
+    poke(&mut v, cl_shim, b"SHIM");
+    poke(&mut v, cl_grub, b"GRUB");
+    v
+}
+
 #[test]
 fn raynu_f_mok_variable_roundtrip() {
     use super::services::STACK_ARG5_OFF;

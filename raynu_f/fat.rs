@@ -478,6 +478,8 @@ pub fn resolve_in<R: VolumeRead>(
 pub const GRUB_CFG_PATH_BOOT: &[u8] = b"\\EFI\\BOOT\\grub.cfg";
 /// `\EFI\alpine\grub.cfg` on the ESP.
 pub const GRUB_CFG_PATH_ALPINE: &[u8] = b"\\EFI\\alpine\\grub.cfg";
+/// `\EFI\ubuntu\grub.cfg` on an installed Ubuntu ESP.
+pub const GRUB_CFG_PATH_UBUNTU: &[u8] = b"\\EFI\\ubuntu\\grub.cfg";
 
 /// Menu file from a directory walk. `\EFI\BOOT\grub.cfg` wins when it is a file.
 /// A directory is not the menu. `None` means neither file is present.
@@ -496,4 +498,69 @@ pub fn pick_grub_cfg(
         }
     }
     None
+}
+
+/// Installed Ubuntu shim. A relative `grubx64.efi` open stays in this directory
+/// when LoadedImage `FilePath` names this file.
+pub const DISK_BOOT_UBUNTU_SHIM: &[u8] = b"\\EFI\\ubuntu\\shimx64.efi";
+/// Installed Ubuntu GRUB, beside the shim. Direct load when the shim file is absent.
+pub const DISK_BOOT_UBUNTU_GRUB: &[u8] = b"\\EFI\\ubuntu\\grubx64.efi";
+/// Removable loader. Alpine GRUB lives here. Ubuntu also copies shim here,
+/// and that copy opens `grubx64.efi` beside itself.
+pub const DISK_BOOT_REMOVABLE: &[u8] = b"\\EFI\\BOOT\\BOOTX64.EFI";
+/// Alpine's second ESP path.
+pub const DISK_BOOT_ALPINE_GRUB: &[u8] = b"\\EFI\\alpine\\grubx64.efi";
+
+/// One disk-ESP loader. `publish_file_path` stores `path` as
+/// `LoadedImage.FilePath` so a relative `grubx64.efi` open stays in that directory.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DiskBootCandidate {
+    pub path: &'static [u8],
+    pub publish_file_path: bool,
+}
+
+/// Ubuntu's installed shim is ahead of the removable copy. Alpine disks have
+/// neither ubuntu path, so they still stage `BOOTX64.EFI` with no FilePath node.
+pub const DISK_BOOT_CANDIDATES: &[DiskBootCandidate] = &[
+    DiskBootCandidate {
+        path: DISK_BOOT_UBUNTU_SHIM,
+        publish_file_path: true,
+    },
+    DiskBootCandidate {
+        path: DISK_BOOT_UBUNTU_GRUB,
+        publish_file_path: true,
+    },
+    DiskBootCandidate {
+        path: DISK_BOOT_REMOVABLE,
+        publish_file_path: false,
+    },
+    DiskBootCandidate {
+        path: DISK_BOOT_ALPINE_GRUB,
+        publish_file_path: false,
+    },
+];
+
+/// First present file wins. `present` is true only for a non-directory file.
+pub fn pick_disk_bootloader(
+    mut present: impl FnMut(&[u8]) -> bool,
+) -> Option<&'static DiskBootCandidate> {
+    DISK_BOOT_CANDIDATES.iter().find(|c| present(c.path))
+}
+
+/// Menu file beside the staged loader. An Ubuntu loader looks in
+/// `\EFI\ubuntu\` first. Alpine still prefers `\EFI\BOOT\grub.cfg`.
+pub fn pick_grub_cfg_for_loader(
+    loader: &[u8],
+    ubuntu: Option<&FatEntry>,
+    boot: Option<&FatEntry>,
+    alpine: Option<&FatEntry>,
+) -> Option<(&'static [u8], u32)> {
+    if loader.starts_with(b"\\EFI\\ubuntu\\") || loader.starts_with(b"\\efi\\ubuntu\\") {
+        if let Some(e) = ubuntu {
+            if !e.is_dir() {
+                return Some((GRUB_CFG_PATH_UBUNTU, e.size));
+            }
+        }
+    }
+    pick_grub_cfg(boot, alpine)
 }
