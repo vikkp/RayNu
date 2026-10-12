@@ -8435,6 +8435,32 @@ fn raynu_f_note_esp_grub_cfg<R: crate::raynu_f::fat::VolumeRead>(
             serial::write_str(" bytes=");
             write_dec(u64::from(bytes));
             serial::write_line(" (F7 disk; not ISO-INSTALL-OK)");
+            if bytes > 0 && bytes <= 160 {
+                if let Some(ent) = file(path) {
+                    let mut body = [0u8; 160];
+                    let n = bytes as usize;
+                    if let Ok(got) = crate::raynu_f::fat::read_chain(
+                        vol,
+                        r,
+                        ent.first_cluster,
+                        0,
+                        &mut body[..n],
+                    ) {
+                        if got == n {
+                            serial::write_str("boot: RayNu-F grubcfg body=");
+                            for &b in &body[..n] {
+                                let c = match b {
+                                    b'\n' | b'\r' | b'\t' => b' ',
+                                    0x20..=0x7e => b,
+                                    _ => b'.',
+                                };
+                                serial::write_byte(c);
+                            }
+                            serial::write_line(" (F7 disk; not ISO-INSTALL-OK)");
+                        }
+                    }
+                }
+            }
         }
         None => {
             serial::write_line("boot: RayNu-F grubcfg=no (F7 disk; not ISO-INSTALL-OK)");
@@ -8443,10 +8469,11 @@ fn raynu_f_note_esp_grub_cfg<R: crate::raynu_f::fat::VolumeRead>(
 }
 
 /// F7: mount the GPT ESP on the install disk and stage its loader.
-/// Ubuntu: `\EFI\ubuntu\shimx64.efi` with that path as LoadedImage `FilePath`,
-/// so a relative `grubx64.efi` open stays in `\EFI\ubuntu\`. Else
-/// `\EFI\ubuntu\grubx64.efi`. Alpine: `\EFI\BOOT\BOOTX64.EFI`, else
-/// `\EFI\alpine\grubx64.efi`, with no FilePath node. Publishes a
+/// Ubuntu: `\EFI\ubuntu\grubx64.efi` with that path as LoadedImage `FilePath`.
+/// `9abd4870` staged the shim instead; its buffer `LoadImage` left GRUB at
+/// `grub>`. The shim is the fallback when `grubx64.efi` is absent. Alpine:
+/// `\EFI\BOOT\BOOTX64.EFI`, else `\EFI\alpine\grubx64.efi`, with no FilePath
+/// node. Publishes a
 /// Hardware/Vendor whole-disk path on `HANDLE_DISK` (not Media/HardDrive —
 /// GRUB `efidisk` would skip that as a partition child). `None` leaves
 /// El Torito / test app.

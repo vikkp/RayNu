@@ -543,8 +543,14 @@ impl FirmwareState {
         }
         let staged = &self.staged_loader[..self.staged_loader_len as usize];
         let mut buf = [0u8; GRUB_PATH_CAP];
-        let Some(n) = join_grub_load_path(staged, opened, &mut buf) else {
-            return;
+        // A long device-path string is not a FAT path. The sibling of the
+        // staged shim is the file GRUB needs as its prefix.
+        let n = match join_grub_load_path(staged, opened, &mut buf) {
+            Some(n) if n <= GRUB_PATH_CAP => n,
+            _ => match join_grub_load_path(staged, b"grubx64.efi", &mut buf) {
+                Some(n) => n,
+                None => return,
+            },
         };
         self.grub_open_path[..n].copy_from_slice(&buf[..n]);
         for b in &mut self.grub_open_path[n..] {

@@ -2811,8 +2811,8 @@ fn grub_load_path_joins_a_relative_open_to_the_ubuntu_shim_dir() {
 }
 
 /// Ubuntu copies shim to `\EFI\BOOT\BOOTX64.EFI` and leaves `grubx64.efi` in
-/// `\EFI\ubuntu\`. A relative open from the removable directory misses it.
-/// The disk picker stages the ubuntu shim and publishes that directory.
+/// `\EFI\ubuntu\`. The disk picker stages that GRUB file, not the shim.
+/// A relative open from the removable directory misses `grubx64.efi`.
 #[test]
 fn disk_bootloader_prefers_ubuntu_shim_so_grub_stays_beside_it() {
     use super::fat::{
@@ -2823,20 +2823,24 @@ fn disk_bootloader_prefers_ubuntu_shim_so_grub_stays_beside_it() {
     use super::filesystem::{FileSystem, EFI_FILE_MODE_READ};
 
     let present = |names: &[&[u8]]| pick_disk_bootloader(|p| names.iter().any(|n| *n == p));
-    let shim = present(&[
+    let grub = present(&[
         DISK_BOOT_UBUNTU_SHIM,
         DISK_BOOT_UBUNTU_GRUB,
         DISK_BOOT_REMOVABLE,
     ])
-    .expect("ubuntu shim");
-    assert_eq!(shim.path, DISK_BOOT_UBUNTU_SHIM);
-    assert!(shim.publish_file_path);
-    assert!(shim.path.starts_with(b"\\EFI\\ubuntu\\"));
-    assert!(!shim.path.starts_with(b"\\EFI\\BOOT\\"));
-
-    let grub = present(&[DISK_BOOT_UBUNTU_GRUB, DISK_BOOT_REMOVABLE]).expect("ubuntu grub");
+    .expect("ubuntu grub");
     assert_eq!(grub.path, DISK_BOOT_UBUNTU_GRUB);
     assert!(grub.publish_file_path);
+    assert!(grub.path.starts_with(b"\\EFI\\ubuntu\\"));
+    assert!(!grub.path.starts_with(b"\\EFI\\BOOT\\"));
+
+    let shim = present(&[DISK_BOOT_UBUNTU_SHIM, DISK_BOOT_REMOVABLE]).expect("ubuntu shim");
+    assert_eq!(shim.path, DISK_BOOT_UBUNTU_SHIM);
+    assert!(shim.publish_file_path);
+
+    let grub_only = present(&[DISK_BOOT_UBUNTU_GRUB, DISK_BOOT_REMOVABLE]).expect("ubuntu grub");
+    assert_eq!(grub_only.path, DISK_BOOT_UBUNTU_GRUB);
+    assert!(grub_only.publish_file_path);
 
     let alpine = present(&[DISK_BOOT_REMOVABLE, DISK_BOOT_ALPINE_GRUB]).expect("alpine");
     assert_eq!(alpine.path, DISK_BOOT_REMOVABLE);
@@ -2884,7 +2888,7 @@ fn disk_bootloader_prefers_ubuntu_shim_so_grub_stays_beside_it() {
         matches!(resolve_path(&fv, &vol, p), Ok(e) if !e.is_dir())
     })
     .expect("shim on the volume");
-    assert_eq!(picked.path, DISK_BOOT_UBUNTU_SHIM);
+    assert_eq!(picked.path, DISK_BOOT_UBUNTU_GRUB);
     assert!(picked.publish_file_path);
     assert_eq!(
         resolve_path(&fv, &vol, b"\\EFI\\BOOT\\grubx64.efi"),

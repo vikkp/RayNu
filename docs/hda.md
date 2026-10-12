@@ -1,6 +1,6 @@
 ---
 hda_version: 1
-last_updated: 2026-10-11
+last_updated: 2026-10-12
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-8-grub-prefix |
-| Summary | **`252c04cd` opened `grubx64.efi` and stopped at GNU GRUB 2.14 `grub>`.** The buffer `LoadImage` cleared FilePath, so GRUB had no prefix. This EFI publishes `\EFI\ubuntu\grubx64.efi` on that image. Scores held. Months **0.0 held**. Overall **99 held**. |
+| Commit | m8-8-grub-direct |
+| Summary | **`9abd4870` opened `grubx64.efi` and stopped at GNU GRUB 2.14 `grub>`.** No GRUB FilePath line. This EFI stages `\EFI\ubuntu\grubx64.efi` and publishes that path before VMLAUNCH. Scores held. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
 | Gates touched | M8.8.3 still open. No doorbell. No format of UBUNTU0. Not a COM2 close. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 60 held, perc 78 held, unmodified 25 held, overall LOI 73 held, months A 0.25 held, months B 1.5 held. |
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-12 | m8-8-grub-direct | 0.0 | 99 | **`9abd4870` staged the shim, opened `grubx64.efi`, and stopped at `grub>`.** No GRUB FilePath line. Next EFI stages `\EFI\ubuntu\grubx64.efi` directly. Not `ISO-INSTALL-OK`. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-11 | m8-8-grub-prefix | 0.0 | 99 | **`252c04cd` opened `grubx64.efi`, then GNU GRUB 2.14 `grub>`.** FilePath was cleared on the buffer load, so GRUB had no prefix. Next EFI publishes `\EFI\ubuntu\grubx64.efi` on that image. Not `ISO-INSTALL-OK`. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-11 | m8-8-ubuntu-shim | 0.0 | 99 | **`1c278f67` Start on @18432 opened the removable shim, then `Failed to open grubx64.efi`.** Next EFI stages `\EFI\ubuntu\shimx64.efi` and publishes that FilePath. Alpine `BOOTX64.EFI` stays. Not `ISO-INSTALL-OK`. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-11 | m8-8-guest-list | 0.0 | 99 | **Installation complete lived. The 10240 MiB Start booted Alpine `ee851fd5`.** Ubuntu sits on the next GPT. This EFI lists every tail. Not an install close. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
