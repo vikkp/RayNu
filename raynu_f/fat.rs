@@ -500,10 +500,10 @@ pub fn pick_grub_cfg(
     None
 }
 
-/// Installed Ubuntu shim. A relative `grubx64.efi` open stays in this directory
-/// when LoadedImage `FilePath` names this file.
+/// Installed Ubuntu shim. Its `LoadImage` of `grubx64.efi` is a buffer load.
 pub const DISK_BOOT_UBUNTU_SHIM: &[u8] = b"\\EFI\\ubuntu\\shimx64.efi";
-/// Installed Ubuntu GRUB, beside the shim. Direct load when the shim file is absent.
+/// Installed Ubuntu GRUB. Staged directly so LoadedImage `FilePath` is this
+/// file. Shim's buffer `LoadImage` clears that path (`9abd4870` reached `grub>`).
 pub const DISK_BOOT_UBUNTU_GRUB: &[u8] = b"\\EFI\\ubuntu\\grubx64.efi";
 /// Removable loader. Alpine GRUB lives here. Ubuntu also copies shim here,
 /// and that copy opens `grubx64.efi` beside itself.
@@ -519,15 +519,17 @@ pub struct DiskBootCandidate {
     pub publish_file_path: bool,
 }
 
-/// Ubuntu's installed shim is ahead of the removable copy. Alpine disks have
-/// neither ubuntu path, so they still stage `BOOTX64.EFI` with no FilePath node.
+/// Ubuntu GRUB is ahead of the shim. `9abd4870` staged the shim, opened
+/// `grubx64.efi`, and stopped at `grub>` because the buffer `LoadImage`
+/// did not keep a file path. Alpine disks have neither ubuntu path, so
+/// they still stage `BOOTX64.EFI` with no FilePath node.
 pub const DISK_BOOT_CANDIDATES: &[DiskBootCandidate] = &[
     DiskBootCandidate {
-        path: DISK_BOOT_UBUNTU_SHIM,
+        path: DISK_BOOT_UBUNTU_GRUB,
         publish_file_path: true,
     },
     DiskBootCandidate {
-        path: DISK_BOOT_UBUNTU_GRUB,
+        path: DISK_BOOT_UBUNTU_SHIM,
         publish_file_path: true,
     },
     DiskBootCandidate {
