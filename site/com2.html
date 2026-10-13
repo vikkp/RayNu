@@ -232,9 +232,10 @@
         <p class="com2-kicker">A guided read · real iron</p>
         <h1 class="com2-mast__title">A chat with Mr. COM2</h1>
         <p class="com2-mast__lede">
-          One full, unedited serial capture from a Dell PowerEdge R640 booting
-          RayNu-V on 2026-08-15 — annotated beat by beat, so the core concepts
-          tell themselves.
+          The first nine chapters are one unedited serial capture from a Dell
+          PowerEdge R640 booting RayNu-V on 2026-08-15. Chapters 10–12 are
+          later iron, same three voices: the USB walk, the RAID disks, and
+          the guest firmware that lets an operating system speak.
         </p>
       </div>
     </header>
@@ -587,6 +588,115 @@ boot: E2 marker build=r640-boot-ok-marker
         </div>
       </section>
 
+      <section class="com2-section" id="xhci">
+        <h2>10 · Walking a USB port</h2>
+        <div class="beat">
+          <p class="beat__who">COM2 says</p>
+          <pre class="term">boot: Stage 46 xhci caplen=0x00000080 slots=64 ports=26
+boot: Stage 46 xhci enum p11 vid=0x00000480 did=0x0000a004
+boot: Stage 46 xhci bot p11 iface=08/06/50 ep_out=2 ep_in=1
+boot: Stage 46 durable LUN usb I/O ready bytes=320072933376</pre>
+        </div>
+        <div class="beat">
+          <p class="beat__who beat__who--cs">Computer science says</p>
+          <p>
+            xHCI (eXtensible Host Controller Interface) is the register file
+            a modern USB host uses. After ExitBootServices the firmware’s USB
+            stack is gone, so the hypervisor has to run the state machine
+            itself: reset a port, give the device an address, read its
+            descriptors, then Set Configuration. Class <code>08/06/50</code>
+            is mass storage, SCSI transparent, Bulk-Only Transport. A command
+            is a CBW (Command Block Wrapper), the data follows, and a CSW
+            (Command Status Wrapper) says whether the disk accepted it. Skip
+            a step and the stick stays a silent port.
+          </p>
+        </div>
+        <div class="beat">
+          <p class="beat__who beat__who--raynuv">RayNu-V says</p>
+          <p>
+            Twenty-six ports, one connected device on port 11, descriptors,
+            then a bulk pipe that can read. That walk is how a disk plugged
+            into the R640 survives the moment firmware leaves. The bytes on
+            the wire are the same idea as a spinning disk’s SCSI commands —
+            only the transport is USB instead of a RAID mailbox.
+          </p>
+        </div>
+      </section>
+
+      <section class="com2-section" id="perc">
+        <h2>11 · The disks behind the RAID card</h2>
+        <div class="beat">
+          <p class="beat__who">COM2 says</p>
+          <pre class="term">boot: perc ld status=0x00 n=2 id=0 class=ubuntu id=1 class=spare pick=1
+<span class="mk">RAYNU-V-M8-PERC-WRITE-OK</span>
+<span class="mk">RAYNU-V-M8-PERC-LUN-OK</span>
+virtio_blk virtio0: [vda] 20971520 512-byte logical blocks (10.0 GiB)
+ vda: vda1 vda2 vda3</pre>
+        </div>
+        <div class="beat">
+          <p class="beat__who beat__who--cs">Computer science says</p>
+          <p>
+            A RAID controller hides spindles behind a virtual disk. The host
+            posts a command through a mailbox — here the Fusion-MPT frame —
+            and waits for a status byte. Two logical disks came back: the
+            machine’s own Ubuntu volume, and a spare. The guest must not be
+            handed the host’s boot disk. It is handed a slice of the spare,
+            presented as a virtio block device, which is a shared-memory ring
+            rather than a fake IDE controller.
+          </p>
+        </div>
+        <div class="beat">
+          <p class="beat__who beat__who--raynuv">RayNu-V says</p>
+          <p>
+            We listed the logical disks, wrote one sector at the spare’s last
+            LBA and read it back, then published a 10 GiB <code>vda</code>.
+            Linux saw <code>vda1</code>, <code>vda2</code>, and
+            <code>vda3</code>. UBUNTU0 stayed the host. The rest of the 2.9 TB
+            spare is not this disk.
+          </p>
+        </div>
+      </section>
+
+      <section class="com2-section" id="raynu-f">
+        <h2>12 · A firmware the guest can call</h2>
+        <div class="beat">
+          <p class="beat__who">COM2 says</p>
+          <pre class="term">boot: RayNu-F direct — OVMF leg bypassed
+boot: RayNu-F found \EFI\ubuntu\grubx64.efi
+GNU GRUB  version 2.14
+<span class="dim">*Ubuntu</span>
+boot: RayNu-F initrd ext4 bytes=34338680 name=initrd.img-7.0.0-14-generic
+Linux version 7.0.0-14-generic
+vikkp@raynusrv2:~$</pre>
+        </div>
+        <div class="beat">
+          <p class="beat__who beat__who--cs">Computer science says</p>
+          <p>
+            A guest operating system does not boot from page tables alone. It
+            expects firmware: an EFI system table, boot services, a way to
+            read a disk, and <code>LoadImage</code> / <code>StartImage</code>
+            so its own loader can run. GRUB and the Linux EFI stub call those
+            services the way an application calls an operating system. A
+            hypervisor that only has VMX and EPT has no one for them to call.
+            Borrowing a foreign firmware means living inside invariants you
+            do not own. The friendly path is to be the firmware.
+          </p>
+        </div>
+        <div class="beat">
+          <p class="beat__who beat__who--raynuv">RayNu-V says</p>
+          <p>
+            RayNu-F is that firmware, inside the same binary. It published
+            the Ubuntu <code>grubx64.efi</code>, let GNU GRUB 2.14 draw the
+            menu, then copied <code>initrd.img-7.0.0-14-generic</code> into
+            the stub’s buffer. Linux 7.0.0-14-generic reached
+            <code>vikkp@raynusrv2:~$</code>. Without RayNu-F, that guest would
+            have had no UEFI to talk to. A virtual guest NIC is the next
+            conversation on this wire: the shell is up, and it still has no
+            network of its own.
+          </p>
+        </div>
+      </section>
+
       <div class="com2-close">
         <p>
           That is the entire conversation — unedited bytes are in the
@@ -603,13 +713,10 @@ boot: E2 marker build=r640-boot-ok-marker
           too.
         </p>
         <p class="com2-footnote">
-          A snapshot, not the frontier: this capture is the E2 boot-ok path of
-          2026-08-15. Later COM2 conversations — management HTTP on a
-          host-owned NIC, guest UEFI — live on
-          <a href="stories.html">Stories</a> and in the
-          <a href="https://github.com/vikkp/RayNu/tree/main/docs/evidence/r640"
-            >evidence archive</a
-          >.
+          Chapters 1–9 are the E2 boot-ok path of 2026-08-15. Chapters 10–12
+          are later COM2: the xHCI walk, the PERC spare, and RayNu-F on the
+          Ubuntu disk. More field notes live on
+          <a href="stories.html">Stories</a>.
         </p>
         <div class="cta">
           <a class="cta__primary" href="stories.html">Read the field stories</a>

@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-8-iso-cleared |
-| Summary | **Same COM2 as the Ubuntu login printed `boot: M8.8 library ISO cleared`.** Signature sector only. Disks unchanged. M8.8.4 lived. Scores held. Months **0.0 held**. Overall **99 held**. |
+| Commit | site-ubuntu-loi |
+| Summary | **The public pages now tell the Ubuntu-on-PERC login.** Guest NIC is named next. HDA months **0.0 held**. Overall **99 held**. LOIHDA overall 73→78. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
 | Gates touched | M8.8.4 lived. Clear ISO wiped the signature sector. No doorbell. No format of UBUNTU0. Not an `ISO-INSTALL-OK` close. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 60 held, perc 78 held, unmodified 25 held, overall LOI 73 held, months A 0.25 held, months B 1.5 held. |
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-13 | site-ubuntu-loi | 0.0 | 99 | **Homepage, LOI page, and COM2 chat catch up to M8.8.** Ubuntu on the PERC spare logged in; Clear ISO lived; guest NIC is next. HDA scores held. LOIHDA overall 73→78, Bar B 60→70, perc 78→86, unmodified 25→45. Not an `ISO-INSTALL-OK` close. months 0.0 held; overall 99 held |
 | 2026-10-13 | m8-8-iso-cleared | 0.0 | 99 | **After `vikkp@raynusrv2:~$`, COM2 printed `boot: M8.8 library ISO cleared (signature sector only; disks unchanged)`.** M8.8.1–M8.8.4 lived on `c3a70e62`. UBUNTU0 and the Ubuntu disk stay. Not an `ISO-INSTALL-OK` close. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-13 | m8-8-ubuntu-login | 0.0 | 99 | **`c3a70e62` `initrd ext4 bytes=34338680 name=initrd.img-7.0.0-14-generic`, then `Linux version 7.0.0-14-generic` and `vikkp@raynusrv2:~$`.** Library ISO still waiting. Clear ISO not clicked. The `ISO-INSTALL-OK` line in that log is the firmware handoff, not a new install close. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-13 | m8-8-initrd-ext4 | 0.0 | 99 | **`826ca6e9` `sz=34338680` then `Failed to load initrd: 0x8000000000000001`.** The length was already real. No `blk fail`. This EFI copies that ext4 file and returns success from the shim. Not `ISO-INSTALL-OK`. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |

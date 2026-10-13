@@ -7,24 +7,24 @@ updated_by: cursor
 loi_target: "Non-prod Letter of Intent. Bar A = dedicated-box lab. Bar B = RAID-fleet replacement. HDA 99% is Everest, not an LOI."
 months_to_loi_a: 0.25
 months_to_loi_a_prev: 0.5
-months_to_loi_b: 1.5
-months_to_loi_b_prev: 1.75
-overall_pct: 73
+months_to_loi_b: 1.25
+months_to_loi_b_prev: 1.5
+overall_pct: 78
 confidence: medium
 baseline_date: 2026-09-14
 baseline_months: 1.5
 loi_a_eta_month: "2026-10"
 loi_b_eta_month: "2026-12"
 bar_a_pct: 92
-bar_b_pct: 60
+bar_b_pct: 70
 piece_everest_pct: 100
 piece_persist_pct: 93
 piece_sku_pct: 92
 piece_tls_pct: 80
 piece_auth_pct: 38
 piece_console_pct: 82
-piece_perc_pct: 78
-piece_unmodified_pct: 25
+piece_perc_pct: 86
+piece_unmodified_pct: 45
 ---
 
 # LOIHDA — Honest Distance to a Letter of Intent
@@ -43,17 +43,17 @@ Lived: [`docs/progress.md`](progress.md) · M8: [`docs/m8_plan.md`](m8_plan.md) 
 
 | Metric | Value | Meaning |
 |--------|------:|---------|
-| **Overall LOI readiness** | **73%** | Nearest honest conversation is still Bar A. `752586b9` choice 3 reached the ISO prompt and withheld `setup-disk`. Unmodified media 20→25. The ISO is still serial-patched. perc 78. Overall held. |
+| **Overall LOI readiness** | **78%** | Bar A stays the nearer conversation. M8.8 lived: Ubuntu on the PERC spare reached `vikkp@raynusrv2:~$`, then Clear ISO. Auth is still open. The library CD view still adds `console=ttyS0`. The 2.9 TB VD is still not the guest disk. |
 | **Bar A — dedicated-box** | **92%** | One PowerEdge we own or they dedicate. A1 Everest, A3 SKU, A4 TLS, A4s standing SPA **DONE**. A2 persist **repeated** (sixth `login:`, UUID `a0ad99ac-…`). A6 **lived once**. A5 parked. USB ≠ PERC. Held. |
-| **Bar B — RAID-fleet** | **60%** | `752586b9` choice 3 staged `ISO-BOOTX64` on the 10 GiB tail and stopped at the ISO prompt. `ee851fd5` was seen and unmounted. The 2.9 TB VD is not that disk. Held. |
+| **Bar B — RAID-fleet** | **70%** | `c3a70e62` installed Ubuntu 26.04 from the library file onto a 10 GiB tail of RAYNU-SPARE and reached `vikkp@raynusrv2:~$`. Clear ISO then wiped the signature sector only. The 2.9 TB VD is still not the guest disk. Auth still blocks a fleet conversation. |
 | **Months to Bar A** | **0.25** | Baseline 2026-09-14. ETA **2026-10**. Held. A6 lived once. A5 is parked, not closed. Do not go to 0. |
-| **Months to Bar B** | **1.5** | Held. The 10 GiB guest reached its own login. The spare VD is still not the guest disk. ETA **2026-12** held. |
+| **Months to Bar B** | **1.25** | Was 1.5. The Ubuntu login on the spare tail closed the “no installed Ubuntu disk” residual. ETA **2026-12** held. The whole VD and auth remain. |
 | **Confidence** | medium | Everest is high-confidence. A6 lived once. Iron `8ad2ac89` reinstalled the 8 GiB window, then booted that UUID after a new HV boot. The whole 2.9 TB VD is not the guest disk. A5 parked. |
 
 ```
 Bar A (dedicated-box)  ██████████████████░░  92%
-Bar B (RAID fleet)      ████████████░░░░░░░░  60%
-Overall LOI             ███████████████░░░░░  73%
+Bar B (RAID fleet)      ██████████████░░░░░░  70%
+Overall LOI             ████████████████░░░░  78%
 ```
 
 **How the month number moves:** same honesty as Everest HDA. Closed iron gates shrink `months_to_loi_*`. Nested QEMU, host tests, and design docs do **not**. Stalls or new scope slip the ETA. Prefer under-claiming.
@@ -69,7 +69,7 @@ There are **two** LOIs. Treating them as one conversation overstates what is rea
 | Bar | Who signs | What they are buying | Close when |
 |-----|-----------|----------------------|------------|
 | **A — dedicated-box** | A lab / innovation / “spare R640” owner | One binary on a box they can afford to dedicate. Guest disk survives Force Off. HTTPS they can show InfoSec. | M8.0-mech on COM2 + SKU card + TLS path |
-| **B — RAID-fleet** | Someone whose disks already live on PERC H740P | “Keep the iron, replace the licensed hypervisor.” USB is not this. | A guest reaches `login:` from a spare VD. Bar B is 60%. The PERC piece is 78%. `f44ba647` logged in from `ee851fd5` on a 10 GiB `vda`. The 2.9 TB VD is not the guest disk. |
+| **B — RAID-fleet** | Someone whose disks already live on PERC H740P | “Keep the iron, replace the licensed hypervisor.” USB is not this. | A guest reaches `login:` from a spare VD. Bar B is 70%. The PERC piece is 86%. `c3a70e62` logged in as `vikkp@raynusrv2` on a 10 GiB Ubuntu disk. `f44ba647` had already logged in from `ee851fd5`. The 2.9 TB VD is not the guest disk. |
 
 **Bar B stays out of commercial conversation until its close criteria are met.** A USB persist demonstration is the Bar A mechanism. It is not evidence that RayNu-V runs on the customer’s RAID virtual disks.
 
@@ -152,17 +152,17 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 **Product effect.** Operators should not need iDRAC SOL to see Alpine or to type one command. On this tip Activity showed `abc` run by Alpine (`-sh: abc: not found`) and `RAYNU-V-M8-CONSOLE-OK`, with Host green. The same log tail still copies host UART lines (`HTTP keep-alive`), because those lines use `write_line_nowait` on the shared UART. **not VNC**. A6 is lived once. The mixed tail is why this piece stays at 82.
 
-### 7. PERC RAID I/O — 78%
+### 7. PERC RAID I/O — 86%
 
 **What it is.** The lab H740P Mini (`0000:18:00.0`) has two RAID-6 VDs: **UBUNTU0** (~400 GB, Ubuntu 26.04, boot) and **RAYNU-SPARE** (~2.9 TB). Iron `bda7a59b` hid `00:04.0` and reached `localhost login:` from `vda` (8.00 GiB, `vda2` UUID `a0ad99ac`). The guest disk is the copied image in the first 8 GiB of the spare. The rest of the 2.9 TB VD is not offered. **M8.7** is the Fusion mailbox milestone: scratch-pad status, one IOC init, one LD list, LBA 0 then the last LBA, then the image window. The host slice packs frames and refuses the Ubuntu-sized LD (`RAYNU-V-M8-PERC-HOST-OK`). Iron `2dd2b412` mapped the Mini (`1028:1fcd`, BAR `0x9d800000`) and left the H840 (`3b:00.0`, `1028:1fc9`) unmapped. Iron `22ce3728` read scratch pad 0 as `0xb73c0fed` (READY, max commands 4077, `mapped=1`). Iron `7577f934` posted IOC init and the LD list (`status=0x00`, `n=2`, `pick=1`). Iron `985495bef9fa` lived both host READs and Linux `[vdc]`. Iron `9c37fcae` then printed `boot: perc virtio rd lba=0 ok` and `RAYNU-V-M8-PERC-LUN-OK`. Iron `f0a7aabb` posted one WRITE(16) of the spare's last LBA (`6190268927`) and the readback matched (`RAYNU-V-M8-PERC-WRITE-OK`). LBA 0 of the probe was not written. Iron `0739edd0` copied the 8 GiB image. Iron `40ec12fc` started GRUB from it. Iron `bda7a59b` logged in. The DurableLun mapper still prints `skip PERC`. PRE-EBS UEFI RAID BlockIo dies at ExitBootServices. Map: [`runbooks/r640_perc_lab.md`](runbooks/r640_perc_lab.md).
 
-**Product effect.** This is the difference between a lab hypervisor and “extend the life of the fleet you already paid for.” This piece is **78%**. Bar B, the fleet conversation, is **60%**. On `8ad2ac89` the SPA waited. Choice 2 ran `setup-disk` on the 8 GiB window and replaced `a0ad99ac-…` with `d43dbf07-…`. A later HV boot, choice 1, printed `DISK-BOOTX64`, `RAYNU-V-M8-PERC-BOOT-OK`, and `localhost login:` from that UUID with `setup-disk` withheld. `vda2` was clean (`6377/521216` files) and remounted read/write. A guest `reboot` while the reinstall choice was still set returned to the ISO. `f44ba647` then booted `ee851fd5` (`choice=4`, `[vda]` 10.0 GiB, `localhost:~#`) with `setup-disk` withheld. The 2.9 TB VD is not that disk. The Toshiba was still attached. `vdb` is still the ISO. Do not format UBUNTU0. Do not open the H840. Do not type `setup-alpine` on this shell. Do not click Create on `f44ba647`. That click still types `setup-disk`.
+**Product effect.** This is the difference between a lab hypervisor and “extend the life of the fleet you already paid for.” This piece is **86%** (78→86). Bar B, the fleet conversation, is **70%**. `c3a70e62` stored `ubuntu-26.04-live-server-amd64.iso` on the spare, installed it onto a 10 GiB tail, reached `vikkp@raynusrv2:~$`, then Clear ISO wiped the signature sector only. The 2.9 TB VD is still not the guest disk, which is why this is not 95. On `8ad2ac89` the SPA waited. Choice 2 ran `setup-disk` on the 8 GiB window and replaced `a0ad99ac-…` with `d43dbf07-…`. A later HV boot, choice 1, printed `DISK-BOOTX64`, `RAYNU-V-M8-PERC-BOOT-OK`, and `localhost login:` from that UUID with `setup-disk` withheld. `vda2` was clean (`6377/521216` files) and remounted read/write. A guest `reboot` while the reinstall choice was still set returned to the ISO. `f44ba647` then booted `ee851fd5` (`choice=4`, `[vda]` 10.0 GiB, `localhost:~#`) with `setup-disk` withheld. The 2.9 TB VD is not that disk. The Toshiba was still attached. `vdb` is still the ISO. Do not format UBUNTU0. Do not open the H840. Do not type `setup-alpine` on this shell. Do not click Create on `f44ba647`. That click still types `setup-disk`.
 
-### 8. Unmodified media (Gen-1) — 25%
+### 8. Unmodified media (Gen-1) — 45%
 
 **What it is.** Iron Alpine still uses an ISO patcher + serial auto-answer. RayNu-F is the firmware; the guest is not yet a specified Generation 1 VM on stock ISOs.
 
-**Product effect.** Fine for a dedicated-box demo. A Bar B claim of “unmodified Linux ISO” is false until that patcher is gone. `752586b9` choice 3 reached `localhost:~#` on the ISO, printed `You can setup the system with the command: setup-alpine`, and then `boot: perc SPA linux_iso — setup-disk withheld`. No scripted `setup-disk` line. The answerer still typed `root`. COM2 still says the ISO serial console is patched. This piece is **25%** (20→25). Windows is later still. **Not** a Bar A blocker if the SKU card says Alpine-on-virtio.
+**Product effect.** Fine for a dedicated-box demo. A Bar B claim of “unmodified Linux ISO” is still false while the library CD view adds `console=ttyS0` and the Alpine answerer still types `root`. `c3a70e62` is the move: the stored Ubuntu file was not rewritten, Subiquity installed it, and an operator logged in as `vikkp` on Ubuntu 26.04 (`Linux version 7.0.0-14-generic`). This piece is **45%** (25→45). The serial amendment on the CD boot is the remainder. Windows is later still. **Not** a Bar A blocker if the SKU card says Alpine-on-virtio.
 
 ---
 
@@ -178,12 +178,12 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | **2026-09-25** | Bar A **A4s** | Page stays up after `login:` | **LIVED** (`1f33eeda72f9`, lease `.154`, one TCP accept, `HTTP keep-alive`, Host green, guest COM1 in Activity) |
 | **2026-09-27** | M8.7 spare read | COM2 `RAYNU-V-M8-PERC-LUN-OK` | **LIVED** (`9c37fcae`: `perc virtio rd lba=0 ok`, then `dd` of `/dev/vdc` returned 16 zero bytes) |
 | **2026-09-27** | M8.7 last-LBA write | COM2 `RAYNU-V-M8-PERC-WRITE-OK` | **LIVED** (`f0a7aabb`: `perc write status=0x00` at LBA `6190268927`, readback match, then the marker. LBA 0 stayed 16 zeros. Read-only virtio. Alpine still on the Toshiba.) |
-| **NOW** | Slice 3 lived | ISO prompt on `752586b9` | Leave `localhost:~#`. Do not type `setup-alpine`. Choice 3 withheld `setup-disk`. `ee851fd5` was seen and unmounted. Unmodified media 20→25. Bar B stays 60. See [ADR-019](adr/ADR-019.md) |
+| **NOW** | M8.8 lived | Ubuntu login, then Clear ISO | `c3a70e62` `vikkp@raynusrv2:~$`, then `boot: M8.8 library ISO cleared`. Next is the guest NIC. Unmodified 25→45. PERC 78→86. Bar B 60→70. Overall 73→78. See [ADR-019](adr/ADR-019.md) |
 | later | Unmodified ISO | Gen-1 Phase 2 | named residual, not a fake close |
 
 ```
 2026-09  ████████  Everest closed
-2026-10  ████████  Bar A held; both SPA paths lived on the 8 GiB window; whole VD still hidden; A5 parked
+2026-10  ████████  M8.8 lived: Ubuntu on the spare tail, then Clear ISO; whole VD still hidden; A5 parked
 2026-11  ░░░░░░░░  Bar A: first dedicated-box LOI window; iron shows the SPA wait then one chosen path
 2026-12  ░░░░░░░░  Bar B: the guest disk is the spare VD, not an 8 GiB window
 ```
@@ -207,10 +207,10 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-8-iso-cleared |
-| Summary | **Clear ISO printed `boot: M8.8 library ISO cleared`.** Signature sector only. Disks unchanged. M8.8.4 lived. Unmodified media stays 25. Bar B stays 60. |
+| Commit | site-ubuntu-loi |
+| Summary | **M8.8 lived, so the public pages and the scores move.** PERC 78→86. Unmodified 25→45. Bar B 60→70. Overall 73→78. Bar A 92 held. Guest NIC is next. |
 | Everest impact | none — HDA months 0.0 / 99% held |
-| LOI impact | Scores held. Bar A 92. Bar B 60. perc 78. Overall 73. Unmodified media stays 25. The library boot is not lived. |
+| LOI impact | Bar A 92 held. Bar B 60→70. perc 78→86. unmodified 25→45. Overall 73→78. Months B 1.5→1.25. |
 | Gates touched | M8.8.4 lived. Clear ISO wiped the signature sector. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
 
 ---
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-10-13 | site-ubuntu-loi | 92 | 70 | **Public pages catch up to M8.8.** Ubuntu on the PERC spare reached `vikkp@raynusrv2:~$`, then Clear ISO. PERC 78→86. Unmodified 25→45 because the installed guest is Ubuntu and the library CD view still adds `console=ttyS0`. Bar B 60→70. Overall 73→78. Bar A 92 held. Months B 1.5→1.25. Guest NIC is next. |
 | 2026-10-13 | m8-8-iso-cleared | 92 | 60 | **`boot: M8.8 library ISO cleared (signature sector only; disks unchanged)` after `vikkp@raynusrv2:~$`.** M8.8.4 lived. UBUNTU0 and the Ubuntu disk stay. Unmodified media stays 25. Bar B stays 60. |
 | 2026-10-13 | m8-8-ubuntu-login | 92 | 60 | **`c3a70e62` `vikkp@raynusrv2:~$` on Ubuntu 26.04, kernel 7.0.0-14-generic.** Initrd `initrd.img-7.0.0-14-generic` (34338680 bytes). Library ISO still waiting. Clear ISO not clicked. Unmodified media stays 25. Bar B stays 60. |
 | 2026-10-13 | m8-8-initrd-ext4 | 92 | 60 | **`826ca6e9` `sz=34338680`, then `Failed to load initrd`.** No disk read. Next EFI copies that ext4 file. Install boot not lived. Unmodified media stays 25. Bar B stays 60. |
@@ -376,10 +377,10 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 ```
 LOI:           NOT OPEN. Tracker born 2026-09-14.
 Bar A:         92% · 0.25 months · dedicated-box non-prod
-Bar B:         60% · 1.5 months · PERC RAID fleet (8ad2ac89 reinstall then boot of d43dbf07; 8 GiB image; whole VD still hidden)
-Overall:       73% · confidence medium
-NOW:           Leave localhost:~# on the ISO under 752586b9. Do not type setup-alpine. Choice 3 withheld setup-disk. ADR-019 decision 9 (ISO library on the spare) is accepted and not built. The Cruzer file is still the boot media. Rollback v0.1.0-m8-perc-spa. Do not format UBUNTU0. Bar B stays 60. The 2.9 TB VD is not this disk. A5 parked. Bar A 92. Bar B 60. Overall 73. perc 78. unmodified 25. months A 0.25. months B 1.5. docs/adr/ADR-019.md
-Open:          boot a guest from a VD · iron AUTH-OK (parked) · unmodified ISO · cluster
+Bar B:         70% · 1.25 months · Ubuntu login on a 10 GiB spare tail (c3a70e62); whole VD still hidden
+Overall:       78% · confidence medium
+NOW:           M8.8 lived. vikkp@raynusrv2:~$ then library ISO cleared. Next is the guest NIC. Do not format UBUNTU0. The 2.9 TB VD is not this disk. A5 parked. Bar A 92. Bar B 70. Overall 78. perc 86. unmodified 45. months A 0.25. months B 1.25. docs/adr/ADR-019.md
+Open:          guest NIC · iron AUTH-OK (parked) · unmodified ISO without the serial amendment · the whole spare VD · cluster
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
 Rollback:      v0.1.0-m8-perc-spa → lived SPA choice (COM2 sha=8ad2ac89125e, CI 36362775808, SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849). v0.1.0-m8-a4s → older standing SPA (1f33eeda72f9, CI 36137732145). v0.1.0-m8-a6 → keyboard + power-off (fd2ca12e, CI 36166108942), not Latest. Everest Latest stays v0.1.0-everest-closed (f72b4276).
 Sit:           Ubuntu is the OS. Do not setup-disk. Do not format the ~298 GB Toshiba. Identify disks by size, never by sdX.

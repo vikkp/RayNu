@@ -6,12 +6,12 @@
     <title>RayNu-V — Single-binary hypervisor, designed for proof</title>
     <meta
       name="description"
-      content="RayNu-V is a single-binary Type-1 hypervisor. Mount Everest closed on a real PowerEdge R640. Since then Guests boots disks on the PERC spare, including a 10 GiB Alpine login. An operator-chosen Ubuntu ISO is packed and not flashed."
+      content="RayNu-V is a single-binary Type-1 hypervisor. Mount Everest closed on a real PowerEdge R640. An Ubuntu 26.04 ISO stored on the PERC spare installed and reached vikkp@raynusrv2. A virtual guest NIC is next."
     />
-    <meta property="og:title" content="RayNu-V — past Mount Everest, on the PERC spare" />
+    <meta property="og:title" content="RayNu-V — Ubuntu logged in from the PERC spare" />
     <meta
       property="og:description"
-      content="Everest closed on a real R640. Guests then booted an 8 GiB spare disk and a 10 GiB tail to login. A new Linux ISO stops at its own prompt. An Ubuntu ISO chosen on the page is packed and not on the running EFI."
+      content="Everest closed on a real R640. Ubuntu 26.04 from a library ISO on the PERC spare reached vikkp@raynusrv2. Clear ISO wiped the signature sector only. A virtual guest NIC is next."
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://raynuv.com/" />
@@ -29,11 +29,11 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta
       name="twitter:title"
-      content="RayNu-V — past Mount Everest, on the PERC spare"
+      content="RayNu-V — Ubuntu logged in from the PERC spare"
     />
     <meta
       name="twitter:description"
-      content="Everest closed. A 10 GiB guest on RAYNU-SPARE reached login. Next is an Ubuntu ISO chosen on Guests. The 2.9 TB VD is not that disk."
+      content="Everest closed. Ubuntu 26.04 on a 10 GiB PERC tail reached vikkp@raynusrv2. A virtual guest NIC is next. The 2.9 TB VD is not that disk."
     />
     <meta name="twitter:image" content="https://raynuv.com/assets/hero.jpg" />
     <link rel="canonical" href="https://raynuv.com/" />
@@ -115,7 +115,8 @@
         </h1>
         <p class="lede reveal reveal--delay-2">
           Single-binary Type-1 hypervisor. Mount Everest is closed. On the
-          same PowerEdge, Guests now boots disks that live on the PERC spare.
+          same PowerEdge, an Ubuntu ISO on the PERC spare installed and
+          logged in.
         </p>
         <div class="cta reveal reveal--delay-3">
           <a class="cta__primary" href="https://github.com/vikkp/RayNu"
@@ -128,10 +129,10 @@
           >
         </div>
         <p class="hero__proof reveal reveal--delay-3">
-          Everest closed, then the spare: <code>RAYNU-V-R640-BOOT-OK</code> ·
-          <code>RAYNU-V-M7-ISO-INSTALL-OK</code> ·
-          <code>RAYNU-V-M8-PERC-BOOT-OK</code> ·
-          <code>ee851fd5</code> on a 10 GiB <code>vda</code>
+          Everest closed, then Ubuntu on the spare:
+          <code>c3a70e62</code> ·
+          <code>initrd.img-7.0.0-14-generic</code> ·
+          <code>vikkp@raynusrv2:~$</code>
         </p>
       </div>
     </header>
@@ -139,31 +140,30 @@
     <main>
       <section class="section section--status" id="status">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>Milestones · September 2026</p>
-          <h2 class="section__title">Everest is closed. The spare is in use.</h2>
+          <p class="milestone-kicker" data-reveal>Milestones · October 2026</p>
+          <h2 class="section__title">Ubuntu logged in from the PERC spare.</h2>
           <p class="section__lede">
-            The summit closed on 11 September 2026: EFI
-            <code>f72b4276</code> on a real PowerEdge R640, SPA Start, Alpine
-            install, reboot to <code>login:</code>. That loop stays closed.
-            The work since then is on the PERC spare of the same machine.
-            Guests lists the disks. Start booted the 8 GiB Alpine
-            (<code>d43dbf07</code>) and a later 10 GiB disk
-            (<code>ee851fd5</code>, <code>f44ba647</code>) to
-            <code>localhost:~#</code>. On <code>752586b9</code> a new Linux
-            ISO stopped at the ISO’s own prompt and did not type
-            <code>setup-disk</code>. TLS
-            (<code>RAYNU-V-M8-TLS-OK</code>) and a standing page are already
-            behind that. M8.8 is packed and not flashed: choose
-            <code>ubuntu-26.04-live-server-amd64.iso</code> on Guests, store
-            it on the spare, install, then delete that file. It is not on
-            the running EFI. The 2.9 TB virtual disk is not the guest disk.
+            Guests stored <code>ubuntu-26.04-live-server-amd64.iso</code> on
+            RAYNU-SPARE, the large RAID virtual disk of the lab H740P. Start
+            on the 10 GiB tail installed it. EFI <code>c3a70e62</code> then
+            booted that disk: RayNu-F copied
+            <code>initrd.img-7.0.0-14-generic</code> (34,338,680 bytes),
+            Linux 7.0.0-14-generic came up with root
+            <code>ubuntu--vg-ubuntu--lv</code>, and the serial console
+            reached <code>vikkp@raynusrv2:~$</code>.
+            <code>vda</code> is 10 GiB (<code>vda1</code> <code>vda2</code>
+            <code>vda3</code>). Clear ISO then printed
+            <code>boot: M8.8 library ISO cleared</code> — the signature
+            sector only. UBUNTU0 and the Ubuntu disk stayed.
+            Mount Everest, the Alpine install loop of 11 September, stays
+            closed on <code>f72b4276</code>. Next is a virtual guest NIC, so
+            this shell can reach a network without the host’s management
+            address. The 2.9 TB virtual disk is not this 10 GiB tail.
             Auth is still open.
             Summit rollback remains
             <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed"
               ><code>v0.1.0-everest-closed</code></a
             >.
-            The PERC rollback is
-            <code>v0.1.0-m8-perc-spa</code>.
           </p>
           <figure class="milestone-shot" data-reveal>
             <picture>
@@ -197,11 +197,13 @@ RAYNU-V-M7-ISO-INSTALL-OK
 RAYNU-V-RAYNU-F-DISK-BOOT-OK
 root=UUID=814a97a0-d3be-4a64-8611-b3dbd9859201
 localhost login:</code></pre>
-          <pre class="ship-code milestone-log" data-reveal><code>752586b9  choice=3  ISO-BOOTX64
-[vda] 10.0 GiB   tail_off=8589934592
-ee851fd5 seen, journal recovered, unmounted
-boot: perc SPA linux_iso — setup-disk withheld
-You can setup the system with the command: setup-alpine</code></pre>
+          <pre class="ship-code milestone-log" data-reveal><code>build: sha=c3a70e623aec
+boot: RayNu-F initrd ext4 bytes=34338680 name=initrd.img-7.0.0-14-generic
+Linux version 7.0.0-14-generic
+virtio_blk virtio0: [vda] 20971520 512-byte logical blocks (10.0 GiB)
+Welcome to Ubuntu 26.04 LTS!
+vikkp@raynusrv2:~$
+boot: M8.8 library ISO cleared (signature sector only; disks unchanged)</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
             Evidence:
             <code>docs/evidence/r640/2026-09-11-f72b4276-phase-b-spa-iso-install-disk-boot-ok.md</code>
@@ -729,11 +731,9 @@ You can setup the system with the command: setup-alpine</code></pre>
             <div class="journey__era journey__era--span" data-reveal>
               <h3 class="journey__era-title">M8 · after the summit</h3>
               <p class="journey__era-note">
-                Same R640. TLS and a standing SPA came first. Guests then
-                became the spare’s boot policy. A 10 GiB disk reached its own
-                login. A new Linux ISO now stops at the installer prompt.
-                M8.8, the Ubuntu file chosen on the page, is packed and not
-                on the running EFI.
+                Same R640. TLS and a standing SPA came first. M8.8 then put
+                an Ubuntu ISO on the PERC spare, installed it, and logged in.
+                A virtual guest NIC is next.
               </p>
               <ol class="journey__list">
                 <li>
@@ -763,9 +763,9 @@ You can setup the system with the command: setup-alpine</code></pre>
                 <li>
                   <span class="journey__gate">M8.8</span>
                   <span class="journey__text"
-                    >Ubuntu 26.04 live-server ISO from Guests, stored on the
-                    spare, deleted after the installed disk boots. Packed.
-                    Not on the running EFI.</span
+                    >Ubuntu 26.04 from the library ISO on the spare, then
+                    <code>vikkp@raynusrv2:~$</code> and Clear ISO
+                    (<code>c3a70e62</code>). Guest NIC is next.</span
                   >
                 </li>
               </ol>
@@ -815,9 +815,8 @@ You can setup the system with the command: setup-alpine</code></pre>
                   not a mystery appliance. R640 iron closed BOOT-OK (E2),
                   UEFI-HTTP-OK (E3), host-NIC HTTP (E3b), E4 SPA VMLAUNCH,
                   El Torito CD EFI, and Mount Everest (ISO-INSTALL-OK +
-                  DISK-BOOT-OK, 2026-09-11). After that, a guest login from
-                  the PERC spare, including a 10 GiB disk.</span
-                >
+                  DISK-BOOT-OK, 2026-09-11). After that, Ubuntu 26.04 logged
+                  in from a 10 GiB tail of the PERC spare.</span>
               </div>
               <span class="pillars__note">Near-term</span>
             </li>
@@ -921,8 +920,8 @@ You can setup the system with the command: setup-alpine</code></pre>
             <code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code> (E3b),
             <code>RAYNU-V-M7-ISO-INSTALL-OK</code> +
             <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code> (E5 + Phase B, 2026-09-11).
-            M8 TLS and USB persist are closed on COM2. Standing SPA lived.
-            The SPA typed once, then Power off host left the chassis off.
+            M8 TLS and USB persist are closed on COM2. Ubuntu 26.04 then
+            logged in from a 10 GiB PERC tail. A virtual guest NIC is next.
             Auth is still open. See
             <a href="hda.html">HDA</a> and <a href="loi.html">LOI</a>.
           </p>
@@ -999,12 +998,12 @@ cargo build --release --target x86_64-unknown-uefi --features uefi-bin
             (2026-08-21, SHELL stub) and Stage 44/45
             <code>OVMF-ATAPI-OK</code> / <code>OVMF-ELTORITO-OK</code>
             (2026-08-27);
-            and the full ISO install loop
+                  and the full ISO install loop
             <code>RAYNU-V-M7-ISO-INSTALL-OK</code> /
             <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code> (2026-09-11).
-            Mount Everest is closed. Since then Guests boots disks on the
-            PERC spare, and the next build is an Ubuntu ISO chosen on the
-            page. See the
+            Mount Everest is closed. Since then an Ubuntu ISO on the PERC
+            spare reached <code>vikkp@raynusrv2:~$</code>. A virtual guest
+            NIC is next. See the
             <a href="loi.html">LOI tracker</a> and the
             <a href="paper.html">living verification paper</a>.
           </p>
