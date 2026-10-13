@@ -7372,6 +7372,21 @@ pub fn try_spa_product_iso_start() {
     }
 }
 
+/// Start after Stop, while the SPA is still up. Consumes one relaunch flag.
+/// Host does nothing. Firmware resets RayNu-F and boots the chosen disk.
+pub fn relaunch_perc_guest_from_spa() {
+    #[cfg(target_os = "uefi")]
+    unsafe {
+        if !crate::mgmt::perc_boot_choice::take_perc_relaunch() {
+            return;
+        }
+        serial::write_line(
+            "boot: perc SPA start again (guest was stopped; hypervisor stays up; not ISO-INSTALL-OK)",
+        );
+        raynu_f_reset_relaunch(crate::devices::guest_platform::ResetSrc::Kbc);
+    }
+}
+
 #[cfg(target_os = "uefi")]
 unsafe fn try_spa_product_iso_start_firmware() {
     if RAYNU_F_RAN.load(Ordering::Acquire) {

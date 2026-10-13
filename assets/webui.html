@@ -31,8 +31,7 @@ main{padding:.5rem 1.25rem 2rem;max-width:1080px;margin:0 auto}
 .dot.ok{background:var(--ok)}
 .dot.wn{background:var(--wn)}
 .dot.bad{background:var(--bad)}
-#story,.empty,.note,#status{color:rgba(12,26,34,.6)}
-#story{margin:0 0 1rem}
+.empty,.note,#status{color:rgba(12,26,34,.6)}
 h2{font-family:var(--font-brand);font-size:1.25rem;font-weight:600;margin:0 0 .65rem;color:var(--sea-deep)}
 .pg{display:none}.pg.on{display:block}
 .toolbar{display:flex;flex-wrap:wrap;gap:.5rem;align-items:end;margin-bottom:.8rem}
@@ -72,7 +71,6 @@ input.token{min-width:12rem}
 <div class="card"><div class="dot" id="d-guest"></div><b>Guest</b><span id="t-guest">No guest yet</span></div>
 <div class="card"><div class="dot" id="d-iso"></div><b>Install media</b><span id="t-iso">No ISO yet</span></div>
 </div>
-<p id="story"></p>
 <section class="pg on" data-pg="overview">
 <h2>Overview</h2>
 <div class="card" id="perc-choice">
@@ -158,12 +156,6 @@ if(isoP==="loading")dot("iso","wn","ISO is being loaded…");
 else if(isoP==="fail")dot("iso","bad",isoN);
 else if(isoP==="ok"||isoOn)dot("iso","ok",isoOn?"ISO is on a guest":isoN);
 else dot("iso","",isoN);
-const s=[];
-s.push(hostOk?"Host is green.":"Host is red.");
-s.push("RayNu-V is running.");
-s.push(run?"A guest is running.":defd?"A guest is stopped.":"No guest yet.");
-s.push(isoP==="loading"?"ISO loading.":(isoP==="ok"||isoOn)?"ISO attached.":"No ISO yet.");
-document.getElementById("story").textContent=s.join(" ");
 }
 function show(p){document.querySelectorAll("[data-pg]").forEach(function(el){el.classList.toggle("on",el.getAttribute("data-pg")===p)});document.querySelectorAll("nav [data-go]").forEach(function(el){el.classList.toggle("on",el.getAttribute("data-go")===p)})}
 document.querySelectorAll("nav [data-go]").forEach(function(el){el.onclick=function(){show(el.getAttribute("data-go"))}});
@@ -206,12 +198,12 @@ g.forEach(function(vm){
 const row=document.createElement("div");row.className="row";
 row.innerHTML='<span class="id">'+vm.id+'</span><span><div class="meta">'+(vm.image_type||"")+" "+(vm.disk_mib||0)+" MiB"+(vm.off_mib?"@"+vm.off_mib:"")+'</div><div class=\"st\">'+(vm.state||"")+'</div></span><span class="acts"></span>';
 const acts=row.querySelector(".acts");
-if(vm.start){const a=document.createElement("button");a.className="pri";a.textContent=vm.act||"Start";a.onclick=function(){guestStart(vm)};acts.appendChild(a)}
-if(vm.stop){const b=document.createElement("button");b.className="ghost";b.textContent="Stop";b.onclick=guestStop;acts.appendChild(b)}
+const a=document.createElement("button");a.className="pri";a.textContent=vm.act||"Start";a.disabled=!vm.start;a.onclick=function(){if(!a.disabled)guestStart(vm)};acts.appendChild(a);
+const c=document.createElement("button");c.className="ghost";c.textContent="Stop";c.disabled=!vm.stop;c.onclick=function(){if(!c.disabled)guestStop()};acts.appendChild(c);
 box.appendChild(row);
 });
 }
-async function guestStart(vm){if(up)return;const id=vm.id;const path=vm.boot?vm.boot:(id==3||vm.act==="ISO"?"/perc/guests/1/linux/"+num("f-disk",10240):(id===2?"/perc/guests/2/start":"/perc/guests/1/start"));setS("Starting "+id+"…");const res=await api("POST",path);setS(res.ok?("Booting guest "+id):("Start refused ("+res.status+")"));loadSpare()}
+async function guestStart(vm){if(up)return;const id=vm.id;const path=vm.boot?vm.boot:(id==3||vm.act==="ISO"?"/perc/guests/1/linux/"+num("f-disk",10240):(id===2?"/perc/guests/2/start":"/perc/guests/1/start"));setS("Starting "+id+"…");const res=await api("POST",path);let t="";try{t=await res.text()}catch(e){}setS(!res.ok?("Start refused ("+res.status+")"):t.indexOf("busy")>=0?"Guest stays off":("Booting guest "+id));loadSpare()}
 async function guestStop(){if(up)return;setS("Stopping guest…");const res=await api("POST","/perc/guests/stop");setS(res.ok?"Guest stopped":"Stop refused ("+res.status+")");loadSpare()}
 async function loadSpare(){
 if(up)return;let r;try{r=await api("GET","/perc/guests")}catch(e){return}

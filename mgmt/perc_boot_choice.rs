@@ -397,9 +397,60 @@ pub fn take_guest_stop() -> bool {
     true
 }
 
-/// True after Stop has landed. Start stays refused for this hypervisor boot.
+/// True after Stop has landed.
 pub fn guest_stopped() -> bool {
     GUEST_STOPPED.load(Ordering::Acquire)
+}
+
+/// Stop left the guest off and the SPA up. The next Start may boot again.
+///
+/// Clears the one-boot latch and the choice. Returns false when Stop has
+/// not landed, so a running guest is not replaced by a second Start.
+pub fn rearm_guest_after_stop() -> bool {
+    if !guest_stopped() {
+        return false;
+    }
+    GUEST_STOP.store(false, Ordering::Release);
+    GUEST_STOPPED.store(false, Ordering::Release);
+    CHOICE.store(CHOICE_PENDING, Ordering::Release);
+    true
+}
+
+static PERC_RELAUNCH: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+
+/// Which guest, if any, is in the RayNu-F VMCS.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VmcsGuest {
+    None,
+    Window,
+    Tail(u64),
+}
+
+/// The guest currently on the CPU. Pending and a landed Stop are [`VmcsGuest::None`].
+pub fn vmcs_guest() -> VmcsGuest {
+    if guest_stopped() {
+        return VmcsGuest::None;
+    }
+    match perc_spa_choice() {
+        PercSpaChoice::Pending => VmcsGuest::None,
+        PercSpaChoice::BootInstalled | PercSpaChoice::CleanReinstall => VmcsGuest::Window,
+        PercSpaChoice::Tail { .. } | PercSpaChoice::TailBoot { .. } => {
+            match armed_tail() {
+                Some((off, _)) => VmcsGuest::Tail(off),
+                None => VmcsGuest::None,
+            }
+        }
+    }
+}
+
+/// The coexist idle should boot the guest that Start just chose.
+pub fn note_perc_relaunch() {
+    PERC_RELAUNCH.store(true, Ordering::Release);
+}
+
+/// One-shot. The idle loop consumes this and relaunches RayNu-F.
+pub fn take_perc_relaunch() -> bool {
+    PERC_RELAUNCH.swap(false, Ordering::AcqRel)
 }
 
 fn status_body() -> &'static [u8] {
@@ -559,6 +610,7 @@ pub fn clear_perc_spa_choice_for_test() {
     TAIL_OFF.store(0, Ordering::Release);
     GUEST_STOP.store(false, Ordering::Release);
     GUEST_STOPPED.store(false, Ordering::Release);
+    PERC_RELAUNCH.store(false, Ordering::Release);
 }
 
 #[cfg(test)]
@@ -711,6 +763,20 @@ mod perc_boot_choice_test {
         assert!(take_guest_stop());
         assert!(guest_stopped());
         assert!(!request_guest_stop());
+        assert!(rearm_guest_after_stop());
+        assert!(!guest_stopped());
+        assert!(matches!(perc_spa_choice(), PercSpaChoice::Pending));
+        assert_eq!(
+            apply_tail_boot_choice(true, crate::mgmt::megaraid::IRON_LD1_BYTES, ten),
+            PercChoiceApply::Accepted
+        );
+        assert_eq!(
+            vmcs_guest(),
+            VmcsGuest::Tail(crate::mgmt::megaraid::PERC_IMAGE_BYTES)
+        );
+        note_perc_relaunch();
+        assert!(take_perc_relaunch());
+        assert!(!take_perc_relaunch());
         clear_perc_spa_choice_for_test();
         assert!(!guest_stopped());
         assert!(!installer_iso_forced());

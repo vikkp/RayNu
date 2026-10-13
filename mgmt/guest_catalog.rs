@@ -447,15 +447,20 @@ fn apply_action(action: CatalogAction) -> GuestCatalogHttp {
 }
 
 fn start_tail() -> GuestCatalogHttp {
-    use super::perc_boot_choice::{apply_tail_boot_choice, guest_stopped, PercChoiceApply, CHOICE_TAIL_BOOT};
-    if guest_stopped() {
-        return ready(409, b"{\"ok\":false,\"reason\":\"stopped\"}", None);
+    use super::perc_boot_choice::{apply_tail_boot_choice, PercChoiceApply, VmcsGuest, CHOICE_TAIL_BOOT};
+    let off = crate::mgmt::megaraid::PERC_IMAGE_BYTES;
+    if let Some(body) = held_by_other(VmcsGuest::Tail(off)) {
+        return ready(200, body, None);
     }
+    let restarted = crate::mgmt::perc_boot_choice::rearm_guest_after_stop();
     let installed = crate::mgmt::megaraid::perc_image_boot_latched();
     let spare = crate::mgmt::megaraid::perc_spare_bytes();
     let disk_bytes = known_tail_bytes(spare, installed);
     match apply_tail_boot_choice(installed, spare, disk_bytes) {
         PercChoiceApply::Accepted => {
+            if restarted {
+                crate::mgmt::perc_boot_choice::note_perc_relaunch();
+            }
             crate::boot::raynu_f_flag::request_installed_boot();
             let mut body = [0u8; 128];
             let mut w = JsonBuf::new(&mut body);
@@ -473,20 +478,23 @@ fn start_tail() -> GuestCatalogHttp {
 }
 
 fn start_disk_at(spare_off: u64) -> GuestCatalogHttp {
-    use super::perc_boot_choice::{
-        apply_tail_boot_at, guest_stopped, PercChoiceApply, CHOICE_TAIL_BOOT,
-    };
-    if guest_stopped() {
-        return ready(409, b"{\"ok\":false,\"reason\":\"stopped\"}", None);
-    }
+    use super::perc_boot_choice::{apply_tail_boot_at, PercChoiceApply, CHOICE_TAIL_BOOT};
     let installed = crate::mgmt::megaraid::perc_image_boot_latched();
     let spare = crate::mgmt::megaraid::perc_spare_bytes();
     let (tails, n) = discovered_tails();
     let Some(disk) = tails[..n].iter().find(|d| d.spare_off == spare_off) else {
         return ready(409, b"{\"ok\":false,\"reason\":\"nodisk\"}", None);
     };
+    if let Some(body) = held_by_other(crate::mgmt::perc_boot_choice::VmcsGuest::Tail(spare_off))
+    {
+        return ready(200, body, None);
+    }
+    let restarted = crate::mgmt::perc_boot_choice::rearm_guest_after_stop();
     match apply_tail_boot_at(installed, spare, disk.spare_off, disk.disk_bytes) {
         PercChoiceApply::Accepted => {
+            if restarted {
+                crate::mgmt::perc_boot_choice::note_perc_relaunch();
+            }
             crate::boot::raynu_f_flag::request_installed_boot();
             let mut body = [0u8; 192];
             let mut w = JsonBuf::new(&mut body);
@@ -531,8 +539,21 @@ fn store_tail(
 }
 
 fn store_choice(choice: u8, installed: bool) -> GuestCatalogHttp {
+    if choice == CHOICE_BOOT {
+        if let Some(body) = held_by_other(crate::mgmt::perc_boot_choice::VmcsGuest::Window) {
+            return ready(200, body, None);
+        }
+    }
+    let restarted = if choice == CHOICE_BOOT {
+        crate::mgmt::perc_boot_choice::rearm_guest_after_stop()
+    } else {
+        false
+    };
     match apply_spa_choice(installed, choice) {
         PercChoiceApply::Accepted => {
+            if restarted {
+                crate::mgmt::perc_boot_choice::note_perc_relaunch();
+            }
             if choice == CHOICE_REINSTALL {
                 let _ = crate::mgmt::iso_library::choose_held_library();
                 crate::boot::raynu_f_flag::request_from_spa();
@@ -823,12 +844,20 @@ fn write_list_json(
     w.s(".\",\"note\":\"");
     w.s(catalog_note(waiting, choice, stopped));
     w.s("\",\"guests\":[");
-    if installed {
-        let pending = matches!(choice, PercSpaChoice::Pending) && !stopped;
-        let active = matches!(
+    let window_on = installed
+        && !stopped
+        && matches!(
             choice,
             PercSpaChoice::BootInstalled | PercSpaChoice::CleanReinstall
-        ) && !stopped;
+        );
+    let tail_on = !stopped
+        && matches!(
+            choice,
+            PercSpaChoice::Tail { .. } | PercSpaChoice::TailBoot { .. }
+        );
+    let iso_on = iso_ready && crate::mgmt::iso_library::present_as_cd() && !stopped;
+    if installed {
+        let (start, stop) = row_power(window_on);
         w.s("{\"id\":1,\"name\":\"alpine\",\"state\":\"");
         w.s(if stopped {
             "stopped"
@@ -838,9 +867,9 @@ fn write_list_json(
         w.s("\",\"disk_mib\":");
         w.u(numbers.used_bytes / (1024 * 1024));
         w.s(",\"image_type\":\"linux_iso\",\"start\":");
-        w.s(if pending { "true" } else { "false" });
+        w.s(if start { "true" } else { "false" });
         w.s(",\"stop\":");
-        w.s(if active { "true" } else { "false" });
+        w.s(if stop { "true" } else { "false" });
         w.s(",\"boot\":\"/perc/guests/1/start\"}");
     }
     let armed_off = match choice {
@@ -859,14 +888,9 @@ fn write_list_json(
             w.s(",");
         }
         any_guest = true;
-        let pending = matches!(choice, PercSpaChoice::Pending) && !stopped;
         let mine = armed_off == Some(disk.spare_off);
-        let active = mine
-            && matches!(
-                choice,
-                PercSpaChoice::Tail { .. } | PercSpaChoice::TailBoot { .. }
-            )
-            && !stopped;
+        let active = mine && tail_on;
+        let (start, stop) = row_power(active);
         w.s("{\"id\":");
         w.u(next_id);
         next_id += 1;
@@ -883,9 +907,9 @@ fn write_list_json(
         w.s(",\"off_mib\":");
         w.u(disk.spare_off / (1024 * 1024));
         w.s(",\"image_type\":\"linux_iso\",\"start\":");
-        w.s(if pending { "true" } else { "false" });
+        w.s(if start { "true" } else { "false" });
         w.s(",\"stop\":");
-        w.s(if active { "true" } else { "false" });
+        w.s(if stop { "true" } else { "false" });
         w.s(",\"boot\":\"/perc/guests/disk/");
         w.u(disk.spare_off);
         w.s("/start\"}");
@@ -895,7 +919,7 @@ fn write_list_json(
             w.s(",");
         }
         let chosen = crate::mgmt::iso_library::present_as_cd();
-        let pending = matches!(choice, PercSpaChoice::Pending) && !stopped && !chosen;
+        let (start, stop) = row_power(iso_on);
         w.s("{\"id\":");
         w.u(next_id);
         w.s(",\"name\":\"ubuntu\",\"state\":\"");
@@ -903,8 +927,10 @@ fn write_list_json(
         w.s("\",\"disk_mib\":");
         w.u(library / (1024 * 1024));
         w.s(",\"image_type\":\"ubuntu\",\"start\":");
-        w.s(if pending { "true" } else { "false" });
-        w.s(",\"stop\":false,\"act\":\"ISO\"}");
+        w.s(if start { "true" } else { "false" });
+        w.s(",\"stop\":");
+        w.s(if stop { "true" } else { "false" });
+        w.s(",\"act\":\"ISO\"}");
     }
     w.s("]}");
     if w.fit {
@@ -914,9 +940,26 @@ fn write_list_json(
     }
 }
 
+/// Start and Stop follow this guest alone. Another guest being on does not
+/// change this row.
+pub fn row_power(this_on: bool) -> (bool, bool) {
+    (!this_on, this_on)
+}
+
+/// `Some` when the CPU is already running a different guest. This guest is
+/// left off. The guest that is on is left on.
+fn held_by_other(want: crate::mgmt::perc_boot_choice::VmcsGuest) -> Option<&'static [u8]> {
+    use crate::mgmt::perc_boot_choice::{vmcs_guest, VmcsGuest};
+    match vmcs_guest() {
+        VmcsGuest::None => None,
+        owner if owner == want => Some(b"{\"ok\":true,\"running\":true}"),
+        _ => Some(b"{\"ok\":true,\"busy\":true}"),
+    }
+}
+
 fn catalog_note(waiting: bool, choice: PercSpaChoice, stopped: bool) -> &'static str {
     if stopped {
-        return "Guest stopped. F11 to start another.";
+        return "Guest stopped. Start boots it again. The hypervisor stays up.";
     }
     if waiting {
         "Start boots one installed guest. A larger Linux disk uses the free tail. 8192 MiB reinstalls the window."
@@ -1053,6 +1096,9 @@ pub fn prop_guest_catalog() -> bool {
         && !html.contains("btn-perc-boot")
         && http.contains("guest_catalog_rest")
         && html.contains("b.note")
+        && html.contains("a.disabled=!vm.start")
+        && html.contains("c.disabled=!vm.stop")
+        && include_str!("../vmx/launch.rs").contains("relaunch_perc_guest_from_spa")
         && html.contains("b.cap")
         && include_str!("guest_catalog.rs").contains("free tail")
         && include_str!("../docs/adr/ADR-019.md").contains("free tail")
@@ -1068,6 +1114,12 @@ mod guest_catalog_test {
     use crate::mgmt::megaraid::IRON_LD1_BYTES;
     use crate::mgmt::perc_boot_choice::clear_perc_spa_choice_for_test;
     use crate::mgmt::{ImageTable, VmTable};
+
+    #[test]
+    fn row_power_stays_on_the_row() {
+        assert_eq!(row_power(false), (true, false));
+        assert_eq!(row_power(true), (false, true));
+    }
 
     #[test]
     fn numbers_show_the_tail_and_cap_the_window() {
