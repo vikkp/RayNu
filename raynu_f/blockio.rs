@@ -70,6 +70,9 @@ pub struct BlockMedia {
     pub block_size: u32,
     /// Last valid LBA (`blocks - 1`); `present == false` when there is none.
     pub last_block: u64,
+    /// `EFI_BLOCK_IO_MEDIA.LogicalPartition`. The ESP handle is a partition.
+    /// The whole-disk handle stays false.
+    pub logical_partition: bool,
 }
 
 impl BlockMedia {
@@ -83,6 +86,7 @@ impl BlockMedia {
             read_only: true,
             block_size: CD_BLOCK_SIZE,
             last_block: if blocks > 0 { blocks - 1 } else { 0 },
+            logical_partition: false,
         }
     }
 
@@ -96,6 +100,22 @@ impl BlockMedia {
             read_only: false,
             block_size: DISK_BLOCK_SIZE,
             last_block: if blocks > 0 { blocks - 1 } else { 0 },
+            logical_partition: false,
+        }
+    }
+
+    /// ESP as a logical partition. `sectors` is the GPT partition length.
+    /// `media_id` stays the disk id so reads use the virtio backing store.
+    /// The caller adds the partition's byte offset.
+    pub const fn esp(sectors: u64) -> Self {
+        BlockMedia {
+            media_id: MEDIA_ID_DISK,
+            removable: false,
+            present: sectors > 0,
+            read_only: false,
+            block_size: DISK_BLOCK_SIZE,
+            last_block: if sectors > 0 { sectors - 1 } else { 0 },
+            logical_partition: true,
         }
     }
 
@@ -108,7 +128,7 @@ impl BlockMedia {
             .copy_from_slice(&self.media_id.to_le_bytes());
         out[MEDIA_REMOVABLE_OFF] = self.removable as u8;
         out[MEDIA_PRESENT_OFF] = self.present as u8;
-        out[MEDIA_LOGICAL_PARTITION_OFF] = 0; // whole device, not a partition
+        out[MEDIA_LOGICAL_PARTITION_OFF] = self.logical_partition as u8;
         out[MEDIA_READ_ONLY_OFF] = self.read_only as u8;
         out[MEDIA_WRITE_CACHING_OFF] = 0; // writes reach the backing store
         out[MEDIA_BLOCK_SIZE_OFF..MEDIA_BLOCK_SIZE_OFF + 4]

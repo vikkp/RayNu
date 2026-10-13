@@ -416,8 +416,14 @@ pub struct FirmwareState {
     /// `This` pointer → media, published by the launcher.
     pub blockio_cd: u64,
     pub blockio_disk: u64,
+    /// `This` of the ESP partition BlockIo. Zero until the Ubuntu disk path
+    /// publishes it. Reads add [`Self::esp_byte_off`].
+    pub blockio_esp: u64,
     pub media_cd: BlockMedia,
     pub media_disk: BlockMedia,
+    pub media_esp: BlockMedia,
+    /// Byte offset of ESP LBA 0 on the virtio disk.
+    pub esp_byte_off: u64,
     pub read_blocks: Option<BlockReadFn>,
     pub write_blocks: Option<BlockWriteFn>,
     /// F5: mounted FAT volume + open-file table.
@@ -488,8 +494,11 @@ impl FirmwareState {
             watchdog_sets: 0,
             blockio_cd: 0,
             blockio_disk: 0,
+            blockio_esp: 0,
             media_cd: BlockMedia::cd(0),
             media_disk: BlockMedia::disk(0),
+            media_esp: BlockMedia::disk(0),
+            esp_byte_off: 0,
             read_blocks: None,
             write_blocks: None,
             fs: FileSystem::new(),
@@ -566,6 +575,8 @@ impl FirmwareState {
             Some(&self.media_cd)
         } else if this != 0 && this == self.blockio_disk {
             Some(&self.media_disk)
+        } else if this != 0 && this == self.blockio_esp {
+            Some(&self.media_esp)
         } else {
             None
         }
@@ -1195,7 +1206,10 @@ fn block_transfer(
     if v != EFI_SUCCESS || size == 0 {
         return v;
     }
-    let off = lba_offset(&media, lba);
+    let mut off = lba_offset(&media, lba);
+    if a.a1 == st.blockio_esp {
+        off = st.esp_byte_off.saturating_add(off);
+    }
     let mut buf = [0u8; 4096];
     let mut done = 0u64;
     while done < size {
