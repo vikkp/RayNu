@@ -12257,6 +12257,17 @@ unsafe fn redirect_initrd_loadfile(
     let mut path0 = [0u8; 1];
     let _ = mem.read(args.a2, &mut path0);
     let buf = crate::raynu_f::services::stack_arg(mem, args.rsp, 5).unwrap_or(0);
+    let mut sz = 0u64;
+    if args.a4 != 0 {
+        let mut raw = [0u8; 8];
+        if mem.read(args.a4, &mut raw) == 8 {
+            sz = u64::from_le_bytes(raw);
+        }
+    }
+    let copy_sz = crate::raynu_f::services::initrd_loadfile_copy_size(buf != 0, sz);
+    if copy_sz != sz && args.a4 != 0 {
+        let _ = mem.write(args.a4, &copy_sz.to_le_bytes());
+    }
     if n < 4 {
         serial::write_str("boot: RayNu-F initrd LoadFile policy=");
         write_dec(args.a3);
@@ -12264,6 +12275,12 @@ unsafe fn redirect_initrd_loadfile(
         write_hex2(path0[0]);
         serial::write_str(" buf=0x");
         write_hex(buf);
+        serial::write_str(" sz=");
+        write_dec(sz);
+        if copy_sz != sz {
+            serial::write_str(" copy=");
+            write_dec(copy_sz);
+        }
         serial::write_str(" fn=0x");
         write_hex(st.initrd_lf2_fn);
         serial::write_line(" (not ISO-INSTALL-OK)");
