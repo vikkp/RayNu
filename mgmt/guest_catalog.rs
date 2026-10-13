@@ -11,7 +11,9 @@
 //! Proven Core: **outside** (ADR-002 / ADR-019).
 
 use super::api::RestMethod;
-use super::megaraid::{place_in_free_tail, PERC_IMAGE_BYTES};
+use super::megaraid::{
+    classify_ld_bytes, place_in_free_tail, LdClass, PERC_IMAGE_BYTES, SPARE_HIGH_RESERVE,
+};
 use super::perc_boot_choice::{
     apply_spa_choice, apply_tail_choice, perc_spa_choice, perc_spa_wait_required, PercChoiceApply,
     PercSpaChoice, CHOICE_BOOT, CHOICE_REINSTALL, CHOICE_TAIL,
@@ -93,8 +95,9 @@ pub struct CatalogNumbers {
 ///
 /// `spare_bytes == 0` means the VD size was not read (host and QEMU).
 /// The window is then the placeable cap. A known installed spare places
-/// new disks in the free tail, so `placeable_bytes` is that tail. An
-/// empty latch does not offer the whole VD.
+/// new disks in the free tail, so `placeable_bytes` is that tail minus
+/// the NIC catalog and the mailbox probe. An empty latch does not offer
+/// the whole VD.
 pub fn catalog_numbers(spare_bytes: u64, window_bytes: u64, installed: bool) -> CatalogNumbers {
     let window_cap = if spare_bytes == 0 {
         window_bytes
@@ -103,8 +106,13 @@ pub fn catalog_numbers(spare_bytes: u64, window_bytes: u64, installed: bool) -> 
     };
     let used = if installed { window_cap } else { 0 };
     let free = spare_bytes.saturating_sub(used);
+    let reserve = if classify_ld_bytes(spare_bytes) == LdClass::Spare {
+        SPARE_HIGH_RESERVE
+    } else {
+        0
+    };
     let placeable = if spare_bytes > 0 && installed {
-        free
+        free.saturating_sub(reserve)
     } else {
         window_cap
     };
@@ -776,7 +784,13 @@ fn write_list_json(
         .used_bytes
         .saturating_add(tail_bytes)
         .saturating_add(library);
-    let reserve = if library > 0 { 512 } else { 0 };
+    let reserve = if classify_ld_bytes(numbers.spare_bytes) == LdClass::Spare {
+        SPARE_HIGH_RESERVE
+    } else if library > 0 {
+        512
+    } else {
+        0
+    };
     let free = numbers.spare_bytes.saturating_sub(used).saturating_sub(reserve);
     let placeable = if numbers.spare_bytes > 0 && installed {
         free
@@ -1061,7 +1075,10 @@ mod guest_catalog_test {
         assert_eq!(n.spare_bytes, IRON_LD1_BYTES);
         assert_eq!(n.used_bytes, SLICE1_WINDOW_BYTES);
         assert_eq!(n.free_bytes, IRON_LD1_BYTES - SLICE1_WINDOW_BYTES);
-        assert_eq!(n.placeable_bytes, IRON_LD1_BYTES - SLICE1_WINDOW_BYTES);
+        assert_eq!(
+            n.placeable_bytes,
+            IRON_LD1_BYTES - SLICE1_WINDOW_BYTES - SPARE_HIGH_RESERVE
+        );
         let empty = catalog_numbers(IRON_LD1_BYTES, SLICE1_WINDOW_BYTES, false);
         assert_eq!(empty.used_bytes, 0);
         assert_eq!(empty.free_bytes, IRON_LD1_BYTES);

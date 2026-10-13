@@ -11,7 +11,7 @@
     <meta property="og:title" content="RayNu-V · Path to LOI" />
     <meta
       property="og:description"
-              content="Bar A 92%. Bar B 70%. Overall 78%. PERC 86%. Ubuntu 26.04 on a 10 GiB PERC tail reached vikkp@raynusrv2. Unmodified media is 45%. A virtual guest NIC is next."
+              content="Bar A 92%. Bar B 70%. Overall 78%. PERC 86%. Ubuntu 26.04 on a 10 GiB PERC tail reached vikkp@raynusrv2. Unmodified media is 45%. M8.9.1 is the spare NIC record."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -58,7 +58,7 @@
           and reached <code>vikkp@raynusrv2:~$</code>. An LOI still asks a
           different question — would a fleet owner put <em>non-production
           intent</em> in writing? HDA 99% is not that answer. The 2.9 TB
-          virtual disk is not this 10 GiB tail. A virtual guest NIC is next.
+          virtual disk is not this 10 GiB tail. M8.9.1 is the spare NIC record. The guest still has no NIC.
         </p>
         <p
           class="hda-path reveal reveal--delay-3"
@@ -366,7 +366,7 @@
       <section class="section section--hda-com2" id="now">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Show and tell · M8.8 · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">70%</span> · overall <span data-loi-pct="overall">78%</span> · PERC <span data-loi-pct="pieces.perc">86%</span> · unmodified <span data-loi-pct="pieces.unmodified">45%</span></p>
-          <h2 class="section__title">The Ubuntu ISO lived on the PERC. The guest NIC is next.</h2>
+          <h2 class="section__title">The Ubuntu ISO lived on the PERC. M8.9.1 is the NIC record.</h2>
           <p class="section__lede">
             M8.8 is four steps, and all four have COM2. The file sits at the
             high end of RAYNU-SPARE. Guests uploads it unchanged. Choosing
@@ -379,8 +379,12 @@ M8.8.2  upload        lived · ubuntu-26.04-live-server-amd64.iso, bytes unchang
 M8.8.3  boot the ISO  lived · Subiquity installed onto vda
 M8.8.4  login + clear lived · vikkp@raynusrv2:~$
                               boot: M8.8 library ISO cleared (signature sector only)
-next    M8.9 guest NIC  virtio NIC, own MAC, egress 01:00.1
-                      SPA stays on :38
+M8.9.1  record        host · sector before the probe; no NIC until Save
+M8.9.2  Guests panel  open · attach, DHCP, manual, Save
+M8.9.3  DHCP preview  open · fill the form; do not save
+M8.9.4  egress        open · next Start; frames leave :39
+M8.9.5  address       open · Ubuntu uses the saved address
+M8.9.6  close         open · login from another machine
 scores  unmodified <span data-loi-pct="pieces.unmodified">45%</span> · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">70%</span> · overall <span data-loi-pct="overall">78%</span> · PERC <span data-loi-pct="pieces.perc">86%</span></code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
             Rollback remains GitHub Latest

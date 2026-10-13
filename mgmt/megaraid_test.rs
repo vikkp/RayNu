@@ -362,7 +362,9 @@ fn fwstate_load_is_one_harpoon_and_does_not_bus_master() {
         ten
     )
     .is_none());
-    let free = super::IRON_LD1_BYTES - super::PERC_IMAGE_BYTES;
+    let free = super::IRON_LD1_BYTES
+        - super::PERC_IMAGE_BYTES
+        - super::SPARE_HIGH_RESERVE;
     assert!(
         super::place_in_free_tail(super::IRON_LD1_BYTES, super::PERC_IMAGE_BYTES, true, free)
             .is_some()
@@ -372,6 +374,13 @@ fn fwstate_load_is_one_harpoon_and_does_not_bus_master() {
         super::PERC_IMAGE_BYTES,
         true,
         free + 512
+    )
+    .is_none());
+    assert!(super::place_in_free_tail(
+        super::IRON_LD1_BYTES,
+        super::PERC_IMAGE_BYTES,
+        true,
+        super::IRON_LD1_BYTES - super::PERC_IMAGE_BYTES
     )
     .is_none());
     let tail_lba = super::PERC_IMAGE_BYTES / 512;

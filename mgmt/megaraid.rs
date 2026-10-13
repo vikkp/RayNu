@@ -357,6 +357,12 @@ pub const LAB_UBUNTU0_BYTES: u64 = 400 * GIB;
 pub const IRON_LD0_BYTES: u64 = 429_496_467_456;
 /// Iron `7577f934` LD 1. ~2.882 TiB. Classifies as RAYNU-SPARE. `pick=1`.
 pub const IRON_LD1_BYTES: u64 = 3_169_417_691_136;
+/// Last sector of RAYNU-SPARE. The mailbox probe lives here. Do not place a guest disk on it.
+pub const SPARE_PROBE_BYTES: u64 = 512;
+/// One sector immediately before the probe. M8.9.1 NIC records live here.
+pub const NIC_CATALOG_BYTES: u64 = 512;
+/// Bytes at the high end of a spare that are not a guest disk and not a library file.
+pub const SPARE_HIGH_RESERVE: u64 = SPARE_PROBE_BYTES + NIC_CATALOG_BYTES;
 /// ~2.882 TiB, rounded down to a 512-byte multiple so a sector round-trip matches.
 pub const LAB_SPARE_BYTES: u64 = (2882 * (TIB / 512) / 1000) * 512;
 /// Old single-VD usable capacity, 3351.75 GiB. Must not classify as the spare.
@@ -739,7 +745,7 @@ pub struct TailPlacement {
 ///
 /// `None` when the latch is clear, the disk is not larger than the window,
 /// the size is not sector-aligned, the VD is not spare-class, or the disk
-/// does not fit in `spare - window`. The window itself is the slice-1
+/// does not fit before the NIC catalog. The window itself is the slice-1
 /// reinstall, not this placement.
 pub fn place_in_free_tail(
     spare_bytes: u64,
@@ -758,7 +764,10 @@ pub fn place_in_free_tail(
     }
     let spare_off = window_bytes;
     let end = spare_off.checked_add(disk_bytes)?;
-    if end > spare_bytes {
+    // Stop before the NIC catalog and the mailbox probe. A disk that fills
+    // the VD would cover both.
+    let limit = spare_bytes.checked_sub(SPARE_HIGH_RESERVE)?;
+    if end > limit {
         return None;
     }
     Some(TailPlacement {

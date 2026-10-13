@@ -167,7 +167,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 | M+2 | 2026-09 | E3b native NIC lab (QEMU e1000) + ISO residual | ADR-013 Phase C | **Phase C DONE (QEMU)** |
 | M+3 | 2026-08 | E3b iron HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | **DONE (M7.8 iron)** |
 | M+4 | 2026-09 | Phase B (SPA → installed disk) | remaining Everest | **DONE — EVEREST CLOSED** (`f72b4276` / `34552377351`) |
-| M+5 | 2026-10 | **M8.8** Ubuntu library install | installed disk reaches a Linux shell, then Clear ISO | **Lived.** `c3a70e62` reached `vikkp@raynusrv2:~$`, then `boot: M8.8 library ISO cleared`. Signature sector only. Scores held. Next is the guest NIC, after M8.8. See [m8_plan.md](m8_plan.md). |
+| M+5 | 2026-10 | **M8.8** Ubuntu library install | installed disk reaches a Linux shell, then Clear ISO | **Lived.** `c3a70e62` reached `vikkp@raynusrv2:~$`, then `boot: M8.8 library ISO cleared`. Signature sector only. **M8.9.1** is the spare NIC record (host). M8.9.2–M8.9.6 open. Scores held. See [m8_plan.md](m8_plan.md). |
 
 ### Timeline burn-down
 
@@ -354,11 +354,11 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-9-nic-adr |
-| Summary | **Guest NIC is M8.9, an amendment to ADR-013 Appendix C.** Not M8.8.5. Not built. HDA months **0.0 held**. Overall **99 held**. LOIHDA scores held. |
+| Commit | m8-9-nic-record |
+| Summary | **M8.9 is M8.9.1–M8.9.6.** M8.9.1 is the spare NIC record. Host tests. The sector is not written. Create still leaves the Ubuntu disk with no NIC. HDA months **0.0 held**. Overall **99 held**. LOIHDA scores held. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
-| Gates touched | M8.8.4 lived. Clear ISO wiped the signature sector. No doorbell. No format of UBUNTU0. Not an `ISO-INSTALL-OK` close. |
-| Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 60 held, perc 78 held, unmodified 25 held, overall LOI 73 held, months A 0.25 held, months B 1.5 held. |
+| Gates touched | M8.9.1 host record. M8.9.2–M8.9.6 open. No doorbell. No format of UBUNTU0. Not an `ISO-INSTALL-OK` close. Not an iron NIC. |
+| Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 70 held, perc 86 held, unmodified 45 held, overall LOI 78 held, months A 0.25 held, months B 1.25 held. |
 
 
 ## Blockers & risks (Everest-relevant)
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-13 | m8-9-nic-record | 0.0 | 99 | **M8.9.1–M8.9.6.** M8.9.1 is the spare NIC record (host tests, sector not written). Create still leaves the Ubuntu disk with no NIC. M8.9.2–M8.9.6 open. Not on iron. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-13 | m8-9-nic-adr | 0.0 | 99 | **ADR-013 Appendix C labels the admin-attached guest NIC M8.9.** Not M8.8.5. Create leaves the guest with no NIC. DHCP fills the form; Save pins it. Not built. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-13 | site-ubuntu-loi | 0.0 | 99 | **Homepage, LOI page, and COM2 chat catch up to M8.8.** Ubuntu on the PERC spare logged in; Clear ISO lived; guest NIC is next. HDA scores held. LOIHDA overall 73→78, Bar B 60→70, perc 78→86, unmodified 25→45. Not an `ISO-INSTALL-OK` close. months 0.0 held; overall 99 held |
 | 2026-10-13 | m8-8-iso-cleared | 0.0 | 99 | **After `vikkp@raynusrv2:~$`, COM2 printed `boot: M8.8 library ISO cleared (signature sector only; disks unchanged)`.** M8.8.1–M8.8.4 lived on `c3a70e62`. UBUNTU0 and the Ubuntu disk stay. Not an `ISO-INSTALL-OK` close. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
@@ -1088,7 +1089,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     Leave localhost:~# on the ISO under 752586b9. Do not type setup-alpine. Choice 3 withheld setup-disk. ee851fd5 was seen and unmounted. The 8192 MiB window reinstall was not clicked. Rollback is v0.1.0-m8-perc-spa. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/adr/ADR-019.md.
+Next move:     M8.8 lived (`vikkp@raynusrv2:~$`, then Clear ISO). M8.9.1 is the spare NIC record (host). Create still leaves that disk with no NIC. Do not format UBUNTU0. No doorbell. A5 is parked. Rollback is v0.1.0-m8-perc-spa. See docs/m8_plan.md.
 Rollback:      PERC SPA: v0.1.0-m8-perc-spa → CI 36362775808 / COM2 sha=8ad2ac89125e / EFI SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849
 Standing SPA:  v0.1.0-m8-a4s → CI 36137732145 / COM2 sha=1f33eeda72f9 / EFI SHA256 5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693
 Everest:       GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351 / EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc / COM2 build: sha=f72b4276d198

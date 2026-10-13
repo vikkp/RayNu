@@ -78,6 +78,9 @@ M8.7  PERC mailbox on RAYNU-SPARE (Fusion: status, IOC init, one last-LBA write 
 M8.8  Ubuntu ISO library on RAYNU-SPARE (ADR-019 decision 9)
       M8.8.1 placement · M8.8.2 upload · M8.8.3 boot · M8.8.4 install and reclaim
       M8.4's 256-byte host blob is not this. M8.4–M8.6 stay open.
+M8.9  Admin-attached guest NIC (ADR-013 Appendix C)
+      M8.9.1 record · M8.9.2 Guests panel · M8.9.3 DHCP preview
+      M8.9.4 egress · M8.9.5 address in the guest · M8.9.6 close
 
 → M9 sketch: vMotion-like · DRS-like · hot-add
 ```
@@ -240,11 +243,20 @@ M8.4 stays the host 256-byte blob. M8.8 is the product path and may proceed whil
 
 ### M8.9 — Admin-attached guest NIC
 
-**Status: accepted in [ADR-013](adr/ADR-013.md) Appendix C (2026-10-13). Not built.** Not M8.8.5. M8.8 stays the library plan.
+**Status: M8.9.1 is the spare record (host tests). M8.9.2 through M8.9.6 are open.** Accepted in [ADR-013](adr/ADR-013.md) Appendix C (2026-10-13). Not M8.8.5. Not on iron. Create still leaves the guest with no NIC. Scores held.
 
 **Goal:** The admin attaches a virtio NIC on a Guests row. Create does not attach one. **Get from DHCP** fills the form from a lease on that guest’s MAC through `01:00.1` / `b0:26:28:5c:5a:39`. **Save** pins the address on that guest. Manual entry uses the same Save. The record lives on the spare and survives a hypervisor Force Off until the admin saves again or detaches it. The next Start applies it. The SPA stays on `:38`.
 
-**Close when:** COM2 shows a guest frame leaving `:39`, and a login to that guest address from another machine.
+**Close when:** COM2 shows a guest frame leaving `:39`, and a login to that guest address from another machine. That close is M8.9.6. Scores stay put until then.
+
+| Step | What | Close when |
+|------|------|------------|
+| M8.9.1 record | One 512-byte sector on RAYNU-SPARE, immediately before the mailbox probe. Keyed by the guest disk’s spare offset. An empty or unrecognized sector is no NIC, including the `c3a70e62` Ubuntu disk and the 8 GiB window. The first Save mints a MAC that is not `:38` and not `:39`. A later Save keeps that MAC and replaces IP, prefix, gateway, and DNS. Mode is DHCP-pinned or manual. Detach removes that guest only. New disks and the library stop before this sector. This step does not WRITE the sector and does not attach virtio. | Host tests. Not COM2. |
+| M8.9.2 Guests panel | Attach, Get from DHCP, manual fields, Save, and Detach on that guest’s row. Save does not need the guest to be running. The reply stays inside the management cap. The audit event lands on Save and Detach. | The page shows the saved fields after a refresh. Not an iron frame. |
+| M8.9.3 DHCP preview | Discover and offer on the guest MAC through `01:00.1`. Fill the form. Do not save. After Save, RayNu does not keep a second DHCP client on that MAC. The APE PHY stays. | An offer is copied into the form, and the sector is unchanged until Save. |
+| M8.9.4 egress | The next Start only. A virtio NIC is present. Frames leave `:39`. Not the SPA MAC. Not the dedicated iDRAC jack. Hot-plug is not this step. | COM2 names the guest MAC and the pinned address, and a frame leaves `:39`. |
+| M8.9.5 address in the guest | The installed Ubuntu uses the saved address. `cloud-init` is disabled on this disk, so this step chooses the mechanism. It does not format the disk and it does not rewrite the disk as a side effect of placement. | The guest’s own interface shows the saved address. |
+| M8.9.6 close | A login from another machine to that address. | COM2 shows the `:39` frame and that login. Scores move only on this row. |
 
 ---
 
