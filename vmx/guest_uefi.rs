@@ -8468,6 +8468,110 @@ fn raynu_f_note_esp_grub_cfg<R: crate::raynu_f::fat::VolumeRead>(
     }
 }
 
+/// Publish the ESP as a GRUB partition child of the whole-disk vendor path.
+///
+/// `89a67dc4` staged `\EFI\ubuntu\grubx64.efi` with FilePath set and still
+/// stopped at `grub>`. GRUB names the device from `LoadedImage.DeviceHandle`.
+/// That handle was the raw disk, so `\EFI\ubuntu\grub.cfg` was sought at LBA 0.
+/// This handle's BlockIo starts at the ESP. The whole-disk handle stays, so
+/// GRUB can call the pair `hd0` and `hd0,gpt1`.
+#[cfg(target_os = "uefi")]
+fn raynu_f_publish_esp_partition(
+    esp: &crate::raynu_f::gpt::EspPartition,
+    disk_blockio: u64,
+    sfs: u64,
+    ram_hpa: u64,
+) -> bool {
+    // SAFETY: BSP-only firmware state; guest not yet launched.
+    // KANI-TARGET: RayNu-F ESP handle (outside Proven Core).
+    let st = unsafe { &mut *core::ptr::addr_of_mut!(RAYNU_F_STATE) };
+    let mem = SlabMem {
+        hpa: ram_hpa,
+        len: GUEST_UEFI_LOW_RAM_BYTES,
+    };
+    let (status, gpa) = st.pool.allocate_pages(
+        crate::raynu_f::memory::ALLOCATE_ANY_PAGES,
+        crate::raynu_f::memory::EFI_LOADER_DATA,
+        1,
+        0,
+    );
+    if status != 0 {
+        return false;
+    }
+    let media = crate::raynu_f::BlockMedia::esp(esp.size_lba());
+    let mut media_bytes = [0u8; crate::raynu_f::blockio::MEDIA_SIZE];
+    media.encode(&mut media_bytes);
+    let media_gpa = gpa + 0x40;
+    let path_gpa = gpa + 0x80;
+    let offs = [
+        crate::raynu_f::blockio::BLOCKIO_RESET_OFF,
+        crate::raynu_f::blockio::BLOCKIO_READ_OFF,
+        crate::raynu_f::blockio::BLOCKIO_WRITE_OFF,
+        crate::raynu_f::blockio::BLOCKIO_FLUSH_OFF,
+    ];
+    let mut ptrs = [0u64; 4];
+    for (i, off) in offs.iter().enumerate() {
+        let mut b = [0u8; 8];
+        if crate::raynu_f::GuestMem::read(&mem, disk_blockio + *off as u64, &mut b) != 8 {
+            return false;
+        }
+        ptrs[i] = u64::from_le_bytes(b);
+    }
+    let mut proto = [0u8; crate::raynu_f::blockio::BLOCKIO_SIZE];
+    proto[..8].copy_from_slice(&crate::raynu_f::blockio::BLOCKIO_REVISION2.to_le_bytes());
+    proto[8..16].copy_from_slice(&media_gpa.to_le_bytes());
+    proto[0x10..0x18].copy_from_slice(&ptrs[0].to_le_bytes());
+    proto[0x18..0x20].copy_from_slice(&ptrs[1].to_le_bytes());
+    proto[0x20..0x28].copy_from_slice(&ptrs[2].to_le_bytes());
+    proto[0x28..0x30].copy_from_slice(&ptrs[3].to_le_bytes());
+    let mut path = [0u8; 96];
+    let Some(n) = crate::raynu_f::protocol::encode_esp_device_path(
+        esp.partition_number,
+        esp.start_lba,
+        esp.size_lba(),
+        esp.unique_guid,
+        &mut path,
+    ) else {
+        return false;
+    };
+    if crate::raynu_f::GuestMem::write(&mem, gpa, &proto) != proto.len()
+        || crate::raynu_f::GuestMem::write(&mem, media_gpa, &media_bytes) != media_bytes.len()
+        || crate::raynu_f::GuestMem::write(&mem, path_gpa, &path[..n]) != n
+    {
+        return false;
+    }
+    let bio = st.protocols.install(
+        crate::raynu_f::protocol::HANDLE_ESP,
+        crate::raynu_f::protocol::GUID_BLOCK_IO,
+        gpa,
+    );
+    let dp = st.protocols.install(
+        crate::raynu_f::protocol::HANDLE_ESP,
+        crate::raynu_f::protocol::GUID_DEVICE_PATH,
+        path_gpa,
+    );
+    let fs = st.protocols.install(
+        crate::raynu_f::protocol::HANDLE_ESP,
+        crate::raynu_f::protocol::GUID_SIMPLE_FILE_SYSTEM,
+        sfs,
+    );
+    if bio != 0 || dp != 0 || fs != 0 {
+        return false;
+    }
+    st.blockio_esp = gpa;
+    st.media_esp = media;
+    st.esp_byte_off = esp.start_lba.saturating_mul(512);
+    st.device_handle = crate::raynu_f::protocol::HANDLE_ESP;
+    serial::write_str("boot: RayNu-F ESP handle part=");
+    write_dec(u64::from(esp.partition_number));
+    serial::write_str(" lba=");
+    write_dec(esp.start_lba);
+    serial::write_str(" sectors=");
+    write_dec(esp.size_lba());
+    serial::write_line(" (GRUB hd0,gpt1; not ISO-INSTALL-OK)");
+    true
+}
+
 /// F7: mount the GPT ESP on the install disk and stage its loader.
 /// Ubuntu: `\EFI\ubuntu\grubx64.efi` with that path as LoadedImage `FilePath`.
 /// `9abd4870` staged the shim instead; its buffer `LoadImage` left GRUB at
@@ -8581,6 +8685,11 @@ unsafe fn raynu_f_stage_disk_bootloader(
     serial::write_line(" (F7 disk; not ISO-INSTALL-OK)");
     raynu_f_note_esp_grub_cfg(&vol, &vol_reader, path);
     let file_path = if choice.publish_file_path {
+        if !raynu_f_publish_esp_partition(&esp, layout.blockio_disk, layout.sfs, ram_hpa) {
+            serial::write_line(
+                "boot: RayNu-F WARN ESP handle not published (GRUB may stay at grub>)",
+            );
+        }
         Some(path)
     } else {
         None

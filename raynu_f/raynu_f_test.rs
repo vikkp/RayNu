@@ -2810,6 +2810,44 @@ fn grub_load_path_joins_a_relative_open_to_the_ubuntu_shim_dir() {
     assert!(!st.grub_open_pending);
 }
 
+#[test]
+fn esp_device_path_is_a_child_of_the_whole_disk() {
+    use super::blockio::{
+        BlockMedia, MEDIA_LOGICAL_PARTITION_OFF, MEDIA_SIZE, MEDIA_ID_DISK,
+    };
+    use super::protocol::{
+        device_path_is_grub_partition_child, encode_esp_device_path,
+        encode_whole_disk_device_path, DEVICE_PATH_BYTES, DP_VENDOR_LEN, ESP_DEVICE_PATH_BYTES,
+    };
+    let mut disk = [0u8; DEVICE_PATH_BYTES];
+    encode_whole_disk_device_path(&mut disk);
+    let sig = [0x11u8; 16];
+    let mut esp = [0u8; 96];
+    let n = encode_esp_device_path(1, 2048, 1_101_824, sig, &mut esp).expect("fits");
+    assert_eq!(n, ESP_DEVICE_PATH_BYTES);
+    assert_eq!(&esp[..DP_VENDOR_LEN], &disk[..DP_VENDOR_LEN]);
+    assert!(device_path_is_grub_partition_child(&esp[..n]));
+    assert!(!device_path_is_grub_partition_child(&disk));
+    assert_eq!(
+        u32::from_le_bytes(esp[DP_VENDOR_LEN + 4..DP_VENDOR_LEN + 8].try_into().unwrap()),
+        1
+    );
+    assert_eq!(
+        u64::from_le_bytes(esp[DP_VENDOR_LEN + 8..DP_VENDOR_LEN + 16].try_into().unwrap()),
+        2048
+    );
+    let media = BlockMedia::esp(1_101_824);
+    assert!(media.logical_partition);
+    assert_eq!(media.media_id, MEDIA_ID_DISK);
+    assert_eq!(media.last_block, 1_101_823);
+    let mut enc = [0u8; MEDIA_SIZE];
+    media.encode(&mut enc);
+    assert_eq!(enc[MEDIA_LOGICAL_PARTITION_OFF], 1);
+    BlockMedia::disk(512).encode(&mut enc);
+    assert_eq!(enc[MEDIA_LOGICAL_PARTITION_OFF], 0);
+    assert!(encode_esp_device_path(1, 0, 1, sig, &mut [0u8; 8]).is_none());
+}
+
 /// Ubuntu copies shim to `\EFI\BOOT\BOOTX64.EFI` and leaves `grubx64.efi` in
 /// `\EFI\ubuntu\`. The disk picker stages that GRUB file, not the shim.
 /// A relative open from the removable directory misses `grubx64.efi`.

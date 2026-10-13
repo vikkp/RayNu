@@ -48,6 +48,10 @@ pub const HANDLE_CD: u64 = 0x5246_0000_0000_0020;
 pub const HANDLE_DISK: u64 = 0x5246_0000_0000_0021;
 /// Handle for the image `LoadImage` staged (F5).
 pub const HANDLE_IMAGE: u64 = 0x5246_0000_0000_0022;
+/// ESP of the install disk. Device path is the whole-disk vendor node plus
+/// a Media/HardDrive node, so GRUB names it `hd0,gpt1` instead of reading
+/// `\EFI\ubuntu` from LBA 0 of the raw disk.
+pub const HANDLE_ESP: u64 = 0x5246_0000_0000_0023;
 /// First handle minted for a guest `InstallMultipleProtocolInterfaces` with
 /// `*Handle == NULL` (GRUB's initrd `LoadFile2` handle is the first).
 pub const HANDLE_DYNAMIC_BASE: u64 = 0x5246_0000_0000_0100;
@@ -99,6 +103,8 @@ pub const DP_END_LEN: usize = 0x04;
 pub const CD_DEVICE_PATH_BYTES: usize = DP_CDROM_LEN + DP_END_LEN;
 pub const HD_DEVICE_PATH_BYTES: usize = DP_HD_LEN + DP_END_LEN;
 pub const WHOLE_DISK_DEVICE_PATH_BYTES: usize = DP_VENDOR_LEN + DP_END_LEN;
+/// Vendor node + HardDrive node + End. Longer than the firmware image slot.
+pub const ESP_DEVICE_PATH_BYTES: usize = DP_VENDOR_LEN + DP_HD_LEN + DP_END_LEN;
 /// RayNu-F whole-disk vendor GUID `{52464E55-00F7-11D2-BA4B-5241594E5546}`
 /// (`RFNU` + F7 + `RAYNUF`). Distinguishes `HANDLE_DISK` from a CDROM /
 /// HardDrive *partition* node so GRUB `efidisk` names the disk `hd0`.
@@ -184,6 +190,46 @@ pub fn encode_whole_disk_device_path(out: &mut [u8; DEVICE_PATH_BYTES]) {
     out[DP_VENDOR_LEN + 1] = DP_SUBTYPE_END_ENTIRE;
     out[DP_VENDOR_LEN + 2..DP_VENDOR_LEN + 4]
         .copy_from_slice(&(DP_END_LEN as u16).to_le_bytes());
+}
+
+/// ESP device path: the whole-disk vendor node, then Media/HardDrive, then End.
+///
+/// GRUB `efidisk` treats a path that ends in HardDrive as a partition and
+/// links it to the disk whose path is the prefix (`hd0` + `hd0,gpt1`).
+/// `\EFI\ubuntu\grub.cfg` lives on that partition, not at LBA 0.
+/// Returns the number of bytes written, or `None` when `out` is short.
+pub fn encode_esp_device_path(
+    partition_number: u32,
+    start_lba: u64,
+    size_lba: u64,
+    signature: [u8; 16],
+    out: &mut [u8],
+) -> Option<usize> {
+    if out.len() < ESP_DEVICE_PATH_BYTES {
+        return None;
+    }
+    for b in out[..ESP_DEVICE_PATH_BYTES].iter_mut() {
+        *b = 0;
+    }
+    out[0] = DP_TYPE_HARDWARE;
+    out[1] = DP_SUBTYPE_VENDOR;
+    out[2..4].copy_from_slice(&(DP_VENDOR_LEN as u16).to_le_bytes());
+    out[4..20].copy_from_slice(&GUID_RAYNU_F_DISK);
+    let hd = DP_VENDOR_LEN;
+    out[hd] = DP_TYPE_MEDIA;
+    out[hd + 1] = DP_SUBTYPE_HD;
+    out[hd + 2..hd + 4].copy_from_slice(&(DP_HD_LEN as u16).to_le_bytes());
+    out[hd + 4..hd + 8].copy_from_slice(&partition_number.to_le_bytes());
+    out[hd + 8..hd + 16].copy_from_slice(&start_lba.to_le_bytes());
+    out[hd + 16..hd + 24].copy_from_slice(&size_lba.to_le_bytes());
+    out[hd + 24..hd + 40].copy_from_slice(&signature);
+    out[hd + 40] = DP_MBR_TYPE_GPT;
+    out[hd + 41] = DP_SIG_TYPE_GUID;
+    let end = hd + DP_HD_LEN;
+    out[end] = DP_TYPE_END;
+    out[end + 1] = DP_SUBTYPE_END_ENTIRE;
+    out[end + 2..end + 4].copy_from_slice(&(DP_END_LEN as u16).to_le_bytes());
+    Some(ESP_DEVICE_PATH_BYTES)
 }
 
 /// Media/FilePath node + End Entire for an ASCII `\` path (no trailing NUL).
