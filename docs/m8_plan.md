@@ -223,7 +223,7 @@ The fence accepts one LD of ~2.5–3.1 TiB and refuses ~300–512 GiB. Scratch p
 
 ### M8.8 — Ubuntu ISO library on RAYNU-SPARE
 
-**Status: M8.8.1–M8.8.4 lived on `c3a70e62`.** Choice 4 reached `vikkp@raynusrv2:~$` with the library file still waiting (`initrd.img-7.0.0-14-generic`, 34338680 bytes, `Linux version 7.0.0-14-generic`). The same COM2 then printed `boot: M8.8 library ISO cleared (signature sector only; disks unchanged)`. That wipe is the ISO signature sector. UBUNTU0, the 8 GiB window, and the Ubuntu disk stay. The `ISO-INSTALL-OK` line in that boot is the firmware handoff, not a new install close. Scores held. Next is the guest NIC, after M8.8.
+**Status: M8.8.1–M8.8.4 lived on `c3a70e62`.** Choice 4 reached `vikkp@raynusrv2:~$` with the library file still waiting (`initrd.img-7.0.0-14-generic`, 34338680 bytes, `Linux version 7.0.0-14-generic`). The same COM2 then printed `boot: M8.8 library ISO cleared (signature sector only; disks unchanged)`. That wipe is the ISO signature sector. UBUNTU0, the 8 GiB window, and the Ubuntu disk stay. The `ISO-INSTALL-OK` line in that boot is the firmware handoff, not a new install close. Scores held. Next is **M8.9**, the admin-attached guest NIC. It is not M8.8.5.
 
 **Goal:** The operator picks `ubuntu-26.04-live-server-amd64.iso` on Guests. The hypervisor stores that file unchanged in a high library on RAYNU-SPARE and boots it as a CD. The file stays after install. **Clear ISO** on Guests drops the catalog hold and wipes the ISO signature sector. It does not scrub the whole file and it does not touch an installed disk.
 
@@ -236,7 +236,15 @@ M8.4 stays the host 256-byte blob. M8.8 is the product path and may proceed whil
 | M8.8.3 boot | The file stays waiting until Guests chooses it. That choice is virtio `vdb` and the RayNu-F CD (`\EFI\BOOT\BOOTX64.EFI` from the library El Torito). Start on an Alpine row does not attach it. This boot does not rewrite the stored bytes. The answerer types neither `root` nor `setup-disk`. The library CD `BlockIo` view adds `console=ttyS0` on `linux` lines and bumps the ISO9660 directory length. | Lived on the install boot: Subiquity reached Installation complete. COM2 showed `library CD chosen`, `cd_bytes=2918598656`, and `ISO-BOOT` from that file. |
 | M8.8.4 install and clear | Subiquity installs onto the new `vda`. The ISO stays until the operator clicks **Clear ISO**. That click returns Placeable and wipes the signature sector. A boot of the installed disk does not delete the file. | **Lived** on `c3a70e62`: `vikkp@raynusrv2:~$` while the file was still held, then `boot: M8.8 library ISO cleared (signature sector only; disks unchanged)`. UBUNTU0 and `ee851fd5` stay. |
 
-Guest SSH is not a row in this table. It is [ADR-013](adr/ADR-013.md) Appendix C: virtio NIC, own MAC, egress `01:00.1` / `b0:26:28:5c:5a:39`. The SPA stays on `:38`. After M8.8. Not built.
+---
+
+### M8.9 — Admin-attached guest NIC
+
+**Status: accepted in [ADR-013](adr/ADR-013.md) Appendix C (2026-10-13). Not built.** Not M8.8.5. M8.8 stays the library plan.
+
+**Goal:** The admin attaches a virtio NIC on a Guests row. Create does not attach one. **Get from DHCP** fills the form from a lease on that guest’s MAC through `01:00.1` / `b0:26:28:5c:5a:39`. **Save** pins the address on that guest. Manual entry uses the same Save. The record lives on the spare and survives a hypervisor Force Off until the admin saves again or detaches it. The next Start applies it. The SPA stays on `:38`.
+
+**Close when:** COM2 shows a guest frame leaving `:39`, and a login to that guest address from another machine.
 
 ---
 

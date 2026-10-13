@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | site-ubuntu-loi |
-| Summary | **M8.8 lived, so the public pages and the scores move.** PERC 78→86. Unmodified 25→45. Bar B 60→70. Overall 73→78. Bar A 92 held. Guest NIC is next. |
+| Commit | m8-9-nic-adr |
+| Summary | **Guest NIC is M8.9 in ADR-013.** Not M8.8.5. Not built. Scores held. Bar A 92. Bar B 70. Overall 78. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Bar A 92 held. Bar B 60→70. perc 78→86. unmodified 25→45. Overall 73→78. Months B 1.5→1.25. |
 | Gates touched | M8.8.4 lived. Clear ISO wiped the signature sector. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-10-13 | m8-9-nic-adr | 92 | 70 | **ADR-013 Appendix C: the guest NIC is M8.9.** Admin attaches it. DHCP fills the form; Save pins it. Not built. Scores held. Bar A 92. Bar B 70. Overall 78. PERC 86. Unmodified 45. |
 | 2026-10-13 | site-ubuntu-loi | 92 | 70 | **Public pages catch up to M8.8.** Ubuntu on the PERC spare reached `vikkp@raynusrv2:~$`, then Clear ISO. PERC 78→86. Unmodified 25→45 because the installed guest is Ubuntu and the library CD view still adds `console=ttyS0`. Bar B 60→70. Overall 73→78. Bar A 92 held. Months B 1.5→1.25. Guest NIC is next. |
 | 2026-10-13 | m8-8-iso-cleared | 92 | 60 | **`boot: M8.8 library ISO cleared (signature sector only; disks unchanged)` after `vikkp@raynusrv2:~$`.** M8.8.4 lived. UBUNTU0 and the Ubuntu disk stay. Unmodified media stays 25. Bar B stays 60. |
 | 2026-10-13 | m8-8-ubuntu-login | 92 | 60 | **`c3a70e62` `vikkp@raynusrv2:~$` on Ubuntu 26.04, kernel 7.0.0-14-generic.** Initrd `initrd.img-7.0.0-14-generic` (34338680 bytes). Library ISO still waiting. Clear ISO not clicked. Unmodified media stays 25. Bar B stays 60. |
