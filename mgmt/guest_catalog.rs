@@ -396,6 +396,7 @@ enum NicRoute {
         dns: [u8; 4],
     },
     Detach(u64),
+    Discover(u64),
     Bad,
 }
 
@@ -406,6 +407,9 @@ fn parse_nic_route(path: &str) -> Option<NicRoute> {
     let kind = parts.next()?;
     if kind == "detach" && parts.next().is_none() {
         return Some(NicRoute::Detach(off));
+    }
+    if kind == "dhcp" && parts.next().is_none() {
+        return Some(NicRoute::Discover(off));
     }
     let mode = match kind {
         "m" => crate::mgmt::guest_nic::NicMode::Manual,
@@ -463,6 +467,38 @@ fn parse_ipv4(s: &str) -> Option<[u8; 4]> {
     }
 }
 
+fn discover_nic(spare_off: u64) -> GuestCatalogHttp {
+    let saved = crate::mgmt::guest_nic::panel_snapshot()
+        .get(spare_off)
+        .map(|r| r.mac);
+    let mac = crate::mgmt::guest_dhcp::discover_mac(saved, spare_off);
+    let offer = crate::mgmt::guest_dhcp::preview_offer(mac);
+    let mut body = [0u8; 192];
+    let mut w = JsonBuf::new(&mut body);
+    match offer {
+        Some(fields) => {
+            w.s("{\"ok\":true,\"saved\":false,\"mac\":\"");
+            write_mac(&mut w, mac);
+            w.s("\",\"ip\":\"");
+            write_ip(&mut w, fields.ipv4);
+            w.s("\",\"px\":");
+            w.u(u64::from(fields.prefix));
+            w.s(",\"gw\":\"");
+            write_ip(&mut w, fields.gateway);
+            w.s("\",\"dns\":\"");
+            write_ip(&mut w, fields.dns);
+            w.s("\"}");
+        }
+        None => {
+            w.s("{\"ok\":false,\"reason\":\"noffer\",\"mac\":\"");
+            write_mac(&mut w, mac);
+            w.s("\"}");
+        }
+    }
+    let n = if w.fit { w.n } else { 0 };
+    ready(200, &body[..n], None)
+}
+
 fn nic_rest(method: RestMethod, route: NicRoute, authed: bool) -> GuestCatalogHttp {
     if !authed {
         return GuestCatalogHttp::Unauthorized;
@@ -473,6 +509,7 @@ fn nic_rest(method: RestMethod, route: NicRoute, authed: bool) -> GuestCatalogHt
     let spare = crate::mgmt::megaraid::perc_spare_bytes();
     match route {
         NicRoute::Bad => GuestCatalogHttp::BadMethod,
+        NicRoute::Discover(spare_off) => discover_nic(spare_off),
         NicRoute::Detach(spare_off) => {
             if crate::mgmt::guest_nic::panel_detach(spare_off) {
                 crate::audit_log!(crate::audit::AuditEvent::GuestNicDetached { spare_off });
@@ -1298,6 +1335,8 @@ pub fn prop_guest_catalog() -> bool {
         && html.contains("id=\"n-ip\"")
         && html.contains("btn-nic")
         && html.contains("btn-dhcp")
+        && html.contains("/dhcp")
+        && html.contains("Offer filled")
         && html.contains("btn-det")
         && html.contains("a.disabled=!vm.start")
         && html.contains("c.disabled=!vm.stop")
@@ -1322,6 +1361,37 @@ mod guest_catalog_test {
     fn row_power_stays_on_the_row() {
         assert_eq!(row_power(false), (true, false));
         assert_eq!(row_power(true), (false, true));
+    }
+
+    #[test]
+    fn m893_offer_fills_fields_and_does_not_save() {
+        crate::mgmt::guest_nic::clear_panel_for_test();
+        crate::mgmt::guest_dhcp::inject_offer_for_test(Some(crate::mgmt::guest_dhcp::DhcpFields {
+            ipv4: [10, 99, 99, 50],
+            prefix: 24,
+            gateway: [10, 99, 99, 1],
+            dns: [1, 1, 1, 1],
+        }));
+        let (st, body) = nic_exchange(
+            "POST /perc/nic/0/dhcp HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
+        );
+        assert_eq!(st, 200, "{body}");
+        assert!(body.contains("\"saved\":false"), "{body}");
+        assert!(body.contains("\"ip\":\"10.99.99.50\""), "{body}");
+        assert!(body.contains("\"px\":24"), "{body}");
+        let (st, list) = nic_exchange(
+            "GET /perc/guests HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
+        );
+        assert_eq!(st, 200, "{list}");
+        assert!(!list.contains("\"nic\""), "{list}");
+        crate::mgmt::guest_dhcp::inject_offer_for_test(None);
+        let (st, body) = nic_exchange(
+            "POST /perc/nic/0/dhcp HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
+        );
+        assert_eq!(st, 200, "{body}");
+        assert!(body.contains("\"reason\":\"noffer\""), "{body}");
+        assert!(!body.contains("\"ip\""), "{body}");
+        crate::mgmt::guest_nic::clear_panel_for_test();
     }
 
     #[test]
