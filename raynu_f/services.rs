@@ -479,6 +479,13 @@ pub struct FirmwareState {
     /// Successful block reads / writes (host bookkeeping for markers).
     pub block_reads: u32,
     pub block_writes: u32,
+    /// `LocateDevicePath` of the Linux initrd vendor path.
+    /// `matched` is the handle prefix in bytes. `forced` is set when that
+    /// prefix did not land on End and the remainder was moved there so
+    /// GRUB's `LoadFile` size query can return `EFI_BUFFER_TOO_SMALL`.
+    pub initrd_locate_matched: u16,
+    pub initrd_locate_forced: bool,
+    pub initrd_locate_seen: bool,
     /// Mok and other variables for this firmware boot. Not on disk.
     pub vars: super::vars::VarStore,
     /// `SetVirtualAddressMap` has run. A second call is `EFI_UNSUPPORTED`.
@@ -527,6 +534,9 @@ impl FirmwareState {
             cd_linux_skip: false,
             block_reads: 0,
             block_writes: 0,
+            initrd_locate_matched: 0,
+            initrd_locate_forced: false,
+            initrd_locate_seen: false,
             vars: super::vars::VarStore::new(),
             virtual_mode: false,
         }
@@ -1125,12 +1135,38 @@ fn device_path_len(mem: &dyn GuestMem, dp: u64) -> Option<usize> {
     None
 }
 
+/// First node is Media/Vendor with [`super::protocol::LINUX_EFI_INITRD_MEDIA_GUID`].
+fn path_starts_with_linux_initrd(mem: &dyn GuestMem, dp: u64) -> bool {
+    let mut node = [0u8; 20];
+    if mem.read(dp, &mut node) < 20 {
+        return false;
+    }
+    let len = u16::from_le_bytes([node[2], node[3]]);
+    node[0] == super::protocol::DP_TYPE_MEDIA
+        && node[1] == super::protocol::DP_SUBTYPE_VENDOR_MEDIA
+        && len >= 20
+        && node[4..20] == super::protocol::LINUX_EFI_INITRD_MEDIA_GUID
+}
+
+fn node_is_end_entire(mem: &dyn GuestMem, dp: u64) -> bool {
+    let mut hdr = [0u8; 4];
+    mem.read(dp, &mut hdr) >= 4
+        && hdr[0] == super::protocol::DP_TYPE_END
+        && hdr[1] == super::protocol::DP_SUBTYPE_END_ENTIRE
+}
+
 /// `LocateDevicePath(Guid*, DevicePath**, Handle*)` (UEFI 2.10 §7.3): the
 /// handle supporting `Guid` whose device path is the longest prefix of
 /// `*DevicePath`; `*DevicePath` is advanced to the first unmatched node.
 /// This is how the Linux EFI stub finds GRUB's initrd `LoadFile2` handle
 /// (vendor media path `5568E427-68FC-4F3D-AC74-CA555231CC68`).
-fn locate_device_path(st: &FirmwareState, mem: &dyn GuestMem, a: ServiceArgs) -> u64 {
+///
+/// GRUB 2.14's `LoadFile` returns `EFI_NOT_FOUND` unless that remainder is
+/// an End node, and the stub turns any other status into `EFI_LOAD_ERROR`
+/// (`Failed to load initrd: 0x8000000000000001` on `1149d279`). A zero-length
+/// prefix leaves the vendor node in place. When the request is the Linux
+/// initrd path, the remainder is the request's own End node.
+fn locate_device_path(st: &mut FirmwareState, mem: &dyn GuestMem, a: ServiceArgs) -> u64 {
     let Some(guid) = read_guid(mem, a.a1) else {
         return EFI_INVALID_PARAMETER;
     };
@@ -1179,6 +1215,16 @@ fn locate_device_path(st: &FirmwareState, mem: &dyn GuestMem, a: ServiceArgs) ->
     let Some((h, matched)) = best else {
         return PROTO_NOT_FOUND;
     };
+    let mut matched = matched;
+    if path_starts_with_linux_initrd(mem, want) {
+        let forced = !node_is_end_entire(mem, want + matched as u64);
+        st.initrd_locate_matched = matched.min(u16::MAX as usize) as u16;
+        st.initrd_locate_forced = forced;
+        st.initrd_locate_seen = true;
+        if forced {
+            matched = want_len;
+        }
+    }
     if write_u64(mem, a.a3, h) && write_u64(mem, a.a2, want + matched as u64) {
         EFI_SUCCESS
     } else {

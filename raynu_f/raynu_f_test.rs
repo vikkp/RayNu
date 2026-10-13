@@ -961,6 +961,7 @@ fn raynu_f_protocols_and_blockio() {
         validate_transfer, BlockMedia, BLOCKIO_MEDIA_OFF, BLOCKIO_READ_OFF, BLOCKIO_REVISION2,
         BLOCKIO_REVISION_OFF, BLOCKIO_WRITE_OFF, CD_BLOCK_SIZE, DISK_BLOCK_SIZE,
         EFI_BAD_BUFFER_SIZE, EFI_MEDIA_CHANGED, EFI_NO_MEDIA, EFI_WRITE_PROTECTED,
+        MAX_TRANSFER_BYTES,
         MEDIA_BLOCK_SIZE_OFF, MEDIA_LAST_BLOCK_OFF, MEDIA_MEDIA_ID_OFF, MEDIA_PRESENT_OFF,
         MEDIA_READ_ONLY_OFF, MEDIA_REMOVABLE_OFF, MEDIA_SIZE,
     };
@@ -1030,6 +1031,17 @@ fn raynu_f_protocols_and_blockio() {
     assert_eq!(validate_transfer(&media_cd, 1, 0, 2048, 0, false), EFI_INVALID_PARAMETER);
     assert_eq!(validate_transfer(&BlockMedia::cd(0), 1, 0, 2048, 0x1000, false), EFI_NO_MEDIA);
     assert_eq!(validate_transfer(&media_disk, 2, 0, 512, 0x1000, true), EFI_SUCCESS);
+    // A contiguous ext4 extent can be larger than 2 MiB. The initrd read
+    // must not come back INVALID_PARAMETER (`1149d279` stub LOAD_ERROR).
+    let big = BlockMedia::disk(256 * 1024 * 1024);
+    assert_eq!(
+        validate_transfer(&big, 2, 0, 8 * 1024 * 1024, 0x1000, false),
+        super::memory::EFI_SUCCESS
+    );
+    assert_eq!(
+        validate_transfer(&big, 2, 0, MAX_TRANSFER_BYTES + 512, 0x1000, false),
+        EFI_INVALID_PARAMETER
+    );
 
     // --- protocol database ------------------------------------------------
     let mut db = Protocols::new();
@@ -2364,6 +2376,80 @@ fn raynu_f_below_1m_trampoline_window() {
             && r.pages >= 1),
         "AnyPages drained the trampoline window out of the map"
     );
+}
+
+/// `1149d279` drew the Ubuntu menu, then the stub printed
+/// `Failed to load initrd: 0x8000000000000001`. GRUB 2.14's `LoadFile`
+/// returns `EFI_NOT_FOUND` unless `LocateDevicePath` left an End node.
+/// A handle path that does not share the vendor prefix must still leave
+/// that End node when the request is the Linux initrd media path.
+#[test]
+fn linux_initrd_locate_lands_on_the_end_node() {
+    use super::protocol::{
+        GUID_DEVICE_PATH, GUID_LOAD_FILE2, HANDLE_DYNAMIC_BASE, LINUX_EFI_INITRD_MEDIA_GUID,
+    };
+    use super::services::{
+        dispatch, FirmwareState, ServiceArgs, ServiceId, EFI_SUCCESS,
+    };
+
+    let mem = vec![0u8; SLAB as usize];
+    let guest = MockGuest::new(0, mem);
+    let mut sink = CaptureSink::default();
+    let clk = ManualClock { now: Cell::new(1_000), step: 1_000 };
+    let mut st = FirmwareState::new();
+    let scratch = 0x00B0_0000u64;
+    let dp_end = scratch;
+    let dp_initrd = scratch + 0x100;
+    let p_dp = scratch + 0x200;
+    let p_h = scratch + 0x208;
+    let g_lf2 = scratch + 0x300;
+    guest.write(g_lf2, &GUID_LOAD_FILE2);
+    guest.write(dp_end, &[0x7F, 0xFF, 0x04, 0x00]);
+    let mut dp = [0u8; 0x18];
+    dp[0] = 0x04;
+    dp[1] = 0x03;
+    dp[2..4].copy_from_slice(&0x14u16.to_le_bytes());
+    dp[4..20].copy_from_slice(&LINUX_EFI_INITRD_MEDIA_GUID);
+    dp[0x14] = 0x7F;
+    dp[0x15] = 0xFF;
+    dp[0x16..0x18].copy_from_slice(&4u16.to_le_bytes());
+    guest.write(dp_initrd, &dp);
+    assert_eq!(st.protocols.install(HANDLE_DYNAMIC_BASE, GUID_LOAD_FILE2, scratch + 0x400), EFI_SUCCESS);
+    assert_eq!(st.protocols.install(HANDLE_DYNAMIC_BASE, GUID_DEVICE_PATH, dp_end), EFI_SUCCESS);
+    guest.put_u64(p_dp, dp_initrd);
+    guest.put_u64(p_h, 0);
+    let d = dispatch(
+        ServiceId::LocateDevicePath,
+        ServiceArgs::regs(g_lf2, p_dp, p_h, 0),
+        &guest,
+        &mut sink,
+        &mut st,
+        &clk,
+        SLAB,
+    );
+    assert_eq!(d.status, EFI_SUCCESS);
+    assert_eq!(guest.u64_at(p_h), HANDLE_DYNAMIC_BASE);
+    assert_eq!(guest.u64_at(p_dp), dp_initrd + 0x14);
+    assert!(st.initrd_locate_seen);
+    assert!(st.initrd_locate_forced);
+    assert_eq!(st.initrd_locate_matched, 0);
+
+    // The real GRUB path is a prefix. Remainder is already End; do not move it.
+    assert_eq!(st.protocols.install(HANDLE_DYNAMIC_BASE, GUID_DEVICE_PATH, dp_initrd), EFI_SUCCESS);
+    guest.put_u64(p_dp, dp_initrd);
+    let d = dispatch(
+        ServiceId::LocateDevicePath,
+        ServiceArgs::regs(g_lf2, p_dp, p_h, 0),
+        &guest,
+        &mut sink,
+        &mut st,
+        &clk,
+        SLAB,
+    );
+    assert_eq!(d.status, EFI_SUCCESS);
+    assert_eq!(guest.u64_at(p_dp), dp_initrd + 0x14);
+    assert!(!st.initrd_locate_forced);
+    assert_eq!(st.initrd_locate_matched, 0x14);
 }
 
 /// F6-prep b: the GRUB → Linux EFI stub initrd handshake, nested `2d34fff`.

@@ -4349,6 +4349,10 @@ static RAYNU_F_GRUB_OPEN_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_GRUB_PREFIX_LOGGED: AtomicBool = AtomicBool::new(false);
 /// One line when the first `BlockIo` read completes (`blk_rd` leaves zero).
 static RAYNU_F_BLKRD_LOGGED: AtomicBool = AtomicBool::new(false);
+/// One line when the stub's initrd `LocateDevicePath` returns.
+static RAYNU_F_INITRD_DP_LOGGED: AtomicBool = AtomicBool::new(false);
+/// One line for the first failed disk `ReadBlocks` (initrd extent).
+static RAYNU_F_BLKFAIL_LOGGED: AtomicBool = AtomicBool::new(false);
 /// One line when GRUB's PIT channel-2 calibration wait completes.
 static RAYNU_F_PIT2_LOGGED: AtomicBool = AtomicBool::new(false);
 /// One line when StartImage appends `console=ttyS0` for the library CD.
@@ -7925,6 +7929,8 @@ unsafe fn raynu_f_reset_relaunch(_src: crate::devices::guest_platform::ResetSrc)
     RAYNU_F_GRUB_OPEN_LOGGED.store(false, Ordering::Release);
     RAYNU_F_GRUB_PREFIX_LOGGED.store(false, Ordering::Release);
     RAYNU_F_BLKRD_LOGGED.store(false, Ordering::Release);
+    RAYNU_F_INITRD_DP_LOGGED.store(false, Ordering::Release);
+    RAYNU_F_BLKFAIL_LOGGED.store(false, Ordering::Release);
     RAYNU_F_PIT2_LOGGED.store(false, Ordering::Release);
     RAYNU_F_SERIAL_LOGGED.store(false, Ordering::Release);
     RAYNU_F_GRUBCFG_LOGGED.store(false, Ordering::Release);
@@ -12398,6 +12404,27 @@ unsafe fn handle_raynu_f_service() -> bool {
         serial::write_line(
             "boot: RayNu-F blk_rd left zero (GRUB reading the CD; not ISO-INSTALL-OK)",
         );
+    }
+    if st.initrd_locate_seen && !RAYNU_F_INITRD_DP_LOGGED.swap(true, Ordering::AcqRel) {
+        serial::write_str("boot: RayNu-F initrd LocateDevicePath matched=");
+        write_dec(u64::from(st.initrd_locate_matched));
+        if st.initrd_locate_forced {
+            serial::write_line(" remainder=End forced (GRUB LoadFile; not ISO-INSTALL-OK)");
+        } else {
+            serial::write_line(" remainder=End (not ISO-INSTALL-OK)");
+        }
+    }
+    if id == crate::raynu_f::ServiceId::BlockIoReadBlocks
+        && d.status != 0
+        && !RAYNU_F_BLKFAIL_LOGGED.swap(true, Ordering::AcqRel)
+    {
+        serial::write_str("boot: RayNu-F blk fail st=0x");
+        write_hex(d.status);
+        serial::write_str(" bytes=");
+        write_dec(args.a4);
+        serial::write_str(" lba=");
+        write_dec(args.a3);
+        serial::write_line(" (not ISO-INSTALL-OK)");
     }
     if matches!(d.wait, Some(crate::raynu_f::WaitOutcome::TimerFired(_)))
         && !RAYNU_F_TIMER_LOGGED.swap(true, Ordering::AcqRel)

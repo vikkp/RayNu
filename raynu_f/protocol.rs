@@ -39,6 +39,12 @@ pub const GUID_DEVICE_PATH: Guid = [
 pub const GUID_LOAD_FILE2: Guid = [
     0xC1, 0xC0, 0x06, 0x40, 0xB3, 0xFC, 0x3E, 0x40, 0x99, 0x6D, 0x4A, 0x6C, 0x87, 0x24, 0xE0, 0x6D,
 ];
+/// `LINUX_EFI_INITRD_MEDIA_GUID` {5568E427-68FC-4F3D-AC74-CA555231CC68}.
+/// Media/Vendor node on GRUB's initrd `LoadFile2` handle. The stub's
+/// `LocateDevicePath` walks this, then calls `LoadFile` with the remainder.
+pub const LINUX_EFI_INITRD_MEDIA_GUID: Guid = [
+    0x27, 0xE4, 0x68, 0x55, 0xFC, 0x68, 0x3D, 0x4F, 0xAC, 0x74, 0xCA, 0x55, 0x52, 0x31, 0xCC, 0x68,
+];
 
 /// Handles RayNu-F publishes. Tagged like the console handles in `tables.rs`.
 pub const HANDLE_CD: u64 = 0x5246_0000_0000_0020;
@@ -83,6 +89,9 @@ pub const LOADED_IMAGE_REVISION: u32 = 0x1000;
 /// header(4) + BootEntry u32 + PartitionStart u64 + PartitionSize u64.
 pub const DP_TYPE_MEDIA: u8 = 0x04;
 pub const DP_SUBTYPE_CDROM: u8 = 0x02;
+/// Media / Vendor (subtype 3). Header (4) + GUID (16). The Linux initrd
+/// device path is this node plus End.
+pub const DP_SUBTYPE_VENDOR_MEDIA: u8 = 0x03;
 /// Media / File Path (subtype 4). Header (4) + NUL-terminated CHAR16 path.
 /// This is `EFI_LOADED_IMAGE_PROTOCOL.FilePath`, not the device's path.
 pub const DP_SUBTYPE_FILEPATH: u8 = 0x04;

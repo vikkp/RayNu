@@ -223,7 +223,7 @@ The fence accepts one LD of ~2.5–3.1 TiB and refuses ~300–512 GiB. Scratch p
 
 ### M8.8 — Ubuntu ISO library on RAYNU-SPARE
 
-**Status: `89a67dc4` staged `\EFI\ubuntu\grubx64.efi` and still stopped at GNU GRUB 2.14 `grub>`.** FilePath was that file. The ESP stub is `search.fs_uuid 6ded2137-de53-4881-93df-8bbdeb2b20ec` then `set prefix=($root)'/grub'`. GRUB looked for it on the raw disk, whose LBA 0 is not the ESP. This EFI publishes the ESP as `hd0,gpt1` and points the loader's device handle there. The whole disk stays `hd0`. M8.8.4 is not closed. Scores held. Do not flash until CI is green.
+**Status: `1149d279` drew the Ubuntu menu, then the EFI stub failed the initrd.** COM2 showed `*Ubuntu`, `error: no suitable video mode found`, then `EFI stub: ERROR: Failed to load initrd: 0x8000000000000001` and `start_image() returned 0x8000000000000001`. The ESP handle lived (`part=1 lba=2048`). The stub maps any LoadFile2 size-query that is not `EFI_BUFFER_TOO_SMALL` to that status. GRUB 2.14 accepts only an End-node remainder. This EFI leaves that End node, and a single disk read may be up to 128 MiB. M8.8.4 is not closed. Scores held. Do not flash until CI is green.
 
 **Goal:** The operator picks `ubuntu-26.04-live-server-amd64.iso` on Guests. The hypervisor stores that file unchanged in a high library on RAYNU-SPARE and boots it as a CD. The file stays after install. **Clear ISO** on Guests drops the catalog hold and wipes the ISO signature sector. It does not scrub the whole file and it does not touch an installed disk.
 

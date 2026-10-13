@@ -49,8 +49,14 @@ pub const MEDIA_ID_DISK: u32 = 2;
 /// Block sizes.
 pub const CD_BLOCK_SIZE: u32 = 2048;
 pub const DISK_BLOCK_SIZE: u32 = 512;
-/// Largest single transfer we will service (2 MiB).
-pub const MAX_TRANSFER_BYTES: u64 = 2 * 1024 * 1024;
+/// Largest single `ReadBlocks` / `WriteBlocks` we will service.
+///
+/// GRUB's disk layer can hand one contiguous run to `efidisk` (an ext4
+/// extent, or several cache lines agglomerated). The installed Ubuntu
+/// initrd is that run. A 2 MiB ceiling returned `EFI_INVALID_PARAMETER`,
+/// GRUB's `LoadFile` became `EFI_DEVICE_ERROR`, and the stub printed
+/// `Failed to load initrd: 0x8000000000000001`. The copy loop is 4 KiB.
+pub const MAX_TRANSFER_BYTES: u64 = 128 * 1024 * 1024;
 
 pub const EFI_SUCCESS: u64 = 0;
 pub const EFI_INVALID_PARAMETER: u64 = 0x8000_0000_0000_0002;
