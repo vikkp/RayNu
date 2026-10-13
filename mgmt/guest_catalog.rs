@@ -279,6 +279,9 @@ pub enum GuestCatalogHttp {
 /// is `noguest` and a fitting `linux_iso` is `noimage`. A disk past the
 /// window is `window` even without a latch.
 pub fn guest_catalog_rest(method: RestMethod, path: &str, authed: bool) -> GuestCatalogHttp {
+    if let Some(nic) = parse_nic_route(path) {
+        return nic_rest(method, nic, authed);
+    }
     let action = match parse_guest_route(path) {
         None => return GuestCatalogHttp::NotMine,
         Some(GuestRoute::List) => {
@@ -381,6 +384,139 @@ fn parse_guest_route(path: &str) -> Option<GuestRoute> {
         return Some(GuestRoute::Bad);
     }
     None
+}
+
+enum NicRoute {
+    Save {
+        spare_off: u64,
+        mode: crate::mgmt::guest_nic::NicMode,
+        prefix: u8,
+        ipv4: [u8; 4],
+        gateway: [u8; 4],
+        dns: [u8; 4],
+    },
+    Detach(u64),
+    Bad,
+}
+
+fn parse_nic_route(path: &str) -> Option<NicRoute> {
+    let rest = path.strip_prefix("/perc/nic/")?;
+    let mut parts = rest.split('/');
+    let off = parse_u64_token(parts.next()?)?;
+    let kind = parts.next()?;
+    if kind == "detach" && parts.next().is_none() {
+        return Some(NicRoute::Detach(off));
+    }
+    let mode = match kind {
+        "m" => crate::mgmt::guest_nic::NicMode::Manual,
+        "d" => crate::mgmt::guest_nic::NicMode::DhcpPinned,
+        _ => return Some(NicRoute::Bad),
+    };
+    let ipv4 = parse_ipv4(parts.next()?)?;
+    let prefix = parse_u64_token(parts.next()?)?;
+    if prefix > 32 {
+        return Some(NicRoute::Bad);
+    }
+    let gateway = parse_ipv4(parts.next()?)?;
+    let dns = parse_ipv4(parts.next()?)?;
+    if parts.next().is_some() {
+        return Some(NicRoute::Bad);
+    }
+    Some(NicRoute::Save {
+        spare_off: off,
+        mode,
+        prefix: prefix as u8,
+        ipv4,
+        gateway,
+        dns,
+    })
+}
+
+fn parse_u64_token(s: &str) -> Option<u64> {
+    if s.is_empty() || s.len() > 20 || !s.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    s.parse().ok()
+}
+
+fn parse_ipv4(s: &str) -> Option<[u8; 4]> {
+    let mut out = [0u8; 4];
+    let mut n = 0usize;
+    for part in s.split('.') {
+        if n == 4 {
+            return None;
+        }
+        if part.is_empty() || part.len() > 3 || !part.bytes().all(|b| b.is_ascii_digit()) {
+            return None;
+        }
+        let v: u16 = part.parse().ok()?;
+        if v > 255 {
+            return None;
+        }
+        out[n] = v as u8;
+        n += 1;
+    }
+    if n == 4 {
+        Some(out)
+    } else {
+        None
+    }
+}
+
+fn nic_rest(method: RestMethod, route: NicRoute, authed: bool) -> GuestCatalogHttp {
+    if !authed {
+        return GuestCatalogHttp::Unauthorized;
+    }
+    if !matches!(method, RestMethod::Post) {
+        return GuestCatalogHttp::BadMethod;
+    }
+    let spare = crate::mgmt::megaraid::perc_spare_bytes();
+    match route {
+        NicRoute::Bad => GuestCatalogHttp::BadMethod,
+        NicRoute::Detach(spare_off) => {
+            if crate::mgmt::guest_nic::panel_detach(spare_off) {
+                crate::audit_log!(crate::audit::AuditEvent::GuestNicDetached { spare_off });
+                ready(200, b"{\"ok\":true,\"detached\":true}", None)
+            } else {
+                ready(404, b"{\"ok\":false,\"reason\":\"nonic\"}", None)
+            }
+        }
+        NicRoute::Save {
+            spare_off,
+            mode,
+            prefix,
+            ipv4,
+            gateway,
+            dns,
+        } => {
+            match crate::mgmt::guest_nic::panel_save(
+                spare,
+                crate::mgmt::guest_nic::NicDraft {
+                    spare_off,
+                    mode,
+                    prefix,
+                    ipv4,
+                    gateway,
+                    dns,
+                },
+            ) {
+                Ok(rec) => {
+                    crate::audit_log!(crate::audit::AuditEvent::GuestNicSaved {
+                        spare_off,
+                        mode: mode as u8,
+                    });
+                    let mut body = [0u8; 96];
+                    let mut w = JsonBuf::new(&mut body);
+                    w.s("{\"ok\":true,\"mac\":\"");
+                    write_mac(&mut w, rec.mac);
+                    w.s("\"}");
+                    let n = if w.fit { w.n } else { 0 };
+                    ready(200, &body[..n], None)
+                }
+                Err(_) => ready(400, b"{\"ok\":false,\"reason\":\"addr\"}", None),
+            }
+        }
+    }
 }
 
 fn parse_disk_off(path: &str) -> Option<u64> {
@@ -932,7 +1068,9 @@ fn write_list_json(
         w.s(if stop { "true" } else { "false" });
         w.s(",\"act\":\"ISO\"}");
     }
-    w.s("]}");
+    w.s("]");
+    write_nic_json(&mut w);
+    w.s("}");
     if w.fit {
         w.n
     } else {
@@ -955,6 +1093,67 @@ fn held_by_other(want: crate::mgmt::perc_boot_choice::VmcsGuest) -> Option<&'sta
         owner if owner == want => Some(b"{\"ok\":true,\"running\":true}"),
         _ => Some(b"{\"ok\":true,\"busy\":true}"),
     }
+}
+
+fn write_nic_json(w: &mut JsonBuf<'_>) {
+    let cat = crate::mgmt::guest_nic::panel_snapshot();
+    let mut any = false;
+    for i in 0..8 {
+        let Some(rec) = cat.slot(i) else {
+            continue;
+        };
+        if !any {
+            w.s(",\"nic\":[");
+            any = true;
+        } else {
+            w.s(",");
+        }
+        w.s("{\"off\":");
+        w.u(rec.spare_off);
+        w.s(",\"mac\":\"");
+        write_mac(w, rec.mac);
+        w.s("\",\"m\":\"");
+        w.s(if rec.mode == crate::mgmt::guest_nic::NicMode::DhcpPinned {
+            "d"
+        } else {
+            "m"
+        });
+        w.s("\",\"ip\":\"");
+        write_ip(w, rec.ipv4);
+        w.s("\",\"px\":");
+        w.u(u64::from(rec.prefix));
+        w.s(",\"gw\":\"");
+        write_ip(w, rec.gateway);
+        w.s("\",\"dns\":\"");
+        write_ip(w, rec.dns);
+        w.s("\"}");
+    }
+    if any {
+        w.s("]");
+    }
+}
+
+fn write_mac(w: &mut JsonBuf<'_>, mac: [u8; 6]) {
+    for (i, b) in mac.iter().enumerate() {
+        if i > 0 {
+            w.s(":");
+        }
+        const HEX: &[u8; 16] = b"0123456789abcdef";
+        let mut s = [0u8; 2];
+        s[0] = HEX[(b >> 4) as usize];
+        s[1] = HEX[(b & 0xf) as usize];
+        w.s(core::str::from_utf8(&s).unwrap_or("00"));
+    }
+}
+
+fn write_ip(w: &mut JsonBuf<'_>, ip: [u8; 4]) {
+    w.u(u64::from(ip[0]));
+    w.s(".");
+    w.u(u64::from(ip[1]));
+    w.s(".");
+    w.u(u64::from(ip[2]));
+    w.s(".");
+    w.u(u64::from(ip[3]));
 }
 
 fn catalog_note(waiting: bool, choice: PercSpaChoice, stopped: bool) -> &'static str {
@@ -1096,6 +1295,10 @@ pub fn prop_guest_catalog() -> bool {
         && !html.contains("btn-perc-boot")
         && http.contains("guest_catalog_rest")
         && html.contains("b.note")
+        && html.contains("id=\"n-ip\"")
+        && html.contains("btn-nic")
+        && html.contains("btn-dhcp")
+        && html.contains("btn-det")
         && html.contains("a.disabled=!vm.start")
         && html.contains("c.disabled=!vm.stop")
         && include_str!("../vmx/launch.rs").contains("relaunch_perc_guest_from_spa")
@@ -1119,6 +1322,63 @@ mod guest_catalog_test {
     fn row_power_stays_on_the_row() {
         assert_eq!(row_power(false), (true, false));
         assert_eq!(row_power(true), (false, true));
+    }
+
+    #[test]
+    fn m892_save_is_still_there_on_the_next_list() {
+        crate::mgmt::guest_nic::clear_panel_for_test();
+        let save = "POST /perc/nic/0/m/10.99.99.40/24/10.99.99.1/1.1.1.1 HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n";
+        let (st, body) = nic_exchange(save);
+        assert_eq!(st, 200, "{body}");
+        assert!(body.contains("\"ok\":true"), "{body}");
+        let mac = body.split("\"mac\":\"").nth(1).unwrap_or("").split('"').next().unwrap_or("");
+        assert_eq!(mac.len(), 17, "{body}");
+        let list = "GET /perc/guests HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n";
+        let (st, body) = nic_exchange(list);
+        assert_eq!(st, 200, "{body}");
+        assert!(body.contains("\"ip\":\"10.99.99.40\""), "{body}");
+        assert!(body.contains(mac), "{body}");
+        let (st, again) = nic_exchange(list);
+        assert_eq!(st, 200, "{again}");
+        assert!(again.contains(mac), "{again}");
+        let again_save = "POST /perc/nic/0/d/10.99.99.41/22/0.0.0.0/0.0.0.0 HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n";
+        let (st, body) = nic_exchange(again_save);
+        assert_eq!(st, 200, "{body}");
+        assert!(body.contains(mac), "{body}");
+        let (st, body) = nic_exchange(list);
+        assert!(body.contains("\"ip\":\"10.99.99.41\""), "{body}");
+        assert!(body.contains("\"m\":\"d\""), "{body}");
+        let detach = "POST /perc/nic/0/detach HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n";
+        let (st, body) = nic_exchange(detach);
+        assert_eq!(st, 200, "{body}");
+        let (st, body) = nic_exchange(list);
+        assert_eq!(st, 200, "{body}");
+        assert!(!body.contains("\"nic\""), "{body}");
+        let (st, _) = nic_exchange(
+            "POST /perc/nic/0/m/10.99.99.40/24/10.99.99.1/1.1.1.1 HTTP/1.1\r\n\r\n",
+        );
+        assert_eq!(st, 401);
+        crate::mgmt::guest_nic::clear_panel_for_test();
+    }
+
+    fn nic_exchange(raw: &str) -> (u16, String) {
+        let mut table = VmTable::new();
+        let mut images = ImageTable::new();
+        let mut iso_plan = IsoDeployPlan::empty();
+        let mut iso_install = InstallToDiskPlan::empty();
+        let mut out = [0u8; HTTP_RESPONSE_CAP];
+        let n = handle_http_request(
+            &mut table,
+            &mut images,
+            &mut iso_plan,
+            &mut iso_install,
+            raw,
+            &mut out,
+        )
+        .unwrap_or(0);
+        let s = core::str::from_utf8(&out[..n]).unwrap_or("").to_string();
+        let status = s.split_whitespace().nth(1).unwrap_or("0").parse().unwrap_or(0);
+        (status, s)
     }
 
     #[test]
@@ -1347,6 +1607,7 @@ mod guest_catalog_test {
     }
 
     fn exchange(raw: &str) -> (u16, String) {
+        crate::mgmt::guest_nic::clear_panel_for_test();
         clear_perc_spa_choice_for_test();
         let mut table = VmTable::new();
         let mut images = ImageTable::new();

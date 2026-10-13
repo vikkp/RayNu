@@ -13,7 +13,7 @@
 
 extern crate alloc;
 
-use crate::mgmt::tls_coexist::{request_complete, COEXIST_HTTP_OUT_N, COEXIST_RX_ACC_N};
+use crate::mgmt::tls_coexist::{request_complete, COEXIST_RX_ACC_N, COEXIST_TLS_TX_N};
 use aes_gcm::aead::{AeadInPlace, KeyInit};
 use aes_gcm::{Aes128Gcm, Key, Nonce};
 use hmac::{Hmac, Mac};
@@ -210,7 +210,7 @@ pub struct Tls12Listen {
     ecdhe: Option<EphemeralSecret>,
     rx: [u8; COEXIST_RX_ACC_N],
     rx_len: usize,
-    tx: [u8; COEXIST_HTTP_OUT_N],
+    tx: [u8; COEXIST_TLS_TX_N],
     tx_len: usize,
     http: [u8; COEXIST_RX_ACC_N],
     http_len: usize,
@@ -236,7 +236,7 @@ impl Tls12Listen {
             ecdhe: None,
             rx: [0; COEXIST_RX_ACC_N],
             rx_len: 0,
-            tx: [0; COEXIST_HTTP_OUT_N],
+            tx: [0; COEXIST_TLS_TX_N],
             tx_len: 0,
             http: [0; COEXIST_RX_ACC_N],
             http_len: 0,
@@ -264,7 +264,7 @@ impl Tls12Listen {
             ecdhe: None,
             rx: [0; COEXIST_RX_ACC_N],
             rx_len: 0,
-            tx: [0; COEXIST_HTTP_OUT_N],
+            tx: [0; COEXIST_TLS_TX_N],
             tx_len: 0,
             http: [0; COEXIST_RX_ACC_N],
             http_len: 0,

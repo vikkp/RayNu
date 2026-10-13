@@ -33,8 +33,30 @@ pub const HTTP_GAP_NOTE: &str = "GAP(CLOSED M7.1): Network HTTPS/HTTP mgmt";
 pub const HTTP_LAB_NOTE: &str =
     "lab MVP: firmware TLS 1.2 on coexist (M8.1; plaintext HTTP remains a lab fallback; iron HTTPS closed on COM2 928d6224; ADR-003 size)";
 
-/// SPA + HTTP headers must fit this coexist / host serve buffer.
-pub const HTTP_RESPONSE_CAP: usize = 20480;
+/// Plaintext management reply, including the SPA and its headers.
+///
+/// ADR-013 (2026-10-13): was 20 KiB. The page is the management plane, so
+/// the buffer is 64 KiB. TLS 1.2 still fragments at 16 KiB. Firmware copies
+/// use [`http_reply_buf`], not a stack array of this size.
+pub const HTTP_RESPONSE_CAP: usize = 64 * 1024;
+
+/// Ciphertext room for one max reply. A TLS 1.2 record is 5 + 8 + plain + 16.
+/// Four full 16384-byte records are 65652 bytes.
+pub const HTTP_TLS_TX_CAP: usize = HTTP_RESPONSE_CAP + 4 * 1024;
+
+const _: () = assert!(4 * (5 + 8 + 16384 + 16) <= HTTP_TLS_TX_CAP);
+
+/// PRE-EBS SNP and Tcp4 reply scratch. Single-threaded firmware.
+/// The post-EBS coexist path keeps its own static and does not use this one.
+static mut HTTP_REPLY: [u8; HTTP_RESPONSE_CAP] = [0; HTTP_RESPONSE_CAP];
+
+/// Firmware HTTP reply buffer. Not the coexist session buffer.
+///
+/// SAFETY: BSP-only. PRE-EBS listen is finished before the coexist statics run.
+/// KANI-TARGET: management reply scratch (outside Proven Core).
+pub fn http_reply_buf() -> &'static mut [u8] {
+    unsafe { &mut *core::ptr::addr_of_mut!(HTTP_REPLY) }
+}
 
 /// Default lab bind (host tests / QEMU user-net docs).
 pub const MGMT_HTTP_DEFAULT_PORT: u16 = 8443;

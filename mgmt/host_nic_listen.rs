@@ -95,10 +95,10 @@ const TCP_RX_N: usize = 8192;
 /// Standing SPA window. One 64 KiB library post fits here. The QEMU listen
 /// path keeps [`TCP_RX_N`] so the management arena stays 80 KiB.
 const COEXIST_TCP_RX_N: usize = 96 * 1024;
-const TCP_TX_N: usize = COEXIST_HTTP_OUT_N;
+const TCP_TX_N: usize = crate::mgmt::tls_coexist::COEXIST_TLS_TX_N;
 const RX_ACC_N: usize = COEXIST_RX_ACC_N;
 const HTTP_OUT_N: usize = COEXIST_HTTP_OUT_N;
-const WRAP_OUT_N: usize = COEXIST_HTTP_OUT_N;
+const WRAP_OUT_N: usize = crate::mgmt::tls_coexist::COEXIST_TLS_TX_N;
 const SCRATCH_N: usize = TCP_RX_N + TCP_TX_N + HTTP_OUT_N + WRAP_OUT_N;
 const _: [(); COEXIST_RX_ACC_N] = [(); RX_ACC_N];
 const _: () = assert!(SCRATCH_N + 16 <= crate::mgmt::mgmt_arena::MGMT_ARENA_BYTES);

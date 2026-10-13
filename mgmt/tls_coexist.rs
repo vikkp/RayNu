@@ -22,8 +22,10 @@
 /// has to hold that record before it can be opened. The TCP window stays
 /// smaller; the listen loop reads until this buffer has a whole request.
 pub const COEXIST_RX_ACC_N: usize = 96 * 1024;
-/// HTTP response / TLS ciphertext drain size (must match coexist HTTP out).
+/// Plaintext HTTP response size (must match the SPA reply cap).
 pub const COEXIST_HTTP_OUT_N: usize = crate::mgmt::http::HTTP_RESPONSE_CAP;
+/// TLS ciphertext for one max reply (records plus overhead).
+pub const COEXIST_TLS_TX_N: usize = crate::mgmt::http::HTTP_TLS_TX_CAP;
 
 /// Host/CI: rustls session used the coexist feed/take/wrap API. Not iron.
 pub const M8_TLS_FW_HOST_OK_MARKER: &str = "RAYNU-V-M8-TLS-FW-HOST-OK";

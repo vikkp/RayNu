@@ -170,7 +170,7 @@ pub fn webui_html_wires_api() -> bool {
 
 /// Operator SPA (menus + status lights). Firmware-debug button labels are
 /// not required on the home screen — those POSTs stay on REST `/fw/*`.
-/// Size stays `webui_len()+256 ≤ HTTP_RESPONSE_CAP` (20 KiB; TLS 1.2 records still 16 KiB).
+/// Size stays `webui_len()+256 ≤ HTTP_RESPONSE_CAP` (64 KiB; TLS 1.2 records still 16 KiB).
 pub fn spa_operator_surface_present() -> bool {
     let Ok(s) = core::str::from_utf8(webui_raw_bytes()) else {
         return false;

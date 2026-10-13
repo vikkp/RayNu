@@ -72,10 +72,18 @@ input.token{min-width:12rem}
 <div class="card"><div class="dot" id="d-iso"></div><b>Install media</b><span id="t-iso">No ISO yet</span></div>
 </div>
 <section class="pg on" data-pg="overview">
-<h2>Overview</h2>
-<div class="card" id="perc-choice">
-<b>Spare</b>
-<p class="empty" id="perc-note">Guests</p>
+<h2>Guest NIC</h2>
+<p class="empty" id="n-mac">No NIC saved.</p>
+<div class="toolbar" id="nic-form">
+<label>Guest <select id="n-off"></select></label>
+<label>Mode <select id="n-mode"><option value="m">Manual</option><option value="d">DHCP</option></select></label>
+<label>IP <input id="n-ip" autocomplete="off"/></label>
+<label>Prefix <input id="n-px" type="number" min="1" max="32" value="24"/></label>
+<label>Gateway <input id="n-gw" autocomplete="off"/></label>
+<label>DNS <input id="n-dns" autocomplete="off"/></label>
+<button class="ghost" id="btn-dhcp" type="button">Get from DHCP</button>
+<button class="pri" id="btn-nic" type="button">Save</button>
+<button class="ghost" id="btn-det" type="button">Detach</button>
 </div>
 <div class="toolbar"><button class="danger" id="btn-poweroff" type="button">Power off host</button></div>
 </section>
@@ -189,8 +197,7 @@ async function refreshLogs(){if(up)return;setS("Fetching console…");let g="",h
 async function sendKeys(){const el=document.getElementById("g-keys");let k=el.value;if(!k)return;if(k.charCodeAt(k.length-1)!==13)k+="\r";const res=await fetch("/console/keys",{method:"POST",headers:{"Authorization":auth(),"Content-Type":"text/plain"},body:k});hostOk=res.ok||hostOk;setS(res.ok?"Sent keys":"Keys failed ("+res.status+")");if(res.ok)el.value=""}
 async function powerOff(){if(!confirm("Power off RayNu-V on this chassis?"))return;setS("Powering off…");const res=await fetch("/host/poweroff",{method:"POST",headers:{"Authorization":auth()}});hostOk=res.ok||hostOk;setS(res.ok?"Host powering off":"Power off failed ("+res.status+")")}
 function paintSpare(b){
-const cap=document.getElementById("spare-cap"),box=document.getElementById("spare-list");
-cap.textContent=b.cap||"";
+const box=document.getElementById("spare-list");
 const g=b.guests||[];
 if(!g.length){box.className="empty";box.textContent="No guest on the spare.";return}
 box.className="";box.innerHTML="";
@@ -209,9 +216,25 @@ async function loadSpare(){
 if(up)return;let r;try{r=await api("GET","/perc/guests")}catch(e){return}
 hostOk=r.ok||hostOk;if(!r.ok)return;
 let b={};try{b=await r.json()}catch(e){}
-document.getElementById("perc-note").textContent=b.note||"";
-paintSpare(b);
+capNote(b);paintNic(b);paintSpare(b);
 }
+function capNote(b){const cap=document.getElementById("spare-cap");if(cap)cap.textContent=(b.cap||"")+(b.note?(" "+b.note):"");}
+function paintNic(b){
+const sel=document.getElementById("n-off");if(!sel)return;const prev=sel.value;sel.innerHTML="";
+(b.guests||[]).forEach(function(vm){if(vm.act==="ISO")return;const o=document.createElement("option");o.value=String(vm.off_mib?vm.off_mib*1048576:0);o.textContent=vm.id+" "+(vm.name||"");sel.appendChild(o)});
+if(!sel.options.length){const o=document.createElement("option");o.value="0";o.textContent="0";sel.appendChild(o)}
+if(prev)sel.value=prev;
+const list=b.nic||[],cur=sel.value,n=list.filter(function(x){return String(x.off)===cur})[0];
+document.getElementById("n-ip").value=n?n.ip:"";
+document.getElementById("n-px").value=n?n.px:24;
+document.getElementById("n-gw").value=n?n.gw:"";
+document.getElementById("n-dns").value=n?n.dns:"";
+document.getElementById("n-mode").value=n&&n.m==="d"?"d":"m";
+document.getElementById("n-mac").textContent=n?n.mac:"No NIC saved.";
+}
+function quad(id){const v=document.getElementById(id).value;return v||"0.0.0.0"}
+async function saveNic(){if(up)return;const off=document.getElementById("n-off").value||"0";const q="/perc/nic/"+off+"/"+document.getElementById("n-mode").value+"/"+document.getElementById("n-ip").value+"/"+document.getElementById("n-px").value+"/"+quad("n-gw")+"/"+quad("n-dns");setS("Saving NIC…");const res=await api("POST",q);setS(res.ok?"NIC saved":"NIC refused ("+res.status+")");loadSpare()}
+async function detachNic(){if(up)return;const off=document.getElementById("n-off").value||"0";setS("Detaching…");const res=await api("POST","/perc/nic/"+off+"/detach");setS(res.ok?"NIC detached":"Detach refused");loadSpare()}
 function render(v){
 if(!v.length){L.className="empty";L.textContent="No guests.";return}
 L.className="";L.innerHTML="";
@@ -239,6 +262,10 @@ document.getElementById("btn-iso-firmware").onclick=armFirmwareCd;
 document.getElementById("btn-logs").onclick=refreshLogs;
 document.getElementById("btn-keys").onclick=sendKeys;
 document.getElementById("btn-poweroff").onclick=powerOff;
+document.getElementById("btn-nic").onclick=saveNic;
+document.getElementById("btn-det").onclick=detachNic;
+document.getElementById("btn-dhcp").onclick=function(){document.getElementById("n-mode").value="d";setS("DHCP discover is the next stage")};
+document.getElementById("n-off").onchange=function(){loadSpare()};
 document.getElementById("g-keys").onkeydown=function(e){if(e.key==="Enter"){e.preventDefault();sendKeys()}};
 window.raynuWebUi={listVms:listVms,startVm:startVm,stopVm:stopVm,createVm:createVm,listImages:listImages,refreshLogs:refreshLogs,sendKeys:sendKeys,powerOff:powerOff,loadSpare:loadSpare};
 dot("hv","ok","Hypervisor is running");listVms();loadSpare();setInterval(listVms,30000);setInterval(loadSpare,2000);setInterval(function(){if(document.querySelector('.pg.on[data-pg="activity"]'))refreshLogs()},2000);
