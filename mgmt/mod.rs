@@ -356,6 +356,7 @@ pub mod perc_boot_choice;
 pub mod guest_catalog;
 pub mod m8_console_gate;
 pub mod sku_card;
+pub mod guest_egress;
 pub mod guest_dhcp;
 pub mod guest_nic;
 pub mod iso_library;

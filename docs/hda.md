@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-9-dhcp-preview |
-| Summary | **M8.9.3 host: an offer fills the NIC form and does not Save.** Discover uses the guest MAC. `01:00.1` is not opened. The spare sector is not written. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | m8-9-egress-port |
+| Summary | **M8.9.3 hands the discover to function 1.** Station MAC `:39`. Function 0 stays the SPA. The APE phylock stays with iDRAC. Rings are not programmed. The form still fills from an offer and does not Save. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
-| Gates touched | M8.9.3 host DHCP preview. Port `01:00.1` not opened. Sector not written. No doorbell. No format of UBUNTU0. |
+| Gates touched | M8.9.3 egress port choice. Rings on `01:00.1` not programmed. Sector not written. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 70 held, perc 86 held, unmodified 45 held, overall LOI 78 held, months A 0.25 held, months B 1.25 held. |
 
 
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-13 | m8-9-egress-port | 0.0 | 99 | **M8.9.3 hands the discover to function 1 (`01:00.1` / `:39`).** Refused on the SPA port. APE phylock stays with iDRAC. Rings not programmed. Offer still does not Save. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-13 | m8-9-dhcp-preview | 0.0 | 99 | **M8.9.3 host: Get from DHCP fills the form from an offer and does not Save.** Guest MAC, not `:38`. `01:00.1` is not opened. Sector not written. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-13 | m8-9-nic-form | 0.0 | 99 | **M8.9.2 Overview NIC form.** Save then the next guest list returns the MAC and address. DHCP discover is M8.9.3. Sector not written. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-13 | m8-9-reply-64k | 0.0 | 99 | **ADR-013: the management reply buffer is 64 KiB.** Was 20 KiB. TLS records stay 16 KiB and the wrap already splits them. Lab arena 80→256 KiB. Scores held. months 0.0 held; overall 99 held |
@@ -1094,7 +1095,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     M8.8 lived (`vikkp@raynusrv2:~$`, then Clear ISO). M8.9.2 NIC form is on Overview (host). DHCP discover is M8.9.3. Do not format UBUNTU0. No doorbell. A5 is parked. Rollback is v0.1.0-m8-perc-spa. See docs/m8_plan.md.
+Next move:     M8.8 lived (`vikkp@raynusrv2:~$`, then Clear ISO). M8.9.3 hands the guest DHCP discover to function 1. Rings on `01:00.1` are not programmed. Do not format UBUNTU0. No doorbell. A5 is parked. Rollback is v0.1.0-m8-perc-spa. See docs/m8_plan.md.
 Rollback:      PERC SPA: v0.1.0-m8-perc-spa → CI 36362775808 / COM2 sha=8ad2ac89125e / EFI SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849
 Standing SPA:  v0.1.0-m8-a4s → CI 36137732145 / COM2 sha=1f33eeda72f9 / EFI SHA256 5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693
 Everest:       GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351 / EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc / COM2 build: sha=f72b4276d198

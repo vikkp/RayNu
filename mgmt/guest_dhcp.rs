@@ -6,10 +6,14 @@
 //!
 //! Get from DHCP builds a discover for that guest's MAC and, when an offer
 //! is in hand, returns the address fields. It does not Save and it does not
-//! write the spare sector. The SPA stays on `:38`. This slice does not open
-//! `01:00.1` and does not take the APE PHY.
+//! write the spare sector. The discover is handed to function 1
+//! (`01:00.1` / `:39`). Function 0 stays the SPA. The APE phylock stays
+//! with iDRAC. Rings on that port are not programmed.
 
-use crate::mgmt::guest_nic::{mint_mac, EGRESS_PHY_MAC, SPA_MAC};
+use crate::mgmt::guest_nic::mint_mac;
+
+#[cfg(test)]
+use crate::mgmt::guest_nic::{EGRESS_PHY_MAC, SPA_MAC};
 
 #[cfg(test)]
 use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
@@ -150,14 +154,21 @@ pub fn parse_offer(buf: &[u8]) -> Option<DhcpFields> {
 
 /// Offer for `mac`, if one is already in hand. Does not Save.
 ///
-/// The discover frame is built so the guest MAC is the client address.
-/// Opening `01:00.1` to send it is not this function.
+/// The discover is handed to function 1. A shared BAR with the SPA, or a
+/// phylock, does not arm rings. With no reply in hand this returns none.
 pub fn preview_offer(mac: [u8; 6]) -> Option<DhcpFields> {
-    if mac == SPA_MAC || mac == EGRESS_PHY_MAC || mac[0] & 1 != 0 {
-        return None;
-    }
     let frame = discover_frame(&mac, 1);
-    if frame.len < 64 || frame.bytes[6..12] != mac {
+    let port = crate::mgmt::guest_egress::iron_port();
+    let Some(hand) = crate::mgmt::guest_egress::handoff(mac, &frame.bytes, frame.len, port) else {
+        return None;
+    };
+    crate::mgmt::guest_egress::note_handoff(&hand);
+    // This call site has no function-1 BAR. Ready here would mean a zero
+    // BAR was accepted, so the form stays empty.
+    if !matches!(
+        crate::mgmt::guest_egress::rings_ready(&hand.port, 0, 0, 0),
+        crate::mgmt::guest_egress::RingArm::Hold
+    ) {
         return None;
     }
     injected_offer()
@@ -282,5 +293,24 @@ mod guest_dhcp_test {
         assert_eq!(got.gateway, [10, 99, 99, 1]);
         assert_eq!(got.dns, [1, 1, 1, 1]);
         assert!(parse_offer(&[0u8; 16]).is_none());
+    }
+
+    #[test]
+    fn preview_hands_the_discover_to_function_1() {
+        let mac = mint_mac(0);
+        inject_offer_for_test(Some(DhcpFields {
+            ipv4: [10, 99, 99, 50],
+            prefix: 24,
+            gateway: [10, 99, 99, 1],
+            dns: [1, 1, 1, 1],
+        }));
+        let got = preview_offer(mac).unwrap();
+        assert_eq!(got.ipv4, [10, 99, 99, 50]);
+        let (guest, phy, func, phylock, _) = crate::mgmt::guest_egress::last_handoff().unwrap();
+        assert_eq!(guest, mac);
+        assert_eq!(phy, EGRESS_PHY_MAC);
+        assert_eq!(func, 1);
+        assert!(!phylock);
+        inject_offer_for_test(None);
     }
 }
