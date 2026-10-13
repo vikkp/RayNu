@@ -167,7 +167,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 | M+2 | 2026-09 | E3b native NIC lab (QEMU e1000) + ISO residual | ADR-013 Phase C | **Phase C DONE (QEMU)** |
 | M+3 | 2026-08 | E3b iron HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | **DONE (M7.8 iron)** |
 | M+4 | 2026-09 | Phase B (SPA → installed disk) | remaining Everest | **DONE — EVEREST CLOSED** (`f72b4276` / `34552377351`) |
-| M+5 | 2026-10 | **M8.8** Ubuntu library install | installed disk reaches a Linux shell | **Open.** `826ca6e9` passed the real initrd length and the stub still failed the copy. This EFI reads that ext4 file. Scores held. See [m8_plan.md](m8_plan.md). |
+| M+5 | 2026-10 | **M8.8** Ubuntu library install | installed disk reaches a Linux shell | **Open.** `c3a70e62` reached `vikkp@raynusrv2:~$` on the 10 GiB Ubuntu disk. Library file still waiting. Clear ISO not clicked. Scores held. See [m8_plan.md](m8_plan.md). |
 
 ### Timeline burn-down
 
@@ -175,7 +175,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 2026-07 ████████  HDA + M6 closed (Latitude)
 2026-08 ████████  R640 boot (E2) + E3b HTTP-OK
 2026-09 ████████  E5 + Phase B — **Mount Everest CLOSED** (`f72b4276`)  ← months_to_everest = 0.0
-2026-10 ███████░  M8.8 disk GRUB menu lived; initrd copy reads ext4; scores held
+2026-10 ███████░  M8.8 Ubuntu disk login lived on c3a70e62 (`vikkp@raynusrv2`); scores held
 2026-11 ░░░░░░░░  operator picks boot or reinstall in the SPA; mailbox probe LBA 0 stays unwritten; `skip PERC` stays
 ```
 
@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-8-initrd-ext4 |
-| Summary | **`826ca6e9` copy call had `sz=34338680` and still returned `EFI_LOAD_ERROR`.** No `blk fail`. This EFI reads that ext4 file into the stub buffer. Scores held. Months **0.0 held**. Overall **99 held**. |
+| Commit | m8-8-ubuntu-login |
+| Summary | **`c3a70e62` copied `initrd.img-7.0.0-14-generic` and reached `vikkp@raynusrv2:~$`.** Library ISO still waiting. Clear ISO not clicked. Scores held. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
-| Gates touched | M8.8.3 still open. No doorbell. No format of UBUNTU0. Not a COM2 close. |
+| Gates touched | Installed-disk login lived. M8.8.4 stays open until Clear ISO. No doorbell. No format of UBUNTU0. Not an `ISO-INSTALL-OK` close. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 60 held, perc 78 held, unmodified 25 held, overall LOI 73 held, months A 0.25 held, months B 1.5 held. |
 
 
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-13 | m8-8-ubuntu-login | 0.0 | 99 | **`c3a70e62` `initrd ext4 bytes=34338680 name=initrd.img-7.0.0-14-generic`, then `Linux version 7.0.0-14-generic` and `vikkp@raynusrv2:~$`.** Library ISO still waiting. Clear ISO not clicked. The `ISO-INSTALL-OK` line in that log is the firmware handoff, not a new install close. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-13 | m8-8-initrd-ext4 | 0.0 | 99 | **`826ca6e9` `sz=34338680` then `Failed to load initrd: 0x8000000000000001`.** The length was already real. No `blk fail`. This EFI copies that ext4 file and returns success from the shim. Not `ISO-INSTALL-OK`. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-13 | m8-8-initrd-sz | 0.0 | 99 | **`fa3ccb64` `LoadFile policy=0 path0=7f buf=0x0` then `buf=0x415f000`, then `Failed to load initrd: 0x8000000000000001`.** No disk read. The copy call returns `BUFFER_TOO_SMALL` when `*BufferSize` is short. This EFI raises that check and prints `sz=`. Not `ISO-INSTALL-OK`. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-13 | m8-8-initrd-shim | 0.0 | 99 | **`4f65682f` printed `initrd LocateDevicePath matched=20 remainder=End`, then `Failed to load initrd: 0x8000000000000001`.** No `blk fail`. GRUB's LoadFile requires `this` to be its own struct. This EFI's shim enters that function with `this` restored and boot policy 0. Not `ISO-INSTALL-OK`. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |

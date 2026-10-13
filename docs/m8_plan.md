@@ -223,7 +223,7 @@ The fence accepts one LD of ~2.5–3.1 TiB and refuses ~300–512 GiB. Scratch p
 
 ### M8.8 — Ubuntu ISO library on RAYNU-SPARE
 
-**Status: `826ca6e9` showed the copy call already had the real initrd length.** COM2 printed `sz=34338680` (about 32.7 MiB) and `copy=281474976706560`, then `Failed to load initrd: 0x8000000000000001`, with no `blk fail`. The size check was not the failure. This EFI reads that ext4 file into the stub buffer and returns success. A miss falls through to GRUB and COM2 names it. M8.8.4 is not closed. Scores held. Do not flash until CI is green.
+**Status: `c3a70e62` booted the installed Ubuntu disk to a shell.** COM2 (`build: sha=c3a70e623aec`, choice 4) printed `initrd ext4 bytes=34338680 name=initrd.img-7.0.0-14-generic`, then `RAYNU-V-RAYNU-F-EBS-OK`, `Linux version 7.0.0-14-generic`, `Freeing initrd memory: 33536K`, `Welcome to Ubuntu 26.04 LTS!`, and `vikkp@raynusrv2:~$`. `vda` is 10.0 GiB (`vda1` `vda2` `vda3`) and the root is `ubuntu--vg-ubuntu--lv`. The library file stayed waiting, bytes unchanged. Clear ISO was not clicked, so M8.8.4 stays open. The `ISO-INSTALL-OK` line in that log is the firmware handoff, not a new install close. Scores held.
 
 **Goal:** The operator picks `ubuntu-26.04-live-server-amd64.iso` on Guests. The hypervisor stores that file unchanged in a high library on RAYNU-SPARE and boots it as a CD. The file stays after install. **Clear ISO** on Guests drops the catalog hold and wipes the ISO signature sector. It does not scrub the whole file and it does not touch an installed disk.
 
