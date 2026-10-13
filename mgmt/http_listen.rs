@@ -420,7 +420,7 @@ fn serve_one_tcp4_exchange(
     let n = (rx_data.data_length as usize).min(rx_buf.len());
     let raw = core::str::from_utf8(&rx_buf[..n]).unwrap_or("");
 
-    let mut out = [0u8; HTTP_RESPONSE_CAP];
+    let out = crate::mgmt::http::http_reply_buf();
     let wn = unsafe {
         crate::mgmt::pre_ebs_mgmt::with_pre_ebs_mgmt(|m| {
             handle_http_request(
@@ -429,7 +429,7 @@ fn serve_one_tcp4_exchange(
                 &mut m.iso_plan,
                 &mut m.iso_install,
                 raw,
-                &mut out,
+                out,
             )
         })
     }

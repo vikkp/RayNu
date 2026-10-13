@@ -6,7 +6,7 @@
 #![cfg(feature = "uefi-bin")]
 
 use crate::boot::serial;
-use crate::mgmt::http::{handle_http_request, HTTP_RESPONSE_CAP};
+use crate::mgmt::http::{handle_http_request, http_reply_buf, HTTP_RESPONSE_CAP};
 use crate::mgmt::http_listen::{
     MgmtListenError, M7_UEFI_HTTP_OK_MARKER, PRE_EBS_MAX_EXCHANGES, SNP_POST_BIND_LISTEN_MS,
 };
@@ -173,7 +173,7 @@ pub fn uefi_snp_listen(port: u16) -> Result<(), MgmtListenError> {
 
             if headers_done && sock.can_send() {
                 let raw = core::str::from_utf8(&rx_acc[..rx_len]).unwrap_or("");
-                let mut out = [0u8; HTTP_RESPONSE_CAP];
+                let out = http_reply_buf();
                 let wn = unsafe {
                     crate::mgmt::pre_ebs_mgmt::with_pre_ebs_mgmt(|m| {
                         handle_http_request(
@@ -182,7 +182,7 @@ pub fn uefi_snp_listen(port: u16) -> Result<(), MgmtListenError> {
                             &mut m.iso_plan,
                             &mut m.iso_install,
                             raw,
-                            &mut out,
+                            out,
                         )
                     })
                 }
