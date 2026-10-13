@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-8-initrd-lf2 |
-| Summary | **`1149d279` drew the Ubuntu menu and the stub failed the initrd (`EFI_LOAD_ERROR`).** Next EFI leaves an End-node remainder for GRUB's LoadFile2 and allows a 128 MiB disk read. Scores held. Months **0.0 held**. Overall **99 held**. |
+| Commit | m8-8-initrd-shim |
+| Summary | **`4f65682f` matched the initrd path (`matched=20 remainder=End`) and the stub still returned `EFI_LOAD_ERROR`.** No disk read failed. This EFI enters GRUB's LoadFile with the struct GRUB registered. Scores held. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
 | Gates touched | M8.8.3 still open. No doorbell. No format of UBUNTU0. Not a COM2 close. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 60 held, perc 78 held, unmodified 25 held, overall LOI 73 held, months A 0.25 held, months B 1.5 held. |
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-13 | m8-8-initrd-shim | 0.0 | 99 | **`4f65682f` printed `initrd LocateDevicePath matched=20 remainder=End`, then `Failed to load initrd: 0x8000000000000001`.** No `blk fail`. GRUB's LoadFile requires `this` to be its own struct. This EFI's shim enters that function with `this` restored and boot policy 0. Not `ISO-INSTALL-OK`. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-13 | m8-8-initrd-lf2 | 0.0 | 99 | **`1149d279` drew `*Ubuntu` then `Failed to load initrd: 0x8000000000000001`.** ESP handle lived (`part=1 lba=2048`). The stub requires LoadFile2's size query to return `EFI_BUFFER_TOO_SMALL`. This EFI leaves an End remainder and raises the disk transfer cap to 128 MiB. Not `ISO-INSTALL-OK`. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-13 | m8-8-esp-part | 0.0 | 99 | **`89a67dc4` staged `\EFI\ubuntu\grubx64.efi` and stopped at `grub>`.** Stub is `search.fs_uuid 6ded2137-…`. Next EFI names the ESP `hd0,gpt1`. Not `ISO-INSTALL-OK`. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |
 | 2026-10-12 | m8-8-grub-direct | 0.0 | 99 | **`9abd4870` staged the shim, opened `grubx64.efi`, and stopped at `grub>`.** No GRUB FilePath line. Next EFI stages `\EFI\ubuntu\grubx64.efi` directly. Not `ISO-INSTALL-OK`. Scores held. Unmodified media stays 25. months 0.0 held; overall 99 held |

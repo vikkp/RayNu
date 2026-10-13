@@ -2452,6 +2452,103 @@ fn linux_initrd_locate_lands_on_the_end_node() {
     assert_eq!(st.initrd_locate_matched, 0x14);
 }
 
+/// `4f65682f` left an End remainder (`matched=20`) and the stub still
+/// returned `EFI_LOAD_ERROR` with no failed disk read. GRUB's LoadFile
+/// rejects the call unless `this` is the struct it registered. Publish a
+/// shim the stub calls; the hypervisor enters GRUB's function with that
+/// `this` restored.
+#[test]
+fn initrd_loadfile_shim_replaces_grub_interface() {
+    use super::protocol::{
+        GUID_DEVICE_PATH, GUID_LOAD_FILE2, LINUX_EFI_INITRD_MEDIA_GUID,
+    };
+    use super::services::{
+        decode_trampoline, dispatch, FirmwareState, ServiceArgs, ServiceId, EFI_SUCCESS,
+        STACK_ARG5_OFF,
+    };
+    use super::tables::{
+        build_firmware_image, get_u64, initrd_loadfile_struct_gpa, IMAGE_BYTES,
+        IMAGE_INITRD_END_OFF, IMAGE_INITRD_SHIM_CODE_OFF, IMAGE_INITRD_SHIM_OFF,
+    };
+
+    let base = 0x0080_0000u64;
+    let mut img = vec![0u8; IMAGE_BYTES];
+    let layout = build_firmware_image(base, &mut img).unwrap();
+    assert_eq!(
+        get_u64(&img, IMAGE_INITRD_SHIM_OFF),
+        base + IMAGE_INITRD_SHIM_CODE_OFF as u64
+    );
+    assert_eq!(
+        decode_trampoline(&img[IMAGE_INITRD_SHIM_CODE_OFF..IMAGE_INITRD_SHIM_CODE_OFF + 16]),
+        Some(ServiceId::InitrdLoadFile)
+    );
+    assert_eq!(img[IMAGE_INITRD_END_OFF], 0x7F);
+    assert_eq!(img[IMAGE_INITRD_END_OFF + 1], 0xFF);
+
+    let mem = vec![0u8; 0x2000];
+    let guest = MockGuest::new(0, mem);
+    let mut sink = CaptureSink::default();
+    let clk = ManualClock { now: Cell::new(1_000), step: 1_000 };
+    let mut st = FirmwareState::new();
+    st.system_table = layout.system_table;
+    let grub = 0x1000u64;
+    let func = 0x00DB_5000u64;
+    guest.put_u64(grub, func);
+    let dp = 0x1100u64;
+    let mut path = [0u8; 0x18];
+    path[0] = 0x04;
+    path[1] = 0x03;
+    path[2..4].copy_from_slice(&0x14u16.to_le_bytes());
+    path[4..20].copy_from_slice(&LINUX_EFI_INITRD_MEDIA_GUID);
+    path[0x14] = 0x7F;
+    path[0x15] = 0xFF;
+    path[0x16..0x18].copy_from_slice(&4u16.to_le_bytes());
+    guest.write(dp, &path);
+    let p_handle = 0x1200u64;
+    let g_lf2 = 0x1300u64;
+    let g_dp = 0x1310u64;
+    let stack = 0x1400u64;
+    guest.write(g_lf2, &GUID_LOAD_FILE2);
+    guest.write(g_dp, &GUID_DEVICE_PATH);
+    guest.put_u64(p_handle, 0);
+    guest.put_u64(stack + STACK_ARG5_OFF, dp);
+    guest.put_u64(stack + STACK_ARG5_OFF + 8, 0);
+    let d = dispatch(
+        ServiceId::InstallMultipleProtocolInterfaces,
+        ServiceArgs { a1: p_handle, a2: g_lf2, a3: grub, a4: g_dp, rsp: stack },
+        &guest,
+        &mut sink,
+        &mut st,
+        &clk,
+        0,
+    );
+    assert_eq!(d.status, EFI_SUCCESS);
+    let h = guest.u64_at(p_handle);
+    assert_eq!(
+        st.protocols.interface_for(h, &GUID_LOAD_FILE2),
+        Some(initrd_loadfile_struct_gpa(layout.system_table))
+    );
+    assert_eq!(st.initrd_lf2_this, grub);
+    assert_eq!(st.initrd_lf2_fn, func);
+    guest.put_u64(stack + STACK_ARG5_OFF, dp);
+    guest.put_u64(stack + STACK_ARG5_OFF + 8, 0);
+    let u = ServiceArgs { a1: h, a2: g_lf2, a3: grub, a4: g_dp, rsp: stack };
+    assert_eq!(
+        dispatch(
+            ServiceId::UninstallMultipleProtocolInterfaces,
+            u,
+            &guest,
+            &mut sink,
+            &mut st,
+            &clk,
+            0,
+        )
+        .status,
+        EFI_SUCCESS
+    );
+    assert!(!st.protocols.handle_exists(h));
+}
+
 /// F6-prep b: the GRUB → Linux EFI stub initrd handshake, nested `2d34fff`.
 /// GRUB's last act before the kernel is
 /// `InstallMultipleProtocolInterfaces(&h, &LoadFile2, &lf2, &DevicePath, &dp, NULL)`
