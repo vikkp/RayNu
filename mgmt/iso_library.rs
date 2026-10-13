@@ -36,9 +36,6 @@ pub const LIBRARY_SERIAL_ARG: &str = "console=ttyS0";
 /// not rewritten.
 pub const LIBRARY_CLOUD_INIT_ARG: &str = "fsck.mode=skip systemd.mask=casper-md5check.service systemd.mask=snapd.seeded.service cloud-init=disabled";
 
-/// Last sector of RAYNU-SPARE stays the mailbox probe.
-const PROBE_RESERVE: u64 = 512;
-
 static LIB_OFF: AtomicU64 = AtomicU64::new(0);
 static LIB_LEN: AtomicU64 = AtomicU64::new(0);
 static CD_BOOT: AtomicBool = AtomicBool::new(false);
@@ -65,7 +62,9 @@ pub fn library_floor(spare_bytes: u64, library_bytes: u64) -> Option<u64> {
     if library_bytes % 512 != 0 {
         return None;
     }
-    let end = spare_bytes.checked_sub(PROBE_RESERVE)?;
+    // NIC catalog plus the mailbox probe. The file must end at or before
+    // the catalog sector.
+    let end = spare_bytes.checked_sub(crate::mgmt::megaraid::SPARE_HIGH_RESERVE)?;
     if end % 512 != 0 {
         return None;
     }
@@ -746,13 +745,14 @@ mod iso_library_test {
         let occupied = window + ten;
         let second = place_guest_after_occupied(spare, window, true, occupied, 0, ten).unwrap();
         assert_eq!(second.spare_off, occupied);
-        assert!(second.spare_off + second.disk_bytes <= spare - PROBE_RESERVE);
+        let catalog = crate::mgmt::guest_nic::catalog_off(spare).unwrap();
+        assert!(second.spare_off + second.disk_bytes <= catalog);
         let iso = 2u64 * 1024 * 1024 * 1024;
         let lib = place_iso_library(spare, occupied, iso).unwrap();
         assert_eq!(lib.bytes, iso);
-        assert!(lib.spare_off + lib.bytes <= spare - PROBE_RESERVE);
+        assert!(lib.spare_off + lib.bytes <= catalog);
         assert_eq!(lib.spare_off % LIBRARY_HTTP_CHUNK as u64, 0);
-        assert!(spare - PROBE_RESERVE - (lib.spare_off + lib.bytes) < LIBRARY_HTTP_CHUNK as u64);
+        assert!(catalog - (lib.spare_off + lib.bytes) < LIBRARY_HTTP_CHUNK as u64);
         assert!(lib.spare_off >= occupied);
         assert!(place_guest_after_occupied(spare, window, true, occupied, iso, ten).is_some());
         let huge = lib.spare_off - occupied;

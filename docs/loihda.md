@@ -178,12 +178,12 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | **2026-09-25** | Bar A **A4s** | Page stays up after `login:` | **LIVED** (`1f33eeda72f9`, lease `.154`, one TCP accept, `HTTP keep-alive`, Host green, guest COM1 in Activity) |
 | **2026-09-27** | M8.7 spare read | COM2 `RAYNU-V-M8-PERC-LUN-OK` | **LIVED** (`9c37fcae`: `perc virtio rd lba=0 ok`, then `dd` of `/dev/vdc` returned 16 zero bytes) |
 | **2026-09-27** | M8.7 last-LBA write | COM2 `RAYNU-V-M8-PERC-WRITE-OK` | **LIVED** (`f0a7aabb`: `perc write status=0x00` at LBA `6190268927`, readback match, then the marker. LBA 0 stayed 16 zeros. Read-only virtio. Alpine still on the Toshiba.) |
-| **NOW** | M8.8 lived | Ubuntu login, then Clear ISO | `c3a70e62` `vikkp@raynusrv2:~$`, then `boot: M8.8 library ISO cleared`. Next is the guest NIC. Unmodified 25→45. PERC 78→86. Bar B 60→70. Overall 73→78. See [ADR-019](adr/ADR-019.md) |
+| **NOW** | M8.9.1 record | spare NIC sector, host tests | M8.8 lived. The catalog sector is reserved. The Ubuntu disk still has no NIC. Not on iron. Scores held. Bar A 92. Bar B 70. Overall 78. See [m8_plan.md](m8_plan.md) |
 | later | Unmodified ISO | Gen-1 Phase 2 | named residual, not a fake close |
 
 ```
 2026-09  ████████  Everest closed
-2026-10  ████████  M8.8 lived: Ubuntu on the spare tail, then Clear ISO; whole VD still hidden; A5 parked
+2026-10  ████████  M8.8 lived; M8.9.1 is the spare NIC record (host); whole VD still hidden; A5 parked
 2026-11  ░░░░░░░░  Bar A: first dedicated-box LOI window; iron shows the SPA wait then one chosen path
 2026-12  ░░░░░░░░  Bar B: the guest disk is the spare VD, not an 8 GiB window
 ```
@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-9-nic-adr |
-| Summary | **Guest NIC is M8.9 in ADR-013.** Not M8.8.5. Not built. Scores held. Bar A 92. Bar B 70. Overall 78. |
+| Commit | m8-9-nic-record |
+| Summary | **M8.9.1 is the spare NIC record.** Host tests. The sector is not written. The Ubuntu disk still has no NIC. Scores held. Bar A 92. Bar B 70. Overall 78. |
 | Everest impact | none — HDA months 0.0 / 99% held |
-| LOI impact | Bar A 92 held. Bar B 60→70. perc 78→86. unmodified 25→45. Overall 73→78. Months B 1.5→1.25. |
-| Gates touched | M8.8.4 lived. Clear ISO wiped the signature sector. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
+| LOI impact | Bar A 92 held. Bar B 70 held. perc 86 held. unmodified 45 held. Overall 78 held. Months B 1.25 held. |
+| Gates touched | M8.9.1 host record. M8.9.2–M8.9.6 open. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
 
 ---
 
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-10-13 | m8-9-nic-record | 92 | 70 | **M8.9.1 is the spare NIC record.** Host tests. Sector not written. Ubuntu disk still has no NIC. M8.9.2–M8.9.6 open. Scores held. Bar A 92. Bar B 70. Overall 78. PERC 86. Unmodified 45. |
 | 2026-10-13 | m8-9-nic-adr | 92 | 70 | **ADR-013 Appendix C: the guest NIC is M8.9.** Admin attaches it. DHCP fills the form; Save pins it. Not built. Scores held. Bar A 92. Bar B 70. Overall 78. PERC 86. Unmodified 45. |
 | 2026-10-13 | site-ubuntu-loi | 92 | 70 | **Public pages catch up to M8.8.** Ubuntu on the PERC spare reached `vikkp@raynusrv2:~$`, then Clear ISO. PERC 78→86. Unmodified 25→45 because the installed guest is Ubuntu and the library CD view still adds `console=ttyS0`. Bar B 60→70. Overall 73→78. Bar A 92 held. Months B 1.5→1.25. Guest NIC is next. |
 | 2026-10-13 | m8-8-iso-cleared | 92 | 60 | **`boot: M8.8 library ISO cleared (signature sector only; disks unchanged)` after `vikkp@raynusrv2:~$`.** M8.8.4 lived. UBUNTU0 and the Ubuntu disk stay. Unmodified media stays 25. Bar B stays 60. |
