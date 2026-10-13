@@ -22,6 +22,7 @@
 pub mod blockio;
 pub mod cd_serial;
 pub mod events;
+pub mod ext4;
 pub mod fat;
 pub mod filesystem;
 pub mod gpt;

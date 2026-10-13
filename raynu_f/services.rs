@@ -1025,25 +1025,6 @@ fn install_multiple(st: &mut FirmwareState, mem: &dyn GuestMem, a: ServiceArgs) 
     EFI_SUCCESS
 }
 
-/// Floor for `*BufferSize` on the initrd copy call.
-///
-/// The size query (`Buffer == NULL`) must still see the caller's zero so
-/// GRUB writes the real length and returns `EFI_BUFFER_TOO_SMALL`. The copy
-/// call returns that same status when `*BufferSize` is smaller than the
-/// initrd, and the stub prints it as `EFI_LOAD_ERROR` (`fa3ccb64`:
-/// `buf=0x415f000` and no disk read). The pages were already allocated at
-/// the size GRUB reported. Raising the check lets the copy run; GRUB then
-/// stores the real length back.
-pub const INITRD_COPY_SIZE_FLOOR: u64 = 0x0000_FFFF_FFFF_F000;
-
-pub fn initrd_loadfile_copy_size(has_buffer: bool, reported: u64) -> u64 {
-    if has_buffer && reported < INITRD_COPY_SIZE_FLOOR {
-        INITRD_COPY_SIZE_FLOOR
-    } else {
-        reported
-    }
-}
-
 /// Remember GRUB's LoadFile2 struct and publish the firmware shim instead.
 fn adopt_initrd_loadfile(st: &mut FirmwareState, mem: &dyn GuestMem, handle: u64, iface: u64) {
     let Some(func) = read_u64(mem, iface) else {

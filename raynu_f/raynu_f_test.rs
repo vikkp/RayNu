@@ -2549,23 +2549,6 @@ fn initrd_loadfile_shim_replaces_grub_interface() {
     assert!(!st.protocols.handle_exists(h));
 }
 
-/// `fa3ccb64` size query was `buf=0x0 path0=7f`, then the copy was
-/// `buf=0x415f000` and the stub still printed `EFI_LOAD_ERROR` with no
-/// disk read. A copy call whose `*BufferSize` is below the initrd makes
-/// GRUB return `EFI_BUFFER_TOO_SMALL` again.
-#[test]
-fn initrd_copy_size_floor_lets_the_second_loadfile_read() {
-    use super::services::{initrd_loadfile_copy_size, INITRD_COPY_SIZE_FLOOR};
-    assert_eq!(initrd_loadfile_copy_size(false, 0), 0);
-    assert_eq!(initrd_loadfile_copy_size(false, 80_000_000), 80_000_000);
-    assert_eq!(initrd_loadfile_copy_size(true, 0), INITRD_COPY_SIZE_FLOOR);
-    assert_eq!(initrd_loadfile_copy_size(true, 80_000_000), INITRD_COPY_SIZE_FLOOR);
-    assert_eq!(
-        initrd_loadfile_copy_size(true, INITRD_COPY_SIZE_FLOOR),
-        INITRD_COPY_SIZE_FLOOR
-    );
-}
-
 /// F6-prep b: the GRUB → Linux EFI stub initrd handshake, nested `2d34fff`.
 /// GRUB's last act before the kernel is
 /// `InstallMultipleProtocolInterfaces(&h, &LoadFile2, &lf2, &DevicePath, &dp, NULL)`

@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-8-initrd-sz |
-| Summary | **`fa3ccb64` size-queried the initrd then failed the copy with no disk read.** Next EFI raises the copy size check. Unmodified media stays 25. Bar B stays 60. |
+| Commit | m8-8-iso-cleared |
+| Summary | **Clear ISO printed `boot: M8.8 library ISO cleared`.** Signature sector only. Disks unchanged. M8.8.4 lived. Unmodified media stays 25. Bar B stays 60. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Scores held. Bar A 92. Bar B 60. perc 78. Overall 73. Unmodified media stays 25. The library boot is not lived. |
-| Gates touched | M8.8.3 packed, not lived. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
+| Gates touched | M8.8.4 lived. Clear ISO wiped the signature sector. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
 
 ---
 
@@ -219,6 +219,9 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-10-13 | m8-8-iso-cleared | 92 | 60 | **`boot: M8.8 library ISO cleared (signature sector only; disks unchanged)` after `vikkp@raynusrv2:~$`.** M8.8.4 lived. UBUNTU0 and the Ubuntu disk stay. Unmodified media stays 25. Bar B stays 60. |
+| 2026-10-13 | m8-8-ubuntu-login | 92 | 60 | **`c3a70e62` `vikkp@raynusrv2:~$` on Ubuntu 26.04, kernel 7.0.0-14-generic.** Initrd `initrd.img-7.0.0-14-generic` (34338680 bytes). Library ISO still waiting. Clear ISO not clicked. Unmodified media stays 25. Bar B stays 60. |
+| 2026-10-13 | m8-8-initrd-ext4 | 92 | 60 | **`826ca6e9` `sz=34338680`, then `Failed to load initrd`.** No disk read. Next EFI copies that ext4 file. Install boot not lived. Unmodified media stays 25. Bar B stays 60. |
 | 2026-10-13 | m8-8-initrd-sz | 92 | 60 | **`fa3ccb64` `buf=0x0` then `buf=0x415f000`, then `Failed to load initrd`.** No disk read. Next EFI raises the copy size check. Install boot not lived. Unmodified media stays 25. Bar B stays 60. |
 | 2026-10-13 | m8-8-initrd-shim | 92 | 60 | **`4f65682f` `matched=20 remainder=End`, then `Failed to load initrd: 0x8000000000000001`.** Next EFI restores GRUB's LoadFile `this`. Install boot not lived. Unmodified media stays 25. Bar B stays 60. |
 | 2026-10-13 | m8-8-initrd-lf2 | 92 | 60 | **`1149d279` Ubuntu menu, then `Failed to load initrd: 0x8000000000000001`.** Next EFI leaves an End remainder for GRUB LoadFile2. Install boot not lived. Unmodified media stays 25. Bar B stays 60. |
