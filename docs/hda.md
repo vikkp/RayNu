@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-9-nic-form |
-| Summary | **M8.9.2 is the Overview NIC form.** Save pins IP, prefix, gateway, and DNS. A second guest list returns the same MAC and address. Get from DHCP does not discover yet. The spare sector is not written. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | m8-9-dhcp-preview |
+| Summary | **M8.9.3 host: an offer fills the NIC form and does not Save.** Discover uses the guest MAC. `01:00.1` is not opened. The spare sector is not written. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
-| Gates touched | M8.9.2 host NIC form. Sector not written. No doorbell. No format of UBUNTU0. Not an `ISO-INSTALL-OK` close. |
+| Gates touched | M8.9.3 host DHCP preview. Port `01:00.1` not opened. Sector not written. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 70 held, perc 86 held, unmodified 45 held, overall LOI 78 held, months A 0.25 held, months B 1.25 held. |
 
 
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-13 | m8-9-dhcp-preview | 0.0 | 99 | **M8.9.3 host: Get from DHCP fills the form from an offer and does not Save.** Guest MAC, not `:38`. `01:00.1` is not opened. Sector not written. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-13 | m8-9-nic-form | 0.0 | 99 | **M8.9.2 Overview NIC form.** Save then the next guest list returns the MAC and address. DHCP discover is M8.9.3. Sector not written. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-13 | m8-9-reply-64k | 0.0 | 99 | **ADR-013: the management reply buffer is 64 KiB.** Was 20 KiB. TLS records stay 16 KiB and the wrap already splits them. Lab arena 80→256 KiB. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-13 | m8-9-spa-rows | 0.0 | 99 | **One guest being on does not disable the other rows.** Start and Stop follow that guest. A second Start leaves the running guest on. One RayNu-F still owns the CPU. Scores held. months 0.0 held; overall 99 held |

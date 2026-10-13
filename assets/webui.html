@@ -264,7 +264,7 @@ document.getElementById("btn-keys").onclick=sendKeys;
 document.getElementById("btn-poweroff").onclick=powerOff;
 document.getElementById("btn-nic").onclick=saveNic;
 document.getElementById("btn-det").onclick=detachNic;
-document.getElementById("btn-dhcp").onclick=function(){document.getElementById("n-mode").value="d";setS("DHCP discover is the next stage")};
+document.getElementById("btn-dhcp").onclick=async function(){if(up)return;const off=document.getElementById("n-off").value||"0";setS("DHCP…");const res=await api("POST","/perc/nic/"+off+"/dhcp");let j=null;try{j=await res.json()}catch(e){}if(j&&j.ip){document.getElementById("n-ip").value=j.ip;document.getElementById("n-px").value=j.px;document.getElementById("n-gw").value=j.gw||"";document.getElementById("n-dns").value=j.dns||"";document.getElementById("n-mode").value="d";if(j.mac)document.getElementById("n-mac").textContent=j.mac;setS("Offer filled")}else setS("No offer")};
 document.getElementById("n-off").onchange=function(){loadSpare()};
 document.getElementById("g-keys").onkeydown=function(e){if(e.key==="Enter"){e.preventDefault();sendKeys()}};
 window.raynuWebUi={listVms:listVms,startVm:startVm,stopVm:stopVm,createVm:createVm,listImages:listImages,refreshLogs:refreshLogs,sendKeys:sendKeys,powerOff:powerOff,loadSpare:loadSpare};
