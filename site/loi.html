@@ -11,7 +11,7 @@
     <meta property="og:title" content="RayNu-V · Path to LOI" />
     <meta
       property="og:description"
-              content="Bar A 92%. Bar B 60%. Overall 73%. PERC 78%. A 10 GiB guest on RAYNU-SPARE reached login. A new Linux ISO stops at its own prompt. The 2.9 TB VD is not that disk. Unmodified media is 25%."
+              content="Bar A 92%. Bar B 70%. Overall 78%. PERC 86%. Ubuntu 26.04 on a 10 GiB PERC tail reached vikkp@raynusrv2. Unmodified media is 45%. A virtual guest NIC is next."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -54,19 +54,18 @@
         </h1>
         <p class="hda-mast__lede reveal reveal--delay-2">
           Everest asked whether the loop works on a real PowerEdge. That answer
-          is yes, and the work since then is already on the PERC spare: Guests
-          lists the disks, a 10 GiB guest reached <code>localhost:~#</code>,
-          and a new Linux ISO stops at its own prompt. An LOI still asks a
+          is yes. M8.8 then put an Ubuntu ISO on the PERC spare, installed it,
+          and reached <code>vikkp@raynusrv2:~$</code>. An LOI still asks a
           different question — would a fleet owner put <em>non-production
           intent</em> in writing? HDA 99% is not that answer. The 2.9 TB
-          virtual disk is not the guest disk.
+          virtual disk is not this 10 GiB tail. A virtual guest NIC is next.
         </p>
         <p
           class="hda-path reveal reveal--delay-3"
           id="loi-path"
           aria-label="Path to LOI"
         >
-          Everest 100% → Persist 93% → SKU 92% → TLS 80% → Auth 38% → Console 82% → PERC 78% → Unmodified 25% → Bar A 92% → Bar B 60% → Overall 73%
+          Everest 100% → Persist 93% → SKU 92% → TLS 80% → Auth 38% → Console 82% → PERC 86% → Unmodified 45% → Bar A 92% → Bar B 70% → Overall 78%
         </p>
       </div>
     </header>
@@ -81,12 +80,12 @@
             <div class="hda-tracker__hero">
               <p class="hda-tracker__label" id="loi-tracker-label">Months to Bar A</p>
               <p class="hda-tracker__months" id="loi-months">0.25 mo</p>
-              <p class="hda-tracker__delta" id="loi-delta">Bar A · was 0.5 · Bar B 1.75 mo</p>
+              <p class="hda-tracker__delta" id="loi-delta">Bar A · was 0.5 · Bar B was 1.5 mo</p>
             </div>
             <dl class="hda-tracker__meta">
               <div>
                 <dt>Overall LOI readiness</dt>
-                <dd id="loi-overall">73%</dd>
+                <dd id="loi-overall">78%</dd>
               </div>
               <div>
                 <dt>Bar A ETA</dt>
@@ -119,33 +118,32 @@
             <div class="hda-bar">
               <div class="hda-bar__head">
                 <span>Bar B · RAID fleet</span>
-                <span id="loi-bar-b-label">60%</span>
+                <span id="loi-bar-b-label">70%</span>
               </div>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill loi-bar__fill--fleet" id="loi-bar-b" style="width: 60%"></span>
+                <span class="hda-bar__fill loi-bar__fill--fleet" id="loi-bar-b" style="width: 70%"></span>
               </div>
             </div>
             <div class="hda-bar">
               <div class="hda-bar__head">
                 <span>Overall LOI readiness</span>
-                <span id="loi-bar-overall-label">73%</span>
+                <span id="loi-bar-overall-label">78%</span>
               </div>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill" id="loi-bar-overall" style="width: 73%"></span>
+                <span class="hda-bar__fill" id="loi-bar-overall" style="width: 78%"></span>
               </div>
             </div>
           </div>
           <p class="hda-aside" data-reveal>
             These numbers move only with COM2 evidence. Nested QEMU and host
             tests do not. Bar A is <span data-loi-pct="bars.a">92%</span>.
-            Bar B is <span data-loi-pct="bars.b">60%</span>. Overall is
-            <span data-loi-pct="overall">73%</span>. The PERC piece is
-            <span data-loi-pct="pieces.perc">78%</span>.
-            A 10 GiB guest, <code>ee851fd5</code>, reached
-            <code>localhost:~#</code> from RAYNU-SPARE. The 8 GiB window is
-            still there. The 2.9 TB virtual disk is not either disk. Auth is
-            parked. Unmodified media is
-            <span data-loi-pct="pieces.unmodified">25%</span>.
+            Bar B is <span data-loi-pct="bars.b">70%</span>. Overall is
+            <span data-loi-pct="overall">78%</span>. The PERC piece is
+            <span data-loi-pct="pieces.perc">86%</span>.
+            Ubuntu 26.04 on a 10 GiB tail of RAYNU-SPARE reached
+            <code>vikkp@raynusrv2:~$</code>. The 2.9 TB virtual disk is not
+            that disk. Auth is parked. Unmodified media is
+            <span data-loi-pct="pieces.unmodified">45%</span>.
           </p>
         </div>
       </section>
@@ -177,22 +175,21 @@
               </p>
             </article>
             <article class="loi-card">
-              <p class="loi-card__kicker" id="loi-kicker-b" data-bar-kicker="b">Bar B · 60%</p>
+              <p class="loi-card__kicker" id="loi-kicker-b" data-bar-kicker="b">Bar B · 70%</p>
               <h3>RAID fleet</h3>
               <p>
                 Keep the iron. Replace the licensed hypervisor. This bar is
-                <span data-loi-pct="bars.b">60%</span>. The PERC I/O piece
-                inside it is <span data-loi-pct="pieces.perc">78%</span>.
+                <span data-loi-pct="bars.b">70%</span>. The PERC I/O piece
+                inside it is <span data-loi-pct="pieces.perc">86%</span>.
                 Those are two scores for two questions: the fleet conversation,
                 and how far spare I/O has come. USB persist does not close this.
                 Formatting the lab Ubuntu array does not close this.
               </p>
               <p class="loi-card__effect">
                 <strong>Product effect:</strong> this is the “extend the life
-                of the fleet you already paid for” pitch. A guest logged in
-                from a 10 GiB slice of the spare, and from the 8 GiB window
-                before that. The 2.9 TB virtual disk is not that disk, so
-                this conversation stays partial.
+                of the fleet you already paid for” pitch. Ubuntu 26.04 logged
+                in from a 10 GiB tail of the spare. The 2.9 TB virtual disk
+                is not that disk, so this conversation stays partial.
               </p>
             </article>
           </div>
@@ -324,46 +321,42 @@
             <li data-reveal>
               <header>
                 <span class="loi-pieces__name">PERC RAID I/O</span>
-                <span class="loi-pieces__pct" data-piece="perc">78%</span>
+                <span class="loi-pieces__pct" data-piece="perc">86%</span>
               </header>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill loi-bar__fill--fleet" data-piece-fill="perc" style="width: 78%"></span>
+                <span class="hda-bar__fill loi-bar__fill--fleet" data-piece-fill="perc" style="width: 86%"></span>
               </div>
               <p>
                 The lab H740P Mini has two RAID-6 virtual disks.
-                <strong>UBUNTU0</strong> (~400 GB) is Ubuntu 26.04 and the boot
-                device. Iron <code>8ad2ac89</code> reinstalled the first 8 GiB of
-                <strong>RAYNU-SPARE</strong>, then a later boot reached
-                <code>localhost login:</code> from <code>d43dbf07</code>.
-                <code>vdc</code> stayed hidden.
-                This piece is
-                <span data-loi-pct="pieces.perc">78%</span>.
-                Bar B is <span data-loi-pct="bars.b">60%</span>.
-                <code>f44ba647</code> then booted <code>ee851fd5</code> on a 10 GiB
-                <code>vda</code>. Bar B stays
-                <span data-loi-pct="bars.b">60%</span>.
+                <strong>UBUNTU0</strong> (~400 GB) stays the host OS.
+                <strong>RAYNU-SPARE</strong> holds the guest disks.
+                M8.8 stored an Ubuntu ISO on that spare, installed it onto a
+                10 GiB tail, and <code>c3a70e62</code> reached
+                <code>vikkp@raynusrv2:~$</code>. This piece is
+                <span data-loi-pct="pieces.perc">86%</span>.
+                Bar B is <span data-loi-pct="bars.b">70%</span>.
                 The 2.9 TB VD is not the guest disk.
                 The mailbox probe LBA 0 is not written. The H840 was not
-                mapped. The mapper still prints <code>skip PERC</code>.
-                Do not format UBUNTU0.
+                mapped. Do not format UBUNTU0.
               </p>
             </li>
             <li data-reveal>
               <header>
                 <span class="loi-pieces__name">Unmodified media</span>
-                <span class="loi-pieces__pct" data-piece="unmodified">25%</span>
+                <span class="loi-pieces__pct" data-piece="unmodified">45%</span>
               </header>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill" data-piece-fill="unmodified" style="width: 25%"></span>
+                <span class="hda-bar__fill" data-piece-fill="unmodified" style="width: 45%"></span>
               </div>
               <p>
-                Iron Alpine still rides an ISO patcher. <code>752586b9</code>
-                choice 3 reached the ISO prompt and withheld
-                <code>setup-disk</code>. This piece is
-                <span data-loi-pct="pieces.unmodified">25%</span>.
-                The answerer still types <code>root</code>. A fleet
-                claim of “unmodified Linux ISO” is false until that patcher is
-                gone. Windows is later still, and is not a peer of TLS.
+                The installed guest is Ubuntu 26.04. An operator typed the
+                password and got <code>vikkp@raynusrv2:~$</code>. The stored
+                ISO bytes were not rewritten. The library CD boot view still
+                adds <code>console=ttyS0</code>, and the Alpine answerer still
+                types <code>root</code>. This piece is
+                <span data-loi-pct="pieces.unmodified">45%</span>.
+                A fleet claim of “unmodified Linux ISO” waits until that
+                serial amendment is gone. Windows is later still.
               </p>
             </li>
           </ol>
@@ -372,26 +365,23 @@
 
       <section class="section section--hda-com2" id="now">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>NOW · past the summit · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">60%</span> · overall <span data-loi-pct="overall">73%</span> · PERC <span data-loi-pct="pieces.perc">78%</span> · unmodified <span data-loi-pct="pieces.unmodified">25%</span></p>
-          <h2 class="section__title">Guests runs the spare. Ubuntu is packed, and not on this EFI.</h2>
+          <p class="milestone-kicker" data-reveal>Show and tell · M8.8 · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">70%</span> · overall <span data-loi-pct="overall">78%</span> · PERC <span data-loi-pct="pieces.perc">86%</span> · unmodified <span data-loi-pct="pieces.unmodified">45%</span></p>
+          <h2 class="section__title">The Ubuntu ISO lived on the PERC. The guest NIC is next.</h2>
           <p class="section__lede">
-            Start on <code>f44ba647</code> booted <code>ee851fd5</code> from a
-            10 GiB disk on RAYNU-SPARE. <code>752586b9</code> then opened a
-            new Linux ISO and stopped at that ISO’s own prompt, without
-            typing <code>setup-disk</code>. The 8 GiB window
-            (<code>d43dbf07</code>) is still there. M8.8 lets the page
-            take <code>ubuntu-26.04-live-server-amd64.iso</code>, store it on
-            the spare, and delete it after that guest boots from its own
-            disk. That slice is packed and not on the running EFI.
-            Unmodified media is
-            <span data-loi-pct="pieces.unmodified">25%</span>.
-            Bar A is 92. Bar B is 60. Overall is 73. PERC is 78.
+            M8.8 is four steps, and all four have COM2. The file sits at the
+            high end of RAYNU-SPARE. Guests uploads it unchanged. Choosing
+            it boots the ISO as a CD. The install lands on a new 10 GiB tail.
+            The file stays until Clear ISO, which wipes the signature sector
+            and leaves the disks alone.
           </p>
-          <pre class="ship-code" data-reveal><code>lived:  8 GiB d43dbf07 · 10 GiB ee851fd5 · ISO prompt withheld setup-disk
-spare:  RAYNU-SPARE ~2.9 TB · the guest disk is a slice, not the whole VD
-host:   UBUNTU0 ~400 GB · Ubuntu 26.04 · do not format
-next:   M8.8.1 placement · M8.8.2 upload · M8.8.3 CD boot · M8.8.4 install, then delete the ISO
-scores: unmodified <span data-loi-pct="pieces.unmodified">25%</span> · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">60%</span> · overall <span data-loi-pct="overall">73%</span> · PERC <span data-loi-pct="pieces.perc">78%</span></code></pre>
+          <pre class="ship-code" data-reveal><code>M8.8.1  placement     lived · library at the high end of RAYNU-SPARE
+M8.8.2  upload        lived · ubuntu-26.04-live-server-amd64.iso, bytes unchanged
+M8.8.3  boot the ISO  lived · Subiquity installed onto vda
+M8.8.4  login + clear lived · vikkp@raynusrv2:~$
+                              boot: M8.8 library ISO cleared (signature sector only)
+next    guest NIC     virtio NIC, own MAC, egress 01:00.1
+                      SPA stays on :38
+scores  unmodified <span data-loi-pct="pieces.unmodified">45%</span> · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">70%</span> · overall <span data-loi-pct="overall">78%</span> · PERC <span data-loi-pct="pieces.perc">86%</span></code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
             Rollback remains GitHub Latest
             <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed"
