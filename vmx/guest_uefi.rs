@@ -12264,10 +12264,6 @@ unsafe fn redirect_initrd_loadfile(
             sz = u64::from_le_bytes(raw);
         }
     }
-    let copy_sz = crate::raynu_f::services::initrd_loadfile_copy_size(buf != 0, sz);
-    if copy_sz != sz && args.a4 != 0 {
-        let _ = mem.write(args.a4, &copy_sz.to_le_bytes());
-    }
     if n < 4 {
         serial::write_str("boot: RayNu-F initrd LoadFile policy=");
         write_dec(args.a3);
@@ -12277,10 +12273,6 @@ unsafe fn redirect_initrd_loadfile(
         write_hex(buf);
         serial::write_str(" sz=");
         write_dec(sz);
-        if copy_sz != sz {
-            serial::write_str(" copy=");
-            write_dec(copy_sz);
-        }
         serial::write_str(" fn=0x");
         write_hex(st.initrd_lf2_fn);
         serial::write_line(" (not ISO-INSTALL-OK)");
@@ -12288,6 +12280,44 @@ unsafe fn redirect_initrd_loadfile(
     if st.initrd_lf2_fn == 0 {
         SAVED_RAX = crate::raynu_f::services::EFI_NOT_FOUND;
         return false;
+    }
+    // `826ca6e9`: the stub already passed the real length (34338680) and
+    // raising `*BufferSize` still came back `EFI_LOAD_ERROR` with no disk
+    // error. Copy that ext4 file into the stub's buffer and return success.
+    if buf != 0 && sz != 0 {
+        serial::write_str("boot: RayNu-F initrd ext4 want=");
+        write_dec(sz);
+        serial::write_line(" (not ISO-INSTALL-OK)");
+        match try_copy_ext4_initrd(st, mem, buf, sz) {
+            Ok(file) => {
+                if args.a4 != 0 {
+                    let _ = mem.write(args.a4, &file.bytes.to_le_bytes());
+                }
+                SAVED_RAX = crate::raynu_f::services::EFI_SUCCESS;
+                serial::write_str("boot: RayNu-F initrd ext4 bytes=");
+                write_dec(file.bytes);
+                serial::write_str(" name=");
+                for &b in &file.name[..file.name_len] {
+                    serial::write_byte(b);
+                }
+                serial::write_line(" (not ISO-INSTALL-OK)");
+                return false;
+            }
+            Err(miss) => {
+                serial::write_str("boot: RayNu-F initrd ext4 miss ");
+                serial::write_str(miss.why);
+                serial::write_str(" saw=");
+                write_dec(miss.saw_bytes);
+                if miss.saw_name_len > 0 {
+                    serial::write_str(" name=");
+                    let n = miss.saw_name_len.min(miss.saw_name.len());
+                    for &b in &miss.saw_name[..n] {
+                        serial::write_byte(b);
+                    }
+                }
+                serial::write_line(" (not ISO-INSTALL-OK)");
+            }
+        }
     }
     let path = if path0[0] == crate::raynu_f::protocol::DP_TYPE_END {
         args.a2
@@ -12299,6 +12329,47 @@ unsafe fn redirect_initrd_loadfile(
     SAVED_RDX = path;
     SAVED_R8 = 0;
     ops::vmwrite(GUEST_RIP, st.initrd_lf2_fn).is_ok()
+}
+
+/// Copy the initrd GRUB sized into `buf`. The length is the stub's
+/// `*BufferSize` from the query that already returned `EFI_BUFFER_TOO_SMALL`.
+#[cfg(target_os = "uefi")]
+fn try_copy_ext4_initrd(
+    st: &crate::raynu_f::FirmwareState,
+    mem: &impl crate::raynu_f::GuestMem,
+    buf: u64,
+    want: u64,
+) -> Result<crate::raynu_f::ext4::InitrdFile, crate::raynu_f::ext4::InitrdMiss> {
+    let Some(read) = st.read_blocks else {
+        return Err(crate::raynu_f::ext4::InitrdMiss {
+            saw_bytes: 0,
+            saw_name: [0; 48],
+            saw_name_len: 0,
+            why: "disk",
+        });
+    };
+    struct Disk(crate::raynu_f::services::BlockReadFn);
+    impl crate::raynu_f::fat::VolumeRead for Disk {
+        fn read_at(&self, off: u64, buf: &mut [u8]) -> bool {
+            (self.0)(crate::raynu_f::MEDIA_ID_DISK, off, buf)
+        }
+    }
+    let mut scratch = [0u8; 4096];
+    let mut at = 0u64;
+    crate::raynu_f::ext4::copy_sized_initrd(&Disk(read), want, &mut scratch, |chunk| {
+        if mem.write(buf.wrapping_add(at), chunk) != chunk.len() {
+            return false;
+        }
+        let prev = at;
+        at = at.saturating_add(chunk.len() as u64);
+        const STEP: u64 = 8 * 1024 * 1024;
+        if at / STEP != prev / STEP {
+            serial::write_str("boot: RayNu-F initrd ext4 at=");
+            write_dec(at);
+            serial::write_line(" (not ISO-INSTALL-OK)");
+        }
+        true
+    })
 }
 
 /// RayNu-F service call (ADR-016): `out dx, eax` to port `0x5246` from a

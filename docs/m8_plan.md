@@ -223,7 +223,7 @@ The fence accepts one LD of ~2.5–3.1 TiB and refuses ~300–512 GiB. Scratch p
 
 ### M8.8 — Ubuntu ISO library on RAYNU-SPARE
 
-**Status: `fa3ccb64` reached GRUB's LoadFile twice and the stub still failed the initrd.** COM2 printed `policy=0 path0=7f buf=0x0` then `buf=0x415f000`, then `Failed to load initrd: 0x8000000000000001`, with no disk read. The size query was accepted. The copy call returns `EFI_BUFFER_TOO_SMALL` when `*BufferSize` is below the initrd, and the stub prints that as `EFI_LOAD_ERROR`. This EFI raises that check to a floor so the copy runs, and prints `sz=`. M8.8.4 is not closed. Scores held. Do not flash until CI is green.
+**Status: `826ca6e9` showed the copy call already had the real initrd length.** COM2 printed `sz=34338680` (about 32.7 MiB) and `copy=281474976706560`, then `Failed to load initrd: 0x8000000000000001`, with no `blk fail`. The size check was not the failure. This EFI reads that ext4 file into the stub buffer and returns success. A miss falls through to GRUB and COM2 names it. M8.8.4 is not closed. Scores held. Do not flash until CI is green.
 
 **Goal:** The operator picks `ubuntu-26.04-live-server-amd64.iso` on Guests. The hypervisor stores that file unchanged in a high library on RAYNU-SPARE and boots it as a CD. The file stays after install. **Clear ISO** on Guests drops the catalog hold and wipes the ISO signature sector. It does not scrub the whole file and it does not touch an installed disk.
 
