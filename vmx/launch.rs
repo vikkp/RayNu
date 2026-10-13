@@ -5541,7 +5541,9 @@ pub fn enter_phase_b_coexist_idle() -> ! {
         // Do not sleep 10 ms — SYN would be missed. Iron `7f8dc0a9` `curl: (7)`.
         crate::mgmt::tick_native_coexist();
         // SAFETY: BSP-only idle; `M4_LADDER_DONE`; no live G0 to save.
+        // A Start after Stop relaunches RayNu-F on the VMCS Stop left clear.
         unsafe {
+            crate::vmx::guest_uefi::relaunch_perc_guest_from_spa();
             try_spa_vmlaunch();
         }
         core::hint::spin_loop();
