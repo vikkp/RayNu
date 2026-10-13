@@ -133,6 +133,9 @@ impl ServiceId {
     pub const LocateProtocol: ServiceId = ServiceId(0x225);
     pub const InstallMultipleProtocolInterfaces: ServiceId = ServiceId(0x226);
     pub const UninstallMultipleProtocolInterfaces: ServiceId = ServiceId(0x227);
+    /// Guest stub in the firmware image. Not a boot service. The hypervisor
+    /// enters GRUB's `LoadFile` with the interface pointer GRUB registered.
+    pub const InitrdLoadFile: ServiceId = ServiceId(0x0000_F210);
     pub const CalculateCrc32: ServiceId = ServiceId(0x228);
     pub const CopyMem: ServiceId = ServiceId(0x229);
     pub const SetMem: ServiceId = ServiceId(0x22A);
@@ -486,6 +489,11 @@ pub struct FirmwareState {
     pub initrd_locate_matched: u16,
     pub initrd_locate_forced: bool,
     pub initrd_locate_seen: bool,
+    /// GRUB's `LoadFile2` struct and the function pointer inside it.
+    /// HandleProtocol returns our shim; the shim enters this function with
+    /// `this` set back to the struct.
+    pub initrd_lf2_this: u64,
+    pub initrd_lf2_fn: u64,
     /// Mok and other variables for this firmware boot. Not on disk.
     pub vars: super::vars::VarStore,
     /// `SetVirtualAddressMap` has run. A second call is `EFI_UNSUPPORTED`.
@@ -537,6 +545,8 @@ impl FirmwareState {
             initrd_locate_matched: 0,
             initrd_locate_forced: false,
             initrd_locate_seen: false,
+            initrd_lf2_this: 0,
+            initrd_lf2_fn: 0,
             vars: super::vars::VarStore::new(),
             virtual_mode: false,
         }
@@ -996,7 +1006,57 @@ fn install_multiple(st: &mut FirmwareState, mem: &dyn GuestMem, a: ServiceArgs) 
         }
         return EFI_INVALID_PARAMETER;
     }
+    // GRUB's initrd LoadFile compares `this` to its own struct and returns
+    // INVALID_PARAMETER otherwise. The stub then prints EFI_LOAD_ERROR.
+    // Publish our shim as the interface. It enters GRUB's function with
+    // `this` restored and boot policy cleared. GRUB's bytes stay as GRUB wrote them.
+    let lf2 = pairs[..n]
+        .iter()
+        .find(|(g, _)| g == &super::protocol::GUID_LOAD_FILE2)
+        .map(|(_, iface)| *iface);
+    let initrd_dp = pairs[..n].iter().any(|(g, iface)| {
+        g == &super::protocol::GUID_DEVICE_PATH && path_starts_with_linux_initrd(mem, *iface)
+    });
+    if initrd_dp {
+        if let Some(iface) = lf2 {
+            adopt_initrd_loadfile(st, mem, handle, iface);
+        }
+    }
     EFI_SUCCESS
+}
+
+/// Remember GRUB's LoadFile2 struct and publish the firmware shim instead.
+fn adopt_initrd_loadfile(st: &mut FirmwareState, mem: &dyn GuestMem, handle: u64, iface: u64) {
+    let Some(func) = read_u64(mem, iface) else {
+        return;
+    };
+    let shim = super::tables::initrd_loadfile_struct_gpa(st.system_table);
+    if func == 0 || shim == 0 {
+        return;
+    }
+    st.initrd_lf2_this = iface;
+    st.initrd_lf2_fn = func;
+    let _ = st.protocols.install(handle, super::protocol::GUID_LOAD_FILE2, shim);
+}
+
+/// GRUB uninstalls the struct it passed. We may have published the shim.
+fn loadfile_uninstall_interface(st: &FirmwareState, handle: u64, guid: &Guid, iface: u64) -> u64 {
+    let Some(cur) = st.protocols.interface_for(handle, guid) else {
+        return iface;
+    };
+    if cur == iface {
+        return iface;
+    }
+    let shim = super::tables::initrd_loadfile_struct_gpa(st.system_table);
+    if *guid == super::protocol::GUID_LOAD_FILE2
+        && iface == st.initrd_lf2_this
+        && shim != 0
+        && cur == shim
+    {
+        cur
+    } else {
+        iface
+    }
 }
 
 /// `UninstallMultipleProtocolInterfaces(Handle, Guid*, Interface, …, NULL)`.
@@ -1013,14 +1073,15 @@ fn uninstall_multiple(st: &mut FirmwareState, mem: &dyn GuestMem, a: ServiceArgs
     if n == 0 {
         return EFI_INVALID_PARAMETER;
     }
-    if pairs[..n]
-        .iter()
-        .any(|(g, iface)| st.protocols.interface_for(a.a1, g) != Some(*iface))
-    {
+    if pairs[..n].iter().any(|(g, iface)| {
+        let want = loadfile_uninstall_interface(st, a.a1, g, *iface);
+        st.protocols.interface_for(a.a1, g) != Some(want)
+    }) {
         return EFI_INVALID_PARAMETER;
     }
     for (g, iface) in pairs[..n].iter() {
-        let _ = st.protocols.uninstall(a.a1, g, *iface);
+        let want = loadfile_uninstall_interface(st, a.a1, g, *iface);
+        let _ = st.protocols.uninstall(a.a1, g, want);
     }
     EFI_SUCCESS
 }

@@ -4351,6 +4351,8 @@ static RAYNU_F_GRUB_PREFIX_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_BLKRD_LOGGED: AtomicBool = AtomicBool::new(false);
 /// One line when the stub's initrd `LocateDevicePath` returns.
 static RAYNU_F_INITRD_DP_LOGGED: AtomicBool = AtomicBool::new(false);
+/// How many initrd LoadFile entries have been logged (size query, then the copy).
+static RAYNU_F_INITRD_LF_LOGS: AtomicU32 = AtomicU32::new(0);
 /// One line for the first failed disk `ReadBlocks` (initrd extent).
 static RAYNU_F_BLKFAIL_LOGGED: AtomicBool = AtomicBool::new(false);
 /// One line when GRUB's PIT channel-2 calibration wait completes.
@@ -7930,6 +7932,7 @@ unsafe fn raynu_f_reset_relaunch(_src: crate::devices::guest_platform::ResetSrc)
     RAYNU_F_GRUB_PREFIX_LOGGED.store(false, Ordering::Release);
     RAYNU_F_BLKRD_LOGGED.store(false, Ordering::Release);
     RAYNU_F_INITRD_DP_LOGGED.store(false, Ordering::Release);
+    RAYNU_F_INITRD_LF_LOGS.store(0, Ordering::Release);
     RAYNU_F_BLKFAIL_LOGGED.store(false, Ordering::Release);
     RAYNU_F_PIT2_LOGGED.store(false, Ordering::Release);
     RAYNU_F_SERIAL_LOGGED.store(false, Ordering::Release);
@@ -12240,6 +12243,47 @@ unsafe fn load_guest_io(linear: u64, size: u8) -> Option<u64> {
     load_report_ram_at(page, linear, size)
 }
 
+/// The Linux stub called our initrd `LoadFile2` shim. Enter GRUB's function
+/// with `this` set to the struct GRUB registered and with boot policy 0.
+/// GRUB returns `EFI_NOT_FOUND` or `EFI_INVALID_PARAMETER` otherwise, and the
+/// stub prints that as `EFI_LOAD_ERROR`.
+#[cfg(target_os = "uefi")]
+unsafe fn redirect_initrd_loadfile(
+    st: &mut crate::raynu_f::FirmwareState,
+    mem: &impl crate::raynu_f::GuestMem,
+    args: &crate::raynu_f::ServiceArgs,
+) -> bool {
+    let n = RAYNU_F_INITRD_LF_LOGS.fetch_add(1, Ordering::AcqRel);
+    let mut path0 = [0u8; 1];
+    let _ = mem.read(args.a2, &mut path0);
+    let buf = crate::raynu_f::services::stack_arg(mem, args.rsp, 5).unwrap_or(0);
+    if n < 4 {
+        serial::write_str("boot: RayNu-F initrd LoadFile policy=");
+        write_dec(args.a3);
+        serial::write_str(" path0=");
+        write_hex2(path0[0]);
+        serial::write_str(" buf=0x");
+        write_hex(buf);
+        serial::write_str(" fn=0x");
+        write_hex(st.initrd_lf2_fn);
+        serial::write_line(" (not ISO-INSTALL-OK)");
+    }
+    if st.initrd_lf2_fn == 0 {
+        SAVED_RAX = crate::raynu_f::services::EFI_NOT_FOUND;
+        return false;
+    }
+    let path = if path0[0] == crate::raynu_f::protocol::DP_TYPE_END {
+        args.a2
+    } else {
+        let end = crate::raynu_f::tables::initrd_loadfile_end_gpa(st.system_table);
+        if end == 0 { args.a2 } else { end }
+    };
+    SAVED_RCX = st.initrd_lf2_this;
+    SAVED_RDX = path;
+    SAVED_R8 = 0;
+    ops::vmwrite(GUEST_RIP, st.initrd_lf2_fn).is_ok()
+}
+
 /// RayNu-F service call (ADR-016): `out dx, eax` to port `0x5246` from a
 /// trampoline in **our own** firmware tables. EAX = service id; args are
 /// `RCX / R10 / R8 / R9` (the stub moved RDX to R10 before loading DX).
@@ -12319,6 +12363,9 @@ unsafe fn handle_raynu_f_service() -> bool {
     // SAFETY: BSP-only firmware state; guest halted on this exit (see decl).
     // KANI-TARGET: RayNu-F firmware state mutation (outside Proven Core).
     let st = unsafe { &mut *core::ptr::addr_of_mut!(RAYNU_F_STATE) };
+    if id == crate::raynu_f::ServiceId::InitrdLoadFile {
+        return redirect_initrd_loadfile(st, &Mem, &args);
+    }
     let d = crate::raynu_f::dispatch(
         id,
         args,

@@ -76,7 +76,32 @@ pub const FIRMWARE_REVISION: u32 = 0x0000_0001;
 /// Region layout (offsets from the image base GPA). Trampolines first so the
 /// code page is separable from the data tables.
 pub const IMAGE_TRAMPOLINE_OFF: usize = 0x0000;
+/// `EFI_LOAD_FILE2_PROTOCOL` struct the Linux stub calls for the initrd.
+/// First qword is the code GPA at [`IMAGE_INITRD_SHIM_CODE_OFF`].
+pub const IMAGE_INITRD_SHIM_OFF: usize = 0x0800;
+/// `out dx, eax` stub. The hypervisor then enters GRUB's real `LoadFile`.
+pub const IMAGE_INITRD_SHIM_CODE_OFF: usize = 0x0810;
+/// End-entire device path node. GRUB accepts only this as the LoadFile remainder.
+pub const IMAGE_INITRD_END_OFF: usize = 0x0830;
 pub const IMAGE_SYSTEM_TABLE_OFF: usize = 0x1000;
+
+/// GPA of the initrd `LoadFile2` struct, or 0 when `system_table` is unset.
+pub const fn initrd_loadfile_struct_gpa(system_table: u64) -> u64 {
+    if system_table < IMAGE_SYSTEM_TABLE_OFF as u64 {
+        0
+    } else {
+        system_table - IMAGE_SYSTEM_TABLE_OFF as u64 + IMAGE_INITRD_SHIM_OFF as u64
+    }
+}
+
+/// GPA of the End-entire node the shim can hand to GRUB.
+pub const fn initrd_loadfile_end_gpa(system_table: u64) -> u64 {
+    if system_table < IMAGE_SYSTEM_TABLE_OFF as u64 {
+        0
+    } else {
+        system_table - IMAGE_SYSTEM_TABLE_OFF as u64 + IMAGE_INITRD_END_OFF as u64
+    }
+}
 pub const IMAGE_BOOT_SERVICES_OFF: usize = 0x1100;
 pub const IMAGE_RUNTIME_SERVICES_OFF: usize = 0x1300;
 pub const IMAGE_CONOUT_OFF: usize = 0x1400;
@@ -117,6 +142,7 @@ pub const CONFIG_TABLE_MAX_ENTRIES: usize = 16;
 /// the configuration table array).
 pub const IMAGE_BYTES: usize = 0x3000;
 const _: () = assert!(IMAGE_DEVICE_PATH_OFF + IMAGE_DEVICE_PATH_CAP <= IMAGE_FILE_PROTO_OFF);
+const _: () = assert!(IMAGE_INITRD_END_OFF + 4 <= IMAGE_SYSTEM_TABLE_OFF);
 const _: () = assert!(IMAGE_DEVICE_PATH_OFF + super::protocol::DEVICE_PATH_BYTES <= IMAGE_FILE_PROTO_OFF);
 const _: () = assert!(IMAGE_FILE_PROTO_OFF + 16 * IMAGE_FILE_PROTO_STRIDE <= IMAGE_CONFIG_TABLE_OFF);
 const _: () = assert!(
@@ -280,6 +306,17 @@ pub fn build_firmware_image(base: u64, buf: &mut [u8]) -> Result<FirmwareImageLa
 
     // Trampoline page: one stub per service slot.
     super::services::write_trampolines(&mut buf[IMAGE_TRAMPOLINE_OFF..IMAGE_SYSTEM_TABLE_OFF]);
+    // Initrd LoadFile2 shim. The struct's function pointer is the stub below it.
+    let code_gpa = base + IMAGE_INITRD_SHIM_CODE_OFF as u64;
+    buf[IMAGE_INITRD_SHIM_OFF..IMAGE_INITRD_SHIM_OFF + 8]
+        .copy_from_slice(&code_gpa.to_le_bytes());
+    let stub = super::services::encode_trampoline(super::services::ServiceId::InitrdLoadFile);
+    buf[IMAGE_INITRD_SHIM_CODE_OFF..IMAGE_INITRD_SHIM_CODE_OFF + stub.len()]
+        .copy_from_slice(&stub);
+    buf[IMAGE_INITRD_END_OFF] = super::protocol::DP_TYPE_END;
+    buf[IMAGE_INITRD_END_OFF + 1] = super::protocol::DP_SUBTYPE_END_ENTIRE;
+    buf[IMAGE_INITRD_END_OFF + 2..IMAGE_INITRD_END_OFF + 4]
+        .copy_from_slice(&4u16.to_le_bytes());
 
     // Firmware vendor.
     for (i, ch) in FIRMWARE_VENDOR_UTF16.iter().enumerate() {
