@@ -203,7 +203,7 @@ const c=document.createElement("button");c.className="ghost";c.textContent="Stop
 box.appendChild(row);
 });
 }
-async function guestStart(vm){if(up)return;const id=vm.id;const path=vm.boot?vm.boot:(id==3||vm.act==="ISO"?"/perc/guests/1/linux/"+num("f-disk",10240):(id===2?"/perc/guests/2/start":"/perc/guests/1/start"));setS("Starting "+id+"…");const res=await api("POST",path);setS(res.ok?("Booting guest "+id):("Start refused ("+res.status+")"));loadSpare()}
+async function guestStart(vm){if(up)return;const id=vm.id;const path=vm.boot?vm.boot:(id==3||vm.act==="ISO"?"/perc/guests/1/linux/"+num("f-disk",10240):(id===2?"/perc/guests/2/start":"/perc/guests/1/start"));setS("Starting "+id+"…");const res=await api("POST",path);let t="";try{t=await res.text()}catch(e){}setS(!res.ok?("Start refused ("+res.status+")"):t.indexOf("busy")>=0?"Guest stays off":("Booting guest "+id));loadSpare()}
 async function guestStop(){if(up)return;setS("Stopping guest…");const res=await api("POST","/perc/guests/stop");setS(res.ok?"Guest stopped":"Stop refused ("+res.status+")");loadSpare()}
 async function loadSpare(){
 if(up)return;let r;try{r=await api("GET","/perc/guests")}catch(e){return}

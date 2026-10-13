@@ -245,7 +245,7 @@ M8.4 stays the host 256-byte blob. M8.8 is the product path and may proceed whil
 
 **Status: M8.9.1 is the spare record (host tests). M8.9.2 through M8.9.6 are open.** Accepted in [ADR-013](adr/ADR-013.md) Appendix C (2026-10-13). Not M8.8.5. Not on iron. Create still leaves the guest with no NIC. Scores held.
 
-Guests rows keep Start and Stop on the row. Start is enabled when that guest is off and nothing else is running. Stop is enabled on the guest that is on. After Stop, Start boots that guest again. The hypervisor stays up. Overview is still the spare note and Power off host. The NIC form is M8.9.2.
+Guests rows keep Start and Stop on the row. Each row follows that guest alone. Another guest being on does not disable this row. After Stop, Start boots that guest again. The hypervisor stays up. The PERC Start path still has one RayNu-F, so a second Start leaves the guest that is already on running and does not boot the second guest on that same CPU. Overview is still the spare note and Power off host. The NIC form is M8.9.2.
 
 **Goal:** The admin attaches a virtio NIC on a Guests row. Create does not attach one. **Get from DHCP** fills the form from a lease on that guest’s MAC through `01:00.1` / `b0:26:28:5c:5a:39`. **Save** pins the address on that guest. Manual entry uses the same Save. The record lives on the spare and survives a hypervisor Force Off until the admin saves again or detaches it. The next Start applies it. The SPA stays on `:38`.
 

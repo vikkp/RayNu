@@ -447,7 +447,11 @@ fn apply_action(action: CatalogAction) -> GuestCatalogHttp {
 }
 
 fn start_tail() -> GuestCatalogHttp {
-    use super::perc_boot_choice::{apply_tail_boot_choice, PercChoiceApply, CHOICE_TAIL_BOOT};
+    use super::perc_boot_choice::{apply_tail_boot_choice, PercChoiceApply, VmcsGuest, CHOICE_TAIL_BOOT};
+    let off = crate::mgmt::megaraid::PERC_IMAGE_BYTES;
+    if let Some(body) = held_by_other(VmcsGuest::Tail(off)) {
+        return ready(200, body, None);
+    }
     let restarted = crate::mgmt::perc_boot_choice::rearm_guest_after_stop();
     let installed = crate::mgmt::megaraid::perc_image_boot_latched();
     let spare = crate::mgmt::megaraid::perc_spare_bytes();
@@ -481,6 +485,10 @@ fn start_disk_at(spare_off: u64) -> GuestCatalogHttp {
     let Some(disk) = tails[..n].iter().find(|d| d.spare_off == spare_off) else {
         return ready(409, b"{\"ok\":false,\"reason\":\"nodisk\"}", None);
     };
+    if let Some(body) = held_by_other(crate::mgmt::perc_boot_choice::VmcsGuest::Tail(spare_off))
+    {
+        return ready(200, body, None);
+    }
     let restarted = crate::mgmt::perc_boot_choice::rearm_guest_after_stop();
     match apply_tail_boot_at(installed, spare, disk.spare_off, disk.disk_bytes) {
         PercChoiceApply::Accepted => {
@@ -531,6 +539,11 @@ fn store_tail(
 }
 
 fn store_choice(choice: u8, installed: bool) -> GuestCatalogHttp {
+    if choice == CHOICE_BOOT {
+        if let Some(body) = held_by_other(crate::mgmt::perc_boot_choice::VmcsGuest::Window) {
+            return ready(200, body, None);
+        }
+    }
     let restarted = if choice == CHOICE_BOOT {
         crate::mgmt::perc_boot_choice::rearm_guest_after_stop()
     } else {
@@ -843,9 +856,8 @@ fn write_list_json(
             PercSpaChoice::Tail { .. } | PercSpaChoice::TailBoot { .. }
         );
     let iso_on = iso_ready && crate::mgmt::iso_library::present_as_cd() && !stopped;
-    let any_on = window_on || tail_on || iso_on;
     if installed {
-        let (start, stop) = row_power(window_on, any_on);
+        let (start, stop) = row_power(window_on);
         w.s("{\"id\":1,\"name\":\"alpine\",\"state\":\"");
         w.s(if stopped {
             "stopped"
@@ -878,7 +890,7 @@ fn write_list_json(
         any_guest = true;
         let mine = armed_off == Some(disk.spare_off);
         let active = mine && tail_on;
-        let (start, stop) = row_power(active, any_on);
+        let (start, stop) = row_power(active);
         w.s("{\"id\":");
         w.u(next_id);
         next_id += 1;
@@ -907,7 +919,7 @@ fn write_list_json(
             w.s(",");
         }
         let chosen = crate::mgmt::iso_library::present_as_cd();
-        let (start, stop) = row_power(iso_on, any_on);
+        let (start, stop) = row_power(iso_on);
         w.s("{\"id\":");
         w.u(next_id);
         w.s(",\"name\":\"ubuntu\",\"state\":\"");
@@ -928,9 +940,21 @@ fn write_list_json(
     }
 }
 
-/// Start is on when no guest is running. Stop is on for the guest that is.
-pub fn row_power(this_on: bool, any_on: bool) -> (bool, bool) {
-    (!this_on && !any_on, this_on)
+/// Start and Stop follow this guest alone. Another guest being on does not
+/// change this row.
+pub fn row_power(this_on: bool) -> (bool, bool) {
+    (!this_on, this_on)
+}
+
+/// `Some` when the CPU is already running a different guest. This guest is
+/// left off. The guest that is on is left on.
+fn held_by_other(want: crate::mgmt::perc_boot_choice::VmcsGuest) -> Option<&'static [u8]> {
+    use crate::mgmt::perc_boot_choice::{vmcs_guest, VmcsGuest};
+    match vmcs_guest() {
+        VmcsGuest::None => None,
+        owner if owner == want => Some(b"{\"ok\":true,\"running\":true}"),
+        _ => Some(b"{\"ok\":true,\"busy\":true}"),
+    }
 }
 
 fn catalog_note(waiting: bool, choice: PercSpaChoice, stopped: bool) -> &'static str {
@@ -1093,9 +1117,8 @@ mod guest_catalog_test {
 
     #[test]
     fn row_power_stays_on_the_row() {
-        assert_eq!(row_power(false, false), (true, false));
-        assert_eq!(row_power(true, true), (false, true));
-        assert_eq!(row_power(false, true), (false, false));
+        assert_eq!(row_power(false), (true, false));
+        assert_eq!(row_power(true), (false, true));
     }
 
     #[test]

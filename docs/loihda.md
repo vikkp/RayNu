@@ -208,7 +208,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | Field | Value |
 |-------|-------|
 | Commit | m8-9-spa-power |
-| Summary | **Start and Stop stay on each Guests row.** After Stop, Start boots that guest again. The hypervisor stays up. Scores held. Bar A 92. Bar B 70. Overall 78. |
+| Summary | **Each Guests row follows that guest alone.** Another guest being on does not change its Start or Stop. Scores held. Bar A 92. Bar B 70. Overall 78. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Bar A 92 held. Bar B 70 held. perc 86 held. unmodified 45 held. Overall 78 held. Months B 1.25 held. |
 | Gates touched | SPA guest power buttons. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-10-13 | m8-9-spa-rows | 92 | 70 | **One guest being on does not disable the other rows.** Start and Stop follow that guest. Scores held. Bar A 92. Bar B 70. Overall 78. PERC 86. Unmodified 45. |
 | 2026-10-13 | m8-9-spa-power | 92 | 70 | **Start and Stop stay on each Guests row.** After Stop, Start boots that guest again. Hypervisor stays up. Scores held. Bar A 92. Bar B 70. Overall 78. PERC 86. Unmodified 45. |
 | 2026-10-13 | m8-9-nic-record | 92 | 70 | **M8.9.1 is the spare NIC record.** Host tests. Sector not written. Ubuntu disk still has no NIC. M8.9.2–M8.9.6 open. Scores held. Bar A 92. Bar B 70. Overall 78. PERC 86. Unmodified 45. |
 | 2026-10-13 | m8-9-nic-adr | 92 | 70 | **ADR-013 Appendix C: the guest NIC is M8.9.** Admin attaches it. DHCP fills the form; Save pins it. Not built. Scores held. Bar A 92. Bar B 70. Overall 78. PERC 86. Unmodified 45. |

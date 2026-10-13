@@ -418,6 +418,31 @@ pub fn rearm_guest_after_stop() -> bool {
 
 static PERC_RELAUNCH: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
 
+/// Which guest, if any, is in the RayNu-F VMCS.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VmcsGuest {
+    None,
+    Window,
+    Tail(u64),
+}
+
+/// The guest currently on the CPU. Pending and a landed Stop are [`VmcsGuest::None`].
+pub fn vmcs_guest() -> VmcsGuest {
+    if guest_stopped() {
+        return VmcsGuest::None;
+    }
+    match perc_spa_choice() {
+        PercSpaChoice::Pending => VmcsGuest::None,
+        PercSpaChoice::BootInstalled | PercSpaChoice::CleanReinstall => VmcsGuest::Window,
+        PercSpaChoice::Tail { .. } | PercSpaChoice::TailBoot { .. } => {
+            match armed_tail() {
+                Some((off, _)) => VmcsGuest::Tail(off),
+                None => VmcsGuest::None,
+            }
+        }
+    }
+}
+
 /// The coexist idle should boot the guest that Start just chose.
 pub fn note_perc_relaunch() {
     PERC_RELAUNCH.store(true, Ordering::Release);
@@ -744,6 +769,10 @@ mod perc_boot_choice_test {
         assert_eq!(
             apply_tail_boot_choice(true, crate::mgmt::megaraid::IRON_LD1_BYTES, ten),
             PercChoiceApply::Accepted
+        );
+        assert_eq!(
+            vmcs_guest(),
+            VmcsGuest::Tail(crate::mgmt::megaraid::PERC_IMAGE_BYTES)
         );
         note_perc_relaunch();
         assert!(take_perc_relaunch());
