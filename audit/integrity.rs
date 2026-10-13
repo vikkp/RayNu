@@ -396,6 +396,15 @@ pub enum AuditEvent {
     PercSpaChoice {
         choice: u8,
     },
+    /// SPA Save pinned a guest NIC address. `mode` 1 = DHCP-pinned, 2 = manual.
+    GuestNicSaved {
+        spare_off: u64,
+        mode: u8,
+    },
+    /// SPA Detach removed one guest NIC.
+    GuestNicDetached {
+        spare_off: u64,
+    },
 }
 
 /// One sealed audit record in the hash chain.
@@ -613,6 +622,8 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::OvmfGuestUefiEltorito { .. } => 73,
         AuditEvent::HostPowerOff { .. } => 74,
         AuditEvent::PercSpaChoice { .. } => 75,
+        AuditEvent::GuestNicSaved { .. } => 76,
+        AuditEvent::GuestNicDetached { .. } => 77,
     }
 }
 
@@ -1133,6 +1144,18 @@ fn mirror_audit_to_com1(event: AuditEvent) {
         AuditEvent::PercSpaChoice { choice } => {
             serial::write_str("RAYNU-V-AUDIT: PercSpaChoice choice=");
             write_u32(choice as u32);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::GuestNicSaved { spare_off, mode } => {
+            serial::write_str("RAYNU-V-AUDIT: GuestNicSaved off=");
+            write_u64(spare_off);
+            serial::write_str(" mode=");
+            write_u32(u32::from(mode));
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::GuestNicDetached { spare_off } => {
+            serial::write_str("RAYNU-V-AUDIT: GuestNicDetached off=");
+            write_u64(spare_off);
             serial::write_byte(b'\n');
         }
         AuditEvent::FrameAllocated { .. } | AuditEvent::FrameFreed { .. } => {}

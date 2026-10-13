@@ -15,8 +15,10 @@
 
 use super::datastore::ImageTable;
 use super::http::{
-    handle_http_request, HTTP_LAB_NOTE, HTTP_RESPONSE_CAP, M7_HTTP_OK_MARKER, MGMT_HTTP_DEFAULT_PORT,
+    handle_http_request, HTTP_LAB_NOTE, M7_HTTP_OK_MARKER, MGMT_HTTP_DEFAULT_PORT,
 };
+#[cfg(test)]
+use super::http::HTTP_RESPONSE_CAP;
 use super::iso::IsoDeployPlan;
 use super::iso_install::InstallToDiskPlan;
 use super::VmTable;

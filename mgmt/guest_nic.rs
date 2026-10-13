@@ -10,6 +10,8 @@
 //! Detach removes that guest only. This module does not write the sector
 //! and does not attach a virtio device.
 
+use core::sync::atomic::{AtomicU32, AtomicU64, AtomicU8, Ordering};
+
 use crate::mgmt::megaraid::{classify_ld_bytes, LdClass, NIC_CATALOG_BYTES, SPARE_HIGH_RESERVE};
 
 /// SPA LOM `01:00.0`. A guest MAC must not be this.
@@ -88,19 +90,12 @@ impl NicCatalog {
 
     /// Pin `draft` on `spare_off`. The first Save mints the MAC. A later Save
     /// keeps it and replaces the address fields.
+    pub fn slot(&self, i: usize) -> Option<NicRecord> {
+        self.slots.get(i).copied().flatten()
+    }
+
     pub fn save(&mut self, spare_bytes: u64, draft: NicDraft) -> Result<NicRecord, NicError> {
-        let Some(limit) = catalog_off(spare_bytes) else {
-            return Err(NicError::BadDisk);
-        };
-        if draft.spare_off % 512 != 0 || draft.spare_off >= limit {
-            return Err(NicError::BadDisk);
-        }
-        if draft.prefix == 0 || draft.prefix > 32 {
-            return Err(NicError::BadAddress);
-        }
-        if draft.ipv4 == [0, 0, 0, 0] || draft.ipv4 == [255, 255, 255, 255] {
-            return Err(NicError::BadAddress);
-        }
+        accept_draft(spare_bytes, &draft)?;
         if let Some(idx) = self.index_of(draft.spare_off) {
             let rec = self.slots[idx].as_mut().expect("index matches a record");
             rec.mode = draft.mode;
@@ -143,6 +138,28 @@ impl NicCatalog {
             .iter()
             .position(|s| s.is_some_and(|r| r.spare_off == spare_off))
     }
+}
+
+fn accept_draft(spare_bytes: u64, draft: &NicDraft) -> Result<(), NicError> {
+    if spare_bytes == 0 {
+        if draft.spare_off % 512 != 0 {
+            return Err(NicError::BadDisk);
+        }
+    } else {
+        let Some(limit) = catalog_off(spare_bytes) else {
+            return Err(NicError::BadDisk);
+        };
+        if draft.spare_off % 512 != 0 || draft.spare_off >= limit {
+            return Err(NicError::BadDisk);
+        }
+    }
+    if draft.prefix == 0 || draft.prefix > 32 {
+        return Err(NicError::BadAddress);
+    }
+    if draft.ipv4 == [0, 0, 0, 0] || draft.ipv4 == [255, 255, 255, 255] {
+        return Err(NicError::BadAddress);
+    }
+    Ok(())
 }
 
 /// Spare offset of the catalog sector. `None` when `spare_bytes` is not RAYNU-SPARE.
@@ -290,6 +307,154 @@ fn checksum(bytes: &[u8]) -> u32 {
         s = s.wrapping_add(u32::from(*b));
     }
     s
+}
+
+struct AtomSlot {
+    live: AtomicU8,
+    prefix: AtomicU8,
+    spare: AtomicU64,
+    mac: AtomicU64,
+    ip: AtomicU32,
+    gw: AtomicU32,
+    dns: AtomicU32,
+}
+
+impl AtomSlot {
+    const fn new() -> Self {
+        Self {
+            live: AtomicU8::new(0),
+            prefix: AtomicU8::new(0),
+            spare: AtomicU64::new(0),
+            mac: AtomicU64::new(0),
+            ip: AtomicU32::new(0),
+            gw: AtomicU32::new(0),
+            dns: AtomicU32::new(0),
+        }
+    }
+}
+
+static PANEL_SEQ: AtomicU32 = AtomicU32::new(0);
+static PANEL: [AtomSlot; SLOT_CAP] = [
+    AtomSlot::new(),
+    AtomSlot::new(),
+    AtomSlot::new(),
+    AtomSlot::new(),
+    AtomSlot::new(),
+    AtomSlot::new(),
+    AtomSlot::new(),
+    AtomSlot::new(),
+];
+
+fn lock_panel() {
+    loop {
+        let s = PANEL_SEQ.load(Ordering::Acquire);
+        if s & 1 == 0
+            && PANEL_SEQ
+                .compare_exchange(s, s.wrapping_add(1), Ordering::AcqRel, Ordering::Acquire)
+                .is_ok()
+        {
+            return;
+        }
+        core::hint::spin_loop();
+    }
+}
+
+fn unlock_panel() {
+    PANEL_SEQ.fetch_add(1, Ordering::Release);
+}
+
+fn slots_to_catalog() -> NicCatalog {
+    let mut cat = NicCatalog::empty();
+    for (i, slot) in PANEL.iter().enumerate() {
+        let live = slot.live.load(Ordering::Relaxed);
+        let Some(mode) = mode_from(live) else {
+            continue;
+        };
+        let mac_u = slot.mac.load(Ordering::Relaxed);
+        let mut mac = [0u8; 6];
+        mac.copy_from_slice(&mac_u.to_le_bytes()[..6]);
+        cat.slots[i] = Some(NicRecord {
+            spare_off: slot.spare.load(Ordering::Relaxed),
+            mac,
+            mode,
+            prefix: slot.prefix.load(Ordering::Relaxed),
+            ipv4: slot.ip.load(Ordering::Relaxed).to_be_bytes(),
+            gateway: slot.gw.load(Ordering::Relaxed).to_be_bytes(),
+            dns: slot.dns.load(Ordering::Relaxed).to_be_bytes(),
+        });
+    }
+    cat
+}
+
+fn catalog_to_slots(cat: &NicCatalog) {
+    for (i, slot) in PANEL.iter().enumerate() {
+        match cat.slots[i] {
+            None => {
+                slot.live.store(0, Ordering::Relaxed);
+            }
+            Some(rec) => {
+                let mut mac_b = [0u8; 8];
+                mac_b[..6].copy_from_slice(&rec.mac);
+                slot.spare.store(rec.spare_off, Ordering::Relaxed);
+                slot.mac.store(u64::from_le_bytes(mac_b), Ordering::Relaxed);
+                slot.ip
+                    .store(u32::from_be_bytes(rec.ipv4), Ordering::Relaxed);
+                slot.gw
+                    .store(u32::from_be_bytes(rec.gateway), Ordering::Relaxed);
+                slot.dns
+                    .store(u32::from_be_bytes(rec.dns), Ordering::Relaxed);
+                slot.prefix.store(rec.prefix, Ordering::Relaxed);
+                slot.live.store(rec.mode as u8, Ordering::Relaxed);
+            }
+        }
+    }
+}
+
+/// The records the SPA last Saved. Same bytes a refresh reads.
+pub fn panel_snapshot() -> NicCatalog {
+    loop {
+        let s = PANEL_SEQ.load(Ordering::Acquire);
+        if s & 1 != 0 {
+            core::hint::spin_loop();
+            continue;
+        }
+        let cat = slots_to_catalog();
+        if PANEL_SEQ.load(Ordering::Acquire) == s {
+            return cat;
+        }
+    }
+}
+
+/// Pin one guest. Does not write the spare sector and does not attach virtio.
+pub fn panel_save(spare_bytes: u64, draft: NicDraft) -> Result<NicRecord, NicError> {
+    lock_panel();
+    let mut cat = slots_to_catalog();
+    let result = cat.save(spare_bytes, draft);
+    if result.is_ok() {
+        catalog_to_slots(&cat);
+    }
+    unlock_panel();
+    result
+}
+
+/// Drop one guest's NIC. Other guests stay.
+pub fn panel_detach(spare_off: u64) -> bool {
+    lock_panel();
+    let mut cat = slots_to_catalog();
+    let removed = cat.detach(spare_off);
+    if removed {
+        catalog_to_slots(&cat);
+    }
+    unlock_panel();
+    removed
+}
+
+/// Host tests only.
+#[cfg(test)]
+pub fn clear_panel_for_test() {
+    lock_panel();
+    catalog_to_slots(&NicCatalog::empty());
+    unlock_panel();
 }
 
 #[cfg(test)]
