@@ -48,6 +48,7 @@ input.token{min-width:12rem}
 .note{max-width:44rem;font-size:.8rem;color:rgba(12,26,34,.5)}
 #serial-log{max-height:16rem;overflow:auto;font:12px monospace;white-space:pre-wrap;padding:.4rem;border:1px solid var(--line);background:rgba(255,255,255,.7)}
 #iso-bar{height:8px;background:#c5d5dc;margin:.4rem 0}#iso-fill{height:8px;width:0;background:var(--sea)}
+#vnic{margin:.8rem 0 1rem}#vnic[hidden]{display:none}
 @media(max-width:820px){.strip{grid-template-columns:1fr 1fr}}
 </style>
 </head>
@@ -72,10 +73,17 @@ input.token{min-width:12rem}
 <div class="card"><div class="dot" id="d-iso"></div><b>Install media</b><span id="t-iso">No ISO yet</span></div>
 </div>
 <section class="pg on" data-pg="overview">
-<h2>Guest NIC</h2>
+<h2>Overview</h2>
+<div class="toolbar"><button class="danger" id="btn-poweroff" type="button">Power off host</button></div>
+</section>
+<section class="pg" data-pg="guests">
+<h2>Guests</h2>
+<p class="empty" id="spare-cap">Spare</p>
+<div id="spare-list" class="empty">No spare guest yet.</div>
+<div id="vnic" hidden>
+<p id="vnic-who"></p>
 <p class="empty" id="n-mac">No NIC saved.</p>
-<div class="toolbar" id="nic-form">
-<label>Guest <select id="n-off"></select></label>
+<div class="toolbar">
 <label>Mode <select id="n-mode"><option value="m">Manual</option><option value="d">DHCP</option></select></label>
 <label>IP <input id="n-ip" autocomplete="off"/></label>
 <label>Prefix <input id="n-px" type="number" min="1" max="32" value="24"/></label>
@@ -85,12 +93,7 @@ input.token{min-width:12rem}
 <button class="pri" id="btn-nic" type="button">Save</button>
 <button class="ghost" id="btn-det" type="button">Detach</button>
 </div>
-<div class="toolbar"><button class="danger" id="btn-poweroff" type="button">Power off host</button></div>
-</section>
-<section class="pg" data-pg="guests">
-<h2>Guests</h2>
-<p class="empty" id="spare-cap">Spare</p>
-<div id="spare-list" class="empty">No spare guest yet.</div>
+</div>
 <div class="toolbar" id="create-form">
 <label>ID <input id="f-id" type="number" min="1" value="1"/></label>
 <label>CPU <input id="f-cpu" type="number" min="1" max="64" value="2"/></label>
@@ -138,7 +141,7 @@ input.token{min-width:12rem}
 <script>
 (function(){
 const L=document.getElementById("vm-list"),I=document.getElementById("img-list"),G=document.getElementById("serial-log"),S=document.getElementById("status"),T=document.getElementById("f-token"),A="/vms",TK="raynu-v-token",KK="raynu-v-known";
-let known=[],hostOk=0,items=[],isoP="idle",isoN="No ISO yet",listBusy=0,up=0,hold=0;
+let known=[],hostOk=0,items=[],isoP="idle",isoN="No ISO yet",listBusy=0,up=0,hold=0,spareBody=null,vnicVm=null;
 function def(){return"raynu-v-bringup"}
 function loadT(){try{const t=sessionStorage.getItem(TK);return t&&t.length?t:def()}catch(e){return def()}}
 function saveT(t){try{sessionStorage.setItem(TK,t)}catch(e){}}
@@ -207,6 +210,7 @@ row.innerHTML='<span class="id">'+vm.id+'</span><span><div class="meta">'+(vm.im
 const acts=row.querySelector(".acts");
 const a=document.createElement("button");a.className="pri";a.textContent=vm.act||"Start";a.disabled=!vm.start;a.onclick=function(){if(!a.disabled)guestStart(vm)};acts.appendChild(a);
 const c=document.createElement("button");c.className="ghost";c.textContent="Stop";c.disabled=!vm.stop;c.onclick=function(){if(!c.disabled)guestStop()};acts.appendChild(c);
+if(vm.act!=="ISO"){const v=document.createElement("button");v.className="ghost";v.textContent="vNIC";v.onclick=function(){openVnic(vm)};acts.appendChild(v)}
 box.appendChild(row);
 });
 }
@@ -216,25 +220,26 @@ async function loadSpare(){
 if(up)return;let r;try{r=await api("GET","/perc/guests")}catch(e){return}
 hostOk=r.ok||hostOk;if(!r.ok)return;
 let b={};try{b=await r.json()}catch(e){}
-capNote(b);paintNic(b);paintSpare(b);
+spareBody=b;capNote(b);paintSpare(b);
 }
 function capNote(b){const cap=document.getElementById("spare-cap");if(cap)cap.textContent=(b.cap||"")+(b.note?(" "+b.note):"");}
-function paintNic(b){
-const sel=document.getElementById("n-off");if(!sel)return;const prev=sel.value;sel.innerHTML="";
-(b.guests||[]).forEach(function(vm){if(vm.act==="ISO")return;const o=document.createElement("option");o.value=String(vm.off_mib?vm.off_mib*1048576:0);o.textContent=vm.id+" "+(vm.name||"");sel.appendChild(o)});
-if(!sel.options.length){const o=document.createElement("option");o.value="0";o.textContent="0";sel.appendChild(o)}
-if(prev)sel.value=prev;
-const list=b.nic||[],cur=sel.value,n=list.filter(function(x){return String(x.off)===cur})[0];
+function nicOff(vm){return vm.off_mib?vm.off_mib*1048576:0}
+function openVnic(vm){
+vnicVm=vm;
+const box=document.getElementById("vnic");box.hidden=false;
+document.getElementById("vnic-who").textContent=(vm.disk_mib||0)+" MiB"+(vm.off_mib?"@"+vm.off_mib:" window");
+const off=String(nicOff(vm)),n=((spareBody&&spareBody.nic)||[]).filter(function(x){return String(x.off)===off})[0];
 document.getElementById("n-ip").value=n?n.ip:"";
 document.getElementById("n-px").value=n?n.px:24;
-document.getElementById("n-gw").value=n?n.gw:"";
-document.getElementById("n-dns").value=n?n.dns:"";
+document.getElementById("n-gw").value=n&&n.gw!=="0.0.0.0"?n.gw:"";
+document.getElementById("n-dns").value=n&&n.dns!=="0.0.0.0"?n.dns:"";
 document.getElementById("n-mode").value=n&&n.m==="d"?"d":"m";
 document.getElementById("n-mac").textContent=n?n.mac:"No NIC saved.";
+show("guests");
 }
 function quad(id){const v=document.getElementById(id).value;return v||"0.0.0.0"}
-async function saveNic(){if(up)return;const off=document.getElementById("n-off").value||"0";const q="/perc/nic/"+off+"/"+document.getElementById("n-mode").value+"/"+document.getElementById("n-ip").value+"/"+document.getElementById("n-px").value+"/"+quad("n-gw")+"/"+quad("n-dns");setS("Saving NIC…");const res=await api("POST",q);setS(res.ok?"NIC saved":"NIC refused ("+res.status+")");loadSpare()}
-async function detachNic(){if(up)return;const off=document.getElementById("n-off").value||"0";setS("Detaching…");const res=await api("POST","/perc/nic/"+off+"/detach");setS(res.ok?"NIC detached":"Detach refused");loadSpare()}
+async function saveNic(){if(up||!vnicVm)return;const off=String(nicOff(vnicVm));const q="/perc/nic/"+off+"/"+document.getElementById("n-mode").value+"/"+document.getElementById("n-ip").value+"/"+document.getElementById("n-px").value+"/"+quad("n-gw")+"/"+quad("n-dns");setS("Saving NIC…");const res=await api("POST",q);let j=null;try{j=await res.json()}catch(e){}if(j&&j.mac)document.getElementById("n-mac").textContent=j.mac;setS(res.ok?"NIC saved":"NIC refused ("+res.status+")");loadSpare()}
+async function detachNic(){if(up||!vnicVm)return;const off=String(nicOff(vnicVm));setS("Detaching…");const res=await api("POST","/perc/nic/"+off+"/detach");if(res.ok){document.getElementById("n-mac").textContent="No NIC saved.";document.getElementById("n-ip").value="";document.getElementById("n-gw").value="";document.getElementById("n-dns").value=""}setS(res.ok?"NIC detached":"Detach refused");loadSpare()}
 function render(v){
 if(!v.length){L.className="empty";L.textContent="No guests.";return}
 L.className="";L.innerHTML="";
@@ -264,8 +269,7 @@ document.getElementById("btn-keys").onclick=sendKeys;
 document.getElementById("btn-poweroff").onclick=powerOff;
 document.getElementById("btn-nic").onclick=saveNic;
 document.getElementById("btn-det").onclick=detachNic;
-document.getElementById("btn-dhcp").onclick=async function(){if(up)return;const off=document.getElementById("n-off").value||"0";setS("DHCP…");const res=await api("POST","/perc/nic/"+off+"/dhcp");let j=null;try{j=await res.json()}catch(e){}if(j&&j.ip){document.getElementById("n-ip").value=j.ip;document.getElementById("n-px").value=j.px;document.getElementById("n-gw").value=j.gw||"";document.getElementById("n-dns").value=j.dns||"";document.getElementById("n-mode").value="d";if(j.mac)document.getElementById("n-mac").textContent=j.mac;setS("Offer filled")}else setS("No offer")};
-document.getElementById("n-off").onchange=function(){loadSpare()};
+document.getElementById("btn-dhcp").onclick=async function(){if(up||!vnicVm)return;const off=String(nicOff(vnicVm));setS("DHCP…");const res=await api("POST","/perc/nic/"+off+"/dhcp");let j=null;try{j=await res.json()}catch(e){}if(j&&j.ip){document.getElementById("n-ip").value=j.ip;document.getElementById("n-px").value=j.px;document.getElementById("n-gw").value=j.gw||"";document.getElementById("n-dns").value=j.dns||"";document.getElementById("n-mode").value="d";if(j.mac)document.getElementById("n-mac").textContent=j.mac;setS("Offer filled")}else setS("No offer")};
 document.getElementById("g-keys").onkeydown=function(e){if(e.key==="Enter"){e.preventDefault();sendKeys()}};
 window.raynuWebUi={listVms:listVms,startVm:startVm,stopVm:stopVm,createVm:createVm,listImages:listImages,refreshLogs:refreshLogs,sendKeys:sendKeys,powerOff:powerOff,loadSpare:loadSpare};
 dot("hv","ok","Hypervisor is running");listVms();loadSpare();setInterval(listVms,30000);setInterval(loadSpare,2000);setInterval(function(){if(document.querySelector('.pg.on[data-pg="activity"]'))refreshLogs()},2000);
