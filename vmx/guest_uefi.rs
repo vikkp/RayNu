@@ -13584,6 +13584,17 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
     let Some(bar) = crate::devices::guest_virtio_blk::mmio_bar_base_for_gpa(gpa) else {
         return false;
     };
+    // Iron 80c70e9f: Linux enumerated 1af4:1041, then the first MMIO on
+    // 0xFE003000 returned false here (reason=0x30) and Stage 46 held the
+    // guest. The net BAR now resolves, so this access is emulated.
+    if crate::devices::guest_virtio_net::covers(gpa) {
+        static NET_MMIO: AtomicBool = AtomicBool::new(false);
+        if !NET_MMIO.swap(true, Ordering::AcqRel) {
+            serial::write_line_nowait(
+                "boot: M8.9 virtio-net MMIO (guest keeps running; not ISO-INSTALL-OK)",
+            );
+        }
+    }
     let linux = guest_uefi_linux_guest_active(
         serial::linux_earlycon_share(),
         guest_uefi_pf_should_deliver_to_guest(ops::vmread(GUEST_RIP).unwrap_or(0)),
