@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-9-login-close |
-| Summary | **M8.9.6 host: the close stays open.** A `:39` frame from the guest MAC plus a login from another machine would meet it. No evidence is latched. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | m8-9-nic-live |
+| Summary | **M8.9.3–M8.9.5 live path.** Accepted Start shows virtio-net `00:05.0`. A roomy `linux` line gains `ip=`. Function 1 rings arm without the APE phylock. M8.9.6 stays open. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
-| Gates touched | M8.9.6 close judge. Not COM2. No `:39` frame. No login. No doorbell. No format of UBUNTU0. |
+| Gates touched | M8.9.3 discover transmit, M8.9.4 virtio-net, M8.9.5 `ip=` view. No doorbell. No format of UBUNTU0. Sector not written. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 70 held, perc 86 held, unmodified 45 held, overall LOI 78 held, months A 0.25 held, months B 1.25 held. |
 
 
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-14 | m8-9-nic-live | 0.0 | 99 | **M8.9.3–M8.9.5 live path.** virtio-net `00:05.0` on an accepted Start. `ip=` when the linux line has room. Function 1 rings without the APE phylock. M8.9.6 stays open. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-14 | m8-9-login-close | 0.0 | 99 | **M8.9.6 host: the close stays open.** Judge wants a `:39` guest frame and a login from another machine. No evidence latched. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-14 | m8-9-guest-addr | 0.0 | 99 | **M8.9.5 host: the saved address is a kernel `ip=` token.** Disk not written. Token not on the command line yet. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-13 | m8-9-start-nic | 0.0 | 99 | **M8.9.4 host: the next accepted Start carries the saved NIC.** No hot-plug. Virtio device not programmed. No `:39` frame. Scores held. months 0.0 held; overall 99 held |
@@ -1098,7 +1099,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     M8.8 lived (`vikkp@raynusrv2:~$`, then Clear ISO). M8.9.6 host: the close stays open until a guest frame leaves `:39` and another machine logs in. Do not format UBUNTU0. No doorbell. A5 is parked. Rollback is v0.1.0-m8-perc-spa. See docs/m8_plan.md.
+Next move:     Flash this EFI only to read COM2 `boot: M8.9 virtio-net mac=` and `boot: M8.9 dhcp discover leaves :39` after Save and Start on the Ubuntu row. Rollback is v0.1.0-m8-perc-spa if the SPA drops. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/m8_plan.md.
 Rollback:      PERC SPA: v0.1.0-m8-perc-spa → CI 36362775808 / COM2 sha=8ad2ac89125e / EFI SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849
 Standing SPA:  v0.1.0-m8-a4s → CI 36137732145 / COM2 sha=1f33eeda72f9 / EFI SHA256 5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693
 Everest:       GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351 / EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc / COM2 build: sha=f72b4276d198

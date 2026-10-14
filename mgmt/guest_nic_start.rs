@@ -99,8 +99,8 @@ fn clear() {
     crate::mgmt::guest_addr::clear_token();
 }
 
-/// NIC carried by the last accepted Start.
-#[cfg(test)]
+/// NIC carried by the last accepted Start. None until that Start, and none
+/// after a Start with no saved record.
 pub fn armed_start() -> Option<StartNic> {
     if !SEEN.load(Ordering::Acquire) {
         return None;

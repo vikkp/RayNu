@@ -29,6 +29,8 @@ impl IpToken {
 }
 
 static HELD: AtomicU8 = AtomicU8::new(0);
+static TOKEN_BYTES: [AtomicU8; 96] = [const { AtomicU8::new(0) }; 96];
+static AMEND_LOGGED: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
 
 /// `ip=<client>::<gw>:<mask>:::off[:<dns>]`.
 ///
@@ -82,12 +84,110 @@ pub fn ip_token(nic: &StartNic) -> Option<IpToken> {
 
 /// Remember that this Start has a token. The bytes are rebuilt from the plan.
 pub fn hold_token(nic: &StartNic) {
-    let n = ip_token(nic).map(|t| t.len).unwrap_or(0);
-    HELD.store(n as u8, Ordering::Release);
+    match ip_token(nic) {
+        Some(t) => {
+            for (i, b) in TOKEN_BYTES.iter().enumerate() {
+                let v = if i < t.len { t.bytes[i] } else { 0 };
+                b.store(v, Ordering::Relaxed);
+            }
+            HELD.store(t.len as u8, Ordering::Release);
+        }
+        None => clear_token(),
+    }
 }
 
 pub fn clear_token() {
     HELD.store(0, Ordering::Release);
+}
+
+/// Copy the held token. Returns 0 when this Start has no address.
+pub fn copy_token(out: &mut [u8]) -> usize {
+    let n = held_len().min(out.len());
+    for i in 0..n {
+        out[i] = TOKEN_BYTES[i].load(Ordering::Relaxed);
+    }
+    n
+}
+
+/// Insert the held `ip=` token into a `linux` / `linuxefi` line that names
+/// `root=` and does not already contain `ip=`.
+///
+/// The disk bytes are not written. The insert fits only when `buf` has
+/// enough trailing zero bytes to grow. Otherwise the buffer is unchanged.
+pub fn amend_linux_view(buf: &mut [u8]) -> bool {
+    let n = held_len();
+    if n == 0 || n > 96 {
+        return false;
+    }
+    let mut token = [0u8; 96];
+    let n = copy_token(&mut token);
+    if n == 0 {
+        return false;
+    }
+    let token = &token[..n];
+    let need = 1 + token.len();
+    let slack = buf.iter().rev().take_while(|b| **b == 0).count();
+    if slack < need {
+        return false;
+    }
+    let mut i = 0usize;
+    while i < buf.len() {
+        if buf[i] == 0 {
+            break;
+        }
+        let start = i;
+        while i < buf.len() && buf[i] != 0 && buf[i] != b'\n' {
+            i += 1;
+        }
+        let end = i;
+        if line_wants_ip(&buf[start..end]) {
+            buf.copy_within(end..buf.len() - need, end + need);
+            buf[end] = b' ';
+            buf[end + 1..end + 1 + token.len()].copy_from_slice(token);
+            note_amend();
+            return true;
+        }
+        if i < buf.len() && buf[i] == b'\n' {
+            i += 1;
+        }
+    }
+    false
+}
+
+fn line_wants_ip(line: &[u8]) -> bool {
+    let s = trim(line);
+    if !has_tok(s, b"linuxefi") && !has_tok(s, b"linux") {
+        return false;
+    }
+    contains(s, b"root=") && !contains(s, b"ip=")
+}
+
+fn trim(s: &[u8]) -> &[u8] {
+    let mut i = 0;
+    while i < s.len() && (s[i] == b' ' || s[i] == b'\t') {
+        i += 1;
+    }
+    &s[i..]
+}
+
+fn has_tok(s: &[u8], token: &[u8]) -> bool {
+    s.len() >= token.len()
+        && s.starts_with(token)
+        && (s.len() == token.len() || s[token.len()] == b' ' || s[token.len()] == b'\t')
+}
+
+fn contains(hay: &[u8], needle: &[u8]) -> bool {
+    !needle.is_empty() && hay.windows(needle.len()).any(|w| w == needle)
+}
+
+fn note_amend() {
+    if AMEND_LOGGED.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    #[cfg(feature = "uefi-bin")]
+    crate::boot::serial::write_line(
+        "boot: M8.9 ip= on linux line (this boot only; disk unchanged)",
+    );
 }
 
 /// Length of the token held for the last accepted Start. Zero means none.
@@ -194,6 +294,17 @@ mod guest_addr_test {
         assert_eq!(held_len(), tok.len);
         clear_token();
         assert_eq!(held_len(), 0);
+        hold_token(&nic());
+        let mut view = [0u8; 128];
+        let line = b"linux /vmlinuz root=/dev/mapper/ubuntu--vg-ubuntu--lv ro\n";
+        view[..line.len()].copy_from_slice(line);
+        assert!(amend_linux_view(&mut view));
+        let text = core::str::from_utf8(&view).unwrap();
+        assert!(text.contains("ip=10.99.99.40::10.99.99.1:255.255.255.0:::off:1.1.1.1"));
+        assert!(text.contains("root=/dev/mapper/ubuntu--vg-ubuntu--lv"));
+        let mut tight = *line;
+        assert!(!amend_linux_view(&mut tight));
+        clear_token();
         let src = include_str!("guest_addr.rs");
         let disk = ["ext4", "_write"].concat();
         let grub = ["grub", ".cfg"].concat();
