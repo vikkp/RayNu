@@ -359,6 +359,7 @@ pub mod sku_card;
 pub mod guest_egress;
 pub mod guest_dhcp;
 pub mod guest_nic;
+pub mod guest_nic_start;
 pub mod iso_library;
 pub mod iso_upload;
 pub mod m8_iso_upload_gate;
