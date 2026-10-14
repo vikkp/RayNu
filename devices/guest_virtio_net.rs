@@ -482,4 +482,51 @@ mod guest_virtio_net_test {
         clear_panel_for_test();
         clear_start_for_test();
     }
+
+    #[test]
+    fn net_mmio_resolves_so_an_ept_hit_does_not_stop() {
+        clear_panel_for_test();
+        clear_start_for_test();
+        let gpa = u64::from(GUEST_NET_BAR);
+        assert!(
+            crate::devices::guest_virtio_blk::mmio_bar_base_for_gpa(gpa).is_none(),
+            "no NIC until Start"
+        );
+        let off = 8u64 * 1024 * 1024 * 1024;
+        panel_save(
+            0,
+            NicDraft {
+                spare_off: off,
+                mode: NicMode::Manual,
+                prefix: 24,
+                ipv4: [10, 99, 99, 40],
+                gateway: [10, 99, 99, 1],
+                dns: [1, 1, 1, 1],
+            },
+        )
+        .unwrap();
+        on_accepted_start(off);
+        assert_eq!(
+            crate::devices::guest_virtio_blk::mmio_bar_base_for_gpa(gpa),
+            Some(gpa)
+        );
+        assert!(crate::devices::guest_virtio_blk::is_virtio_bar_gpa(gpa));
+        assert!(crate::devices::guest_virtio_blk::is_virtio_bar_2m_gpa(gpa));
+        let mac = armed_start().unwrap().mac;
+        assert_eq!(
+            crate::devices::guest_virtio_blk::mmio_read_at(gpa + u64::from(OFF_DEVICE), 1) as u8,
+            mac[0]
+        );
+        assert!(crate::devices::guest_virtio_blk::mmio_bar_base_for_gpa(gpa + 0x1000).is_none());
+        let src = include_str!("../vmx/guest_uefi.rs");
+        let handler = src
+            .split("fn handle_virtio_bar_ept")
+            .nth(1)
+            .expect("ept handler");
+        assert!(handler.contains("mmio_bar_base_for_gpa"));
+        assert!(handler
+            .contains("boot: M8.9 virtio-net MMIO (guest keeps running; not ISO-INSTALL-OK)"));
+        clear_panel_for_test();
+        clear_start_for_test();
+    }
 }

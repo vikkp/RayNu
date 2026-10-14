@@ -824,7 +824,15 @@ fn bar_covers(bar: u64, gpa: u64) -> bool {
 }
 
 /// BAR base that contains `gpa`, if any.
+///
+/// Includes virtio-net `00:05.0` after an accepted Start. Iron `80c70e9f`
+/// enumerated `1af4:1041` then stopped: `handle_virtio_bar_ept` returned
+/// false on that BAR (exit reason `0x30`) and the Stage 46 hold parked the
+/// guest. A net MMIO hit must resolve here so the guest keeps running.
 pub fn mmio_bar_base_for_gpa(gpa: u64) -> Option<u64> {
+    if crate::devices::guest_virtio_net::covers(gpa) {
+        return crate::devices::guest_virtio_net::bar_gpa();
+    }
     let disk = mmio_bar_base();
     if bar_covers(disk, gpa) {
         return Some(disk);
@@ -855,10 +863,15 @@ pub fn is_virtio_bar_gpa(gpa: u64) -> bool {
 
 /// 2 MiB page containing a virtio BAR — must not be an EPT zero sink.
 pub fn is_virtio_bar_2m_gpa(gpa: u64) -> bool {
+    let page = gpa & !0x1F_FFFF;
+    if let Some(bar) = crate::devices::guest_virtio_net::bar_gpa() {
+        if page == (bar & !0x1F_FFFF) {
+            return true;
+        }
+    }
     if !queues_armed() {
         return false;
     }
-    let page = gpa & !0x1F_FFFF;
     let disk = mmio_bar_base();
     if disk != 0 && page == (disk & !0x1F_FFFF) {
         return true;
