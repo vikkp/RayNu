@@ -88,6 +88,7 @@ pub fn on_accepted_start(spare_off: u64) {
             GW.store(u32::from_be_bytes(nic.gateway), Ordering::Relaxed);
             DNS.store(u32::from_be_bytes(nic.dns), Ordering::Relaxed);
             SEEN.store(true, Ordering::Release);
+            crate::mgmt::guest_addr::hold_token(&nic);
         }
         None => clear(),
     }
@@ -95,6 +96,7 @@ pub fn on_accepted_start(spare_off: u64) {
 
 fn clear() {
     SEEN.store(false, Ordering::Release);
+    crate::mgmt::guest_addr::clear_token();
 }
 
 /// NIC carried by the last accepted Start.
@@ -152,8 +154,10 @@ mod guest_nic_start_test {
         assert!(plan(off, true).is_none());
         on_accepted_start(off);
         assert_eq!(armed_start().unwrap().mac, saved.mac);
+        assert!(crate::mgmt::guest_addr::held_len() > 0);
         on_accepted_start(0);
         assert!(armed_start().is_none());
+        assert_eq!(crate::mgmt::guest_addr::held_len(), 0);
         clear_panel_for_test();
         clear_start_for_test();
         let src = include_str!("guest_nic_start.rs");
