@@ -635,6 +635,9 @@ fn start_tail() -> GuestCatalogHttp {
                 crate::mgmt::perc_boot_choice::note_perc_relaunch();
             }
             crate::boot::raynu_f_flag::request_installed_boot();
+            crate::mgmt::guest_nic_start::on_accepted_start(
+                crate::mgmt::megaraid::PERC_IMAGE_BYTES,
+            );
             let mut body = [0u8; 128];
             let mut w = JsonBuf::new(&mut body);
             w.s("{\"ok\":true,\"choice\":\"tailboot\",\"spare_off\":");
@@ -669,6 +672,7 @@ fn start_disk_at(spare_off: u64) -> GuestCatalogHttp {
                 crate::mgmt::perc_boot_choice::note_perc_relaunch();
             }
             crate::boot::raynu_f_flag::request_installed_boot();
+            crate::mgmt::guest_nic_start::on_accepted_start(disk.spare_off);
             let mut body = [0u8; 192];
             let mut w = JsonBuf::new(&mut body);
             w.s("{\"ok\":true,\"choice\":\"tailboot\",\"spare_off\":");
@@ -732,6 +736,7 @@ fn store_choice(choice: u8, installed: bool) -> GuestCatalogHttp {
                 crate::boot::raynu_f_flag::request_from_spa();
             } else {
                 crate::boot::raynu_f_flag::request_installed_boot();
+                crate::mgmt::guest_nic_start::on_accepted_start(0);
             }
             let body: &[u8] = if choice == CHOICE_REINSTALL {
                 b"{\"ok\":true,\"choice\":\"reinstall\"}"
