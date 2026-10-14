@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-9-guest-addr |
-| Summary | **M8.9.5 host: the saved address is a kernel `ip=` token.** Disk not written. Scores held. Bar A 92. Bar B 70. Overall 78. |
+| Commit | m8-9-login-close |
+| Summary | **M8.9.6 host: the close stays open.** No `:39` frame and no login are latched. Scores held. Bar A 92. Bar B 70. Overall 78. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Bar A 92 held. Bar B 70 held. perc 86 held. unmodified 45 held. Overall 78 held. Months B 1.25 held. |
-| Gates touched | M8.9.5 address token. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
+| Gates touched | M8.9.6 close judge. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-perc-spa`. |
 
 ---
 
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-10-14 | m8-9-login-close | 92 | 70 | **M8.9.6 host: the close stays open.** No `:39` frame and no login latched. Scores held. Bar A 92. Bar B 70. Overall 78. PERC 86. Unmodified 45. |
 | 2026-10-14 | m8-9-guest-addr | 92 | 70 | **M8.9.5 host: the saved address is a kernel `ip=` token.** Disk not written. Scores held. Bar A 92. Bar B 70. Overall 78. PERC 86. Unmodified 45. |
 | 2026-10-13 | m8-9-start-nic | 92 | 70 | **M8.9.4 host: the next accepted Start carries the saved NIC.** No hot-plug. Virtio not programmed. Scores held. Bar A 92. Bar B 70. Overall 78. PERC 86. Unmodified 45. |
 | 2026-10-13 | m8-9-egress-port | 92 | 70 | **M8.9.3 hands the discover to function 1.** SPA port refused. APE phylock stays. Rings not programmed. Scores held. Bar A 92. Bar B 70. Overall 78. PERC 86. Unmodified 45. |
@@ -389,7 +390,7 @@ LOI:           NOT OPEN. Tracker born 2026-09-14.
 Bar A:         92% · 0.25 months · dedicated-box non-prod
 Bar B:         70% · 1.25 months · Ubuntu login on a 10 GiB spare tail (c3a70e62); whole VD still hidden
 Overall:       78% · confidence medium
-NOW:           M8.8 lived. vikkp@raynusrv2:~$ then library ISO cleared. M8.9.5 host: saved address is a kernel ip= token. The disk is not written. Do not format UBUNTU0. The 2.9 TB VD is not this disk. A5 parked. Bar A 92. Bar B 70. Overall 78. perc 86. unmodified 45. months A 0.25. months B 1.25. docs/adr/ADR-019.md
+NOW:           M8.8 lived. vikkp@raynusrv2:~$ then library ISO cleared. M8.9.6 host: the close stays open until a guest frame leaves :39 and another machine logs in. Do not format UBUNTU0. The 2.9 TB VD is not this disk. A5 parked. Bar A 92. Bar B 70. Overall 78. perc 86. unmodified 45. months A 0.25. months B 1.25. docs/adr/ADR-019.md
 Open:          guest NIC · iron AUTH-OK (parked) · unmodified ISO without the serial amendment · the whole spare VD · cluster
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
 Rollback:      v0.1.0-m8-perc-spa → lived SPA choice (COM2 sha=8ad2ac89125e, CI 36362775808, SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849). v0.1.0-m8-a4s → older standing SPA (1f33eeda72f9, CI 36137732145). v0.1.0-m8-a6 → keyboard + power-off (fd2ca12e, CI 36166108942), not Latest. Everest Latest stays v0.1.0-everest-closed (f72b4276).
