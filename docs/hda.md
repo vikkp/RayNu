@@ -27,7 +27,7 @@ summit_prod_pct: 100
 > **Living document.** Updated on every meaningful commit by Cursor (see `.cursor/rules/hda-update.mdc`).  
 > **North star product loop (“Mount Everest”):** **CLOSED on iron 2026-09-11.**  
 > Ship the EFI → boot on a **real PowerEdge R640** → **network-reachable** vSphere-like UI → **deploy a Linux ISO** (M7 / ADR-009). Production bar (M6.8–M6.9) is already closed on Latitude. **Next mountain: M8 operator hardening** ([ADR-018](adr/ADR-018.md)).  
-> **Iron rollback:** current PERC SPA pin [`v0.1.0-m8-perc-spa`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-m8-perc-spa) (`8ad2ac89125e` / `36362775808` / EFI SHA256 `6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849`). GitHub Latest stays [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) (`f72b4276` / `34552377351` / EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc`).
+> **Iron rollback:** current M8.9 rollback [`v0.1.0-m8-8-ubuntu`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-m8-8-ubuntu) (`c3a70e623aec` / `38454398693` / EFI SHA256 `08ef31ba87136577102ac378d8e0a512327994e8794c41c64444f5be5f8812c4`). Older PERC SPA pin [`v0.1.0-m8-perc-spa`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-m8-perc-spa) (`8ad2ac89125e` / `36362775808`). GitHub Latest stays [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) (`f72b4276` / `34552377351` / EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc`).
 
 Pillars: **[V]** verified core · **[Z]** single binary · **[D]** iDRAC-native · **[A]** audit-first.  
 Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m7_plan.md) (closed) · M8: [`m8_plan.md`](m8_plan.md) · ADR: [`adr/ADR-009.md`](adr/ADR-009.md) · close: [`adr/ADR-018.md`](adr/ADR-018.md) · constitution: [`CLAUDE.md`](../CLAUDE.md).
@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-9-nic-live |
-| Summary | **M8.9.3–M8.9.5 live path.** Accepted Start shows virtio-net `00:05.0`. A roomy `linux` line gains `ip=`. Function 1 rings arm without the APE phylock. M8.9.6 stays open. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | m8-8-rollback-release |
+| Summary | **Rollback pin `v0.1.0-m8-8-ubuntu`.** CI `38454398693`, COM2 `build: sha=c3a70e623aec`. Not Latest. The M8.9 flash rolls back here. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
-| Gates touched | M8.9.3 discover transmit, M8.9.4 virtio-net, M8.9.5 `ip=` view. No doorbell. No format of UBUNTU0. Sector not written. |
+| Gates touched | Release kit only. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 70 held, perc 86 held, unmodified 45 held, overall LOI 78 held, months A 0.25 held, months B 1.25 held. |
 
 
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-14 | m8-8-rollback-release | 0.0 | 99 | **Rollback pin `v0.1.0-m8-8-ubuntu`.** CI `38454398693`, `build: sha=c3a70e623aec`. Not Latest. M8.9 flashes roll back here. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-14 | m8-9-nic-live | 0.0 | 99 | **M8.9.3–M8.9.5 live path.** virtio-net `00:05.0` on an accepted Start. `ip=` when the linux line has room. Function 1 rings without the APE phylock. M8.9.6 stays open. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-14 | m8-9-login-close | 0.0 | 99 | **M8.9.6 host: the close stays open.** Judge wants a `:39` guest frame and a login from another machine. No evidence latched. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-14 | m8-9-guest-addr | 0.0 | 99 | **M8.9.5 host: the saved address is a kernel `ip=` token.** Disk not written. Token not on the command line yet. Scores held. months 0.0 held; overall 99 held |
@@ -1099,8 +1100,9 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     Flash this EFI only to read COM2 `boot: M8.9 virtio-net mac=` and `boot: M8.9 dhcp discover leaves :39` after Save and Start on the Ubuntu row. Rollback is v0.1.0-m8-perc-spa if the SPA drops. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/m8_plan.md.
-Rollback:      PERC SPA: v0.1.0-m8-perc-spa → CI 36362775808 / COM2 sha=8ad2ac89125e / EFI SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849
+Next move:     Flash M8.9 run 38491353329 (`93ec0ac5`) only to read COM2 `boot: M8.9 virtio-net mac=` and `boot: M8.9 dhcp discover leaves :39` after Save and Start on the Ubuntu row. Rollback is v0.1.0-m8-8-ubuntu if that EFI misbehaves. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/m8_plan.md.
+Rollback:      M8.8 close: v0.1.0-m8-8-ubuntu → CI 38454398693 / COM2 sha=c3a70e623aec / EFI SHA256 08ef31ba87136577102ac378d8e0a512327994e8794c41c64444f5be5f8812c4
+Older SPA:     v0.1.0-m8-perc-spa → CI 36362775808 / COM2 sha=8ad2ac89125e / EFI SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849
 Standing SPA:  v0.1.0-m8-a4s → CI 36137732145 / COM2 sha=1f33eeda72f9 / EFI SHA256 5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693
 Everest:       GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351 / EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc / COM2 build: sha=f72b4276d198
 Do not F11:    M8 prototypes `b5e290be` `17d120c5` `3b388279` `08202468` `d60431ee` `28cd4ff1` `15e3d665` `5c32bd06` `1fa231df` `e5cca2e0` `c4a41a17` (table in docs/m8_state.md); Phase B fails `34548550755` / `7f8dc0a9`

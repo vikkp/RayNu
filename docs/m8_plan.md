@@ -10,7 +10,20 @@ M8 is the polish table that used to read as “Everest residual.” It is **not*
 
 ## Iron rollback
 
-Three pins. GitHub Latest stays the Everest loop. The current PERC rollback is the lived SPA choice. The standing-SPA pin is the older path back to `1f33eeda`. Do **not** treat an untagged tip as any of these pins.
+Four pins. GitHub Latest stays the Everest loop. The current rollback for an M8.9 flash is the M8.8 close. The PERC SPA pin is the older path. The standing-SPA pin is the older path back to `1f33eeda`. Do **not** treat an untagged tip as any of these pins.
+
+### M8.8 close (`v0.1.0-m8-8-ubuntu`)
+
+| Field | Value |
+|-------|-------|
+| GitHub | https://github.com/vikkp/RayNu/releases/tag/v0.1.0-m8-8-ubuntu (not Latest) |
+| EFI source | `c3a70e623aec376e548d2553932ce3fe54026468` |
+| CI | `--run 38454398693` · COM2 `build: sha=c3a70e623aec` |
+| EFI SHA256 | `08ef31ba87136577102ac378d8e0a512327994e8794c41c64444f5be5f8812c4` |
+| In-tree kit | `releases/v0.1.0-m8-8-ubuntu/` |
+| Lived | `vikkp@raynusrv2:~$`, then `boot: M8.8 library ISO cleared (signature sector only; disks unchanged)` |
+
+Flash the kit file to leave an M8.9 experiment. Do not rebuild it and expect the same COM2 stamp.
 
 ### PERC SPA choice (`v0.1.0-m8-perc-spa`)
 

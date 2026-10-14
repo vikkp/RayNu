@@ -301,7 +301,7 @@ All ADRs live in `docs/adr/`. Format: numbered, dated, context/decision/rational
 | 016   | RayNu-F — be the guest firmware for E5 | Be the guest UEFI boot env ourselves (own EFI system table + boot services over virtio-blk/CD) instead of puppeting OVMF; RayNu-F is a subsystem in the single binary, outside Proven Core; disable the 3k–3o OVMF forcing (self-inflicted the 9474ab6/4e16b59 NULL-event #PF + CpuDeadLoop); **No third-party firmware state mutation**; do not claim ISO-INSTALL-OK |
 | 017   | Guest reset under RayNu-F (F7)        | Disk-before-ISO; `reset_keep_disk`; CF9/KBC/TF; cap=1; HANDLE_DISK Vendor path; nested `fe4785a` reboot-to-disk (`DISK-BOOT-OK` + `root=UUID=`); do not claim ISO-INSTALL-OK |
 | 018   | Post-Everest M8 operator hardening    | Everest CLOSED on iron `f72b4276`; rollback kit `v0.1.0-everest-closed`; M8 = persist/TLS/auth/console/upload/catalog/Windows-later; cluster → **M9**; no Proven Core expansion |
-| 019   | Guests screen is the spare boot policy | Guests lists the latched spare image and chooses boot or `linux_iso`. Slice 1 places only the 8 GiB window. Windows is refused. Decision 9 reserves an ISO library at the high end of RAYNU-SPARE (accepted, not built). Rollback `v0.1.0-m8-perc-spa` |
+| 019   | Guests screen is the spare boot policy | Guests lists the latched spare image and chooses boot or `linux_iso`. Slice 1 places only the 8 GiB window. Windows is refused. Decision 9 reserves an ISO library at the high end of RAYNU-SPARE. M8.8 lived on `c3a70e62`. Rollback `v0.1.0-m8-8-ubuntu` |
 | 020   | RayNu VM Generation 1                  | One specified VM that boots unmodified OS media. RayNu-F stays host-side and outside the Proven Core. Phases 0–5. Patched Alpine reboot-to-disk lived; the patcher is still on the product path. Not built past that. |
 
 **Rule:** Any new ADR is added here AND to `docs/adr/ADR-NNN.md`.
@@ -481,6 +481,10 @@ qemu-system-x86_64 \
 
 ### Deploy to R640
 
+**M8.8 close rollback (current, for an M8.9 flash):** [`v0.1.0-m8-8-ubuntu`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-m8-8-ubuntu)
+→ EFI `c3a70e623aec376e548d2553932ce3fe54026468` / CI `--run 38454398693` /
+SHA256 `08ef31ba87136577102ac378d8e0a512327994e8794c41c64444f5be5f8812c4`.
+COM2 must read `build: sha=c3a70e623aec`. Not GitHub Latest.
 **Standing-SPA rollback:** [`v0.1.0-m8-a4s`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-m8-a4s)
 → EFI built from `1f33eeda72f99e432204dc943386d99d3d341be8` / CI `--run 36137732145` /
 SHA256 `5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693`.
