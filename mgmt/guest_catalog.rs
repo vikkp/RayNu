@@ -1343,6 +1343,8 @@ pub fn prop_guest_catalog() -> bool {
         && html.contains("/dhcp")
         && html.contains("Offer filled")
         && html.contains("btn-det")
+        && html.contains("btn-vnic-x")
+        && html.contains("function closeVnic")
         && html.contains("a.disabled=!vm.start")
         && html.contains("c.disabled=!vm.stop")
         && include_str!("../vmx/launch.rs").contains("relaunch_perc_guest_from_spa")

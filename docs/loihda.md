@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-9-net-mmio |
-| Summary | **Virtio-net MMIO stays in the guest.** `80c70e9f` stopped on exit reason `0x30`. Scores held. Bar A 92. Bar B 70. Overall 78. |
+| Commit | m8-9-vnic-close |
+| Summary | **A × hides the vNIC panel.** Hide does not Save and does not Detach. Scores held. Bar A 92. Bar B 70. Overall 78. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Bar A 92 held. Bar B 70 held. perc 86 held. unmodified 45 held. Overall 78 held. Months B 1.25 held. |
-| Gates touched | M8.9.4 virtio-net MMIO. M8.9.6 stays open. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-8-ubuntu`. |
+| Gates touched | SPA Guests vNIC close. M8.9.6 stays open. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-8-ubuntu`. |
 
 ---
 
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-10-14 | m8-9-vnic-close | 92 | 70 | **A × hides the vNIC panel.** Hide does not Save and does not Detach. Get from DHCP still returns no offer on the EFI. Scores held. Bar A 92. Bar B 70. Overall 78. PERC 86. Unmodified 45. |
 | 2026-10-14 | m8-9-net-mmio | 92 | 70 | **Virtio-net MMIO is emulated.** `80c70e9f` stopped on exit reason `0x30` and the Stage 46 hold. This EFI keeps the guest running. M8.9.6 stays open. Scores held. Bar A 92. Bar B 70. Overall 78. PERC 86. Unmodified 45. |
 | 2026-10-14 | m8-9-vnic-row | 92 | 70 | **vNIC on each Guests row.** Fields stay while the list refreshes. Not on the flashed EFI. Scores held. Bar A 92. Bar B 70. Overall 78. PERC 86. Unmodified 45. |
 | 2026-10-14 | m8-8-rollback-release | 92 | 70 | **Rollback pin `v0.1.0-m8-8-ubuntu`.** CI `38454398693`, `build: sha=c3a70e623aec`. Not Latest. Scores held. Bar A 92. Bar B 70. Overall 78. PERC 86. Unmodified 45. |
@@ -394,7 +395,7 @@ LOI:           NOT OPEN. Tracker born 2026-09-14.
 Bar A:         92% · 0.25 months · dedicated-box non-prod
 Bar B:         70% · 1.25 months · Ubuntu login on a 10 GiB spare tail (c3a70e62); whole VD still hidden
 Overall:       78% · confidence medium
-NOW:           M8.8 lived. vikkp@raynusrv2:~$ then library ISO cleared. 80c70e9f enumerated virtio-net then Stage 46 hold (exit reason 0x30). Next EFI emulates that MMIO. M8.9.6 stays open. Rollback v0.1.0-m8-8-ubuntu. Do not format UBUNTU0. The 2.9 TB VD is not this disk. A5 parked. Bar A 92. Bar B 70. Overall 78. perc 86. unmodified 45. months A 0.25. months B 1.25. docs/adr/ADR-019.md
+NOW:           M8.8 lived. vikkp@raynusrv2:~$ then library ISO cleared. 80c70e9f enumerated virtio-net then Stage 46 hold (exit reason 0x30). Next EFI emulates that MMIO and adds a × on the vNIC panel. Get from DHCP still returns no offer. M8.9.6 stays open. Rollback v0.1.0-m8-8-ubuntu. Do not format UBUNTU0. The 2.9 TB VD is not this disk. A5 parked. Bar A 92. Bar B 70. Overall 78. perc 86. unmodified 45. months A 0.25. months B 1.25. docs/adr/ADR-019.md
 Open:          guest NIC · iron AUTH-OK (parked) · unmodified ISO without the serial amendment · the whole spare VD · cluster
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
 Rollback:      v0.1.0-m8-8-ubuntu → M8.8 close (COM2 sha=c3a70e623aec, CI 38454398693, SHA256 08ef31ba87136577102ac378d8e0a512327994e8794c41c64444f5be5f8812c4). v0.1.0-m8-perc-spa → older SPA choice (8ad2ac89125e, CI 36362775808). v0.1.0-m8-a4s → older standing SPA (1f33eeda72f9, CI 36137732145). v0.1.0-m8-a6 → keyboard + power-off (fd2ca12e, CI 36166108942), not Latest. Everest Latest stays v0.1.0-everest-closed (f72b4276).
