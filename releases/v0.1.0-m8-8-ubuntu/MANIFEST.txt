@@ -1,0 +1,16 @@
+RayNu-V EFI release kit
+Version: 0.1.0-m8-8-ubuntu
+EFI source: c3a70e623aec376e548d2553932ce3fe54026468
+CI: 38454398693
+COM2: build: sha=c3a70e623aec
+Lived: vikkp@raynusrv2:~$ on Ubuntu 26.04, then boot: M8.8 library ISO cleared
+Not GitHub Latest. Everest Latest remains v0.1.0-everest-closed.
+Current rollback for an M8.9 flash. v0.1.0-m8-perc-spa stays the older SPA pin.
+Contents:
+  r640-hypervisor.efi
+  r640-hypervisor.efi.sha256
+  VERSION
+  SHA256SUMS
+  MANIFEST.txt
+  README.md
+Flash this file. Do not rebuild and expect the same COM2 stamp.

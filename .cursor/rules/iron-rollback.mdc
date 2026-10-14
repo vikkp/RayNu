@@ -5,13 +5,28 @@ globs:
 alwaysApply: true
 ---
 
-# Iron rollback (three pins)
+# Iron rollback (four pins)
 
-You are working in **RayNu-V** (`vikkp/RayNu`). Mount Everest (M7) **closed on iron**. Next numbered work is **M8 operator product hardening** ([ADR-018](docs/adr/ADR-018.md), [docs/m8_plan.md](docs/m8_plan.md)). The current rollback for the lived PERC SPA choice is `v0.1.0-m8-perc-spa`. **A4s** remains the older standing-SPA pin.
+You are working in **RayNu-V** (`vikkp/RayNu`). Mount Everest (M7) **closed on iron**. Next numbered work is **M8 operator product hardening** ([ADR-018](docs/adr/ADR-018.md), [docs/m8_plan.md](docs/m8_plan.md)). The current rollback for an M8.9 flash is `v0.1.0-m8-8-ubuntu`. **`v0.1.0-m8-perc-spa`** remains the older SPA-choice pin. **A4s** remains the older standing-SPA pin.
+
+## Flash `v0.1.0-m8-8-ubuntu` to return to the M8.8 close
+
+This is the rollback when an M8.9 EFI misbehaves. It is **not** GitHub Latest. COM2 on this file reached `vikkp@raynusrv2:~$` and then `boot: M8.8 library ISO cleared (signature sector only; disks unchanged)`.
+
+| Field | Value |
+|-------|-------|
+| GitHub | https://github.com/vikkp/RayNu/releases/tag/v0.1.0-m8-8-ubuntu |
+| EFI source | `c3a70e623aec376e548d2553932ce3fe54026468` |
+| CI | `--run 38454398693` · COM2 `build: sha=c3a70e623aec` |
+| EFI SHA256 | `08ef31ba87136577102ac378d8e0a512327994e8794c41c64444f5be5f8812c4` |
+| In-tree kit | `releases/v0.1.0-m8-8-ubuntu/` |
+| Lived | Ubuntu 26.04 login on the 10 GiB tail, then Clear ISO (signature sector only) |
+
+Flash the kit file. A rebuild of a later commit will not stamp `c3a70e623aec`.
 
 ## Flash `v0.1.0-m8-perc-spa` to return to the lived SPA choice
 
-This is the rollback when a later Guests-screen EFI misbehaves. It is **not** GitHub Latest. Both SPA paths lived on this file: choice 2 reinstalled the 8 GiB window, then a later boot with choice 1 reached `localhost login:`.
+This is the older rollback for the Guests-screen EFI. It is **not** GitHub Latest. Both SPA paths lived on this file: choice 2 reinstalled the 8 GiB window, then a later boot with choice 1 reached `localhost login:`. It does not have the M8.8 Ubuntu disk.
 
 | Field | Value |
 |-------|-------|
