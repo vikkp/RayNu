@@ -850,7 +850,7 @@ fn is_virtio_spare_bar_gpa(gpa: u64) -> bool {
 
 /// GPA in a 4 KiB virtio BAR. False for the lab enum stub.
 pub fn is_virtio_bar_gpa(gpa: u64) -> bool {
-    mmio_bar_base_for_gpa(gpa).is_some()
+    crate::devices::guest_virtio_net::covers(gpa) || mmio_bar_base_for_gpa(gpa).is_some()
 }
 
 /// 2 MiB page containing a virtio BAR — must not be an EPT zero sink.
@@ -1099,6 +1099,9 @@ fn mmio_read_dev(which: VirtioFn, off: u16, size: u8) -> u64 {
 }
 
 pub fn mmio_read_at(gpa: u64, size: u8) -> u64 {
+    if crate::devices::guest_virtio_net::covers(gpa) {
+        return crate::devices::guest_virtio_net::mmio_read(gpa, size);
+    }
     let Some(bar) = mmio_bar_base_for_gpa(gpa) else {
         return 0;
     };
@@ -1206,6 +1209,10 @@ pub fn mmio_write_iso(off: u16, size: u8, val: u64) {
 }
 
 pub fn mmio_write_at(gpa: u64, size: u8, val: u64) {
+    if crate::devices::guest_virtio_net::covers(gpa) {
+        crate::devices::guest_virtio_net::mmio_write(gpa, size, val);
+        return;
+    }
     let Some(bar) = mmio_bar_base_for_gpa(gpa) else {
         return;
     };
@@ -1510,7 +1517,11 @@ pub fn take_iso_install_ok() -> bool {
 /// the request against media geometry.
 pub fn raynu_f_disk_read(off: u64, buf: &mut [u8]) -> bool {
     if crate::mgmt::megaraid::perc_image_boot_latched() {
-        return crate::mgmt::megaraid::perc_image_read(off, buf);
+        let ok = crate::mgmt::megaraid::perc_image_read(off, buf);
+        if ok {
+            let _ = crate::mgmt::guest_addr::amend_linux_view(buf);
+        }
+        return ok;
     }
     if LUN_ATTACHED.load(Ordering::Acquire) && crate::mgmt::durable_lun::durable_lun_serving() {
         let dlen = DISK_LEN.load(Ordering::Acquire);
@@ -1523,10 +1534,14 @@ pub fn raynu_f_disk_read(off: u64, buf: &mut [u8]) -> bool {
         // LBA0..LBA33 stay in the RAM pin. Anything else is the sector
         // GRUB asked for, through the same USB read the soak used.
         if crate::mgmt::disk_persist::persist_lun_gpt_pin_read(off, buf) {
+            let _ = crate::mgmt::guest_addr::amend_linux_view(buf);
             return true;
         }
         let ok = crate::mgmt::durable_lun::durable_lun_read_any(off, buf);
         crate::mgmt::durable_lun::durable_lun_note_past_pin_read(off, buf.len(), ok);
+        if ok {
+            let _ = crate::mgmt::guest_addr::amend_linux_view(buf);
+        }
         return ok;
     }
     let hpa = DISK_HPA.load(Ordering::Acquire);
@@ -1545,6 +1560,7 @@ pub fn raynu_f_disk_read(off: u64, buf: &mut [u8]) -> bool {
     let disk = unsafe { core::slice::from_raw_parts(hpa as *const u8, dlen as usize) };
     let start = off as usize;
     buf.copy_from_slice(&disk[start..start + buf.len()]);
+    let _ = crate::mgmt::guest_addr::amend_linux_view(buf);
     true
 }
 
@@ -2009,6 +2025,7 @@ pub fn drain_queue(translate: impl Fn(u64) -> Option<u64>) -> u32 {
     let disk_n = drain_disk(&translate);
     drain_iso(&translate);
     drain_spare(&translate);
+    crate::devices::guest_virtio_net::drain(&translate);
     disk_n
 }
 

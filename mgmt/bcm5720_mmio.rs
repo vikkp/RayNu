@@ -1341,6 +1341,160 @@ pub fn transmit_frame(frame: &[u8]) -> bool {
     .unwrap_or(false)
 }
 
+/// Result of handing one guest Ethernet frame to function 1.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EgressSend {
+    Sent(usize),
+    /// Rings were not programmed, or the SPA BAR was the only one in hand.
+    Held,
+}
+
+/// Send `frame` on `01:00.1` without taking the APE phylock and without
+/// using the SPA DMA arena. Host builds report [`EgressSend::Held`].
+pub fn egress_send(frame: &[u8]) -> EgressSend {
+    if frame.len() < 14 {
+        return EgressSend::Held;
+    }
+    #[cfg(feature = "uefi-bin")]
+    {
+        // SAFETY: BSP guest TX path. The egress arena is not the SPA arena.
+        // KANI-TARGET: rings_ready bar check (host), not this MMIO path.
+        return unsafe { egress_send_uefi(frame) };
+    }
+    #[cfg(not(feature = "uefi-bin"))]
+    {
+        let _ = frame;
+        EgressSend::Held
+    }
+}
+
+#[cfg(feature = "uefi-bin")]
+static EGRESS_TRIED: AtomicBool = AtomicBool::new(false);
+#[cfg(feature = "uefi-bin")]
+static mut EGRESS_DMA: DmaArena = DmaArena::zeroed();
+#[cfg(feature = "uefi-bin")]
+static mut EGRESS_NIC: Option<NicState> = None;
+
+#[cfg(feature = "uefi-bin")]
+unsafe fn egress_send_uefi(frame: &[u8]) -> EgressSend {
+    if EGRESS_NIC.is_none() && !EGRESS_TRIED.swap(true, Ordering::AcqRel) {
+        arm_egress();
+    }
+    let Some(n) = EGRESS_NIC.as_mut() else {
+        if !EGRESS_HELD_LOGGED.swap(true, Ordering::AcqRel) {
+            serial_step(
+                "boot: M8.9 egress tx held (phylock stays with iDRAC; SPA port stays)\n",
+            );
+        }
+        return EgressSend::Held;
+    };
+    let dma = &mut *core::ptr::addr_of_mut!(EGRESS_DMA);
+    if tx_one(n, dma, frame) {
+        if !EGRESS_SENT_LOGGED.swap(true, Ordering::AcqRel) {
+            serial_step("boot: M8.9 guest frame leaves :39 len=");
+            write_u16_dec(frame.len().min(FRAME_MAX) as u16);
+            serial_step("\n");
+        }
+        EgressSend::Sent(frame.len().min(FRAME_MAX))
+    } else {
+        EgressSend::Held
+    }
+}
+
+#[cfg(feature = "uefi-bin")]
+static EGRESS_HELD_LOGGED: AtomicBool = AtomicBool::new(false);
+#[cfg(feature = "uefi-bin")]
+static EGRESS_SENT_LOGGED: AtomicBool = AtomicBool::new(false);
+
+#[cfg(feature = "uefi-bin")]
+unsafe fn arm_egress() {
+    serial_step("boot: M8.9 egress arm (no phylock, SPA DMA stays)\n");
+    let spa_bar = NIC.as_ref().map(|n| n.mmio).unwrap_or(0);
+    let mut found: Option<(u8, u8, u8, u64, [u8; 6])> = None;
+    for bus in 0u8..=15 {
+        for dev in 0u8..32 {
+            for func in 0u8..2 {
+                let id = pci_read32(bus, dev, func, 0);
+                if id == 0xFFFF_FFFF {
+                    if func == 0 {
+                        break;
+                    }
+                    continue;
+                }
+                if !pci_id_is_bcm5720(id as u16, (id >> 16) as u16) {
+                    continue;
+                }
+                if func != 1 {
+                    continue;
+                }
+                let bar = (pci_read32(bus, dev, func, 0x10) as u64) & !0xF;
+                if bar == 0 {
+                    continue;
+                }
+                enable_mem(bus, dev, func);
+                let mac = peek_mac(bar, bus, dev, func);
+                found = Some((bus, dev, func, bar, mac));
+            }
+        }
+    }
+    let Some((bus, dev, func, bar, mac)) = found else {
+        serial_step("boot: M8.9 egress arm held (no function 1)\n");
+        return;
+    };
+    if mac != crate::mgmt::guest_nic::EGRESS_PHY_MAC {
+        serial_step("boot: M8.9 egress arm held (function 1 MAC is not :39)\n");
+        return;
+    }
+    let port = crate::mgmt::guest_egress::EgressPort {
+        bus,
+        dev,
+        func,
+        phy_mac: mac,
+        phylock: false,
+    };
+    let spa_func = 0u8;
+    if !matches!(
+        crate::mgmt::guest_egress::rings_ready(&port, bar, spa_func, spa_bar),
+        crate::mgmt::guest_egress::RingArm::Ready { .. }
+    ) {
+        serial_step("boot: M8.9 egress arm held (shared BAR or missing SPA BAR)\n");
+        return;
+    }
+    enable_bus_master(bus, dev, func);
+    let dma = &mut *core::ptr::addr_of_mut!(EGRESS_DMA);
+    init_rings(dma);
+    program_rings(bar, bus, dev, func, dma);
+    if enable_mac(bar, crate::mgmt::guest_nic::EGRESS_PHY_MAC).is_err() {
+        serial_step("boot: M8.9 egress arm held (MAC)\n");
+        return;
+    }
+    enable_dma_engines(bar);
+    enable_completion_blocks(bar);
+    EGRESS_NIC = Some(NicState {
+        mmio: bar,
+        mac: crate::mgmt::guest_nic::EGRESS_PHY_MAC,
+        rx_rcb_ptr: 0,
+        rx_std_prod: 0,
+        tx_prod: 0,
+        tx_cons: 0,
+    });
+    if let Some(nic) = crate::mgmt::guest_nic_start::armed_start() {
+        let disc = crate::mgmt::guest_dhcp::discover_frame(&nic.mac, 1);
+        if let Some(n) = EGRESS_NIC.as_mut() {
+            if tx_one(n, dma, &disc.bytes[..disc.len]) {
+                serial_step("boot: M8.9 dhcp discover leaves :39\n");
+            }
+        }
+    }
+    serial_step("boot: M8.9 egress rings armed pci=");
+    write_hex_u8(bus);
+    crate::boot::serial::write_byte(b':');
+    write_hex_u8(dev);
+    crate::boot::serial::write_byte(b'.');
+    write_hex_u8(func);
+    serial_step(" phylock=no\n");
+}
+
 pub fn mac_address() -> Option<[u8; 6]> {
     with_nic(|n, _| n.mac)
 }

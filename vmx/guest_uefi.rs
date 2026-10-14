@@ -13462,6 +13462,7 @@ unsafe fn handle_pci(port: u16, is_in: bool, size: u8) {
             crate::devices::ide_cdrom::pci_write_addr(addr);
             crate::devices::guest_platform::pci_write_addr(addr);
             crate::devices::guest_virtio_blk::pci_write_addr(addr);
+            crate::devices::guest_virtio_net::pci_write_addr(addr);
             LAST_CF8.store(addr, Ordering::Release);
             if (addr & 0x8000_0000) != 0 {
                 LAST_CF8_EN.store(addr, Ordering::Release);
@@ -13484,6 +13485,10 @@ unsafe fn handle_pci(port: u16, is_in: bool, size: u8) {
             };
             let v = if let Some(p) = crate::devices::guest_platform::pci_read_data(port, size) {
                 u64::from(p)
+            } else if crate::devices::guest_virtio_net::pci_selects(
+                crate::devices::ide_cdrom::pci_read_addr(),
+            ) {
+                u64::from(crate::devices::guest_virtio_net::pci_read_data(port, size))
             } else if crate::devices::guest_virtio_blk::pci_addr_selects_owned(
                 crate::devices::guest_virtio_blk::pci_read_addr(),
             ) {
@@ -13499,6 +13504,7 @@ unsafe fn handle_pci(port: u16, is_in: bool, size: u8) {
             crate::devices::guest_platform::pci_write_data(port, size, SAVED_RAX as u32);
             crate::devices::ide_cdrom::pci_write_data(port, size, SAVED_RAX as u32);
             crate::devices::guest_virtio_blk::pci_write_data(port, size, SAVED_RAX as u32);
+            crate::devices::guest_virtio_net::pci_write_data(port, size, SAVED_RAX as u32);
             let cfg = crate::devices::ide_cdrom::pci_read_addr()
                 | u32::from(port.wrapping_sub(0xCFC) & 3);
             trace_pci_cfg(cfg, SAVED_RAX as u32, size, true);
@@ -14970,6 +14976,9 @@ unsafe fn ept_split_2m_trap_4k(gpa: u64) -> bool {
 unsafe fn ept_trap_programmed_virtio_bars() {
     if !crate::devices::guest_virtio_blk::queues_armed() {
         return;
+    }
+    if let Some(bar) = crate::devices::guest_virtio_net::bar_gpa() {
+        let _ = ept_split_2m_trap_4k(bar);
     }
     for bar in crate::devices::guest_virtio_blk::mmio_programmed_bar_gpas() {
         if !guest_uefi_virtio_bar_should_trap(bar) {
