@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | site-sku-lived |
-| Summary | **SKU card matches the spare.** Ubuntu 26.04 logged in on a 10 GiB tail. The 2.9 TB VD stays hidden. No guest LAN. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | site-sku-signer |
+| Summary | **SKU card is what a signature holds today.** One dedicated box, Ubuntu on a 10 GiB tail, no guest LAN. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
-| Gates touched | Public SKU card. M8.9.6 stays open. No doorbell. No format of UBUNTU0. |
+| Gates touched | Public SKU card voice. M8.9.6 stays open. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 70 held, perc 86 held, unmodified 45 held, overall LOI 78 held, months A 0.25 held, months B 1.25 held. |
 
 
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-15 | site-sku-signer | 0.0 | 99 | **SKU card speaks to the signer.** What a dedicated-box letter holds today. Ubuntu on a 10 GiB tail. No guest LAN. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-15 | site-sku-lived | 0.0 | 99 | **SKU card matches the spare.** Ubuntu 26.04 on a 10 GiB tail. RAYNU-SPARE is not empty. No guest LAN. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-15 | m8-9-net-irq | 0.0 | 99 | **virtio-net interrupt pin is INTA.** `33c9b141` reached `vikkp` login and `virtio_net` probe `-22`. Pin 0 skipped INTx. M8.9.6 stays open. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-14 | m8-9-vnic-close | 0.0 | 99 | **A × hides the vNIC panel.** Hide does not Save and does not Detach. Get from DHCP still returns no offer on the EFI. Scores held. months 0.0 held; overall 99 held |
@@ -1105,7 +1106,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     SKU card names the 10 GiB Ubuntu tail and withholds a guest LAN. `4933dc61` sets the virtio-net INTA pin and is the EFI under test. Function 1 link was down (`bmsr=7949`). M8.9.6 stays open. Rollback is v0.1.0-m8-8-ubuntu. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/m8_plan.md.
+Next move:     The SKU card is written for the person who would sign today. `4933dc61` is the EFI under test (virtio-net INTA). No guest LAN until a frame leaves `:39`. M8.9.6 stays open. Rollback is v0.1.0-m8-8-ubuntu. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/m8_plan.md.
 Rollback:      M8.8 close: v0.1.0-m8-8-ubuntu → CI 38454398693 / COM2 sha=c3a70e623aec / EFI SHA256 08ef31ba87136577102ac378d8e0a512327994e8794c41c64444f5be5f8812c4
 Older SPA:     v0.1.0-m8-perc-spa → CI 36362775808 / COM2 sha=8ad2ac89125e / EFI SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849
 Standing SPA:  v0.1.0-m8-a4s → CI 36137732145 / COM2 sha=1f33eeda72f9 / EFI SHA256 5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693

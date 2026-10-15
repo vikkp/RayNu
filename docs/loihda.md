@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | site-sku-lived |
-| Summary | **SKU card matches the spare.** Ubuntu 26.04 on a 10 GiB tail. No guest LAN. Scores held. Bar A 92. Bar B 70. Overall 78. |
+| Commit | site-sku-signer |
+| Summary | **SKU card is what a signature holds today.** One dedicated box. No guest LAN. Scores held. Bar A 92. Bar B 70. Overall 78. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | Bar A 92 held. Bar B 70 held. perc 86 held. unmodified 45 held. SKU 92 held. Overall 78 held. Months B 1.25 held. |
-| Gates touched | Public SKU card. M8.9.6 stays open. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-8-ubuntu`. |
+| Gates touched | Public SKU card voice. M8.9.6 stays open. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-8-ubuntu`. |
 
 ---
 
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-10-15 | site-sku-signer | 92 | 70 | **SKU card is what a signature holds today.** Dedicated box, Ubuntu on a 10 GiB tail, no guest LAN. Scores held. Bar A 92. Bar B 70. Overall 78. PERC 86. Unmodified 45. SKU 92. |
 | 2026-10-15 | site-sku-lived | 92 | 70 | **SKU card matches the spare.** Ubuntu 26.04 on a 10 GiB tail. The 2.9 TB VD stays hidden. No guest LAN. Scores held. Bar A 92. Bar B 70. Overall 78. PERC 86. Unmodified 45. SKU 92. |
 | 2026-10-15 | m8-9-net-irq | 92 | 70 | **virtio-net interrupt pin is INTA.** `33c9b141` login worked; `virtio_net` probe `-22`. M8.9.6 stays open. Scores held. Bar A 92. Bar B 70. Overall 78. PERC 86. Unmodified 45. |
 | 2026-10-14 | m8-9-vnic-close | 92 | 70 | **A × hides the vNIC panel.** Hide does not Save and does not Detach. Get from DHCP still returns no offer on the EFI. Scores held. Bar A 92. Bar B 70. Overall 78. PERC 86. Unmodified 45. |
@@ -397,7 +398,7 @@ LOI:           NOT OPEN. Tracker born 2026-09-14.
 Bar A:         92% · 0.25 months · dedicated-box non-prod
 Bar B:         70% · 1.25 months · Ubuntu login on a 10 GiB spare tail (c3a70e62); whole VD still hidden
 Overall:       78% · confidence medium
-NOW:           SKU card names the 10 GiB Ubuntu tail. 33c9b141 reached vikkp. virtio_net probe returned -22. 4933dc61 sets INTA and is the EFI under test. No guest LAN. M8.9.6 stays open. Rollback v0.1.0-m8-8-ubuntu. Do not format UBUNTU0. The 2.9 TB VD is not this disk. A5 parked. Bar A 92. Bar B 70. Overall 78. perc 86. unmodified 45. SKU 92. months A 0.25. months B 1.25. docs/adr/ADR-019.md
+NOW:           SKU card is what a signature holds today. One dedicated box. Ubuntu on a 10 GiB tail. 33c9b141 reached vikkp. virtio_net returned -22. 4933dc61 is the EFI under test. No guest LAN. M8.9.6 stays open. Rollback v0.1.0-m8-8-ubuntu. Do not format UBUNTU0. The 2.9 TB VD is not this disk. A5 parked. Bar A 92. Bar B 70. Overall 78. perc 86. unmodified 45. SKU 92. months A 0.25. months B 1.25. docs/adr/ADR-019.md
 Open:          guest NIC · iron AUTH-OK (parked) · unmodified ISO without the serial amendment · the whole spare VD · cluster
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
 Rollback:      v0.1.0-m8-8-ubuntu → M8.8 close (COM2 sha=c3a70e623aec, CI 38454398693, SHA256 08ef31ba87136577102ac378d8e0a512327994e8794c41c64444f5be5f8812c4). v0.1.0-m8-perc-spa → older SPA choice (8ad2ac89125e, CI 36362775808). v0.1.0-m8-a4s → older standing SPA (1f33eeda72f9, CI 36137732145). v0.1.0-m8-a6 → keyboard + power-off (fd2ca12e, CI 36166108942), not Latest. Everest Latest stays v0.1.0-everest-closed (f72b4276).

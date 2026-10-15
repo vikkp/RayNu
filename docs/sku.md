@@ -1,62 +1,62 @@
-# RayNu-V SKU card — dedicated-box lab (Bar A)
+# RayNu-V SKU card — what a signature holds today
 
-**Status: DONE (A3).** One page: what ships, what does not.  
+**Status: DONE (A3).** One page for the person who would sign.  
 **Audience:** a lab / innovation owner who can dedicate one Dell PowerEdge.  
-**Not this page:** RAID-fleet replacement (Bar B). HDA 99% is Everest, not an LOI.
+**Not this page:** the RAID-fleet letter (Bar B). HDA 99% is Everest, not an LOI.
 
 Living LOI tracker: [`docs/loihda.md`](loihda.md) · public: [`site/sku.html`](../site/sku.html) · [`site/loi.html`](../site/loi.html).
 
-This card is commercial honesty. Overstated copy does not survive diligence.
+If you signed a non-production letter today, this is the box you would be holding. Overstated copy does not survive diligence.
 
 ---
 
-## What you are buying
+## If you signed today
 
-A **dedicated-box** non-production LOI on **one** PowerEdge we own or they dedicate. One EFI binary. The guest that logged in on the spare is **Ubuntu 26.04** (`vikkp@raynusrv2`) on a **10 GiB** tail of RAYNU-SPARE. The older dedicated-box disk is an **8 GiB** USB slice. Native coexist is **TLS 1.2 HTTPS** with a lab millicert. PRE-EBS SNP remains **plaintext HTTP**.
+A **dedicated-box** letter on **one** PowerEdge. One EFI. You would have an Ubuntu 26.04 guest that has already reached `vikkp@raynusrv2` on a **10 GiB** tail of the spare. The disk that has come back after a chassis power-off is an **8 GiB** USB window. The page is **TLS 1.2 HTTPS** with a lab millicert. The first minutes of boot are still **plaintext HTTP**. The door is a **lab latch** until `auth.token` is on the stick.
 
-It is **not** the whole 2.9 TB VD, **not** a guest LAN, **not cluster**, **not Windows**.
-
----
-
-## Ships today (Bar A dedicated-box)
-
-| Ships | Honest bound |
-|-------|----------------|
-| Single `r640-hypervisor.efi` | No OS, no packages, no config files (ADR-003). |
-| Everest loop on a real R640 | Network SPA → Linux ISO → reboot to disk → `login:` (`f72b4276`). |
-| Ubuntu on a spare tail | `c3a70e62` reached `vikkp@raynusrv2:~$` from a **10 GiB** tail of RAYNU-SPARE. COM2 `33c9b141` logged in as `vikkp` again. The rest of the 2.9 TB VD is not the guest disk. Do not format UBUNTU0. |
-| Guest disk survives Force Off | USB BOT on Toshiba `0480:a004`. Guest sees **8 GiB**, not the whole ~298 GiB stick, not leftover DRAM. A2 **DONE on evidence** (`4af78b43`, UUID `348005a9`). Minted persist-OK **printed** on `928d6224` (`RAYNU-V-M8-DISK-PERSIST-OK`, UUID `dd673a9a`). |
-| Network SPA + REST | Native coexist `https://10.99.99.x:8443/` **while Alpine runs**. A4 encrypt **DONE** (`928d6224`). Standing listen **lived** on `1f33eeda` (one TLS session, Host green). Lab millicert, TLS 1.2 ECDHE-RSA-AES128-GCM only. PRE-EBS SNP remains **plaintext HTTP**. |
-| Lab operator latch | `raynu-v-bringup` until ESP `EFI/RayNu/auth.token` is staged. HostReady tests refuse the latch; iron still accepts it. |
-| Serial keyboard | SPA `POST /console/keys` → guest COM1. `GET /logs/guest` is guest COM1 TX (not iDRAC SOL). `GET /logs/serial` is HV UART. A6 **lived once**: Activity showed `abc`, `-sh: abc: not found`, and `RAYNU-V-M8-CONSOLE-OK`, Host green. Ubuntu login on the spare is COM2 `ttyS0`. The guest log still mixes host UART lines. Not VNC. |
+This letter does not hand you the whole 2.9 TB virtual disk, a guest LAN, **not cluster**, and **not Windows**.
 
 ---
 
-## Does not ship (say this out loud)
+## What you would be holding
 
-- **not PERC fleet.** The mapper still refuses the ~400 GB Ubuntu VD. A **10 GiB** tail of **RAYNU-SPARE** holds the installed Ubuntu guest (`c3a70e62`, login again on `33c9b141`). The rest of the 2.9 TB VD is not offered. The H840 stays closed. USB persist is not RAID-fleet persist. Do not format UBUNTU0. Map: [`runbooks/r640_perc_lab.md`](runbooks/r640_perc_lab.md).
-- **not a guest LAN.** `33c9b141` reached login and `virtio_net` returned `-22`. No frame has left `:39`. A later EFI sets an interrupt pin. That pin is not a close.
-- **not cluster.** vMotion-like / DRS-like / hot-add are **M9**, not Bar A.
-- **not Windows.** Typed `windows_iso` exists; install is M8.6 later. Ubuntu 26.04 and Alpine have both reached a login.
-- **Iron HTTPS (A4) is DONE** on COM2 `928d6224`. Residual: lab millicert, one TLS 1.2 cipher, PRE-EBS SNP **plaintext HTTP**. rustls cannot join `uefi-bin`. **Standing SPA during Alpine lived** on `1f33eeda` (Host green).
-- **Iron ESP-required auth (A5) is parked.** Shared **lab latch** ≠ operator credential. The flashed EFI still accepts bring-up when no ESP `auth.token` is present. The operator skipped this until PERC I/O. Do not start it unless they ask.
-- **Iron SPA keyboard (A6) lived once.** Activity showed `abc` reach Alpine and `RAYNU-V-M8-CONSOLE-OK`. Ubuntu login on the spare is COM2 `ttyS0`. The guest log still mixes host UART lines. Not VNC. Chassis power is iDRAC Force Off.
-- **Whole-Toshiba virtio is not the product window.** 8 GiB slice by design.
-- **ISO blob PUT on coexist is not iron.** ESP-staged `linux.iso` stays valid. Host tests can register ISO bytes; the box you own still uses the stick.
-- Nested QEMU ≠ R640. Latitude ≠ R640. Host/CI never print iron markers.
+| You hold | Bound |
+|----------|--------|
+| One `r640-hypervisor.efi` | No second OS, no packages, no config files (ADR-003). |
+| The install loop on a real R640 | Open the page, start a Linux install, reboot to the disk, reach `login:` (`f72b4276`). |
+| Ubuntu you can log into | `c3a70e62` reached `vikkp@raynusrv2:~$` from a **10 GiB** tail of RAYNU-SPARE. COM2 `33c9b141` logged in as `vikkp` again. The rest of the 2.9 TB VD is outside the letter. Leave UBUNTU0 alone. |
+| A disk that survives Force Off | USB BOT on Toshiba `0480:a004`. You get **8 GiB**, not the whole ~298 GiB stick, and not leftover DRAM. A2 **DONE on evidence** (`4af78b43`, UUID `348005a9`). Persist-OK **printed** on `928d6224` (`RAYNU-V-M8-DISK-PERSIST-OK`, UUID `dd673a9a`). |
+| A page on the management port | `https://10.99.99.x:8443/` while a guest runs. A4 encrypt **DONE** (`928d6224`). The page stayed up on `1f33eeda`. Lab millicert, TLS 1.2 only. PRE-EBS SNP remains **plaintext HTTP**. |
+| A way in | The **lab latch** `raynu-v-bringup` until ESP `EFI/RayNu/auth.token` is staged. The box you would own still accepts that string. |
+| A console | The page typed `abc` into Alpine once. The Ubuntu login you can repeat is COM2 `ttyS0`. The guest log still mixes host lines. This is not a remote desktop. |
 
 ---
 
-## Dedicated-box vs fleet
+## What the letter does not cover
 
-| | Dedicated-box (Bar A) | RAID-fleet (Bar B) |
+- **not PERC fleet.** You are not taking the array. A **10 GiB** tail of **RAYNU-SPARE** holds Ubuntu (`c3a70e62`, login again on `33c9b141`). The rest of the 2.9 TB VD stays hidden. The second controller stays closed. The USB window is a different disk. Leave UBUNTU0 alone. Map: [`runbooks/r640_perc_lab.md`](runbooks/r640_perc_lab.md).
+- **not a guest LAN.** The Ubuntu shell is up. It has no working interface. No packet from that guest has left `:39`. An interrupt-pin change is in test. It is outside today's signature.
+- **not cluster.** No move of a running guest, no placement across boxes, no hot-add. Those are a later letter.
+- **not Windows.** Ubuntu 26.04 and Alpine have both reached a login. Windows is a later letter.
+- The HTTPS you could show is the lab millicert and one TLS 1.2 cipher. The boot window is still **plaintext HTTP**.
+- There is no operator account. The **lab latch** is what the box accepts until ESP `auth.token` exists.
+- The page typed into Alpine once. It is not a remote desktop. Chassis power is the iDRAC control.
+- The USB window is **8 GiB** by design.
+- Putting an ISO through the management page is not what the box does today. The stick still carries the media.
+- A nested lab and a laptop are not the PowerEdge you would be signing for.
+
+---
+
+## Two letters
+
+| | Dedicated-box, the letter on the table | Fleet, a different signature |
 |--|------------------------|---------------------|
-| Who | Lab owner with a spare / dedicated R640 | Someone whose disks already live on PERC |
-| Disk | 8 GiB USB slice (Toshiba) for the older Force Off path. Ubuntu 26.04 login is a 10 GiB tail of RAYNU-SPARE, not the whole VD. | Spare PERC virtual disk that is **not** the 400 GB boot VD. A 10 GiB tail logged in. The 2.9 TB VD is still hidden. |
-| Close | A1–A6. A1/A2/A3/A4 done. Standing SPA lived. A6 lived once. **A5 auth is the open residual.** | `RAYNU-V-M8-PERC-LUN-OK` on a spare VD |
-| Do not | Promise PERC, cluster, or Windows | Skip Bar A and sell USB as fleet persist |
+| Who signs | A lab owner with one R640 they can set aside | Someone whose disks already live on the array |
+| Disk | **8 GiB** USB window for the power-off path. Ubuntu login is a 10 GiB tail, not the whole VD. | The spare array disk that is not the 400 GB boot VD. A 10 GiB tail has logged in. The 2.9 TB VD is still hidden. |
+| What closes it | Install loop, this card, HTTPS. An operator password is still open. | A guest login from the spare virtual disk they already own, on the whole disk they mean. |
+| Leave out | **not PERC** fleet, **not cluster**, **not Windows** | Selling the USB window as the array |
 
-Bar B stays **out of commercial conversation** until its close criteria are met. A USB demonstration is the Bar A mechanism. It is not evidence that RayNu-V runs on the customer’s RAID virtual disks.
+The fleet letter stays off the table. The USB window is the dedicated-box disk. It is not evidence that RayNu-V is running on a customer's array.
 
 ---
 
@@ -64,15 +64,15 @@ Bar B stays **out of commercial conversation** until its close criteria are met.
 
 | Row | State | Why it is on the card |
 |-----|--------|------------------------|
-| A1 Everest | DONE | There is a product loop to intent toward. |
-| A2 Persist | DONE on evidence | Force Off → Alpine from USB. Remainder: 8 GiB slice / USB ≠ PERC. Persist-OK printed on `928d6224`. |
+| A1 Everest | DONE | The install loop you could point at. |
+| A2 Persist | DONE on evidence | Force Off, then the USB window comes back. Remainder: **8 GiB**, and that stick is not the array. |
 | A3 This SKU card | **DONE** | This page. |
-| A4 TLS | **DONE** on COM2 `928d6224` | Native `curl --cacert` SPA + `RAYNU-V-M8-TLS-OK`. Lab millicert. PRE-EBS SNP stays **plaintext HTTP**. |
-| A4s Standing SPA | **LIVED** on `1f33eeda` | HTTPS stayed up. Host green. Guest COM1 visible. |
-| A5 Auth | Host-ready, not iron | Lab latch until ESP `auth.token`. |
-| A6 Console | Firmware SPA keys + guest log, not iron | Not VNC. Depends on standing HTTPS. |
+| A4 TLS | **DONE** on COM2 `928d6224` | The page answered over TLS. Lab millicert. PRE-EBS SNP stays **plaintext HTTP**. |
+| A4s Standing SPA | **LIVED** on `1f33eeda` | The page stayed up. |
+| A5 Auth | Host-ready, not iron | **lab latch** until ESP `auth.token`. |
+| A6 Console | Typed once, not a desktop | The page reached Alpine once. Ubuntu login is the serial console. |
 
-**NOW is the guest NIC, and it is not closed.** `33c9b141` reached `vikkp` on COM2. `virtio_net` returned `-22`. Do not format UBUNTU0. Do not type `setup-disk`. Chassis power is iDRAC Force Off.
+**If you signed today, the guest still has no LAN.** `33c9b141` reached `vikkp` on the serial console. `virtio_net` returned `-22`. Leave UBUNTU0 alone. Leave `setup-disk` alone. Chassis power is iDRAC Force Off.
 
 ---
 
