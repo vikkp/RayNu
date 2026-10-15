@@ -26,6 +26,12 @@ const VIRTIO_F_VERSION_1: u64 = 1 << 32;
 const VIRTIO_NET_F_MAC: u64 = 1 << 5;
 const FEATURES: u64 = VIRTIO_F_VERSION_1 | VIRTIO_NET_F_MAC;
 const STATUS_DRIVER_OK: u8 = 4;
+/// Linux 7 `virtnet_probe`: `VIRTIO_F_VERSION_1` selects
+/// `sizeof(virtio_net_hdr_mrg_rxbuf)` even when `MRG_RXBUF` is off.
+/// Iron `272c6db6` stripped 10. Those two header bytes became the
+/// destination MAC, the gateway never answered, and Stop sampled
+/// `poll_idle` (`pause` then `sub $1,%eax`, linked `0xffffffff8271c5e8`).
+const VNET_HDR_LEN: usize = 12;
 
 #[derive(Clone, Copy)]
 struct Queue {
@@ -82,6 +88,8 @@ static LOGGED_TX: AtomicBool = AtomicBool::new(false);
 /// guest was leaving on serial I/O, so the driver never reaped the packet.
 static TX_IRQ_ARM: AtomicU8 = AtomicU8::new(0);
 static LOGGED_KICK_IDLE: AtomicBool = AtomicBool::new(false);
+static LOGGED_RX: AtomicBool = AtomicBool::new(false);
+static LOGGED_RX_IDLE: AtomicBool = AtomicBool::new(false);
 
 fn with_net<R>(f: impl FnOnce(&mut Net) -> R) -> R {
     // SAFETY: BSP guest-exit path and single-threaded host tests.
@@ -480,7 +488,7 @@ fn drain_one(translate: &impl Fn(u64) -> Option<u64>) -> bool {
         return false;
     };
     let head = unsafe { core::ptr::read_unaligned(ent_hpa as *const u16) };
-    let mut frame = [0u8; 1514];
+    let mut frame = [0u8; VNET_HDR_LEN + 1514];
     let mut flen = 0usize;
     let mut unmapped = false;
     let mut di = head % QSIZE;
@@ -546,9 +554,9 @@ fn drain_one(translate: &impl Fn(u64) -> Option<u64>) -> bool {
         }
         return true;
     }
-    if flen <= 10 {
+    let Some(eth) = ethernet_from_virtio(&frame[..flen]) else {
         return true;
-    }
+    };
     #[cfg(feature = "uefi-bin")]
     {
         static DONE: AtomicBool = AtomicBool::new(false);
@@ -558,7 +566,6 @@ fn drain_one(translate: &impl Fn(u64) -> Option<u64>) -> bool {
             );
         }
     }
-    let eth = &frame[10..flen];
     let result = crate::mgmt::bcm5720_mmio::egress_send(eth);
     if !LOGGED_TX.swap(true, Ordering::AcqRel) {
         #[cfg(feature = "uefi-bin")]
@@ -595,14 +602,166 @@ pub fn raise_deferred_tx_irq(now: u64) {
     }
 }
 
+fn ethernet_from_virtio(buf: &[u8]) -> Option<&[u8]> {
+    let eth = buf.get(VNET_HDR_LEN..)?;
+    if eth.len() < 14 {
+        None
+    } else {
+        Some(eth)
+    }
+}
+
+/// Pull frames the `:39` port has DMA'd and post them on virtio queue 0.
+///
+/// Call from the Linux VM-exit path. `poll_idle` does not touch the BAR,
+/// so a drain that runs only on virtio MMIO never sees the SYN-ACK.
+pub fn poll_rx(translate: impl Fn(u64) -> Option<u64>) {
+    if armed_start().is_none() {
+        return;
+    }
+    for _ in 0..4 {
+        let mut buf = [0u8; 1514];
+        let Some(n) = crate::mgmt::bcm5720_mmio::egress_recv(&mut buf) else {
+            break;
+        };
+        if n < 14 {
+            continue;
+        }
+        if !post_rx(&buf[..n], &translate) {
+            #[cfg(feature = "uefi-bin")]
+            if !LOGGED_RX_IDLE.swap(true, Ordering::AcqRel) {
+                crate::boot::serial::write_line(
+                    "boot: M8.9 virtio-net rx idle (not ISO-INSTALL-OK)",
+                );
+            }
+            break;
+        }
+        #[cfg(feature = "uefi-bin")]
+        if !LOGGED_RX.swap(true, Ordering::AcqRel) {
+            crate::boot::serial::write_line("boot: M8.9 virtio-net rx (not ISO-INSTALL-OK)");
+        }
+    }
+}
+
+/// Write one Ethernet frame into the next guest RX buffer.
+///
+/// The 12-byte header is zeros (`num_buffers` stays 0; `MRG_RXBUF` is off).
+/// Returns false when queue 0 has no published buffer. `poll_rx` has already
+/// taken the frame off the NIC, so a false return drops it.
+fn post_rx(eth: &[u8], translate: &impl Fn(u64) -> Option<u64>) -> bool {
+    if eth.len() < 14 || eth.len() > 1514 {
+        return false;
+    }
+    let (enabled, desc, avail) = with_net(|n| {
+        let q = &n.q[0];
+        (q.enable != 0, q.desc, q.avail)
+    });
+    if !enabled || desc == 0 || avail == 0 {
+        return false;
+    }
+    let Some(avail_hpa) = translate(avail) else {
+        return false;
+    };
+    // SAFETY: translate returned the avail ring page. idx is the u16 at +2.
+    // KANI-TARGET: virtio avail idx (outside Proven Core).
+    let idx = unsafe { core::ptr::read_unaligned((avail_hpa as *const u16).add(1)) };
+    let last = with_net(|n| n.q[0].last_avail);
+    if idx == last {
+        return false;
+    }
+    let slot = last % QSIZE;
+    let Some(ent_hpa) = translate(avail.wrapping_add(4 + u64::from(slot) * 2)) else {
+        return false;
+    };
+    // SAFETY: translate returned this avail ring entry.
+    // KANI-TARGET: virtio avail ring id (outside Proven Core).
+    let head = unsafe { core::ptr::read_unaligned(ent_hpa as *const u16) };
+    let mut pkt = [0u8; VNET_HDR_LEN + 1514];
+    let total = VNET_HDR_LEN + eth.len();
+    pkt[VNET_HDR_LEN..total].copy_from_slice(eth);
+    let mut off = 0usize;
+    let mut di = head % QSIZE;
+    for _ in 0..8 {
+        if off == total {
+            break;
+        }
+        let Some(d_hpa) = translate(desc.wrapping_add(u64::from(di) * 16)) else {
+            return false;
+        };
+        // SAFETY: translate returned this descriptor.
+        // KANI-TARGET: virtio-net RX descriptor (outside Proven Core).
+        let (addr, len, flags, next) = unsafe {
+            let addr = core::ptr::read_unaligned(d_hpa as *const u64);
+            let len = core::ptr::read_unaligned((d_hpa as *const u32).add(2)) as usize;
+            let flags = core::ptr::read_unaligned((d_hpa as *const u16).add(6));
+            let next = core::ptr::read_unaligned((d_hpa as *const u16).add(7));
+            (addr, len, flags, next)
+        };
+        if flags & 2 != 0 && len > 0 {
+            let Some(hpa) = translate(addr) else {
+                return false;
+            };
+            let take = len.min(total - off);
+            // SAFETY: translate returned the guest RX buffer. `take` stays
+            // inside that descriptor's length and inside `pkt`.
+            // KANI-TARGET: virtio-net RX payload copy (outside Proven Core).
+            unsafe {
+                core::ptr::copy_nonoverlapping(pkt.as_ptr().add(off), hpa as *mut u8, take);
+            }
+            off += take;
+        }
+        if flags & 1 == 0 {
+            break;
+        }
+        di = next % QSIZE;
+    }
+    if off != total {
+        return false;
+    }
+    let (used_base, used_slot, used_idx) = with_net(|n| {
+        let q = &mut n.q[0];
+        let slot = q.used_idx % QSIZE;
+        q.used_idx = q.used_idx.wrapping_add(1);
+        q.last_avail = last.wrapping_add(1);
+        n.isr = 1;
+        (q.used, slot, q.used_idx)
+    });
+    if used_base != 0 {
+        if let Some(hpa) = translate(used_base.wrapping_add(4 + u64::from(used_slot) * 8)) {
+            // SAFETY: translate returned the used-ring element for this slot.
+            // KANI-TARGET: virtio-net used ring id/len (outside Proven Core).
+            unsafe {
+                core::ptr::write_unaligned(hpa as *mut u32, u32::from(head));
+                core::ptr::write_unaligned((hpa as *mut u32).add(1), total as u32);
+            }
+        }
+        if let Some(hpa) = translate(used_base.wrapping_add(2)) {
+            // SAFETY: translate returned the used.idx halfword.
+            // KANI-TARGET: virtio-net used idx (outside Proven Core).
+            unsafe {
+                core::ptr::write_unaligned(hpa as *mut u16, used_idx);
+            }
+        }
+    }
+    TX_IRQ_ARM.store(1, Ordering::Release);
+    true
+}
+
 #[cfg(test)]
 mod guest_virtio_net_test {
     use super::*;
     use crate::mgmt::guest_nic::{clear_panel_for_test, panel_save, NicDraft, NicMode};
     use crate::mgmt::guest_nic_start::{clear_start_for_test, on_accepted_start};
+    use std::sync::{Mutex, MutexGuard};
+
+    fn lock() -> MutexGuard<'static, ()> {
+        static LOCK: Mutex<()> = Mutex::new(());
+        LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    }
 
     #[test]
     fn nic_appears_only_after_an_accepted_start() {
+        let _guard = lock();
         clear_panel_for_test();
         clear_start_for_test();
         let addr = 0x8000_0000 | (u32::from(GUEST_NET_PCI_DEV) << 11);
@@ -636,6 +795,7 @@ mod guest_virtio_net_test {
 
     #[test]
     fn net_mmio_resolves_so_an_ept_hit_does_not_stop() {
+        let _guard = lock();
         clear_panel_for_test();
         clear_start_for_test();
         let gpa = u64::from(GUEST_NET_BAR);
@@ -683,6 +843,7 @@ mod guest_virtio_net_test {
 
     #[test]
     fn interrupt_pin_is_inta_so_virtio_net_can_probe() {
+        let _guard = lock();
         clear_panel_for_test();
         clear_start_for_test();
         let off = 8u64 * 1024 * 1024 * 1024;
@@ -718,6 +879,7 @@ mod guest_virtio_net_test {
 
     #[test]
     fn rx_kick_does_not_complete_a_tx_the_guest_has_not_published() {
+        let _guard = lock();
         clear_panel_for_test();
         clear_start_for_test();
         let off = 8u64 * 1024 * 1024 * 1024;
@@ -790,6 +952,112 @@ mod guest_virtio_net_test {
             .0;
         assert!(!one.contains("raise_virtio()"));
         assert!(include_str!("../vmx/guest_uefi.rs").contains("raise_deferred_tx_irq(cpu::rdtsc())"));
+        assert!(include_str!("../vmx/guest_uefi.rs").contains("poll_rx(guest_uefi_gpa_to_hpa)"));
+        clear_panel_for_test();
+        clear_start_for_test();
+    }
+
+    #[test]
+    fn version1_header_is_twelve_bytes() {
+        let mut buf = [0u8; 12 + 14];
+        buf[12] = 0x02;
+        buf[13] = 0x52;
+        let eth = ethernet_from_virtio(&buf).unwrap();
+        assert_eq!(eth.len(), 14);
+        assert_eq!(&eth[..2], &[0x02, 0x52]);
+        assert!(ethernet_from_virtio(&buf[..25]).is_none());
+        let drain = include_str!("guest_virtio_net.rs")
+            .split_once("fn drain_one")
+            .expect("drain_one")
+            .1
+            .split_once("fn raise_deferred_tx_irq")
+            .expect("raise")
+            .0;
+        assert!(drain.contains("ethernet_from_virtio"));
+        assert!(!drain.contains("[10.."));
+        let arm = include_str!("../mgmt/bcm5720_mmio.rs")
+            .split_once("unsafe fn arm_egress")
+            .expect("arm")
+            .1
+            .split_once("pub fn mac_address")
+            .expect("mac")
+            .0;
+        assert!(
+            arm.contains("MAILBOX_RCV_STD_PROD_IDX"),
+            "function 1 must post RX buffers or a reply is never DMA'd"
+        );
+    }
+
+    #[test]
+    fn posted_rx_keeps_a_twelve_byte_header() {
+        let _guard = lock();
+        clear_panel_for_test();
+        clear_start_for_test();
+        let off = 8u64 * 1024 * 1024 * 1024;
+        panel_save(
+            0,
+            NicDraft {
+                spare_off: off,
+                mode: NicMode::Manual,
+                prefix: 24,
+                ipv4: [10, 99, 99, 145],
+                gateway: [10, 99, 99, 1],
+                dns: [1, 1, 1, 1],
+            },
+        )
+        .unwrap();
+        on_accepted_start(off);
+        let bar = u64::from(GUEST_NET_BAR);
+        mmio_write(bar + 0x14, 1, 0);
+        mmio_write(bar + 0x16, 2, 0);
+        let mut desc = [0u8; 16];
+        let mut avail = [0u8; 8];
+        let used = [0u8; 16];
+        let mut buf = [0xABu8; 64];
+        let desc_gpa = 0x10_0000u64;
+        let avail_gpa = 0x20_0000u64;
+        let used_gpa = 0x30_0000u64;
+        let buf_gpa = 0x40_0000u64;
+        desc[0..8].copy_from_slice(&buf_gpa.to_le_bytes());
+        desc[8..12].copy_from_slice(&64u32.to_le_bytes());
+        desc[12] = 2;
+        mmio_write(bar + 0x20, 8, desc_gpa);
+        mmio_write(bar + 0x28, 8, avail_gpa);
+        mmio_write(bar + 0x30, 8, used_gpa);
+        mmio_write(bar + 0x1C, 2, 1);
+        let desc_ptr = desc.as_ptr() as u64;
+        let avail_ptr = avail.as_ptr() as u64;
+        let used_ptr = used.as_ptr() as u64;
+        let buf_ptr = buf.as_mut_ptr() as u64;
+        let translate = move |gpa: u64| -> Option<u64> {
+            if gpa == desc_gpa {
+                Some(desc_ptr)
+            } else if (avail_gpa..avail_gpa + 8).contains(&gpa) {
+                Some(avail_ptr + (gpa - avail_gpa))
+            } else if (used_gpa..used_gpa + 16).contains(&gpa) {
+                Some(used_ptr + (gpa - used_gpa))
+            } else if gpa == buf_gpa {
+                Some(buf_ptr)
+            } else {
+                None
+            }
+        };
+        let mut eth = [0u8; 14];
+        eth[0] = 0x02;
+        eth[6] = 0xb0;
+        assert!(!post_rx(&eth, &translate), "no buffer published yet");
+        avail[2] = 1;
+        assert_eq!(avail[2], 1);
+        assert!(post_rx(&eth, &translate));
+        assert_eq!(&buf[..12], &[0u8; 12], "virtio header stays zero");
+        assert_eq!(&buf[12..26], &eth);
+        assert_eq!(buf[26], 0xAB, "bytes past the frame stay");
+        let used_idx = u16::from_le_bytes([used[2], used[3]]);
+        assert_eq!(used_idx, 1);
+        let len = u32::from_le_bytes([used[8], used[9], used[10], used[11]]);
+        assert_eq!(len, 12 + 14);
+        let isr = mmio_read(bar + 0x100, 1);
+        assert_eq!(isr, 1);
         clear_panel_for_test();
         clear_start_for_test();
     }
