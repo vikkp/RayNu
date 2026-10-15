@@ -45,6 +45,7 @@ struct Net {
     drv_sel: u32,
     drv_feat: u64,
     status: u8,
+    isr: u8,
     qsel: u16,
     q: [Queue; 2],
     notify: bool,
@@ -59,6 +60,7 @@ static mut NET: Net = Net {
     drv_sel: 0,
     drv_feat: 0,
     status: 0,
+    isr: 0,
     qsel: 0,
     q: [Queue {
         enable: 0,
@@ -143,7 +145,10 @@ fn cfg_dword(off: u8) -> u32 {
         }
         0x2C => u32::from(GUEST_NET_VENDOR) | (1u32 << 16),
         0x34 => 0x40,
-        0x3C => u32::from(crate::devices::guest_irq::VIRTIO_PIC_IRQ),
+        // Pin 0 leaves pci_dev->irq at 0. virtio-pci then skips INTx and
+        // virtio_net probe returns -22. virtio-blk, which probed on this
+        // boot, uses the same line with pin INTA. Iron 33c9b141.
+        0x3C => u32::from(crate::devices::guest_irq::VIRTIO_PIC_IRQ) | 0x0000_0100,
         0x40 => 0x0110_5009,
         0x44 => 0,
         0x48 => 0,
@@ -197,7 +202,11 @@ pub fn mmio_read(gpa: u64, size: u8) -> u64 {
         return common_read(off, size);
     }
     if off == 0x100 {
-        return 0;
+        return with_net(|n| {
+            let v = u64::from(n.isr);
+            n.isr = 0;
+            v
+        });
     }
     if (OFF_DEVICE..OFF_DEVICE + 6).contains(&off) {
         let mac = armed_start().map(|n| n.mac).unwrap_or([0; 6]);
@@ -246,7 +255,19 @@ fn write_common(n: &mut Net, off: u16, val: u8) {
         }
         0x14 => {
             n.status = val;
-            if val & STATUS_DRIVER_OK != 0 {
+            if val == 0 {
+                n.isr = 0;
+                n.notify = false;
+                n.qsel = 0;
+                n.q = [Queue {
+                    enable: 0,
+                    desc: 0,
+                    avail: 0,
+                    used: 0,
+                    last_avail: 0,
+                    used_idx: 0,
+                }; 2];
+            } else if val & STATUS_DRIVER_OK != 0 {
                 n.logged = true;
             }
         }
@@ -412,10 +433,33 @@ pub fn drain(translate: impl Fn(u64) -> Option<u64>) {
         }
         di = next % QSIZE;
     }
-    with_net(|n| {
-        n.q[1].last_avail = last.wrapping_add(1);
+    let (used_base, used_slot, used_idx) = with_net(|n| {
+        let q = &mut n.q[1];
+        let slot = q.used_idx % QSIZE;
+        q.used_idx = q.used_idx.wrapping_add(1);
+        q.last_avail = last.wrapping_add(1);
         n.notify = false;
+        n.isr = 1;
+        (q.used, slot, q.used_idx)
     });
+    if used_base != 0 {
+        if let Some(hpa) = translate(used_base.wrapping_add(4 + u64::from(used_slot) * 8)) {
+            // SAFETY: translate returned the used-ring element for this slot.
+            // KANI-TARGET: virtio-net used ring id/len (outside Proven Core).
+            unsafe {
+                core::ptr::write_unaligned(hpa as *mut u32, u32::from(head));
+                core::ptr::write_unaligned((hpa as *mut u32).add(1), flen as u32);
+            }
+        }
+        if let Some(hpa) = translate(used_base.wrapping_add(2)) {
+            // SAFETY: translate returned the used.idx halfword.
+            // KANI-TARGET: virtio-net used idx (outside Proven Core).
+            unsafe {
+                core::ptr::write_unaligned(hpa as *mut u16, used_idx);
+            }
+        }
+    }
+    crate::devices::guest_irq::raise_virtio();
     if flen <= 10 {
         return;
     }
@@ -526,6 +570,41 @@ mod guest_virtio_net_test {
         assert!(handler.contains("mmio_bar_base_for_gpa"));
         assert!(handler
             .contains("boot: M8.9 virtio-net MMIO (guest keeps running; not ISO-INSTALL-OK)"));
+        clear_panel_for_test();
+        clear_start_for_test();
+    }
+
+    #[test]
+    fn interrupt_pin_is_inta_so_virtio_net_can_probe() {
+        clear_panel_for_test();
+        clear_start_for_test();
+        let off = 8u64 * 1024 * 1024 * 1024;
+        panel_save(
+            0,
+            NicDraft {
+                spare_off: off,
+                mode: NicMode::Manual,
+                prefix: 24,
+                ipv4: [10, 99, 99, 40],
+                gateway: [10, 99, 99, 1],
+                dns: [1, 1, 1, 1],
+            },
+        )
+        .unwrap();
+        on_accepted_start(off);
+        let addr = 0x8000_0000 | (u32::from(GUEST_NET_PCI_DEV) << 11);
+        crate::devices::ide_cdrom::pci_write_addr(addr | 0x3C);
+        let irq = pci_read_data(0xCFC, 4);
+        assert_eq!(
+            irq as u8,
+            crate::devices::guest_irq::VIRTIO_PIC_IRQ,
+            "interrupt line"
+        );
+        assert_eq!(
+            (irq >> 8) as u8,
+            1,
+            "INTA; pin 0 makes virtio_net probe return -22"
+        );
         clear_panel_for_test();
         clear_start_for_test();
     }

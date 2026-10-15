@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-9-vnic-close |
-| Summary | **A × hides the vNIC panel.** Hide does not Save and does not Detach. Get from DHCP still returns no offer on the EFI. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | m8-9-net-irq |
+| Summary | **virtio-net advertises INTA.** Pin 0 made `virtio_net` probe return `-22` on `33c9b141`. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
-| Gates touched | SPA Guests vNIC close. M8.9.6 stays open. No doorbell. No format of UBUNTU0. |
+| Gates touched | M8.9.4 virtio-net INTA. M8.9.6 stays open. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 70 held, perc 86 held, unmodified 45 held, overall LOI 78 held, months A 0.25 held, months B 1.25 held. |
 
 
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-15 | m8-9-net-irq | 0.0 | 99 | **virtio-net interrupt pin is INTA.** `33c9b141` reached `vikkp` login and `virtio_net` probe `-22`. Pin 0 skipped INTx. M8.9.6 stays open. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-14 | m8-9-vnic-close | 0.0 | 99 | **A × hides the vNIC panel.** Hide does not Save and does not Detach. Get from DHCP still returns no offer on the EFI. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-14 | m8-9-net-mmio | 0.0 | 99 | **Virtio-net MMIO is emulated.** `80c70e9f` stopped on exit reason `0x30` after `1af4:1041`. Stage 46 hold kept only the SPA. This EFI keeps the guest running. M8.9.6 stays open. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-14 | m8-9-vnic-row | 0.0 | 99 | **vNIC on each Guests row.** Fields and Save stay while the list refreshes. Not on the flashed `93ec0ac5` EFI. Scores held. months 0.0 held; overall 99 held |
@@ -1103,7 +1104,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     `80c70e9f` reached virtio-net `00:05.0` then the Stage 46 hold (exit reason `0x30`). The next EFI emulates that MMIO and adds a × that hides the vNIC panel. Look for `boot: M8.9 virtio-net MMIO (guest keeps running; not ISO-INSTALL-OK)`. Get from DHCP still returns no offer. M8.9.6 stays open. Rollback is v0.1.0-m8-8-ubuntu. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/m8_plan.md.
+Next move:     `33c9b141` reached `vikkp` on ttyS0. `virtio_net` probe returned `-22` because the NIC interrupt pin was 0. The next EFI sets INTA on line 11. Function 1 link was down (`bmsr=7949`). M8.9.6 stays open. Rollback is v0.1.0-m8-8-ubuntu. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/m8_plan.md.
 Rollback:      M8.8 close: v0.1.0-m8-8-ubuntu → CI 38454398693 / COM2 sha=c3a70e623aec / EFI SHA256 08ef31ba87136577102ac378d8e0a512327994e8794c41c64444f5be5f8812c4
 Older SPA:     v0.1.0-m8-perc-spa → CI 36362775808 / COM2 sha=8ad2ac89125e / EFI SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849
 Standing SPA:  v0.1.0-m8-a4s → CI 36137732145 / COM2 sha=1f33eeda72f9 / EFI SHA256 5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693
