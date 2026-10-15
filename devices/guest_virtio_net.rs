@@ -276,6 +276,7 @@ fn write_common(n: &mut Net, off: u16, val: u8) {
                 }; 2];
             } else if val & STATUS_DRIVER_OK != 0 {
                 n.logged = true;
+                note_tx_queue(n);
             }
         }
         0x16 => n.qsel = u16::from(val),
@@ -347,6 +348,43 @@ fn common_byte(off: u16) -> u8 {
             _ => 0,
         }
     })
+}
+
+fn note_tx_queue(n: &Net) {
+    #[cfg(feature = "uefi-bin")]
+    {
+        static ONCE: AtomicBool = AtomicBool::new(false);
+        if ONCE.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        let q = &n.q[1];
+        crate::boot::serial::write_str("boot: M8.9 virtio-net q1 en=");
+        crate::boot::serial::write_str(if q.enable != 0 { "1" } else { "0" });
+        crate::boot::serial::write_str(" desc=0x");
+        write_hex_u64(q.desc);
+        crate::boot::serial::write_str(" avail=0x");
+        write_hex_u64(q.avail);
+        crate::boot::serial::write_str(" used=0x");
+        write_hex_u64(q.used);
+        crate::boot::serial::write_line(" (not ISO-INSTALL-OK)");
+    }
+    #[cfg(not(feature = "uefi-bin"))]
+    {
+        let _ = n;
+    }
+}
+
+#[cfg(feature = "uefi-bin")]
+fn write_hex_u64(mut n: u64) {
+    const H: &[u8; 16] = b"0123456789abcdef";
+    let mut buf = [b'0'; 16];
+    for i in (0..16).rev() {
+        buf[i] = H[(n & 0xf) as usize];
+        n >>= 4;
+    }
+    for b in buf {
+        crate::boot::serial::write_byte(b);
+    }
 }
 
 fn note_visible() {
@@ -430,9 +468,11 @@ fn drain_one(translate: &impl Fn(u64) -> Option<u64>) -> bool {
     let head = unsafe { core::ptr::read_unaligned(ent_hpa as *const u16) };
     let mut frame = [0u8; 1514];
     let mut flen = 0usize;
+    let mut unmapped = false;
     let mut di = head % QSIZE;
     for _ in 0..8 {
         let Some(d_hpa) = translate(desc.wrapping_add(u64::from(di) * 16)) else {
+            unmapped = true;
             break;
         };
         let addr = unsafe { core::ptr::read_unaligned(d_hpa as *const u64) };
@@ -441,15 +481,10 @@ fn drain_one(translate: &impl Fn(u64) -> Option<u64>) -> bool {
         let next = unsafe { core::ptr::read_unaligned((d_hpa as *const u16).add(7)) };
         if flags & 2 == 0 && len > 0 {
             let Some(hpa) = translate(addr) else {
-                #[cfg(feature = "uefi-bin")]
-                if !LOGGED_TX.swap(true, Ordering::AcqRel) {
-                    crate::boot::serial::write_line(
-                        "boot: M8.9 virtio-net tx unmapped (buffer not completed; not ISO-INSTALL-OK)",
-                    );
-                }
-                return false;
+                unmapped = true;
+                break;
             };
-            let take = len.min(frame.len() - flen);
+            let take = len.min(frame.len().saturating_sub(flen));
             unsafe {
                 core::ptr::copy_nonoverlapping(hpa as *const u8, frame.as_mut_ptr().add(flen), take);
             }
@@ -490,8 +525,26 @@ fn drain_one(translate: &impl Fn(u64) -> Option<u64>) -> bool {
     // unlock after the kick before this IRQ is delivered. Zero stays "idle".
     let deadline = crate::arch::cpu::rdtsc().wrapping_add(2_100_000);
     TX_IRQ_AT.store(if deadline == 0 { 1 } else { deadline }, Ordering::Release);
+    if unmapped {
+        #[cfg(feature = "uefi-bin")]
+        if !LOGGED_TX.swap(true, Ordering::AcqRel) {
+            crate::boot::serial::write_line(
+                "boot: M8.9 virtio-net tx unmapped (slot completed; not ISO-INSTALL-OK)",
+            );
+        }
+        return true;
+    }
     if flen <= 10 {
         return true;
+    }
+    #[cfg(feature = "uefi-bin")]
+    {
+        static DONE: AtomicBool = AtomicBool::new(false);
+        if !DONE.swap(true, Ordering::AcqRel) {
+            crate::boot::serial::write_line(
+                "boot: M8.9 virtio-net tx done (not ISO-INSTALL-OK)",
+            );
+        }
     }
     let eth = &frame[10..flen];
     let result = crate::mgmt::bcm5720_mmio::egress_send(eth);
