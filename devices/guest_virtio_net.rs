@@ -90,6 +90,16 @@ static TX_IRQ_ARM: AtomicU8 = AtomicU8::new(0);
 static LOGGED_KICK_IDLE: AtomicBool = AtomicBool::new(false);
 static LOGGED_RX: AtomicBool = AtomicBool::new(false);
 static LOGGED_RX_IDLE: AtomicBool = AtomicBool::new(false);
+static TX_DONE_N: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
+static RX_POSTED_N: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
+
+/// Frames handed to egress, and frames posted into virtio queue 0.
+pub fn net_counts() -> (u32, u32) {
+    (
+        TX_DONE_N.load(Ordering::Acquire),
+        RX_POSTED_N.load(Ordering::Acquire),
+    )
+}
 
 fn with_net<R>(f: impl FnOnce(&mut Net) -> R) -> R {
     // SAFETY: BSP guest-exit path and single-threaded host tests.
@@ -557,6 +567,7 @@ fn drain_one(translate: &impl Fn(u64) -> Option<u64>) -> bool {
     let Some(eth) = ethernet_from_virtio(&frame[..flen]) else {
         return true;
     };
+    TX_DONE_N.fetch_add(1, Ordering::AcqRel);
     #[cfg(feature = "uefi-bin")]
     {
         static DONE: AtomicBool = AtomicBool::new(false);
@@ -744,6 +755,7 @@ fn post_rx(eth: &[u8], translate: &impl Fn(u64) -> Option<u64>) -> bool {
         }
     }
     TX_IRQ_ARM.store(1, Ordering::Release);
+    RX_POSTED_N.fetch_add(1, Ordering::AcqRel);
     true
 }
 

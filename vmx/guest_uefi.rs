@@ -1503,6 +1503,17 @@ pub fn guest_uefi_virtio_mmio_polls_lapic(linux: bool, product_iso: bool) -> boo
     linux && product_iso
 }
 
+/// Installed-disk Linux sits in `poll_idle` (`pause` then `sub $1,%eax`).
+/// That loop never HLTs, and the product-ISO window is not armed, so the
+/// old preempt/HLT gate never called `poll_timer_expiry`. `timeout` and
+/// TCP retransmit timers never fired. Iron `cbaf2a99` stop
+/// `rip=0xffffffff98f1c5e8` (same `0x11c5e8` as `272c6db6`).
+/// Poll the LAPIC timer on those exits once Linux is up.
+/// Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_linux_idle_polls_lapic(linux: bool, preempt_or_hlt: bool) -> bool {
+    linux && preempt_or_hlt
+}
+
 /// VM-entry injects PIC IRQ 0 before leftover IOAPIC→LAPIC **unless**
 /// Linux has programmed MADT GSI 2 (ACPI timer). PIC-first while GSI 2 is
 /// armed injects vector 0x20 into an IOAPIC IDT. linux PIC before LAPIC.
@@ -6397,10 +6408,16 @@ fn tick_hpet_on_exit(basic: u32, gpa: u64, qual: u64) {
     if step != 0 && v != 0 {
         HPET_TICKS.fetch_add(1, Ordering::AcqRel);
     }
-    if crate::devices::ide_cdrom::product_iso_window_armed()
-        && (basic == EXIT_REASON_PREEMPTION_TIMER || basic == EXIT_REASON_HLT)
+    let preempt_or_hlt =
+        basic == EXIT_REASON_PREEMPTION_TIMER || basic == EXIT_REASON_HLT;
+    let linux_up = serial::linux_earlycon_share() || serial::linux_high_half();
+    if preempt_or_hlt
+        && (crate::devices::ide_cdrom::product_iso_window_armed()
+            || guest_uefi_linux_idle_polls_lapic(linux_up, true))
     {
         let _ = crate::devices::lapic_virt::poll_timer_expiry();
+    }
+    if crate::devices::ide_cdrom::product_iso_window_armed() && preempt_or_hlt {
         crate::devices::guest_irq::raise_pit();
         if serial::linux_earlycon_share() {
             linux_prefer_pit_until_driver_ok();
@@ -9114,6 +9131,12 @@ unsafe fn raynu_f_stop(why: &str) -> ! {
     serial::write_str(" free_pages=");
     write_dec(st.pool.free_pages() as u64);
     serial::write_line(" (F2b; not ISO-INSTALL-OK)");
+    let (tx, rx) = crate::devices::guest_virtio_net::net_counts();
+    serial::write_str("boot: M8.9 net tx=");
+    write_dec(u64::from(tx));
+    serial::write_str(" rx=");
+    write_dec(u64::from(rx));
+    serial::write_line(" (not ISO-INSTALL-OK)");
     leave_to_e4();
 }
 

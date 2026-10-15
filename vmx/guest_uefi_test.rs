@@ -90,6 +90,7 @@ use super::{
     virtio_mmio_retry_decode_len, guest_uefi_linux_mov_dr_len,
     guest_uefi_virtio_bar_overlaps_scratch, guest_uefi_virtio_bar_should_trap,
     guest_uefi_virtio_mmio_raises_pit, guest_uefi_virtio_mmio_polls_lapic,
+    guest_uefi_linux_idle_polls_lapic,
     guest_uefi_linux_virtio_mmio_raises_pit, guest_uefi_linux_reassert_virtio_intx,
     guest_uefi_linux_virtio_pic_vec,
     guest_uefi_linux_prefer_pit_during_apk, guest_uefi_linux_hlt_uart_after_driver_ok,
@@ -1615,6 +1616,12 @@ fn marker_and_residual_honest() {
     assert!(guest_uefi_virtio_mmio_polls_lapic(true, true), "virtio MMIO polls lapic");
     assert!(!guest_uefi_virtio_mmio_polls_lapic(false, true), "iso=0 firmware no extra lapic poll");
     assert!(!guest_uefi_virtio_mmio_polls_lapic(true, false));
+    assert!(
+        guest_uefi_linux_idle_polls_lapic(true, true),
+        "installed-disk poll_idle still polls the LAPIC timer"
+    );
+    assert!(!guest_uefi_linux_idle_polls_lapic(false, true));
+    assert!(!guest_uefi_linux_idle_polls_lapic(true, false));
     assert!(!guest_uefi_linux_io_raises_pit(true, true), "linux I/O does not raise PIT (iron MADT stop)");
     assert!(!guest_uefi_linux_io_raises_pit(false, true), "iso=0 firmware no extra I/O PIT");
     assert!(!guest_uefi_linux_io_raises_pit(true, false));
