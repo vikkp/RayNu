@@ -377,31 +377,48 @@ fn write_hex(b: u8) {
     crate::boot::serial::write_byte(H[(b & 0xf) as usize]);
 }
 
-/// Pull one TX descriptor chain (queue 1) and hand the Ethernet frame to egress.
+/// Pull published TX descriptor chains (queue 1) and hand each Ethernet
+/// frame to egress.
+///
+/// A notify with no new avail idx is not a buffer. Queue 0 (RX) and queue 1
+/// share one notify flag. Iron `e79f7e83`: bringing `enp0s5` up kicked RX,
+/// the next connect never printed `M8.9`, and the shell stopped taking
+/// Ctrl+C until SPA Stop. Completing a TX slot the guest had not published
+/// left the real packet unfinished.
 pub fn drain(translate: impl Fn(u64) -> Option<u64>) {
     if armed_start().is_none() {
         return;
     }
-    let (enabled, desc, avail, notify) = with_net(|n| {
+    for _ in 0..usize::from(QSIZE) {
+        if !drain_one(&translate) {
+            break;
+        }
+    }
+}
+
+fn drain_one(translate: &impl Fn(u64) -> Option<u64>) -> bool {
+    let (enabled, desc, avail) = with_net(|n| {
         let q = &n.q[1];
-        (q.enable != 0, q.desc, q.avail, n.notify)
+        (q.enable != 0, q.desc, q.avail)
     });
     if !enabled || desc == 0 || avail == 0 {
-        return;
+        with_net(|n| n.notify = false);
+        return false;
     }
     let Some(avail_hpa) = translate(avail) else {
-        return;
+        return false;
     };
     // SAFETY: translate returned a mapped guest page for this avail ring.
     // KANI-TARGET: virtio avail idx (outside Proven Core).
     let idx = unsafe { core::ptr::read_unaligned((avail_hpa as *const u16).add(1)) };
     let last = with_net(|n| n.q[1].last_avail);
-    if idx == last && !notify {
-        return;
+    if idx == last {
+        with_net(|n| n.notify = false);
+        return false;
     }
     let slot = last % QSIZE;
     let Some(ent_hpa) = translate(avail.wrapping_add(4 + u64::from(slot) * 2)) else {
-        return;
+        return false;
     };
     let head = unsafe { core::ptr::read_unaligned(ent_hpa as *const u16) };
     let mut frame = [0u8; 1514];
@@ -461,7 +478,7 @@ pub fn drain(translate: impl Fn(u64) -> Option<u64>) {
     }
     crate::devices::guest_irq::raise_virtio();
     if flen <= 10 {
-        return;
+        return true;
     }
     let eth = &frame[10..flen];
     let result = crate::mgmt::bcm5720_mmio::egress_send(eth);
@@ -486,6 +503,7 @@ pub fn drain(translate: impl Fn(u64) -> Option<u64>) {
             let _ = result;
         }
     }
+    true
 }
 
 #[cfg(test)]
@@ -605,6 +623,74 @@ mod guest_virtio_net_test {
             1,
             "INTA; pin 0 makes virtio_net probe return -22"
         );
+        clear_panel_for_test();
+        clear_start_for_test();
+    }
+
+    #[test]
+    fn rx_kick_does_not_complete_a_tx_the_guest_has_not_published() {
+        clear_panel_for_test();
+        clear_start_for_test();
+        let off = 8u64 * 1024 * 1024 * 1024;
+        panel_save(
+            0,
+            NicDraft {
+                spare_off: off,
+                mode: NicMode::Manual,
+                prefix: 24,
+                ipv4: [10, 99, 99, 145],
+                gateway: [10, 99, 99, 1],
+                dns: [1, 1, 1, 1],
+            },
+        )
+        .unwrap();
+        on_accepted_start(off);
+        let bar = u64::from(GUEST_NET_BAR);
+        mmio_write(bar + 0x14, 1, 0);
+        mmio_write(bar + 0x16, 2, 1);
+        let mut desc = [0u8; 16];
+        let mut avail = [0u8; 8];
+        let used = [0u8; 16];
+        let mut buf = [0u8; 32];
+        buf[10..24].copy_from_slice(b"0123456789abcd");
+        let desc_gpa = 0x10_0000u64;
+        let avail_gpa = 0x20_0000u64;
+        let used_gpa = 0x30_0000u64;
+        let buf_gpa = 0x40_0000u64;
+        desc[0..8].copy_from_slice(&buf_gpa.to_le_bytes());
+        desc[8..12].copy_from_slice(&24u32.to_le_bytes());
+        mmio_write(bar + 0x20, 8, desc_gpa);
+        mmio_write(bar + 0x28, 8, avail_gpa);
+        mmio_write(bar + 0x30, 8, used_gpa);
+        mmio_write(bar + 0x1C, 2, 1);
+        mmio_write(bar + u64::from(OFF_NOTIFY), 2, 0);
+        let desc_ptr = desc.as_ptr() as u64;
+        let avail_ptr = avail.as_ptr() as u64;
+        let used_ptr = used.as_ptr() as u64;
+        let buf_ptr = buf.as_ptr() as u64;
+        let translate = move |gpa: u64| -> Option<u64> {
+            if gpa == desc_gpa {
+                Some(desc_ptr)
+            } else if (avail_gpa..avail_gpa + 8).contains(&gpa) {
+                Some(avail_ptr + (gpa - avail_gpa))
+            } else if (used_gpa..used_gpa + 16).contains(&gpa) {
+                Some(used_ptr + (gpa - used_gpa))
+            } else if gpa == buf_gpa {
+                Some(buf_ptr)
+            } else {
+                None
+            }
+        };
+        drain(&translate);
+        let used_idx = u16::from_le_bytes([used[2], used[3]]);
+        assert_eq!(used_idx, 0, "RX kick must not invent a TX completion");
+        avail[2] = 1;
+        assert_eq!(avail[2], 1);
+        drain(&translate);
+        let used_idx = u16::from_le_bytes([used[2], used[3]]);
+        assert_eq!(used_idx, 1);
+        let id = u32::from_le_bytes([used[4], used[5], used[6], used[7]]);
+        assert_eq!(id, 0);
         clear_panel_for_test();
         clear_start_for_test();
     }
