@@ -1368,6 +1368,22 @@ pub fn egress_send(frame: &[u8]) -> EgressSend {
     }
 }
 
+/// One Ethernet frame from function 1, without the SPA DMA arena.
+/// Host builds return `None`.
+pub fn egress_recv(out: &mut [u8]) -> Option<usize> {
+    #[cfg(feature = "uefi-bin")]
+    {
+        // SAFETY: BSP guest-exit path. The egress arena is not the SPA arena.
+        // KANI-TARGET: rx_return_pending (host), not this MMIO path.
+        return unsafe { egress_recv_uefi(out) };
+    }
+    #[cfg(not(feature = "uefi-bin"))]
+    {
+        let _ = out;
+        None
+    }
+}
+
 #[cfg(feature = "uefi-bin")]
 static EGRESS_TRIED: AtomicBool = AtomicBool::new(false);
 #[cfg(feature = "uefi-bin")]
@@ -1399,6 +1415,13 @@ unsafe fn egress_send_uefi(frame: &[u8]) -> EgressSend {
     } else {
         EgressSend::Held
     }
+}
+
+#[cfg(feature = "uefi-bin")]
+unsafe fn egress_recv_uefi(out: &mut [u8]) -> Option<usize> {
+    let n = EGRESS_NIC.as_mut()?;
+    let dma = &mut *core::ptr::addr_of_mut!(EGRESS_DMA);
+    rx_one(n, dma, out)
 }
 
 #[cfg(feature = "uefi-bin")]
@@ -1470,11 +1493,21 @@ unsafe fn arm_egress() {
     }
     enable_dma_engines(bar);
     enable_completion_blocks(bar);
+    enable_hostcc(bar);
+    // SPA posts RING-1 buffers before the first receive. Leaving the
+    // producer at 0 means a SYN-ACK on :39 is never DMA'd.
+    mailbox_write(
+        bar,
+        MAILBOX_RCV_STD_PROD_IDX,
+        (RING as u32).saturating_sub(1),
+    );
+    mailbox_write(bar, MAILBOX_RCVRET_CON_IDX_0, 0);
+    kick_hostcc(bar);
     EGRESS_NIC = Some(NicState {
         mmio: bar,
         mac: crate::mgmt::guest_nic::EGRESS_PHY_MAC,
         rx_rcb_ptr: 0,
-        rx_std_prod: 0,
+        rx_std_prod: (RING as u16).saturating_sub(1),
         tx_prod: 0,
         tx_cons: 0,
     });

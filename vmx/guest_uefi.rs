@@ -6445,6 +6445,9 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     // A TX completion armed on the previous exit. Serial I/O exits are the
     // ones Linux takes while the watchdog is printing (iron 03906000).
     crate::devices::guest_virtio_net::raise_deferred_tx_irq(0);
+    // Iron 272c6db6 sat in poll_idle during the connect. A reply on :39
+    // has to land while the vCPU is idle, not only when it kicks virtio.
+    crate::devices::guest_virtio_net::poll_rx(guest_uefi_gpa_to_hpa);
     if guest_uefi_linux_earlycon_share_on_bootimg(
         crate::devices::ide_cdrom::product_iso_window_armed(),
         crate::devices::ide_cdrom::eltorito_boot_image_read(),
