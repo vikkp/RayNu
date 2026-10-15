@@ -6442,6 +6442,9 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
         serial::set_linux_high_half(false);
         raynu_f_stop("spa-stop");
     }
+    // A TX completion armed on the previous exit. Serial I/O exits are the
+    // ones Linux takes while the watchdog is printing (iron 03906000).
+    crate::devices::guest_virtio_net::raise_deferred_tx_irq(0);
     if guest_uefi_linux_earlycon_share_on_bootimg(
         crate::devices::ide_cdrom::product_iso_window_armed(),
         crate::devices::ide_cdrom::eltorito_boot_image_read(),

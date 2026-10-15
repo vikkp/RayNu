@@ -8,7 +8,7 @@
 //! saved NIC. The MAC in device config is that guest MAC. TX frames are
 //! handed to the function-1 egress path. This is not the M4 vSwitch.
 
-use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 use crate::devices::guest_platform::{pci_bdf, pci_cfg_offset};
 use crate::mgmt::guest_nic_start::armed_start;
@@ -75,13 +75,13 @@ static mut NET: Net = Net {
 };
 
 static LOGGED_TX: AtomicBool = AtomicBool::new(false);
-/// TSC at which a TX completion may raise IRQ 11. Zero means nothing is owed.
+/// 1 when a TX used-ring update is waiting for the next VM exit.
 ///
-/// The raise must not happen on the notify VM exit. Linux still holds the
-/// TX lock across `virtqueue_kick`. Iron `c203eaf4` stopped in the kernel at
-/// the same instruction as `e79f7e83` (`rip` low bits `0x11c5e8`, exit
-/// `0x34`) and never printed `M8.9`.
-static TX_IRQ_AT: AtomicU64 = AtomicU64::new(0);
+/// Iron `03906000`: `enp0s5` printed `NETDEV WATCHDOG` on virtqueue 1.
+/// The completion IRQ was armed only for a preemption-timer exit, and the
+/// guest was leaving on serial I/O, so the driver never reaped the packet.
+static TX_IRQ_ARM: AtomicU8 = AtomicU8::new(0);
+static LOGGED_KICK_IDLE: AtomicBool = AtomicBool::new(false);
 
 fn with_net<R>(f: impl FnOnce(&mut Net) -> R) -> R {
     // SAFETY: BSP guest-exit path and single-threaded host tests.
@@ -447,7 +447,21 @@ fn drain_one(translate: &impl Fn(u64) -> Option<u64>) -> bool {
         (q.enable != 0, q.desc, q.avail)
     });
     if !enabled || desc == 0 || avail == 0 {
-        with_net(|n| n.notify = false);
+        with_net(|n| {
+            if n.notify && !LOGGED_KICK_IDLE.swap(true, Ordering::AcqRel) {
+                #[cfg(feature = "uefi-bin")]
+                {
+                    crate::boot::serial::write_str("boot: M8.9 virtio-net tx q1 idle en=");
+                    crate::boot::serial::write_str(if enabled { "1" } else { "0" });
+                    crate::boot::serial::write_str(" desc=0x");
+                    write_hex_u64(desc);
+                    crate::boot::serial::write_str(" avail=0x");
+                    write_hex_u64(avail);
+                    crate::boot::serial::write_line(" (not ISO-INSTALL-OK)");
+                }
+            }
+            n.notify = false;
+        });
         return false;
     }
     let Some(avail_hpa) = translate(avail) else {
@@ -521,10 +535,8 @@ fn drain_one(translate: &impl Fn(u64) -> Option<u64>) -> bool {
             }
         }
     }
-    // One millisecond at the 2.1 GHz the R640 reports. The guest runs the
-    // unlock after the kick before this IRQ is delivered. Zero stays "idle".
-    let deadline = crate::arch::cpu::rdtsc().wrapping_add(2_100_000);
-    TX_IRQ_AT.store(if deadline == 0 { 1 } else { deadline }, Ordering::Release);
+    // Deliver on the next VM exit, after this kick has returned.
+    TX_IRQ_ARM.store(1, Ordering::Release);
     if unmapped {
         #[cfg(feature = "uefi-bin")]
         if !LOGGED_TX.swap(true, Ordering::AcqRel) {
@@ -574,19 +586,13 @@ fn drain_one(translate: &impl Fn(u64) -> Option<u64>) -> bool {
 
 /// Raise IRQ 11 for a TX completion whose kick has already returned.
 ///
-/// No-op until the deadline stored by the notify path. Called from the
-/// preemption-timer exit, not from the notify exit.
+/// Call at VM-exit entry. The notify exit arms the flag after this has
+/// already run, so the raise happens on the following exit.
 pub fn raise_deferred_tx_irq(now: u64) {
-    let at = TX_IRQ_AT.load(Ordering::Acquire);
-    if at == 0 {
-        return;
+    let _ = now;
+    if TX_IRQ_ARM.swap(0, Ordering::AcqRel) == 1 {
+        crate::devices::guest_irq::raise_virtio();
     }
-    // `now < at` wraps to a value with the high bit set.
-    if now.wrapping_sub(at) & (1 << 63) != 0 {
-        return;
-    }
-    TX_IRQ_AT.store(0, Ordering::Release);
-    crate::devices::guest_irq::raise_virtio();
 }
 
 #[cfg(test)]

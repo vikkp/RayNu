@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-9-tx-done |
-| Summary | **A published TX slot is always completed.** Iron `ab34e1e7` printed `NETDEV WATCHDOG` on `enp0s5` queue 0. An unmapped buffer is still marked done. DRIVER_OK prints queue 1's rings. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | m8-9-tx-irq-exit |
+| Summary | **The TX completion IRQ is raised on the next VM exit.** Iron `03906000` still printed `NETDEV WATCHDOG` because the IRQ waited for a timer exit the guest was not taking. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
-| Gates touched | virtio-net TX completion. M8.9.6 stays open. No doorbell. No format of UBUNTU0. The Ubuntu disk stays. |
+| Gates touched | virtio-net TX IRQ on the next exit. M8.9.6 stays open. No doorbell. No format of UBUNTU0. The Ubuntu disk stays. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 70 held, perc 86 held, unmodified 45 held, overall LOI 78 held, months A 0.25 held, months B 1.25 held. |
 
 
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-15 | m8-9-tx-irq-exit | 0.0 | 99 | **TX completion IRQ on the next VM exit.** `03906000` still watchdogs; the IRQ was waiting on a timer exit. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-15 | m8-9-tx-done | 0.0 | 99 | **A published TX slot is always completed.** `ab34e1e7` watchdog on `enp0s5`. Unmapped still marked done. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-15 | m8-9-tx-irq-defer | 0.0 | 99 | **TX IRQ waits until the kick returns.** `c203eaf4` spun at `0x11c5e8` exit `0x34` with no `M8.9`. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-15 | m8-9-net-tx | 0.0 | 99 | **A notify is not a TX buffer.** `e79f7e83` Stop idled. The `enp0s5` connect never printed `M8.9` and Ctrl+C did not return. Scores held. months 0.0 held; overall 99 held |
