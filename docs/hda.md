@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-9-vnet-rx |
-| Summary | **Replies on `:39` are posted to virtio RX, and the header strip is 12 bytes.** Iron `272c6db6` left the connect in `poll_idle` (`0xffffffff8271c5e8`). A 10-byte strip shifted the Ethernet frame. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | m8-9-lapic-idle |
+| Summary | **The LAPIC timer is polled while installed-disk Linux sits in `poll_idle`.** Iron `cbaf2a99` stop `rip=0xffffffff98f1c5e8` is the same idle loop. `timeout` never ran. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
-| Gates touched | virtio-net RX from function 1. M8.9.6 stays open. No doorbell. No format of UBUNTU0. The Ubuntu disk stays. |
+| Gates touched | LAPIC poll on Linux preempt/HLT without a product ISO. M8.9.6 stays open. No doorbell. No format of UBUNTU0. The Ubuntu disk stays. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 70 held, perc 86 held, unmodified 45 held, overall LOI 78 held, months A 0.25 held, months B 1.25 held. |
 
 
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-15 | m8-9-lapic-idle | 0.0 | 99 | **LAPIC timer polled during installed-disk `poll_idle`.** `cbaf2a99` connect never printed `exit:`. Same idle RIP. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-15 | m8-9-vnet-rx | 0.0 | 99 | **Function-1 replies posted to virtio RX.** `272c6db6` sat in `poll_idle`. Header strip is 12 bytes. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-15 | m8-9-tx-irq-exit | 0.0 | 99 | **TX completion IRQ on the next VM exit.** `03906000` still watchdogs; the IRQ was waiting on a timer exit. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-15 | m8-9-tx-done | 0.0 | 99 | **A published TX slot is always completed.** `ab34e1e7` watchdog on `enp0s5`. Unmapped still marked done. Scores held. months 0.0 held; overall 99 held |
