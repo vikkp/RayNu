@@ -800,4 +800,24 @@ mod perc_boot_choice_test {
         assert_eq!(perc_spa_choice(), PercSpaChoice::Pending);
         clear_perc_spa_choice_for_test();
     }
+
+    #[test]
+    fn spa_stop_idle_is_checked_before_the_stage46_hold() {
+        let main = include_str!("../src/main.rs");
+        let launch = include_str!("../vmx/launch.rs");
+        let resume = main
+            .split_once("extern \"C\" fn resume_e4_shell()")
+            .expect("resume")
+            .1
+            .split_once("fn run_m2_ept_launch(")
+            .expect("end of resume")
+            .0;
+        let stop = resume.find("guest_stopped()").expect("stop check");
+        let hold = resume.find("stage46_hold_e4_shell()").expect("hold check");
+        assert!(stop < hold, "SPA Stop must not fall into the Stage 46 hold");
+        assert!(resume.contains("enter_spa_stop_idle"));
+        assert!(launch.contains("fn enter_spa_stop_idle() -> !"));
+        assert!(launch.contains("relaunch_perc_guest_from_spa()"));
+        assert!(launch.contains("SPA stop idle — guest off"));
+    }
 }

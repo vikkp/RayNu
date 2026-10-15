@@ -194,6 +194,15 @@ fn run_m1_vmx(alloc: &mut memory::FrameAllocator) {
 }
 
 extern "C" fn resume_e4_shell() -> ! {
+    // Iron `4933dc61`: SPA Stop of the Ubuntu tail printed `RayNu-F stop
+    // spa-stop`, then the product-ISO window sent this resume into the
+    // Stage 46 hold. That hold ticks HTTP and never consumes Start
+    // (`PercSpaChoice choice=4` left the guest off). A stopped guest
+    // returns to an idle that relaunches. A guest that dies on its own
+    // still enters the hold below.
+    if r640_hypervisor::mgmt::perc_boot_choice::guest_stopped() {
+        vmx::launch::enter_spa_stop_idle();
+    }
     if r640_hypervisor::mgmt::stage46_hold_e4_shell() {
         boot::serial::write_line(r640_hypervisor::mgmt::M7_STAGE46_HOLD_E4_NOTE);
         // Phase 0: live hold (SPA ticks + heartbeat), not a dead spin.

@@ -1,6 +1,6 @@
 ---
 hda_version: 1
-last_updated: 2026-10-14
+last_updated: 2026-10-15
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
@@ -167,7 +167,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 | M+2 | 2026-09 | E3b native NIC lab (QEMU e1000) + ISO residual | ADR-013 Phase C | **Phase C DONE (QEMU)** |
 | M+3 | 2026-08 | E3b iron HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | **DONE (M7.8 iron)** |
 | M+4 | 2026-09 | Phase B (SPA → installed disk) | remaining Everest | **DONE — EVEREST CLOSED** (`f72b4276` / `34552377351`) |
-| M+5 | 2026-10 | **M8.8** Ubuntu library install | installed disk reaches a Linux shell, then Clear ISO | **Lived.** `c3a70e62` reached `vikkp@raynusrv2:~$`, then `boot: M8.8 library ISO cleared`. Signature sector only. **M8.9.1** is the spare NIC record (host). M8.9.2–M8.9.6 open. Scores held. See [m8_plan.md](m8_plan.md). |
+| M+5 | 2026-10 | **M8.8** Ubuntu library install | installed disk reaches a Linux shell, then Clear ISO | **Lived.** `c3a70e62` reached `vikkp@raynusrv2:~$`, then `boot: M8.8 library ISO cleared`. Signature sector only. **M8.9.1** is the spare NIC record (host). M8.9.2–M8.9.6 open. Iron `4933dc61` Stop entered the Stage 46 hold; the next EFI returns that Stop to an idle that honors Start. Scores held. See [m8_plan.md](m8_plan.md). |
 
 ### Timeline burn-down
 
@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | site-sku-signer |
-| Summary | **SKU card is what a signature holds today.** One dedicated box, Ubuntu on a 10 GiB tail, no guest LAN. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | m8-9-spa-stop-idle |
+| Summary | **SPA Stop returns to an idle that honors Start.** Iron `4933dc61` printed `RayNu-F stop spa-stop` then `Stage 46 product ISO hold`. `choice=4` was audited and Ubuntu stayed off. A guest that dies on its own still enters the hold. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
-| Gates touched | Public SKU card voice. M8.9.6 stays open. No doorbell. No format of UBUNTU0. |
+| Gates touched | SPA Stop resume. M8.9.6 stays open. No doorbell. No format of UBUNTU0. The Ubuntu disk stays. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 70 held, perc 86 held, unmodified 45 held, overall LOI 78 held, months A 0.25 held, months B 1.25 held. |
 
 
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-15 | m8-9-spa-stop-idle | 0.0 | 99 | **SPA Stop returns to an idle that honors Start.** `4933dc61` held after `spa-stop`. `choice=4` left Ubuntu off. A guest that dies on its own still holds. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-15 | site-sku-signer | 0.0 | 99 | **SKU card speaks to the signer.** What a dedicated-box letter holds today. Ubuntu on a 10 GiB tail. No guest LAN. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-15 | site-sku-lived | 0.0 | 99 | **SKU card matches the spare.** Ubuntu 26.04 on a 10 GiB tail. RAYNU-SPARE is not empty. No guest LAN. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-15 | m8-9-net-irq | 0.0 | 99 | **virtio-net interrupt pin is INTA.** `33c9b141` reached `vikkp` login and `virtio_net` probe `-22`. Pin 0 skipped INTx. M8.9.6 stays open. Scores held. months 0.0 held; overall 99 held |
