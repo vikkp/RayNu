@@ -8,7 +8,7 @@
 //! saved NIC. The MAC in device config is that guest MAC. TX frames are
 //! handed to the function-1 egress path. This is not the M4 vSwitch.
 
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use crate::devices::guest_platform::{pci_bdf, pci_cfg_offset};
 use crate::mgmt::guest_nic_start::armed_start;
@@ -75,6 +75,13 @@ static mut NET: Net = Net {
 };
 
 static LOGGED_TX: AtomicBool = AtomicBool::new(false);
+/// TSC at which a TX completion may raise IRQ 11. Zero means nothing is owed.
+///
+/// The raise must not happen on the notify VM exit. Linux still holds the
+/// TX lock across `virtqueue_kick`. Iron `c203eaf4` stopped in the kernel at
+/// the same instruction as `e79f7e83` (`rip` low bits `0x11c5e8`, exit
+/// `0x34`) and never printed `M8.9`.
+static TX_IRQ_AT: AtomicU64 = AtomicU64::new(0);
 
 fn with_net<R>(f: impl FnOnce(&mut Net) -> R) -> R {
     // SAFETY: BSP guest-exit path and single-threaded host tests.
@@ -432,18 +439,21 @@ fn drain_one(translate: &impl Fn(u64) -> Option<u64>) -> bool {
         let len = unsafe { core::ptr::read_unaligned((d_hpa as *const u32).add(2)) } as usize;
         let flags = unsafe { core::ptr::read_unaligned((d_hpa as *const u16).add(6)) };
         let next = unsafe { core::ptr::read_unaligned((d_hpa as *const u16).add(7)) };
-        if flags & 2 == 0 {
-            if let Some(hpa) = translate(addr) {
-                let take = len.min(frame.len() - flen);
-                unsafe {
-                    core::ptr::copy_nonoverlapping(
-                        hpa as *const u8,
-                        frame.as_mut_ptr().add(flen),
-                        take,
+        if flags & 2 == 0 && len > 0 {
+            let Some(hpa) = translate(addr) else {
+                #[cfg(feature = "uefi-bin")]
+                if !LOGGED_TX.swap(true, Ordering::AcqRel) {
+                    crate::boot::serial::write_line(
+                        "boot: M8.9 virtio-net tx unmapped (buffer not completed; not ISO-INSTALL-OK)",
                     );
                 }
-                flen += take;
+                return false;
+            };
+            let take = len.min(frame.len() - flen);
+            unsafe {
+                core::ptr::copy_nonoverlapping(hpa as *const u8, frame.as_mut_ptr().add(flen), take);
             }
+            flen += take;
         }
         if flags & 1 == 0 {
             break;
@@ -476,7 +486,10 @@ fn drain_one(translate: &impl Fn(u64) -> Option<u64>) -> bool {
             }
         }
     }
-    crate::devices::guest_irq::raise_virtio();
+    // One millisecond at the 2.1 GHz the R640 reports. The guest runs the
+    // unlock after the kick before this IRQ is delivered. Zero stays "idle".
+    let deadline = crate::arch::cpu::rdtsc().wrapping_add(2_100_000);
+    TX_IRQ_AT.store(if deadline == 0 { 1 } else { deadline }, Ordering::Release);
     if flen <= 10 {
         return true;
     }
@@ -504,6 +517,23 @@ fn drain_one(translate: &impl Fn(u64) -> Option<u64>) -> bool {
         }
     }
     true
+}
+
+/// Raise IRQ 11 for a TX completion whose kick has already returned.
+///
+/// No-op until the deadline stored by the notify path. Called from the
+/// preemption-timer exit, not from the notify exit.
+pub fn raise_deferred_tx_irq(now: u64) {
+    let at = TX_IRQ_AT.load(Ordering::Acquire);
+    if at == 0 {
+        return;
+    }
+    // `now < at` wraps to a value with the high bit set.
+    if now.wrapping_sub(at) & (1 << 63) != 0 {
+        return;
+    }
+    TX_IRQ_AT.store(0, Ordering::Release);
+    crate::devices::guest_irq::raise_virtio();
 }
 
 #[cfg(test)]
@@ -691,6 +721,16 @@ mod guest_virtio_net_test {
         assert_eq!(used_idx, 1);
         let id = u32::from_le_bytes([used[4], used[5], used[6], used[7]]);
         assert_eq!(id, 0);
+        let src = include_str!("guest_virtio_net.rs");
+        let one = src
+            .split_once("fn drain_one")
+            .expect("drain_one")
+            .1
+            .split_once("fn raise_deferred_tx_irq")
+            .expect("raise")
+            .0;
+        assert!(!one.contains("raise_virtio()"));
+        assert!(include_str!("../vmx/guest_uefi.rs").contains("raise_deferred_tx_irq(cpu::rdtsc())"));
         clear_panel_for_test();
         clear_start_for_test();
     }

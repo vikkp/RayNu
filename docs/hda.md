@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-9-net-tx |
-| Summary | **A notify is not a TX buffer.** Iron `e79f7e83` Stop returned to the SPA idle. The connect on `enp0s5` never printed `M8.9` and the shell stopped taking Ctrl+C. An RX kick no longer completes a TX slot the guest has not published. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | m8-9-tx-irq-defer |
+| Summary | **TX IRQ waits until the kick returns.** Iron `c203eaf4` Stop idled again. The kernel spin is the same instruction (`0x11c5e8`, exit `0x34`) and still no `M8.9`. The notify exit no longer raises IRQ 11. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
-| Gates touched | virtio-net TX completion. M8.9.6 stays open. No doorbell. No format of UBUNTU0. The Ubuntu disk stays. |
+| Gates touched | virtio-net TX IRQ defer. M8.9.6 stays open. No doorbell. No format of UBUNTU0. The Ubuntu disk stays. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 70 held, perc 86 held, unmodified 45 held, overall LOI 78 held, months A 0.25 held, months B 1.25 held. |
 
 
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-15 | m8-9-tx-irq-defer | 0.0 | 99 | **TX IRQ waits until the kick returns.** `c203eaf4` spun at `0x11c5e8` exit `0x34` with no `M8.9`. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-15 | m8-9-net-tx | 0.0 | 99 | **A notify is not a TX buffer.** `e79f7e83` Stop idled. The `enp0s5` connect never printed `M8.9` and Ctrl+C did not return. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-15 | m8-9-spa-stop-idle | 0.0 | 99 | **SPA Stop returns to an idle that honors Start.** `4933dc61` held after `spa-stop`. `choice=4` left Ubuntu off. A guest that dies on its own still holds. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-15 | site-sku-signer | 0.0 | 99 | **SKU card speaks to the signer.** What a dedicated-box letter holds today. Ubuntu on a 10 GiB tail. No guest LAN. Scores held. months 0.0 held; overall 99 held |

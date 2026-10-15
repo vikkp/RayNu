@@ -6957,6 +6957,7 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
             EXIT_REASON_EXTERNAL_INTERRUPT => true,
             EXIT_REASON_INTERRUPT_WINDOW => true,
             EXIT_REASON_PREEMPTION_TIMER => {
+                crate::devices::guest_virtio_net::raise_deferred_tx_irq(cpu::rdtsc());
                 // Iron 19b0c11: between tick 1024 (RIP still 0x1f6ba35 in
                 // 32MiB) and 1280 (RIP 0x27e22d5 execute-from-zero) firmware
                 // installed a 1GiB PDPTE. Split while RIP is still in RAM.
