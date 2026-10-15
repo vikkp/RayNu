@@ -5514,6 +5514,30 @@ fn finish_boot(ok: bool) -> ! {
     }
 }
 
+/// SPA Stop of a product-ISO guest. The coexist listener from the first
+/// boot stays; this does not re-arm the NIC or reprint the SNP warning.
+///
+/// Iron `4933dc61`: `leave_to_e4` after `spa-stop` hit the Stage 46 hold
+/// because the Ubuntu ISO window was still armed and Phase B continue was
+/// not. Start was audited (`choice=4`) and the guest stayed off. This idle
+/// consumes that Start. Not `ISO-INSTALL-OK`.
+pub fn enter_spa_stop_idle() -> ! {
+    serial::write_line(
+        "boot: SPA stop idle — guest off; Start on that row boots it again (not ISO-INSTALL-OK)",
+    );
+    loop {
+        crate::mgmt::tick_native_coexist();
+        // SAFETY: BSP-only after SPA Stop. The private VMCS was VMCLEAR'd.
+        // A Start after Stop relaunches RayNu-F. `try_spa_vmlaunch` still
+        // owns the older slot-1 start flag.
+        unsafe {
+            crate::vmx::guest_uefi::relaunch_perc_guest_from_spa();
+            try_spa_vmlaunch();
+        }
+        core::hint::spin_loop();
+    }
+}
+
 /// Phase B skip-OVMF: arm coexist HTTP and wait for SPA Start.
 /// Do **not** launch packed-bzImage G0.
 ///
