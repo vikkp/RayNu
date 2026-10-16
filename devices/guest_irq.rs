@@ -135,8 +135,25 @@ fn with_irq<R>(f: impl FnOnce(&mut IrqChip) -> R) -> R {
     out
 }
 
+/// Installed-disk Linux has no product ISO, so the IRQ chip stayed dark and
+/// `raise_virtio` was a no-op. Set at RayNu-F Linux handoff.
+static LINUX_DEV_IRQ: AtomicBool = AtomicBool::new(false);
+
+/// True when device IRQs should be latched. Product ISO, or Linux handoff.
+pub fn guest_irq_live(product_iso: bool, linux_handoff: bool) -> bool {
+    product_iso || linux_handoff
+}
+
 fn product_live() -> bool {
-    crate::devices::ide_cdrom::product_iso_window_armed()
+    guest_irq_live(
+        crate::devices::ide_cdrom::product_iso_window_armed(),
+        LINUX_DEV_IRQ.load(Ordering::Acquire),
+    )
+}
+
+/// Linux owns the VMCS. Virtio and the LAPIC timer can raise.
+pub fn note_linux_dev_irq() {
+    LINUX_DEV_IRQ.store(true, Ordering::Release);
 }
 
 static PREFER_PIT_ONCE: AtomicBool = AtomicBool::new(false);
@@ -185,6 +202,7 @@ pub fn pic_master_snap() -> PicMasterSnap {
 }
 
 pub fn reset() {
+    LINUX_DEV_IRQ.store(false, Ordering::Release);
     PREFER_PIT_ONCE.store(false, Ordering::Release);
     PREFER_PIT_HOLD.store(false, Ordering::Release);
     IRQ11_YIELD_PIT.store(false, Ordering::Release);
