@@ -5592,15 +5592,16 @@ unsafe fn launch_uefi(
         // known PT-store GPA. Hole reads are R-only dedicated zero (not HPET
         // SINK_HPA; iron f93caee). Do not bulk 2–4GiB (73576cc).
         let _ = ept_map_2m_scratch(0x8000_0000);
+        // Installed-disk Linux has no product ISO. A 2 MiB sink at
+        // 0xFEC00000 drops IOAPIC routing, so virtio INTx never arrives
+        // and poll_idle never sees a timer. Trap the 4 KiB for every boot.
         let mut hpet_2m = true;
-        if crate::devices::ide_cdrom::product_iso_window_armed() {
-            if let Some(pt) = alloc_phys(alloc) {
-                if ept_install_ioapic_trap(pt) {
-                    hpet_2m = false;
-                    serial::write_line(
-                        "boot: guest-UEFI IOAPIC trap 4K (Stage 46; not ISO-INSTALL-OK)",
-                    );
-                }
+        if let Some(pt) = alloc_phys(alloc) {
+            if ept_install_ioapic_trap(pt) {
+                hpet_2m = false;
+                serial::write_line(
+                    "boot: guest-UEFI IOAPIC trap 4K (Stage 46; not ISO-INSTALL-OK)",
+                );
             }
         }
         if hpet_2m {
@@ -5624,19 +5625,13 @@ unsafe fn launch_uefi(
             crate::devices::lapic_virt::fill_xapic_page(unsafe {
                 core::slice::from_raw_parts_mut(lapic as *mut u8, 4096)
             });
-            let trap = crate::devices::ide_cdrom::product_iso_window_armed();
-            if ept_install_xapic_4k(pt, lapic, trap) {
-                if trap {
-                    serial::write_line(
-                        "boot: guest-UEFI xAPIC 4K trap (Stage 46; not ISO-INSTALL-OK)",
-                    );
-                } else {
-                    serial::write_str("boot: guest-UEFI xAPIC 4K hpa=0x");
-                    write_hex(lapic);
-                    serial::write_str(" ver=0x");
-                    write_hex(u64::from(crate::devices::lapic_virt::XAPIC_VERSION));
-                    serial::write_byte(b'\n');
-                }
+            // A RAM image of the APIC accepts INIT_COUNT and then never
+            // counts. Iron `9a7cc63b` polled that idle timer, so `timeout`
+            // never ran. Trap for the installed disk too.
+            if ept_install_xapic_4k(pt, lapic, true) {
+                serial::write_line(
+                    "boot: guest-UEFI xAPIC 4K trap (Stage 46; not ISO-INSTALL-OK)",
+                );
             } else {
                 serial::write_line("boot: guest-UEFI WARN — xAPIC 4K EPT map failed");
             }
@@ -6361,6 +6356,17 @@ fn arm_preempt_on_resume() {
 
 #[cfg(target_os = "uefi")]
 fn tick_hpet_on_exit(basic: u32, gpa: u64, qual: u64) {
+    // Before the sink/UART-pace returns. A paced exit is still the only
+    // tick poll_idle gets, and the installed disk has no product ISO.
+    let preempt_or_hlt =
+        basic == EXIT_REASON_PREEMPTION_TIMER || basic == EXIT_REASON_HLT;
+    let linux_up = serial::linux_earlycon_share() || serial::linux_high_half();
+    if preempt_or_hlt
+        && (crate::devices::ide_cdrom::product_iso_window_armed()
+            || guest_uefi_linux_idle_polls_lapic(linux_up, true))
+    {
+        let _ = crate::devices::lapic_virt::poll_timer_expiry();
+    }
     let sink = SINK_HPA.load(Ordering::Acquire);
     if sink == 0 {
         return;
@@ -6407,15 +6413,6 @@ fn tick_hpet_on_exit(basic: u32, gpa: u64, qual: u64) {
     );
     if step != 0 && v != 0 {
         HPET_TICKS.fetch_add(1, Ordering::AcqRel);
-    }
-    let preempt_or_hlt =
-        basic == EXIT_REASON_PREEMPTION_TIMER || basic == EXIT_REASON_HLT;
-    let linux_up = serial::linux_earlycon_share() || serial::linux_high_half();
-    if preempt_or_hlt
-        && (crate::devices::ide_cdrom::product_iso_window_armed()
-            || guest_uefi_linux_idle_polls_lapic(linux_up, true))
-    {
-        let _ = crate::devices::lapic_virt::poll_timer_expiry();
     }
     if crate::devices::ide_cdrom::product_iso_window_armed() && preempt_or_hlt {
         crate::devices::guest_irq::raise_pit();
@@ -7749,6 +7746,7 @@ unsafe fn raynu_f_configure_high_ram() {
 /// region), which must never run against a kernel we launched.
 #[cfg(target_os = "uefi")]
 unsafe fn raynu_f_linux_handoff() {
+    crate::devices::guest_irq::note_linux_dev_irq();
     let _ = ops::vmwrite(
         EXCEPTION_BITMAP,
         u64::from(guest_uefi_raynu_f_handoff_exception_bitmap()),
@@ -9296,8 +9294,19 @@ unsafe fn raynu_f_vmexit(reason: u32, qual: u64, rip: u64, intr: u64) -> ! {
             raynu_f_stop("exception");
         }
         EXIT_REASON_EPT_VIOLATION => {
+            let gpa = ops::vmread(GUEST_PHYSICAL_ADDRESS).unwrap_or(0);
+            if crate::devices::lapic_virt::is_xapic_mmio_gpa(gpa) && handle_xapic_ept(gpa, qual)
+            {
+                guest_uefi_vmresume();
+            }
+            if gpa >= crate::devices::guest_irq::IOAPIC_GPA
+                && gpa < crate::devices::guest_irq::IOAPIC_GPA + crate::devices::guest_irq::IOAPIC_SIZE
+                && handle_ioapic_ept(gpa, qual)
+            {
+                guest_uefi_vmresume();
+            }
             serial::write_str("boot: RayNu-F EPT violation gpa=0x");
-            write_hex(ops::vmread(GUEST_PHYSICAL_ADDRESS).unwrap_or(0));
+            write_hex(gpa);
             serial::write_str(" qual=0x");
             write_hex(qual);
             serial::write_str(" rip=0x");

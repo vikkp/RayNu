@@ -1,6 +1,6 @@
     use super::{
     has_deliverable, ioapic_read, ioapic_write, is_hpet_split_2m_gpa, is_ioapic_gpa, lower_ata,
-    pic_has_deliverable, pic_io, prefer_pit_once, prefer_pit_until_driver_ok,     raise_ata, raise_gsi,
+    pic_has_deliverable, pic_io, prefer_pit_once, prefer_pit_until_driver_ok,     raise_ata, raise_gsi, note_linux_dev_irq,
     raise_pit, raise_virtio, reset, take_inject_vector, take_ioapic_ata_vector, take_ioapic_vector, take_pic_vector,
     arm_firmware_virtual_wire, arm_firmware_ata_gsi14, firmware_virtual_wire_armed, ioapic_ata_ready, pic_ata_ready,
     firmware_ata_vec, firmware_is_pit_vec,
@@ -38,6 +38,21 @@ fn lab_stub_does_not_arm_ioapic_or_inject() {
     assert!(!has_deliverable());
     assert!(take_inject_vector().is_none());
     reset();
+}
+
+#[test]
+fn linux_handoff_injects_virtio_without_a_product_iso() {
+    reset();
+    reset_cd();
+    guest_platform::reset();
+    note_linux_dev_irq();
+    assert!(is_ioapic_gpa(IOAPIC_GPA));
+    ioapic_write(0, 0x10 + 2 * u32::from(VIRTIO_GSI));
+    ioapic_write(0x10, 0x51);
+    raise_virtio();
+    assert_eq!(take_inject_vector(), Some(0x51));
+    reset();
+    assert!(!is_ioapic_gpa(IOAPIC_GPA));
 }
 
 #[test]
