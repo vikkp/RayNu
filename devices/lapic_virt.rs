@@ -479,6 +479,11 @@ pub fn has_irr_vec(vec: u8) -> bool {
     bit_is_set(core::ptr::addr_of!(APIC_IRR), vec)
 }
 
+/// LVT timer vector is sitting in IRR. Does not consume it.
+pub fn timer_vector_pending() -> bool {
+    has_irr_vec(lvt_timer_vector())
+}
+
 /// Host LAPIC one-shot expired for a guest-armed virtual timer.
 /// Latches IRR (and GTIMER3); does **not** by itself program VM-entry inject.
 pub fn on_host_timer_fire() -> bool {

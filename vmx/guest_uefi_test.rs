@@ -92,7 +92,7 @@ use super::{
     guest_uefi_virtio_mmio_raises_pit, guest_uefi_virtio_mmio_polls_lapic,
     guest_uefi_linux_idle_polls_lapic,
     guest_uefi_linux_virtio_mmio_raises_pit, guest_uefi_linux_reassert_virtio_intx,
-    guest_uefi_linux_virtio_pic_vec,
+    guest_uefi_linux_virtio_pic_vec, guest_uefi_linux_timer_before_virtio_pic,
     guest_uefi_linux_prefer_pit_during_apk, guest_uefi_linux_hlt_uart_after_driver_ok,
     guest_uefi_linux_hlt_prefer_pit_during_apk, guest_uefi_linux_uart_prefer_pit_during_apk,
     guest_uefi_linux_prefer_pit_hold, guest_uefi_linux_raise_pit_on_resume,
@@ -1764,6 +1764,9 @@ fn marker_and_residual_honest() {
     assert!(guest_uefi_linux_virtio_pic_vec(0x2b), "linux virtio PIC 11");
     assert!(guest_uefi_linux_virtio_pic_vec(0x3b), "linux x86_64 IRQ11 0x3b");
     assert!(!guest_uefi_linux_virtio_pic_vec(0x20));
+    assert!(guest_uefi_linux_timer_before_virtio_pic(true, true));
+    assert!(!guest_uefi_linux_timer_before_virtio_pic(true, false));
+    assert!(!guest_uefi_linux_timer_before_virtio_pic(false, true));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux virtio INTx reassert"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux virtio PIC 11"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux virtio PIC level INTx"));

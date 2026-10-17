@@ -1577,6 +1577,14 @@ pub fn guest_uefi_pic_before_lapic(pic_ready: bool, gsi2_armed: bool, linux: boo
     }
 }
 
+/// Iron `9cdf496c`: `sleep 1` returned, then `net tx=1` left IRQ 11
+/// level-asserted. Every inject took the PIC line, the LAPIC timer stayed
+/// pending, and `timeout 3` never printed `exit:`.
+/// Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_linux_timer_before_virtio_pic(linux: bool, timer_pending: bool) -> bool {
+    linux && timer_pending
+}
+
 /// HLT `CpuSleep` after BOTH-OK with no ATA I/O floods SOL (resume cap
 /// 16_777_216; tick every 4096). Keep a sparse beat so the stall is still
 /// visible. Print-only: leftover `cpu_flush` stays on the tick cadence
@@ -14555,6 +14563,12 @@ unsafe fn try_inject_guest_irq() {
     if guest_uefi_firmware_ata_over_pic(linux, ata_ready)
         && !guest_uefi_firmware_pic_ata(linux, crate::devices::guest_irq::pic_ata_ready())
     {
+        use_pic = false;
+    }
+    if guest_uefi_linux_timer_before_virtio_pic(
+        linux,
+        crate::devices::lapic_virt::timer_vector_pending(),
+    ) {
         use_pic = false;
     }
     if !use_pic {

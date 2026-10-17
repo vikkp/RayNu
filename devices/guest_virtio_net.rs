@@ -230,6 +230,12 @@ pub fn mmio_read(gpa: u64, size: u8) -> u64 {
         return with_net(|n| {
             let v = u64::from(n.isr);
             n.isr = 0;
+            // Level INTx stays asserted until this ack. Leaving IRQ 11
+            // pending made every inject take the PIC and starved the
+            // LAPIC timer (iron `9cdf496c`, `sleep 1` then no `exit:`).
+            if v != 0 {
+                crate::devices::guest_irq::lower_virtio();
+            }
             v
         });
     }
