@@ -1580,6 +1580,8 @@ pub fn guest_uefi_pic_before_lapic(pic_ready: bool, gsi2_armed: bool, linux: boo
 /// Iron `9cdf496c`: `sleep 1` returned, then `net tx=1` left IRQ 11
 /// level-asserted. Every inject took the PIC line, the LAPIC timer stayed
 /// pending, and `timeout 3` never printed `exit:`.
+/// Iron `4ed6522c` cleared `use_pic` and still took the highest IRR bit
+/// (virtio or a self-IPI). The LVT vector has to be the one injected.
 /// Not `ISO-INSTALL-OK`.
 pub fn guest_uefi_linux_timer_before_virtio_pic(linux: bool, timer_pending: bool) -> bool {
     linux && timer_pending
@@ -6374,6 +6376,9 @@ fn tick_hpet_on_exit(basic: u32, gpa: u64, qual: u64) {
             || guest_uefi_linux_idle_polls_lapic(linux_up, true))
     {
         let _ = crate::devices::lapic_virt::poll_timer_expiry();
+        if linux_up {
+            let _ = crate::devices::lapic_virt::relatch_if_idle(cpu::rdtsc());
+        }
     }
     let sink = SINK_HPA.load(Ordering::Acquire);
     if sink == 0 {
@@ -9137,11 +9142,15 @@ unsafe fn raynu_f_stop(why: &str) -> ! {
     serial::write_str(" free_pages=");
     write_dec(st.pool.free_pages() as u64);
     serial::write_line(" (F2b; not ISO-INSTALL-OK)");
-    let (tx, rx) = crate::devices::guest_virtio_net::net_counts();
+    let (tx, rx, sent, held) = crate::devices::guest_virtio_net::net_counts();
     serial::write_str("boot: M8.9 net tx=");
     write_dec(u64::from(tx));
     serial::write_str(" rx=");
     write_dec(u64::from(rx));
+    serial::write_str(" sent=");
+    write_dec(u64::from(sent));
+    serial::write_str(" held=");
+    write_dec(u64::from(held));
     serial::write_line(" (not ISO-INSTALL-OK)");
     leave_to_e4();
 }
@@ -14565,13 +14574,16 @@ unsafe fn try_inject_guest_irq() {
     {
         use_pic = false;
     }
-    if guest_uefi_linux_timer_before_virtio_pic(
+    let timer_first = guest_uefi_linux_timer_before_virtio_pic(
         linux,
         crate::devices::lapic_virt::timer_vector_pending(),
-    ) {
+    );
+    if timer_first {
         use_pic = false;
     }
-    if !use_pic {
+    // A higher virtio vector latched on this same exit would be taken
+    // instead of the timer. Leave the IOAPIC pin for the next exit.
+    if !use_pic && !timer_first {
         if prefer_ata && guest_uefi_firmware_take_ioapic_ata(linux) {
         // firmware take IOAPIC ATA: do not latch virtio/UART into IRR
         // that ata_irr_only will not inject. IOAPIC edge no remote IRR:
@@ -14596,7 +14608,7 @@ unsafe fn try_inject_guest_irq() {
     } else {
         crate::devices::lapic_virt::has_deliverable_irr()
     };
-    if !use_pic && !lapic {
+    if !use_pic && !lapic && !timer_first {
         if pic_ready {
             use_pic = true;
         } else {
@@ -14622,13 +14634,23 @@ unsafe fn try_inject_guest_irq() {
     }
     // Linux 7 starts an SRCU grace period with irq_work → self-IPI.
     // PIC stays pending; this vector is the one fsnotify is waiting on.
-    let self_vec = if linux {
+    // A pending LVT timer is taken first. Iron `4ed6522c` cleared the PIC
+    // and then injected the higher bit, so `timeout` still never printed.
+    let self_vec = if linux && !timer_first {
         crate::devices::lapic_virt::take_self_ipi()
     } else {
         None
     };
     let from_self = self_vec.is_some();
-    let Some(vec) = (if let Some(v) = self_vec {
+    let Some(vec) = (if timer_first {
+        match crate::devices::lapic_virt::take_timer_vector() {
+            Some(v) => Some(v),
+            None => {
+                let _ = set_guest_uefi_interrupt_window(false);
+                return;
+            }
+        }
+    } else if let Some(v) = self_vec {
         Some(v)
     } else if use_pic {
         crate::devices::guest_irq::take_pic_vector().map(u32::from)

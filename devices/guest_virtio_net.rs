@@ -91,13 +91,17 @@ static LOGGED_KICK_IDLE: AtomicBool = AtomicBool::new(false);
 static LOGGED_RX: AtomicBool = AtomicBool::new(false);
 static LOGGED_RX_IDLE: AtomicBool = AtomicBool::new(false);
 static TX_DONE_N: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
+static TX_SENT_N: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
+static TX_HELD_N: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
 static RX_POSTED_N: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
 
-/// Frames handed to egress, and frames posted into virtio queue 0.
-pub fn net_counts() -> (u32, u32) {
+/// Frames parsed, frames posted to RX, frames the NIC accepted, frames held.
+pub fn net_counts() -> (u32, u32, u32, u32) {
     (
         TX_DONE_N.load(Ordering::Acquire),
         RX_POSTED_N.load(Ordering::Acquire),
+        TX_SENT_N.load(Ordering::Acquire),
+        TX_HELD_N.load(Ordering::Acquire),
     )
 }
 
@@ -584,6 +588,14 @@ fn drain_one(translate: &impl Fn(u64) -> Option<u64>) -> bool {
         }
     }
     let result = crate::mgmt::bcm5720_mmio::egress_send(eth);
+    match result {
+        crate::mgmt::bcm5720_mmio::EgressSend::Sent(_) => {
+            TX_SENT_N.fetch_add(1, Ordering::AcqRel);
+        }
+        crate::mgmt::bcm5720_mmio::EgressSend::Held => {
+            TX_HELD_N.fetch_add(1, Ordering::AcqRel);
+        }
+    }
     if !LOGGED_TX.swap(true, Ordering::AcqRel) {
         #[cfg(feature = "uefi-bin")]
         {

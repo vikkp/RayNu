@@ -68,6 +68,8 @@ static mut APIC_OK: bool = false;
 static mut APIC_OK_PRINT: bool = false;
 /// Vector latched when the guest last armed delivery (for host-fire → IRR).
 static mut PENDING_VECTOR: Option<u8> = None;
+/// TSC of the last stalled-timer relatch. 0 means not yet.
+static mut TIMER_RELA_TSC: u64 = 0;
 /// TSC when INIT_COUNT was last written (countdown base).
 static mut TIMER_START_TSC: u64 = 0;
 static mut TIMER_RUNNING: bool = false;
@@ -484,6 +486,37 @@ pub fn timer_vector_pending() -> bool {
     has_irr_vec(lvt_timer_vector())
 }
 
+/// One-shot mode latches IRR once. If that vector is never taken, the
+/// guest does not write `INIT_COUNT` again and the clock stops.
+/// A write of 0 is a cancel and stays idle. Iron `4ed6522c`: `sleep 1`
+/// returned, then `timeout` did not.
+pub fn relatch_if_idle(now: u64) -> bool {
+    const MIN_TSC: u64 = 2_000_000;
+    // SAFETY: VMEXIT / host-test path. LVT and IRR are the virtual APIC.
+    // KANI-TARGET: stalled one-shot relatch (outside Proven Core).
+    unsafe {
+        if !timer_should_deliver() || timer_vector_pending() {
+            return false;
+        }
+        if APIC_INIT_COUNT == 0 || (TIMER_RUNNING && HOST_TIMER_FOR_GUEST) {
+            return false;
+        }
+        if TIMER_RELA_TSC != 0 && now.wrapping_sub(TIMER_RELA_TSC) < MIN_TSC {
+            return false;
+        }
+        TIMER_RELA_TSC = now;
+        set_irr(lvt_timer_vector());
+        true
+    }
+}
+
+/// Move the LVT timer vector from IRR into ISR.
+/// A higher device bit stays pending. Not `ISO-INSTALL-OK`.
+pub fn take_timer_vector() -> Option<u32> {
+    let vec = lvt_timer_vector();
+    take_irr_vec(vec, false)
+}
+
 /// Host LAPIC one-shot expired for a guest-armed virtual timer.
 /// Latches IRR (and GTIMER3); does **not** by itself program VM-entry inject.
 pub fn on_host_timer_fire() -> bool {
@@ -686,6 +719,7 @@ pub fn reset() {
         APIC_OK_PRINT = false;
         PENDING_VECTOR = None;
         TIMER_START_TSC = 0;
+        TIMER_RELA_TSC = 0;
         TIMER_RUNNING = false;
     }
 }

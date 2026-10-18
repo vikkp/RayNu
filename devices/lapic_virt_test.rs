@@ -1,5 +1,11 @@
 use super::*;
 
+fn lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(|p| p.into_inner())
+}
+
+
 #[test]
 fn marker_and_range() {
     assert_eq!(M3_GTIMER3_OK_MARKER, "RAYNU-V-M3-GTIMER3-OK");
@@ -14,6 +20,7 @@ fn marker_and_range() {
 
 #[test]
 fn mmio_version_readable() {
+    let _guard = lock();
     let r = mmio_access(APIC_GPA + 0x30, false, 0).unwrap().unwrap();
     assert_eq!(r & 0xFF, 0x14);
     assert_eq!(XAPIC_VERSION, 0x50014);
@@ -21,6 +28,7 @@ fn mmio_version_readable() {
 
 #[test]
 fn reset_restores_masked_lvt_and_version() {
+    let _guard = lock();
     assert!(wrmsr(0x80F, 0x1FF).is_some());
     assert!(wrmsr(0x832, 0x20).is_some());
     reset();
@@ -43,6 +51,7 @@ fn fill_xapic_page_version_not_zero() {
 
 #[test]
 fn real_countdown_decreases_cur_count() {
+    let _guard = lock();
     assert!(wrmsr(0x80F, 0x1FF).is_some()); // SVR
     assert!(wrmsr(0x83E, 0x3).is_some()); // ÷16
     assert!(wrmsr(0x832, (LVT_MASKED | 0xEF) as u64).is_some());
@@ -58,6 +67,7 @@ fn real_countdown_decreases_cur_count() {
 
 #[test]
 fn irr_isr_eoi_delivery() {
+    let _guard = lock();
     assert!(wrmsr(0x80F, 0x1FF).is_some());
     assert!(wrmsr(0x832, 0xEF_u64).is_some()); // unmasked 0xEF
     assert!(wrmsr(0x838, 0x1000).unwrap()); // arms host timer flag
@@ -80,6 +90,8 @@ fn irr_isr_eoi_delivery() {
 
 #[test]
 fn poll_timer_expiry_latches_irr() {
+    let _guard = lock();
+    reset();
     assert!(wrmsr(0x80F, 0x1FF).is_some());
     assert!(wrmsr(0x83E, 0x3).is_some()); // ÷16
     assert!(wrmsr(0x832, 0xEF_u64).is_some());
@@ -93,7 +105,40 @@ fn poll_timer_expiry_latches_irr() {
 }
 
 #[test]
+fn relatch_if_idle_arms_a_stalled_one_shot() {
+    let _guard = lock();
+    reset();
+    assert!(wrmsr(0x80F, 0x1FF).is_some());
+    assert!(wrmsr(0x832, 0xEF).is_some());
+    assert!(!relatch_if_idle(0), "INIT_COUNT 0 is a cancelled timer");
+    assert!(wrmsr(0x838, 1000).is_some());
+    assert!(!relatch_if_idle(0), "countdown still running");
+    assert!(on_host_timer_fire());
+    assert!(timer_vector_pending());
+    assert!(!relatch_if_idle(0));
+    assert_eq!(take_timer_vector(), Some(0xEF));
+    assert!(relatch_if_idle(0));
+    assert!(timer_vector_pending());
+    assert!(!relatch_if_idle(1));
+}
+
+#[test]
+fn take_timer_vector_leaves_a_higher_irr_bit() {
+    let _guard = lock();
+    reset();
+    assert!(wrmsr(0x80F, 0x1FF).is_some());
+    assert!(wrmsr(0x832, 0xEF).is_some());
+    assert!(wrmsr(0x838, 1000).is_some());
+    assert!(on_host_timer_fire());
+    latch_irr(0xF0);
+    assert_eq!(take_timer_vector(), Some(0xEF));
+    assert!(has_irr_vec(0xF0));
+    assert!(!timer_vector_pending());
+}
+
+#[test]
 fn latch_irr_device_vector_then_eoi() {
+    let _guard = lock();
     latch_irr(0x31);
     assert!(has_deliverable_irr());
     let v = take_deliverable_vector().expect("device IRR→ISR");
@@ -104,6 +149,7 @@ fn latch_irr_device_vector_then_eoi() {
 
 #[test]
 fn cr8_maps_to_tpr_class() {
+    let _guard = lock();
     set_cr8(0);
     assert_eq!(cr8(), 0);
     assert_eq!(tpr() & 0xF0, 0);
@@ -136,6 +182,7 @@ fn cr8_maps_to_tpr_class() {
 
 #[test]
 fn firmware_prefer_ata_irr_ignores_tpr() {
+    let _guard = lock();
     while take_highest_irr().is_some() {
         assert!(wrmsr(0x80B, 0).is_some());
     }
@@ -156,6 +203,7 @@ fn firmware_prefer_ata_irr_ignores_tpr() {
 
 #[test]
 fn firmware_prefer_ata_irr_not_lvt() {
+    let _guard = lock();
     while take_highest_irr().is_some() {
         assert!(wrmsr(0x80B, 0).is_some());
     }
@@ -176,6 +224,7 @@ fn firmware_prefer_ata_irr_not_lvt() {
 
 #[test]
 fn firmware_lapic_timer_expiry_masked_uses_vec20() {
+    let _guard = lock();
     assert!(wrmsr(0x80F, 0x1FF).is_some());
     assert!(wrmsr(0x832, (LVT_MASKED | 0xEF) as u64).is_some());
     while take_highest_irr().is_some() {
@@ -189,6 +238,7 @@ fn firmware_lapic_timer_expiry_masked_uses_vec20() {
 
 #[test]
 fn firmware_lapic_timer_expiry_keeps_unmasked_vector() {
+    let _guard = lock();
     assert!(wrmsr(0x80F, 0x1FF).is_some());
     assert!(wrmsr(0x832, 0x27u64).is_some());
     while take_highest_irr().is_some() {
@@ -202,6 +252,7 @@ fn firmware_lapic_timer_expiry_keeps_unmasked_vector() {
 
 #[test]
 fn icr_self_ipi_latches_irr_and_take_moves_to_isr() {
+    let _guard = lock();
     reset();
     assert!(wrmsr(0x80F, 0x1FF).is_some());
     // Shorthand self (bit 18), assert (bit 14), fixed, vector 0xf6 (irq_work).

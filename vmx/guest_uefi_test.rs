@@ -1767,6 +1767,7 @@ fn marker_and_residual_honest() {
     assert!(guest_uefi_linux_timer_before_virtio_pic(true, true));
     assert!(!guest_uefi_linux_timer_before_virtio_pic(true, false));
     assert!(!guest_uefi_linux_timer_before_virtio_pic(false, true));
+    assert!(include_str!("guest_uefi.rs").contains("take_timer_vector"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux virtio INTx reassert"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux virtio PIC 11"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux virtio PIC level INTx"));

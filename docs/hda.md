@@ -1,6 +1,6 @@
 ---
 hda_version: 1
-last_updated: 2026-10-17
+last_updated: 2026-10-18
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-9-timer-before-pic |
-| Summary | **A pending LAPIC timer is injected ahead of virtio IRQ 11.** Iron `9cdf496c`: `sleep 1` returned, then `net tx=1 rx=0` and `timeout` never printed `exit:`. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | m8-9-timer-take |
+| Summary | **The LVT timer vector is the inject, ahead of a higher IRR bit.** Iron `4ed6522c` still left `timeout` with no `exit:`. A stalled one-shot is re-latched. Stop prints `sent=` and `held=`. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
-| Gates touched | Timer inject before level IRQ 11. ISR ack drops the line. M8.9.6 stays open. No doorbell. No format of UBUNTU0. The Ubuntu disk stays. |
+| Gates touched | LVT take before self-IPI and virtio. Stalled one-shot relatch. M8.9.6 stays open. No doorbell. No format of UBUNTU0. The Ubuntu disk stays. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 70 held, perc 86 held, unmodified 45 held, overall LOI 78 held, months A 0.25 held, months B 1.25 held. |
 
 
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-18 | m8-9-timer-take | 0.0 | 99 | **LVT timer vector is the inject.** `4ed6522c` still left `timeout` with no `exit:`. A stalled one-shot is re-latched. Stop prints `sent=` and `held=`. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-17 | m8-9-timer-before-pic | 0.0 | 99 | **LAPIC timer injects ahead of virtio IRQ 11.** `9cdf496c` `sleep 1` returned, then `net tx=1 rx=0` and no `exit:`. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-16 | m8-9-xapic-trap | 0.0 | 99 | **xAPIC and IOAPIC trapped for the installed disk.** `9a7cc63b` still had no `exit:`. The APIC page was RAM. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-15 | m8-9-lapic-idle | 0.0 | 99 | **LAPIC timer polled during installed-disk `poll_idle`.** `cbaf2a99` connect never printed `exit:`. Same idle RIP. Scores held. months 0.0 held; overall 99 held |
