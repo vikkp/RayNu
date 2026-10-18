@@ -1,7 +1,7 @@
     use super::{
     has_deliverable, ioapic_read, ioapic_write, is_hpet_split_2m_gpa, is_ioapic_gpa, lower_ata,
     pic_has_deliverable, pic_io, prefer_pit_once, prefer_pit_until_driver_ok,     raise_ata, raise_gsi, note_linux_dev_irq,
-    raise_pit, raise_virtio, reset, take_inject_vector, take_ioapic_ata_vector, take_ioapic_vector, take_pic_vector,
+    raise_pit, raise_virtio, lower_virtio, reset, take_inject_vector, take_ioapic_ata_vector, take_ioapic_vector, take_pic_vector,
     arm_firmware_virtual_wire, arm_firmware_ata_gsi14, firmware_virtual_wire_armed, ioapic_ata_ready, pic_ata_ready,
     firmware_ata_vec, firmware_is_pit_vec,
     ATA_GSI, IOAPIC_GPA,
@@ -1453,6 +1453,58 @@ fn pic_master_snap_counts_irq0_and_irq4_takes() {
     let s4 = pic_master_snap();
     assert_eq!((s4.take_irq0, s4.take_irq4), (0, 0), "reset clears INTA counts");
     assert_eq!((s4.irr, s4.imr, s4.isr, s4.ready), (0, 0xFF, 0, false));
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
+fn pic_snap_counts_irq11_takes_and_pit_raises_for_the_post_tx_trace() {
+    // M8.9 post-TX trace: iron `ccf68f7c` lost IRQ 0 and IRQ 4 after the
+    // first virtio-net frame with nothing on COM2 to say whether the PIT
+    // was still raised, whether the slave 8259 still held IRQ 11, or
+    // whether anything was taken. The snapshot carries both chips and the
+    // IRQ 11 / raise_pit counters.
+    use crate::devices::guest_irq::pic_snap;
+    arm_product_iso();
+    let s0 = pic_snap();
+    assert_eq!((s0.take_irq11, s0.pit_raises), (0, 0));
+    assert_eq!((s0.slave_irr, s0.slave_imr, s0.slave_isr), (0, 0xFF, 0));
+    assert!(!s0.slave_ready);
+    let _ = pic_io(0x20, false, 1, 0x11);
+    let _ = pic_io(0x21, false, 1, 0x20);
+    let _ = pic_io(0x21, false, 1, 0x04);
+    let _ = pic_io(0x21, false, 1, 0x01);
+    let _ = pic_io(0xA0, false, 1, 0x11);
+    let _ = pic_io(0xA1, false, 1, 0x28);
+    let _ = pic_io(0xA1, false, 1, 0x02);
+    let _ = pic_io(0xA1, false, 1, 0x01);
+    let _ = pic_io(0x21, false, 1, 0xFA);
+    let _ = pic_io(0xA1, false, 1, 0xF7);
+    raise_pit();
+    raise_pit();
+    raise_virtio();
+    let s1 = pic_snap();
+    assert!(s1.master.ready && s1.slave_ready);
+    assert_eq!(s1.pit_raises, 2, "every raise_pit call counts, taken or not");
+    assert_eq!(s1.slave_irr & 0x08, 0x08, "IRQ 11 latched on the slave");
+    assert_eq!(s1.master.irr & 0x05, 0x05, "IRQ 0 and cascade IRQ 2 on the master");
+    // Slave beats PIT with no PIT preference armed.
+    assert_eq!(take_pic_vector(), Some(0x2B));
+    let s2 = pic_snap();
+    assert_eq!(s2.take_irq11, 1);
+    assert_eq!(s2.slave_isr & 0x08, 0x08, "IRQ 11 in service until EOI");
+    assert_eq!(s2.master.isr & 0x04, 0x04, "cascade in service on the master");
+    assert_eq!(s2.slave_irr & 0x08, 0x08, "level INTx: IRR stays until the ISR read lowers it");
+    let _ = pic_io(0xA0, false, 1, 0x63);
+    let _ = pic_io(0x20, false, 1, 0x62);
+    lower_virtio();
+    assert_eq!(take_pic_vector(), Some(0x20));
+    let s3 = pic_snap();
+    assert_eq!((s3.master.take_irq0, s3.take_irq11), (1, 1));
+    reset();
+    let s4 = pic_snap();
+    assert_eq!((s4.take_irq11, s4.pit_raises), (0, 0), "reset clears the trace counters");
+    assert_eq!((s4.slave_irr, s4.slave_imr, s4.slave_isr), (0, 0xFF, 0));
     reset_cd();
     guest_platform::reset();
 }

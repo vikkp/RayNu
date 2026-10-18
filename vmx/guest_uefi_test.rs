@@ -145,6 +145,8 @@ use super::{
     guest_uefi_virtio_mmio_heartbeat_kick,
     guest_uefi_virtio_mmio_kick_line_due, VIRTIO_MMIO_KICK_LINE_MIN_TSC,
     guest_uefi_uart_pace_wanted, guest_uefi_uart_pace_ticks, guest_uefi_preempt_arm,
+    guest_uefi_preempt_nominal_due, guest_uefi_preempt_unpaced_value,
+    guest_uefi_net_trace_due, guest_uefi_net_trace_begins,
     UART_PACE_US,
     GUEST_UEFI_INTR_TYPE_NMI,
     guest_uefi_pt_paint_vga_uc, guest_uefi_pt_leaf_4k_for, guest_uefi_gpa_in_vga_fix_uc,
@@ -3628,4 +3630,116 @@ fn uart_line_rate_pace_clamps_preempt_without_stealing_the_nominal_tick() {
     assert!(include_str!("../boot/serial.rs").contains("guest UART TX ring room"));
     assert!(include_str!("../boot/serial.rs").contains("guest UART COM2 FIFO burst"));
     assert!(include_str!("../boot/raynu_f_flag.rs").contains("Always — RayNu-F"));
+}
+
+#[test]
+fn pit_wall_deadline_survives_unpaced_resumes() {
+    // M8.9 PIT wall deadline: the preemption countdown only runs in guest
+    // mode and was re-armed to the full reload at every un-paced resume,
+    // so a guest exiting more often than ~64 ms never reached a preemption
+    // exit and `raise_pit` starved. The installed Ubuntu disk has no LAPIC
+    // timer (`APIC: ... virtual wire mode setup with no configuration`),
+    // so a starved PIT is a stopped clock. Keep the deadline across resumes.
+    let reload = 0x0010_0000u32;
+    let shift = 7u32;
+    let period = u64::from(reload) << shift;
+    let t0 = 5_000_000_000u64;
+    // No deadline yet: start one.
+    let due = guest_uefi_preempt_nominal_due(0, t0, reload, shift);
+    assert_eq!(due, t0 + period);
+    // Exits 1 ms apart keep the same deadline instead of pushing it out.
+    let t1 = t0 + 2_100_000;
+    assert_eq!(guest_uefi_preempt_nominal_due(due, t1, reload, shift), due);
+    let t2 = due - 1;
+    assert_eq!(guest_uefi_preempt_nominal_due(due, t2, reload, shift), due);
+    // The remainder is what gets armed, never more than reload, never zero.
+    assert_eq!(guest_uefi_preempt_unpaced_value(reload, t0, due, shift), reload);
+    let v1 = guest_uefi_preempt_unpaced_value(reload, t1, due, shift);
+    assert!(v1 < reload && v1 > 0, "v1={v1}");
+    assert_eq!(v1, ((due - t1) >> shift) as u32);
+    assert_eq!(guest_uefi_preempt_unpaced_value(reload, t2, due, shift), 1);
+    assert_eq!(guest_uefi_preempt_unpaced_value(reload, due, due, shift), 1);
+    assert_eq!(guest_uefi_preempt_unpaced_value(reload, due + 10, due, shift), 1);
+    assert_eq!(guest_uefi_preempt_unpaced_value(0, t0, due, shift), 0);
+    // Once the tick fired (or is overdue) the next deadline starts from now.
+    assert_eq!(guest_uefi_preempt_nominal_due(due, due, reload, shift), due + period);
+    let late = due + 3 * period;
+    assert_eq!(guest_uefi_preempt_nominal_due(due, late, reload, shift), late + period);
+    let src = include_str!("guest_uefi.rs");
+    assert!(src.contains("M8.9 PIT wall deadline"));
+    let arm = src
+        .split_once("fn arm_preempt_on_resume()")
+        .map(|(_, rest)| rest.split_once("\n}\n").map(|(body, _)| body).unwrap_or(rest))
+        .unwrap();
+    assert!(arm.contains("guest_uefi_preempt_nominal_due("));
+    assert!(arm.contains("guest_uefi_preempt_unpaced_value("));
+    assert!(
+        !arm.contains("!PREEMPT_UART_PACED.load(Ordering::Acquire)\n        ||"),
+        "deadline must not restart on every un-paced resume"
+    );
+}
+
+#[test]
+fn net_post_tx_trace_prints_at_tx_then_2s_then_10s_and_on_stop() {
+    // M8.9 post-TX trace: iron `ccf68f7c` — `ip link set enp0s5 up`
+    // returned, `tx=1 sent=1`, then neither `timeout` nor the console
+    // came back while the SPA kept ticking and Stop found `poll_idle`
+    // (`0x34` at `0x11c5e8`). COM2 printed nothing between the frame and
+    // Stop. The trace prints one line at the first frame, at +2 s, at
+    // +10 s and on Stop, each with deltas since the frame.
+    let hz = 2_100_000_000u64;
+    assert!(!guest_uefi_net_trace_begins(0, 0, 0), "no frame yet");
+    assert!(guest_uefi_net_trace_begins(0, 1, 0), "first frame starts the trace");
+    assert!(!guest_uefi_net_trace_begins(1, 5, 0), "already started");
+    // Net counters are not reset per Start: a second launch waits for a
+    // frame of its own.
+    assert!(!guest_uefi_net_trace_begins(0, 1, 1), "frame from the previous launch");
+    assert!(guest_uefi_net_trace_begins(0, 2, 1));
+    let t0 = 10_000_000_000u64;
+    assert_eq!(guest_uefi_net_trace_due(0, 0, t0, hz), None, "not started");
+    assert_eq!(guest_uefi_net_trace_due(1, t0, t0 + hz, hz), None, "1 s: wait");
+    assert_eq!(guest_uefi_net_trace_due(1, t0, t0 + 2 * hz, hz), Some(2), "2 s line");
+    assert_eq!(guest_uefi_net_trace_due(2, t0, t0 + 3 * hz, hz), None, "3 s: wait");
+    assert_eq!(guest_uefi_net_trace_due(2, t0, t0 + 10 * hz, hz), Some(3), "10 s line");
+    assert_eq!(guest_uefi_net_trace_due(3, t0, t0 + 60 * hz, hz), None, "done");
+    // Stage 1 that missed 2 s still prints the 2 s line first.
+    assert_eq!(guest_uefi_net_trace_due(1, t0, t0 + 30 * hz, hz), Some(2));
+    // Uncalibrated TSC falls back to 2 GHz.
+    assert_eq!(guest_uefi_net_trace_due(1, t0, t0 + 4_000_000_000, 0), Some(2));
+    let src = include_str!("guest_uefi.rs");
+    assert!(src.contains("boot: M8.9 net post-tx "));
+    for field in [
+        " exits=", " pre=", " pace=", " io=", " ept=", " ext=", " win=", " hlt=", " pit=",
+        " inj=", " skip_exc=", " skip_unarmed=", " skip_idle=", " skip_if0=", " skip_none=",
+        " skip_pit=", " skip_prep=", " take0=", " take4=", " take11=", " pic_m=", " pic_s=",
+        " netisr=", " netarm=", " lirr=", " ltmr=", " if=", " ist=", " winx=", " armed=",
+        " paced=", " txring=",
+    ] {
+        assert!(src.contains(field), "trace field {field}");
+    }
+    // Every early return in the inject path is counted.
+    let inject = src
+        .split_once("unsafe fn try_inject_guest_irq()")
+        .map(|(_, rest)| rest)
+        .unwrap();
+    let inject = inject.split_once("\nunsafe fn set_guest_uefi_interrupt_window").unwrap().0;
+    for skip in [
+        "INJECT_SKIP[INJECT_SKIP_EXC]",
+        "INJECT_SKIP[INJECT_SKIP_UNARMED]",
+        "INJECT_SKIP[INJECT_SKIP_IDLE]",
+        "INJECT_SKIP[INJECT_SKIP_WINDOW]",
+        "INJECT_SKIP[INJECT_SKIP_NONE]",
+        "INJECT_SKIP[INJECT_SKIP_PIT]",
+        "INJECT_SKIP[INJECT_SKIP_PREP]",
+    ] {
+        assert!(inject.contains(skip), "{skip}");
+    }
+    // The exit path buckets Linux exits and ticks the trace; Stop prints it.
+    let exit = src.split_once("pub unsafe extern \"C\" fn guest_uefi_vmexit()").unwrap().1;
+    assert!(exit.contains("note_linux_exit_kind(reason & 0xFFFF, pace_exit);"));
+    assert!(exit.contains("net_trace_tick(reason & 0xFFFF, rip);"));
+    let stop = src.split_once("unsafe fn raynu_f_stop(why: &str)").unwrap().1;
+    assert!(stop.split_once("leave_to_e4();").unwrap().0.contains("net_trace_on_stop();"));
+    assert!(include_str!("../devices/guest_irq.rs").contains("pub fn pic_snap()"));
+    assert!(include_str!("../devices/guest_virtio_net.rs").contains("pub fn irq_state()"));
 }

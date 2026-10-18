@@ -177,6 +177,42 @@ static LINUX_IOAPIC_GSI2: AtomicBool = AtomicBool::new(false);
 /// UART THRE chain telemetry.
 static TAKE_IRQ0: AtomicU32 = AtomicU32::new(0);
 static TAKE_IRQ4: AtomicU32 = AtomicU32::new(0);
+/// 8259 INTA count for slave IRQ 11 (virtio INTx) and [`raise_pit`] calls
+/// since reset. M8.9 post-TX trace.
+static TAKE_IRQ11: AtomicU32 = AtomicU32::new(0);
+static PIT_RAISES: AtomicU32 = AtomicU32::new(0);
+
+/// Both 8259s plus the INTA / PIT-raise counters. M8.9 post-TX trace.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PicSnap {
+    pub master: PicMasterSnap,
+    pub slave_irr: u8,
+    pub slave_imr: u8,
+    pub slave_isr: u8,
+    pub slave_ready: bool,
+    pub take_irq11: u32,
+    pub pit_raises: u32,
+}
+
+/// Snapshot both 8259s as the inject path sees them. Not `ISO-INSTALL-OK`.
+pub fn pic_snap() -> PicSnap {
+    with_irq(|c| PicSnap {
+        master: PicMasterSnap {
+            irr: c.master.irr,
+            imr: c.master.imr,
+            isr: c.master.isr,
+            ready: c.master.ready,
+            take_irq0: TAKE_IRQ0.load(Ordering::Acquire),
+            take_irq4: TAKE_IRQ4.load(Ordering::Acquire),
+        },
+        slave_irr: c.slave.irr,
+        slave_imr: c.slave.imr,
+        slave_isr: c.slave.isr,
+        slave_ready: c.slave.ready,
+        take_irq11: TAKE_IRQ11.load(Ordering::Acquire),
+        pit_raises: PIT_RAISES.load(Ordering::Acquire),
+    })
+}
 
 /// Master 8259 registers plus INTA counts. UART THRE chain telemetry.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -211,6 +247,8 @@ pub fn reset() {
     LINUX_IOAPIC_GSI2.store(false, Ordering::Release);
     TAKE_IRQ0.store(0, Ordering::Release);
     TAKE_IRQ4.store(0, Ordering::Release);
+    TAKE_IRQ11.store(0, Ordering::Release);
+    PIT_RAISES.store(0, Ordering::Release);
     with_irq(|c| *c = IrqChip::empty());
 }
 
@@ -296,6 +334,7 @@ pub fn lower_virtio_iso() {
 /// after Linux masked the PIC (ACPI `rest_init`). PIT skips IOAPIC pin 0.
 /// MADT IRQ0 ISO GSI 2. Not `ISO-INSTALL-OK`.
 pub fn raise_pit() {
+    PIT_RAISES.fetch_add(1, Ordering::AcqRel);
     crate::devices::guest_platform::pit_tick();
     raise_pic_irq(PIT_IRQ);
     raise_ioapic_gsi(PIT_IOAPIC_GSI);
@@ -859,6 +898,8 @@ fn pic_take(c: &mut IrqChip) -> Option<u8> {
         TAKE_IRQ0.fetch_add(1, Ordering::AcqRel);
     } else if irq == 4 {
         TAKE_IRQ4.fetch_add(1, Ordering::AcqRel);
+    } else if irq == VIRTIO_PIC_IRQ {
+        TAKE_IRQ11.fetch_add(1, Ordering::AcqRel);
     }
     if irq == 0 {
         PREFER_PIT_ONCE.store(false, Ordering::Release);

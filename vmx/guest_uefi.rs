@@ -1494,6 +1494,59 @@ pub fn guest_uefi_preempt_arm(
     }
 }
 
+/// Wall-clock deadline of the next nominal PIT/HPET preemption tick.
+///
+/// The VMX preemption timer counts only in guest mode and was re-armed to
+/// the full reload on every un-paced resume, so any exit stream closer
+/// than one reload (~64 ms at shift 7) starved `raise_pit` for as long as
+/// it lasted: jiffies stopped while the guest kept exiting. Keep the
+/// deadline across resumes; start a new one only when there is none or
+/// the old one has passed (the tick was delivered or is overdue).
+/// M8.9 PIT wall deadline. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_preempt_nominal_due(prev_due: u64, now: u64, reload: u32, shift: u32) -> u64 {
+    if prev_due == 0 || now >= prev_due {
+        now.wrapping_add(u64::from(reload) << shift.min(31))
+    } else {
+        prev_due
+    }
+}
+
+/// Preemption value for an un-paced resume: the remainder to `due`, never
+/// more than `reload`, never zero. M8.9 PIT wall deadline.
+pub fn guest_uefi_preempt_unpaced_value(reload: u32, now: u64, due: u64, shift: u32) -> u32 {
+    if reload == 0 {
+        return 0;
+    }
+    let remaining = if due > now {
+        ((due - now) >> shift.min(31)).min(u64::from(reload)) as u32
+    } else {
+        0
+    };
+    remaining.max(1)
+}
+
+/// M8.9 post-TX trace stage. 0 = no guest TX yet, 1 = TX seen (t0 line
+/// printed), 2 = 2 s line printed, 3 = 10 s line printed. Returns the
+/// stage whose line is due now, or `None`.
+pub fn guest_uefi_net_trace_due(stage: u8, first_tx_tsc: u64, now: u64, tsc_hz: u64) -> Option<u8> {
+    if stage == 0 || stage >= 3 || first_tx_tsc == 0 {
+        return None;
+    }
+    let hz = if tsc_hz == 0 { UART_PACE_TSC_HZ_FALLBACK } else { tsc_hz };
+    let elapsed_ms = now.wrapping_sub(first_tx_tsc) / (hz / 1000).max(1);
+    match stage {
+        1 if elapsed_ms >= 2_000 => Some(2),
+        2 if elapsed_ms >= 10_000 => Some(3),
+        _ => None,
+    }
+}
+
+/// M8.9 post-TX trace: the first guest frame of this launch starts the
+/// trace (`tx_seen` is the frame count when the guest was launched).
+pub fn guest_uefi_net_trace_begins(stage: u8, tx_done: u32, tx_seen: u32) -> bool {
+    stage == 0 && tx_done > tx_seen
+}
+
 /// Linux `clocksource=tsc` still uses the LAPIC timer for `jiffies` /
 /// `msleep`. Tight virtio BAR EPT resets the VMX preemption timer, so
 /// `poll_timer_expiry` on HLT/preempt never runs. Poll on each Linux
@@ -4273,6 +4326,35 @@ static FIRMWARE_WFE_STATE4: AtomicBool = AtomicBool::new(false);
 static FIRMWARE_WFE_EVENT_PF: AtomicBool = AtomicBool::new(false);
 static FIRMWARE_ZEROMEM_EPT: AtomicBool = AtomicBool::new(false);
 static INJECT_N: AtomicU32 = AtomicU32::new(0);
+const ATOMIC_U32_ZERO: AtomicU32 = AtomicU32::new(0);
+/// Why [`try_inject_guest_irq`] returned without a VM-entry inject.
+/// 0 exception pending · 1 product window not armed · 2 nothing pending ·
+/// 3 IF=0 / interrupt shadow (window armed) · 4 take returned none ·
+/// 5 firmware skip-PIT · 6 `prepare_external_inject` failed.
+/// M8.9 post-TX trace.
+static INJECT_SKIP: [AtomicU32; 7] = [ATOMIC_U32_ZERO; 7];
+const INJECT_SKIP_EXC: usize = 0;
+const INJECT_SKIP_UNARMED: usize = 1;
+const INJECT_SKIP_IDLE: usize = 2;
+const INJECT_SKIP_WINDOW: usize = 3;
+const INJECT_SKIP_NONE: usize = 4;
+const INJECT_SKIP_PIT: usize = 5;
+const INJECT_SKIP_PREP: usize = 6;
+/// Linux-phase exits by kind (RayNu-F exits are counted separately in
+/// `RAYNU_F_EXITS`). 0 preempt tick · 1 preempt paced · 2 I/O · 3 EPT ·
+/// 4 external interrupt · 5 interrupt window · 6 HLT · 7 other.
+/// M8.9 post-TX trace.
+static LINUX_EXIT_KIND: [AtomicU32; 8] = [ATOMIC_U32_ZERO; 8];
+/// M8.9 post-TX trace: stage (see [`guest_uefi_net_trace_due`]), TSC of
+/// the first guest frame, and the counter baseline captured at that time
+/// so each line prints deltas since the TX.
+static NET_TRACE_STAGE: AtomicU32 = AtomicU32::new(0);
+static NET_TRACE_TX_TSC: AtomicU64 = AtomicU64::new(0);
+/// `TX_DONE_N` at the last guest launch; the net counters are not reset
+/// per Start, so a frame is "first" when the count moves past this.
+static NET_TRACE_TX_SEEN: AtomicU32 = AtomicU32::new(0);
+static NET_TRACE_BASE: [AtomicU32; NET_TRACE_N] = [ATOMIC_U32_ZERO; NET_TRACE_N];
+const NET_TRACE_N: usize = 21;
 static SPIN_JMP_SKIPS: AtomicU32 = AtomicU32::new(0);
 static LAST_PREEMPT_RIP: AtomicU64 = AtomicU64::new(u64::MAX);
 static PREEMPT_SAME_RIP: AtomicU32 = AtomicU32::new(0);
@@ -5130,6 +5212,12 @@ pub fn reset_guest_uefi_launch() {
     LAST_HPET_TSC.store(0, Ordering::Release);
     PREEMPT_RELOAD.store(0, Ordering::Release);
     PREEMPT_NOMINAL_DUE_TSC.store(0, Ordering::Release);
+    NET_TRACE_STAGE.store(0, Ordering::Release);
+    NET_TRACE_TX_TSC.store(0, Ordering::Release);
+    NET_TRACE_TX_SEEN.store(
+        crate::devices::guest_virtio_net::net_counts().0,
+        Ordering::Release,
+    );
     PREEMPT_UART_PACED.store(false, Ordering::Release);
     UART_PACE_EXIT.store(false, Ordering::Release);
     UART_PACE_EXITS.store(0, Ordering::Release);
@@ -6307,9 +6395,12 @@ pub fn guest_uefi_hpet_uart_tsc_step(tsc_delta: u64) -> u64 {
 
 /// Re-arm the VMX preemption timer for the next resume.
 ///
-/// Nominal: [`PREEMPT_RELOAD`] ticks (live HPET / PIT cadence; restarts at
-/// every un-paced resume as the hardware countdown always did). While
-/// [`guest_uefi_uart_pace_wanted`] the value is clamped to
+/// Nominal: [`PREEMPT_RELOAD`] ticks (live HPET / PIT cadence) measured
+/// against a wall-clock deadline ([`guest_uefi_preempt_nominal_due`]) that
+/// survives un-paced resumes. The countdown used to restart at every
+/// resume, so a guest exiting more often than one reload never saw a
+/// preemption exit and `raise_pit` never ran (M8.9 PIT wall deadline).
+/// While [`guest_uefi_uart_pace_wanted`] the value is clamped to
 /// [`guest_uefi_uart_pace_ticks`] so the shared guest TX ring drains toward
 /// iDRAC SOL at the port's pace with no help from guest exits; the nominal
 /// tick keeps its deadline through the clamps ([`guest_uefi_preempt_arm`]).
@@ -6330,22 +6421,25 @@ fn arm_preempt_on_resume() {
         crate::devices::ide_cdrom::product_iso_window_armed(),
         serial::guest_tx_len(),
     );
-    if !PREEMPT_UART_PACED.load(Ordering::Acquire)
-        || PREEMPT_NOMINAL_DUE_TSC.load(Ordering::Acquire) == 0
-    {
-        PREEMPT_NOMINAL_DUE_TSC.store(
-            now.wrapping_add(u64::from(reload) << shift.min(31)),
-            Ordering::Release,
-        );
-    }
-    let (value, paced) = guest_uefi_preempt_arm(
-        reload,
-        pace,
-        guest_uefi_uart_pace_ticks(crate::boot::raynu_f_flag::tsc_hz(), shift),
-        now,
+    let due = guest_uefi_preempt_nominal_due(
         PREEMPT_NOMINAL_DUE_TSC.load(Ordering::Acquire),
+        now,
+        reload,
         shift,
     );
+    PREEMPT_NOMINAL_DUE_TSC.store(due, Ordering::Release);
+    let (value, paced) = if pace {
+        guest_uefi_preempt_arm(
+            reload,
+            true,
+            guest_uefi_uart_pace_ticks(crate::boot::raynu_f_flag::tsc_hz(), shift),
+            now,
+            due,
+            shift,
+        )
+    } else {
+        (guest_uefi_preempt_unpaced_value(reload, now, due, shift), false)
+    };
     PREEMPT_UART_PACED.store(paced, Ordering::Release);
     // SAFETY: VMX-root with the guest-UEFI VMCS current (called from the
     // resume path only). KANI-TARGET: guest-UEFI preemption timer arm
@@ -6443,6 +6537,160 @@ fn tick_hpet_on_exit(basic: u32, gpa: u64, qual: u64) {
     }
 }
 
+/// Every counter the M8.9 post-TX trace prints, in print order.
+/// 0 exits · 1..=8 [`LINUX_EXIT_KIND`] · 9 PIT raises · 10 injects ·
+/// 11..=17 [`INJECT_SKIP`] · 18 INTA IRQ 0 · 19 INTA IRQ 4 · 20 INTA IRQ 11.
+#[cfg(target_os = "uefi")]
+fn net_trace_counters() -> [u32; NET_TRACE_N] {
+    let pic = crate::devices::guest_irq::pic_snap();
+    let mut v = [0u32; NET_TRACE_N];
+    v[0] = EXIT_COUNT.load(Ordering::Acquire);
+    for (i, k) in LINUX_EXIT_KIND.iter().enumerate() {
+        v[1 + i] = k.load(Ordering::Acquire);
+    }
+    v[9] = pic.pit_raises;
+    v[10] = INJECT_N.load(Ordering::Acquire);
+    for (i, k) in INJECT_SKIP.iter().enumerate() {
+        v[11 + i] = k.load(Ordering::Acquire);
+    }
+    v[18] = pic.master.take_irq0;
+    v[19] = pic.master.take_irq4;
+    v[20] = pic.take_irq11;
+    v
+}
+
+/// One `boot: M8.9 net post-tx` COM2 line: counter deltas since the first
+/// guest frame, both 8259s, virtio-net ISR, LAPIC IRR, guest IF and
+/// interruptibility, and the exit this line was printed from.
+///
+/// Iron `ccf68f7c`: `ip link set enp0s5 up` returned, the first frame left
+/// `:39` (`tx=1 sent=1`), and from then on neither IRQ 0 nor IRQ 4 was
+/// seen in the guest while the vCPU sat in `poll_idle` (stop `0x34` at
+/// `0x11c5e8`) and the SPA kept ticking. Nothing on COM2 told which link
+/// of raise → 8259 → inject went dark. This line does. Not `ISO-INSTALL-OK`.
+#[cfg(target_os = "uefi")]
+unsafe fn net_trace_dump(tag: &str, reason: u32, rip: u64) {
+    const NAMES: [&str; NET_TRACE_N] = [
+        " exits=", " pre=", " pace=", " io=", " ept=", " ext=", " win=", " hlt=", " oth=",
+        " pit=", " inj=", " skip_exc=", " skip_unarmed=", " skip_idle=", " skip_if0=",
+        " skip_none=", " skip_pit=", " skip_prep=", " take0=", " take4=", " take11=",
+    ];
+    let now = net_trace_counters();
+    let hz = crate::boot::raynu_f_flag::tsc_hz();
+    let hz = if hz == 0 { UART_PACE_TSC_HZ_FALLBACK } else { hz };
+    serial::write_str_nowait("boot: M8.9 net post-tx ");
+    serial::write_str_nowait(tag);
+    serial::write_str_nowait(" ms=");
+    write_dec_nowait(
+        cpu::rdtsc().wrapping_sub(NET_TRACE_TX_TSC.load(Ordering::Acquire)) / (hz / 1000).max(1),
+    );
+    for (i, name) in NAMES.iter().enumerate() {
+        serial::write_str_nowait(name);
+        write_dec_nowait(u64::from(
+            now[i].wrapping_sub(NET_TRACE_BASE[i].load(Ordering::Acquire)),
+        ));
+    }
+    let pic = crate::devices::guest_irq::pic_snap();
+    serial::write_str_nowait(" pic_m=");
+    write_hex_nowait(u64::from(pic.master.irr));
+    serial::write_byte_nowait(b'/');
+    write_hex_nowait(u64::from(pic.master.imr));
+    serial::write_byte_nowait(b'/');
+    write_hex_nowait(u64::from(pic.master.isr));
+    serial::write_str_nowait(" pic_s=");
+    write_hex_nowait(u64::from(pic.slave_irr));
+    serial::write_byte_nowait(b'/');
+    write_hex_nowait(u64::from(pic.slave_imr));
+    serial::write_byte_nowait(b'/');
+    write_hex_nowait(u64::from(pic.slave_isr));
+    serial::write_str_nowait(" rdy=");
+    write_dec_nowait(u64::from(pic.master.ready && pic.slave_ready));
+    let (net_isr, net_arm) = crate::devices::guest_virtio_net::irq_state();
+    serial::write_str_nowait(" netisr=");
+    write_dec_nowait(u64::from(net_isr));
+    serial::write_str_nowait(" netarm=");
+    write_dec_nowait(u64::from(net_arm));
+    serial::write_str_nowait(" lirr=");
+    write_dec_nowait(u64::from(crate::devices::lapic_virt::has_pending_irr()));
+    serial::write_str_nowait(" ltmr=");
+    write_dec_nowait(u64::from(crate::devices::lapic_virt::timer_vector_pending()));
+    let rflags = ops::vmread(GUEST_RFLAGS).unwrap_or(0);
+    serial::write_str_nowait(" if=");
+    write_dec_nowait(u64::from((rflags & (1 << 9)) != 0));
+    serial::write_str_nowait(" ist=");
+    write_hex_nowait(ops::vmread(GUEST_INTERRUPTIBILITY_STATE).unwrap_or(0));
+    serial::write_str_nowait(" winx=");
+    let ctl = ops::vmread(PRIMARY_PROC_BASED_VM_EXEC_CONTROL).unwrap_or(0) as u32;
+    write_dec_nowait(u64::from((ctl & CPU_BASED_INTERRUPT_WINDOW_EXITING) != 0));
+    serial::write_str_nowait(" armed=");
+    write_dec_nowait(u64::from(crate::devices::ide_cdrom::product_iso_window_armed()));
+    serial::write_str_nowait(" paced=");
+    write_dec_nowait(u64::from(PREEMPT_UART_PACED.load(Ordering::Acquire)));
+    serial::write_str_nowait(" txring=");
+    write_dec_nowait(serial::guest_tx_len() as u64);
+    serial::write_str_nowait(" reason=0x");
+    write_hex_u32_nowait(reason);
+    serial::write_str_nowait(" rip=0x");
+    write_hex_nowait(rip);
+    serial::write_line_nowait(" (not ISO-INSTALL-OK)");
+}
+
+/// Linux-phase exit hook for the M8.9 post-TX trace: capture the baseline
+/// at the first guest frame, then print at +2 s and +10 s.
+#[cfg(target_os = "uefi")]
+unsafe fn net_trace_tick(reason: u32, rip: u64) {
+    let stage = NET_TRACE_STAGE.load(Ordering::Acquire) as u8;
+    let (tx_done, _, _, _) = crate::devices::guest_virtio_net::net_counts();
+    if guest_uefi_net_trace_begins(stage, tx_done, NET_TRACE_TX_SEEN.load(Ordering::Acquire)) {
+        NET_TRACE_TX_TSC.store(cpu::rdtsc(), Ordering::Release);
+        let base = net_trace_counters();
+        for (slot, v) in NET_TRACE_BASE.iter().zip(base.iter()) {
+            slot.store(*v, Ordering::Release);
+        }
+        NET_TRACE_STAGE.store(1, Ordering::Release);
+        net_trace_dump("t0", reason, rip);
+        return;
+    }
+    if let Some(next) = guest_uefi_net_trace_due(
+        stage,
+        NET_TRACE_TX_TSC.load(Ordering::Acquire),
+        cpu::rdtsc(),
+        crate::boot::raynu_f_flag::tsc_hz(),
+    ) {
+        NET_TRACE_STAGE.store(u32::from(next), Ordering::Release);
+        net_trace_dump(if next == 2 { "t2s" } else { "t10s" }, reason, rip);
+    }
+}
+
+/// Stop line companion: the same fields once the operator clicks Stop.
+#[cfg(target_os = "uefi")]
+unsafe fn net_trace_on_stop() {
+    if NET_TRACE_STAGE.load(Ordering::Acquire) == 0 {
+        return;
+    }
+    net_trace_dump(
+        "stop",
+        LAST_EXIT_REASON.load(Ordering::Acquire),
+        LAST_GUEST_RIP.load(Ordering::Acquire),
+    );
+}
+
+/// Bucket a Linux-phase exit for the M8.9 post-TX trace.
+#[cfg(target_os = "uefi")]
+fn note_linux_exit_kind(basic: u32, pace_exit: bool) {
+    let k = match basic {
+        EXIT_REASON_PREEMPTION_TIMER if pace_exit => 1,
+        EXIT_REASON_PREEMPTION_TIMER => 0,
+        EXIT_REASON_IO_INSTRUCTION => 2,
+        EXIT_REASON_EPT_VIOLATION => 3,
+        EXIT_REASON_EXTERNAL_INTERRUPT => 4,
+        EXIT_REASON_INTERRUPT_WINDOW => 5,
+        EXIT_REASON_HLT => 6,
+        _ => 7,
+    };
+    LINUX_EXIT_KIND[k].fetch_add(1, Ordering::AcqRel);
+}
+
 /// HOST_RIP continuation for the private guest-UEFI VMCS. Not the E4 SHELL landing.
 #[cfg(target_os = "uefi")]
 pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
@@ -6507,7 +6755,9 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     if pace_exit {
         UART_PACE_EXITS.fetch_add(1, Ordering::AcqRel);
     }
+    note_linux_exit_kind(reason & 0xFFFF, pace_exit);
     tick_hpet_on_exit(reason & 0xFFFF, gpa, qual);
+    net_trace_tick(reason & 0xFFFF, rip);
     // linux earlycon hush HV (do not drain CHUNK on every exit).
     let _ = serial::drain_guest_tx(if pace_exit {
         serial::GUEST_TX_DRAIN_PACE
@@ -8044,6 +8294,12 @@ unsafe fn raynu_f_reset_relaunch(_src: crate::devices::guest_platform::ResetSrc)
     LAST_HPET_TSC.store(0, Ordering::Release);
     PREEMPT_RELOAD.store(0, Ordering::Release);
     PREEMPT_NOMINAL_DUE_TSC.store(0, Ordering::Release);
+    NET_TRACE_STAGE.store(0, Ordering::Release);
+    NET_TRACE_TX_TSC.store(0, Ordering::Release);
+    NET_TRACE_TX_SEEN.store(
+        crate::devices::guest_virtio_net::net_counts().0,
+        Ordering::Release,
+    );
     PREEMPT_UART_PACED.store(false, Ordering::Release);
     UART_PACE_EXIT.store(false, Ordering::Release);
     UART_PACE_EXITS.store(0, Ordering::Release);
@@ -9152,6 +9408,7 @@ unsafe fn raynu_f_stop(why: &str) -> ! {
     serial::write_str(" held=");
     write_dec(u64::from(held));
     serial::write_line(" (not ISO-INSTALL-OK)");
+    net_trace_on_stop();
     leave_to_e4();
 }
 
@@ -14457,9 +14714,11 @@ unsafe fn try_inject_guest_irq() {
         PF_LINUX_CR2.load(Ordering::Acquire),
         LINUX_EXC_INJECT.swap(false, Ordering::AcqRel),
     ) {
+        INJECT_SKIP[INJECT_SKIP_EXC].fetch_add(1, Ordering::AcqRel);
         return;
     }
     if !crate::devices::ide_cdrom::product_iso_window_armed() {
+        INJECT_SKIP[INJECT_SKIP_UNARMED].fetch_add(1, Ordering::AcqRel);
         return;
     }
     // Paced. Unpaced poll_host_rx() on this resume is per-exit COM2 inb
@@ -14612,6 +14871,7 @@ unsafe fn try_inject_guest_irq() {
         if pic_ready {
             use_pic = true;
         } else {
+            INJECT_SKIP[INJECT_SKIP_IDLE].fetch_add(1, Ordering::AcqRel);
             let _ = set_guest_uefi_interrupt_window(false);
             return;
         }
@@ -14629,6 +14889,7 @@ unsafe fn try_inject_guest_irq() {
     }
     let int_state = ops::vmread(GUEST_INTERRUPTIBILITY_STATE).unwrap_or(0);
     if (rflags & (1 << 9)) == 0 || (int_state & 0x3) != 0 {
+        INJECT_SKIP[INJECT_SKIP_WINDOW].fetch_add(1, Ordering::AcqRel);
         let _ = set_guest_uefi_interrupt_window(true);
         return;
     }
@@ -14646,6 +14907,7 @@ unsafe fn try_inject_guest_irq() {
         match crate::devices::lapic_virt::take_timer_vector() {
             Some(v) => Some(v),
             None => {
+                INJECT_SKIP[INJECT_SKIP_NONE].fetch_add(1, Ordering::AcqRel);
                 let _ = set_guest_uefi_interrupt_window(false);
                 return;
             }
@@ -14670,6 +14932,7 @@ unsafe fn try_inject_guest_irq() {
     } else {
         crate::devices::lapic_virt::take_deliverable_vector()
     }) else {
+        INJECT_SKIP[INJECT_SKIP_NONE].fetch_add(1, Ordering::AcqRel);
         let _ = set_guest_uefi_interrupt_window(false);
         return;
     };
@@ -14684,6 +14947,7 @@ unsafe fn try_inject_guest_irq() {
         // do not F11 489d938. do not F11 e70a295.
         // firmware PIT one-shot after first wake. do not F11 24c5fa6.
         // Not ISO-INSTALL-OK.
+        INJECT_SKIP[INJECT_SKIP_PIT].fetch_add(1, Ordering::AcqRel);
         let _ = set_guest_uefi_interrupt_window(false);
         return;
     }
@@ -14745,6 +15009,7 @@ unsafe fn try_inject_guest_irq() {
             );
         }
     } else {
+        INJECT_SKIP[INJECT_SKIP_PREP].fetch_add(1, Ordering::AcqRel);
         let _ = set_guest_uefi_interrupt_window(true);
     }
 }

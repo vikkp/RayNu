@@ -105,6 +105,16 @@ pub fn net_counts() -> (u32, u32, u32, u32) {
     )
 }
 
+/// virtio-net ISR byte the guest has not read yet, and whether a TX/RX
+/// completion is still waiting for its raise on the next exit.
+/// M8.9 post-TX trace.
+pub fn irq_state() -> (u8, bool) {
+    (
+        with_net(|n| n.isr),
+        TX_IRQ_ARM.load(Ordering::Acquire) == 1,
+    )
+}
+
 fn with_net<R>(f: impl FnOnce(&mut Net) -> R) -> R {
     // SAFETY: BSP guest-exit path and single-threaded host tests.
     // KANI-TARGET: virtio-net PCI config bytes (outside Proven Core).
