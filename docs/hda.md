@@ -7,7 +7,7 @@ updated_by: cursor
 mount_everest_target: "CLOSED on iron 2026-09-11: Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest). Next: M8 operator hardening (ADR-018)."
 months_to_everest: 0.0
 months_to_everest_prev: 0.0
-velocity_commits_30d: 613
+velocity_commits_30d: 614
 velocity_gates_30d: 65
 overall_pct: 99
 confidence: high
@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-9-timer-take |
-| Summary | **The LVT timer vector is the inject, ahead of a higher IRR bit.** Iron `4ed6522c` still left `timeout` with no `exit:`. A stalled one-shot is re-latched. Stop prints `sent=` and `held=`. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | m8-9-tx-hang-trace |
+| Summary | **The post-TX hang gets a trace, and the PIT tick gets a wall deadline.** Iron `ccf68f7c`: `exit:124` and IRQ 0 climbing with `enp0s5` down; `ip link set enp0s5 up` returned, then `tx=1 sent=1 rx=0`, no `exit:`, no echo, SPA ticking, Stop in `poll_idle` (`0x34` at `0x11c5e8`). This kernel is on the 8259 PIT (`virtual wire mode setup with no configuration`), so the three LVT-timer EFIs were on a dead branch. COM2 now prints `boot: M8.9 net post-tx` at the first frame, +2 s, +10 s and Stop: exit kinds, PIT raises, injects, every inject early-return, INTA 0/4/11, both 8259s, virtio-net ISR, LAPIC IRR, IF, interruptibility. The nominal preemption tick keeps its deadline across un-paced resumes. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
-| Gates touched | LVT take before self-IPI and virtio. Stalled one-shot relatch. M8.9.6 stays open. No doorbell. No format of UBUNTU0. The Ubuntu disk stays. |
+| Gates touched | `pic_snap` (both 8259s, IRQ 11 INTA, `raise_pit` count), `INJECT_SKIP` reasons, Linux exit buckets, `guest_uefi_preempt_nominal_due` / `guest_uefi_preempt_unpaced_value`. M8.9.6 stays open. No doorbell. No format of UBUNTU0. The Ubuntu disk stays. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 70 held, perc 86 held, unmodified 45 held, overall LOI 78 held, months A 0.25 held, months B 1.25 held. |
 
 
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-18 | m8-9-tx-hang-trace | 0.0 | 99 | **Post-TX hang trace + PIT wall deadline.** `ccf68f7c` hung at the first `enp0s5` frame (`tx=1 sent=1`, `poll_idle`, no COM2 between frame and Stop). This kernel is on the 8259 PIT, not the LVT timer. `net post-tx` lines at t0/2 s/10 s/Stop; nominal tick survives un-paced resumes. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-18 | m8-9-timer-take | 0.0 | 99 | **LVT timer vector is the inject.** `4ed6522c` still left `timeout` with no `exit:`. A stalled one-shot is re-latched. Stop prints `sent=` and `held=`. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-17 | m8-9-timer-before-pic | 0.0 | 99 | **LAPIC timer injects ahead of virtio IRQ 11.** `9cdf496c` `sleep 1` returned, then `net tx=1 rx=0` and no `exit:`. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-16 | m8-9-xapic-trap | 0.0 | 99 | **xAPIC and IOAPIC trapped for the installed disk.** `9a7cc63b` still had no `exit:`. The APIC page was RAM. Scores held. months 0.0 held; overall 99 held |
@@ -1116,7 +1117,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     The SKU card is written for the person who would sign today. `4933dc61` is the EFI under test (virtio-net INTA). No guest LAN until a frame leaves `:39`. M8.9.6 stays open. Rollback is v0.1.0-m8-8-ubuntu. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/m8_plan.md.
+Next move:     Flash the m8-9-tx-hang-trace EFI, save the vNIC, Start `10240 MiB@18432`, log in, `sudo ip link set enp0s5 up`, wait 15 s, Stop, paste every `boot: M8.9 net post-tx` line. `ccf68f7c` hung at the first guest frame with the kernel on the 8259 PIT (no LVT timer). No guest LAN until a frame leaves `:39` and a reply comes back. M8.9.6 stays open. Rollback is v0.1.0-m8-8-ubuntu. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/m8_plan.md.
 Rollback:      M8.8 close: v0.1.0-m8-8-ubuntu → CI 38454398693 / COM2 sha=c3a70e623aec / EFI SHA256 08ef31ba87136577102ac378d8e0a512327994e8794c41c64444f5be5f8812c4
 Older SPA:     v0.1.0-m8-perc-spa → CI 36362775808 / COM2 sha=8ad2ac89125e / EFI SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849
 Standing SPA:  v0.1.0-m8-a4s → CI 36137732145 / COM2 sha=1f33eeda72f9 / EFI SHA256 5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693
