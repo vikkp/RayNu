@@ -1,0 +1,24 @@
+name: branching
+
+# Branch off main. Merge when the gate closes. Never chain.
+# Runs on every pull request regardless of base so chained PRs are caught;
+# ci.yml only triggers for PRs that already target main.
+on:
+  pull_request:
+    types: [opened, reopened, edited, synchronize]
+
+jobs:
+  base-is-main:
+    name: PR base is main (never chain)
+    runs-on: ubuntu-latest
+    steps:
+      - name: base must be main
+        env:
+          BASE: ${{ github.base_ref }}
+          HEAD: ${{ github.head_ref }}
+        run: |
+          if [ "$BASE" != "main" ]; then
+            echo "::error::PR '$HEAD' targets '$BASE'. Branch off main. Merge when the gate closes. Never chain. Retarget this PR to main (merge its base first if it needs it)."
+            exit 1
+          fi
+          echo "base is main: ok"

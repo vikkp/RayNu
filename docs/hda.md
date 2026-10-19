@@ -7,7 +7,7 @@ updated_by: cursor
 mount_everest_target: "CLOSED on iron 2026-09-11: Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest). Next: M8 operator hardening (ADR-018)."
 months_to_everest: 0.0
 months_to_everest_prev: 0.0
-velocity_commits_30d: 620
+velocity_commits_30d: 622
 velocity_gates_30d: 65
 overall_pct: 99
 confidence: high
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-19 | three-pages | 0.0 | 99 | **Three pages, three jobs.** HDA = how we got here (closed, 99%, frozen); SKU = what you get and what is being built; LOI = are we ready to talk, now a derived view of `site/sku.json` via ADR-021's new **Letters** table (A = S1; B = S1 + C4, C11, D12, D13, F6). Retired `docs/loihda.md`, `site/loi.json`, `sync-loihda-site.sh`, `loihda-update.mdc` (its 78% / 92% / 70% disagreed with the catalog). Main fast-forwarded `ac3b92cd`→`250dc961` (238 commits, 0 behind); 165 chained PRs closed. Branching mantra in `CLAUDE.md` + CI `branching` job. Scores held |
 | 2026-10-19 | what-next-trigger | 0.0 | 99 | `CLAUDE.md` gains a **What next** section: on "what next" / "next gate" run `./tools/sync-sku-site.sh --next` and answer from it; trigger phrases registered in `build-order.mdc` and `hda-update.mdc`. Docs only; scores held |
 | 2026-10-19 | sku-build-order | 0.0 | 99 | **ADR-021 waves + `--next`.** Build order as waves 0–17 + V with one iron thread each; sync tool validates coverage and computes the current wave (1, Close M8.9, iron D3); `.cursor/rules/build-order.mdc` tells agents what to pick up when a gate passes; SKU page shows Now building. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-19 | sku-final-adr | 0.0 | 99 | **ADR-021 professional-grade bar + SKU page.** iDRAC: port 4 Down, AN disabled; port 3 Up. Catalog A–K 129 rows (26 lived / 4 in flight / 99 planned; S1 67) is the single source for `site/sku.json`; SKU page rebuilt around Shipment 1 vs final SKU. New S1 rows append as M8.10+. Scores held. months 0.0 held; overall 99 held |

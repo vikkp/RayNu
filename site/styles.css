@@ -1961,3 +1961,74 @@ figure[id] {
     margin-left: 0;
   }
 }
+
+/* —— LOI page: derived from sku.json —— */
+
+.loi-letter {
+  position: relative;
+}
+
+.loi-letter--ready {
+  border-color: var(--teal);
+}
+
+.loi-letter__meaning {
+  color: var(--ink-soft);
+}
+
+.loi-letter__rows {
+  font-size: 0.95em;
+  line-height: 1.7;
+}
+
+.loi-letter__row {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: var(--teal);
+  text-decoration: none;
+  border-bottom: 1px dotted rgba(16, 24, 32, 0.3);
+}
+
+.loi-letter__extra-name {
+  color: var(--muted);
+  font-size: 0.9em;
+}
+
+.loi-letter__stack {
+  height: 0.5rem;
+  margin: 0.8rem 0 0.4rem;
+  background: rgba(16, 24, 32, 0.08);
+}
+
+.loi-letter__counts {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.loi-letter__open {
+  margin: 0.7rem 0 0;
+  padding-top: 0.6rem;
+  border-top: 1px solid rgba(16, 24, 32, 0.1);
+  font-weight: 600;
+}
+
+.loi-letter--ready .loi-letter__open {
+  color: var(--teal);
+}
+
+.loi-now {
+  margin-top: 1.5rem;
+}
+
+.loi-now__pick {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.loi-now__pick a {
+  font-family: var(--font-mono);
+  color: var(--teal);
+  text-decoration: none;
+}

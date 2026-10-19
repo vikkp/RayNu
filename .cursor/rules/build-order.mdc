@@ -48,6 +48,17 @@ When code lands on a branch that is under iron test, set that row to
 `in flight` and name the branch or PR in Note. When a row is demoted, record
 it in the HDA changelog.
 
+## Branching mantra
+
+**Branch off main. Merge when the gate closes. Never chain.**
+
+Start every task branch at `origin/main`, even if this run was opened on a
+feature branch (fetch main, branch from it, say so in the PR). Merge to main
+when the row's gate closes (host gate green in CI; iron row when the marker
+printed and the catalog row is `lived`). Never base a branch on another open
+feature branch; CI job `branching` fails a PR whose base is not `main`.
+Open the PR against `main`.
+
 ## Rules
 
 - **One iron thread at a time.** Each wave has exactly one row that needs

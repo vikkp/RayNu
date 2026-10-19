@@ -380,6 +380,16 @@ section of [ADR-021](docs/adr/ADR-021.md); the procedure when a gate passes is
 run `--next` again). Do not pick a row from a later wave for iron work, and do
 not derive a percent-to-GA from the catalog counts (HDA stays 99%).
 
+### Branching mantra (how main stopped lagging by 238 commits)
+
+> **Branch off main. Merge when the gate closes. Never chain.**
+
+- **Branch off main.** Every task branch starts at `origin/main` (`git fetch origin main && git checkout -b cursor/<row>-<id> origin/main`). If this agent run was started on a feature branch, fetch main and branch from it anyway; say so in the PR.
+- **Merge when the gate closes.** A host-gated row merges to main when its host gate is green in CI. An iron row merges when its marker printed on the R640 and the ADR-021 row is `lived` with the SHA. Main is the integration branch (CI green); the known-good is always the tag, never main.
+- **Never chain.** Do not base a new branch on another open feature branch. If you need something unmerged, that something merges first. CI job `branching` fails any PR whose base is not `main`.
+- One task branch per catalog row (`./tools/sync-sku-site.sh --next` names it). The tool does not care which branch you are on.
+- On 2026-10-19 main was fast-forwarded 238 commits (`ac3b92cd` → `250dc961`) and 165 chained PRs were closed. Do not let it happen again.
+
 ### Risk Hotspots
 
 - **M2 is the #1 risk.** EPT + interrupt virtualization is where hypervisors stall. Plan 14–18 weeks.

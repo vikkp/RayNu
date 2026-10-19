@@ -81,5 +81,5 @@ Waves, not letters: [ADR-021 · Build order](adr/ADR-021.md#build-order-the-rule
 
 - Edit rows in `docs/adr/ADR-021.md`, then run `./tools/sync-sku-site.sh`. Stage `site/sku.json` with it. Every row must be in exactly one wave; the tool fails otherwise.
 - A row becomes **lived** only with R640 evidence (or CI for a host artifact). Latitude and QEMU do not count. The sync tool rejects a lived row with no SHA, marker, tool or document in its note.
-- The LOI tracker ([`docs/loihda.md`](loihda.md), [`site/loi.html`](../site/loi.html)) measures distance to the letter; this card lists what the letter and the product contain.
+- The LOI page ([`site/loi.html`](../site/loi.html)) is a derived view of `site/sku.json`: ADR-021's **Letters** table names the rows Letter A (dedicated box = Shipment 1) and Letter B (RAID fleet = Shipment 1 + C4, C11, D12, D13, F6) need. A letter is ready when every row is lived. No percent, no month; the earlier `docs/loihda.md` scoreboard is retired.
 - Rollbacks: M8.9 `v0.1.0-m8-8-ubuntu` (`c3a70e62`); M8.0 `v0.1.0-everest-closed` (`f72b4276`).

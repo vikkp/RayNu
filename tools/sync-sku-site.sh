@@ -161,6 +161,36 @@ for rid, it in by_id.items():
     if w == "0" and it["status"] != "lived":
         errors.append(f"{rid}: wave 0 is the lived base; this row is {it['status']}")
 
+# ---- Letters (LOI page derives from these) ----
+LETTER_COLUMNS = ["Letter", "Name", "Rows", "Meaning"]
+lm = re.search(r"^## Letters.*?$(.*?)^## ", text, re.S | re.M)
+letters = []
+if not lm:
+    errors.append("no '## Letters' section")
+else:
+    for raw in lm.group(1).splitlines():
+        cells = split_row(raw)
+        if cells is None or cells == LETTER_COLUMNS:
+            continue
+        if all(re.fullmatch(r":?-+:?", c) for c in cells):
+            continue
+        if len(cells) != len(LETTER_COLUMNS):
+            errors.append(f"letters row has {len(cells)} cells: {raw}")
+            continue
+        lid, name, rows, meaning = (strip_md(c) for c in cells)
+        spec = [r.strip() for r in rows.split(",") if r.strip()]
+        ids = []
+        for r in spec:
+            if r == "S1":
+                ids.extend(it["id"] for it in by_id.values() if it["ships"] == "S1")
+            elif r in by_id:
+                ids.append(r)
+            else:
+                errors.append(f"letter {lid}: row {r} is not in the catalog")
+        letters.append({"id": lid, "name": name, "spec": spec, "rows": ids, "meaning": meaning})
+if not letters:
+    errors.append("letters table is empty")
+
 if not areas:
     errors.append("no '### X. Area' headings under Catalog")
 for a in areas:
@@ -211,6 +241,12 @@ if current is not None:
             for r in nw["rows"] if by_id[r]["status"] != "lived" and r != nw["iron"]
         ]
 
+for L in letters:
+    items = [by_id[r] for r in L["rows"]]
+    L["counts"] = count(items)
+    L["ready"] = all(it["status"] == "lived" for it in items)
+    L["extra"] = [r for r in L["spec"] if r != "S1"]
+
 data = {
     "generated_from": "docs/adr/ADR-021.md",
     "adr": "ADR-021",
@@ -229,6 +265,7 @@ data = {
         for a in areas
     ],
     "waves": waves,
+    "letters": letters,
     "current_wave": None if current is None else current["id"],
     "next_up": next_up,
     "filler": filler,
@@ -252,6 +289,7 @@ if want_next:
             print(f"  {f['id']:<4} {f['capability']}")
     closed = [w["id"] for w in waves if w["closed"] and w["id"] != "V"]
     print(f"Closed waves: {', '.join(closed) if closed else 'none'}. One iron thread at a time. Edit docs/adr/ADR-021.md, then ./tools/sync-sku-site.sh.")
+    print("Branch off main. Merge when the gate closes. Never chain.")
     sys.exit(0)
 
 if check:
