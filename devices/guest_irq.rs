@@ -181,8 +181,15 @@ static TAKE_IRQ4: AtomicU32 = AtomicU32::new(0);
 /// since reset. M8.9 post-TX trace.
 static TAKE_IRQ11: AtomicU32 = AtomicU32::new(0);
 static PIT_RAISES: AtomicU32 = AtomicU32::new(0);
+/// OCW2 EOI writes per 8259 and the last OCW2 byte each one saw since
+/// reset. Iron `0dcc1cea` left master ISR=1 / slave ISR=8 ten seconds after
+/// the first frame; these say whether the guest ever wrote the EOI.
+static EOI_MASTER: AtomicU32 = AtomicU32::new(0);
+static EOI_SLAVE: AtomicU32 = AtomicU32::new(0);
+static LAST_OCW2_MASTER: AtomicU8 = AtomicU8::new(0);
+static LAST_OCW2_SLAVE: AtomicU8 = AtomicU8::new(0);
 
-/// Both 8259s plus the INTA / PIT-raise counters. M8.9 post-TX trace.
+/// Both 8259s plus the INTA / PIT-raise / EOI counters. M8.9 post-TX trace.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct PicSnap {
     pub master: PicMasterSnap,
@@ -192,6 +199,10 @@ pub struct PicSnap {
     pub slave_ready: bool,
     pub take_irq11: u32,
     pub pit_raises: u32,
+    pub eoi_master: u32,
+    pub eoi_slave: u32,
+    pub last_ocw2_master: u8,
+    pub last_ocw2_slave: u8,
 }
 
 /// Snapshot both 8259s as the inject path sees them. Not `ISO-INSTALL-OK`.
@@ -211,6 +222,10 @@ pub fn pic_snap() -> PicSnap {
         slave_ready: c.slave.ready,
         take_irq11: TAKE_IRQ11.load(Ordering::Acquire),
         pit_raises: PIT_RAISES.load(Ordering::Acquire),
+        eoi_master: EOI_MASTER.load(Ordering::Acquire),
+        eoi_slave: EOI_SLAVE.load(Ordering::Acquire),
+        last_ocw2_master: LAST_OCW2_MASTER.load(Ordering::Acquire),
+        last_ocw2_slave: LAST_OCW2_SLAVE.load(Ordering::Acquire),
     })
 }
 
@@ -249,6 +264,10 @@ pub fn reset() {
     TAKE_IRQ4.store(0, Ordering::Release);
     TAKE_IRQ11.store(0, Ordering::Release);
     PIT_RAISES.store(0, Ordering::Release);
+    EOI_MASTER.store(0, Ordering::Release);
+    EOI_SLAVE.store(0, Ordering::Release);
+    LAST_OCW2_MASTER.store(0, Ordering::Release);
+    LAST_OCW2_SLAVE.store(0, Ordering::Release);
     with_irq(|c| *c = IrqChip::empty());
 }
 
@@ -990,9 +1009,54 @@ fn pic_read(c: &mut IrqChip, port: u16) -> u8 {
 
 fn pic_write(c: &mut IrqChip, port: u16, val: u8) {
     match port {
-        0x20 | 0xA0 => pic_cmd(pic_of(c, port), val),
+        0x20 | 0xA0 => {
+            if pic_ocw2_is_eoi(val) {
+                if port == 0xA0 {
+                    EOI_SLAVE.fetch_add(1, Ordering::AcqRel);
+                    LAST_OCW2_SLAVE.store(val, Ordering::Release);
+                } else {
+                    EOI_MASTER.fetch_add(1, Ordering::AcqRel);
+                    LAST_OCW2_MASTER.store(val, Ordering::Release);
+                }
+            }
+            pic_cmd(pic_of(c, port), val);
+        }
         0x21 | 0xA1 => pic_data(pic_of(c, port), val),
         _ => {}
+    }
+}
+
+/// OCW2 (D4=0, D3=0) with the EOI bit (D5) set: 0x20 non-specific,
+/// 0x60|n specific, 0xA0 / 0xE0 their rotating forms.
+pub fn pic_ocw2_is_eoi(val: u8) -> bool {
+    val & 0x18 == 0 && val & 0x20 != 0
+}
+
+/// Which in-service bit an OCW2 EOI clears (8259A datasheet, OCW2).
+///
+/// - Specific EOI (`0x60|n`, `0xE0|n`): bit `n` of ISR — the level the
+///   command names, whether or not it is the highest in service.
+/// - Non-specific EOI (`0x20`, `0xA0`): the highest-priority bit in
+///   service, which in fully nested mode is the lowest set bit number.
+///
+/// Iron `0dcc1cea`: IRQ 0 was taken while cascade IRQ 2 was still in
+/// service (ISR=0x05). Linux's `mask_and_ack_8259A(0)` wrote `0x60`; the
+/// old model cleared the highest *numbered* bit, so bit 2 went and bit 0
+/// stayed in service forever — no PIT after that (`pit=108 take0=1`).
+/// Returns 0 when nothing is in service or `val` is not an EOI.
+pub fn pic_ocw2_eoi_bit(isr: u8, val: u8) -> u8 {
+    if !pic_ocw2_is_eoi(val) || isr == 0 {
+        return 0;
+    }
+    if val & 0x40 != 0 {
+        let bit = 1u8 << (val & 7);
+        if isr & bit != 0 {
+            bit
+        } else {
+            0
+        }
+    } else {
+        1u8 << isr.trailing_zeros()
     }
 }
 
@@ -1012,13 +1076,9 @@ fn pic_cmd(p: &mut Pic, val: u8) {
         p.read_isr = val & 0x03 == 0x03;
         return;
     }
-    // OCW2 EOI
-    if val & 0x20 != 0 {
-        if p.isr != 0 {
-            let bit = 1u8 << (7 - p.isr.leading_zeros() as u8);
-            p.isr &= !bit;
-        }
-    }
+    // OCW2 EOI: specific clears the named level, non-specific the highest
+    // priority in service. See `pic_ocw2_eoi_bit` (iron 0dcc1cea ISR=0x05).
+    p.isr &= !pic_ocw2_eoi_bit(p.isr, val);
 }
 
 fn pic_data(p: &mut Pic, val: u8) {

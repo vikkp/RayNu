@@ -2,6 +2,7 @@
     has_deliverable, ioapic_read, ioapic_write, is_hpet_split_2m_gpa, is_ioapic_gpa, lower_ata,
     pic_has_deliverable, pic_io, prefer_pit_once, prefer_pit_until_driver_ok,     raise_ata, raise_gsi, note_linux_dev_irq,
     raise_pit, raise_virtio, lower_virtio, reset, take_inject_vector, take_ioapic_ata_vector, take_ioapic_vector, take_pic_vector,
+    pic_ocw2_eoi_bit, pic_ocw2_is_eoi,
     arm_firmware_virtual_wire, arm_firmware_ata_gsi14, firmware_virtual_wire_armed, ioapic_ata_ready, pic_ata_ready,
     firmware_ata_vec, firmware_is_pit_vec,
     ATA_GSI, IOAPIC_GPA,
@@ -1505,6 +1506,78 @@ fn pic_snap_counts_irq11_takes_and_pit_raises_for_the_post_tx_trace() {
     let s4 = pic_snap();
     assert_eq!((s4.take_irq11, s4.pit_raises), (0, 0), "reset clears the trace counters");
     assert_eq!((s4.slave_irr, s4.slave_imr, s4.slave_isr), (0, 0xFF, 0));
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
+fn ocw2_specific_eoi_clears_the_named_level_not_the_highest_bit_number() {
+    // Iron `0dcc1cea` +2 s: `pic_m=4/e8/1 pic_s=8/f6/8 take0=1 take11=1`.
+    // IRQ 11 had been INTA'd (slave ISR 0x08, master cascade ISR 0x04) and
+    // its handler never ran; then PIT IRQ 0 was taken on top (master ISR
+    // 0x05). Linux `mask_and_ack_8259A(0)` wrote specific EOI 0x60. The
+    // old OCW2 model cleared the highest *numbered* in-service bit, so the
+    // cascade bit went and IRQ 0 stayed in service: `pic=108 take0=1`,
+    // no PIT ever again, `timeout 1 sleep 5` never returned.
+    assert!(pic_ocw2_is_eoi(0x20) && pic_ocw2_is_eoi(0x60) && pic_ocw2_is_eoi(0xA0));
+    assert!(pic_ocw2_is_eoi(0xE3), "rotate on specific EOI is still an EOI");
+    assert!(!pic_ocw2_is_eoi(0x0B) && !pic_ocw2_is_eoi(0x0A), "OCW3 ISR/IRR select");
+    assert!(!pic_ocw2_is_eoi(0x11), "ICW1");
+    assert!(!pic_ocw2_is_eoi(0x40) && !pic_ocw2_is_eoi(0xC0), "no-op / set priority");
+    // Specific: the named level, whatever else is in service.
+    assert_eq!(pic_ocw2_eoi_bit(0x05, 0x60), 0x01, "IRQ 0 EOI with cascade in service");
+    assert_eq!(pic_ocw2_eoi_bit(0x05, 0x62), 0x04, "cascade EOI with IRQ 0 in service");
+    assert_eq!(pic_ocw2_eoi_bit(0x08, 0x63), 0x08, "slave IRQ 11");
+    assert_eq!(pic_ocw2_eoi_bit(0x10, 0x64), 0x10, "IRQ 4");
+    assert_eq!(pic_ocw2_eoi_bit(0x10, 0x60), 0, "level not in service: nothing");
+    // Non-specific: highest priority in service = lowest set bit number.
+    assert_eq!(pic_ocw2_eoi_bit(0x05, 0x20), 0x01);
+    assert_eq!(pic_ocw2_eoi_bit(0x14, 0x20), 0x04);
+    assert_eq!(pic_ocw2_eoi_bit(0x14, 0xA0), 0x04, "rotating form");
+    assert_eq!(pic_ocw2_eoi_bit(0, 0x20), 0, "nothing in service");
+    assert_eq!(pic_ocw2_eoi_bit(0x05, 0x0B), 0, "OCW3 is not an EOI");
+
+    // Replay the iron sequence through the ports.
+    use crate::devices::guest_irq::pic_snap;
+    arm_product_iso();
+    let _ = pic_io(0x20, false, 1, 0x11);
+    let _ = pic_io(0x21, false, 1, 0x30);
+    let _ = pic_io(0x21, false, 1, 0x04);
+    let _ = pic_io(0x21, false, 1, 0x01);
+    let _ = pic_io(0xA0, false, 1, 0x11);
+    let _ = pic_io(0xA1, false, 1, 0x38);
+    let _ = pic_io(0xA1, false, 1, 0x02);
+    let _ = pic_io(0xA1, false, 1, 0x01);
+    let _ = pic_io(0x21, false, 1, 0xE8);
+    let _ = pic_io(0xA1, false, 1, 0xF6);
+    raise_virtio();
+    assert_eq!(take_pic_vector(), Some(0x3B), "Linux slave base 0x38 + 3");
+    raise_pit();
+    assert_eq!(take_pic_vector(), Some(0x30), "IRQ 0 nests over the cascade");
+    let s = pic_snap();
+    assert_eq!((s.master.isr, s.slave_isr), (0x05, 0x08), "iron 0dcc1cea before the EOI");
+    assert_eq!((s.eoi_master, s.eoi_slave), (0, 0));
+    // Linux mask_and_ack_8259A(0): IMR write then specific EOI 0x60.
+    let _ = pic_io(0x21, false, 1, 0xE9);
+    let _ = pic_io(0x20, false, 1, 0x60);
+    let _ = pic_io(0x21, false, 1, 0xE8);
+    let s = pic_snap();
+    assert_eq!(s.master.isr, 0x04, "IRQ 0 left service; cascade still waits for 0x62");
+    assert_eq!((s.eoi_master, s.eoi_slave, s.last_ocw2_master), (1, 0, 0x60));
+    raise_pit();
+    assert_eq!(take_pic_vector(), Some(0x30), "the next PIT tick is offered again");
+    let _ = pic_io(0x20, false, 1, 0x60);
+    // The IRQ 11 handler finally runs: 0x63 to the slave, 0x62 to the master.
+    let _ = pic_io(0xA0, false, 1, 0x63);
+    let _ = pic_io(0x20, false, 1, 0x62);
+    let s = pic_snap();
+    assert_eq!((s.master.isr, s.slave_isr), (0, 0));
+    assert_eq!((s.eoi_master, s.eoi_slave), (3, 1));
+    assert_eq!((s.last_ocw2_master, s.last_ocw2_slave), (0x62, 0x63));
+    lower_virtio();
+    reset();
+    let s = pic_snap();
+    assert_eq!((s.eoi_master, s.eoi_slave, s.last_ocw2_master, s.last_ocw2_slave), (0, 0, 0, 0));
     reset_cd();
     guest_platform::reset();
 }

@@ -1547,6 +1547,29 @@ pub fn guest_uefi_net_trace_begins(stage: u8, tx_done: u32, tx_seen: u32) -> boo
     stage == 0 && tx_done > tx_seen
 }
 
+/// Entry info to re-queue when a VM exit interrupted delivery of an event
+/// we injected (SDM 27.2.4 IDT-vectoring information, 26.5.1.2).
+///
+/// INVARIANTS:
+/// - `None` when bit 31 (valid) is clear
+/// - `None` for anything but type 0 (external interrupt): exceptions and
+///   NMIs during delivery are the reflect paths' business
+/// - `Some(valid | vector)` otherwise, with no error code and type 0
+///
+/// Iron `0dcc1cea`: `take11=1 inj=2` but the guest never ran the IRQ 11
+/// handler (virtio-net ISR unread, slave ISR still 0x08 at +10 s). Without
+/// this the vector was INTA'd out of the 8259 and then lost on the first
+/// EPT / #PF exit that landed during its delivery.
+pub fn guest_uefi_idt_vectoring_reinject(idtv: u32) -> Option<u32> {
+    if idtv & (1 << 31) == 0 {
+        return None;
+    }
+    if (idtv >> 8) & 0x7 != 0 {
+        return None;
+    }
+    Some((1 << 31) | (idtv & 0xFF))
+}
+
 /// Linux `clocksource=tsc` still uses the LAPIC timer for `jiffies` /
 /// `msleep`. Tight virtio BAR EPT resets the VMX preemption timer, so
 /// `poll_timer_expiry` on HLT/preempt never runs. Poll on each Linux
@@ -4354,7 +4377,18 @@ static NET_TRACE_TX_TSC: AtomicU64 = AtomicU64::new(0);
 /// per Start, so a frame is "first" when the count moves past this.
 static NET_TRACE_TX_SEEN: AtomicU32 = AtomicU32::new(0);
 static NET_TRACE_BASE: [AtomicU32; NET_TRACE_N] = [ATOMIC_U32_ZERO; NET_TRACE_N];
-const NET_TRACE_N: usize = 21;
+const NET_TRACE_N: usize = 25;
+/// VM exits that interrupted event delivery (`IDT_VECTORING_INFO` valid)
+/// in the Linux phase, how many of those external-interrupt events were
+/// re-queued for the next VM entry, and the re-queued entry info itself
+/// (0 = none). Iron `0dcc1cea`: IRQ 11 was INTA'd (`take11=1 inj=2`) but
+/// the guest never read the virtio-net ISR nor EOI'd the slave, so the
+/// injected vector never ran. An exit during delivery is the one way VMX
+/// drops an injected event unless the VMM re-injects it (SDM 27.2.4 /
+/// 26.5.1.2); the old exit path never read the field.
+static IDTV_SEEN: AtomicU32 = AtomicU32::new(0);
+static REINJECT_N: AtomicU32 = AtomicU32::new(0);
+static REINJECT_INFO: AtomicU32 = AtomicU32::new(0);
 static SPIN_JMP_SKIPS: AtomicU32 = AtomicU32::new(0);
 static LAST_PREEMPT_RIP: AtomicU64 = AtomicU64::new(u64::MAX);
 static PREEMPT_SAME_RIP: AtomicU32 = AtomicU32::new(0);
@@ -5214,6 +5248,7 @@ pub fn reset_guest_uefi_launch() {
     PREEMPT_NOMINAL_DUE_TSC.store(0, Ordering::Release);
     NET_TRACE_STAGE.store(0, Ordering::Release);
     NET_TRACE_TX_TSC.store(0, Ordering::Release);
+    REINJECT_INFO.store(0, Ordering::Release);
     NET_TRACE_TX_SEEN.store(
         crate::devices::guest_virtio_net::net_counts().0,
         Ordering::Release,
@@ -6539,7 +6574,9 @@ fn tick_hpet_on_exit(basic: u32, gpa: u64, qual: u64) {
 
 /// Every counter the M8.9 post-TX trace prints, in print order.
 /// 0 exits · 1..=8 [`LINUX_EXIT_KIND`] · 9 PIT raises · 10 injects ·
-/// 11..=17 [`INJECT_SKIP`] · 18 INTA IRQ 0 · 19 INTA IRQ 4 · 20 INTA IRQ 11.
+/// 11..=17 [`INJECT_SKIP`] · 18 INTA IRQ 0 · 19 INTA IRQ 4 · 20 INTA IRQ 11 ·
+/// 21 master EOIs · 22 slave EOIs · 23 exits during event delivery ·
+/// 24 external interrupts re-injected after such an exit.
 #[cfg(target_os = "uefi")]
 fn net_trace_counters() -> [u32; NET_TRACE_N] {
     let pic = crate::devices::guest_irq::pic_snap();
@@ -6556,6 +6593,10 @@ fn net_trace_counters() -> [u32; NET_TRACE_N] {
     v[18] = pic.master.take_irq0;
     v[19] = pic.master.take_irq4;
     v[20] = pic.take_irq11;
+    v[21] = pic.eoi_master;
+    v[22] = pic.eoi_slave;
+    v[23] = IDTV_SEEN.load(Ordering::Acquire);
+    v[24] = REINJECT_N.load(Ordering::Acquire);
     v
 }
 
@@ -6574,6 +6615,7 @@ unsafe fn net_trace_dump(tag: &str, reason: u32, rip: u64) {
         " exits=", " pre=", " pace=", " io=", " ept=", " ext=", " win=", " hlt=", " oth=",
         " pit=", " inj=", " skip_exc=", " skip_unarmed=", " skip_idle=", " skip_if0=",
         " skip_none=", " skip_pit=", " skip_prep=", " take0=", " take4=", " take11=",
+        " eoi_m=", " eoi_s=", " idtv=", " reinj=",
     ];
     let now = net_trace_counters();
     let hz = crate::boot::raynu_f_flag::tsc_hz();
@@ -6603,6 +6645,10 @@ unsafe fn net_trace_dump(tag: &str, reason: u32, rip: u64) {
     write_hex_nowait(u64::from(pic.slave_imr));
     serial::write_byte_nowait(b'/');
     write_hex_nowait(u64::from(pic.slave_isr));
+    serial::write_str_nowait(" ocw2=");
+    write_hex_nowait(u64::from(pic.last_ocw2_master));
+    serial::write_byte_nowait(b'/');
+    write_hex_nowait(u64::from(pic.last_ocw2_slave));
     serial::write_str_nowait(" rdy=");
     write_dec_nowait(u64::from(pic.master.ready && pic.slave_ready));
     let (net_isr, net_arm) = crate::devices::guest_virtio_net::irq_state();
@@ -6756,6 +6802,15 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
         UART_PACE_EXITS.fetch_add(1, Ordering::AcqRel);
     }
     note_linux_exit_kind(reason & 0xFFFF, pace_exit);
+    // An exit in the middle of delivering an injected external interrupt
+    // drops it unless we queue it again (iron 0dcc1cea lost IRQ 11).
+    let idtv = ops::vmread(IDT_VECTORING_INFO).unwrap_or(0) as u32;
+    if idtv & (1 << 31) != 0 {
+        IDTV_SEEN.fetch_add(1, Ordering::AcqRel);
+        if let Some(info) = guest_uefi_idt_vectoring_reinject(idtv) {
+            REINJECT_INFO.store(info, Ordering::Release);
+        }
+    }
     tick_hpet_on_exit(reason & 0xFFFF, gpa, qual);
     net_trace_tick(reason & 0xFFFF, rip);
     // linux earlycon hush HV (do not drain CHUNK on every exit).
@@ -8296,6 +8351,7 @@ unsafe fn raynu_f_reset_relaunch(_src: crate::devices::guest_platform::ResetSrc)
     PREEMPT_NOMINAL_DUE_TSC.store(0, Ordering::Release);
     NET_TRACE_STAGE.store(0, Ordering::Release);
     NET_TRACE_TX_TSC.store(0, Ordering::Release);
+    REINJECT_INFO.store(0, Ordering::Release);
     NET_TRACE_TX_SEEN.store(
         crate::devices::guest_virtio_net::net_counts().0,
         Ordering::Release,
@@ -14715,6 +14771,18 @@ unsafe fn try_inject_guest_irq() {
         LINUX_EXC_INJECT.swap(false, Ordering::AcqRel),
     ) {
         INJECT_SKIP[INJECT_SKIP_EXC].fetch_add(1, Ordering::AcqRel);
+        return;
+    }
+    // The last VM exit interrupted delivery of an external interrupt we
+    // had already INTA'd out of the 8259. Queue that same vector again
+    // before taking anything new (iron 0dcc1cea; SDM 26.5.1.2).
+    let reinject = REINJECT_INFO.swap(0, Ordering::AcqRel);
+    if reinject != 0 {
+        let _ = set_guest_uefi_interrupt_window(false);
+        let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, u64::from(reinject));
+        let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
+        let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
+        REINJECT_N.fetch_add(1, Ordering::AcqRel);
         return;
     }
     if !crate::devices::ide_cdrom::product_iso_window_armed() {

@@ -146,7 +146,7 @@ use super::{
     guest_uefi_virtio_mmio_kick_line_due, VIRTIO_MMIO_KICK_LINE_MIN_TSC,
     guest_uefi_uart_pace_wanted, guest_uefi_uart_pace_ticks, guest_uefi_preempt_arm,
     guest_uefi_preempt_nominal_due, guest_uefi_preempt_unpaced_value,
-    guest_uefi_net_trace_due, guest_uefi_net_trace_begins,
+    guest_uefi_net_trace_due, guest_uefi_net_trace_begins, guest_uefi_idt_vectoring_reinject,
     UART_PACE_US,
     GUEST_UEFI_INTR_TYPE_NMI,
     guest_uefi_pt_paint_vga_uc, guest_uefi_pt_leaf_4k_for, guest_uefi_gpa_in_vga_fix_uc,
@@ -3742,4 +3742,71 @@ fn net_post_tx_trace_prints_at_tx_then_2s_then_10s_and_on_stop() {
     assert!(stop.split_once("leave_to_e4();").unwrap().0.contains("net_trace_on_stop();"));
     assert!(include_str!("../devices/guest_irq.rs").contains("pub fn pic_snap()"));
     assert!(include_str!("../devices/guest_virtio_net.rs").contains("pub fn irq_state()"));
+}
+
+#[test]
+fn idt_vectoring_reinjects_a_lost_external_interrupt_and_the_trace_shows_eois() {
+    // Iron `0dcc1cea` (first run with the post-TX trace): at +2 s
+    // `take11=1 take0=1 inj=2`, but `netisr=1` never cleared and the slave
+    // 8259 still had ISR=0x08 at +10 s — the IRQ 11 vector was INTA'd and
+    // injected, yet its handler never ran. Master ISR went 0x05 → 0x01 on
+    // the IRQ 0 EOI (the OCW2 bug, see guest_irq_test), so with IRQ 0
+    // "in service" no PIT was offered again (`pit=108 take0=1`) and
+    // `timeout 1 sleep 5` never returned while Enter still echoed (IRQ 4
+    // is not blocked by our model). The one architectural way to lose an
+    // injected event is a VM exit during its delivery: the exit path now
+    // reads IDT_VECTORING_INFO and queues the vector for the next entry.
+    let valid = 1u32 << 31;
+    assert_eq!(guest_uefi_idt_vectoring_reinject(0), None, "nothing in flight");
+    assert_eq!(guest_uefi_idt_vectoring_reinject(0x3B), None, "valid bit clear");
+    assert_eq!(
+        guest_uefi_idt_vectoring_reinject(valid | 0x3B),
+        Some(valid | 0x3B),
+        "external interrupt 0x3B (Linux IRQ 11) is queued again"
+    );
+    assert_eq!(
+        guest_uefi_idt_vectoring_reinject(valid | 0x30),
+        Some(valid | 0x30),
+        "PIT vector too"
+    );
+    // Type, error-code and reserved bits are not carried: external
+    // interrupts have none, and the vector is all the next entry needs.
+    assert_eq!(
+        guest_uefi_idt_vectoring_reinject(valid | (1 << 11) | 0x3B),
+        Some(valid | 0x3B)
+    );
+    for ty in 2u32..=7 {
+        assert_eq!(
+            guest_uefi_idt_vectoring_reinject(valid | (ty << 8) | 0x0E),
+            None,
+            "type {ty} (NMI / exception / software) is left to the reflect paths"
+        );
+    }
+    let src = include_str!("guest_uefi.rs");
+    let exit = src.split_once("pub unsafe extern \"C\" fn guest_uefi_vmexit()").unwrap().1;
+    let exit = exit.split_once("net_trace_tick(reason & 0xFFFF, rip);").unwrap().0;
+    assert!(
+        exit.contains("ops::vmread(IDT_VECTORING_INFO)"),
+        "Linux exit path reads IDT-vectoring info before the trace tick"
+    );
+    assert!(exit.contains("IDTV_SEEN.fetch_add(1"));
+    assert!(exit.contains("REINJECT_INFO.store(info, Ordering::Release)"));
+    // Re-inject happens before any new take, after the exception guard,
+    // and is the only thing injected on that entry.
+    let inject = src.split_once("unsafe fn try_inject_guest_irq()").unwrap().1;
+    let (before_reinject, after_reinject) =
+        inject.split_once("let reinject = REINJECT_INFO.swap(0, Ordering::AcqRel);").unwrap();
+    assert!(before_reinject.contains("INJECT_SKIP[INJECT_SKIP_EXC]"));
+    assert!(!before_reinject.contains("INJECT_SKIP[INJECT_SKIP_UNARMED]"));
+    let block = after_reinject.split_once("INJECT_SKIP[INJECT_SKIP_UNARMED]").unwrap().0;
+    assert!(block.contains("ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, u64::from(reinject))"));
+    assert!(block.contains("REINJECT_N.fetch_add(1"));
+    assert!(block.contains("return;"));
+    // Both launch resets drop a stale re-inject.
+    assert_eq!(src.matches("REINJECT_INFO.store(0, Ordering::Release);").count(), 2);
+    // The trace prints EOI counts, last OCW2 bytes and the re-inject counters.
+    for field in [" eoi_m=", " eoi_s=", " idtv=", " reinj=", " ocw2="] {
+        assert!(src.contains(field), "trace field {field}");
+    }
+    assert!(src.contains("const NET_TRACE_N: usize = 25;"));
 }
