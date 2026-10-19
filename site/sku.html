@@ -3,15 +3,15 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>RayNu-V — What an LOI holds today</title>
+    <title>RayNu-V — SKU: Shipment 1 and the final product</title>
     <meta
       name="description"
-      content="If you signed a dedicated-box letter of intent today: one PowerEdge, Ubuntu 26.04 on a 10 GiB spare tail, an 8 GiB USB window, TLS 1.2 with a lab millicert, a lab latch until auth.token. PRE-EBS SNP is plaintext HTTP. not PERC fleet, not cluster, not Windows, not a guest LAN."
+      content="Two shipments, one catalog. Shipment 1 is the dedicated-box letter: one PowerEdge R640, one Ubuntu guest, no RayNu-V engineer in the room. The final SKU is every row of the ADR-021 catalog: lived on iron, in flight, or planned. Nothing else."
     />
-    <meta property="og:title" content="RayNu-V · What an LOI holds today" />
+    <meta property="og:title" content="RayNu-V · SKU: Shipment 1 and the final product" />
     <meta
       property="og:description"
-      content="Sign today and you hold one dedicated-box PowerEdge. Ubuntu 26.04 has logged in on a 10 GiB tail. 8 GiB USB persist. HTTPS millicert. lab latch until auth.token. plaintext HTTP before boot finishes. not PERC fleet. not cluster. not Windows."
+      content="Every capability a professional operator expects from a PowerEdge hypervisor, with an honest status on each row: lived on the R640, in flight, or planned. Shipment 1 is the subset you can run without us in the room."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -25,7 +25,7 @@
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="stylesheet" href="styles.css" />
   </head>
-  <body class="page-hda page-loi">
+  <body class="page-hda page-loi page-sku">
     <nav class="site-nav site-nav--solid" aria-label="Site">
       <a class="site-nav__brand" href="index.html">RayNu-V</a>
       <div class="site-nav__links">
@@ -40,6 +40,7 @@
         <a href="https://github.com/vikkp/RayNu" data-hide-sm>GitHub</a>
       </div>
     </nav>
+
     <header class="hda-mast">
       <div class="hda-mast__inner">
         <p class="hda-mast__nav">
@@ -47,145 +48,187 @@
           <span aria-hidden="true">·</span>
           <a href="loi.html">LOI</a>
           <span aria-hidden="true">·</span>
-          <span>Dedicated-box SKU card</span>
+          <span>SKU</span>
         </p>
         <p class="brand reveal">RayNu-V</p>
-        <p class="hda-mast__kicker reveal">If you signed today</p>
+        <p class="hda-mast__kicker reveal">Two shipments · one catalog</p>
         <h1 class="hda-mast__title reveal reveal--delay-1">
-          What this letter holds
+          What ships first, and what the whole product is
         </h1>
         <p class="hda-mast__lede reveal reveal--delay-2">
-          A non-production letter for one dedicated-box PowerEdge. You would
-          be holding one EFI, a browser on that box, and an Ubuntu 26.04 guest
-          that has already reached <code>vikkp@raynusrv2</code> on a 10 GiB
-          tail of the spare. The older disk that comes back after a chassis
-          power-off is an 8 GiB USB window. The page is TLS 1.2 HTTPS with a
-          lab millicert. The first minutes of boot are still plaintext HTTP.
-          The door is a lab latch until <code>auth.token</code> is on the
-          stick.
+          This page is generated from
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-021.md">ADR-021</a>,
+          the list of everything a professional operator expects from a
+          hypervisor on a Dell PowerEdge. Every row carries one of three words:
+          <strong>lived</strong> (printed on the R640, with a commit),
+          <strong>in flight</strong> (code under iron test), or
+          <strong>planned</strong> (named, not built).
+          <strong>Shipment 1</strong> is the subset you can run on one R640
+          without a RayNu-V engineer in the room. The <strong>final SKU</strong>
+          is every row. Nothing on this page is a percentage toward GA.
+        </p>
+        <p class="sku-mast__meta reveal reveal--delay-2">
+          <span>Catalog date <span id="sku-date">—</span></span>
+          <span aria-hidden="true">·</span>
+          <span><span id="sku-total">—</span> capabilities</span>
+          <span aria-hidden="true">·</span>
+          <span>Source <code>docs/adr/ADR-021.md</code></span>
         </p>
       </div>
     </header>
 
     <main>
-      <section class="section" id="ships">
+      <section class="section" id="shipments">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>In your hands</p>
-          <h2 data-reveal>On that one box</h2>
-          <ul class="loi-locks" data-reveal>
-            <li>
-              One file, <code>r640-hypervisor.efi</code>. No second operating
-              system to install. No package set.
-            </li>
-            <li>
-              On a real PowerEdge you can dedicate, the loop has already
-              happened: open the page, start a Linux install, reboot onto the
-              installed disk, and reach a <code>login:</code>.
-            </li>
-            <li>
-              The guest you can log into is Ubuntu 26.04,
-              <code>vikkp@raynusrv2:~$</code>, on a <strong>10 GiB</strong> tail
-              of the spare. That login has been repeated
-              (<code>c3a70e62</code>, and again on the serial console at
-              <code>33c9b141</code>). The rest of the 2.9 TB virtual disk is
-              outside this letter. Leave the 400 GB boot disk, UBUNTU0, alone.
-            </li>
-            <li>
-              The disk that has come back after Force Off is the older
-              <strong>8 GiB</strong> USB window on a Toshiba stick. You get
-              that window, not the whole stick, and not memory that vanishes
-              when the hypervisor reboots.
-            </li>
-            <li>
-              You open the page at <code>https://10.99.99.x:8443/</code>.
-              The certificate is a lab millicert. The cipher is TLS 1.2.
-              <code>RAYNU-V-M8-TLS-OK</code> printed on <code>928d6224</code>
-              after <code>curl --cacert</code> returned the page, and the page
-              stayed up on <code>1f33eeda</code>. Before boot finishes, that
-              same port is <strong>plaintext HTTP</strong>.
-            </li>
-            <li>
-              You enter with the shared <strong>lab latch</strong>
-              <code>raynu-v-bringup</code>, until
-              <code>EFI/RayNu/auth.token</code> is on the stick. That string
-              is what the box accepts today.
-            </li>
-            <li>
-              The page has typed into an Alpine guest once (<code>abc</code>).
-              The Ubuntu login you can repeat is on COM2 <code>ttyS0</code>.
-              The guest log still mixes host lines. This is not a remote
-              desktop. iDRAC remains how you watch the console.
-            </li>
-          </ul>
+          <p class="milestone-kicker" data-reveal>The two lists</p>
+          <h2 data-reveal>Shipment 1 and the final SKU</h2>
+          <div class="loi-cards sku-ship-cards" data-reveal>
+            <article class="loi-card sku-ship" id="ship-s1">
+              <p class="loi-card__kicker">Shipment 1 · the dedicated-box letter</p>
+              <h3>One R640, one Ubuntu guest, nobody from us in the room</h3>
+              <p id="sku-s1-lede">—</p>
+              <dl class="sku-ship__counts" id="sku-s1-counts"></dl>
+              <div class="hda-bar sku-ship__bar">
+                <div class="hda-bar__track sku-stack" id="sku-s1-stack"></div>
+              </div>
+              <p class="loi-card__effect">
+                <a class="sku-link" href="#catalog" data-view="S1">Show only Shipment 1 →</a>
+              </p>
+            </article>
+            <article class="loi-card sku-ship sku-ship--final" id="ship-final">
+              <p class="loi-card__kicker">Final SKU · the whole product</p>
+              <h3>Every row in the catalog. Nothing else.</h3>
+              <p id="sku-final-lede">—</p>
+              <dl class="sku-ship__counts" id="sku-final-counts"></dl>
+              <div class="hda-bar sku-ship__bar">
+                <div class="hda-bar__track sku-stack" id="sku-final-stack"></div>
+              </div>
+              <p class="loi-card__effect">
+                <a class="sku-link" href="#catalog" data-view="Final">Show the full catalog →</a>
+              </p>
+            </article>
+          </div>
         </div>
       </section>
 
-      <section class="section" id="does-not">
+      <section class="section" id="shipment-1">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>Outside the signature</p>
-          <h2 data-reveal>What you would be declining</h2>
-          <ul class="loi-locks" data-reveal>
-            <li>
-              <strong>not PERC fleet.</strong> You are not taking the array.
-              A 10 GiB tail of the spare holds Ubuntu. The rest of the 2.9 TB
-              virtual disk stays hidden. The second controller stays closed.
-              The USB window is a different disk. Leave UBUNTU0 alone.
-            </li>
-            <li>
-              <strong>not a guest LAN.</strong> The Ubuntu shell is up. It has
-              no working network interface. No packet from that guest has left
-              the second port. An interrupt-pin change is in test. It is
-              outside what you would be signing for today.
-            </li>
-            <li>
-              <strong>not cluster.</strong> No move of a running guest between
-              boxes, no placement across a fleet, no hot-add. Those belong to
-              a later letter.
-            </li>
-            <li>
-              <strong>not Windows.</strong> Ubuntu 26.04 and Alpine have both
-              reached a login. Windows is a later letter.
-            </li>
-            <li>
-              The HTTPS you could show is the lab millicert and one TLS 1.2
-              cipher. The boot window is still plaintext HTTP.
-            </li>
-            <li>
-              There is no operator account yet. The lab latch is the
-              credential the box accepts.
-            </li>
-            <li>
-              The page typed into Alpine once. It is not a remote desktop.
-              Chassis power is the iDRAC control.
-            </li>
-          </ul>
+          <p class="milestone-kicker" data-reveal>Shipment 1 in one paragraph</p>
+          <h2 data-reveal>What you would be able to do</h2>
+          <p data-reveal>
+            One <code>r640-hypervisor.efi</code>, signed, booted from iDRAC
+            virtual media or USB on a PowerEdge R640. You reach an HTTPS page
+            with your own certificate and your own account, on a management
+            port with a static address you chose. You upload an Ubuntu ISO,
+            create a guest with the CPUs, RAM and disk you want on the PERC
+            array you already own, attach a NIC, and the page shows you that
+            the guest uplink has link before you press Start. The guest
+            installs, reboots to its disk, gets an address on your network,
+            and you SSH to it from your desk. You can type into it from the
+            browser when SSH is not an option. When the rack loses power the
+            guest comes back on its own. When a new RayNu-V ships you update
+            from the page and roll back from the page. Every one of those
+            actions is in an audit log you can export. Nothing in that
+            paragraph requires a serial console.
+          </p>
+          <p data-reveal>
+            Today's lab box already does part of that paragraph: the install
+            loop, Ubuntu to <code>login:</code>, the PERC array, persist across
+            power-off, HTTPS, a guest NIC that transmits. The rows below say
+            which part, and what is still only a sentence here.
+          </p>
+          <div class="sku-cabling" data-reveal>
+            <p class="loi-card__kicker">Cabling an R640 for Shipment 1</p>
+            <table class="sku-cabling__table">
+              <thead>
+                <tr><th>Jack</th><th>Carries</th><th>Cable</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Dedicated iDRAC</td><td>Console, iDRAC UI, hypervisor boot media</td><td>Yes, or Shared LOM on port 3</td></tr>
+                <tr><td>LOM port 3 (<code>01:00.0</code>)</td><td>RayNu-V management page on <code>:8443</code></td><td>Yes, untagged</td></tr>
+                <tr><td>LOM port 4 (<code>01:00.1</code>)</td><td>All guest traffic</td><td>Yes once a guest has a NIC, untagged</td></tr>
+                <tr><td>10G ports 1–2</td><td>Nothing in Shipment 1</td><td>No</td></tr>
+              </tbody>
+            </table>
+            <p>
+              Management and guest traffic on separate ports is the ESXi
+              best practice too. A single-port mode (D13) and operator-chosen
+              port roles (D12) are in the final SKU.
+            </p>
+          </div>
         </div>
       </section>
 
-      <section class="section" id="bars">
+      <section class="section section--sku-catalog" id="catalog">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>Which letter</p>
-          <h2 data-reveal>The one on the table</h2>
-          <p data-reveal>
-            The letter you could sign today is the dedicated-box letter: one
-            PowerEdge you can afford to set aside. The other letter — keep the
-            servers, replace the hypervisor on the disks you already own — is
-            a different signature. A USB stick that comes back after power-off
-            is the first letter. It is not the second.
-          </p>
-          <p data-reveal>
-            The install loop, the USB window, this page, and HTTPS are in the
-            first letter. The page stayed up. A keyboard from the page reached
-            Alpine once. An operator password is still open. Ubuntu on a 10
-            GiB spare tail is a step toward the second letter. The whole
-            virtual disk stays hidden. A guest LAN is not in either letter yet.
-          </p>
+          <p class="milestone-kicker" data-reveal>The catalog</p>
+          <h2 data-reveal>Every capability, with its word</h2>
+          <div class="sku-toolbar" role="group" aria-label="Catalog filters">
+            <div class="sku-toolbar__group">
+              <span class="sku-toolbar__label">View</span>
+              <button type="button" class="sku-chip is-on" data-view="Final">Final SKU</button>
+              <button type="button" class="sku-chip" data-view="S1">Shipment 1</button>
+            </div>
+            <div class="sku-toolbar__group">
+              <span class="sku-toolbar__label">Status</span>
+              <button type="button" class="sku-chip is-on" data-status="all">All</button>
+              <button type="button" class="sku-chip sku-chip--lived" data-status="lived">lived</button>
+              <button type="button" class="sku-chip sku-chip--flight" data-status="in flight">in flight</button>
+              <button type="button" class="sku-chip sku-chip--planned" data-status="planned">planned</button>
+            </div>
+            <label class="sku-toolbar__search">
+              <span class="sku-toolbar__label">Find</span>
+              <input type="search" id="sku-search" placeholder="VLAN, Secure Boot, snapshot…" autocomplete="off" />
+            </label>
+          </div>
+          <p class="sku-showing" id="sku-showing" aria-live="polite">—</p>
+          <nav class="sku-areas-nav" id="sku-areas-nav" aria-label="Catalog areas"></nav>
+          <div id="sku-catalog" class="sku-catalog">
+            <noscript>
+              <p>
+                The catalog needs JavaScript to render here. The same list is
+                <a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-021.md#catalog">in ADR-021</a>
+                and as <a href="sku.json">sku.json</a>.
+              </p>
+            </noscript>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="words">
+        <div class="section__inner">
+          <p class="milestone-kicker" data-reveal>How to read a row</p>
+          <h2 data-reveal>Three words, one rule</h2>
+          <ul class="loi-locks" data-reveal>
+            <li>
+              <strong>lived</strong> — printed on the PowerEdge R640 (or, for
+              a host artifact such as a proof or a size gate, closed in CI),
+              with a commit SHA or an iron marker in the note. A laptop or
+              QEMU does not make a row lived. The sync tool rejects a lived
+              row without evidence.
+            </li>
+            <li>
+              <strong>in flight</strong> — code exists on a branch or pull
+              request and is under iron test. The note names it.
+            </li>
+            <li>
+              <strong>planned</strong> — accepted in ADR-021, not built. No
+              evidence, no claim.
+            </li>
+            <li>
+              Rows move by editing the ADR with evidence, reviewed like code.
+              Demotions are allowed and are recorded in the HDA changelog.
+              Counts here are not a score; the distance tracker is
+              <a href="hda.html">Everest</a>, which stays at 99% until the M8
+              gaps shrink.
+            </li>
+          </ul>
           <div class="cta" data-reveal>
             <a class="cta__primary" href="loi.html">Path to LOI</a>
             <a
               class="cta__secondary"
-              href="https://github.com/vikkp/RayNu/blob/main/docs/sku.md"
-              >Full SKU markdown</a
+              href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-021.md"
+              >ADR-021 on GitHub</a
             >
           </div>
         </div>
@@ -195,7 +238,7 @@
     <footer class="footer">
       <p>
         <span class="brand brand--footer">RayNu-V</span>
-        · What a dedicated-box signature holds today
+        · Shipment 1 and the final SKU, from ADR-021
       </p>
       <p class="footer__meta">
         <a href="index.html">Home</a>
@@ -207,8 +250,11 @@
         <a href="https://github.com/vikkp/RayNu">GitHub</a>
         ·
         <a href="https://github.com/vikkp/RayNu/blob/main/docs/sku.md">docs/sku.md</a>
+        ·
+        <a href="sku.json">sku.json</a>
       </p>
     </footer>
     <script src="main.js" defer></script>
+    <script src="sku.js" defer></script>
   </body>
 </html>
