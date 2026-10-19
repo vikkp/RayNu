@@ -75,6 +75,14 @@ pub fn prop_sku_catalog_published() -> bool {
         && json.contains("\"generated_from\": \"docs/adr/ADR-021.md\"")
         && json.contains("\"status\": \"lived\"")
         && json.contains("\"ships\": \"S1\"")
+        && adr.contains("## Build order")
+        && adr.contains("| Wave | Theme | Rows | Iron thread | Why here |")
+        && sync.contains("--next")
+        && sync.contains("not in any wave")
+        && json.contains("\"current_wave\": \"")
+        && json.contains("\"next_up\": [")
+        && html.contains("id=\"sku-now\"")
+        && include_str!("../.cursor/rules/build-order.mdc").contains("sync-sku-site.sh --next")
 }
 
 #[cfg(test)]

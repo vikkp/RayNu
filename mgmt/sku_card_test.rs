@@ -29,4 +29,14 @@ fn sku_catalog_is_published_from_adr_021() {
     assert!(json.contains("Uplink discovery"), "the :39 lesson is a row");
     assert!(json.contains("Physical link state of both LOM ports"), "link state is a row");
     assert!(!json.contains("\"status\": \"done\""), "only lived / in flight / planned");
+    // Build order: every row carries a wave; wave 0 is the lived base; the
+    // current wave is the first with a non-lived row; one iron thread per wave.
+    assert!(json.contains("\"wave\": \"0\""));
+    assert!(json.contains("\"wave\": \"V\""));
+    assert!(json.contains("\"theme\": \"Close M8.9\""));
+    assert!(json.contains("\"iron\": \"D3\""));
+    assert!(json.contains("\"theme\": \"Prove it: Shipment 1\""), "72 h soak is a wave");
+    let adr = include_str!("../docs/adr/ADR-021.md");
+    assert!(adr.contains("One iron thread at a time."));
+    assert!(adr.contains("Wave 9 is not optional."));
 }

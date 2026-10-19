@@ -71,9 +71,15 @@ Outside even the final SKU: a host shell or userspace, a package manager, KVM/Xe
 
 ---
 
+## Build order
+
+Waves, not letters: [ADR-021 · Build order](adr/ADR-021.md#build-order-the-rule-behind-decision-5). Wave 0 is the lived base; waves 1–9 are Shipment 1 (wave 9 is the 72-hour iron soak); waves 10–17 are the final SKU; wave V is verification, continuous. Each wave has one iron thread. `./tools/sync-sku-site.sh --next` prints the current wave and what to pick up; the page shows it as **Now building**. Rule for agents: [`.cursor/rules/build-order.mdc`](../.cursor/rules/build-order.mdc).
+
+---
+
 ## Rules for this card
 
-- Edit rows in `docs/adr/ADR-021.md`, then run `./tools/sync-sku-site.sh`. Stage `site/sku.json` with it.
+- Edit rows in `docs/adr/ADR-021.md`, then run `./tools/sync-sku-site.sh`. Stage `site/sku.json` with it. Every row must be in exactly one wave; the tool fails otherwise.
 - A row becomes **lived** only with R640 evidence (or CI for a host artifact). Latitude and QEMU do not count. The sync tool rejects a lived row with no SHA, marker, tool or document in its note.
 - The LOI tracker ([`docs/loihda.md`](loihda.md), [`site/loi.html`](../site/loi.html)) measures distance to the letter; this card lists what the letter and the product contain.
 - Rollbacks: M8.9 `v0.1.0-m8-8-ubuntu` (`c3a70e62`); M8.0 `v0.1.0-everest-closed` (`f72b4276`).

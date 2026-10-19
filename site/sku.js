@@ -71,6 +71,7 @@
               <p class="sku-row__meta">
                 ${pill(it.status)}
                 <span class="sku-ships sku-ships--${esc(it.ships).toLowerCase()}">${it.ships === "S1" ? "Shipment 1" : "Final"}</span>
+                ${it.wave !== undefined ? `<a class="sku-wave-chip${data && data.current_wave === it.wave ? " is-current" : ""}" href="#wave-${esc(it.wave)}" title="Build order wave">wave ${esc(it.wave)}</a>` : ""}
                 ${it.ref ? `<span class="sku-ref">${inline(it.ref)}</span>` : ""}
               </p>
               ${it.note ? `<p class="sku-row__note">${inline(it.note)}</p>` : ""}
@@ -99,6 +100,63 @@
     const q = state.q ? ` containing “${state.q}”` : "";
     if ($("sku-showing")) {
       $("sku-showing").textContent = `Showing ${shown} of ${total} rows in ${viewName}${statusName}${q}.`;
+    }
+  };
+
+  const renderWaves = () => {
+    const list = $("sku-waves");
+    if (!list || !data || !Array.isArray(data.waves)) return;
+    const cur = data.current_wave;
+    list.innerHTML = data.waves
+      .map((w) => {
+        const c = w.counts || { lived: 0, "in flight": 0, planned: 0, total: 0 };
+        const state = w.closed ? "closed" : w.id === cur ? "current" : w.id === "V" ? "continuous" : "ahead";
+        const rows = w.rows
+          .map((r) => `<a href="#${esc(r)}" class="sku-wave__row">${esc(r)}</a>`)
+          .join(" ");
+        return `
+        <li class="sku-wave sku-wave--${state}" id="wave-${esc(w.id)}">
+          <div class="sku-wave__head">
+            <span class="sku-wave__id">${w.id === "V" ? "V" : esc(w.id)}</span>
+            <h3 class="sku-wave__theme">${esc(w.theme)}</h3>
+            <span class="sku-wave__state">${state}</span>
+            <span class="sku-wave__counts"><b class="sku-c sku-c--lived">${c.lived}</b> / <b class="sku-c sku-c--flight">${c["in flight"]}</b> / <b class="sku-c sku-c--planned">${c.planned}</b> of ${c.total}</span>
+          </div>
+          <div class="sku-stack sku-wave__stack">${
+            c.total
+              ? ["lived", "in flight", "planned"]
+                  .map((k) => `<span class="sku-stack__seg sku-stack__seg--${STATUS_CLASS[k]}" style="width:${(100 * c[k]) / c.total}%"></span>`)
+                  .join("")
+              : ""
+          }</div>
+          <p class="sku-wave__why">${esc(w.why)}</p>
+          <p class="sku-wave__rows">${rows}${w.iron ? ` <span class="sku-wave__iron">iron thread <a href="#${esc(w.iron)}">${esc(w.iron)}</a></span>` : ""}</p>
+        </li>`;
+      })
+      .join("");
+  };
+
+  const renderNow = () => {
+    if (!data) return;
+    const cur = (data.waves || []).find((w) => w.id === data.current_wave);
+    if (!cur) {
+      if ($("sku-now-title")) $("sku-now-title").textContent = "All numbered waves closed";
+      return;
+    }
+    if ($("sku-now-title")) $("sku-now-title").textContent = `Wave ${cur.id} · ${cur.theme}`;
+    if ($("sku-now-why")) $("sku-now-why").textContent = cur.why;
+    if ($("sku-now-list")) {
+      $("sku-now-list").innerHTML = (data.next_up || [])
+        .map(
+          (n) => `<li><a href="#${esc(n.id)}">${esc(n.id)}</a> ${inline(n.capability)} <span class="sku-now__role sku-now__role--${n.role === "iron thread" ? "iron" : "host"}">${esc(n.role)}</span> ${pill(n.status)}</li>`
+        )
+        .join("");
+    }
+    if ($("sku-now-filler")) {
+      const f = data.filler || [];
+      $("sku-now-filler").innerHTML = f.length
+        ? `While the rack is busy, host-first from wave ${esc(f[0].wave)}: ${f.map((x) => `<a href="#${esc(x.id)}">${esc(x.id)}</a>`).join(", ")}.`
+        : "";
     }
   };
 
@@ -164,6 +222,8 @@
     renderStack($("sku-s1-stack"), d.counts.S1);
     renderStack($("sku-final-stack"), d.counts.Final);
     renderAreasNav();
+    renderWaves();
+    renderNow();
     syncChips();
     renderCatalog();
     if (location.hash && /^#[A-K]\d+$/.test(location.hash)) {

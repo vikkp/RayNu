@@ -110,6 +110,10 @@ When user asks to commit:
 
 CI enforces freshness: `./tools/sync-hda-site.sh --check` must pass. CI also runs `./tools/check-site-chrome.sh`.
 
+## When a gate passes (ADR-021)
+
+Also update the catalog row in `docs/adr/ADR-021.md` (`lived` + evidence), run `./tools/sync-sku-site.sh` (and `--check`), stage `site/sku.json`, and start what `./tools/sync-sku-site.sh --next` prints. Rule: `.cursor/rules/build-order.mdc`. CI enforces `./tools/sync-sku-site.sh --check`.
+
 ## Optional one-shot user phrases
 
 - `hda` / `update hda` / `everest` → only run HDA procedure + site sync.

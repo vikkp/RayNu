@@ -1,0 +1,68 @@
+---
+description: What to pick up when a gate passes — ADR-021 waves, one iron thread, sync the SKU catalog
+alwaysApply: true
+---
+
+# Build order (ADR-021 waves)
+
+You are working in **RayNu-V** (`vikkp/RayNu`). The product bar and the full
+capability catalog live in [`docs/adr/ADR-021.md`](../../docs/adr/ADR-021.md).
+Its **Build order** section is the order of work. The catalog letters (A–K)
+are for reading, not for building. Work moves in **waves**; the tool knows
+which wave is current.
+
+## Ask the tool before choosing work
+
+```bash
+./tools/sync-sku-site.sh --next
+```
+
+It prints the current wave (the lowest numbered wave with a row not yet
+`lived`), the rows to pick up in order with the **one iron thread** marked,
+and host-first filler from the next wave for when the R640 is busy. Start
+with the first row it prints unless the user names another. Do not pick a
+row from a later wave for iron work.
+
+## When a gate passes
+
+An iron marker printed on the R640, or a host gate closed in CI. In the
+**same change**:
+
+1. Open `docs/adr/ADR-021.md`, find the row in **Catalog**, set **Status**
+   to `lived`, and put the evidence in **Note** (commit SHA, iron marker,
+   tool, or evidence doc). The sync tool rejects `lived` without evidence.
+   Latitude / QEMU / nested do **not** make a row lived.
+2. Run `./tools/sync-sku-site.sh` and `./tools/sync-sku-site.sh --check`.
+   Stage **both** `docs/adr/ADR-021.md` and `site/sku.json`.
+3. Run `./tools/sync-sku-site.sh --next`. If the wave closed, the current
+   wave advanced; say so in the `docs/hda.md` changelog row for this commit
+   (HDA procedure in `hda-update.mdc` still applies).
+4. Begin the first row `--next` prints. If it is the iron thread and iron is
+   not available, take the first host-first row instead and say why.
+
+When code lands on a branch that is under iron test, set that row to
+`in flight` and name the branch or PR in Note. When a row is demoted, record
+it in the HDA changelog.
+
+## Rules
+
+- **One iron thread at a time.** Each wave has exactly one row that needs
+  the R640. Do not open a second iron thread while it is unclosed.
+- **Host-only rows are filler, always available.** Never idle on the rack.
+- **Final rows do not jump the queue.** A prospect asking is answered by the
+  SKU page, not by pulling B13 / D14 / K rows forward.
+- **Wave V (verification) runs continuously** beside every wave.
+- **Wave 9 (72-hour iron soak) is not optional.** It is the Shipment 1 close.
+- **Wave 0 is the lived base.** Every later wave re-runs it as regression.
+- Adding a capability: add a catalog row **and** put its ID in exactly one
+  wave row. The sync tool fails on a row in no wave or in two.
+- Counts are not a score. HDA overall stays **99%**; do not derive a
+  percent-to-GA from the catalog.
+
+## Where it shows
+
+- `site/sku.html` reads `site/sku.json` and shows **Now building: wave N**,
+  the wave on every row, and the wave table.
+- `docs/sku.md` is the card; `docs/m8_plan.md` M8.10+ is "the ADR-021 waves".
+- Honesty constraints in `hda-update.mdc` and `iron-rollback.mdc` apply
+  unchanged.

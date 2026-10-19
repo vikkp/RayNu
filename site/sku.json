@@ -46,7 +46,8 @@
           "status": "lived",
           "ships": "S1",
           "ref": "ADR-003",
-          "note": "`f72b4276` on R640; size gate `./tools/check-size.sh` within 15 MB"
+          "note": "`f72b4276` on R640; size gate `./tools/check-size.sh` within 15 MB",
+          "wave": "0"
         },
         {
           "id": "A2",
@@ -54,7 +55,8 @@
           "status": "lived",
           "ships": "S1",
           "ref": "M7.5",
-          "note": "`RAYNU-V-R640-BOOT-OK`; runbook `docs/runbooks/usb_idrac.md`"
+          "note": "`RAYNU-V-R640-BOOT-OK`; runbook `docs/runbooks/usb_idrac.md`",
+          "wave": "0"
         },
         {
           "id": "A3",
@@ -62,7 +64,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "COM2 prints `build: sha=`; the page does not"
+          "note": "COM2 prints `build: sha=`; the page does not",
+          "wave": "2"
         },
         {
           "id": "A4",
@@ -70,7 +73,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Today iron verification reads COM2 markers"
+          "note": "Today iron verification reads COM2 markers",
+          "wave": "6"
         },
         {
           "id": "A5",
@@ -78,7 +82,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Unsigned today; R640 Secure Boot must be off"
+          "note": "Unsigned today; R640 Secure Boot must be off",
+          "wave": "6"
         },
         {
           "id": "A6",
@@ -86,7 +91,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-021",
-          "note": "Attestation of what is running"
+          "note": "Attestation of what is running",
+          "wave": "13"
         },
         {
           "id": "A7",
@@ -94,7 +100,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Today: flash USB, F11. Rollback is a GitHub tag"
+          "note": "Today: flash USB, F11. Rollback is a GitHub tag",
+          "wave": "6"
         },
         {
           "id": "A8",
@@ -102,7 +109,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "ADR-005",
-          "note": "R640 + BCM5720 + H740P lived; rest planned"
+          "note": "R640 + BCM5720 + H740P lived; rest planned",
+          "wave": "7"
         },
         {
           "id": "A9",
@@ -110,7 +118,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-021",
-          "note": "Operators plan maintenance windows around it"
+          "note": "Operators plan maintenance windows around it",
+          "wave": "13"
         },
         {
           "id": "A10",
@@ -118,7 +127,8 @@
           "status": "lived",
           "ships": "S1",
           "ref": "ADR-003",
-          "note": "Single binary (`./tools/check-pe-assets.sh`); ISO comes from the operator; the lab LAN `10.99.99.0/24` has no route out"
+          "note": "Single binary (`./tools/check-pe-assets.sh`); ISO comes from the operator; the lab LAN `10.99.99.0/24` has no route out",
+          "wave": "0"
         }
       ],
       "counts": {
@@ -147,7 +157,8 @@
           "status": "lived",
           "ships": "S1",
           "ref": "ADR-016 / ADR-020",
-          "note": "Alpine `f72b4276`; Ubuntu 26.04 `c3a70e62` to `login:`"
+          "note": "Alpine `f72b4276`; Ubuntu 26.04 `c3a70e62` to `login:`",
+          "wave": "0"
         },
         {
           "id": "B2",
@@ -155,7 +166,8 @@
           "status": "lived",
           "ships": "S1",
           "ref": "M7 E4",
-          "note": "`RAYNU-V-M7-E4-SPA-LAUNCH-OK` (2026-08-21); Start/Stop of Ubuntu on `d7e2e24f`"
+          "note": "`RAYNU-V-M7-E4-SPA-LAUNCH-OK` (2026-08-21); Start/Stop of Ubuntu on `d7e2e24f`",
+          "wave": "0"
         },
         {
           "id": "B3",
@@ -163,7 +175,8 @@
           "status": "lived",
           "ships": "S1",
           "ref": "ADR-019",
-          "note": "Guests row `linux_iso 10240 MiB@18432` booted on `c3a70e62`"
+          "note": "Guests row `linux_iso 10240 MiB@18432` booted on `c3a70e62`",
+          "wave": "0"
         },
         {
           "id": "B4",
@@ -171,7 +184,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Stop kills the guest today"
+          "note": "Stop kills the guest today",
+          "wave": "4"
         },
         {
           "id": "B5",
@@ -179,7 +193,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Power cut today leaves guests off"
+          "note": "Power cut today leaves guests off",
+          "wave": "4"
         },
         {
           "id": "B6",
@@ -187,7 +202,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "M4",
-          "note": "`RAYNU-V-M4-2VM-OK` on iron for lab guests; product guests one at a time"
+          "note": "`RAYNU-V-M4-2VM-OK` on iron for lab guests; product guests one at a time",
+          "wave": "7"
         },
         {
           "id": "B7",
@@ -195,7 +211,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "M4.5",
-          "note": "Dual-vCPU probe lived on Latitude only (`RAYNU-V-M4-SMP-OK`)"
+          "note": "Dual-vCPU probe lived on Latitude only (`RAYNU-V-M4-SMP-OK`)",
+          "wave": "7"
         },
         {
           "id": "B8",
@@ -203,7 +220,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "PIC + IRQ 11 shared lived on `d7e2e24f`; SMP and performance need APIC"
+          "note": "PIC + IRQ 11 shared lived on `d7e2e24f`; SMP and performance need APIC",
+          "wave": "7"
         },
         {
           "id": "B9",
@@ -211,7 +229,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "PIT 100 Hz lived on `c9f4451a`; drift under load untested"
+          "note": "PIT 100 Hz lived on `c9f4451a`; drift under load untested",
+          "wave": "7"
         },
         {
           "id": "B10",
@@ -219,7 +238,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-021",
-          "note": ""
+          "note": "",
+          "wave": "11"
         },
         {
           "id": "B11",
@@ -227,7 +247,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-021",
-          "note": ""
+          "note": "",
+          "wave": "11"
         },
         {
           "id": "B12",
@@ -235,7 +256,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-021",
-          "note": "Removes the serial install step"
+          "note": "Removes the serial install step",
+          "wave": "11"
         },
         {
           "id": "B13",
@@ -243,7 +265,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-014 / M8.6",
-          "note": "Same UEFI+virtio model, no parallel firmware"
+          "note": "Same UEFI+virtio model, no parallel firmware",
+          "wave": "11"
         },
         {
           "id": "B14",
@@ -251,7 +274,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-014",
-          "note": "Typed ISO path"
+          "note": "Typed ISO path",
+          "wave": "11"
         },
         {
           "id": "B15",
@@ -259,7 +283,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-021",
-          "note": ""
+          "note": "",
+          "wave": "11"
         },
         {
           "id": "B16",
@@ -267,7 +292,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-021",
-          "note": ""
+          "note": "",
+          "wave": "11"
         },
         {
           "id": "B17",
@@ -275,7 +301,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-021",
-          "note": "SRAT/SLIT already parsed (M0)"
+          "note": "SRAT/SLIT already parsed (M0)",
+          "wave": "11"
         },
         {
           "id": "B18",
@@ -283,7 +310,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "[A]",
-          "note": "Metered for FinOps rows (G5)"
+          "note": "Metered for FinOps rows (G5)",
+          "wave": "11"
         },
         {
           "id": "B19",
@@ -291,7 +319,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "M9",
-          "note": "Cluster-era"
+          "note": "Cluster-era",
+          "wave": "17"
         },
         {
           "id": "B20",
@@ -299,7 +328,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Today on COM2 `reason=0x… rip=0x…`"
+          "note": "Today on COM2 `reason=0x… rip=0x…`",
+          "wave": "2"
         }
       ],
       "counts": {
@@ -328,7 +358,8 @@
           "status": "lived",
           "ships": "S1",
           "ref": "M8.0",
-          "note": "`RAYNU-V-M8-DISK-PERSIST-OK` on `928d6224` (8 GiB USB window)"
+          "note": "`RAYNU-V-M8-DISK-PERSIST-OK` on `928d6224` (8 GiB USB window)",
+          "wave": "0"
         },
         {
           "id": "C2",
@@ -336,7 +367,8 @@
           "status": "lived",
           "ships": "S1",
           "ref": "M8.7",
-          "note": "`RAYNU-V-M8-PERC-LUN-OK` `9c37fcae`; `PERC-WRITE-OK` `f0a7aabb`"
+          "note": "`RAYNU-V-M8-PERC-LUN-OK` `9c37fcae`; `PERC-WRITE-OK` `f0a7aabb`",
+          "wave": "0"
         },
         {
           "id": "C3",
@@ -344,7 +376,8 @@
           "status": "lived",
           "ships": "S1",
           "ref": "M8.7 / M8.8",
-          "note": "Ubuntu login from a 10 GiB tail, `c3a70e62`"
+          "note": "Ubuntu login from a 10 GiB tail, `c3a70e62`",
+          "wave": "0"
         },
         {
           "id": "C4",
@@ -352,7 +385,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Fixed 10 GiB tail today; 2.9 TB hidden"
+          "note": "Fixed 10 GiB tail today; 2.9 TB hidden",
+          "wave": "7"
         },
         {
           "id": "C5",
@@ -360,7 +394,8 @@
           "status": "lived",
           "ships": "S1",
           "ref": "M8.8.2",
-          "note": "`93088c32` stored `ubuntu-26.04-live-server-amd64.iso`"
+          "note": "`93088c32` stored `ubuntu-26.04-live-server-amd64.iso`",
+          "wave": "0"
         },
         {
           "id": "C6",
@@ -368,7 +403,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Chunked upload lived; no resume"
+          "note": "Chunked upload lived; no resume",
+          "wave": "7"
         },
         {
           "id": "C7",
@@ -376,7 +412,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Unverified on iron; required before \"production data\""
+          "note": "Unverified on iron; required before \"production data\"",
+          "wave": "3"
         },
         {
           "id": "C8",
@@ -384,7 +421,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "M8.5",
-          "note": "vNIC is RAM-only today; re-saved every boot"
+          "note": "vNIC is RAM-only today; re-saved every boot",
+          "wave": "3"
         },
         {
           "id": "C9",
@@ -392,7 +430,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-021",
-          "note": "NVMe Identify/Read/Write TCG-proven, not iron"
+          "note": "NVMe Identify/Read/Write TCG-proven, not iron",
+          "wave": "12"
         },
         {
           "id": "C10",
@@ -400,7 +439,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-005",
-          "note": ""
+          "note": "",
+          "wave": "12"
         },
         {
           "id": "C11",
@@ -408,7 +448,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-018",
-          "note": "Explicitly held closed in M8.7"
+          "note": "Explicitly held closed in M8.7",
+          "wave": "12"
         },
         {
           "id": "C12",
@@ -416,7 +457,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-021",
-          "note": ""
+          "note": "",
+          "wave": "12"
         },
         {
           "id": "C13",
@@ -424,7 +466,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-021",
-          "note": "Pairs with B16"
+          "note": "Pairs with B16",
+          "wave": "12"
         },
         {
           "id": "C14",
@@ -432,7 +475,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "M5.5",
-          "note": "VMDK convert is the migration engine"
+          "note": "VMDK convert is the migration engine",
+          "wave": "12"
         },
         {
           "id": "C15",
@@ -440,7 +484,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-021",
-          "note": ""
+          "note": "",
+          "wave": "12"
         },
         {
           "id": "C16",
@@ -448,7 +493,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-005 Tier 2",
-          "note": "Redfish OEM schemas"
+          "note": "Redfish OEM schemas",
+          "wave": "12"
         },
         {
           "id": "C17",
@@ -456,7 +502,8 @@
           "status": "lived",
           "ships": "S1",
           "ref": "ADR-018",
-          "note": "`skip PERC` rule; LBA 0 signature stayed 16 zeros on `f0a7aabb`; UBUNTU0 untouched through M8.8"
+          "note": "`skip PERC` rule; LBA 0 signature stayed 16 zeros on `f0a7aabb`; UBUNTU0 untouched through M8.8",
+          "wave": "0"
         }
       ],
       "counts": {
@@ -485,7 +532,8 @@
           "status": "lived",
           "ships": "S1",
           "ref": "ADR-013 E3b",
-          "note": "`RAYNU-V-M7-HOST-NIC-HTTP-OK` (2026-08-20) on `:38` / port 3; docs/evidence/r640/2026-08-20-e3b-host-nic-http-ok.md"
+          "note": "`RAYNU-V-M7-HOST-NIC-HTTP-OK` (2026-08-20) on `:38` / port 3; docs/evidence/r640/2026-08-20-e3b-host-nic-http-ok.md",
+          "wave": "0"
         },
         {
           "id": "D2",
@@ -493,7 +541,8 @@
           "status": "lived",
           "ships": "S1",
           "ref": "M8.9.4",
-          "note": "`d7e2e24f`: `TX 15` frames, no `NETDEV WATCHDOG`"
+          "note": "`d7e2e24f`: `TX 15` frames, no `NETDEV WATCHDOG`",
+          "wave": "0"
         },
         {
           "id": "D3",
@@ -501,7 +550,8 @@
           "status": "in flight",
           "ships": "S1",
           "ref": "M8.9.4 / ADR-013 App. C",
-          "note": "PR #409 brings the PHY up; port 4 was Link Down"
+          "note": "PR #409 brings the PHY up; port 4 was Link Down",
+          "wave": "1"
         },
         {
           "id": "D4",
@@ -509,7 +559,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "`EGRESS_PHY_MAC` is this lab's `…:39`"
+          "note": "`EGRESS_PHY_MAC` is this lab's `…:39`",
+          "wave": "2"
         },
         {
           "id": "D5",
@@ -517,7 +568,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "iDRAC showed port 4 Down; the page showed nothing"
+          "note": "iDRAC showed port 4 Down; the page showed nothing",
+          "wave": "2"
         },
         {
           "id": "D6",
@@ -525,7 +577,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Device always reports link up today"
+          "note": "Device always reports link up today",
+          "wave": "2"
         },
         {
           "id": "D7",
@@ -533,7 +586,8 @@
           "status": "in flight",
           "ships": "S1",
           "ref": "M8.9.5",
-          "note": "DHCP discover leaves `:39`; address field on Guests"
+          "note": "DHCP discover leaves `:39`; address field on Guests",
+          "wave": "1"
         },
         {
           "id": "D8",
@@ -541,7 +595,8 @@
           "status": "in flight",
           "ships": "S1",
           "ref": "M8.9.6",
-          "note": "The M8.9 close marker"
+          "note": "The M8.9 close marker",
+          "wave": "1"
         },
         {
           "id": "D9",
@@ -549,7 +604,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "DHCP lease only today"
+          "note": "DHCP lease only today",
+          "wave": "4"
         },
         {
           "id": "D10",
@@ -557,7 +613,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": ""
+          "note": "",
+          "wave": "4"
         },
         {
           "id": "D11",
@@ -565,7 +622,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Install guide row (H6)"
+          "note": "Install guide row (H6)",
+          "wave": "6"
         },
         {
           "id": "D12",
@@ -573,7 +631,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-021",
-          "note": "Fixed roles in S1"
+          "note": "Fixed roles in S1",
+          "wave": "10"
         },
         {
           "id": "D13",
@@ -581,7 +640,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-013 App. B",
-          "note": "For the one-cable customer"
+          "note": "For the one-cable customer",
+          "wave": "10"
         },
         {
           "id": "D14",
@@ -589,7 +649,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-013",
-          "note": "Not built; untagged only"
+          "note": "Not built; untagged only",
+          "wave": "14"
         },
         {
           "id": "D15",
@@ -597,7 +658,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-021",
-          "note": "One per guest in M8.9"
+          "note": "One per guest in M8.9",
+          "wave": "14"
         },
         {
           "id": "D16",
@@ -605,7 +667,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "M4",
-          "note": "Lab pair exists; not a product switch"
+          "note": "Lab pair exists; not a product switch",
+          "wave": "14"
         },
         {
           "id": "D17",
@@ -613,7 +676,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-021",
-          "note": ""
+          "note": "",
+          "wave": "14"
         },
         {
           "id": "D18",
@@ -621,7 +685,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-021",
-          "note": "1536 today"
+          "note": "1536 today",
+          "wave": "14"
         },
         {
           "id": "D19",
@@ -629,7 +694,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-005",
-          "note": ""
+          "note": "",
+          "wave": "14"
         },
         {
           "id": "D20",
@@ -637,7 +703,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-005",
-          "note": ""
+          "note": "",
+          "wave": "14"
         },
         {
           "id": "D21",
@@ -645,7 +712,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "[A]",
-          "note": ""
+          "note": "",
+          "wave": "14"
         },
         {
           "id": "D22",
@@ -653,7 +721,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-013",
-          "note": "Performance"
+          "note": "Performance",
+          "wave": "14"
         },
         {
           "id": "D23",
@@ -661,7 +730,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-021",
-          "note": ""
+          "note": "",
+          "wave": "14"
         }
       ],
       "counts": {
@@ -690,7 +760,8 @@
           "status": "lived",
           "ships": "S1",
           "ref": "M7 E4",
-          "note": "`.assets.webui` section (`./tools/check-pe-assets.sh`); `RAYNU-V-M7-E4-SPA-LAUNCH-OK`"
+          "note": "`.assets.webui` section (`./tools/check-pe-assets.sh`); `RAYNU-V-M7-E4-SPA-LAUNCH-OK`",
+          "wave": "0"
         },
         {
           "id": "E2",
@@ -698,7 +769,8 @@
           "status": "lived",
           "ships": "S1",
           "ref": "ADR-019",
-          "note": "Guests screen reads the spare boot policy; a new browser saw the running row on `c3a70e62`"
+          "note": "Guests screen reads the spare boot policy; a new browser saw the running row on `c3a70e62`",
+          "wave": "0"
         },
         {
           "id": "E3",
@@ -706,7 +778,8 @@
           "status": "lived",
           "ships": "S1",
           "ref": "M8.1",
-          "note": "`RAYNU-V-M8-TLS-OK` `928d6224`; TLS 1.2, lab millicert"
+          "note": "`RAYNU-V-M8-TLS-OK` `928d6224`; TLS 1.2, lab millicert",
+          "wave": "0"
         },
         {
           "id": "E4",
@@ -714,7 +787,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Millicert is not a customer certificate"
+          "note": "Millicert is not a customer certificate",
+          "wave": "5"
         },
         {
           "id": "E5",
@@ -722,7 +796,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "M8.1",
-          "note": "Boot minutes are HTTP today"
+          "note": "Boot minutes are HTTP today",
+          "wave": "5"
         },
         {
           "id": "E6",
@@ -730,7 +805,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "M8.2",
-          "note": "`raynu-v-bringup` is a lab latch"
+          "note": "`raynu-v-bringup` is a lab latch",
+          "wave": "5"
         },
         {
           "id": "E7",
@@ -738,7 +814,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-021",
-          "note": ""
+          "note": "",
+          "wave": "13"
         },
         {
           "id": "E8",
@@ -746,7 +823,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-021",
-          "note": ""
+          "note": "",
+          "wave": "13"
         },
         {
           "id": "E9",
@@ -754,7 +832,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-021",
-          "note": ""
+          "note": "",
+          "wave": "13"
         },
         {
           "id": "E10",
@@ -762,7 +841,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-021",
-          "note": ""
+          "note": "",
+          "wave": "13"
         },
         {
           "id": "E11",
@@ -770,7 +850,8 @@
           "status": "in flight",
           "ships": "S1",
           "ref": "M8.3",
-          "note": "Typed into Alpine once; Ubuntu via COM2"
+          "note": "Typed into Alpine once; Ubuntu via COM2",
+          "wave": "7"
         },
         {
           "id": "E12",
@@ -778,7 +859,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Endpoints exist; no published contract"
+          "note": "Endpoints exist; no published contract",
+          "wave": "5"
         },
         {
           "id": "E13",
@@ -786,7 +868,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-021",
-          "note": "Host stays shell-less"
+          "note": "Host stays shell-less",
+          "wave": "13"
         },
         {
           "id": "E14",
@@ -794,7 +877,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "[A]",
-          "note": ""
+          "note": "",
+          "wave": "13"
         },
         {
           "id": "E15",
@@ -802,7 +886,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-021",
-          "note": ""
+          "note": "",
+          "wave": "13"
         },
         {
           "id": "E16",
@@ -810,7 +895,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-021",
-          "note": "COM2 is the log today"
+          "note": "COM2 is the log today",
+          "wave": "13"
         },
         {
           "id": "E17",
@@ -818,7 +904,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "\"The guest log still mixes host lines\""
+          "note": "\"The guest log still mixes host lines\"",
+          "wave": "7"
         }
       ],
       "counts": {
@@ -849,7 +936,8 @@
           "status": "lived",
           "ships": "S1",
           "ref": "M7.5",
-          "note": "`docs/runbooks/usb_idrac.md`"
+          "note": "`docs/runbooks/usb_idrac.md`",
+          "wave": "0"
         },
         {
           "id": "F2",
@@ -857,7 +945,8 @@
           "status": "lived",
           "ships": "S1",
           "ref": "ADR-013",
-          "note": "`ape-nophylock=yes` on every iron boot since 2026-08-19; docs/evidence/r640/2026-08-17-phase0-census.md"
+          "note": "`ape-nophylock=yes` on every iron boot since 2026-08-19; docs/evidence/r640/2026-08-17-phase0-census.md",
+          "wave": "0"
         },
         {
           "id": "F3",
@@ -865,7 +954,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "ADR-005",
-          "note": ""
+          "note": "",
+          "wave": "8"
         },
         {
           "id": "F4",
@@ -873,7 +963,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "ADR-005",
-          "note": "Parsed at boot; not shown"
+          "note": "Parsed at boot; not shown",
+          "wave": "8"
         },
         {
           "id": "F5",
@@ -881,7 +972,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "ADR-005",
-          "note": ""
+          "note": "",
+          "wave": "8"
         },
         {
           "id": "F6",
@@ -889,7 +981,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-005 Tier 2",
-          "note": ""
+          "note": "",
+          "wave": "15"
         },
         {
           "id": "F7",
@@ -897,7 +990,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-005 Tier 2",
-          "note": ""
+          "note": "",
+          "wave": "15"
         },
         {
           "id": "F8",
@@ -905,7 +999,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-021",
-          "note": "Pairs with B5"
+          "note": "Pairs with B5",
+          "wave": "15"
         },
         {
           "id": "F9",
@@ -913,7 +1008,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-005",
-          "note": ""
+          "note": "",
+          "wave": "15"
         },
         {
           "id": "F10",
@@ -921,7 +1017,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Lab runs one cable on port 3 (shared)"
+          "note": "Lab runs one cable on port 3 (shared)",
+          "wave": "6"
         }
       ],
       "counts": {
@@ -952,7 +1049,8 @@
           "status": "lived",
           "ships": "S1",
           "ref": "M5 / ADR-002",
-          "note": "`./tools/m5-audit-smoke.sh`; `RAYNU-V-M6-EXT-OK` auditor path (host artifact)"
+          "note": "`./tools/m5-audit-smoke.sh`; `RAYNU-V-M6-EXT-OK` auditor path (host artifact)",
+          "wave": "0"
         },
         {
           "id": "G2",
@@ -960,7 +1058,8 @@
           "status": "lived",
           "ships": "S1",
           "ref": "CLAUDE.md audit rule",
-          "note": "`audit_log!` categories; `./tools/m5-life-smoke.sh` (host artifact)"
+          "note": "`audit_log!` categories; `./tools/m5-life-smoke.sh` (host artifact)",
+          "wave": "0"
         },
         {
           "id": "G3",
@@ -968,7 +1067,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Ring is in memory; export path missing"
+          "note": "Ring is in memory; export path missing",
+          "wave": "5"
         },
         {
           "id": "G4",
@@ -976,7 +1076,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": ""
+          "note": "",
+          "wave": "3"
         },
         {
           "id": "G5",
@@ -984,7 +1085,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "[A]",
-          "note": ""
+          "note": "",
+          "wave": "15"
         },
         {
           "id": "G6",
@@ -992,7 +1094,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "M5",
-          "note": "Generator exists outside Proven Core; templates not shipped"
+          "note": "Generator exists outside Proven Core; templates not shipped",
+          "wave": "15"
         },
         {
           "id": "G7",
@@ -1000,7 +1103,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-021",
-          "note": "Tamper evidence beyond the box"
+          "note": "Tamper evidence beyond the box",
+          "wave": "15"
         }
       ],
       "counts": {
@@ -1029,7 +1133,8 @@
           "status": "lived",
           "ships": "S1",
           "ref": "M6 / ADR-004",
-          "note": "`./tools/m6-fault-smoke.sh` (Latitude); iron guests stopped cleanly and the SPA stayed up on `d7e2e24f`"
+          "note": "`./tools/m6-fault-smoke.sh` (Latitude); iron guests stopped cleanly and the SPA stayed up on `d7e2e24f`",
+          "wave": "0"
         },
         {
           "id": "H2",
@@ -1037,7 +1142,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Pairs with B5, F8"
+          "note": "Pairs with B5, F8",
+          "wave": "4"
         },
         {
           "id": "H3",
@@ -1045,7 +1151,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "M6 bar",
-          "note": "M6 soak was QEMU"
+          "note": "M6 soak was QEMU",
+          "wave": "9"
         },
         {
           "id": "H4",
@@ -1053,7 +1160,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-021",
-          "note": ""
+          "note": "",
+          "wave": "13"
         },
         {
           "id": "H5",
@@ -1061,7 +1169,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Runbooks exist for the lab"
+          "note": "Runbooks exist for the lab",
+          "wave": "6"
         },
         {
           "id": "H6",
@@ -1069,7 +1178,8 @@
           "status": "lived",
           "ships": "S1",
           "ref": "ADR-018",
-          "note": "`v0.1.0-everest-closed` (`f72b4276`), `v0.1.0-m8-8-ubuntu` (`c3a70e62`)"
+          "note": "`v0.1.0-everest-closed` (`f72b4276`), `v0.1.0-m8-8-ubuntu` (`c3a70e62`)",
+          "wave": "0"
         },
         {
           "id": "H7",
@@ -1077,7 +1187,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-021",
-          "note": ""
+          "note": "",
+          "wave": "13"
         },
         {
           "id": "H8",
@@ -1085,7 +1196,8 @@
           "status": "planned",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": ""
+          "note": "",
+          "wave": "6"
         }
       ],
       "counts": {
@@ -1116,7 +1228,8 @@
           "status": "lived",
           "ships": "S1",
           "ref": "M3.17",
-          "note": "`RAYNU-V-M3-L3-VERIFY-OK`"
+          "note": "`RAYNU-V-M3-L3-VERIFY-OK`",
+          "wave": "0"
         },
         {
           "id": "I2",
@@ -1124,7 +1237,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-006",
-          "note": "`80 verified, 0 errors` covers part; not all L2"
+          "note": "`80 verified, 0 errors` covers part; not all L2",
+          "wave": "V"
         },
         {
           "id": "I3",
@@ -1132,7 +1246,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-004",
-          "note": "Partial; the headline proof"
+          "note": "Partial; the headline proof",
+          "wave": "V"
         },
         {
           "id": "I4",
@@ -1140,7 +1255,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "ADR-001",
-          "note": ""
+          "note": "",
+          "wave": "V"
         },
         {
           "id": "I5",
@@ -1148,7 +1264,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "M6 bar",
-          "note": ""
+          "note": "",
+          "wave": "V"
         },
         {
           "id": "I6",
@@ -1156,7 +1273,8 @@
           "status": "lived",
           "ships": "S1",
           "ref": "ADR-010",
-          "note": "`site/paper.html`; docs/adr/ADR-010.md evidence-only sections"
+          "note": "`site/paper.html`; docs/adr/ADR-010.md evidence-only sections",
+          "wave": "0"
         },
         {
           "id": "I7",
@@ -1164,7 +1282,8 @@
           "status": "lived",
           "ships": "S1",
           "ref": "ADR-008",
-          "note": "`rust-toolchain.toml`, `verus-version.toml`; `./tools/verus-verify-smoke.sh`"
+          "note": "`rust-toolchain.toml`, `verus-version.toml`; `./tools/verus-verify-smoke.sh`",
+          "wave": "0"
         },
         {
           "id": "I8",
@@ -1172,7 +1291,8 @@
           "status": "lived",
           "ships": "S1",
           "ref": "ADR-002",
-          "note": "Budget table in CLAUDE.md; docs/progress.md verification checkpoint"
+          "note": "Budget table in CLAUDE.md; docs/progress.md verification checkpoint",
+          "wave": "0"
         }
       ],
       "counts": {
@@ -1201,7 +1321,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "M5.5 / ADR-007",
-          "note": ""
+          "note": "",
+          "wave": "16"
         },
         {
           "id": "J2",
@@ -1209,7 +1330,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "M5.5",
-          "note": ""
+          "note": "",
+          "wave": "16"
         },
         {
           "id": "J3",
@@ -1217,7 +1339,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "M5.5",
-          "note": ""
+          "note": "",
+          "wave": "16"
         },
         {
           "id": "J4",
@@ -1225,7 +1348,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "M5.5",
-          "note": "The M5.5 gate"
+          "note": "The M5.5 gate",
+          "wave": "16"
         }
       ],
       "counts": {
@@ -1254,7 +1378,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "M9",
-          "note": ""
+          "note": "",
+          "wave": "17"
         },
         {
           "id": "K2",
@@ -1262,7 +1387,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "M9",
-          "note": ""
+          "note": "",
+          "wave": "17"
         },
         {
           "id": "K3",
@@ -1270,7 +1396,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "M9 / ADR-004",
-          "note": ""
+          "note": "",
+          "wave": "17"
         },
         {
           "id": "K4",
@@ -1278,7 +1405,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "M9",
-          "note": ""
+          "note": "",
+          "wave": "17"
         },
         {
           "id": "K5",
@@ -1286,7 +1414,8 @@
           "status": "planned",
           "ships": "Final",
           "ref": "M9",
-          "note": ""
+          "note": "",
+          "wave": "17"
         }
       ],
       "counts": {
@@ -1303,6 +1432,465 @@
           "total": 5
         }
       }
+    }
+  ],
+  "waves": [
+    {
+      "id": "0",
+      "theme": "Base, already lived",
+      "rows": [
+        "A1",
+        "A2",
+        "A10",
+        "B1",
+        "B2",
+        "B3",
+        "C1",
+        "C2",
+        "C3",
+        "C5",
+        "C17",
+        "D1",
+        "D2",
+        "E1",
+        "E2",
+        "E3",
+        "F1",
+        "F2",
+        "G1",
+        "G2",
+        "H1",
+        "H6",
+        "I1",
+        "I6",
+        "I7",
+        "I8"
+      ],
+      "iron": "",
+      "why": "What Everest and M8.0–M8.8 left on the R640. Regression set for every later wave.",
+      "counts": {
+        "lived": 26,
+        "in flight": 0,
+        "planned": 0,
+        "total": 26
+      },
+      "closed": true
+    },
+    {
+      "id": "1",
+      "theme": "Close M8.9",
+      "rows": [
+        "D3",
+        "D7",
+        "D8"
+      ],
+      "iron": "D3",
+      "why": "Never open new work with an iron loop half-done. The port 4 cable arrives, this closes.",
+      "counts": {
+        "lived": 0,
+        "in flight": 3,
+        "planned": 0,
+        "total": 3
+      },
+      "closed": false
+    },
+    {
+      "id": "2",
+      "theme": "The box tells the truth",
+      "rows": [
+        "D5",
+        "D6",
+        "D4",
+        "B20",
+        "A3"
+      ],
+      "iron": "D5",
+      "why": "Cheap, in code just touched; each would have saved a day in October.",
+      "counts": {
+        "lived": 0,
+        "in flight": 0,
+        "planned": 5,
+        "total": 5
+      },
+      "closed": false
+    },
+    {
+      "id": "3",
+      "theme": "State survives",
+      "rows": [
+        "C8",
+        "G4",
+        "C7"
+      ],
+      "iron": "C8",
+      "why": "M8.5 in ADR-018 terms. Everything after depends on it.",
+      "counts": {
+        "lived": 0,
+        "in flight": 0,
+        "planned": 3,
+        "total": 3
+      },
+      "closed": false
+    },
+    {
+      "id": "4",
+      "theme": "Survives a power cut, unattended",
+      "rows": [
+        "B5",
+        "B4",
+        "D9",
+        "D10",
+        "H2"
+      ],
+      "iron": "B5",
+      "why": "The first \"walk away from the rack\" moment. Needs wave 3.",
+      "counts": {
+        "lived": 0,
+        "in flight": 0,
+        "planned": 5,
+        "total": 5
+      },
+      "closed": false
+    },
+    {
+      "id": "5",
+      "theme": "A customer can be let in",
+      "rows": [
+        "E6",
+        "E4",
+        "E5",
+        "G3",
+        "E12"
+      ],
+      "iron": "E6",
+      "why": "Security and audit together; what diligence asks for first. Host-heavy, overlaps wave 4 iron time.",
+      "counts": {
+        "lived": 0,
+        "in flight": 0,
+        "planned": 5,
+        "total": 5
+      },
+      "closed": false
+    },
+    {
+      "id": "6",
+      "theme": "Installable like a product",
+      "rows": [
+        "A5",
+        "A7",
+        "A4",
+        "H5",
+        "F10",
+        "D11",
+        "H8"
+      ],
+      "iron": "A7",
+      "why": "Needs C8 so an update keeps guests. Signing (A5) needs a key decision from the operator.",
+      "counts": {
+        "lived": 0,
+        "in flight": 0,
+        "planned": 7,
+        "total": 7
+      },
+      "closed": false
+    },
+    {
+      "id": "7",
+      "theme": "More than one guest, properly",
+      "rows": [
+        "B6",
+        "B8",
+        "B7",
+        "B9",
+        "C4",
+        "C6",
+        "E11",
+        "E17",
+        "A8"
+      ],
+      "iron": "B8",
+      "why": "Performance and capacity. B8 before B7: SMP on an 8259 is misery.",
+      "counts": {
+        "lived": 0,
+        "in flight": 1,
+        "planned": 8,
+        "total": 9
+      },
+      "closed": false
+    },
+    {
+      "id": "8",
+      "theme": "See the hardware",
+      "rows": [
+        "F3",
+        "F4",
+        "F5"
+      ],
+      "iron": "F3",
+      "why": "Tier 1 only. Host work plus one iron screenshot.",
+      "counts": {
+        "lived": 0,
+        "in flight": 0,
+        "planned": 3,
+        "total": 3
+      },
+      "closed": false
+    },
+    {
+      "id": "9",
+      "theme": "Prove it: Shipment 1",
+      "rows": [
+        "H3"
+      ],
+      "iron": "H3",
+      "why": "72 hours on the R640 with a guest under load, then rerun wave 0. The S1 release.",
+      "counts": {
+        "lived": 0,
+        "in flight": 0,
+        "planned": 1,
+        "total": 1
+      },
+      "closed": false
+    },
+    {
+      "id": "10",
+      "theme": "Port roles and the one-cable customer",
+      "rows": [
+        "D12",
+        "D13"
+      ],
+      "iron": "D13",
+      "why": "First Final wave; the question the lab asked on 2026-10-19.",
+      "counts": {
+        "lived": 0,
+        "in flight": 0,
+        "planned": 2,
+        "total": 2
+      },
+      "closed": false
+    },
+    {
+      "id": "11",
+      "theme": "Guest features",
+      "rows": [
+        "B10",
+        "B11",
+        "B12",
+        "B13",
+        "B14",
+        "B15",
+        "B16",
+        "B17",
+        "B18"
+      ],
+      "iron": "B13",
+      "why": "Windows is the iron thread; the rest is host-first.",
+      "counts": {
+        "lived": 0,
+        "in flight": 0,
+        "planned": 9,
+        "total": 9
+      },
+      "closed": false
+    },
+    {
+      "id": "12",
+      "theme": "Storage depth",
+      "rows": [
+        "C9",
+        "C10",
+        "C11",
+        "C12",
+        "C13",
+        "C14",
+        "C15",
+        "C16"
+      ],
+      "iron": "C9",
+      "why": "NVMe first; it is TCG-proven already.",
+      "counts": {
+        "lived": 0,
+        "in flight": 0,
+        "planned": 8,
+        "total": 8
+      },
+      "closed": false
+    },
+    {
+      "id": "13",
+      "theme": "Identity and operations depth",
+      "rows": [
+        "E7",
+        "E8",
+        "E9",
+        "E10",
+        "E13",
+        "E14",
+        "E15",
+        "E16",
+        "H4",
+        "H7",
+        "A6",
+        "A9"
+      ],
+      "iron": "A6",
+      "why": "TPM measured boot is the only iron row.",
+      "counts": {
+        "lived": 0,
+        "in flight": 0,
+        "planned": 12,
+        "total": 12
+      },
+      "closed": false
+    },
+    {
+      "id": "14",
+      "theme": "Network depth",
+      "rows": [
+        "D14",
+        "D15",
+        "D16",
+        "D17",
+        "D18",
+        "D19",
+        "D20",
+        "D21",
+        "D22",
+        "D23"
+      ],
+      "iron": "D14",
+      "why": "VLAN first; it unlocks most customer topologies.",
+      "counts": {
+        "lived": 0,
+        "in flight": 0,
+        "planned": 10,
+        "total": 10
+      },
+      "closed": false
+    },
+    {
+      "id": "15",
+      "theme": "Audit and hardware depth",
+      "rows": [
+        "G5",
+        "G6",
+        "G7",
+        "F6",
+        "F7",
+        "F8",
+        "F9"
+      ],
+      "iron": "F8",
+      "why": "Watchdog is the iron row; Tier 2 Redfish stays non-blocking (ADR-005).",
+      "counts": {
+        "lived": 0,
+        "in flight": 0,
+        "planned": 7,
+        "total": 7
+      },
+      "closed": false
+    },
+    {
+      "id": "16",
+      "theme": "Migration from VMware",
+      "rows": [
+        "J1",
+        "J2",
+        "J3",
+        "J4"
+      ],
+      "iron": "J4",
+      "why": "M5.5 as its own workstream (ADR-007).",
+      "counts": {
+        "lived": 0,
+        "in flight": 0,
+        "planned": 4,
+        "total": 4
+      },
+      "closed": false
+    },
+    {
+      "id": "17",
+      "theme": "Cluster (M9)",
+      "rows": [
+        "K1",
+        "K2",
+        "K3",
+        "K4",
+        "K5",
+        "B19"
+      ],
+      "iron": "K3",
+      "why": "Live migration is the iron thread; hot-add rides with it.",
+      "counts": {
+        "lived": 0,
+        "in flight": 0,
+        "planned": 6,
+        "total": 6
+      },
+      "closed": false
+    },
+    {
+      "id": "V",
+      "theme": "Verification, continuous",
+      "rows": [
+        "I2",
+        "I3",
+        "I4",
+        "I5"
+      ],
+      "iron": "",
+      "why": "[V] north star. Runs beside every wave; never waits for one.",
+      "counts": {
+        "lived": 0,
+        "in flight": 0,
+        "planned": 4,
+        "total": 4
+      },
+      "closed": false
+    }
+  ],
+  "current_wave": "1",
+  "next_up": [
+    {
+      "id": "D3",
+      "capability": "Guest frames leave and return on the second LOM port (`:39` / port 4)",
+      "status": "in flight",
+      "role": "iron thread"
+    },
+    {
+      "id": "D7",
+      "capability": "Guest address on the customer LAN: DHCP from their server or static from the SPA",
+      "status": "in flight",
+      "role": "host-first"
+    },
+    {
+      "id": "D8",
+      "capability": "SSH to the guest from another machine",
+      "status": "in flight",
+      "role": "host-first"
+    }
+  ],
+  "filler": [
+    {
+      "id": "D6",
+      "capability": "virtio-net carrier follows the uplink (guest sees `NO-CARRIER` when port is dark)",
+      "wave": "2"
+    },
+    {
+      "id": "D4",
+      "capability": "Uplink discovery: egress is the other BCM5720 function on any R640, not one MAC constant",
+      "wave": "2"
+    },
+    {
+      "id": "B20",
+      "capability": "Guest exit/stop reasons readable on the page (why did it stop)",
+      "wave": "2"
+    },
+    {
+      "id": "A3",
+      "capability": "Build identity (git SHA, CI run) visible on the SPA, not only COM2",
+      "wave": "2"
     }
   ]
 }
