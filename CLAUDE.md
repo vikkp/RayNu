@@ -303,6 +303,7 @@ All ADRs live in `docs/adr/`. Format: numbered, dated, context/decision/rational
 | 018   | Post-Everest M8 operator hardening    | Everest CLOSED on iron `f72b4276`; rollback kit `v0.1.0-everest-closed`; M8 = persist/TLS/auth/console/upload/catalog/Windows-later; cluster → **M9**; no Proven Core expansion |
 | 019   | Guests screen is the spare boot policy | Guests lists the latched spare image and chooses boot or `linux_iso`. Slice 1 places only the 8 GiB window. Windows is refused. Decision 9 reserves an ISO library at the high end of RAYNU-SPARE. M8.8 lived on `c3a70e62`. Rollback `v0.1.0-m8-8-ubuntu` |
 | 020   | RayNu VM Generation 1                  | One specified VM that boots unmodified OS media. RayNu-F stays host-side and outside the Proven Core. Phases 0–5. Patched Alpine reboot-to-disk lived; the patcher is still on the product path. Not built past that. |
+| 021   | Professional-grade bar: Shipment 1 and the final SKU | One catalog (A–K; lived / in flight / planned) is the single source for `site/sku.json` via `./tools/sync-sku-site.sh`; S1 = dedicated-box letter; new S1 rows append as M8.10+; no Proven Core expansion |
 
 **Rule:** Any new ADR is added here AND to `docs/adr/ADR-NNN.md`.
 

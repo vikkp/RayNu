@@ -95,6 +95,9 @@ M8.9  Admin-attached guest NIC (ADR-013 Appendix C)
       M8.9.1 record · M8.9.2 Guests panel · M8.9.3 DHCP preview
       M8.9.4 egress · M8.9.5 address in the guest · M8.9.6 close
 
+→ M8.10+ appended from ADR-021 S1 rows as predecessors close
+  (uplink discovery · link state on the SPA · clean shutdown · autostart ·
+   host NTP/static address · config persist · signed EFI · in-place update)
 → M9 sketch: vMotion-like · DRS-like · hot-add
 ```
 
