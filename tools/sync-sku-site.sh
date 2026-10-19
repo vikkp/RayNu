@@ -289,6 +289,7 @@ if want_next:
             print(f"  {f['id']:<4} {f['capability']}")
     closed = [w["id"] for w in waves if w["closed"] and w["id"] != "V"]
     print(f"Closed waves: {', '.join(closed) if closed else 'none'}. One iron thread at a time. Edit docs/adr/ADR-021.md, then ./tools/sync-sku-site.sh.")
+    print("Branch off main. Merge when the gate closes. Never chain.")
     sys.exit(0)
 
 if check:

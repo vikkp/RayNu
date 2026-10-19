@@ -99,6 +99,9 @@ pub fn prop_sku_catalog_published() -> bool {
         && adr.contains("| Letter | Name | Rows | Meaning |")
         && sync.contains("letters table is empty")
         && json.contains("\"letters\": [")
+        && include_str!("../CLAUDE.md").contains("Branch off main. Merge when the gate closes. Never chain.")
+        && include_str!("../.github/workflows/branching.yml").contains("github.base_ref")
+        && sync.contains("Never chain")
 }
 
 #[cfg(test)]
