@@ -1,13 +1,13 @@
 ---
 hda_version: 1
-last_updated: 2026-10-18
+last_updated: 2026-10-19
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
 mount_everest_target: "CLOSED on iron 2026-09-11: Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest). Next: M8 operator hardening (ADR-018)."
 months_to_everest: 0.0
 months_to_everest_prev: 0.0
-velocity_commits_30d: 614
+velocity_commits_30d: 615
 velocity_gates_30d: 65
 overall_pct: 99
 confidence: high
@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-9-tx-hang-trace |
-| Summary | **The post-TX hang gets a trace, and the PIT tick gets a wall deadline.** Iron `ccf68f7c`: `exit:124` and IRQ 0 climbing with `enp0s5` down; `ip link set enp0s5 up` returned, then `tx=1 sent=1 rx=0`, no `exit:`, no echo, SPA ticking, Stop in `poll_idle` (`0x34` at `0x11c5e8`). This kernel is on the 8259 PIT (`virtual wire mode setup with no configuration`), so the three LVT-timer EFIs were on a dead branch. COM2 now prints `boot: M8.9 net post-tx` at the first frame, +2 s, +10 s and Stop: exit kinds, PIT raises, injects, every inject early-return, INTA 0/4/11, both 8259s, virtio-net ISR, LAPIC IRR, IF, interruptibility. The nominal preemption tick keeps its deadline across un-paced resumes. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | m8-9-pic-eoi-reinject |
+| Summary | **The trace spoke: an 8259 EOI bug and a dropped inject.** Iron `0dcc1cea` (PR #406) printed `boot: M8.9 net post-tx` at t0 / +2 s / +10 s. The PIT wall deadline ticks (`pre=108 pit=108` in 8 s) and the guest is alive (userspace at +2 s, `poll_idle` IF=1 at +10 s, Enter echoed), but after `take11=1 take0=1 inj=2` the inject path found nothing deliverable for the rest of the run (`skip_idle=385`). Slave ISR stayed `0x08` with the virtio-net ISR unread: the injected IRQ 11 vector never ran. Master ISR went `0x05 → 0x01` on Linux's specific EOI `0x60`: OCW2 cleared the highest-numbered in-service bit (cascade) instead of IRQ 0, so IRQ 0 stayed in service and no PIT was offered again — that is why `timeout 1 sleep 5` never returned. This EFI: OCW2 specific EOI clears the named level and non-specific clears the highest priority; an external interrupt whose delivery a VM exit cut short is re-queued from `IDT_VECTORING_INFO` (never read before); the trace adds `eoi_m= eoi_s= ocw2= idtv= reinj=`. Previous (m8-9-tx-hang-trace): **The post-TX hang gets a trace, and the PIT tick gets a wall deadline.** Iron `ccf68f7c`: `exit:124` and IRQ 0 climbing with `enp0s5` down; `ip link set enp0s5 up` returned, then `tx=1 sent=1 rx=0`, no `exit:`, no echo, SPA ticking, Stop in `poll_idle` (`0x34` at `0x11c5e8`). This kernel is on the 8259 PIT (`virtual wire mode setup with no configuration`), so the three LVT-timer EFIs were on a dead branch. COM2 now prints `boot: M8.9 net post-tx` at the first frame, +2 s, +10 s and Stop: exit kinds, PIT raises, injects, every inject early-return, INTA 0/4/11, both 8259s, virtio-net ISR, LAPIC IRR, IF, interruptibility. The nominal preemption tick keeps its deadline across un-paced resumes. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. Nested QEMU ≠ R640. |
-| Gates touched | `pic_snap` (both 8259s, IRQ 11 INTA, `raise_pit` count), `INJECT_SKIP` reasons, Linux exit buckets, `guest_uefi_preempt_nominal_due` / `guest_uefi_preempt_unpaced_value`. M8.9.6 stays open. No doorbell. No format of UBUNTU0. The Ubuntu disk stays. |
+| Gates touched | `pic_ocw2_eoi_bit` / `pic_ocw2_is_eoi` (8259 OCW2), `guest_uefi_idt_vectoring_reinject`, `REINJECT_INFO` ahead of any new take, `pic_snap` EOI counters. Previous: `pic_snap` (both 8259s, IRQ 11 INTA, `raise_pit` count), `INJECT_SKIP` reasons, Linux exit buckets, `guest_uefi_preempt_nominal_due` / `guest_uefi_preempt_unpaced_value`. M8.9.6 stays open. No doorbell. No format of UBUNTU0. The Ubuntu disk stays. |
 | Months Δ | 0.0 held (Everest closed). Overall 99 held. LOIHDA Bar A 92 held, Bar B 70 held, perc 86 held, unmodified 45 held, overall LOI 78 held, months A 0.25 held, months B 1.25 held. |
 
 
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-19 | m8-9-pic-eoi-reinject | 0.0 | 99 | **8259 EOI fix + lost-inject re-queue.** `0dcc1cea` trace: PIT wall deadline ticks, guest alive, but `take11=1 take0=1 inj=2` then nothing (`skip_idle=385`); slave ISR `0x08` stuck with net ISR unread (IRQ 11 vector never ran), master ISR `0x05 → 0x01` on EOI `0x60` (wrong bit cleared, IRQ 0 stuck in service, no PIT). OCW2 fixed; `IDT_VECTORING_INFO` re-inject; trace adds `eoi_m/eoi_s/ocw2/idtv/reinj`. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-18 | m8-9-tx-hang-trace | 0.0 | 99 | **Post-TX hang trace + PIT wall deadline.** `ccf68f7c` hung at the first `enp0s5` frame (`tx=1 sent=1`, `poll_idle`, no COM2 between frame and Stop). This kernel is on the 8259 PIT, not the LVT timer. `net post-tx` lines at t0/2 s/10 s/Stop; nominal tick survives un-paced resumes. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-18 | m8-9-timer-take | 0.0 | 99 | **LVT timer vector is the inject.** `4ed6522c` still left `timeout` with no `exit:`. A stalled one-shot is re-latched. Stop prints `sent=` and `held=`. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-17 | m8-9-timer-before-pic | 0.0 | 99 | **LAPIC timer injects ahead of virtio IRQ 11.** `9cdf496c` `sleep 1` returned, then `net tx=1 rx=0` and no `exit:`. Scores held. months 0.0 held; overall 99 held |
@@ -1117,7 +1118,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     Flash the m8-9-tx-hang-trace EFI, save the vNIC, Start `10240 MiB@18432`, log in, `sudo ip link set enp0s5 up`, wait 15 s, Stop, paste every `boot: M8.9 net post-tx` line. `ccf68f7c` hung at the first guest frame with the kernel on the 8259 PIT (no LVT timer). No guest LAN until a frame leaves `:39` and a reply comes back. M8.9.6 stays open. Rollback is v0.1.0-m8-8-ubuntu. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/m8_plan.md.
+Next move:     Flash the m8-9-pic-eoi-reinject EFI, save the vNIC, Start `10240 MiB@18432`, log in, `sudo ip link set enp0s5 up` (Enter), type nothing for 15 s, Enter once; if the prompt returns run `timeout 1 sleep 5; echo exit:$?` and go on to `ip addr add` / `ip route add` / the connect; Stop at the end either way and paste every `boot: M8.9 net post-tx` line. `0dcc1cea` showed the 8259 EOI clearing the wrong in-service bit and the injected IRQ 11 vector never running. No guest LAN until a frame leaves `:39` and a reply comes back. M8.9.6 stays open. Rollback is v0.1.0-m8-8-ubuntu. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/m8_plan.md.
 Rollback:      M8.8 close: v0.1.0-m8-8-ubuntu → CI 38454398693 / COM2 sha=c3a70e623aec / EFI SHA256 08ef31ba87136577102ac378d8e0a512327994e8794c41c64444f5be5f8812c4
 Older SPA:     v0.1.0-m8-perc-spa → CI 36362775808 / COM2 sha=8ad2ac89125e / EFI SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849
 Standing SPA:  v0.1.0-m8-a4s → CI 36137732145 / COM2 sha=1f33eeda72f9 / EFI SHA256 5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693
