@@ -118,3 +118,4 @@ Also update the catalog row in `docs/adr/ADR-021.md` (`lived` + evidence), run `
 
 - `hda` / `update hda` / `everest` → only run HDA procedure + site sync.
 - `hda tight` → only frontmatter + scoreboard + changelog + `./tools/sync-hda-site.sh`.
+- `what next` / `next gate` → run `./tools/sync-sku-site.sh --next` and answer from it (`build-order.mdc`).

@@ -361,6 +361,25 @@ cargo verus --verify                                    # Formal proofs (Proven 
 **M6 closed** (EXT → `RAYNU-V-M6-EXT-OK`; `80 verified, 0 errors`). Production-ready bar met on Latitude/QEMU.  
 **Mount Everest (M7) CLOSED on iron** (2026-09-11, EFI `f72b4276` / `--run 34552377351`): coexist `HOST-NIC-HTTP-OK` on `10.99.99.145:8443` → SPA Start of RayNu-F ISO → `RAYNU-V-M7-ISO-INSTALL-OK` → `RAYNU-V-RAYNU-F-DISK-BOOT-OK` → second Linux `root=UUID=` → `login:`. Through M7.4 closed on Latitude; M7.5–M7.8 + E4 + E5 Phase A (`56a3ffd`) + Phase B on iron. **Next is M8** operator hardening ([ADR-018](docs/adr/ADR-018.md), [docs/m8_plan.md](docs/m8_plan.md)) — leftover-disk persist across HV reboot, then TLS/auth/console. Cluster is **M9**. HDA overall stays 99% (not 100%). **What to build next:** `./tools/sync-sku-site.sh --next` (ADR-021 waves; rule `.cursor/rules/build-order.mdc`). **Iron rollback for M8.0:** GitHub Latest [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) → git `f72b4276d198b5e90147e9be1037d0d0b7213a28` / CI `--run 34552377351` / EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc` (COM2 `build: sha=f72b4276d198`). Do not flash a later persist prototype as the known-good. Do not F11 `34548550755` / `7f8dc0a9`. Plan: [docs/m7_plan.md](docs/m7_plan.md) (closed). HDA: [docs/hda.md](docs/hda.md). Lived: [docs/progress.md](docs/progress.md). Rule: [`.cursor/rules/iron-rollback.mdc`](.cursor/rules/iron-rollback.mdc). **M8 / persist / LOI work: read [docs/m8_state.md](docs/m8_state.md) first** (known-good builds, prototype table, diagnosis, Phase 0–3 plan).
 
+### What next (run this, do not guess)
+
+When the user asks **"what next"**, **"what should we build next"**, **"what do I pick up"**,
+**"next gate"**, or you must decide the next task yourself:
+
+```bash
+./tools/sync-sku-site.sh --next
+```
+
+It prints the current ADR-021 wave, the rows to pick up in order with the one
+**iron thread** marked, and host-first filler for when the R640 is busy. Answer
+from its output, start with the first row it prints unless the user names
+another, and quote it in the reply. The order behind it is the **Build order**
+section of [ADR-021](docs/adr/ADR-021.md); the procedure when a gate passes is
+[`.cursor/rules/build-order.mdc`](.cursor/rules/build-order.mdc) (set the row
+`lived` with evidence, run `./tools/sync-sku-site.sh`, stage `site/sku.json`,
+run `--next` again). Do not pick a row from a later wave for iron work, and do
+not derive a percent-to-GA from the catalog counts (HDA stays 99%).
+
 ### Risk Hotspots
 
 - **M2 is the #1 risk.** EPT + interrupt virtualization is where hypervisors stall. Plan 14–18 weeks.

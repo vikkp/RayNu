@@ -13,6 +13,10 @@ which wave is current.
 
 ## Ask the tool before choosing work
 
+Trigger phrases: `what next`, `what's next`, `what should we build next`,
+`what do I pick up`, `next gate`, `next task`, or any time you choose work
+without the user naming it.
+
 ```bash
 ./tools/sync-sku-site.sh --next
 ```

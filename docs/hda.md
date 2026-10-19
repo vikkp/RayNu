@@ -7,7 +7,7 @@ updated_by: cursor
 mount_everest_target: "CLOSED on iron 2026-09-11: Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest). Next: M8 operator hardening (ADR-018)."
 months_to_everest: 0.0
 months_to_everest_prev: 0.0
-velocity_commits_30d: 619
+velocity_commits_30d: 620
 velocity_gates_30d: 65
 overall_pct: 99
 confidence: high
@@ -381,6 +381,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-19 | what-next-trigger | 0.0 | 99 | `CLAUDE.md` gains a **What next** section: on "what next" / "next gate" run `./tools/sync-sku-site.sh --next` and answer from it; trigger phrases registered in `build-order.mdc` and `hda-update.mdc`. Docs only; scores held |
 | 2026-10-19 | sku-build-order | 0.0 | 99 | **ADR-021 waves + `--next`.** Build order as waves 0–17 + V with one iron thread each; sync tool validates coverage and computes the current wave (1, Close M8.9, iron D3); `.cursor/rules/build-order.mdc` tells agents what to pick up when a gate passes; SKU page shows Now building. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-19 | sku-final-adr | 0.0 | 99 | **ADR-021 professional-grade bar + SKU page.** iDRAC: port 4 Down, AN disabled; port 3 Up. Catalog A–K 129 rows (26 lived / 4 in flight / 99 planned; S1 67) is the single source for `site/sku.json`; SKU page rebuilt around Shipment 1 vs final SKU. New S1 rows append as M8.10+. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-19 | m8-9-egress-link | 0.0 | 99 | **`:39` PHY bring-up + wire telemetry.** `d7e2e24f`: guest healthy, `TX 15 RX 0`, ARP FAILED. Function-1 PHY was never touched. AN restart at arm, link poll, MAC port mode; `wire=` fields on the trace. Scores held. months 0.0 held; overall 99 held |
