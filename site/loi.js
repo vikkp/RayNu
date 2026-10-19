@@ -1,107 +1,81 @@
+// LOI page: a derived view of site/sku.json (ADR-021 catalog + letters).
+// No numbers of its own. No percent. No months.
 (() => {
   const $ = (id) => document.getElementById(id);
+  const STATUS_CLASS = { lived: "lived", "in flight": "flight", planned: "planned" };
 
-  const fmtNum = (n) => {
-    const x = Number(n);
-    if (!Number.isFinite(x)) return String(n);
-    return String(x);
+  const esc = (s) =>
+    String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const inline = (s) => esc(s).replace(/`([^`]+)`/g, "<code>$1</code>");
+  const rowLink = (id) => `<a class="loi-letter__row" href="sku.html#${esc(id)}">${esc(id)}</a>`;
+
+  const stack = (c) =>
+    c.total
+      ? `<div class="sku-stack loi-letter__stack" aria-hidden="true">${["lived", "in flight", "planned"]
+          .map((k) => `<span class="sku-stack__seg sku-stack__seg--${STATUS_CLASS[k]}" style="width:${(100 * c[k]) / c.total}%"></span>`)
+          .join("")}</div>`
+      : "";
+
+  const renderLetter = (L, data) => {
+    const card = $(`letter-${L.id}`);
+    if (!card) return;
+    const c = L.counts;
+    const byId = {};
+    (data.areas || []).forEach((a) => a.items.forEach((it) => (byId[it.id] = it)));
+    const open = L.rows.filter((r) => byId[r] && byId[r].status !== "lived");
+    const extra = (L.extra || []).map((r) => `${rowLink(r)} <span class="loi-letter__extra-name">${inline(byId[r] ? byId[r].capability : "")}</span>`);
+    card.classList.toggle("loi-letter--ready", L.ready);
+    card.innerHTML = `
+      <p class="loi-card__kicker">Letter ${esc(L.id)} · Bar ${esc(L.id)} · ${L.ready ? "ready" : "not yet"}</p>
+      <h3>${esc(L.name)}</h3>
+      <p class="loi-letter__meaning">${inline(L.meaning)}</p>
+      <p class="loi-letter__rows">
+        ${L.spec.includes("S1") ? `<strong>Shipment 1</strong> (${L.rows.length - (L.extra || []).length} rows, <a href="sku.html#ship-s1">the dedicated-box letter</a>)` : ""}
+        ${extra.length ? `<br />plus ${extra.join(", ")}` : ""}
+      </p>
+      ${stack(c)}
+      <p class="loi-letter__counts">
+        <b class="sku-c sku-c--lived">${c.lived}</b> lived ·
+        <b class="sku-c sku-c--flight">${c["in flight"]}</b> in flight ·
+        <b class="sku-c sku-c--planned">${c.planned}</b> planned · ${c.total} rows
+      </p>
+      <p class="loi-letter__open">${
+        L.ready
+          ? "Every row is lived on the R640. The letter can be written."
+          : `Not ready: ${open.length} row${open.length === 1 ? "" : "s"} not yet lived. The letter waits for the last of them; there is no partial letter.`
+      }</p>`;
   };
 
-  const clampPct = (n) => Math.max(0, Math.min(100, Number(n) || 0));
-
-  const fmtPct = (n) => `${fmtNum(clampPct(n))}%`;
-
-  const lookup = (spec, data, bars, pieces) => {
-    if (spec === "overall") return data.overall_pct;
-    if (spec === "months.a") return data.months_to_loi_a;
-    if (spec === "months.b") return data.months_to_loi_b;
-    if (spec.startsWith("bars.")) return bars[spec.slice(5)];
-    if (spec.startsWith("pieces.")) return pieces[spec.slice(7)];
-    return undefined;
+  const renderNow = (data) => {
+    const cur = (data.waves || []).find((w) => w.id === data.current_wave);
+    if (!cur) {
+      if ($("loi-now-title")) $("loi-now-title").textContent = "All numbered waves closed";
+      return;
+    }
+    if ($("loi-now-title")) $("loi-now-title").textContent = `Wave ${cur.id} · ${cur.theme}`;
+    if ($("loi-now-why")) $("loi-now-why").textContent = cur.why;
+    const nu = data.next_up || [];
+    if ($("loi-now-pick")) {
+      $("loi-now-pick").innerHTML = nu.length
+        ? `Picking up now: ${nu
+            .map((n) => `<a href="sku.html#${esc(n.id)}">${esc(n.id)}</a>${n.role === "iron thread" ? " <span class=\"sku-now__role sku-now__role--iron\">iron thread</span>" : ""}`)
+            .join(", ")}. Letter A is written when wave 9 closes; see <a href="sku.html#build-order">the waves</a>.`
+        : "";
+    }
   };
 
-  const apply = (data) => {
-    const a = data.months_to_loi_a;
-    const b = data.months_to_loi_b;
-    const overall = data.overall_pct;
-    const bars = data.bars || {};
-    const pieces = data.pieces || {};
-
-    if ($("loi-months")) $("loi-months").textContent = `${fmtNum(a)} mo`;
-    if ($("loi-delta")) {
-      $("loi-delta").textContent = `Bar A · was ${fmtNum(data.months_to_loi_a_prev)} · Bar B ${fmtNum(b)} mo`;
-    }
-    if ($("loi-overall")) $("loi-overall").textContent = fmtPct(overall);
-    if ($("loi-eta")) $("loi-eta").textContent = data.loi_a_eta_month;
-    if ($("loi-eta-b")) $("loi-eta-b").textContent = data.loi_b_eta_month;
-    if ($("loi-confidence")) $("loi-confidence").textContent = data.confidence;
-    if ($("loi-updated")) $("loi-updated").textContent = data.last_updated;
-    if ($("loi-commit")) {
-      $("loi-commit").textContent = data.last_commit_short || data.last_commit;
-    }
-    if ($("loi-path")) {
-      const bit = (label, spec) => `${label} ${fmtPct(lookup(spec, data, bars, pieces))}`;
-      $("loi-path").textContent = [
-        bit("Everest", "pieces.everest"),
-        bit("Persist", "pieces.persist"),
-        bit("SKU", "pieces.sku"),
-        bit("TLS", "pieces.tls"),
-        bit("Auth", "pieces.auth"),
-        bit("Console", "pieces.console"),
-        bit("PERC", "pieces.perc"),
-        bit("Unmodified", "pieces.unmodified"),
-        bit("Bar A", "bars.a"),
-        bit("Bar B", "bars.b"),
-        bit("Overall", "overall"),
-      ].join(" → ");
-    }
-
-    const setBar = (fillId, labelId, pct) => {
-      const p = clampPct(pct);
-      if ($(fillId)) $(fillId).style.width = `${fmtNum(p)}%`;
-      if ($(labelId)) $(labelId).textContent = fmtPct(pct);
-    };
-
-    setBar("loi-bar-a", "loi-bar-a-label", bars.a);
-    setBar("loi-bar-b", "loi-bar-b-label", bars.b);
-    setBar("loi-bar-overall", "loi-bar-overall-label", overall);
-
-    document.querySelectorAll("[data-bar-kicker]").forEach((el) => {
-      const key = el.getAttribute("data-bar-kicker");
-      if (key && bars[key] != null) {
-        const name = key === "b" ? "Bar B" : "Bar A";
-        el.textContent = `${name} · ${fmtPct(bars[key])}`;
+  fetch("sku.json", { cache: "no-store" })
+    .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+    .then((data) => {
+      (data.letters || []).forEach((L) => renderLetter(L, data));
+      renderNow(data);
+      if ($("loi-updated") && data.adr_date) {
+        $("loi-updated").textContent = data.adr_date;
+        $("loi-updated").setAttribute("datetime", data.adr_date);
       }
-    });
-
-    document.querySelectorAll("[data-loi-pct]").forEach((el) => {
-      const spec = el.getAttribute("data-loi-pct");
-      const v = lookup(spec, data, bars, pieces);
-      if (v == null) return;
-      el.textContent = spec.startsWith("months.") ? fmtNum(v) : fmtPct(v);
-    });
-
-    document.querySelectorAll("[data-piece]").forEach((el) => {
-      const key = el.getAttribute("data-piece");
-      if (key && pieces[key] != null) {
-        el.textContent = fmtPct(pieces[key]);
-      }
-    });
-    document.querySelectorAll("[data-piece-fill]").forEach((el) => {
-      const key = el.getAttribute("data-piece-fill");
-      if (key && pieces[key] != null) {
-        el.style.width = `${clampPct(pieces[key])}%`;
-      }
-    });
-  };
-
-  fetch("loi.json", { cache: "no-store" })
-    .then((r) => {
-      if (!r.ok) throw new Error(`loi.json ${r.status}`);
-      return r.json();
     })
-    .then(apply)
     .catch(() => {
-      /* Static fallback numbers already in HTML. */
+      const m = document.querySelector("#letter-A .loi-letter__meaning");
+      if (m) m.textContent = "Could not load site/sku.json.";
     });
 })();

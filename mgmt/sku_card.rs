@@ -9,6 +9,11 @@
 //! lab latch until ESP `auth.token`. not PERC. not cluster. not Windows.
 //! A4 TLS iron DONE. A5/A6 remain.
 //!
+//! 2026-10-19: the LOI scoreboard (`docs/loihda.md`, `site/loi.json`) is
+//! retired. `site/loi.html` is a derived view of `site/sku.json` (ADR-021
+//! Letters table). Three pages, three jobs: HDA = how we got here, SKU =
+//! what you get, LOI = are we ready to talk.
+//!
 //! ADR-021 (2026-10-19): the card also carries **Shipment 1** and the
 //! **final SKU**, both rendered from `site/sku.json`, which
 //! `./tools/sync-sku-site.sh` generates from the ADR-021 catalog. The
@@ -21,11 +26,12 @@ pub const SKU_CARD_HOST_OK_MARKER: &str = "RAYNU-V-M8-SKU-CARD-OK";
 pub const SKU_CARD_RESIDUAL_NOTE: &str =
     "residual: A3 SKU card is docs; A4 TLS iron DONE (lab millicert); PRE-EBS SNP plaintext HTTP remains; lab latch until auth.token; 8 GiB USB slice; not PERC; not cluster; not Windows; nested QEMU ≠ R640";
 
-/// True when the SKU page and LOIHDA A3 row stay honest.
+/// True when the SKU page stays honest and the LOI page derives from it.
 pub fn prop_sku_card_package() -> bool {
     let sku = include_str!("../docs/sku.md");
     let html = include_str!("../site/sku.html");
-    let loi = include_str!("../docs/loihda.md");
+    let loi = include_str!("../site/loi.html");
+    let loi_js = include_str!("../site/loi.js");
     sku.contains("dedicated-box")
         && sku.contains("8 GiB")
         && sku.contains("plaintext HTTP")
@@ -44,8 +50,14 @@ pub fn prop_sku_card_package() -> bool {
         && html.contains("not PERC")
         && html.contains("not cluster")
         && html.contains("not Windows")
-        && loi.contains("| A3 |")
-        && loi.contains("SKU card")
+        && loi.contains("Bar A")
+        && loi.contains("Bar B")
+        && loi.contains("sku.json")
+        && !loi.contains("loi.json")
+        && !loi.contains("loihda")
+        && loi_js.contains("fetch(\"sku.json\"")
+        && !loi_js.contains("overall_pct")
+        && !loi_js.contains("months_to_loi")
         && SKU_CARD_RESIDUAL_NOTE.contains("A4 TLS iron DONE")
         && SKU_CARD_RESIDUAL_NOTE.contains("not PERC")
         && prop_sku_catalog_published()
@@ -83,6 +95,10 @@ pub fn prop_sku_catalog_published() -> bool {
         && json.contains("\"next_up\": [")
         && html.contains("id=\"sku-now\"")
         && include_str!("../.cursor/rules/build-order.mdc").contains("sync-sku-site.sh --next")
+        && adr.contains("## Letters")
+        && adr.contains("| Letter | Name | Rows | Meaning |")
+        && sync.contains("letters table is empty")
+        && json.contains("\"letters\": [")
 }
 
 #[cfg(test)]
