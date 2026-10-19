@@ -8,6 +8,28 @@ Two shipments, one catalog. Every capability a professional operator expects fro
 
 ---
 
+## Today's box, before either shipment
+
+If you signed a non-production **dedicated-box** letter today, this is what you would hold, stated the way diligence would state it:
+
+- One `r640-hypervisor.efi` on one PowerEdge R640. Ubuntu 26.04 has reached `vikkp@raynusrv2` on a 10 GiB tail of RAYNU-SPARE (`c3a70e62`).
+- The disk that comes back after a chassis power-off is an **8 GiB** USB window (`928d6224`), not the array.
+- The page is TLS 1.2 with a lab millicert (`RAYNU-V-M8-TLS-OK`). The first minutes of boot are still **plaintext HTTP**.
+- The door is a **lab latch** (`raynu-v-bringup`) until ESP `EFI/RayNu/auth.token` exists. There is no operator account.
+- The guest NIC transmits; its uplink (LOM port 4, `:39`) had no link on the lab box. **No packet has yet returned to the guest.**
+- **not PERC** fleet: the rest of the 2.9 TB VD stays hidden; leave UBUNTU0 alone. **not cluster.** **not Windows.** Not a remote desktop; iDRAC is the console.
+
+| Row | State | Why it is on the card |
+|-----|-------|------------------------|
+| A1 Everest | DONE | The install loop you could point at (`f72b4276`). |
+| A2 Persist | DONE on evidence | Force Off, then the **8 GiB** USB window comes back (`928d6224`). |
+| A3 This SKU card | **DONE** | This page, now the Shipment 1 / final SKU card over ADR-021. |
+| A4 TLS | **DONE** on COM2 `928d6224` | Lab millicert. PRE-EBS SNP stays **plaintext HTTP**. |
+| A5 Auth | Host-ready, not iron | **lab latch** until ESP `auth.token`. |
+| A6 Console | Typed once, not a desktop | The page reached Alpine once. Ubuntu login is COM2. |
+
+---
+
 ## Shipment 1 — the dedicated-box letter
 
 One `r640-hypervisor.efi`, signed, booted from iDRAC virtual media or USB on a PowerEdge R640. The operator reaches an HTTPS page with their own certificate and their own account, on a management port with a static address they chose. They upload an Ubuntu ISO, create a guest with the CPUs, RAM and disk they want on the PERC array they already own, attach a NIC, and the page shows them that the guest uplink has link before they press Start. The guest installs, reboots to its disk, gets an address on the customer's network, and they SSH to it from their desk. They can type into it from the browser when SSH is not an option. When the rack loses power the guest comes back on its own. When a new RayNu-V ships they update from the page and roll back from the page. Every one of those actions is in an audit log they can export. Nothing in that paragraph requires COM2.

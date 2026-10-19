@@ -111,6 +111,51 @@
         </div>
       </section>
 
+      <section class="section" id="today">
+        <div class="section__inner">
+          <p class="milestone-kicker" data-reveal>Before either shipment</p>
+          <h2 data-reveal>What the lab box holds today</h2>
+          <p data-reveal>
+            If you signed a non-production <strong>dedicated-box</strong>
+            letter today, this is what you would hold, stated the way
+            diligence would state it. The catalog's <em>lived</em> rows are
+            this list with commit SHAs.
+          </p>
+          <ul class="loi-locks" data-reveal>
+            <li>
+              One <code>r640-hypervisor.efi</code> on one PowerEdge R640.
+              Ubuntu 26.04 has reached <code>vikkp@raynusrv2</code> on a
+              10 GiB tail of the PERC spare (<code>c3a70e62</code>).
+            </li>
+            <li>
+              The disk that comes back after a chassis power-off is an
+              <strong>8 GiB</strong> USB window (<code>928d6224</code>), not
+              the array.
+            </li>
+            <li>
+              The page is TLS 1.2 with a lab millicert
+              (<code>RAYNU-V-M8-TLS-OK</code>). The first minutes of boot are
+              still <strong>plaintext HTTP</strong>.
+            </li>
+            <li>
+              The door is a <strong>lab latch</strong>
+              (<code>raynu-v-bringup</code>) until <code>auth.token</code> is
+              on the stick. There is no operator account.
+            </li>
+            <li>
+              The guest NIC transmits. Its uplink, LOM port 4, had no link on
+              the lab box; no packet has yet returned to the guest.
+            </li>
+            <li>
+              <strong>not PERC</strong> fleet: the rest of the 2.9 TB virtual
+              disk stays hidden; UBUNTU0 is never touched.
+              <strong>not cluster.</strong> <strong>not Windows.</strong> Not
+              a remote desktop; iDRAC is still the console.
+            </li>
+          </ul>
+        </div>
+      </section>
+
       <section class="section" id="shipment-1">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Shipment 1 in one paragraph</p>

@@ -8,6 +8,11 @@
 //! USB 8 GiB slice. native HTTPS (lab millicert). PRE-EBS SNP plaintext HTTP.
 //! lab latch until ESP `auth.token`. not PERC. not cluster. not Windows.
 //! A4 TLS iron DONE. A5/A6 remain.
+//!
+//! ADR-021 (2026-10-19): the card also carries **Shipment 1** and the
+//! **final SKU**, both rendered from `site/sku.json`, which
+//! `./tools/sync-sku-site.sh` generates from the ADR-021 catalog. The
+//! "today" honesty phrases stay on the card in front of both shipments.
 
 /// Host/CI: the SKU page names ships vs does-not. Not an iron COM2 marker.
 pub const SKU_CARD_HOST_OK_MARKER: &str = "RAYNU-V-M8-SKU-CARD-OK";
@@ -43,6 +48,33 @@ pub fn prop_sku_card_package() -> bool {
         && loi.contains("SKU card")
         && SKU_CARD_RESIDUAL_NOTE.contains("A4 TLS iron DONE")
         && SKU_CARD_RESIDUAL_NOTE.contains("not PERC")
+        && prop_sku_catalog_published()
+}
+
+/// True when the card and the page publish Shipment 1 and the final SKU
+/// from the ADR-021 catalog, and the sync tool enforces the evidence rule.
+pub fn prop_sku_catalog_published() -> bool {
+    let sku = include_str!("../docs/sku.md");
+    let html = include_str!("../site/sku.html");
+    let adr = include_str!("../docs/adr/ADR-021.md");
+    let sync = include_str!("../tools/sync-sku-site.sh");
+    let json = include_str!("../site/sku.json");
+    sku.contains("Shipment 1")
+        && sku.contains("final SKU")
+        && sku.contains("ADR-021")
+        && sku.contains("sync-sku-site.sh")
+        && html.contains("Shipment 1")
+        && html.contains("ADR-021")
+        && html.contains("sku.js")
+        && html.contains("id=\"today\"")
+        && adr.contains("## Catalog")
+        && adr.contains("| ID | Capability | Status | Ships | Ref | Note |")
+        && adr.contains("### K. Cluster and elasticity (M9)")
+        && sync.contains("lived rows need evidence")
+        && sync.contains("--check")
+        && json.contains("\"generated_from\": \"docs/adr/ADR-021.md\"")
+        && json.contains("\"status\": \"lived\"")
+        && json.contains("\"ships\": \"S1\"")
 }
 
 #[cfg(test)]
