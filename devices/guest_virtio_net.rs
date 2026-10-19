@@ -19,7 +19,17 @@ pub const GUEST_NET_VENDOR: u16 = 0x1AF4;
 pub const GUEST_NET_DEVICE: u16 = 0x1041;
 pub const GUEST_NET_BAR: u32 = 0xFE00_3000;
 const BAR_MASK: u32 = 0xFFFF_F000;
-const QSIZE: u16 = 8;
+/// Ring size for both queues. Linux `check_sq_full_and_disable` stops the
+/// TX queue whenever `num_free < 2 + MAX_SKB_FRAGS` (19) and only
+/// `virtnet_poll_tx` / `skb_xmit_done` wake it, again at `>= 19` free.
+/// Iron `c9f4451a`: with 8 entries the queue stopped on the first frame
+/// and could never wake — `NETDEV WATCHDOG: ... transmit queue 0 timed
+/// out` every 5 s while IRQ 11, the EOIs and the PIT were all healthy
+/// (`take11=21 eoi_s=21 take0=149`). 256 is what QEMU exposes.
+const QSIZE: u16 = 256;
+/// Longest descriptor chain walked per buffer: header + linear + 17 frags
+/// fits, and a malformed `next` loop still ends.
+const CHAIN_MAX: usize = 32;
 const OFF_NOTIFY: u16 = 0x300;
 const OFF_DEVICE: u16 = 0x200;
 const VIRTIO_F_VERSION_1: u64 = 1 << 32;
@@ -522,7 +532,7 @@ fn drain_one(translate: &impl Fn(u64) -> Option<u64>) -> bool {
     let mut flen = 0usize;
     let mut unmapped = false;
     let mut di = head % QSIZE;
-    for _ in 0..8 {
+    for _ in 0..CHAIN_MAX {
         let Some(d_hpa) = translate(desc.wrapping_add(u64::from(di) * 16)) else {
             unmapped = true;
             break;
@@ -720,7 +730,7 @@ fn post_rx(eth: &[u8], translate: &impl Fn(u64) -> Option<u64>) -> bool {
     pkt[VNET_HDR_LEN..total].copy_from_slice(eth);
     let mut off = 0usize;
     let mut di = head % QSIZE;
-    for _ in 0..8 {
+    for _ in 0..CHAIN_MAX {
         if off == total {
             break;
         }
@@ -993,6 +1003,44 @@ mod guest_virtio_net_test {
         assert!(!one.contains("raise_virtio()"));
         assert!(include_str!("../vmx/guest_uefi.rs").contains("raise_deferred_tx_irq(cpu::rdtsc())"));
         assert!(include_str!("../vmx/guest_uefi.rs").contains("poll_rx(guest_uefi_gpa_to_hpa)"));
+        clear_panel_for_test();
+        clear_start_for_test();
+    }
+
+    #[test]
+    fn tx_queue_is_deep_enough_for_linux_to_wake_it() {
+        // Iron `c9f4451a`: interrupts healthy (`idtv=1 reinj=1 eoi_s=21
+        // take0=149`), yet `NETDEV WATCHDOG: transmit queue 0 timed out`
+        // every 5 s. Linux stops the TX queue at `num_free < 2 +
+        // MAX_SKB_FRAGS` and wakes it at `>= 2 + MAX_SKB_FRAGS`; an 8-entry
+        // ring can never satisfy the wake.
+        const MAX_SKB_FRAGS: u16 = 17;
+        assert!(QSIZE >= 2 + MAX_SKB_FRAGS + 1, "queue can never wake below this");
+        assert!(QSIZE.is_power_of_two(), "virtio 1.0 split ring");
+        assert_eq!(QSIZE, 256);
+        assert!(CHAIN_MAX >= usize::from(2 + MAX_SKB_FRAGS), "one skb per chain");
+        let _guard = lock();
+        clear_panel_for_test();
+        clear_start_for_test();
+        let off = 8u64 * 1024 * 1024 * 1024;
+        panel_save(
+            0,
+            NicDraft {
+                spare_off: off,
+                mode: NicMode::Manual,
+                prefix: 24,
+                ipv4: [10, 99, 99, 145],
+                gateway: [10, 99, 99, 1],
+                dns: [1, 1, 1, 1],
+            },
+        )
+        .unwrap();
+        on_accepted_start(off);
+        let bar = u64::from(GUEST_NET_BAR);
+        for q in 0..2u64 {
+            mmio_write(bar + 0x16, 2, q);
+            assert_eq!(mmio_read(bar + 0x18, 2), u64::from(QSIZE), "queue_size for queue {q}");
+        }
         clear_panel_for_test();
         clear_start_for_test();
     }
