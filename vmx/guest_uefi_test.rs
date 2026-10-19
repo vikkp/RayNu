@@ -3809,4 +3809,15 @@ fn idt_vectoring_reinjects_a_lost_external_interrupt_and_the_trace_shows_eois() 
         assert!(src.contains(field), "trace field {field}");
     }
     assert!(src.contains("const NET_TRACE_N: usize = 25;"));
+    // Iron d7e2e24f: the wire view rides on the same lines.
+    let dump = src.split_once("unsafe fn net_trace_dump(").unwrap().1;
+    let dump = dump.split_once("unsafe fn net_trace_tick(").unwrap().0;
+    assert!(dump.contains("net_wire_dump();"));
+    for field in [
+        " vtx=", " vrx=", " sent=", " held=", " wire=", " bmsr=", " bmcr=", " lpa=", " macst=",
+        " macmode=", " wtx=", " wrx=", " fcs=", " txp=", " rcb=",
+    ] {
+        assert!(dump.contains(field), "wire field {field}");
+    }
+    assert!(dump.contains("crate::mgmt::bcm5720_mmio::egress_wire()"));
 }

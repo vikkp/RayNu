@@ -6674,11 +6674,62 @@ unsafe fn net_trace_dump(tag: &str, reason: u32, rip: u64) {
     write_dec_nowait(u64::from(PREEMPT_UART_PACED.load(Ordering::Acquire)));
     serial::write_str_nowait(" txring=");
     write_dec_nowait(serial::guest_tx_len() as u64);
+    net_wire_dump();
     serial::write_str_nowait(" reason=0x");
     write_hex_u32_nowait(reason);
     serial::write_str_nowait(" rip=0x");
     write_hex_nowait(rip);
     serial::write_line_nowait(" (not ISO-INSTALL-OK)");
+}
+
+/// `:39` as the wire sees it: PHY BMSR/BMCR/LPA, MAC status and mode, MAC
+/// TX/RX frame and octet counters, ring producers. Iron `d7e2e24f`: guest
+/// `TX 15 RX 0`, ARP `FAILED`; nothing on COM2 said whether those frames
+/// reached the MAC, left on a live link, or whether anything came back.
+#[cfg(target_os = "uefi")]
+unsafe fn net_wire_dump() {
+    let (tx_done, rx_posted, tx_sent, tx_held) = crate::devices::guest_virtio_net::net_counts();
+    serial::write_str_nowait(" vtx=");
+    write_dec_nowait(u64::from(tx_done));
+    serial::write_str_nowait(" vrx=");
+    write_dec_nowait(u64::from(rx_posted));
+    serial::write_str_nowait(" sent=");
+    write_dec_nowait(u64::from(tx_sent));
+    serial::write_str_nowait(" held=");
+    write_dec_nowait(u64::from(tx_held));
+    let w = crate::mgmt::bcm5720_mmio::egress_wire();
+    serial::write_str_nowait(" wire=");
+    if !w.armed {
+        serial::write_str_nowait("unarmed");
+        return;
+    }
+    serial::write_str_nowait(if w.link_up { "up" } else { "down" });
+    serial::write_str_nowait(" bmsr=");
+    write_hex_nowait(u64::from(w.bmsr));
+    serial::write_str_nowait(" bmcr=");
+    write_hex_nowait(u64::from(w.bmcr));
+    serial::write_str_nowait(" lpa=");
+    write_hex_nowait(u64::from(w.lpa));
+    serial::write_str_nowait(" macst=");
+    write_hex_nowait(u64::from(w.mac_status));
+    serial::write_str_nowait(" macmode=");
+    write_hex_nowait(u64::from(w.mac_mode));
+    serial::write_str_nowait(" wtx=");
+    write_dec_nowait(u64::from(w.tx_frames));
+    serial::write_byte_nowait(b'/');
+    write_dec_nowait(u64::from(w.tx_octets));
+    serial::write_str_nowait(" wrx=");
+    write_dec_nowait(u64::from(w.rx_frames));
+    serial::write_byte_nowait(b'/');
+    write_dec_nowait(u64::from(w.rx_octets));
+    serial::write_str_nowait(" fcs=");
+    write_dec_nowait(u64::from(w.rx_fcs));
+    serial::write_str_nowait(" txp=");
+    write_dec_nowait(u64::from(w.tx_prod));
+    serial::write_byte_nowait(b'/');
+    write_dec_nowait(u64::from(w.tx_cons));
+    serial::write_str_nowait(" rcb=");
+    write_dec_nowait(u64::from(w.rx_rcb));
 }
 
 /// Linux-phase exit hook for the M8.9 post-TX trace: capture the baseline

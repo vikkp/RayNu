@@ -1420,12 +1420,223 @@ unsafe fn egress_send_uefi(frame: &[u8]) -> EgressSend {
 #[cfg(feature = "uefi-bin")]
 unsafe fn egress_recv_uefi(out: &mut [u8]) -> Option<usize> {
     let n = EGRESS_NIC.as_mut()?;
+    egress_link_tick(n.mmio);
     let dma = &mut *core::ptr::addr_of_mut!(EGRESS_DMA);
     rx_one(n, dma, out)
 }
 
 #[cfg(feature = "uefi-bin")]
 static EGRESS_HELD_LOGGED: AtomicBool = AtomicBool::new(false);
+
+/// MAC statistics registers (Linux `tg3_periodic_fetch_stats` reads these
+/// with `tr32` on 5705+; the block is not DMA'd there).
+const MAC_TX_STATS_OCTETS: u32 = 0x800;
+const MAC_TX_STATS_UCAST: u32 = 0x86C;
+const MAC_TX_STATS_MCAST: u32 = 0x870;
+const MAC_TX_STATS_BCAST: u32 = 0x874;
+const MAC_RX_STATS_OCTETS: u32 = 0x880;
+const MAC_RX_STATS_UCAST: u32 = 0x88C;
+const MAC_RX_STATS_MCAST: u32 = 0x890;
+const MAC_RX_STATS_BCAST: u32 = 0x894;
+const MAC_RX_STATS_FCS_ERRORS: u32 = 0x898;
+const BMCR_PDOWN: u16 = 0x0800;
+const BMCR_ISOLATE: u16 = 0x0400;
+
+/// What the `:39` PHY needs before the guest's frames can reach a wire.
+///
+/// INVARIANTS:
+/// - `Up` when `BMSR_LSTATUS` is set: leave the PHY alone
+/// - `ClearThenRestart` when the PHY is powered down or isolated
+///   (firmware never used function 1): clear those bits, then restart AN
+/// - `Restart` otherwise: a plain AN restart (`BMCR_ANENABLE|BMCR_ANRESTART`)
+/// - Never panics
+///
+/// Iron `d7e2e24f`: guest `TX 15 packets`, `RX 0`, ARP `FAILED`, carrier 1
+/// (virtio always says up). Pre-EBS peek had function 1 at `bmsr=7949`
+/// (no link, AN not complete) while function 0 read `796d`. `arm_egress`
+/// never touched the PHY, so a down `:39` stayed down.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EgressPhyPlan {
+    Up,
+    ClearThenRestart,
+    Restart,
+}
+
+pub fn egress_phy_plan(bmsr: u16, bmcr: u16) -> EgressPhyPlan {
+    if bmsr_link_up(bmsr) {
+        EgressPhyPlan::Up
+    } else if bmcr & (BMCR_PDOWN | BMCR_ISOLATE) != 0 {
+        EgressPhyPlan::ClearThenRestart
+    } else {
+        EgressPhyPlan::Restart
+    }
+}
+
+/// Poll the `:39` link no more often than this (TSC ticks at the 2.1 GHz
+/// fallback ≈ 500 ms). One MDIO read per poll, not one per VM exit.
+pub const EGRESS_LINK_POLL_TSC: u64 = 1_050_000_000;
+
+/// Whether an exit at `now` should poll the `:39` link again.
+///
+/// INVARIANTS:
+/// - Never while the link is already up
+/// - First poll happens at once (`last == 0`)
+/// - Then at most once per [`EGRESS_LINK_POLL_TSC`]
+pub fn egress_link_poll_due(link_up: bool, last: u64, now: u64) -> bool {
+    !link_up && (last == 0 || now.wrapping_sub(last) >= EGRESS_LINK_POLL_TSC)
+}
+
+/// Function-1 wire view for the M8.9 post-TX trace and the Stop line.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct EgressWire {
+    pub armed: bool,
+    pub link_up: bool,
+    pub bmsr: u16,
+    pub bmcr: u16,
+    pub lpa: u16,
+    pub mac_status: u32,
+    pub mac_mode: u32,
+    pub tx_octets: u32,
+    pub tx_frames: u32,
+    pub rx_octets: u32,
+    pub rx_frames: u32,
+    pub rx_fcs: u32,
+    pub tx_prod: u16,
+    pub tx_cons: u16,
+    pub rx_rcb: u16,
+}
+
+/// Read the `:39` PHY, MAC status and MAC statistics. Host builds return
+/// the default. One snapshot costs four MDIO reads; callers are the trace
+/// lines and Stop, not the per-exit path.
+pub fn egress_wire() -> EgressWire {
+    #[cfg(feature = "uefi-bin")]
+    {
+        // SAFETY: BSP trace path; function-1 BAR0 is identity-mapped MMIO
+        // and reads here are status/statistics only.
+        // KANI-TARGET: egress_phy_plan / egress_link_poll_due (host).
+        return unsafe { egress_wire_uefi() };
+    }
+    #[cfg(not(feature = "uefi-bin"))]
+    {
+        EgressWire::default()
+    }
+}
+
+#[cfg(feature = "uefi-bin")]
+static EGRESS_LINK_UP: AtomicBool = AtomicBool::new(false);
+#[cfg(feature = "uefi-bin")]
+static EGRESS_LINK_LAST_POLL: AtomicU64 = AtomicU64::new(0);
+
+#[cfg(feature = "uefi-bin")]
+unsafe fn egress_phy_addr(mmio: u64) -> u32 {
+    phy_addr_5717_plus(1, mmio_read(mmio, SG_DIG_STATUS))
+}
+
+#[cfg(feature = "uefi-bin")]
+unsafe fn egress_wire_uefi() -> EgressWire {
+    let Some(n) = EGRESS_NIC.as_ref() else {
+        return EgressWire::default();
+    };
+    let mmio = n.mmio;
+    let phy = egress_phy_addr(mmio);
+    let _ = phy_read(mmio, phy, MII_BMSR);
+    let bmsr = phy_read(mmio, phy, MII_BMSR).unwrap_or(0);
+    EgressWire {
+        armed: true,
+        link_up: EGRESS_LINK_UP.load(Ordering::Acquire),
+        bmsr,
+        bmcr: phy_read(mmio, phy, MII_BMCR).unwrap_or(0),
+        lpa: phy_read(mmio, phy, MII_LPA).unwrap_or(0),
+        mac_status: mmio_read(mmio, MAC_STATUS),
+        mac_mode: mmio_read(mmio, MAC_MODE),
+        tx_octets: mmio_read(mmio, MAC_TX_STATS_OCTETS),
+        tx_frames: mmio_read(mmio, MAC_TX_STATS_UCAST)
+            .wrapping_add(mmio_read(mmio, MAC_TX_STATS_MCAST))
+            .wrapping_add(mmio_read(mmio, MAC_TX_STATS_BCAST)),
+        rx_octets: mmio_read(mmio, MAC_RX_STATS_OCTETS),
+        rx_frames: mmio_read(mmio, MAC_RX_STATS_UCAST)
+            .wrapping_add(mmio_read(mmio, MAC_RX_STATS_MCAST))
+            .wrapping_add(mmio_read(mmio, MAC_RX_STATS_BCAST)),
+        rx_fcs: mmio_read(mmio, MAC_RX_STATS_FCS_ERRORS),
+        tx_prod: n.tx_prod,
+        tx_cons: n.tx_cons,
+        rx_rcb: n.rx_rcb_ptr,
+    }
+}
+
+/// `arm_egress`: look at the `:39` PHY once and, if the link is down,
+/// clear power-down / isolate and restart auto-negotiation. No wait here
+/// (this runs inside a VM exit); [`egress_link_tick`] finishes the job.
+#[cfg(feature = "uefi-bin")]
+unsafe fn egress_phy_kick(mmio: u64) {
+    let bmsr = peek_phy_bmsr(mmio, 1);
+    let phy = egress_phy_addr(mmio);
+    let bmcr = phy_read(mmio, phy, MII_BMCR).unwrap_or(0);
+    let plan = egress_phy_plan(bmsr, bmcr);
+    serial_step("boot: M8.9 egress :39 phy bmsr=");
+    write_hex_u16(bmsr);
+    serial_step(" bmcr=");
+    write_hex_u16(bmcr);
+    match plan {
+        EgressPhyPlan::Up => {
+            EGRESS_LINK_UP.store(true, Ordering::Release);
+            egress_adjust_mac(mmio, phy);
+            serial_step(" link=up\n");
+        }
+        EgressPhyPlan::ClearThenRestart => {
+            let _ = phy_write(mmio, phy, MII_BMCR, BMCR_ANENABLE);
+            tsc_spin_ms(1);
+            let _ = phy_write(mmio, phy, MII_BMCR, BMCR_ANENABLE | BMCR_ANRESTART);
+            serial_step(" link=down pdown/isolate cleared, AN restarted\n");
+        }
+        EgressPhyPlan::Restart => {
+            let _ = phy_write(mmio, phy, MII_BMCR, BMCR_ANENABLE | BMCR_ANRESTART);
+            serial_step(" link=down AN restarted\n");
+        }
+    }
+    EGRESS_LINK_LAST_POLL.store(crate::arch::cpu::rdtsc(), Ordering::Release);
+}
+
+/// `MAC_MODE` port mode from the negotiated link (GMII at 1000, MII below).
+#[cfg(feature = "uefi-bin")]
+unsafe fn egress_adjust_mac(mmio: u64, phy: u32) {
+    let (speed, full) = match (
+        phy_read(mmio, phy, MII_LPA),
+        phy_read(mmio, phy, MII_STAT1000),
+    ) {
+        (Some(lpa), Some(stat1000)) => decode_phy_link(lpa, stat1000),
+        _ => (1000, true),
+    };
+    mmio_write(mmio, MAC_MODE, mac_mode_from_link(speed, full));
+    tsc_spin_us(40);
+    mmio_write(mmio, MAC_RX_MODE, RX_MODE_ENABLE | RX_MODE_PROMISC);
+    serial_step("boot: M8.9 egress :39 link=up speed=");
+    write_u16_dec(speed);
+    serial_step(if full { " duplex=full\n" } else { " duplex=half\n" });
+}
+
+/// Per-exit hook (rate limited): once the `:39` link comes up after the
+/// AN restart, set the MAC port mode for it. Nothing to do once up.
+#[cfg(feature = "uefi-bin")]
+unsafe fn egress_link_tick(mmio: u64) {
+    let now = crate::arch::cpu::rdtsc();
+    if !egress_link_poll_due(
+        EGRESS_LINK_UP.load(Ordering::Acquire),
+        EGRESS_LINK_LAST_POLL.load(Ordering::Acquire),
+        now,
+    ) {
+        return;
+    }
+    EGRESS_LINK_LAST_POLL.store(now, Ordering::Release);
+    let phy = egress_phy_addr(mmio);
+    let _ = phy_read(mmio, phy, MII_BMSR);
+    let bmsr = phy_read(mmio, phy, MII_BMSR).unwrap_or(0);
+    if bmsr_link_up(bmsr) {
+        EGRESS_LINK_UP.store(true, Ordering::Release);
+        egress_adjust_mac(mmio, phy);
+    }
+}
 #[cfg(feature = "uefi-bin")]
 static EGRESS_SENT_LOGGED: AtomicBool = AtomicBool::new(false);
 
@@ -1503,6 +1714,9 @@ unsafe fn arm_egress() {
     );
     mailbox_write(bar, MAILBOX_RCVRET_CON_IDX_0, 0);
     kick_hostcc(bar);
+    // Iron d7e2e24f: 15 guest frames out, nothing back, ARP FAILED. The
+    // function-1 PHY was never looked at; firmware left it without link.
+    egress_phy_kick(bar);
     EGRESS_NIC = Some(NicState {
         mmio: bar,
         mac: crate::mgmt::guest_nic::EGRESS_PHY_MAC,

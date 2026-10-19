@@ -8,7 +8,8 @@ use super::{
     pick_bcm5720_pci, pick_bcm5720_try_order, ring_idx, rx_bd_packet_len, rx_dump_is_interesting,
     rx_return_pending, skip_bmcr_reset, skip_coreclk_reset, skip_http_listen_without_lstatus,
     station_mac, Bcm5720PickReason, BCM5720_DEVICE, BCM5720_VENDOR, ETHERTYPE_ARP, ETH_FCS_LEN,
-    FRAME_MAX, RING, RING_MASK, RX_LEN_MAX_HW,
+    egress_link_poll_due, egress_phy_plan, egress_wire, EgressPhyPlan, EgressWire,
+    EGRESS_LINK_POLL_TSC, FRAME_MAX, RING, RING_MASK, RX_LEN_MAX_HW,
 };
 
 /// R640 dual-port BCM5720 from COM2: func 0 = unused jack, func 1 = SNP / LAN.
@@ -522,4 +523,44 @@ fn mac_mode_from_link_gmii_vs_mii() {
     assert_eq!(m & 0x0c, MII);
     assert_eq!(h & HALF, HALF);
     assert_eq!(g & HALF, 0);
+}
+
+#[test]
+fn egress_phy_plan_brings_a_dark_function_1_link_up_without_touching_a_live_one() {
+    // Iron d7e2e24f: guest `TX 15 packets RX 0`, `ip neigh` FAILED, carrier 1
+    // (virtio always says up). Pre-EBS peek: function 1 `bmsr=7949` (no
+    // LSTATUS, no ANEGCOMPLETE) against function 0 `796d`. arm_egress set
+    // MAC_MODE GMII and never looked at the PHY.
+    assert_eq!(egress_phy_plan(0x796d, 0x1140), EgressPhyPlan::Up, "SPA-style live link");
+    assert_eq!(egress_phy_plan(0x7949, 0x1140), EgressPhyPlan::Restart, "AN on, no link");
+    assert_eq!(egress_phy_plan(0x7949, 0x1940), EgressPhyPlan::ClearThenRestart, "PDOWN");
+    assert_eq!(egress_phy_plan(0x7949, 0x1540), EgressPhyPlan::ClearThenRestart, "ISOLATE");
+    assert_eq!(egress_phy_plan(0x7949, 0x0000), EgressPhyPlan::Restart, "AN off, no link");
+    // The link poll is rate limited and stops once up.
+    assert!(egress_link_poll_due(false, 0, 123), "first poll at once");
+    assert!(!egress_link_poll_due(false, 1000, 1000 + EGRESS_LINK_POLL_TSC - 1));
+    assert!(egress_link_poll_due(false, 1000, 1000 + EGRESS_LINK_POLL_TSC));
+    assert!(!egress_link_poll_due(true, 0, 0), "never once up");
+    assert!(!egress_link_poll_due(true, 1000, u64::MAX));
+    // Host builds have no function 1.
+    assert_eq!(egress_wire(), EgressWire::default());
+    assert!(!egress_wire().armed);
+    let src = include_str!("bcm5720_mmio.rs");
+    let arm = src
+        .split_once("unsafe fn arm_egress()")
+        .expect("arm")
+        .1
+        .split_once("pub fn mac_address")
+        .expect("mac")
+        .0;
+    assert!(arm.contains("egress_phy_kick(bar);"), "PHY looked at once the rings are armed");
+    let kick = src.split_once("unsafe fn egress_phy_kick(mmio: u64)").expect("kick").1;
+    let kick = kick.split_once("unsafe fn egress_adjust_mac").expect("adjust").0;
+    assert!(kick.contains("BMCR_ANENABLE | BMCR_ANRESTART"));
+    assert!(!kick.contains("BMCR_RESET"), "no PHY reset on a port iDRAC may share");
+    assert!(!kick.contains("tsc_spin_ms(20)"), "no link wait inside a VM exit");
+    let recv = src.split_once("unsafe fn egress_recv_uefi").expect("recv").1;
+    assert!(recv.split_once("rx_one(n, dma, out)").unwrap().0.contains("egress_link_tick(n.mmio);"));
+    assert!(src.contains("const MAC_TX_STATS_OCTETS: u32 = 0x800;"));
+    assert!(src.contains("const MAC_RX_STATS_OCTETS: u32 = 0x880;"));
 }
