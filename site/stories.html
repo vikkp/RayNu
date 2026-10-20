@@ -3,15 +3,15 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Stories of RayNu — Mount Everest closed on iron — Stage 46 RayNu-F, El Torito, ATAPI</title>
+    <title>Stories of RayNu — after the summit: persist, the spare, Ubuntu, an open NIC</title>
     <meta
       name="description"
-      content="Field stories from RayNu-V: Stage 44 ATAPI-OK, Stage 45 El Torito on iron, and Stage 46 — the WaitForEvent wall, the pivot to RayNu-F, nested alpine-extended reboot-to-disk."
+      content="Field stories from RayNu-V after Mount Everest closed on 2026-09-11: USB persist, TLS, the soak, PERC, Guests, Ubuntu 26.04 on a 10 GiB tail, and an M8.9 NIC that transmitted and did not receive."
     />
-    <meta property="og:title" content="Stories of RayNu — we became the firmware" />
+    <meta property="og:title" content="Stories of RayNu — after the summit" />
     <meta
       property="og:description"
-      content="Stage 46: OVMF WaitForEvent would not yield. We stopped puppeting it, wrote RayNu-F, and nested Alpine said Please reboot. Iron ISO-INSTALL-OK remains open."
+      content="After Everest: the same Alpine came back, Ubuntu logged in from a 10 GiB tail of RAYNU-SPARE, and the guest NIC is still open. HDA stays 99%."
     />
     <meta property="og:type" content="article" />
     <meta property="og:url" content="https://raynuv.com/stories.html" />
@@ -29,11 +29,11 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta
       name="twitter:title"
-      content="Stories of RayNu — we became the firmware"
+      content="Stories of RayNu — after the summit"
     />
     <meta
       name="twitter:description"
-      content="Stage 46: WaitForEvent wall, RayNu-F pivot, nested Please reboot. Iron ISO-INSTALL-OK remains open."
+      content="After Everest: Ubuntu logged in from a 10 GiB tail. The guest NIC transmitted and did not receive. HDA stays 99%."
     />
     <meta name="twitter:image" content="https://raynuv.com/assets/r640-boot-ok-com2.png" />
     <link rel="canonical" href="https://raynuv.com/stories.html" />
@@ -274,8 +274,10 @@
         <p class="stories-mast__lede">
           What actually happened on iron — not a roadmap slide. Each story is
           dated, marker-backed, and honest about residuals. Latest close:
-          2026-09-11 Mount Everest on a real R640 — SPA Start of RayNu-F,
-          Alpine installed to virtio disk, rebooted into it.
+          2026-10-13 Ubuntu 26.04 on a 10 GiB tail of RAYNU-SPARE —
+          <code>c3a70e62</code>, <code>vikkp@raynusrv2:~$</code>, then the
+          library signature sector cleared. Mount Everest stays closed on
+          <code>f72b4276</code>. The guest NIC is not closed.
         </p>
       </div>
     </header>
@@ -295,6 +297,51 @@
           </p>
         </div>
         <p class="stories-index__label">In this volume</p>
+        <p>
+          <a href="#r640-2026-10-19-catalog"
+            >2026-10-19 — A catalog, and an order to build it</a
+          >
+        </p>
+        <p>
+          <a href="#r640-2026-10-19-nic"
+            >2026-10-19 — Fifteen frames, and the cable was not there</a
+          >
+        </p>
+        <p>
+          <a href="#r640-2026-10-13-ubuntu"
+            >2026-10-13 — Ubuntu, from the library, to a prompt</a
+          >
+        </p>
+        <p>
+          <a href="#r640-2026-10-07-grub-second"
+            >2026-10-07 — A GRUB second, on a wall clock</a
+          >
+        </p>
+        <p>
+          <a href="#r640-2026-09-29-guests"
+            >2026-09-29 — Guests, plural</a
+          >
+        </p>
+        <p>
+          <a href="#r640-2026-09-28-perc"
+            >2026-09-28 — The spare, and the disk we did not touch</a
+          >
+        </p>
+        <p>
+          <a href="#r640-2026-09-19-tls"
+            >2026-09-19 — HTTPS, before the guest</a
+          >
+        </p>
+        <p>
+          <a href="#r640-2026-09-24-persist"
+            >2026-09-24 — The same Alpine, after the hypervisor went away</a
+          >
+        </p>
+        <p>
+          <a href="#r640-2026-09-23-soak"
+            >2026-09-23 — The soak that found the torn read</a
+          >
+        </p>
         <p>
           <a href="#raynu-f-2026-09-05-stage46"
             >2026-09-05 — Please reboot: we became the firmware</a
@@ -361,6 +408,934 @@
           >
         </p>
       </div>
+
+      <article class="story" id="r640-2026-10-19-catalog">
+        <p class="story__date">2026-10-19 · docs · no iron · b91f1292, e94b47ea, 250dc961</p>
+        <h2 class="story__title">A catalog, and an order to build it</h2>
+
+        <p>
+          The R640 was waiting on a cable. The work that day was paper.
+          <code>b91f1292</code> wrote ADR-021: one catalog, letters A through K,
+          129 rows. Twenty-six lived, four in flight, ninety-nine planned.
+          Shipment 1 is 67 of them. A count is not a score. HDA stayed 99%.
+        </p>
+        <p>
+          <code>e94b47ea</code> added the build order. The letters are how a
+          buyer reads the page. The waves are how the work is picked up:
+          waves 0 through 17, plus V beside them. Each wave has one iron
+          thread. The tool prints the current wave. That afternoon it was
+          wave 1, Close M8.9, iron thread D3.
+          <code>250dc961</code> put the same command in
+          <code>CLAUDE.md</code>: on “what next”, run
+          <code>./tools/sync-sku-site.sh --next</code> and answer from it.
+        </p>
+        <p>
+          <code>7b34cf18</code> named three pages and three jobs. HDA is how
+          we got here. The SKU page is what you get and what is being built.
+          LOI is whether we are ready to talk, read off the catalog.
+          <code>155c49c7</code> recorded the rest of the afternoon: main was
+          fast-forwarded from <code>ac3b92cd</code> to <code>250dc961</code>,
+          238 commits, and 165 chained pull requests were closed. The rule
+          in that commit is branch off main, merge when the gate closes,
+          never chain.
+        </p>
+
+        <h3>What we claim — and what we don’t</h3>
+        <p>
+          We claim a catalog and an order, on that date, with those SHAs.
+          We do not claim a row moved. This page does not make anything
+          lived. We do not claim 1.0, GA, or a percent-to-shipment. Everest
+          stays closed. The rollback for that loop stays
+          <code>v0.1.0-everest-closed</code>.
+        </p>
+
+        <p class="story__aside">
+          Plan:
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-021.md">ADR-021</a>
+          · Tracker: <a href="hda.html">HDA</a>
+          · Catalog:
+          <a href="sku.html#D3">D3</a>
+          (wave 1 iron thread; not closed here)
+        </p>
+      </article>
+
+      <article class="story" id="r640-2026-10-19-nic">
+        <p class="story__kicker">M8.9 · not closed</p>
+        <p class="story__date">2026-10-13 – 2026-10-19 · Dell PowerEdge R640 · BCM5720 function 1 · EFI d7e2e24f</p>
+        <h2 class="story__title">Fifteen frames, and the cable was not there</h2>
+
+        <p>
+          This story is not a close. M8.9.6 wants a frame whose source is
+          the guest MAC to leave <code>:39</code>, and a login to that
+          address from another machine. Neither is latched.
+        </p>
+
+        <h3>A record, a form, a discover</h3>
+        <p>
+          <code>a5bf8d4e</code> is M8.9.1, the spare NIC record, on the host.
+          The sector is not written. Create still leaves the Ubuntu disk
+          with no NIC. <code>fcdec904</code> put the form on Overview: Save,
+          then the next guest list returns the MAC and the address.
+          <code>d2ee5015</code> fills that form from a DHCP offer and does
+          not Save. The discover uses the guest MAC, not <code>:38</code>.
+          <code>19ada6c9</code> hands the discover to function 1,
+          <code>01:00.1</code> / <code>:39</code>, and refuses it on the SPA
+          port. The APE phylock stays with iDRAC. Rings were not programmed
+          on that commit. An offer still does not Save.
+        </p>
+
+        <h3>The chain, then a queue that could not wake</h3>
+        <p>
+          Between the form and a frame, the guest transmitted and then sat
+          still. <code>0dcc1cea</code> printed the post-TX trace: after
+          <code>take11=1 take0=1 inj=2</code> nothing deliverable remained
+          (<code>skip_idle=385</code>). The slave ISR stayed
+          <code>0x08</code> with the virtio-net ISR unread. Linux’s specific
+          EOI <code>0x60</code> moved the master ISR
+          <code>0x05 → 0x01</code> and left IRQ 0 in service.
+        </p>
+        <p>
+          <code>c9f4451a</code> then showed the chain healthy
+          (<code>idtv=1 reinj=1 eoi_s=21 take0=149</code>), and the reason
+          the transmit queue still died:
+        </p>
+        <pre>NETDEV WATCHDOG: transmit queue 0 timed out</pre>
+        <p>
+          Linux stops a virtio-net TX queue below 19 free descriptors and
+          wakes it only at 19. An 8-entry ring never gets there. The watchdog
+          fired every 5 seconds. <code>11cd3ed9</code> raised the queues from
+          8 to 256.
+        </p>
+
+        <h3>Fifteen out, none back</h3>
+        <p>
+          <code>d7e2e24f</code> brought the guest up healthy. COM2 counted
+          <code>TX 15 RX 0</code>. ARP to <code>10.99.99.1</code> was
+          <code>FAILED</code>. The connect ended <code>exit:124</code>.
+          iDRAC had the rest of the sentence the whole time. Integrated NIC
+          port 4, <code>B0:26:28:5C:5A:39</code>, was Link Down,
+          auto-negotiation Disabled. Port 3, <code>:38</code>, the SPA, was
+          Up at 1000 Mbps.
+        </p>
+        <p>
+          The story ends on that page. The port the guest was aimed at had
+          no cable.
+        </p>
+
+        <h3>What we claim — and what we don’t</h3>
+        <p>
+          We claim the interrupt chain on <code>c9f4451a</code>, the queue
+          depth change, and fifteen transmitted frames with zero received on
+          <code>d7e2e24f</code>. We claim iDRAC showed port 4 down. We do
+          not claim M8.9, a returned frame, DHCP that saved, or SSH from
+          another machine. The catalog already has D3, D7, and D8 in flight.
+          This story does not move them. Everest stays closed. HDA stays 99%.
+        </p>
+
+        <p class="story__aside">
+          Plan:
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-013.md">ADR-013</a>
+          Appendix C ·
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-021.md">ADR-021</a>
+          · Tracker: <a href="hda.html">HDA</a>
+          · Catalog:
+          <a href="sku.html#D2">D2</a>,
+          <a href="sku.html#D3">D3</a>,
+          <a href="sku.html#D7">D7</a>,
+          <a href="sku.html#D8">D8</a>
+        </p>
+      </article>
+
+      <article class="story story--featured" id="r640-2026-10-13-ubuntu">
+        <p class="story__kicker">M8.8 · ADR-020</p>
+        <p class="story__date">2026-10-04 – 2026-10-13 · Dell PowerEdge R640 · library ISO on RAYNU-SPARE · EFI c3a70e62</p>
+        <h2 class="story__title">Ubuntu, from the library, to a prompt</h2>
+
+        <p>
+          ADR-020, <code>18d136c2</code>, named RayNu VM Generation 1: one
+          virtual machine that boots unmodified OS media. Phases 0 through 5.
+          What had lived was a patched Alpine reboot-to-disk. The patcher and
+          the auto-answer were still on the product path. The bar was not
+          built past that on the day the ADR was accepted.
+        </p>
+        <p>
+          The file was already on the spare. <code>93088c32</code> stored
+          <code>ubuntu-26.04-live-server-amd64.iso</code>. The page stayed
+          <code>ISO 100%</code>. COM2 had <code>library CD stored</code>.
+          <code>27d4e540</code> then attached that file as <code>vdb</code>
+          and booted the Cruzer Alpine
+          (<code>cd_bytes=1042284544</code>). The next EFI waits for the ISO
+          row. That click is <code>vdb</code> and the RayNu-F CD.
+        </p>
+
+        <h3>The shim, before it could open GRUB</h3>
+        <p>
+          <code>5cb54836</code> ran Ubuntu <code>BOOTX64.EFI</code> for 180
+          seconds, <code>blk_rd=0</code>, on <code>AllocatePool</code> type 0.
+          The next EFI serves that call as loader data.
+          <code>0aa0a78d</code> stopped on <code>MokListRT</code>.
+          <code>SetVariable</code> was unsupported. The next EFI keeps a
+          boot-long variable store.
+          <code>8822dbfa</code> stopped on <code>grubx64.efi</code> Not Found.
+          FilePath was the CDROM node, so shim looked the file up in the FAT
+          root. The next EFI publishes
+          <code>\EFI\BOOT\BOOTX64.EFI</code> as the file node.
+        </p>
+
+        <h3>Menu time, then a kernel line with no console</h3>
+        <p>
+          <code>90f64bcf</code> drew GNU GRUB 2.14. The countdown was at 22 s
+          when <code>wall_ms=180007</code> and <code>blk_rd=17</code>. The
+          next EFI uses a 600 s cap.
+          <code>9147cad0</code> died at GRUB <code>1s</code> with
+          <code>wall_ms=600005</code> and <code>blk_rd=17</code>. A GRUB
+          second was about 20 wall seconds because PIT channel 2 did not
+          wait. That clock is its own story.
+        </p>
+        <p>
+          <code>87979e32</code> reached EBS and virtio <code>DRIVER_OK</code>
+          and did not print <code>Linux version</code>. The stock kernel line
+          has no serial console. This boot appends
+          <code>console=ttyS0</code> at <code>StartImage</code> for the
+          library CD only. The stored file is not rewritten.
+          <code>6865b5ab</code> and <code>4e9ebcdb</code> showed why a
+          LoadOptions append was not enough: GRUB 2.14 hands the kernel over
+          without <code>StartImage</code>, and the <code>linux</code> line
+          GRUB actually reads is the ISO9660 file. The read view grew
+          <code>console=ttyS0</code>. The backing bytes stayed the stored file.
+        </p>
+
+        <h3>The CPU the library refused</h3>
+        <p>
+          <code>a71fbb3d</code> printed <code>Linux version 7.0.0-14-generic</code>
+          and <code>console=ttyS0</code>, then an initrd unpack
+          <code>write error</code>. Guest RAM was 256 MiB of about 2 GiB
+          premapped. <code>6a7e72b1</code> unpacked the initrd
+          (<code>bytes=2113929216 tail=1845493760</code>) and panicked in
+          <code>/init</code>: <code>CPU ISA level is lower than required</code>.
+          The next EFI publishes <code>XCR0</code> and CPUID OSXSAVE.
+          <code>8c6bfa85</code> lived <code>XCR0</code> <code>0x2ff</code>.
+          libc still refused the ISA level. Leaf 0’s vendor was
+          <code>GenuineIntEl</code> for userspace, because X2APIC was masked
+          on every leaf. The next EFI masks leaf 1 only.
+        </p>
+        <p>
+          <code>1b01c2d8</code> got a vendor userspace would accept, and udev
+          started, then fsnotify waited in <code>synchronize_srcu</code>.
+          Linux 7 arms that grace period with a self-IPI.
+          <code>6d630acc</code> delivered <code>self-ipi vec=0xf6</code> four
+          times, then:
+        </p>
+        <pre>Welcome to Ubuntu 26.04 LTS!</pre>
+        <p>
+          The screen was <code>waiting for cloud-init</code> when the log
+          was cut. There is no guest NIC. <code>9df8d68a</code> put
+          <code>cloud-init=disabled</code> on the kernel line and the tty
+          stayed on that wait. <code>5f24b74e</code> reached cloud-init final
+          and did not reach the language list. The next EFI adds
+          <code>ci.ds=None</code> and masks casper-md5check and snapd.seeded.
+        </p>
+
+        <h3>Fourteen hours, one sector at a time</h3>
+        <p>
+          <code>674f74c8</code> drew the language list, started
+          <code>curtin extract</code> onto <code>vda</code>, and stopped in
+          <code>Stage 46 hold</code> at the 16M exit cap.
+          <code>806d8961</code> raised that cap to 256M, reached Installing
+          system, and did not move for about 14 hours. No
+          <code>Stage 46 hold</code>. Each sector was its own PERC command.
+          <code>c4a3ef1b</code> posts 64 KiB, else 4 KiB, else one sector.
+          The virtio bounce is 64 KiB. That boot finished the extract and
+          the kernel, then failed installing GRUB. dmesg:
+          <code>efi: Unable to switch EFI into virtual mode (status=8000000000000003)</code>.
+          That status is <code>SetVirtualAddressMap</code> unsupported.
+          <code>996492fc</code> accepts the call.
+        </p>
+
+        <h3>Shim, prefix, the ESP, the initrd</h3>
+        <p>
+          Installation complete lived. Start on the 10240 MiB row of
+          <code>1c278f67</code> opened the removable shim and printed
+          <code>Failed to open grubx64.efi</code>. The installed GRUB is
+          <code>\EFI\ubuntu\grubx64.efi</code>.
+          <code>252c04cd</code> opened <code>grubx64.efi</code> and stopped
+          at GNU GRUB 2.14 <code>grub&gt;</code>. The buffer load had cleared
+          FilePath, so GRUB had no prefix.
+          <code>9abd4870</code> staged the shim, opened
+          <code>grubx64.efi</code>, and stopped at <code>grub&gt;</code> with
+          no GRUB FilePath line. The next EFI stages
+          <code>\EFI\ubuntu\grubx64.efi</code> directly.
+          <code>89a67dc4</code> did that and stopped at <code>grub&gt;</code>
+          again. The stub is
+          <code>search.fs_uuid 6ded2137-de53-4881-93df-8bbdeb2b20ec</code>.
+          The handle was the raw disk, so the file was sought at LBA 0. The
+          next EFI names the ESP <code>hd0,gpt1</code>.
+        </p>
+        <p>
+          <code>1149d279</code> drew <code>*Ubuntu</code> and then:
+        </p>
+        <pre>Failed to load initrd: 0x8000000000000001</pre>
+        <p>
+          The ESP handle lived (<code>part=1 lba=2048</code>). GRUB’s
+          LoadFile2 returns not-found unless the remainder is an End node,
+          and the stub’s size query must return
+          <code>EFI_BUFFER_TOO_SMALL</code>.
+          <code>4f65682f</code> printed
+          <code>initrd LocateDevicePath matched=20 remainder=End</code> and
+          the same load error. GRUB returns invalid parameter when
+          <code>this</code> is not the LoadFile2 struct it registered.
+          <code>fa3ccb64</code> printed
+          <code>LoadFile policy=0 path0=7f buf=0x0</code> and then
+          <code>buf=0x415f000</code>, and the same error. The copy call
+          returns <code>BUFFER_TOO_SMALL</code> when
+          <code>*BufferSize</code> is short.
+          <code>826ca6e9</code> printed <code>sz=34338680</code> and the same
+          error. The length was already real. No <code>blk fail</code>. The
+          next EFI copies that ext4 file and returns success from the shim.
+        </p>
+
+        <h3>The prompt, then the signature sector</h3>
+        <p>
+          <code>c3a70e62</code> (<code>build: sha=c3a70e623aec</code>), choice
+          4, copied the initrd and reached a shell. The library file was
+          still waiting. Clear ISO had not been clicked. The
+          <code>ISO-INSTALL-OK</code> line in that log is the firmware
+          handoff, not a new install close.
+        </p>
+        <pre>initrd ext4 bytes=34338680 name=initrd.img-7.0.0-14-generic
+RAYNU-V-RAYNU-F-EBS-OK
+Linux version 7.0.0-14-generic
+root=/dev/mapper/ubuntu--vg-ubuntu--lv
+Freeing initrd memory: 33536K
+Welcome to Ubuntu 26.04 LTS!
+vikkp@raynusrv2:~$</pre>
+        <p>
+          The same COM2 then printed:
+        </p>
+        <pre>boot: M8.8 library ISO cleared (signature sector only; disks unchanged)</pre>
+        <p>
+          The wipe is the ISO signature sector. UBUNTU0, the 8 GiB window,
+          and the Ubuntu disk stay. Tag
+          <code>v0.1.0-m8-8-ubuntu</code>, CI <code>38454398693</code>. Not
+          GitHub Latest.
+        </p>
+
+        <h3>What we claim — and what we don’t</h3>
+        <p>
+          We claim M8.8.1 through M8.8.4 lived on <code>c3a70e62</code>: an
+          Ubuntu 26.04 login from a 10 GiB tail, kernel
+          <code>7.0.0-14-generic</code>, then the library signature sector
+          cleared. <code>vda</code> is 10 GiB, <code>vda1</code>
+          <code>vda2</code> <code>vda3</code>. The 2.9 TB virtual disk is
+          not that tail.
+        </p>
+        <p>
+          We do not claim unmodified media. The stored ISO was not rewritten,
+          and the boot still amended <code>console=ttyS0</code>. The Alpine
+          answerer is still on the product path. The login row held
+          unmodified media at 25. We do not claim a new
+          <code>RAYNU-V-M7-ISO-INSTALL-OK</code>. Everest stays closed on
+          <code>f72b4276</code>. Rollback for that loop stays
+          <code>v0.1.0-everest-closed</code>. HDA stays 99%. This tag is the
+          rollback when an M8.9 EFI misbehaves. It is not Latest.
+        </p>
+
+        <p class="story__aside">
+          Plan:
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-020.md">ADR-020</a>
+          ·
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-019.md">ADR-019</a>
+          decision 9 ·
+          Tag:
+          <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-m8-8-ubuntu">v0.1.0-m8-8-ubuntu</a>
+          · Tracker: <a href="hda.html">HDA</a>
+          · Catalog:
+          <a href="sku.html#B1">B1</a>,
+          <a href="sku.html#C3">C3</a>,
+          <a href="sku.html#C5">C5</a>,
+          <a href="sku.html#C17">C17</a>,
+          <a href="sku.html#E2">E2</a>
+        </p>
+      </article>
+
+      <article class="story" id="r640-2026-10-07-grub-second">
+        <p class="story__date">2026-09-24 – 2026-10-07 · Dell PowerEdge R640 · GRUB on COM2 · EFI 9147cad0</p>
+        <h2 class="story__title">A GRUB second, on a wall clock</h2>
+
+        <p>
+          GRUB’s menu is a countdown. On this machine the countdown and the
+          wall disagreed, twice, a fortnight apart.
+        </p>
+
+        <h3>One read, then the cap</h3>
+        <p>
+          <code>c4a41a17</code> staged the installed Alpine ESP and stopped
+          at <code>grub&gt;</code>. The one line past the GPT pin was the
+          firmware reading the FAT boot sector while it staged
+          <code>BOOTX64.EFI</code>, not a sector GRUB had asked for:
+        </p>
+        <pre>boot: Stage 46 disk past pin lba=2048 n=512 ok (not ISO-INSTALL-OK)
+boot: RayNu-F found \EFI\BOOT\BOOTX64.EFI bytes=139264 (F7 disk; not ISO-INSTALL-OK)
+image=DISK-BOOTX64</pre>
+        <p>
+          There is no wall-cap line on that boot. The operator Force Off at
+          the prompt.
+        </p>
+        <p>
+          Boot 2 of <code>e5cca2e0</code>, the soak EFI with
+          <code>usbsoak.txt</code> removed, staged the same file and stopped
+          at the same prompt. The cap did fire:
+        </p>
+        <pre>RayNu-F stop wall-cap exits=301551616 wall_ms=180005 svc=301551566 svc_err=1 conout_ok=1 blk_rd=33 blk_wr=0 allocs=6 free_pages=62553
+Stage 46 product ISO hold</pre>
+        <p>
+          <code>blk_rd=33</code> is one successful <code>ReadBlocks</code>
+          per count, the same count as <code>d60431ee</code>, where the pin
+          served LBA 0 through 33 and GRUB never completed a sector past it.
+          The function named “past pin” USB-read LBA 0 again, inside GRUB’s
+          first read outside the pin. <code>blk_wr=0</code>. The Toshiba was
+          not written. Not <code>login:</code>.
+        </p>
+
+        <h3>Twenty wall seconds to a GRUB second</h3>
+        <p>
+          The Ubuntu menu met the same cap from the other side.
+          <code>90f64bcf</code> drew GNU GRUB 2.14. The countdown was at 22 s
+          when <code>wall_ms=180007</code> and <code>blk_rd=17</code>. The
+          next EFI gives the menu 600 seconds so the 30 s countdown and the
+          kernel read can finish.
+        </p>
+        <p>
+          <code>9147cad0</code> died at GRUB <code>1s</code>.
+          <code>wall_ms=600005</code>. <code>blk_rd=17</code>. A GRUB second
+          was about 20 wall seconds because PIT channel 2 did not wait. The
+          next EFI waits a real 55 ms on that counter. M8.8.3 was not lived
+          on either boot.
+        </p>
+
+        <h3>What we claim — and what we don’t</h3>
+        <p>
+          We claim two measurements. On 24 September a 180 s wall cap fired
+          at <code>grub&gt;</code> with <code>blk_rd=33</code>. On 7 October
+          a GRUB second cost about 20 wall seconds, and a 600 s cap expired
+          at countdown <code>1s</code>. We do not claim the menu completed,
+          a kernel, or a login. The PIT wait is the next EFI after
+          <code>9147cad0</code>. It is not this story’s close.
+        </p>
+
+        <p class="story__aside">
+          Evidence:
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-09-24-c4a41a17-grub-staging-oneshot.md">2026-09-24-c4a41a17-grub-staging-oneshot.md</a>
+          ·
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-09-24-e5cca2e0-grub-wallcap.md">2026-09-24-e5cca2e0-grub-wallcap.md</a>
+          · Tracker: <a href="hda.html">HDA</a>
+          · Catalog:
+          <a href="sku.html#B1">B1</a>,
+          <a href="sku.html#B9">B9</a>
+        </p>
+      </article>
+
+      <article class="story" id="r640-2026-09-29-guests">
+        <p class="story__date">2026-09-28 – 2026-09-29 · Dell PowerEdge R640 · RAYNU-SPARE · EFI 752586b9</p>
+        <h2 class="story__title">Guests, plural</h2>
+
+        <p>
+          ADR-019 made the Guests screen the spare boot policy. The Overview
+          buttons had been a lab gate for one Alpine image. A new browser
+          showed “No guests” while that Alpine was running, because the list
+          was browser memory of <code>POST /vms</code>.
+        </p>
+
+        <h3>Start, on the window</h3>
+        <p>
+          <code>5175b3da</code> waited on SPA Guests.
+          <code>PercSpaChoice choice=1</code>, <code>DISK-BOOTX64</code>,
+          <code>RAYNU-V-M8-PERC-BOOT-OK</code>, <code>localhost:~#</code> on
+          <code>d43dbf07</code>. <code>vda</code> was 8.00 GiB. The page
+          showed spare 3022592 MiB, used 8192, placeable 8192. The 10240 MiB
+          refusal was not clicked. Windows stayed refused. One RayNu-F still
+          owns the CPU.
+        </p>
+
+        <h3>A disk past 8 GiB</h3>
+        <p>
+          <code>67bdb0d9</code> is choice 3: <code>tail_off=8589934592</code>,
+          <code>[vda]</code> 10.0 GiB, <code>ee851fd5</code> written. A guest
+          reboot returned to the ISO. The following hypervisor boot is what
+          picks boot-installed.
+        </p>
+        <p>
+          <code>f44ba647</code> started that 10 GiB guest.
+          <code>choice=4</code>, <code>DISK-BOOTX64</code>,
+          <code>ee851fd5</code>, <code>[vda]</code> 10.0 GiB,
+          <code>localhost:~#</code>. Stop on that EFI did not reach the Linux
+          exit loop. Packed, not lived.
+        </p>
+
+        <h3>The ISO prompt, and the command that was not typed</h3>
+        <p>
+          <code>752586b9</code>, choice 3, booted
+          <code>ISO-BOOTX64</code> onto <code>[vda]</code> 10.0 GiB and
+          stopped before <code>setup-disk</code>:
+        </p>
+        <pre>boot: perc SPA linux_iso — setup-disk withheld</pre>
+        <p>
+          The ISO motd offered <code>setup-alpine</code>. Nobody was told to
+          type it. <code>ee851fd5</code> was journal-recovered and unmounted.
+          No scripted <code>setup-disk</code>. Login still gets
+          <code>root</code>. The ISO is still serial-patched. The 8192 MiB
+          window reinstall was not clicked. Unmodified media moved 20 to 25
+          on that line, and 25 is not done.
+        </p>
+
+        <h3>What we claim — and what we don’t</h3>
+        <p>
+          We claim Guests Start of the latched 8 GiB image, a 10 GiB tail
+          that reached <code>localhost:~#</code>, and a <code>linux_iso</code>
+          that stopped with <code>setup-disk</code> withheld. We do not claim
+          concurrent guests, an unattended install, unmodified media, or the
+          2.9 TB virtual disk as the guest disk. A guest reboot during a
+          reinstall choice returns to the ISO until the next hypervisor boot
+          picks boot-installed.
+        </p>
+
+        <p class="story__aside">
+          Plan:
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-019.md">ADR-019</a>
+          · Tracker: <a href="hda.html">HDA</a>
+          · Catalog:
+          <a href="sku.html#E2">E2</a>,
+          <a href="sku.html#B3">B3</a>,
+          <a href="sku.html#C3">C3</a>
+        </p>
+      </article>
+
+      <article class="story" id="r640-2026-09-28-perc">
+        <p class="story__date">2026-09-26 – 2026-09-28 · Dell PowerEdge R640 · H740P Mini 18:00.0 · EFI 8ad2ac89</p>
+        <h2 class="story__title">The spare, and the disk we did not touch</h2>
+
+        <p>
+          Ubuntu 26.04 is the standing OS on PERC virtual disk UBUNTU0, about
+          400 GB. RAYNU-SPARE is about 2.9 TB. The rule for the week was the
+          same sentence every boot: do not format UBUNTU0. Do not open the
+          H840. Do not Clear Configuration again.
+        </p>
+
+        <h3>The Mini, not the other controller</h3>
+        <p>
+          <code>cc03d01b</code> printed <code>perc fwstate refuse count=2</code>
+          and loaded no BAR. The H840 is also <code>1000:0016</code>.
+          <code>2dd2b412</code> mapped the H740P Mini at <code>18:00.0</code>,
+          subsystem <code>1028:1fcd</code>, BAR <code>0x9d800000</code>, and
+          read xscale <code>outbound_msg_0</code> as 0. The H840 at
+          <code>3b:00.0</code> stayed unmapped. That zero is the xscale
+          register, not a reset. The status word is scratch pad 0.
+          <code>post=0</code>. <code>mapped=0</code> stops the milestone.
+        </p>
+        <p>
+          <code>22ce3728</code> read scratch pad 0 as <code>0xb73c0fed</code>:
+          READY, max commands 4077, <code>queues=128</code>,
+          <code>rdpq=1</code>, <code>mapped=1</code>. The low 16 bits are max
+          commands, not a reset request. <code>allow=0</code> on that boot
+          was those 4077, not a reason to reset the adapter. No doorbell was
+          stored. The next EFI posts one IOC init and one LD list to port
+          <code>0xC0</code> because the nibble is already READY.
+        </p>
+        <p>
+          <code>83ae471e</code> confirmed READY and printed
+          <code>perc ioc skip above4g</code>. The DMA buffer was above 4 GiB.
+          No doorbell. The next EFI takes eight pages from the frame pool
+          (<code>phys=0x1000000</code> on that boot).
+          <code>7577f934</code> then lived the post:
+          <code>perc ioc status=0x00</code>,
+          <code>perc ld status=0x00 n=2 pick=1</code>.
+        </p>
+
+        <h3>A read, a write at the last LBA, LBA 0 left alone</h3>
+        <p>
+          <code>985495be</code> read LBA 0 (16 zeros) and LBA
+          <code>6190268927</code>, both <code>status=0x00</code>, and Linux
+          enumerated <code>[vdc] 6190268928</code>. The marker did not reach
+          COM2: <code>write_line</code> drops after earlycon.
+          <code>9c37fcae</code> printed it with <code>write_line_nowait</code>
+          during the <code>vdc</code> probe. The same boot’s
+          <code>dd</code> of <code>/dev/vdc</code> copied 512 bytes, first 16
+          zero, in 0.029 s. Read-only. The spare stayed unpartitioned.
+        </p>
+        <pre>boot: perc virtio rd lba=0 ok
+RAYNU-V-M8-PERC-LUN-OK</pre>
+        <p>
+          <code>f0a7aabb</code> wrote one sector at LBA
+          <code>6190268927</code>. COM2 showed
+          <code>perc write status=0x00</code>, then the readback:
+        </p>
+        <pre>boot: perc write rd lba=6190268927 match
+RAYNU-V-M8-PERC-WRITE-OK</pre>
+        <p>
+          LBA 0 stayed 16 zeros. Virtio stayed read-only. Alpine was still
+          on the Toshiba.
+        </p>
+
+        <h3>The 8 GiB window, twice, then a choice</h3>
+        <p>
+          <code>bda7a59b</code> hid <code>vdc</code> and booted the copied
+          window. UBUNTU0 was not written. The H840 was not mapped. PCI
+          listed virtio at <code>00:02.0</code> and <code>00:03.0</code>. It
+          did not list <code>00:04.0</code>. There was no <code>[vdc]</code>.
+        </p>
+        <pre>build: sha=bda7a59bd597
+boot: perc copy skip present alt=16777215
+boot: perc virtio ro hidden (vda is the 8 GiB image; not PERC-BOOT-OK)
+RAYNU-V-M8-PERC-WRITE-OK
+RAYNU-V-M8-PERC-BOOT-OK
+boot: RayNu-F found \EFI\BOOT\BOOTX64.EFI bytes=139264
+image=DISK-BOOTX64
+RAYNU-V-RAYNU-F-DISK-BOOT-OK
+[vda] 16777216 512-byte logical blocks (8.59 GB/8.00 GiB)
+ vda: vda1 vda2
+[vdb] 2035712 512-byte logical blocks (1.04 GB/994 MiB)
+EXT4-fs (vda2): recovery complete
+EXT4-fs (vda2): mounted filesystem a0ad99ac-ca25-4458-ade1-cd8599ca4928 ro
+Mounting root: ok.
+Welcome to Alpine Linux 3.21
+localhost login: root
+localhost:~# cat /proc/cmdline
+BOOT_IMAGE=/boot/vmlinuz-lts root=UUID=a0ad99ac-ca25-4458-ade1-cd8599ca4928</pre>
+        <p>
+          A chassis restart of the same EFI printed
+          <code>perc copy skip present</code> again, not
+          <code>perc copy start</code>. Same UUID.
+          <code>/dev/vda2: clean, 6380/521216 files, 102913/2084352 blocks</code>.
+          The Toshiba was still attached. The guest disk is that 8 GiB
+          window. The rest of the 2.9 TB stayed hidden.
+        </p>
+        <p>
+          <code>8ad2ac89</code> waited after HTTPS. Choice 2 reinstalled the
+          8 GiB window and wrote <code>d43dbf07-…</code>. A later boot,
+          choice 1, printed <code>DISK-BOOTX64</code> and
+          <code>localhost login:</code> from that UUID with
+          <code>setup-disk</code> withheld. An unattended F11 does not
+          install. Tag <code>v0.1.0-m8-perc-spa</code>, CI
+          <code>36362775808</code>, COM2 <code>build: sha=8ad2ac89125e</code>.
+          Not GitHub Latest.
+        </p>
+
+        <h3>What we claim — and what we don’t</h3>
+        <p>
+          We claim a mailbox read and a last-LBA write on the H740P Mini, an
+          unattended login from the 8 GiB image, the same login after a
+          chassis restart, and both SPA paths on <code>8ad2ac89</code>. We
+          do not claim the 2.9 TB virtual disk as a guest disk, a format of
+          UBUNTU0, a doorbell, or the H840. LBA 0 of the mailbox probe stayed
+          16 zeros. <code>skip PERC</code> stays. Host and CI do not print
+          <code>RAYNU-V-M8-PERC-LUN-OK</code>.
+        </p>
+
+        <p class="story__aside">
+          Evidence:
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-09-27-bda7a59b-perc-image-login.md">2026-09-27-bda7a59b-perc-image-login.md</a>
+          ·
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-09-27-bda7a59b-perc-image-reboot.md">2026-09-27-bda7a59b-perc-image-reboot.md</a>
+          · Plan:
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-018.md">ADR-018</a>
+          M8.7 ·
+          Tag:
+          <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-m8-perc-spa">v0.1.0-m8-perc-spa</a>
+          · Tracker: <a href="hda.html">HDA</a>
+          · Catalog:
+          <a href="sku.html#C2">C2</a>,
+          <a href="sku.html#C3">C3</a>,
+          <a href="sku.html#C17">C17</a>
+        </p>
+      </article>
+
+      <article class="story" id="r640-2026-09-19-tls">
+        <p class="story__date">2026-09-19 – 2026-09-25 · Dell PowerEdge R640 · BCM5720 :38 · EFI 928d6224</p>
+        <h2 class="story__title">HTTPS, before the guest</h2>
+
+        <p>
+          rustls wrapped the SPA on the host. <code>77e3e33c</code> put a
+          plaintext listen in front of coexist. <code>bc640594</code> fed
+          that stream through rustls and got the SPA back over TCP. The host
+          marker is <code>RAYNU-V-M8-TLS-FW-HOST-OK</code>. rustls and ring
+          could not be linked into <code>uefi-bin</code>. CURL NOW stayed
+          <code>http://</code>. What joined the EFI was a firmware TLS 1.2
+          listener, one cipher, written for this binary.
+        </p>
+
+        <h3>The curl that returned the page</h3>
+        <p>
+          <code>928d6224</code>, <code>build: sha=928d62241967</code>. The
+          PRE-EBS SNP window at <code>http://10.99.99.140:8443/</code> timed
+          out. The operator did not curl plaintext. After ExitBootServices
+          the native BCM5720, <code>01:00.0</code>, MAC
+          <code>b0:26:28:5c:5a:38</code>, link up, printed
+          <code>CURL NOW → https://10.99.99.140:8443/</code>. The Mac used
+          <code>--cacert</code>, TLS 1.2, cipher
+          <code>ECDHE-RSA-AES128-GCM-SHA256</code>, and the name
+          <code>raynu-v.lab</code>. The body was the SPA,
+          <code>&lt;title&gt;RayNu-V&lt;/title&gt;</code>.
+        </p>
+        <pre>boot: HOST-NIC TCP accept — client connected
+boot: HOST-NIC HTTP exchange ok
+RAYNU-V-M8-TLS-OK</pre>
+        <p>
+          Then RayNu-F, <code>image=DISK-BOOTX64</code>,
+          <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code>,
+          <code>RAYNU-V-M8-DISK-PERSIST-OK</code>, Alpine
+          <code>root=UUID=dd673a9a-30c3-4acd-8d7e-9afe9313c46f</code>. The
+          exchange was before the guest. The certificate is a lab millicert.
+          Not TLS 1.3. <code>GET /</code> is still unauthenticated.
+        </p>
+
+        <h3>The page that stayed up</h3>
+        <p>
+          <code>1f33eeda</code>, CI <code>36137732145</code>, leased
+          <code>10.99.99.154/24</code> and booted the installed disk while a
+          browser held one TLS session. One
+          <code>boot: HOST-NIC TCP accept — client connected</code>, then
+          <code>HTTP exchange ok</code> / <code>HTTP keep-alive</code> through
+          Overview polls and the Activity tab. No second
+          <code>TCP accept</code>. Host stayed green. The chassis stayed up.
+          <code>RAYNU-V-M8-TLS-OK</code> did not print: there was no
+          pre-guest HTTPS exchange on that boot. The keep-alive is the
+          standing session. Tag <code>v0.1.0-m8-a4s</code>. Not GitHub Latest.
+        </p>
+
+        <h3>What we claim — and what we don’t</h3>
+        <p>
+          We claim <code>RAYNU-V-M8-TLS-OK</code> on <code>928d6224</code>:
+          <code>curl --cacert</code> returned the SPA on
+          <code>10.99.99.140:8443</code> before RayNu-F. We claim
+          <code>1f33eeda</code> kept one HTTPS session up while the guest
+          ran. We do not claim a customer certificate, TLS 1.3, or more than
+          one cipher. PRE-EBS SNP is still <code>http://</code>. Auth is
+          still open. GitHub Latest stays
+          <code>v0.1.0-everest-closed</code>.
+        </p>
+
+        <p class="story__aside">
+          Evidence:
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-09-19-928d6224-m8-tls-ok.md">2026-09-19-928d6224-m8-tls-ok.md</a>
+          · Standing session, boot 6 of
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-09-24-36d3b559-persist-login.md">2026-09-24-36d3b559-persist-login.md</a>
+          · Tracker: <a href="hda.html">HDA</a>
+          · Catalog:
+          <a href="sku.html#E3">E3</a>,
+          <a href="sku.html#E4">E4</a>,
+          <a href="sku.html#E5">E5</a>
+        </p>
+      </article>
+
+      <article class="story" id="r640-2026-09-24-persist">
+        <p class="story__date">2026-09-18 – 2026-09-24 · Dell PowerEdge R640 · Toshiba on xHCI p11 · EFI 36d3b559</p>
+        <h2 class="story__title">The same Alpine, after the hypervisor went away</h2>
+
+        <p>
+          A guest reboot was already a solved sentence. F7 on
+          <code>b661808c</code> had reached <code>DISK-BOOT-OK</code> and
+          <code>login:</code> with
+          <code>root=UUID=348005a9-25b7-4027-bc95-af9aef244c3a</code>. That
+          disk lived inside the guest. Force Off of RayNu-V is a different
+          event. The earlier Force Off, <code>ef7e93ec</code>, came back
+          <code>keep=0</code>. The install had not survived the hypervisor.
+        </p>
+
+        <h3>keep=1, then the installed GRUB</h3>
+        <p>
+          <code>4af78b43</code> was not a new flash. F11 of the UDisk already
+          in front USB 2, <code>build: sha=4af78b4303fd</code>. The Toshiba,
+          <code>0480:a004</code>, came up at
+          <code>usb I/O ready bytes=320072933376</code>. The virtio window
+          is 8 GiB. Peek:
+          <code>efi=EFI PART gpt=1 fit=1 guest=8589934592 bootx64=1 ext4=1 installed=1</code>,
+          <code>keep=1 (durable LUN usb)</code>. SPA Start, then
+          <code>image=DISK-BOOTX64</code>,
+          <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code>, and
+          <code>root=UUID=348005a9-25b7-4027-bc95-af9aef244c3a</code> on
+          <code>[vda] 8.00 GiB</code>, through <code>login: root</code>.
+        </p>
+        <p>
+          Same UUID as the F7 install on <code>b661808c</code>. A spurious
+          <code>RAYNU-V-M7-ISO-INSTALL-OK</code> printed on journal recovery.
+          That was not a new install. The minted line
+          <code>RAYNU-V-M8-DISK-PERSIST-OK</code> was not serial-printed on
+          this EFI. The auto-answer still fired <code>setup-disk</code> and
+          got <code>No disks found</code>. It did not wipe.
+        </p>
+
+        <h3>The marker, and the login twice</h3>
+        <p>
+          <code>36d3b559</code> installed onto a blank 8 GiB slice, Force Off,
+          and came back. Both boots, no curl:
+        </p>
+        <pre>boot: Stage 46 virtio-blk install disk bytes=8589934592 keep=1
+boot: Stage 46 disk past pin lba=2048 n=512 ok
+boot: RayNu-F found \EFI\BOOT\BOOTX64.EFI bytes=139264
+boot: RayNu-F grubcfg=no (F7 disk; not ISO-INSTALL-OK)
+image=DISK-BOOTX64
+RAYNU-V-RAYNU-F-DISK-BOOT-OK
+RAYNU-V-M8-DISK-PERSIST-OK</pre>
+        <p>
+          <code>grubcfg=no</code> is the ESP lookup. Alpine keeps
+          <code>grub.cfg</code> on the ext4 <code>/boot/grub</code>, not on
+          the ESP. GRUB printed <code>error: no suitable video mode found</code>
+          and <code>error: unable to determine partition UUID of boot device</code>,
+          then the menu, and auto-booted. Both boots reached
+          <code>localhost login: root</code>.
+          <code>cat /proc/cmdline</code> showed
+          <code>root=UUID=a0ad99ac-ca25-4458-ade1-cd8599ca4928</code>.
+          <code>[vda] 16777216</code>. Boot 2, after another Force Off,
+          needed ext4 journal recovery on that same UUID, and fsck cleared a
+          vfat dirty bit. The shutdown had not been clean. The clock in CMOS
+          was stuck at 2026-08-16.
+        </p>
+        <p>
+          Boot 3 of the same EFI, after the chassis had turned off, leased
+          <code>10.99.99.150/24</code> and printed the marker again.
+          <code>/dev/vda2</code> was
+          <code>clean, 6380/521216 files, 102908/2084352 blocks</code>, the
+          same counts as boot 2. Opening the page on boots 2 and 3 was
+          followed by iDRAC <code>SYS1003</code> then <code>SYS1001</code>,
+          with no <code>RAC1195</code>. The persist that counts is the login
+          with no browser. The whole Toshiba,
+          <code>bytes=320072933376</code>, stays outside the virtio window.
+          USB is not PERC.
+        </p>
+
+        <h3>What we claim — and what we don’t</h3>
+        <p>
+          We claim an installed Alpine survived a hypervisor Force Off on
+          <code>4af78b43</code>, same UUID <code>348005a9</code>, and that
+          <code>36d3b559</code> printed <code>RAYNU-V-M8-DISK-PERSIST-OK</code>
+          and returned <code>a0ad99ac</code> to <code>login:</code> twice.
+          We do not claim a clean filesystem: journal recovery ran, and a
+          vfat dirty bit was cleared. We do not claim the whole Toshiba, and
+          we do not claim PERC. The guest disk is 8 GiB. Nested QEMU is not
+          this COM2.
+        </p>
+
+        <p class="story__aside">
+          Evidence:
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-09-18-4af78b43-m8-disk-persist-keep1-disk-boot-ok.md">2026-09-18-4af78b43-m8-disk-persist-keep1-disk-boot-ok.md</a>
+          ·
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-09-24-36d3b559-persist-login.md">2026-09-24-36d3b559-persist-login.md</a>
+          · Plan:
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-018.md">ADR-018</a>
+          M8.0 · Tracker: <a href="hda.html">HDA</a>
+          · Catalog:
+          <a href="sku.html#C1">C1</a>
+        </p>
+      </article>
+
+      <article class="story" id="r640-2026-09-23-soak">
+        <p class="story__date">2026-09-22 – 2026-09-23 · Dell PowerEdge R640 · Toshiba 0480:a004 · EFI e5cca2e0</p>
+        <h2 class="story__title">The soak that found the torn read</h2>
+
+        <p>
+          The branches are the chapters, and most of them were wrong turns.
+          From 14 September the log is a list of names that each explained
+          one COM2 line and missed the next:
+          <code>m8-xhci-enum</code>, <code>m8-xhci-desc-retry</code>,
+          <code>m8-usb-bot-csw</code>, <code>m8-usb-bot-read</code>,
+          <code>m8-usb-bot-firstcbw</code>, <code>m8-usb-bot-nlb1</code>,
+          <code>m8-usb-bot-setcfgretry</code>, <code>m8-usb-bot-guest8g</code>.
+          Retries accumulated beside them:
+          <code>warm</code>, <code>diskprime</code>, <code>peekretry</code>,
+          <code>addrretry</code>, <code>slotretry</code>, <code>nopretry</code>,
+          <code>cmdptr</code>. The persist-OK boots got through thousands of
+          transfers with those retries papering over misses. The soak was
+          built to stop papering.
+        </p>
+
+        <h3>The flag, and a RAM disk</h3>
+        <p>
+          <code>5c32bd06</code> saw <code>usbsoak.txt</code> and printed
+          <code>boot: USB soak requested</code>. Address Device on p11 and
+          p10 timed out, <code>cmd=3 cmpl=0xff</code>, port already HS U0.
+          <code>err=3</code> is Enum. BOT never started
+          (<code>bot=?</code>). No <code>USBSOAK</code>. With no durable LUN,
+          the ISO landed on 1 GiB of leftover DRAM,
+          <code>keep=0</code>, UUID <code>4c27e121</code>, and a guest reboot
+          reached <code>login:</code>. Force Off drops that disk. The Toshiba
+          was not opened. Do not F11 <code>5c32bd06</code> again expecting
+          the soak.
+        </p>
+        <pre>usb I/O fail err=3 bar=0x92b00000 portsc=0x0000000a00000e03 cmpl=0x00000000000303ff bot=? scsi=?
+leftover install disk hpa=0x140a00000 bytes=1073741824</pre>
+
+        <h3>Commands completed, events lost</h3>
+        <p>
+          <code>1fa231df</code> halted with no guest.
+          <code>USBSOAK abort — USB enumeration failed err=3</code>.
+          BIOS SMIs were not armed
+          (<code>legacy pre … forced=0</code>). A 50 ms recovery delay did
+          not change the outcome. The No-Op timed out, and the No-Op does
+          not touch a USB device. The first p11 Address Device left the slot
+          Addressed:
+        </p>
+        <pre>xhci cmd timeout addr  p11 cmd=0x1 sts=0x18 crcr=0x8 iman=0x1 erdp=0x1406ff090 cmdenq=3 cmdcyc=1 evdeq=9  evcyc=1 evtrb=0x0/0x0 portsc=0xe03 pmsc=0 slotst=2 ep0st=1 ep0deq=0x1406fe001
+xhci enum p11 sc=0xe03 speed=3 cmd=3 cmpl=0x13
+USBSOAK abort — USB enumeration failed err=3; no guest this boot</pre>
+        <p>
+          <code>slotst=2</code> is Addressed. <code>cmpl=0x13</code> on the
+          retry is Context State Error: Address Device on a slot that is
+          already Addressed. SET_ADDRESS had completed. The completion event
+          was never seen. Every event wait read the 16-byte Event TRB
+          pointer-first and cycle-last. A completion landing mid-read looked
+          like a fresh event with a zero pointer and completion code 0, and
+          was skipped. <code>evdeq=4</code> at the No-Op timeout is the
+          fourth event, the No-Op completion, consumed and thrown away.
+        </p>
+
+        <h3>239 reads, and then grub&gt;</h3>
+        <p>
+          <code>e5cca2e0</code> reads the control word first, one 32-bit
+          load, and stores it last on the TRB it writes. The soak ran. No
+          guest.
+        </p>
+        <pre>durable LUN usb I/O ready bytes=320072933376 lba=512
+durable LUN peek usb efi=EFI PART gpt=1 fit=1 … guest=8589934592 bootx64=1 ext4=1 installed=1
+USBSOAK gap_s=0   n=200 ok=200 fail=0 max_ms=12 first_fail=none
+USBSOAK gap_s=5   n=24  ok=24  fail=0 max_ms=0  first_fail=none
+USBSOAK gap_s=30  n=10  ok=10  fail=0 max_ms=0  first_fail=none
+USBSOAK gap_s=120 n=5   ok=5   fail=0 max_ms=0  first_fail=none
+USBSOAK total ok=239 fail=0
+RAYNU-V-USBSOAK-DONE</pre>
+        <p>
+          <code>installed=1</code> means the <code>928d6224</code> Alpine was
+          still on the 8 GiB slice. Idle gaps of 0, 5, 30, and 120 seconds
+          all completed. <code>max_ms=0</code> on the later gaps is a
+          sub-millisecond read: <code>ok</code> equals <code>n</code> on
+          every line. Boot 2 of this EFI, soak flag removed, staged
+          <code>DISK-BOOTX64</code> and stopped at <code>grub&gt;</code> with
+          <code>blk_rd=33</code> inside a 180 s wall cap. The bench did not
+          become a login.
+        </p>
+
+        <h3>What we claim — and what we don’t</h3>
+        <p>
+          We claim the soak found a torn event read, and that
+          <code>e5cca2e0</code> then finished 239 reads with
+          <code>fail=0</code>. We do not claim a victory over the USB stack,
+          a guest, or <code>RAYNU-V-M8-DISK-PERSIST-OK</code>. The product
+          path on the next boot of the same EFI stopped at
+          <code>grub&gt;</code>. The earlier branch names stay in the log as
+          the turns that were wrong.
+        </p>
+
+        <p class="story__aside">
+          Evidence:
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-09-22-5c32bd06-soak-enum-timeout.md">2026-09-22-5c32bd06-soak-enum-timeout.md</a>
+          ·
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-09-23-1fa231df-soak-torn-event-read.md">2026-09-23-1fa231df-soak-torn-event-read.md</a>
+          ·
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-09-23-e5cca2e0-usbsoak-done.md">2026-09-23-e5cca2e0-usbsoak-done.md</a>
+          · Tracker: <a href="hda.html">HDA</a>
+          · Catalog:
+          <a href="sku.html#C1">C1</a>
+        </p>
+      </article>
 
       <article class="story" id="r640-2026-09-11-everest">
         <p class="story__date">2026-09-11 · Dell PowerEdge R640 · UDisk front USB 2 · EFI f72b4276</p>
