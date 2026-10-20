@@ -414,38 +414,49 @@
         <h2 class="story__title">A catalog, and an order to build it</h2>
 
         <p>
-          The R640 was waiting on a cable. The work that day was paper.
-          <code>b91f1292</code> wrote ADR-021: one catalog, letters A through K,
-          129 rows. Twenty-six lived, four in flight, ninety-nine planned.
-          Shipment 1 is 67 of them. A count is not a score. HDA stayed 99%.
+          The R640 was waiting on a cable. There was nothing to flash, so
+          the afternoon went into a question the lab had been answering
+          piecemeal for a month: what does a person expect from a hypervisor
+          they can leave alone, and which of those things have we actually
+          seen on this machine?
         </p>
         <p>
-          <code>e94b47ea</code> added the build order. The letters are how a
-          buyer reads the page. The waves are how the work is picked up:
-          waves 0 through 17, plus V beside them. Each wave has one iron
-          thread. The tool prints the current wave. That afternoon it was
-          wave 1, Close M8.9, iron thread D3.
-          <code>250dc961</code> put the same command in
-          <code>CLAUDE.md</code>: on “what next”, run
-          <code>./tools/sync-sku-site.sh --next</code> and answer from it.
+          <code>b91f1292</code> wrote it down as one catalog. Letters A
+          through K, 129 rows. Twenty-six had lived. Four were in flight.
+          Ninety-nine were only named. Shipment 1, the dedicated box, is 67
+          of them. The count is a table of contents. It is not a score.
+          HDA stayed 99%.
         </p>
         <p>
-          <code>7b34cf18</code> named three pages and three jobs. HDA is how
-          we got here. The SKU page is what you get and what is being built.
-          LOI is whether we are ready to talk, read off the catalog.
-          <code>155c49c7</code> recorded the rest of the afternoon: main was
-          fast-forwarded from <code>ac3b92cd</code> to <code>250dc961</code>,
-          238 commits, and 165 chained pull requests were closed. The rule
-          in that commit is branch off main, merge when the gate closes,
-          never chain.
+          A catalog is how a buyer reads. It is a bad way to decide what to
+          pick up on a Tuesday, because the dependencies cross the letters
+          and the rack is one machine. <code>e94b47ea</code> gave the work
+          an order: waves 0 through 17, and a verification wave that runs
+          beside them. Each wave has one iron thread. Everything else in
+          the wave can be done while that thread waits. The tool prints the
+          current wave. That afternoon it printed wave 1, Close M8.9, iron
+          thread D3 — the port with no cable.
+          <code>250dc961</code> put the same instruction where the next
+          session would see it: on “what next”, run
+          <code>./tools/sync-sku-site.sh --next</code> and answer from the
+          printout.
         </p>
-
-        <h3>What we claim — and what we don’t</h3>
         <p>
-          We claim a catalog and an order, on that date, with those SHAs.
-          We do not claim a row moved. This page does not make anything
-          lived. We do not claim 1.0, GA, or a percent-to-shipment. Everest
-          stays closed. The rollback for that loop stays
+          The same day had a second fact, older than the catalog.
+          Main had fallen 238 commits behind a chain of stacked branches,
+          from <code>ac3b92cd</code> to <code>250dc961</code>, because each
+          new branch had started on the previous one.
+          <code>7b34cf18</code> split the public record into three pages
+          with three jobs: HDA is how we got here, the SKU page is what you
+          get and what is being built, LOI is whether we are ready to talk.
+          <code>155c49c7</code> wrote the rule that was supposed to make the
+          lag impossible to repeat. Branch off main. Merge when the gate
+          closes. Never chain. It also recorded that 165 of those chained
+          pull requests were closed.
+        </p>
+        <p>
+          Nothing in the catalog changed status because a story was written
+          about it. Everest stayed closed. The rollback for that loop stayed
           <code>v0.1.0-everest-closed</code>.
         </p>
 
@@ -455,81 +466,82 @@
           · Tracker: <a href="hda.html">HDA</a>
           · Catalog:
           <a href="sku.html#D3">D3</a>
-          (wave 1 iron thread; not closed here)
+          (wave 1 iron thread; open)
         </p>
       </article>
 
       <article class="story" id="r640-2026-10-19-nic">
-        <p class="story__kicker">M8.9 · not closed</p>
+        <p class="story__kicker">M8.9 · open</p>
         <p class="story__date">2026-10-13 – 2026-10-19 · Dell PowerEdge R640 · BCM5720 function 1 · EFI d7e2e24f</p>
         <h2 class="story__title">Fifteen frames, and the cable was not there</h2>
 
         <p>
-          This story is not a close. M8.9.6 wants a frame whose source is
-          the guest MAC to leave <code>:39</code>, and a login to that
-          address from another machine. Neither is latched.
+          This one is open. The close we wrote down wants a frame from the
+          guest’s own MAC to leave <code>:39</code>, and a login to that
+          address from another machine. Neither has been seen.
         </p>
 
-        <h3>A record, a form, a discover</h3>
+        <h3>A form that remembered</h3>
         <p>
-          <code>a5bf8d4e</code> is M8.9.1, the spare NIC record, on the host.
-          The sector is not written. Create still leaves the Ubuntu disk
-          with no NIC. <code>fcdec904</code> put the form on Overview: Save,
-          then the next guest list returns the MAC and the address.
-          <code>d2ee5015</code> fills that form from a DHCP offer and does
-          not Save. The discover uses the guest MAC, not <code>:38</code>.
-          <code>19ada6c9</code> hands the discover to function 1,
-          <code>01:00.1</code> / <code>:39</code>, and refuses it on the SPA
-          port. The APE phylock stays with iDRAC. Rings were not programmed
-          on that commit. An offer still does not Save.
+          Create still made a disk with no network card.
+          <code>a5bf8d4e</code> kept a NIC record for the spare on the host,
+          and did not write the sector. <code>fcdec904</code> put the form
+          on the page: mode, address, Save. Save it, refresh the guest list,
+          and the MAC came back. <code>d2ee5015</code> could fill the same
+          blanks from a DHCP offer and then stop, on purpose, before Save.
+          <code>19ada6c9</code> aimed that discover at the other LOM port,
+          function 1, <code>01:00.1</code>, the address that ends in
+          <code>:39</code>, and refused to send it out the port the SPA
+          already owned. The APE lock stayed with iDRAC. On that commit the
+          rings were not programmed yet, and an offer still did not Save.
         </p>
 
-        <h3>The chain, then a queue that could not wake</h3>
+        <h3>The queue that could not wake itself</h3>
         <p>
-          Between the form and a frame, the guest transmitted and then sat
-          still. <code>0dcc1cea</code> printed the post-TX trace: after
-          <code>take11=1 take0=1 inj=2</code> nothing deliverable remained
-          (<code>skip_idle=385</code>). The slave ISR stayed
-          <code>0x08</code> with the virtio-net ISR unread. Linux’s specific
-          EOI <code>0x60</code> moved the master ISR
-          <code>0x05 → 0x01</code> and left IRQ 0 in service.
+          Then the guest did send something, and the console went quiet.
+          For a week the connect sat in <code>poll_idle</code>.
+          <code>0dcc1cea</code> finally printed the minutes after the first
+          frame. One IRQ 11 and one timer tick got in
+          (<code>take11=1 take0=1 inj=2</code>). After that the inject path
+          had nothing it was willing to deliver
+          (<code>skip_idle=385</code>). The slave interrupt controller sat
+          with <code>0x08</code> in service and the virtio-net line unread.
+          Linux sent a specific end-of-interrupt, <code>0x60</code>, and the
+          master went from <code>0x05</code> to <code>0x01</code>: the wrong
+          bit cleared, the timer left in service, no more ticks.
         </p>
         <p>
-          <code>c9f4451a</code> then showed the chain healthy
-          (<code>idtv=1 reinj=1 eoi_s=21 take0=149</code>), and the reason
-          the transmit queue still died:
+          <code>c9f4451a</code> fixed that handshake. The chain looked
+          healthy — <code>idtv=1 reinj=1 eoi_s=21 take0=149</code>, the
+          clock keeping up with the PIT — and then, every five seconds, the
+          kernel gave up on its own transmit queue:
         </p>
         <pre>NETDEV WATCHDOG: transmit queue 0 timed out</pre>
         <p>
-          Linux stops a virtio-net TX queue below 19 free descriptors and
-          wakes it only at 19. An 8-entry ring never gets there. The watchdog
-          fired every 5 seconds. <code>11cd3ed9</code> raised the queues from
-          8 to 256.
+          Linux stops a virtio transmit queue when fewer than 19 descriptors
+          are free, and it only wakes the queue again at 19. An eight-entry
+          ring never has 19 free. The watchdog was the queue noticing that
+          it could not be woken. <code>11cd3ed9</code> made the rings 256
+          deep, the size QEMU had been using all along.
         </p>
 
-        <h3>Fifteen out, none back</h3>
+        <h3>The page that already knew</h3>
         <p>
-          <code>d7e2e24f</code> brought the guest up healthy. COM2 counted
-          <code>TX 15 RX 0</code>. ARP to <code>10.99.99.1</code> was
-          <code>FAILED</code>. The connect ended <code>exit:124</code>.
-          iDRAC had the rest of the sentence the whole time. Integrated NIC
-          port 4, <code>B0:26:28:5C:5A:39</code>, was Link Down,
-          auto-negotiation Disabled. Port 3, <code>:38</code>, the SPA, was
-          Up at 1000 Mbps.
+          <code>d7e2e24f</code> brought the guest up clean. No watchdog.
+          COM2 counted <code>TX 15 RX 0</code>. The guest asked for
+          <code>10.99.99.1</code> and the answer was <code>FAILED</code>.
+          The connect ended <code>exit:124</code>.
         </p>
         <p>
-          The story ends on that page. The port the guest was aimed at had
-          no cable.
+          iDRAC had been showing the reason for the whole experiment.
+          Integrated NIC port 4, <code>B0:26:28:5C:5A:39</code>, Link Down,
+          auto-negotiation Disabled. Port 3, the SPA, Up at 1000 Mbps. We
+          had armed a MAC, set a port mode, and counted fifteen frames on a
+          PHY that had nothing plugged into it.
         </p>
-
-        <h3>What we claim — and what we don’t</h3>
         <p>
-          We claim the interrupt chain on <code>c9f4451a</code>, the queue
-          depth change, and fifteen transmitted frames with zero received on
-          <code>d7e2e24f</code>. We claim iDRAC showed port 4 down. We do
-          not claim M8.9, a returned frame, DHCP that saved, or SSH from
-          another machine. The catalog already has D3, D7, and D8 in flight.
-          This story does not move them. Everest stays closed. HDA stays 99%.
+          The story stops on that screen. D3, D7, and D8 stay in flight.
+          HDA stays 99%. Everest stays closed.
         </p>
 
         <p class="story__aside">
@@ -552,155 +564,211 @@
         <h2 class="story__title">Ubuntu, from the library, to a prompt</h2>
 
         <p>
-          ADR-020, <code>18d136c2</code>, named RayNu VM Generation 1: one
-          virtual machine that boots unmodified OS media. Phases 0 through 5.
-          What had lived was a patched Alpine reboot-to-disk. The patcher and
-          the auto-answer were still on the product path. The bar was not
-          built past that on the day the ADR was accepted.
+          On 4 October we wrote the bar down and admitted we were not at it.
+          ADR-020 (<code>18d136c2</code>) calls the machine RayNu VM
+          Generation 1: one specified guest that boots an operating system
+          the way the vendor shipped it. Phases 0 through 5. What had lived
+          was a patched Alpine, reboot to its own disk, with the patcher and
+          the auto-answer still on the product path.
         </p>
         <p>
-          The file was already on the spare. <code>93088c32</code> stored
-          <code>ubuntu-26.04-live-server-amd64.iso</code>. The page stayed
-          <code>ISO 100%</code>. COM2 had <code>library CD stored</code>.
-          <code>27d4e540</code> then attached that file as <code>vdb</code>
-          and booted the Cruzer Alpine
-          (<code>cd_bytes=1042284544</code>). The next EFI waits for the ISO
-          row. That click is <code>vdb</code> and the RayNu-F CD.
-        </p>
-
-        <h3>The shim, before it could open GRUB</h3>
-        <p>
-          <code>5cb54836</code> ran Ubuntu <code>BOOTX64.EFI</code> for 180
-          seconds, <code>blk_rd=0</code>, on <code>AllocatePool</code> type 0.
-          The next EFI serves that call as loader data.
-          <code>0aa0a78d</code> stopped on <code>MokListRT</code>.
-          <code>SetVariable</code> was unsupported. The next EFI keeps a
-          boot-long variable store.
-          <code>8822dbfa</code> stopped on <code>grubx64.efi</code> Not Found.
-          FilePath was the CDROM node, so shim looked the file up in the FAT
-          root. The next EFI publishes
-          <code>\EFI\BOOT\BOOTX64.EFI</code> as the file node.
+          The Ubuntu file was already on the spare.
+          <code>93088c32</code> had stored
+          <code>ubuntu-26.04-live-server-amd64.iso</code>. The page sat at
+          <code>ISO 100%</code>. COM2 had said <code>library CD stored</code>.
+          The next boot, <code>27d4e540</code>, attached that file as
+          <code>vdb</code> and then booted the Cruzer Alpine anyway
+          (<code>cd_bytes=1042284544</code>). The disc we had spent the
+          upload on was not the disc the firmware opened. After that, the
+          file waits until Guests chooses the ISO row.
         </p>
 
-        <h3>Menu time, then a kernel line with no console</h3>
+        <h3>Three ways to refuse a shim</h3>
         <p>
-          <code>90f64bcf</code> drew GNU GRUB 2.14. The countdown was at 22 s
-          when <code>wall_ms=180007</code> and <code>blk_rd=17</code>. The
-          next EFI uses a 600 s cap.
-          <code>9147cad0</code> died at GRUB <code>1s</code> with
-          <code>wall_ms=600005</code> and <code>blk_rd=17</code>. A GRUB
-          second was about 20 wall seconds because PIT channel 2 did not
-          wait. That clock is its own story.
+          Ubuntu’s own <code>BOOTX64.EFI</code> is a shim, and it wanted
+          things Alpine had never asked for.
         </p>
         <p>
-          <code>87979e32</code> reached EBS and virtio <code>DRIVER_OK</code>
-          and did not print <code>Linux version</code>. The stock kernel line
-          has no serial console. This boot appends
-          <code>console=ttyS0</code> at <code>StartImage</code> for the
-          library CD only. The stored file is not rewritten.
-          <code>6865b5ab</code> and <code>4e9ebcdb</code> showed why a
-          LoadOptions append was not enough: GRUB 2.14 hands the kernel over
-          without <code>StartImage</code>, and the <code>linux</code> line
-          GRUB actually reads is the ISO9660 file. The read view grew
-          <code>console=ttyS0</code>. The backing bytes stayed the stored file.
+          <code>5cb54836</code> ran for 180 seconds, read zero blocks, and
+          spent the time in <code>AllocatePool</code> of type 0. We had been
+          declining that pool type. The next EFI serves it as loader data.
+        </p>
+        <p>
+          <code>0aa0a78d</code> got further and stopped on
+          <code>MokListRT</code>. <code>SetVariable</code> was unsupported.
+          Secure Boot’s runtime list is how a shim remembers what it has
+          been told to trust. We kept a variable store for the length of the
+          boot and minted a null protocol handle.
+        </p>
+        <p>
+          <code>8822dbfa</code> reached the open of <code>grubx64.efi</code>
+          and came back Not Found, <code>blk_rd=0</code>. The path we had
+          published was the CD-ROM device itself.           Shim turned that into a
+          directory prefix and looked for GRUB in the root of the FAT.
+          On this disc <code>grubx64.efi</code> sits beside
+          <code>\EFI\BOOT\BOOTX64.EFI</code>. The next EFI publishes that
+          file node, and opens a relative name against the directory handle.
         </p>
 
-        <h3>The CPU the library refused</h3>
+        <h3>A menu, a silent kernel</h3>
         <p>
-          <code>a71fbb3d</code> printed <code>Linux version 7.0.0-14-generic</code>
-          and <code>console=ttyS0</code>, then an initrd unpack
-          <code>write error</code>. Guest RAM was 256 MiB of about 2 GiB
-          premapped. <code>6a7e72b1</code> unpacked the initrd
-          (<code>bytes=2113929216 tail=1845493760</code>) and panicked in
-          <code>/init</code>: <code>CPU ISA level is lower than required</code>.
-          The next EFI publishes <code>XCR0</code> and CPUID OSXSAVE.
-          <code>8c6bfa85</code> lived <code>XCR0</code> <code>0x2ff</code>.
-          libc still refused the ISA level. Leaf 0’s vendor was
-          <code>GenuineIntEl</code> for userspace, because X2APIC was masked
-          on every leaf. The next EFI masks leaf 1 only.
+          The menu did appear. On <code>90f64bcf</code> GNU GRUB 2.14 was
+          counting down, at 22 seconds, when our wall cap fired at
+          <code>wall_ms=180007</code> with only 17 block reads behind it.
+          We gave the next boot ten minutes. <code>9147cad0</code> used them
+          up and died at GRUB’s own <code>1s</code>,
+          <code>wall_ms=600005</code>. A second on that menu was about
+          twenty seconds of the rack. That clock has its own story.
         </p>
         <p>
-          <code>1b01c2d8</code> got a vendor userspace would accept, and udev
-          started, then fsnotify waited in <code>synchronize_srcu</code>.
-          Linux 7 arms that grace period with a self-IPI.
-          <code>6d630acc</code> delivered <code>self-ipi vec=0xf6</code> four
-          times, then:
+          When the menu could finish, the kernel left without saying
+          goodbye. <code>87979e32</code> reached ExitBootServices and virtio
+          <code>DRIVER_OK</code>, and COM2 never printed
+          <code>Linux version</code>. The line in the stock
+          <code>grub.cfg</code> has no serial console. We append
+          <code>console=ttyS0</code> for the library CD, at
+          <code>StartImage</code>, and we do not write it back into the
+          stored file.
+        </p>
+        <p>
+          That was not enough. GRUB 2.14 does not hand the kernel to
+          <code>StartImage</code>. It jumps. <code>6865b5ab</code> and
+          <code>4e9ebcdb</code> both reached the same silence, and the block
+          reads told us the menu file was coming through
+          <code>BlockIo</code>, out of the ISO9660 directory, where our
+          LoadOptions never went. So the read view of that
+          <code>linux</code> line grew <code>console=ttyS0</code>, and the
+          bytes on the spare stayed the bytes the operator uploaded.
+        </p>
+
+        <h3>A CPU that introduced itself wrong</h3>
+        <p>
+          <code>a71fbb3d</code> finally printed
+          <code>Linux version 7.0.0-14-generic</code>, and then the initrd
+          unpack failed with a write error. We had told the guest it had
+          256 MiB. About two gigabytes were already mapped behind it.
+          <code>6a7e72b1</code> gave it the tail
+          (<code>bytes=2113929216 tail=1845493760</code>), unpacked the
+          initrd, and died in <code>/init</code> on a sentence we had not
+          seen from Alpine:
+        </p>
+        <pre>CPU ISA level is lower than required</pre>
+        <p>
+          glibc wanted AVX, and our CPUID had not told it the OS would save
+          that state. The next EFI publishes <code>XCR0</code>.
+          <code>8c6bfa85</code> lived <code>XCR0</code> at <code>0x2ff</code>
+          and libc refused again. This time the vendor string was
+          <code>GenuineIntEl</code>. We had been masking the X2APIC bit on
+          every leaf, and leaf 0 is where the twelve-character vendor lives.
+          Flip one character and userspace never bothers to read leaf 1.
+          The mask moved to leaf 1 only.
+        </p>
+        <p>
+          <code>1b01c2d8</code> got a vendor glibc would believe. udev
+          started. Then a filesystem notification waited forever in
+          <code>synchronize_srcu</code>. Linux 7 starts that grace period
+          with a self-IPI, and we had been throwing local-APIC writes away.
+          <code>6d630acc</code> delivered <code>self-ipi vec=0xf6</code>
+          four times. Casper mounted. The getty came up.
         </p>
         <pre>Welcome to Ubuntu 26.04 LTS!</pre>
         <p>
-          The screen was <code>waiting for cloud-init</code> when the log
-          was cut. There is no guest NIC. <code>9df8d68a</code> put
-          <code>cloud-init=disabled</code> on the kernel line and the tty
-          stayed on that wait. <code>5f24b74e</code> reached cloud-init final
-          and did not reach the language list. The next EFI adds
-          <code>ci.ds=None</code> and masks casper-md5check and snapd.seeded.
+          The tty was <code>waiting for cloud-init</code>. There is no guest
+          NIC on this boot, and cloud-init was waiting for a network that
+          was never going to answer. <code>9df8d68a</code> put
+          <code>cloud-init=disabled</code> on the kernel line. The wait
+          stayed. <code>5f24b74e</code> reached cloud-init’s own “final” and
+          still did not draw the language list. The next EFI adds
+          <code>ci.ds=None</code> and masks the casper checksum and the
+          snap seed.
         </p>
 
-        <h3>Fourteen hours, one sector at a time</h3>
+        <h3>Fourteen hours of one sector</h3>
         <p>
-          <code>674f74c8</code> drew the language list, started
-          <code>curtin extract</code> onto <code>vda</code>, and stopped in
-          <code>Stage 46 hold</code> at the 16M exit cap.
-          <code>806d8961</code> raised that cap to 256M, reached Installing
-          system, and did not move for about 14 hours. No
-          <code>Stage 46 hold</code>. Each sector was its own PERC command.
-          <code>c4a3ef1b</code> posts 64 KiB, else 4 KiB, else one sector.
-          The virtio bounce is 64 KiB. That boot finished the extract and
-          the kernel, then failed installing GRUB. dmesg:
-          <code>efi: Unable to switch EFI into virtual mode (status=8000000000000003)</code>.
-          That status is <code>SetVirtualAddressMap</code> unsupported.
-          <code>996492fc</code> accepts the call.
+          <code>674f74c8</code> drew the language list. Curtin started
+          extracting onto <code>vda</code>. Then the familiar line:
+          <code>Stage 46 hold</code>, at the sixteen-million-exit cap, in
+          the middle of a copy. <code>806d8961</code> raised the cap to
+          256 million. The language list came back. Installing system
+          started. The log did not move for about fourteen hours, and there
+          was no hold this time. The guest was working. Every sector was
+          its own trip through the PERC mailbox.
+        </p>
+        <p>
+          <code>c4a3ef1b</code> posts 64 KiB when the spare allows it, 4 KiB
+          when it does not, one sector when it must. The copy finished. The
+          kernel was on the disk. GRUB’s install then failed, and dmesg had
+          the reason: <code>Unable to switch EFI into virtual mode
+          (status=8000000000000003)</code>. That status is
+          <code>SetVirtualAddressMap</code> unsupported — the same runtime
+          call we had been papering over with <code>efi=noruntime</code> on
+          Alpine, which cannot be injected into this ISO.
+          <code>996492fc</code> accepts the call and rewrites the runtime
+          pointers. Subiquity reached Installation complete.
         </p>
 
-        <h3>Shim, prefix, the ESP, the initrd</h3>
+        <h3>The disk that could not find its own GRUB</h3>
         <p>
-          Installation complete lived. Start on the 10240 MiB row of
-          <code>1c278f67</code> opened the removable shim and printed
-          <code>Failed to open grubx64.efi</code>. The installed GRUB is
-          <code>\EFI\ubuntu\grubx64.efi</code>.
+          Start on the new row booted the wrong Alpine. The Ubuntu disk was
+          the next GPT, ten gibibytes at the 18 GiB mark. When
+          <code>1c278f67</code> started that row, it opened the removable
+          shim and the shim said <code>Failed to open grubx64.efi</code>.
+          The GRUB Ubuntu had installed was
+          <code>\EFI\ubuntu\grubx64.efi</code>, not the one beside
+          <code>BOOTX64.EFI</code>.
+        </p>
+        <p>
           <code>252c04cd</code> opened <code>grubx64.efi</code> and stopped
-          at GNU GRUB 2.14 <code>grub&gt;</code>. The buffer load had cleared
-          FilePath, so GRUB had no prefix.
-          <code>9abd4870</code> staged the shim, opened
-          <code>grubx64.efi</code>, and stopped at <code>grub&gt;</code> with
-          no GRUB FilePath line. The next EFI stages
-          <code>\EFI\ubuntu\grubx64.efi</code> directly.
-          <code>89a67dc4</code> did that and stopped at <code>grub&gt;</code>
-          again. The stub is
-          <code>search.fs_uuid 6ded2137-de53-4881-93df-8bbdeb2b20ec</code>.
-          The handle was the raw disk, so the file was sought at LBA 0. The
-          next EFI names the ESP <code>hd0,gpt1</code>.
+          at <code>grub&gt;</code>. Shim had found the file. Our buffer load
+          had then cleared <code>LoadedImage.FilePath</code>, so GRUB woke
+          up with no prefix and never opened its own
+          <code>grub.cfg</code>. <code>9abd4870</code> staged the shim
+          again, opened GRUB again, and stopped at the same prompt with no
+          FilePath line at all. The next EFI skips the shim when
+          <code>grubx64.efi</code> is already there and launches that file
+          with the path already published.
         </p>
         <p>
-          <code>1149d279</code> drew <code>*Ubuntu</code> and then:
+          <code>89a67dc4</code> did exactly that, printed the stub
+          <code>search.fs_uuid 6ded2137-de53-4881-93df-8bbdeb2b20ec</code>,
+          and stopped at <code>grub&gt;</code> once more. The device handle
+          was the whole disk. GRUB went looking for its files at LBA 0.
+          The ESP is partition 1, at LBA 2048. The next EFI gives the loader
+          that partition’s handle, so GRUB can call the disk
+          <code>hd0,gpt1</code>.
+        </p>
+
+        <h3>An initrd that knew its own length</h3>
+        <p>
+          <code>1149d279</code> drew the menu. <code>*Ubuntu</code>. Then
+          the stub, every time, with the same status:
         </p>
         <pre>Failed to load initrd: 0x8000000000000001</pre>
         <p>
-          The ESP handle lived (<code>part=1 lba=2048</code>). GRUB’s
-          LoadFile2 returns not-found unless the remainder is an End node,
-          and the stub’s size query must return
-          <code>EFI_BUFFER_TOO_SMALL</code>.
-          <code>4f65682f</code> printed
-          <code>initrd LocateDevicePath matched=20 remainder=End</code> and
-          the same load error. GRUB returns invalid parameter when
-          <code>this</code> is not the LoadFile2 struct it registered.
-          <code>fa3ccb64</code> printed
-          <code>LoadFile policy=0 path0=7f buf=0x0</code> and then
-          <code>buf=0x415f000</code>, and the same error. The copy call
-          returns <code>BUFFER_TOO_SMALL</code> when
-          <code>*BufferSize</code> is short.
-          <code>826ca6e9</code> printed <code>sz=34338680</code> and the same
-          error. The length was already real. No <code>blk fail</code>. The
-          next EFI copies that ext4 file and returns success from the shim.
+          The ESP handle was alive (<code>part=1 lba=2048</code>). The
+          failure moved one function call at a time, and the number never
+          changed. GRUB’s LoadFile2 returns not-found unless the path
+          remainder is an End node, and the stub treats any other answer to
+          its size query as a load error. <code>4f65682f</code> got
+          <code>matched=20 remainder=End</code> and the same error, because
+          <code>this</code> was not the LoadFile2 struct GRUB had
+          registered. <code>fa3ccb64</code> entered that struct
+          (<code>buf=0x0</code>, then <code>buf=0x415f000</code>) and the
+          copy came back buffer-too-small, which the stub reports as the
+          same load error. <code>826ca6e9</code> printed
+          <code>sz=34338680</code> — the length was real, there was no
+          <code>blk fail</code> — and still returned the error. The next
+          EFI reads that ext4 file into the stub’s buffer and returns
+          success from the shim.
         </p>
 
-        <h3>The prompt, then the signature sector</h3>
+        <h3>The prompt</h3>
         <p>
-          <code>c3a70e62</code> (<code>build: sha=c3a70e623aec</code>), choice
-          4, copied the initrd and reached a shell. The library file was
-          still waiting. Clear ISO had not been clicked. The
-          <code>ISO-INSTALL-OK</code> line in that log is the firmware
-          handoff, not a new install close.
+          <code>c3a70e62</code>, <code>build: sha=c3a70e623aec</code>, choice
+          4. The library file was still waiting. Clear ISO had not been
+          clicked. The <code>ISO-INSTALL-OK</code> in this log is the
+          firmware handing off, the same words as an install, a different
+          event.
         </p>
         <pre>initrd ext4 bytes=34338680 name=initrd.img-7.0.0-14-generic
 RAYNU-V-RAYNU-F-EBS-OK
@@ -710,34 +778,25 @@ Freeing initrd memory: 33536K
 Welcome to Ubuntu 26.04 LTS!
 vikkp@raynusrv2:~$</pre>
         <p>
-          The same COM2 then printed:
+          Then, on the same COM2, after the prompt:
         </p>
         <pre>boot: M8.8 library ISO cleared (signature sector only; disks unchanged)</pre>
         <p>
-          The wipe is the ISO signature sector. UBUNTU0, the 8 GiB window,
-          and the Ubuntu disk stay. Tag
-          <code>v0.1.0-m8-8-ubuntu</code>, CI <code>38454398693</code>. Not
-          GitHub Latest.
-        </p>
-
-        <h3>What we claim — and what we don’t</h3>
-        <p>
-          We claim M8.8.1 through M8.8.4 lived on <code>c3a70e62</code>: an
-          Ubuntu 26.04 login from a 10 GiB tail, kernel
-          <code>7.0.0-14-generic</code>, then the library signature sector
-          cleared. <code>vda</code> is 10 GiB, <code>vda1</code>
-          <code>vda2</code> <code>vda3</code>. The 2.9 TB virtual disk is
-          not that tail.
+          The wipe is one sector, the ISO signature. UBUNTU0, the 8 GiB
+          window, and the Ubuntu disk stay. <code>vda</code> is 10 GiB,
+          <code>vda1</code> <code>vda2</code> <code>vda3</code>. The 2.9 TB
+          virtual disk is still hidden behind that tail.
         </p>
         <p>
-          We do not claim unmodified media. The stored ISO was not rewritten,
-          and the boot still amended <code>console=ttyS0</code>. The Alpine
-          answerer is still on the product path. The login row held
-          unmodified media at 25. We do not claim a new
-          <code>RAYNU-V-M7-ISO-INSTALL-OK</code>. Everest stays closed on
-          <code>f72b4276</code>. Rollback for that loop stays
-          <code>v0.1.0-everest-closed</code>. HDA stays 99%. This tag is the
-          rollback when an M8.9 EFI misbehaves. It is not Latest.
+          The login is real, and the bar from 4 October is still ahead of
+          it. The stored ISO was the vendor’s file. The boot that reached
+          the prompt had appended <code>console=ttyS0</code> on the way, and
+          the Alpine answerer is still in the tree for the other disc.
+          Unmodified media stayed at 25 on the login row. Everest stays
+          closed on <code>f72b4276</code>. The tag for this EFI is
+          <code>v0.1.0-m8-8-ubuntu</code>, CI <code>38454398693</code>, the
+          rollback when a later flash misbehaves. GitHub Latest stays the
+          Everest pin.
         </p>
 
         <p class="story__aside">
@@ -763,64 +822,60 @@ vikkp@raynusrv2:~$</pre>
         <h2 class="story__title">A GRUB second, on a wall clock</h2>
 
         <p>
-          GRUB’s menu is a countdown. On this machine the countdown and the
-          wall disagreed, twice, a fortnight apart.
+          GRUB counts down in its own seconds. Twice, a fortnight apart, we
+          watched that countdown and a wristwatch disagree, and both times
+          the prompt at the end was <code>grub&gt;</code>.
         </p>
 
-        <h3>One read, then the cap</h3>
+        <h3>The only sector we were willing to mention</h3>
         <p>
-          <code>c4a41a17</code> staged the installed Alpine ESP and stopped
-          at <code>grub&gt;</code>. The one line past the GPT pin was the
-          firmware reading the FAT boot sector while it staged
-          <code>BOOTX64.EFI</code>, not a sector GRUB had asked for:
+          <code>c4a41a17</code> found the installed Alpine and stopped at the
+          prompt. We had taught that EFI to speak up once, the first time a
+          read went past the GPT pin, and then to be quiet. The one line it
+          printed was ours: the firmware, staging
+          <code>BOOTX64.EFI</code>, reading the FAT boot sector. GRUB’s own
+          reads came after, with no serial left to name them.
         </p>
         <pre>boot: Stage 46 disk past pin lba=2048 n=512 ok (not ISO-INSTALL-OK)
 boot: RayNu-F found \EFI\BOOT\BOOTX64.EFI bytes=139264 (F7 disk; not ISO-INSTALL-OK)
 image=DISK-BOOTX64</pre>
         <p>
-          There is no wall-cap line on that boot. The operator Force Off at
-          the prompt.
+          No wall-cap line. The operator powered the machine off at the
+          prompt.
         </p>
         <p>
-          Boot 2 of <code>e5cca2e0</code>, the soak EFI with
-          <code>usbsoak.txt</code> removed, staged the same file and stopped
-          at the same prompt. The cap did fire:
+          Boot 2 of the soak EFI, <code>e5cca2e0</code>, with
+          <code>usbsoak.txt</code> taken off the stick, staged the same file
+          and stopped in the same place. This time the cap spoke.
         </p>
         <pre>RayNu-F stop wall-cap exits=301551616 wall_ms=180005 svc=301551566 svc_err=1 conout_ok=1 blk_rd=33 blk_wr=0 allocs=6 free_pages=62553
 Stage 46 product ISO hold</pre>
         <p>
-          <code>blk_rd=33</code> is one successful <code>ReadBlocks</code>
-          per count, the same count as <code>d60431ee</code>, where the pin
-          served LBA 0 through 33 and GRUB never completed a sector past it.
-          The function named “past pin” USB-read LBA 0 again, inside GRUB’s
-          first read outside the pin. <code>blk_wr=0</code>. The Toshiba was
-          not written. Not <code>login:</code>.
+          Three minutes of wall time. Thirty-three block reads.
+          <code>blk_rd=33</code> is the same count as <code>d60431ee</code>,
+          the boot where a RAM pin had been serving LBA 0 through 33 and
+          GRUB had never been allowed a sector past it. The function we had
+          named “past pin” went back and read LBA 0 again, inside GRUB’s
+          first read outside the pin. Nothing was written. The Toshiba was
+          the same disk we had started with. Nobody got a login.
         </p>
 
         <h3>Twenty wall seconds to a GRUB second</h3>
         <p>
-          The Ubuntu menu met the same cap from the other side.
-          <code>90f64bcf</code> drew GNU GRUB 2.14. The countdown was at 22 s
-          when <code>wall_ms=180007</code> and <code>blk_rd=17</code>. The
-          next EFI gives the menu 600 seconds so the 30 s countdown and the
-          kernel read can finish.
+          The Ubuntu menu met the cap from the other direction.
+          <code>90f64bcf</code> drew GNU GRUB 2.14. The countdown said 22
+          seconds. The wall said <code>wall_ms=180007</code>, and only 17
+          blocks had been read. We raised the cap to ten minutes so a 30
+          second menu, and the kernel read after it, could finish.
         </p>
         <p>
-          <code>9147cad0</code> died at GRUB <code>1s</code>.
-          <code>wall_ms=600005</code>. <code>blk_rd=17</code>. A GRUB second
-          was about 20 wall seconds because PIT channel 2 did not wait. The
-          next EFI waits a real 55 ms on that counter. M8.8.3 was not lived
-          on either boot.
-        </p>
-
-        <h3>What we claim — and what we don’t</h3>
-        <p>
-          We claim two measurements. On 24 September a 180 s wall cap fired
-          at <code>grub&gt;</code> with <code>blk_rd=33</code>. On 7 October
-          a GRUB second cost about 20 wall seconds, and a 600 s cap expired
-          at countdown <code>1s</code>. We do not claim the menu completed,
-          a kernel, or a login. The PIT wait is the next EFI after
-          <code>9147cad0</code>. It is not this story’s close.
+          <code>9147cad0</code> spent the ten minutes and died with GRUB
+          still showing <code>1s</code>. <code>wall_ms=600005</code>.
+          <code>blk_rd=17</code>. A second, to GRUB, had been about twenty
+          seconds of the room. PIT channel 2 is how that firmware calibrates
+          a delay, and channel 2 had not been waiting. The next EFI waits a
+          real 55 milliseconds on that counter. Neither of these boots
+          reached the kernel. The menu is a clock, and the clock was the bug.
         </p>
 
         <p class="story__aside">
@@ -840,63 +895,59 @@ Stage 46 product ISO hold</pre>
         <h2 class="story__title">Guests, plural</h2>
 
         <p>
-          ADR-019 made the Guests screen the spare boot policy. The Overview
-          buttons had been a lab gate for one Alpine image. A new browser
-          showed “No guests” while that Alpine was running, because the list
-          was browser memory of <code>POST /vms</code>.
+          The Overview page had two buttons and one Alpine. ADR-019 said the
+          Guests screen was the boot policy from here on. The proof that the
+          old page was not a list: open a second browser, and the machine
+          that is running says there are no guests. The list had been the
+          first browser’s memory of <code>POST /vms</code>.
         </p>
 
-        <h3>Start, on the window</h3>
+        <h3>One row, eight gigabytes</h3>
         <p>
-          <code>5175b3da</code> waited on SPA Guests.
-          <code>PercSpaChoice choice=1</code>, <code>DISK-BOOTX64</code>,
-          <code>RAYNU-V-M8-PERC-BOOT-OK</code>, <code>localhost:~#</code> on
-          <code>d43dbf07</code>. <code>vda</code> was 8.00 GiB. The page
-          showed spare 3022592 MiB, used 8192, placeable 8192. The 10240 MiB
-          refusal was not clicked. Windows stayed refused. One RayNu-F still
-          owns the CPU.
+          <code>5175b3da</code> waited. The operator pressed Start on the
+          row the firmware had published from the latch.
+          <code>PercSpaChoice choice=1</code>, then
+          <code>DISK-BOOTX64</code>, <code>RAYNU-V-M8-PERC-BOOT-OK</code>,
+          and <code>localhost:~#</code> on <code>d43dbf07</code>.
+          <code>vda</code> was 8.00 GiB. The page showed the spare as
+          3022592 MiB, with 8192 used and 8192 placeable. Someone could have
+          asked for 10240 and been refused. They did not. Windows on the
+          form stayed refused. One RayNu-F still owns the only CPU we give
+          a guest.
         </p>
 
-        <h3>A disk past 8 GiB</h3>
+        <h3>A second disk, past the window</h3>
         <p>
-          <code>67bdb0d9</code> is choice 3: <code>tail_off=8589934592</code>,
-          <code>[vda]</code> 10.0 GiB, <code>ee851fd5</code> written. A guest
-          reboot returned to the ISO. The following hypervisor boot is what
-          picks boot-installed.
+          The free tail had been a number on the page. <code>67bdb0d9</code>
+          made it a disk: choice 3, guest LBA 0 at spare offset
+          <code>8589934592</code>, <code>[vda]</code> 10.0 GiB, UUID
+          <code>ee851fd5</code> written. Reboot the guest while that choice
+          is still set and you are back on the ISO. The hypervisor has to
+          boot again before it will pick the installed system.
         </p>
         <p>
-          <code>f44ba647</code> started that 10 GiB guest.
-          <code>choice=4</code>, <code>DISK-BOOTX64</code>,
-          <code>ee851fd5</code>, <code>[vda]</code> 10.0 GiB,
-          <code>localhost:~#</code>. Stop on that EFI did not reach the Linux
-          exit loop. Packed, not lived.
+          <code>f44ba647</code> was that later boot. Choice 4,
+          <code>DISK-BOOTX64</code>, <code>ee851fd5</code>, ten gibibytes,
+          <code>localhost:~#</code>. Stop was on the screen. Once Linux had
+          the machine, that EFI never read it. The button had been pressed
+          into a path the guest had already left.
         </p>
 
-        <h3>The ISO prompt, and the command that was not typed</h3>
+        <h3>The command we stopped typing</h3>
         <p>
-          <code>752586b9</code>, choice 3, booted
-          <code>ISO-BOOTX64</code> onto <code>[vda]</code> 10.0 GiB and
-          stopped before <code>setup-disk</code>:
+          <code>752586b9</code> booted the ISO onto the tail on purpose, and
+          then declined to run the installer. Choice 3,
+          <code>ISO-BOOTX64</code>, <code>[vda]</code> 10.0 GiB. The motd
+          offered <code>setup-alpine</code>. COM2, a moment later:
         </p>
         <pre>boot: perc SPA linux_iso — setup-disk withheld</pre>
         <p>
-          The ISO motd offered <code>setup-alpine</code>. Nobody was told to
-          type it. <code>ee851fd5</code> was journal-recovered and unmounted.
-          No scripted <code>setup-disk</code>. Login still gets
-          <code>root</code>. The ISO is still serial-patched. The 8192 MiB
-          window reinstall was not clicked. Unmodified media moved 20 to 25
-          on that line, and 25 is not done.
-        </p>
-
-        <h3>What we claim — and what we don’t</h3>
-        <p>
-          We claim Guests Start of the latched 8 GiB image, a 10 GiB tail
-          that reached <code>localhost:~#</code>, and a <code>linux_iso</code>
-          that stopped with <code>setup-disk</code> withheld. We do not claim
-          concurrent guests, an unattended install, unmodified media, or the
-          2.9 TB virtual disk as the guest disk. A guest reboot during a
-          reinstall choice returns to the ISO until the next hypervisor boot
-          picks boot-installed.
+          Login still receives <code>root</code>. The ISO is still
+          serial-patched. <code>ee851fd5</code> was mounted, recovered its
+          journal, and unmounted. The 8192 MiB reinstall of the old window
+          was not the click. Unmodified media moved from 20 to 25 on the
+          strength of a command that was not typed. Twenty-five is a
+          residual with a number, and the answerer is still in the binary.
         </p>
 
         <p class="story__aside">
@@ -915,73 +966,91 @@ Stage 46 product ISO hold</pre>
         <h2 class="story__title">The spare, and the disk we did not touch</h2>
 
         <p>
-          Ubuntu 26.04 is the standing OS on PERC virtual disk UBUNTU0, about
-          400 GB. RAYNU-SPARE is about 2.9 TB. The rule for the week was the
-          same sentence every boot: do not format UBUNTU0. Do not open the
-          H840. Do not Clear Configuration again.
+          By the last week of September the chassis was already somebody’s
+          server. Ubuntu 26.04 lived on a PERC virtual disk called UBUNTU0,
+          about 400 GB, and that disk was the boot disk of the lab. Next to
+          it, empty, was RAYNU-SPARE, about 2.9 TB.           The rule did not change all week. Do not format UBUNTU0. Do not
+          open the H840. Do not Clear Configuration again.
         </p>
 
-        <h3>The Mini, not the other controller</h3>
+        <h3>Two cards, one name</h3>
         <p>
-          <code>cc03d01b</code> printed <code>perc fwstate refuse count=2</code>
-          and loaded no BAR. The H840 is also <code>1000:0016</code>.
-          <code>2dd2b412</code> mapped the H740P Mini at <code>18:00.0</code>,
-          subsystem <code>1028:1fcd</code>, BAR <code>0x9d800000</code>, and
-          read xscale <code>outbound_msg_0</code> as 0. The H840 at
-          <code>3b:00.0</code> stayed unmapped. That zero is the xscale
-          register, not a reset. The status word is scratch pad 0.
-          <code>post=0</code>. <code>mapped=0</code> stops the milestone.
+          The first EFI that went looking, <code>cc03d01b</code>, found two
+          answers and took neither.
+        </p>
+        <pre>perc fwstate refuse count=2</pre>
+        <p>
+          No BAR was loaded. The H840 in the other slot answers to the same
+          vendor and device, <code>1000:0016</code>. Counting matches is not
+          choosing. <code>2dd2b412</code> chose by the subsystem: the H740P
+          Mini at <code>18:00.0</code>, <code>1028:1fcd</code>, BAR
+          <code>0x9d800000</code>. The H840 at <code>3b:00.0</code> stayed
+          unmapped.           What we read at the old xscale offset,
+          <code>outbound_msg_0</code>, was 0. That zero is the xscale
+          register. The status lives in scratch pad 0. This EFI
+          printed <code>perc fusion</code> with <code>post=0</code> and
+          stopped if <code>mapped</code> was 0.
         </p>
         <p>
-          <code>22ce3728</code> read scratch pad 0 as <code>0xb73c0fed</code>:
-          READY, max commands 4077, <code>queues=128</code>,
-          <code>rdpq=1</code>, <code>mapped=1</code>. The low 16 bits are max
-          commands, not a reset request. <code>allow=0</code> on that boot
-          was those 4077, not a reason to reset the adapter. No doorbell was
-          stored. The next EFI posts one IOC init and one LD list to port
-          <code>0xC0</code> because the nibble is already READY.
+          <code>22ce3728</code> read scratch pad 0 as <code>0xb73c0fed</code>.
+          The state nibble was READY. The low sixteen bits were 4077, which
+          is the adapter’s max command count, and which an earlier decode
+          had treated as <code>allow=0</code> and nearly as a reset. Queues
+          128. RDPQ set. <code>mapped=1</code>. The doorbell was not stored.
+          The nibble was already READY, so the next EFI posts one IOC init
+          and one logical-disk list, to port <code>0xC0</code>, and then
+          waits.
         </p>
         <p>
-          <code>83ae471e</code> confirmed READY and printed
-          <code>perc ioc skip above4g</code>. The DMA buffer was above 4 GiB.
-          No doorbell. The next EFI takes eight pages from the frame pool
-          (<code>phys=0x1000000</code> on that boot).
-          <code>7577f934</code> then lived the post:
-          <code>perc ioc status=0x00</code>,
-          <code>perc ld status=0x00 n=2 pick=1</code>.
+          <code>83ae471e</code> confirmed the same scratch pad and then
+          declined to post: <code>perc ioc skip above4g</code>. The DMA
+          buffer lived above 4 GiB, and this adapter’s scratch pad said it
+          would not fetch from there. Eight pages came out of the frame pool
+          instead, <code>phys=0x1000000</code> on that boot. Still no
+          doorbell. <code>7577f934</code> got the answer back.
+          <code>perc ioc status=0x00</code>. Two logical disks,
+          <code>n=2 pick=1</code>. Pick 1 is the spare. Pick 0 is the Ubuntu
+          we had promised to leave alone.
         </p>
 
-        <h3>A read, a write at the last LBA, LBA 0 left alone</h3>
+        <h3>The far end of the disk</h3>
         <p>
-          <code>985495be</code> read LBA 0 (16 zeros) and LBA
-          <code>6190268927</code>, both <code>status=0x00</code>, and Linux
-          enumerated <code>[vdc] 6190268928</code>. The marker did not reach
-          COM2: <code>write_line</code> drops after earlycon.
-          <code>9c37fcae</code> printed it with <code>write_line_nowait</code>
-          during the <code>vdc</code> probe. The same boot’s
-          <code>dd</code> of <code>/dev/vdc</code> copied 512 bytes, first 16
-          zero, in 0.029 s. Read-only. The spare stayed unpartitioned.
+          <code>985495be</code> read LBA 0 and read LBA
+          <code>6190268927</code>, both with status <code>0x00</code>. LBA 0
+          was sixteen zeros. Linux enumerated the whole spare as
+          <code>[vdc] 6190268928</code> and logged into Alpine from the
+          Toshiba, because the Toshiba was still the install disk. The
+          marker we had minted never reached the serial port.
+          <code>write_line</code> goes quiet once Linux shares the UART.
+          <code>9c37fcae</code> printed it with the nowait path, during the
+          probe of <code>vdc</code>. A <code>dd</code> of the first sector
+          copied 512 bytes, the first 16 of them zero, in 0.029 seconds.
+          Read-only. The spare was still unpartitioned.
         </p>
         <pre>boot: perc virtio rd lba=0 ok
 RAYNU-V-M8-PERC-LUN-OK</pre>
         <p>
-          <code>f0a7aabb</code> wrote one sector at LBA
-          <code>6190268927</code>. COM2 showed
-          <code>perc write status=0x00</code>, then the readback:
+          A read of an empty sector is not a boot disk. <code>f0a7aabb</code>
+          wrote one sector at the last LBA, the one furthest from UBUNTU0
+          and from LBA 0, and read it back.
         </p>
         <pre>boot: perc write rd lba=6190268927 match
 RAYNU-V-M8-PERC-WRITE-OK</pre>
         <p>
-          LBA 0 stayed 16 zeros. Virtio stayed read-only. Alpine was still
-          on the Toshiba.
+          Status on the write was <code>0x00</code>. LBA 0 was still sixteen
+          zeros. The guest’s virtio view of the spare stayed read-only.
+          Alpine was still on the Toshiba.
         </p>
 
-        <h3>The 8 GiB window, twice, then a choice</h3>
+        <h3>Eight gigabytes, and a button</h3>
         <p>
-          <code>bda7a59b</code> hid <code>vdc</code> and booted the copied
-          window. UBUNTU0 was not written. The H840 was not mapped. PCI
-          listed virtio at <code>00:02.0</code> and <code>00:03.0</code>. It
-          did not list <code>00:04.0</code>. There was no <code>[vdc]</code>.
+          The image that had reached login on the USB stick was copied into
+          the front of the spare. <code>bda7a59b</code> hid the read-only
+          whole-disk virtio so the initramfs would stop trying to mount it,
+          and booted the copy. UBUNTU0 was not written. The H840 was not
+          mapped. PCI listed virtio at <code>00:02.0</code> and
+          <code>00:03.0</code>. It did not list <code>00:04.0</code>. There
+          was no <code>[vdc]</code>.
         </p>
         <pre>build: sha=bda7a59bd597
 boot: perc copy skip present alt=16777215
@@ -1002,33 +1071,26 @@ localhost login: root
 localhost:~# cat /proc/cmdline
 BOOT_IMAGE=/boot/vmlinuz-lts root=UUID=a0ad99ac-ca25-4458-ade1-cd8599ca4928</pre>
         <p>
-          A chassis restart of the same EFI printed
-          <code>perc copy skip present</code> again, not
-          <code>perc copy start</code>. Same UUID.
-          <code>/dev/vda2: clean, 6380/521216 files, 102913/2084352 blocks</code>.
-          The Toshiba was still attached. The guest disk is that 8 GiB
-          window. The rest of the 2.9 TB stayed hidden.
+          The chassis went down and came back on the same EFI. COM2 said
+          <code>perc copy skip present</code>, which is the firmware
+          noticing the image is already there and refusing to write it
+          again. Same UUID. <code>/dev/vda2</code> came back
+          <code>clean, 6380/521216 files, 102913/2084352 blocks</code>. The
+          Toshiba was still plugged in. The guest disk was the first 8 GiB
+          of the spare. The rest of the 2.9 TB stayed hidden.
         </p>
         <p>
-          <code>8ad2ac89</code> waited after HTTPS. Choice 2 reinstalled the
-          8 GiB window and wrote <code>d43dbf07-…</code>. A later boot,
-          choice 1, printed <code>DISK-BOOTX64</code> and
-          <code>localhost login:</code> from that UUID with
-          <code>setup-disk</code> withheld. An unattended F11 does not
-          install. Tag <code>v0.1.0-m8-perc-spa</code>, CI
-          <code>36362775808</code>, COM2 <code>build: sha=8ad2ac89125e</code>.
-          Not GitHub Latest.
-        </p>
-
-        <h3>What we claim — and what we don’t</h3>
-        <p>
-          We claim a mailbox read and a last-LBA write on the H740P Mini, an
-          unattended login from the 8 GiB image, the same login after a
-          chassis restart, and both SPA paths on <code>8ad2ac89</code>. We
-          do not claim the 2.9 TB virtual disk as a guest disk, a format of
-          UBUNTU0, a doorbell, or the H840. LBA 0 of the mailbox probe stayed
-          16 zeros. <code>skip PERC</code> stays. Host and CI do not print
-          <code>RAYNU-V-M8-PERC-LUN-OK</code>.
+          <code>8ad2ac89</code> stopped after HTTPS and waited. Choice 2
+          reinstalled that 8 GiB window and wrote a new UUID,
+          <code>d43dbf07-…</code>. A later boot, choice 1, printed
+          <code>DISK-BOOTX64</code> and <code>localhost login:</code> from
+          that UUID, and withheld <code>setup-disk</code>. An unattended
+          power-on does not install. The tag is
+          <code>v0.1.0-m8-perc-spa</code>, CI <code>36362775808</code>,
+          COM2 <code>build: sha=8ad2ac89125e</code>. It is the rollback for
+          that screen. It is not GitHub Latest. UBUNTU0 was the standing OS
+          when the week started, and it was the standing OS when the week
+          ended.
         </p>
 
         <p class="story__aside">
@@ -1054,64 +1116,63 @@ BOOT_IMAGE=/boot/vmlinuz-lts root=UUID=a0ad99ac-ca25-4458-ade1-cd8599ca4928</pre
         <h2 class="story__title">HTTPS, before the guest</h2>
 
         <p>
-          rustls wrapped the SPA on the host. <code>77e3e33c</code> put a
-          plaintext listen in front of coexist. <code>bc640594</code> fed
-          that stream through rustls and got the SPA back over TCP. The host
-          marker is <code>RAYNU-V-M8-TLS-FW-HOST-OK</code>. rustls and ring
-          could not be linked into <code>uefi-bin</code>. CURL NOW stayed
-          <code>http://</code>. What joined the EFI was a firmware TLS 1.2
-          listener, one cipher, written for this binary.
+          We already had a TLS stack. On the host, <code>77e3e33c</code> put
+          a plaintext listen in front of the management socket and
+          <code>bc640594</code> fed it through rustls until the SPA came back
+          over TCP. The host marker was
+          <code>RAYNU-V-M8-TLS-FW-HOST-OK</code>. rustls and ring could not
+          be linked into the EFI. The binary that boots the R640 is
+          <code>uefi-bin</code>, and those crates do not join it. CURL NOW
+          stayed <code>http://</code>. What went into the EFI was a TLS 1.2
+          listener written for this one handshake: one cipher, a lab
+          certificate, no TLS 1.3.
         </p>
 
-        <h3>The curl that returned the page</h3>
+        <h3>The minute before RayNu-F</h3>
         <p>
           <code>928d6224</code>, <code>build: sha=928d62241967</code>. The
-          PRE-EBS SNP window at <code>http://10.99.99.140:8443/</code> timed
-          out. The operator did not curl plaintext. After ExitBootServices
-          the native BCM5720, <code>01:00.0</code>, MAC
-          <code>b0:26:28:5c:5a:38</code>, link up, printed
-          <code>CURL NOW → https://10.99.99.140:8443/</code>. The Mac used
-          <code>--cacert</code>, TLS 1.2, cipher
-          <code>ECDHE-RSA-AES128-GCM-SHA256</code>, and the name
-          <code>raynu-v.lab</code>. The body was the SPA,
-          <code>&lt;title&gt;RayNu-V&lt;/title&gt;</code>.
+          PRE-EBS window was still plaintext SNP at
+          <code>http://10.99.99.140:8443/</code>, and it timed out. The
+          operator did not curl it. After ExitBootServices the native
+          BCM5720 came up, <code>01:00.0</code>, MAC
+          <code>b0:26:28:5c:5a:38</code>, link up, and COM2 printed the line
+          we had been waiting to see change:
+          <code>CURL NOW → https://10.99.99.140:8443/</code>.
+        </p>
+        <p>
+          From the Mac, <code>curl --cacert</code>, TLS 1.2 only, cipher
+          <code>ECDHE-RSA-AES128-GCM-SHA256</code>, the name
+          <code>raynu-v.lab</code> pointed at that lease. The body was the
+          SPA. Then, on COM2, before the guest:
         </p>
         <pre>boot: HOST-NIC TCP accept — client connected
 boot: HOST-NIC HTTP exchange ok
 RAYNU-V-M8-TLS-OK</pre>
         <p>
-          Then RayNu-F, <code>image=DISK-BOOTX64</code>,
-          <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code>,
-          <code>RAYNU-V-M8-DISK-PERSIST-OK</code>, Alpine
+          RayNu-F ran after that. <code>DISK-BOOTX64</code>,
+          <code>RAYNU-V-M8-DISK-PERSIST-OK</code>, Alpine at
           <code>root=UUID=dd673a9a-30c3-4acd-8d7e-9afe9313c46f</code>. The
-          exchange was before the guest. The certificate is a lab millicert.
-          Not TLS 1.3. <code>GET /</code> is still unauthenticated.
+          certificate that made the lock icon is a millicert minted for the
+          lab. <code>GET /</code> still does not ask who you are. The
+          minutes before ExitBootServices are still HTTP.
         </p>
 
-        <h3>The page that stayed up</h3>
+        <h3>One handshake, and the guest beside it</h3>
         <p>
-          <code>1f33eeda</code>, CI <code>36137732145</code>, leased
-          <code>10.99.99.154/24</code> and booted the installed disk while a
-          browser held one TLS session. One
-          <code>boot: HOST-NIC TCP accept — client connected</code>, then
-          <code>HTTP exchange ok</code> / <code>HTTP keep-alive</code> through
-          Overview polls and the Activity tab. No second
-          <code>TCP accept</code>. Host stayed green. The chassis stayed up.
-          <code>RAYNU-V-M8-TLS-OK</code> did not print: there was no
-          pre-guest HTTPS exchange on that boot. The keep-alive is the
-          standing session. Tag <code>v0.1.0-m8-a4s</code>. Not GitHub Latest.
-        </p>
-
-        <h3>What we claim — and what we don’t</h3>
-        <p>
-          We claim <code>RAYNU-V-M8-TLS-OK</code> on <code>928d6224</code>:
-          <code>curl --cacert</code> returned the SPA on
-          <code>10.99.99.140:8443</code> before RayNu-F. We claim
-          <code>1f33eeda</code> kept one HTTPS session up while the guest
-          ran. We do not claim a customer certificate, TLS 1.3, or more than
-          one cipher. PRE-EBS SNP is still <code>http://</code>. Auth is
-          still open. GitHub Latest stays
-          <code>v0.1.0-everest-closed</code>.
+          A page that dies when the guest boots is not a management page.
+          Earlier in the week, opening Firefox had been followed by the
+          chassis turning itself off. <code>1f33eeda</code>, CI
+          <code>36137732145</code>, leased <code>10.99.99.154/24</code>,
+          booted the installed disk, and kept a single TLS session for the
+          whole time the operator looked at it. One
+          <code>TCP accept</code>. After that,
+          <code>HTTP keep-alive</code>, through Overview and through the
+          Activity tab, with Alpine’s login in the log and the host card
+          staying green. No second accept. The chassis stayed up.
+          <code>RAYNU-V-M8-TLS-OK</code> did not print, because nobody had
+          fetched the page before the guest started. The session was the
+          evidence. The tag is <code>v0.1.0-m8-a4s</code>. GitHub Latest
+          stayed <code>v0.1.0-everest-closed</code>.
         </p>
 
         <p class="story__aside">
@@ -1132,42 +1193,48 @@ RAYNU-V-M8-TLS-OK</pre>
         <h2 class="story__title">The same Alpine, after the hypervisor went away</h2>
 
         <p>
-          A guest reboot was already a solved sentence. F7 on
-          <code>b661808c</code> had reached <code>DISK-BOOT-OK</code> and
-          <code>login:</code> with
-          <code>root=UUID=348005a9-25b7-4027-bc95-af9aef244c3a</code>. That
-          disk lived inside the guest. Force Off of RayNu-V is a different
-          event. The earlier Force Off, <code>ef7e93ec</code>, came back
-          <code>keep=0</code>. The install had not survived the hypervisor.
+          A guest reboot was already a solved sentence. On
+          <code>b661808c</code> the installer had said it was finished, F7
+          had come back <code>DISK-BOOT-OK</code>, and the login prompt had
+          carried <code>root=UUID=348005a9-25b7-4027-bc95-af9aef244c3a</code>.
+          That disk lived inside the guest. Turn the hypervisor off and the
+          story changes. <code>ef7e93ec</code> had already taught us the
+          difference: hours of a healthy login, then Force Off, then a peek
+          that came back <code>keep=0</code>. The install had not survived
+          the thing that was running it.
         </p>
 
-        <h3>keep=1, then the installed GRUB</h3>
+        <h3>The stick we did not reflash</h3>
         <p>
-          <code>4af78b43</code> was not a new flash. F11 of the UDisk already
-          in front USB 2, <code>build: sha=4af78b4303fd</code>. The Toshiba,
-          <code>0480:a004</code>, came up at
-          <code>usb I/O ready bytes=320072933376</code>. The virtio window
-          is 8 GiB. Peek:
-          <code>efi=EFI PART gpt=1 fit=1 guest=8589934592 bootx64=1 ext4=1 installed=1</code>,
-          <code>keep=1 (durable LUN usb)</code>. SPA Start, then
+          <code>4af78b43</code> was the UDisk already in the front port.
+          <code>build: sha=4af78b4303fd</code>. Nobody wrote a new EFI onto
+          it for this boot. The Toshiba, <code>0480:a004</code>, came up
+          with the whole stick behind it,
+          <code>usb I/O ready bytes=320072933376</code>, and the guest was
+          offered 8 GiB of that. The peek found a GPT, an ESP, an ext4, and
+          <code>installed=1</code>. Virtio attached
+          <code>keep=1 (durable LUN usb)</code>.
+        </p>
+        <p>
+          SPA Start. The firmware chose the installed image. COM2 went
           <code>image=DISK-BOOTX64</code>,
-          <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code>, and
-          <code>root=UUID=348005a9-25b7-4027-bc95-af9aef244c3a</code> on
+          <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code>, and the same UUID as the
+          F7 install, <code>348005a9-…</code>, on
           <code>[vda] 8.00 GiB</code>, through <code>login: root</code>.
-        </p>
-        <p>
-          Same UUID as the F7 install on <code>b661808c</code>. A spurious
-          <code>RAYNU-V-M7-ISO-INSTALL-OK</code> printed on journal recovery.
-          That was not a new install. The minted line
-          <code>RAYNU-V-M8-DISK-PERSIST-OK</code> was not serial-printed on
-          this EFI. The auto-answer still fired <code>setup-disk</code> and
-          got <code>No disks found</code>. It did not wipe.
+          A journal recovery printed <code>RAYNU-V-M7-ISO-INSTALL-OK</code>
+          on the way. That line is a write during recovery, not a second
+          install. The marker we had minted for this moment,
+          <code>RAYNU-V-M8-DISK-PERSIST-OK</code>, was in the binary and was
+          not on the serial port. The auto-answer still tried
+          <code>setup-disk</code>, was told there were no disks, and did not
+          wipe the one that was there.
         </p>
 
-        <h3>The marker, and the login twice</h3>
+        <h3>Twice, and the filesystem that knew it had been dropped</h3>
         <p>
-          <code>36d3b559</code> installed onto a blank 8 GiB slice, Force Off,
-          and came back. Both boots, no curl:
+          <code>36d3b559</code> did it on a disk we had just installed, so
+          there was no argument about leftovers. Blank media, SPA Start, the
+          installer, Force Off. Then two boots with no browser and no curl.
         </p>
         <pre>boot: Stage 46 virtio-blk install disk bytes=8589934592 keep=1
 boot: Stage 46 disk past pin lba=2048 n=512 ok
@@ -1177,42 +1244,36 @@ image=DISK-BOOTX64
 RAYNU-V-RAYNU-F-DISK-BOOT-OK
 RAYNU-V-M8-DISK-PERSIST-OK</pre>
         <p>
-          <code>grubcfg=no</code> is the ESP lookup. Alpine keeps
-          <code>grub.cfg</code> on the ext4 <code>/boot/grub</code>, not on
-          the ESP. GRUB printed <code>error: no suitable video mode found</code>
-          and <code>error: unable to determine partition UUID of boot device</code>,
-          then the menu, and auto-booted. Both boots reached
-          <code>localhost login: root</code>.
+          <code>grubcfg=no</code> scared us for a minute. It is the ESP
+          lookup. Alpine keeps <code>grub.cfg</code> on the ext4
+          <code>/boot/grub</code>, not on the EFI partition. GRUB complained
+          that it had no video mode and could not name the boot partition,
+          printed the menu anyway, and booted it. Both times the prompt was
+          <code>localhost login: root</code>, and
           <code>cat /proc/cmdline</code> showed
           <code>root=UUID=a0ad99ac-ca25-4458-ade1-cd8599ca4928</code>.
-          <code>[vda] 16777216</code>. Boot 2, after another Force Off,
-          needed ext4 journal recovery on that same UUID, and fsck cleared a
-          vfat dirty bit. The shutdown had not been clean. The clock in CMOS
-          was stuck at 2026-08-16.
+          <code>[vda] 16777216</code>, eight gibibytes.
         </p>
         <p>
-          Boot 3 of the same EFI, after the chassis had turned off, leased
+          Boot 2 had been through another Force Off, and the filesystem
+          remembered. Ext4 wanted its journal. fsck cleared a dirty bit on
+          the FAT. The shutdown had not been clean. The clock in the CMOS
+          was stuck on 16 August, five weeks behind the install. Boot 3,
+          after the chassis itself had gone off, leased
           <code>10.99.99.150/24</code> and printed the marker again.
           <code>/dev/vda2</code> was
           <code>clean, 6380/521216 files, 102908/2084352 blocks</code>, the
-          same counts as boot 2. Opening the page on boots 2 and 3 was
-          followed by iDRAC <code>SYS1003</code> then <code>SYS1001</code>,
-          with no <code>RAC1195</code>. The persist that counts is the login
-          with no browser. The whole Toshiba,
-          <code>bytes=320072933376</code>, stays outside the virtio window.
-          USB is not PERC.
+          same counts as boot 2.
         </p>
-
-        <h3>What we claim — and what we don’t</h3>
         <p>
-          We claim an installed Alpine survived a hypervisor Force Off on
-          <code>4af78b43</code>, same UUID <code>348005a9</code>, and that
-          <code>36d3b559</code> printed <code>RAYNU-V-M8-DISK-PERSIST-OK</code>
-          and returned <code>a0ad99ac</code> to <code>login:</code> twice.
-          We do not claim a clean filesystem: journal recovery ran, and a
-          vfat dirty bit was cleared. We do not claim the whole Toshiba, and
-          we do not claim PERC. The guest disk is 8 GiB. Nested QEMU is not
-          this COM2.
+          Opening the page on those later boots was a different story: iDRAC
+          logged <code>SYS1003</code> and then <code>SYS1001</code>, the CPU
+          resetting and the system turning off, with no
+          <code>RAC1195</code> in front of them to say a person had asked.
+          The logins that count are the ones where Firefox stayed closed.
+          The Toshiba behind the window is
+          <code>bytes=320072933376</code>. The guest never saw it. USB is
+          not the PERC, and eight gibibytes is not a datastore.
         </p>
 
         <p class="story__aside">
@@ -1233,69 +1294,81 @@ RAYNU-V-M8-DISK-PERSIST-OK</pre>
         <h2 class="story__title">The soak that found the torn read</h2>
 
         <p>
-          The branches are the chapters, and most of them were wrong turns.
-          From 14 September the log is a list of names that each explained
-          one COM2 line and missed the next:
-          <code>m8-xhci-enum</code>, <code>m8-xhci-desc-retry</code>,
-          <code>m8-usb-bot-csw</code>, <code>m8-usb-bot-read</code>,
-          <code>m8-usb-bot-firstcbw</code>, <code>m8-usb-bot-nlb1</code>,
-          <code>m8-usb-bot-setcfgretry</code>, <code>m8-usb-bot-guest8g</code>.
-          Retries accumulated beside them:
-          <code>warm</code>, <code>diskprime</code>, <code>peekretry</code>,
-          <code>addrretry</code>, <code>slotretry</code>, <code>nopretry</code>,
-          <code>cmdptr</code>. The persist-OK boots got through thousands of
-          transfers with those retries papering over misses. The soak was
-          built to stop papering.
+          For a week the USB stack had a new branch name every time COM2
+          changed its mind. <code>m8-xhci-enum</code>.
+          <code>m8-xhci-desc-retry</code>. <code>m8-usb-bot-csw</code>.
+          <code>m8-usb-bot-read</code>. <code>m8-usb-bot-firstcbw</code>.
+          <code>m8-usb-bot-nlb1</code>. <code>m8-usb-bot-setcfgretry</code>.
+          <code>m8-usb-bot-guest8g</code>. Each one explained the line in
+          front of us and missed the next. Beside them, a pile of retries
+          that sounded like progress: <code>warm</code>,
+          <code>diskprime</code>, <code>peekretry</code>,
+          <code>addrretry</code>, <code>slotretry</code>,
+          <code>nopretry</code>, <code>cmdptr</code>. The boots that reached
+          login got there by trying again until a torn completion happened
+          to land whole. The soak was the decision to stop calling that a
+          fix.
         </p>
 
-        <h3>The flag, and a RAM disk</h3>
+        <h3>A flag, and a disk made of RAM</h3>
         <p>
-          <code>5c32bd06</code> saw <code>usbsoak.txt</code> and printed
-          <code>boot: USB soak requested</code>. Address Device on p11 and
-          p10 timed out, <code>cmd=3 cmpl=0xff</code>, port already HS U0.
-          <code>err=3</code> is Enum. BOT never started
-          (<code>bot=?</code>). No <code>USBSOAK</code>. With no durable LUN,
-          the ISO landed on 1 GiB of leftover DRAM,
-          <code>keep=0</code>, UUID <code>4c27e121</code>, and a guest reboot
-          reached <code>login:</code>. Force Off drops that disk. The Toshiba
-          was not opened. Do not F11 <code>5c32bd06</code> again expecting
-          the soak.
+          <code>5c32bd06</code> saw the empty file
+          <code>usbsoak.txt</code> and printed
+          <code>boot: USB soak requested</code>. Then Address Device timed
+          out on the two external ports, <code>cmd=3 cmpl=0xff</code>, with
+          the ports already in USB high speed. <code>err=3</code> means the
+          enumeration never finished. The bulk pipe never started
+          (<code>bot=?</code>). There was no <code>USBSOAK</code> line,
+          because the soak only runs after a disk is ready.
+        </p>
+        <p>
+          With no durable disk, the installer did what it had always done.
+          It built a 1 GiB drive out of leftover DRAM, <code>keep=0</code>,
+          installed Alpine onto it, and a guest reboot reached
+          <code>login:</code> at UUID <code>4c27e121</code>. Force Off throws
+          that disk away. The Toshiba was not opened. The prompt lasted as
+          long as the hypervisor did.
         </p>
         <pre>usb I/O fail err=3 bar=0x92b00000 portsc=0x0000000a00000e03 cmpl=0x00000000000303ff bot=? scsi=?
 leftover install disk hpa=0x140a00000 bytes=1073741824</pre>
 
-        <h3>Commands completed, events lost</h3>
+        <h3>The completion that finished without us</h3>
         <p>
-          <code>1fa231df</code> halted with no guest.
+          <code>1fa231df</code> halted, and halted with no guest, which was
+          the first honest thing the soak had done.
           <code>USBSOAK abort — USB enumeration failed err=3</code>.
-          BIOS SMIs were not armed
-          (<code>legacy pre … forced=0</code>). A 50 ms recovery delay did
-          not change the outcome. The No-Op timed out, and the No-Op does
-          not touch a USB device. The first p11 Address Device left the slot
-          Addressed:
+          Two theories died in the dump. BIOS SMIs were not armed
+          (<code>forced=0</code> on the legacy handoff). A 50 millisecond
+          pause after reset did not change the outcome. And the No-Op timed
+          out — a command that does not touch a USB device at all. This was
+          not the Toshiba.
         </p>
         <pre>xhci cmd timeout addr  p11 cmd=0x1 sts=0x18 crcr=0x8 iman=0x1 erdp=0x1406ff090 cmdenq=3 cmdcyc=1 evdeq=9  evcyc=1 evtrb=0x0/0x0 portsc=0xe03 pmsc=0 slotst=2 ep0st=1 ep0deq=0x1406fe001
 xhci enum p11 sc=0xe03 speed=3 cmd=3 cmpl=0x13
 USBSOAK abort — USB enumeration failed err=3; no guest this boot</pre>
         <p>
-          <code>slotst=2</code> is Addressed. <code>cmpl=0x13</code> on the
-          retry is Context State Error: Address Device on a slot that is
-          already Addressed. SET_ADDRESS had completed. The completion event
-          was never seen. Every event wait read the 16-byte Event TRB
-          pointer-first and cycle-last. A completion landing mid-read looked
-          like a fresh event with a zero pointer and completion code 0, and
-          was skipped. <code>evdeq=4</code> at the No-Op timeout is the
-          fourth event, the No-Op completion, consumed and thrown away.
+          <code>slotst=2</code> means the slot was already Addressed.
+          <code>cmpl=0x13</code> on the retry is the controller saying so:
+          you cannot address a device you have already addressed.
+          SET_ADDRESS had completed. We had not seen the event. Every wait
+          in the driver read the sixteen-byte event pointer-first and
+          cycle-bit-last. The controller writes the whole event at once.
+          Catch it mid-read and you see a fresh cycle bit sitting on top of
+          a stale zero pointer, decide the event is not yours, and skip the
+          only completion you will ever get. <code>evdeq=4</code> at the
+          No-Op “timeout” is that fourth event, consumed and thrown away.
+          The retries of the week before had been papering over exactly this
+          tear.
         </p>
 
-        <h3>239 reads, and then grub&gt;</h3>
+        <h3>Two hundred and thirty-nine, and then the prompt</h3>
         <p>
           <code>e5cca2e0</code> reads the control word first, one 32-bit
-          load, and stores it last on the TRB it writes. The soak ran. No
-          guest.
+          load, and stores it last when it writes a TRB. The soak ran. No
+          guest was started. The stick sat there while we waited on purpose.
         </p>
         <pre>durable LUN usb I/O ready bytes=320072933376 lba=512
-durable LUN peek usb efi=EFI PART gpt=1 fit=1 … guest=8589934592 bootx64=1 ext4=1 installed=1
+durable LUN peek usb efi=EFI PART gpt=1 fit=1 gpt_err=0 usb_err=0 lba=512 guest=8589934592 bootx64=1 ext4=1 installed=1
 USBSOAK gap_s=0   n=200 ok=200 fail=0 max_ms=12 first_fail=none
 USBSOAK gap_s=5   n=24  ok=24  fail=0 max_ms=0  first_fail=none
 USBSOAK gap_s=30  n=10  ok=10  fail=0 max_ms=0  first_fail=none
@@ -1303,25 +1376,16 @@ USBSOAK gap_s=120 n=5   ok=5   fail=0 max_ms=0  first_fail=none
 USBSOAK total ok=239 fail=0
 RAYNU-V-USBSOAK-DONE</pre>
         <p>
-          <code>installed=1</code> means the <code>928d6224</code> Alpine was
-          still on the 8 GiB slice. Idle gaps of 0, 5, 30, and 120 seconds
-          all completed. <code>max_ms=0</code> on the later gaps is a
-          sub-millisecond read: <code>ok</code> equals <code>n</code> on
-          every line. Boot 2 of this EFI, soak flag removed, staged
-          <code>DISK-BOOTX64</code> and stopped at <code>grub&gt;</code> with
-          <code>blk_rd=33</code> inside a 180 s wall cap. The bench did not
-          become a login.
-        </p>
-
-        <h3>What we claim — and what we don’t</h3>
-        <p>
-          We claim the soak found a torn event read, and that
-          <code>e5cca2e0</code> then finished 239 reads with
-          <code>fail=0</code>. We do not claim a victory over the USB stack,
-          a guest, or <code>RAYNU-V-M8-DISK-PERSIST-OK</code>. The product
-          path on the next boot of the same EFI stopped at
-          <code>grub&gt;</code>. The earlier branch names stay in the log as
-          the turns that were wrong.
+          <code>installed=1</code> meant the Alpine from
+          <code>928d6224</code> was still on the 8 GiB slice. Gaps of zero,
+          five, thirty, and a hundred and twenty seconds, all of them
+          <code>fail=0</code>. <code>max_ms=0</code> on the later lines is a
+          read that finished inside a millisecond, because <code>ok</code>
+          equals <code>n</code>. Then the flag came off the stick, and boot
+          2 of the same EFI staged <code>DISK-BOOTX64</code> and stopped at
+          <code>grub&gt;</code>, <code>blk_rd=33</code>, inside a three-minute
+          wall cap. The bench had done what a bench does. It had not booted
+          the guest. The branch names from the week before stayed wrong.
         </p>
 
         <p class="story__aside">
@@ -1336,7 +1400,6 @@ RAYNU-V-USBSOAK-DONE</pre>
           <a href="sku.html#C1">C1</a>
         </p>
       </article>
-
       <article class="story" id="r640-2026-09-11-everest">
         <p class="story__date">2026-09-11 · Dell PowerEdge R640 · UDisk front USB 2 · EFI f72b4276</p>
         <h2 class="story__title">The SPA that installed Linux</h2>
