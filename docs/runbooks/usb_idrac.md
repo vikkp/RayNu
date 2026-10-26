@@ -110,9 +110,9 @@ then `git pull --ff-only`s the current branch when `--branch` is omitted, downlo
 PR artifact), verifies size + SHA256, refuses known-bad prefixes, then calls
 `sudo ./tools/flash-cruzer-esp.sh --efi ~/r640-hypervisor.efi --sha256 …`.
 
-Identify the stick by **label `RAYNUV` + USB + Cruzer** (`lsusb` `0781:5151`).
-Never hardcode a `/dev/sdX`. Disk letters move: UBUNTU0 is ~400 GB, RAYNU-SPARE is ~2.9 TB, the Toshiba is ~298 GB. Never write a PERC virtual disk. Never format. Leave
-`EFI/RayNu/installdisk.bin` and `auth.token` alone.
+Identify the stick by **label `RAYNUV` + USB**, and by model: Cruzer (`lsusb` `0781:5151`), LogiLink UDisk (`abcd:1234`), or the Lexar that replaced the broken Cruzer on 2026-10-26 (`lsusb` `21c4:0809`, `lsblk` model `USB Flash Drive`, serial `A144053100000F82`, 116.1G).
+Never hardcode a `/dev/sdX`. Disk letters move: UBUNTU0 is ~400 GB, RAYNU-SPARE is ~2.9 TB, the Toshiba is ~298 GB (`External USB HDD`, `0480:a004`). Never write a PERC virtual disk. Never format the Toshiba. Leave
+`EFI/RayNu/installdisk.bin` and `auth.token` alone on a stick that already has them.
 
 If `lsusb` shows LogiLink UDisk `abcd:1234` but `lsblk` has no UDisk (common
 after RayNu-V `xhci hcrst`), `flashcruzer.sh --any-cruzer-usb` cycles that
@@ -127,6 +127,8 @@ A **4 GB** unlabeled stick (alpine-extended / F7) may be a LogiLink **UDisk**
 `0781:5151`. First flash: [`r640_f7_iso_iron.md`](r640_f7_iso_iron.md)
 (`--init-new-cruzer` `--allow-new-serial` `--any-cruzer-usb` `--linux-iso`
 `--raynu-f`). Do not reflash P0-14 `2b795a0` for that attempt.
+
+The **116.1G Lexar** (`21c4:0809`, model `USB Flash Drive`) is unlabeled `RAYNUV` until the first flash. That flash is `--init-new-cruzer --allow-new-serial --any-cruzer-usb` and it formats that one stick. The accept window for this model is above 8 GiB and at or under 128 GiB, so the 298G Toshiba stays out. Later refreshes drop `--init-new-cruzer`. The Cruzer Micro serial `200524441218e7503e33` remains a known serial. The Lexar serial is `A144053100000F82`.
 
 `--wait` polls until HEAD CI finishes. `--download-only` writes
 `~/r640-hypervisor.efi` without flashing. `--self-test` is host/CI only.

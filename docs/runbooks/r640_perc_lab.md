@@ -25,6 +25,15 @@ Linux letters move. Match **size** (and the WWNs below). Do not script `/dev/sda
 
 `findmnt` that day: `/` = the 400G ext4, `/boot/efi` = the 1G vfat. `fstab` lists root UUID `f5ddacc0-52a3-4260-bb52-634c87a3765b`, EFI `4F32-1D11`, and `/swap.img`. `fstab` does not name the 2.9T disk. The ext4 mount showed `stripe=192`.
 
+`lsblk` on 2026-10-26 (letters moved again; match size and model):
+
+| Letter that day | Size | What it is | Notes |
+|-----------------|------|------------|-------|
+| `sda` | 400G | PERC VD **UBUNTU0**, boot | `sda1` 1G vfat, `sda2` 398.9G ext4. Do not format. |
+| `sdb` | 2.9T | PERC VD **RAYNU-SPARE** | `sdb1` 48M vfat, `sdb2` 8G ext4. Do not format. |
+| `sdc` | 298.1G | Toshiba `External USB HDD` (`0480:a004`) | `sdc1` 48M vfat, `sdc2` 8G ext4. Do not format. Do not flash. |
+| `sdd` | 116.1G | Lexar `USB Flash Drive` (`21c4:0809`) | serial `A144053100000F82`, partition label `Lexar`. This is the boot stick. First flash formats it. |
+
 Installer WWNs (the installer does not show PERC names):
 
 | WWN | Size | VD |
@@ -89,8 +98,8 @@ The ~100 GB the old Ubuntu looked like was a filesystem inside the old large VD.
 - Do not Clear Configuration, Set Factory Defaults, Import Foreign, or Auto Configure RAID 0. Those screens already ran once. Running them again destroys this Ubuntu.
 - Do not open the H840.
 - Do not format the Toshiba. Do not flash it. The 8 GiB virtio cap stays.
-- Do not write a PERC volume from `flashcruzer.sh`. The script picks label `RAYNUV`. Disk letters are not a target.
-- Do not `--init-new-cruzer`. Do not put `usbsoak.txt` back. `raynuf.txt` stays.
+- Do not write a PERC volume from `flashcruzer.sh`. The script picks label `RAYNUV` plus model Cruzer, UDisk, or `USB Flash Drive`. Disk letters are not a target. The Lexar window is above 8 GiB and at or under 128 GiB. The Toshiba is 298.1G and model `External USB HDD`, so it cannot match.
+- The Lexar’s first flash is the one `--init-new-cruzer` (it formats that stick to FAT32 label `RAYNUV`). Later flashes omit `--init-new-cruzer`. Do not put `usbsoak.txt` back. `raynuf.txt` stays.
 - Do not F11 `c4a41a17`, `e5cca2e0`, `36d3b559`, `fa6ce771`, `3e9ce45e`, or `3f80abd0`.
 - Do not `setup-disk` by hand. Do not curl Start or `POST /vms/1/start` on a persist boot. One TCP slot.
 - Do not type `normal` at `grub>`. Do not click Create or Start on the SPA while a persist guest is the point of the boot.

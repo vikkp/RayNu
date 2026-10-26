@@ -34,21 +34,32 @@
 #
 # F7 iron: alpine-extended is ~994 MiB. Front USB 2 may be a SanDisk Cruzer
 # or a LogiLink UDisk (lsusb abcd:1234, model UDisk, 4026531840 bytes,
-# serial General_UDisk-0:0). Both are USB 2–8 GiB lab sticks. Pass
-# --init-new-cruzer (exactly one matching USB disk; mkfs.vfat
-# -I -F 32 -n RAYNUV + EFI layout + 1 MiB installdisk.bin identity) and
-# --allow-new-serial. Never PERC. Never guess /dev/sdc.
+# serial General_UDisk-0:0). Both are USB 2–8 GiB lab sticks. The Cruzer
+# Micro broke on 2026-10-26. Its replacement is a Lexar (lsusb 21c4:0809,
+# lsblk model "USB Flash Drive", serial A144053100000F82, 116.1G). That
+# model is accepted only above 8 GiB and at or under 128 GiB. Pass
+# --init-new-cruzer once (exactly one matching USB disk; mkfs.vfat
+# -I -F 32 -n RAYNUV + EFI layout + 1 MiB installdisk.bin identity).
+# Never PERC. Never the Toshiba External USB HDD (~298G, 0480:a004).
 #
-# Optional: CRUZER_SERIAL (default 200524441218e7503e33) must match lsblk
-# SERIAL when the device reports one unless --allow-new-serial.
+# Known serials: Cruzer Micro 200524441218e7503e33 and Lexar
+# A144053100000F82. CRUZER_SERIAL= requires that one serial.
+# --allow-new-serial skips the check. --init-new-cruzer implies it.
 # GUEST_OVMF overrides the host search.
 set -euo pipefail
 
 LABEL="${CRUZER_LABEL:-RAYNUV}"
 EXPECT_SERIAL="${CRUZER_SERIAL:-200524441218e7503e33}"
+# Broken Cruzer Micro, kept so a recovered stick still matches.
+CRUZER_MICRO_SERIAL="200524441218e7503e33"
+# Lexar USB Flash Drive, lsusb 21c4:0809, operator lsblk 2026-10-26.
+LEXAR_SERIAL="A144053100000F82"
 MIN_BYTES=$((256 * 1024 * 1024))
 # 8 GiB so a marketed 4 GB Cruzer still classifies; PERC volumes stay out.
 MAX_BYTES=$((8 * 1024 * 1024 * 1024))
+# Lexar window is strictly above MAX_BYTES and at or under 128 GiB.
+# 298 GiB Toshiba and the PERC VDs (400G, 2.9T) are outside this cap.
+THUMB_MAX=$((128 * 1024 * 1024 * 1024))
 FOURG_MIN=$((2 * 1024 * 1024 * 1024))
 FOURG_MAX="$MAX_BYTES"
 MNT_DEFAULT="/mnt/usb"
@@ -102,23 +113,19 @@ pick_host_ovmf() {
   return 1
 }
 
-# Host-testable: lab Cruzer vs PERC / vMedia / random USB.
+# Host-testable: lab boot stick vs PERC / vMedia / Toshiba / random USB.
 # INVARIANTS:
 # - Label must be RAYNUV
 # - Transport must be usb
-# - Model must contain Cruzer or UDisk (LogiLink 4 GB lab stick)
-# - Model must not contain PERC / H740 / Virtual
-# - Size in [256 MiB, 8 GiB]
+# - Cruzer or UDisk: size in [256 MiB, 8 GiB]
+# - Model exactly "USB Flash Drive" (Lexar 21c4:0809): size in (8 GiB, 128 GiB]
+# - Model must not contain PERC / H740 / Virtual / HDD / Toshiba
 # - Never panics
 target_is_lab_cruzer() {
   local model="$1" tran="$2" size_bytes="$3" label="$4"
   [[ "$label" == "$LABEL" ]] || return 1
   [[ "$tran" == "usb" ]] || return 1
-  [[ "$size_bytes" =~ ^[0-9]+$ ]] || return 1
-  if (( size_bytes < MIN_BYTES || size_bytes > MAX_BYTES )); then
-    return 1
-  fi
-  model_is_cruzer_not_perc "$model"
+  size_ok_for_lab_model "$model" "$size_bytes"
 }
 
 # Host-testable: unlabeled 4 GB Cruzer window (alpine-extended ~994 MiB).
@@ -137,7 +144,53 @@ model_is_cruzer_not_perc() {
   lc=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
   [[ "$lc" == *cruzer* || "$lc" == *udisk* ]] || return 1
   [[ "$lc" != *perc* && "$lc" != *h740* && "$lc" != *virtual* ]] || return 1
+  [[ "$lc" != *hdd* && "$lc" != *toshiba* ]] || return 1
   return 0
+}
+
+# lsblk MODEL for the 2026-10-26 Lexar is exactly "USB Flash Drive".
+# "External USB HDD" (Toshiba 0480:a004) does not match.
+model_is_usb_flash_drive() {
+  local lc
+  lc=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+  [[ "$lc" == "usb flash drive" ]]
+}
+
+model_is_lab_esp() {
+  model_is_cruzer_not_perc "$1" && return 0
+  model_is_usb_flash_drive "$1" && return 0
+  return 1
+}
+
+# Cruzer/UDisk stay in [256 MiB, 8 GiB]. The Lexar class is strictly above
+# 8 GiB and at or under 128 GiB, so a 298 GiB USB HDD cannot qualify by size.
+size_ok_for_lab_model() {
+  local model="$1" size_bytes="$2"
+  [[ "$size_bytes" =~ ^[0-9]+$ ]] || return 1
+  if model_is_cruzer_not_perc "$model"; then
+    if (( size_bytes >= MIN_BYTES && size_bytes <= MAX_BYTES )); then
+      return 0
+    fi
+    return 1
+  fi
+  if model_is_usb_flash_drive "$model"; then
+    if (( size_bytes > MAX_BYTES && size_bytes <= THUMB_MAX )); then
+      return 0
+    fi
+    return 1
+  fi
+  return 1
+}
+
+# Default accepts the broken Cruzer Micro and the Lexar. CRUZER_SERIAL=
+# narrows that to one serial. --allow-new-serial skips this entirely.
+serial_is_lab_stick() {
+  local s="$1"
+  if [[ -n "${CRUZER_SERIAL:-}" ]]; then
+    [[ "$s" == "$CRUZER_SERIAL" ]]
+    return
+  fi
+  [[ "$s" == "$CRUZER_MICRO_SERIAL" || "$s" == "$LEXAR_SERIAL" ]]
 }
 
 self_test() {
@@ -157,6 +210,28 @@ self_test() {
   model_is_cruzer_not_perc "Cruzer Blade 4GB"
   model_is_cruzer_not_perc "UDisk"
   model_is_cruzer_not_perc "PERC H740P Mini" && return 1
+  model_is_cruzer_not_perc "External USB HDD" && return 1
+  model_is_usb_flash_drive "USB Flash Drive"
+  model_is_usb_flash_drive "USB Flash Drive "
+  model_is_usb_flash_drive "External USB HDD" && return 1
+  model_is_usb_flash_drive "Cruzer" && return 1
+  model_is_usb_flash_drive "PERC H740P Mini" && return 1
+  size_ok_for_lab_model "USB Flash Drive" $((1161 * 1024 * 1024 * 1024 / 10))
+  size_ok_for_lab_model "USB Flash Drive" "$THUMB_MAX"
+  size_ok_for_lab_model "USB Flash Drive" "$MAX_BYTES" && return 1
+  size_ok_for_lab_model "USB Flash Drive" $((200 * 1024 * 1024 * 1024)) && return 1
+  size_ok_for_lab_model "USB Flash Drive" $((298 * 1024 * 1024 * 1024)) && return 1
+  size_ok_for_lab_model "External USB HDD" $((1161 * 1024 * 1024 * 1024 / 10)) && return 1
+  size_ok_for_lab_model "Cruzer" 4000000000
+  size_ok_for_lab_model "Cruzer" $((1161 * 1024 * 1024 * 1024 / 10)) && return 1
+  target_is_lab_cruzer "USB Flash Drive" usb $((1161 * 1024 * 1024 * 1024 / 10)) RAYNUV
+  target_is_lab_cruzer "USB Flash Drive" usb $((1161 * 1024 * 1024 * 1024 / 10)) Lexar && return 1
+  target_is_lab_cruzer "USB Flash Drive" sas $((1161 * 1024 * 1024 * 1024 / 10)) RAYNUV && return 1
+  target_is_lab_cruzer "External USB HDD" usb $((298 * 1024 * 1024 * 1024)) RAYNUV && return 1
+  target_is_lab_cruzer "PERC H740P Mini" usb $((1161 * 1024 * 1024 * 1024 / 10)) RAYNUV && return 1
+  serial_is_lab_stick "$LEXAR_SERIAL"
+  serial_is_lab_stick "$CRUZER_MICRO_SERIAL"
+  serial_is_lab_stick "not-a-lab-serial" && return 1
   size_is_4g_cruzer_window 4026531840
   tmp="$(mktemp)"
   dd if=/dev/zero of="$tmp" bs=64 count=1 status=none
@@ -286,12 +361,17 @@ find_one_4g_usb_cruzer() {
     [[ "$type" == "disk" ]] || continue
     [[ "$tran" == "usb" ]] || continue
     model="$(lsblk -bdno MODEL "$name" | sed 's/[[:space:]]*$//')"
-    model_is_cruzer_not_perc "$model" || continue
-    size_is_4g_cruzer_window "$size" || continue
+    if model_is_cruzer_not_perc "$model"; then
+      size_is_4g_cruzer_window "$size" || continue
+    elif model_is_usb_flash_drive "$model"; then
+      size_ok_for_lab_model "$model" "$size" || continue
+    else
+      continue
+    fi
     hits+=("$name")
   done < <(lsblk -bdnpo NAME,TYPE,TRAN,SIZE 2>/dev/null)
   if (( ${#hits[@]} != 1 )); then
-    echo "error: --init-new-cruzer needs exactly one USB Cruzer/UDisk in [2 GiB, 8 GiB] (found ${#hits[@]})" >&2
+    echo "error: --init-new-cruzer needs exactly one USB Cruzer/UDisk in [2 GiB, 8 GiB] or one USB Flash Drive in (8 GiB, 128 GiB] (found ${#hits[@]})" >&2
     lsblk -o NAME,MODEL,TRAN,SIZE,LABEL,SERIAL,FSTYPE,TYPE >&2 || true
     echo "       unplug other USB sticks; never PERC; never guess /dev/sdc" >&2
     return 1
@@ -440,15 +520,21 @@ if [[ "$INIT_NEW" -eq 1 ]]; then
     echo "error: --init-new-cruzer requires a whole-disk USB Cruzer (TYPE=$TYPE)" >&2
     exit 1
   fi
-  if ! model_is_cruzer_not_perc "$MODEL"; then
-    echo "error: $RAW is not a USB Cruzer (refusing PERC / vMedia / random USB)" >&2
+  if ! model_is_lab_esp "$MODEL"; then
+    echo "error: $RAW model='$MODEL' is not a lab stick (refusing PERC / vMedia / Toshiba / random USB)" >&2
     exit 1
   fi
   [[ "$TRAN" == "usb" ]] || { echo "error: $RAW tran=$TRAN is not usb" >&2; exit 1; }
-  size_is_4g_cruzer_window "$SIZE_BYTES" || {
-    echo "error: $RAW size=$SIZE_BYTES is outside 2–8 GiB (alpine-extended needs >994 MiB)" >&2
+  if model_is_cruzer_not_perc "$MODEL"; then
+    size_is_4g_cruzer_window "$SIZE_BYTES" || {
+      echo "error: $RAW size=$SIZE_BYTES is outside 2–8 GiB (alpine-extended needs >994 MiB)" >&2
+      exit 1
+    }
+  elif ! size_ok_for_lab_model "$MODEL" "$SIZE_BYTES"; then
+    echo "error: $RAW size=$SIZE_BYTES is outside (8 GiB, 128 GiB] for model USB Flash Drive" >&2
+    echo "       298 GiB Toshiba and PERC volumes stay out. 21c4:0809 Lexar serial $LEXAR_SERIAL is the lab thumb." >&2
     exit 1
-  }
+  fi
 else
   if [[ "$LS_LABEL" != "$LABEL" ]]; then
     echo "error: lsblk LABEL is '${LS_LABEL}', expected $LABEL" >&2
@@ -463,13 +549,15 @@ if [[ "$TYPE" != "disk" && "$TYPE" != "part" ]]; then
   echo "error: unexpected lsblk TYPE=$TYPE" >&2
   exit 1
 fi
-if [[ "$ALLOW_NEW_SERIAL" -eq 0 && -n "$SERIAL" && -n "$EXPECT_SERIAL" && "$SERIAL" != "$EXPECT_SERIAL" ]]; then
-  echo "error: serial $SERIAL != expected $EXPECT_SERIAL" >&2
-  echo "       4 GB Cruzer: pass --allow-new-serial (or CRUZER_SERIAL=)" >&2
+if [[ "$ALLOW_NEW_SERIAL" -eq 0 && -n "$SERIAL" ]] && ! serial_is_lab_stick "$SERIAL"; then
+  echo "error: serial $SERIAL is not a lab stick serial" >&2
+  echo "       known: $CRUZER_MICRO_SERIAL (Cruzer Micro) $LEXAR_SERIAL (Lexar 21c4:0809)" >&2
+  echo "       pass --allow-new-serial or CRUZER_SERIAL=$SERIAL" >&2
   exit 1
 fi
-if [[ "$MODEL" == *PERC* ]]; then
-  echo "error: PERC refused" >&2
+model_lc=$(printf '%s' "$MODEL" | tr '[:upper:]' '[:lower:]')
+if [[ "$model_lc" == *perc* || "$model_lc" == *h740* || "$model_lc" == *hdd* || "$model_lc" == *toshiba* || "$model_lc" == *virtual* ]]; then
+  echo "error: refusing model '$MODEL' (PERC / Toshiba / virtual)" >&2
   exit 1
 fi
 ROOT_SRC="$(findmnt -n -o SOURCE / 2>/dev/null || true)"
