@@ -101,7 +101,7 @@ Options:
   --refat-cruzer      mkfs.vfat -I -F 32 -n RAYNUV on identified whole-disk Cruzer (64MiB FAT)
   --init-new-cruzer   first-flash unlabeled 4 GB USB Cruzer (exactly one 2–8 GiB stick)
   --allow-new-serial  skip Cruzer Micro serial pin (required for a new 4 GB stick)
-  --any-cruzer-usb    lsusb/lsblk may be Cruzer or LogiLink UDisk (not VID 0781:5151)
+  --any-cruzer-usb    lsusb/lsblk may be Cruzer, LogiLink UDisk, or Lexar (not only VID 0781:5151)
   --run ID            pin a GitHub Actions run id
   --sha256 HEX        extra pin after download
   --require-head      refuse branch-fallback (artifact must match HEAD)
@@ -347,6 +347,10 @@ self_test() {
   grep -q -- '--init-new-cruzer' "$ESP"
   grep -q -- '--allow-new-serial' "$ESP"
   grep -q 'size_is_4g_cruzer_window' "$ESP"
+  grep -q 'size_ok_for_lab_model' "$ESP"
+  grep -q '21c4:0809' "$ESP"
+  grep -q 'A144053100000F82' "$ESP"
+  grep -q 'External USB HDD' "$ESP"
   grep -q 'mkfs.vfat -I -F 32 -n' "$ESP"
   grep -q 'fat_bytes_too_small' "$ESP"
   grep -q 'do not git checkout a SHA' "$SCRIPT_PATH"
@@ -1282,7 +1286,9 @@ if [[ "$NO_FLASH" -eq 1 ]]; then
 fi
 
 lsblk_has_lab_esp() {
-  lsblk -o NAME,MODEL,TRAN,SIZE,LABEL,SERIAL,FSTYPE 2>/dev/null | grep -qiE 'cruzer|udisk'
+  # Cruzer, LogiLink UDisk, or the Lexar whose MODEL is "USB Flash Drive".
+  # "External USB HDD" (Toshiba) does not match.
+  lsblk -o NAME,MODEL,TRAN,SIZE,LABEL,SERIAL,FSTYPE 2>/dev/null | grep -qiE 'cruzer|udisk|lexar|flash drive'
 }
 
 # LogiLink UDisk (abcd:1234) often stays lsusb-only after RayNu-V xHCI HCRST.
@@ -1332,16 +1338,16 @@ kick_logilink_udisk_block() {
 }
 
 if [[ "$ANY_CRUZER_USB" -eq 1 ]]; then
-  if ! lsusb | grep -qiE 'cruzer|udisk|logilink|abcd:1234'; then
-    echo "error: lsusb did not show a Cruzer or LogiLink UDisk — plug front USB 2 (--any-cruzer-usb)" >&2
+  if ! lsusb | grep -qiE 'cruzer|udisk|logilink|abcd:1234|lexar|21c4:0809'; then
+    echo "error: lsusb did not show a Cruzer, LogiLink UDisk, or Lexar — plug front USB 2 (--any-cruzer-usb)" >&2
     lsusb >&2 || true
     exit 1
   fi
-  lsusb | grep -iE 'cruzer|udisk|logilink|abcd:1234' || true
+  lsusb | grep -iE 'cruzer|udisk|logilink|abcd:1234|lexar|21c4:0809' || true
 else
   if ! lsusb | grep -qi "$USB_VIDPID"; then
     echo "error: lsusb did not show $USB_VIDPID (SanDisk Cruzer) — plug front USB 2" >&2
-    echo "       4 GB LogiLink UDisk (abcd:1234): pass --any-cruzer-usb" >&2
+    echo "       LogiLink UDisk (abcd:1234) or Lexar (21c4:0809): pass --any-cruzer-usb" >&2
     lsusb >&2 || true
     exit 1
   fi
@@ -1360,7 +1366,7 @@ if ! lsblk_has_lab_esp; then
   lsusb >&2 || true
   exit 1
 fi
-lsblk -o NAME,MODEL,TRAN,SIZE,LABEL,SERIAL,FSTYPE | grep -iE 'cruzer|udisk' || true
+lsblk -o NAME,MODEL,TRAN,SIZE,LABEL,SERIAL,FSTYPE | grep -iE 'cruzer|udisk|lexar|flash drive' || true
 
 ESP_ARGS=(--efi "$EFI_OUT" --sha256 "$GOT")
 if [[ "$NO_OVMF" -eq 1 && -n "$OVMF_PATH" ]]; then
