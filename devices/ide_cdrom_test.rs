@@ -7,7 +7,7 @@
     pci_read_data, pci_write_addr, pci_write_data,
     linux_hides_duplicate_slot0_ide, linux_hides_piix_ide, linux_ata_floating_bus,
     product_iso_hides_ide, product_iso_hides_duplicate_slot0_ide,
-    present, present_placeholder, product_iso_window_armed, is_lab_eltorito_media,
+    present, present_placeholder, product_iso_window_armed, product_window_armed_from, is_lab_eltorito_media,
     is_lab_eltorito_stub_len, reset, retained_len, sectors_read, take_marker, write_eltorito_efi_pe,
     write_eltorito_fat12, edk2_eltorito_partition_blocks, edk2_fat12_bootx64_ok,
     edk2_iso9660_bootx64_ok, edk2_pe_loadimage_ok, write_placeholder_iso,
@@ -524,6 +524,23 @@ fn product_iso_window_does_not_truncate_and_is_not_lab_stub() {
     reset();
     assert!(!product_iso_window_armed());
     assert!(is_lab_eltorito_media());
+}
+
+#[test]
+fn product_window_arms_on_perc_image_latch_without_an_esp_iso() {
+    // Iron ac1f8619: bare Lexar ESP, spare image latched, Ubuntu tail
+    // started. The ISO-only window left disk_bytes=0 and GRUB at grub>.
+    assert!(product_window_armed_from(0, true));
+    assert!(product_window_armed_from(MOCK_EFI_ISO_BYTES, true));
+    assert!(product_window_armed_from(MOCK_EFI_ISO_BYTES + ISO_SECTOR, false));
+    assert!(!product_window_armed_from(0, false));
+    assert!(!product_window_armed_from(MOCK_EFI_ISO_BYTES, false));
+    // Host never latches, so the live predicate still follows the CD alone.
+    assert!(!crate::mgmt::megaraid::perc_image_boot_latched());
+    reset();
+    assert!(present_placeholder());
+    assert!(!product_iso_window_armed());
+    reset();
 }
 
 fn host_read10_n(lba: u32, nsec: u8) -> Vec<u8> {

@@ -5366,6 +5366,8 @@ pub unsafe fn run_retained_ovmf_vmlaunch(
 
 /// Product-ISO virtio-blk backing. No-op when the window is idle or a disk
 /// is already attached. `warn` prints only when this call is the last chance.
+/// The window is also armed by the latched PERC image (iron `ac1f8619`: no
+/// ESP ISO, no attach, `disk_bytes=0`, GRUB `EFI_NO_MEDIA` at LBA 0).
 #[cfg(target_os = "uefi")]
 unsafe fn attach_product_iso_install_disk(alloc: &mut FrameAllocator, warn: bool) {
     if !crate::devices::ide_cdrom::product_iso_window_armed() {
@@ -5843,9 +5845,14 @@ unsafe fn launch_uefi(
         serial::write_str(" bytes=");
         write_dec(crate::devices::ide_cdrom::retained_len() as u64);
         serial::write_byte(b'\n');
-        if crate::devices::ide_cdrom::product_iso_window_armed() {
+        if crate::devices::ide_cdrom::retained_len() > crate::devices::ide_cdrom::GUEST_CD_ISO_CAP
+        {
             serial::write_line(
                 "boot: guest-UEFI product ISO window (Stage 46; not ISO-INSTALL-OK)",
+            );
+        } else if crate::devices::ide_cdrom::product_iso_window_armed() {
+            serial::write_line(
+                "boot: guest-UEFI product guest from the PERC image (no ESP ISO; lab stub CD; not ISO-INSTALL-OK)",
             );
         }
     }

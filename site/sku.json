@@ -550,7 +550,7 @@
           "status": "in flight",
           "ships": "S1",
           "ref": "M8.9.4 / ADR-013 App. C",
-          "note": "PR #409 brings the PHY up; `250dc961` on the new Lexar showed `bmsr=796d` on `:39` but GRUB ran out of RAM (no ESP ISO). Branch `cursor/m8-9-close-50bb`: report-RAM arms on the PERC image latch too",
+          "note": "PR #409 brings the PHY up; `250dc961` on the new Lexar showed `bmsr=796d` on `:39` but GRUB ran out of RAM (no ESP ISO). Branch `cursor/m8-9-close-50bb` (PR #414): report-RAM arms on the PERC image latch (lived `ac1f8619`); the product window and tail-disk attach arm on it too (next F11)",
           "wave": "1"
         },
         {

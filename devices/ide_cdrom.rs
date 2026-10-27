@@ -509,12 +509,31 @@ pub fn retained_len() -> usize {
 
 /// True when ATAPI media is larger than the 72 KiB lab El Torito stub.
 ///
+/// Or the PERC spare image is latched as the install disk
+/// ([`crate::mgmt::megaraid::perc_image_boot_latched`]). This is the master
+/// switch for the product guest path (interrupt injection, PIT, product
+/// UART, virtio queues, install-disk attach, the resume cap). Iron
+/// `ac1f8619` on a bare Lexar ESP: the spare image was latched and the SPA
+/// started the Ubuntu tail, but the window was ISO-only, so the tail disk
+/// never attached (`disk_bytes=0`), GRUB read LBA 0 as `EFI_NO_MEDIA` and
+/// stopped at `grub>`. Every lived Ubuntu-tail boot had an ISO on the stick
+/// by accident. Host and nested never latch.
+///
 /// INVARIANTS:
-/// - `false` for idle CD and for [`present_placeholder`]
-/// - `true` only after [`retain`] / [`present`] of `len > GUEST_CD_ISO_CAP`
+/// - `false` for idle CD and for [`present_placeholder`] unless the spare
+///   image is latched
+/// - `true` after [`retain`] / [`present`] of `len > GUEST_CD_ISO_CAP`
 /// - Does not imply a distro installer or `ISO-INSTALL-OK`
 pub fn product_iso_window_armed() -> bool {
-    retained_len() > GUEST_CD_ISO_CAP
+    product_window_armed_from(
+        retained_len(),
+        crate::mgmt::megaraid::perc_image_boot_latched(),
+    )
+}
+
+/// Pure form of [`product_iso_window_armed`].
+pub fn product_window_armed_from(cd_len: usize, perc_image_latched: bool) -> bool {
+    cd_len > GUEST_CD_ISO_CAP || perc_image_latched
 }
 
 /// Product ISO window pointer (not the 72 KiB lab stub).
