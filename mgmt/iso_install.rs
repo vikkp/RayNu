@@ -711,6 +711,31 @@ pub fn product_iso_retained_bytes() -> Option<&'static [u8]> {
     }
 }
 
+/// Product guest RAM is armed when **either** boot medium is present: a
+/// window-sized ISO retained from the ESP PRE-EBS, or the PERC spare image
+/// latched by the fusion post ([`crate::mgmt::megaraid::perc_image_boot_latched`]).
+///
+/// Iron `250dc961` on a fresh Lexar ESP had no `EFI/RayNu/linux.iso`. Every
+/// report-RAM gate keyed off the ISO alone, so the Ubuntu tail (`choice=4`)
+/// got `report-RAM pool=32`, no EPT pre-map, RayNu-F `WARN no pre-mapped
+/// report-RAM`, and GRUB aborted with `4462 pages still required`. The old
+/// UDisk had carried an ISO since September, so every earlier boot was
+/// pre-mapped by accident. The product must not depend on the USB stick.
+///
+/// Host and nested never latch the spare, so `iso=0` there still means the
+/// E4 SHELL lazy path (32 slots, no leftover seed).
+pub fn product_guest_ram_armed_from(iso_retained: bool, perc_image_latched: bool) -> bool {
+    iso_retained || perc_image_latched
+}
+
+/// Runtime form of [`product_guest_ram_armed_from`].
+pub fn product_guest_ram_armed() -> bool {
+    product_guest_ram_armed_from(
+        product_iso_retained_bytes().is_some(),
+        crate::mgmt::megaraid::perc_image_boot_latched(),
+    )
+}
+
 /// Clear ESP retain (host tests).
 pub fn clear_product_iso_retain() {
     // SAFETY: single-threaded boot / host-test lock.

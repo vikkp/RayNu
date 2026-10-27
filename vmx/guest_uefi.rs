@@ -872,8 +872,10 @@ pub const GUEST_UEFI_REPORT_RAM_PRODUCT_EXTRA: usize = 976;
 const REPORT_RAM_ARRAY: usize =
     GUEST_UEFI_REPORT_RAM_SLOTS + GUEST_UEFI_REPORT_RAM_PRODUCT_EXTRA;
 
+/// 1008 slots for any product guest (ESP ISO or latched PERC spare image);
+/// `iso=0` without a spare (host, nested E4 SHELL) stays 32.
 fn report_ram_slots_alloc() -> usize {
-    if crate::mgmt::iso_install::product_iso_retained_bytes().is_some() {
+    if crate::mgmt::iso_install::product_guest_ram_armed() {
         REPORT_RAM_ARRAY
     } else {
         GUEST_UEFI_REPORT_RAM_SLOTS
@@ -2376,10 +2378,13 @@ pub fn guest_uefi_report_ram_gpa_2m(gpa: u64) -> u64 {
 /// Iron `113a08a`: hush-on-bootimg + LSR pacing printed a complete PAT
 /// line, then COM2 went quiet. Linux `init_mem_mapping` after
 /// `pat_bp_init` walks ~2 GiB; each first touch was an EPT miss, and an
-/// EPT cap stop is hushed. Not GPA=HPA identity (`89c3731`). iso=0 stays
-/// lazy. report-RAM EPT pre-map. Not `ISO-INSTALL-OK`.
-pub fn guest_uefi_report_ram_should_premap(product_iso: bool) -> bool {
-    product_iso
+/// EPT cap stop is hushed. Not GPA=HPA identity (`89c3731`). iso=0 without a
+/// latched PERC spare stays lazy. The caller passes
+/// [`crate::mgmt::iso_install::product_guest_ram_armed`] (ESP ISO **or**
+/// spare image); iron `250dc961` on a bare Lexar ESP showed that keying this
+/// off the ISO alone leaves GRUB with the 20 MiB slab pool. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_report_ram_should_premap(product_guest_armed: bool) -> bool {
+    product_guest_armed
 }
 
 /// GPA for report-RAM slot `i` covering `[32MiB, 2GiB)` in order.
@@ -5687,10 +5692,11 @@ unsafe fn launch_uefi(
         }
         // report-RAM EPT pre-map: product ISO fills `[32MiB, 2GiB)` WB
         // leaves from leftover HPA so Linux `init_mem_mapping` after PAT
-        // is not ~1000 EPT misses (iron `113a08a`). iso=0 stays lazy.
-        if guest_uefi_report_ram_should_premap(
-            crate::mgmt::iso_install::product_iso_retained_bytes().is_some(),
-        ) {
+        // is not ~1000 EPT misses (iron `113a08a`). The PERC spare image
+        // counts as product media too (iron `250dc961`, bare Lexar ESP);
+        // iso=0 with no spare stays lazy.
+        if guest_uefi_report_ram_should_premap(crate::mgmt::iso_install::product_guest_ram_armed())
+        {
             let mut pre = 0u64;
             for i in 0..report_n as usize {
                 let Some(gpa) = guest_uefi_report_ram_premap_gpa(i, report_n as usize) else {

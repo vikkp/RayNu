@@ -1,6 +1,6 @@
 ---
 loihda_version: 1
-last_updated: 2026-10-14
+last_updated: 2026-10-26
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | site-sku-signer |
-| Summary | **SKU card is what a signature holds today.** One dedicated box. No guest LAN. Scores held. Bar A 92. Bar B 70. Overall 78. |
+| Commit | m8-9-ram-no-esp-iso |
+| Summary | **The installed guest no longer needs an ISO on the USB stick.** Iron `250dc961` on the new Lexar (no `linux.iso`): the PERC post latched the 8 GiB image and the SPA started the Ubuntu tail (`choice=4`, static NIC saved), but report-RAM was keyed off the ESP ISO alone, so GRUB got the 20 MiB slab pool and aborted (`4462 pages still required`). `product_guest_ram_armed()` now arms on the PERC image latch too. First `bmsr=796d` on `:39`. No guest LAN yet. Scores held. Bar A 92. Bar B 70. Overall 78. |
 | Everest impact | none — HDA months 0.0 / 99% held |
-| LOI impact | Bar A 92 held. Bar B 70 held. perc 86 held. unmodified 45 held. SKU 92 held. Overall 78 held. Months B 1.25 held. |
-| Gates touched | Public SKU card voice. M8.9.6 stays open. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-8-ubuntu`. |
+| LOI impact | Bar A 92 held. Bar B 70 held. perc 86 held (a boot that reached GRUB from the spare and then stopped is not a new PERC close). unmodified 45 held. SKU 92 held. Overall 78 held. Months A 0.25 held. Months B 1.25 held. |
+| Gates touched | `product_guest_ram_armed()` at the leftover seed, slot count and pre-map. M8.9.6 stays open. No doorbell. No format of UBUNTU0 or RAYNU-SPARE. Rollback `v0.1.0-m8-8-ubuntu`. |
 
 ---
 
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-10-26 | m8-9-ram-no-esp-iso | 92 | 70 | **Iron `250dc961`, bare Lexar ESP: GRUB out of RAM on the Ubuntu tail.** Spare image latched, `choice=4`, `report-RAM pool=32`, `4462 pages still required`. Report-RAM now arms on the PERC image latch, not only the ESP ISO. First `bmsr=796d` on `:39`. Scores held. Bar A 92. Bar B 70. Overall 78. PERC 86. Unmodified 45. SKU 92. |
 | 2026-10-15 | site-sku-signer | 92 | 70 | **SKU card is what a signature holds today.** Dedicated box, Ubuntu on a 10 GiB tail, no guest LAN. Scores held. Bar A 92. Bar B 70. Overall 78. PERC 86. Unmodified 45. SKU 92. |
 | 2026-10-15 | site-sku-lived | 92 | 70 | **SKU card matches the spare.** Ubuntu 26.04 on a 10 GiB tail. The 2.9 TB VD stays hidden. No guest LAN. Scores held. Bar A 92. Bar B 70. Overall 78. PERC 86. Unmodified 45. SKU 92. |
 | 2026-10-15 | m8-9-net-irq | 92 | 70 | **virtio-net interrupt pin is INTA.** `33c9b141` login worked; `virtio_net` probe `-22`. M8.9.6 stays open. Scores held. Bar A 92. Bar B 70. Overall 78. PERC 86. Unmodified 45. |

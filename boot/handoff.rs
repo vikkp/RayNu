@@ -151,10 +151,16 @@ pub unsafe fn leave_firmware() -> Handoff {
     // window stays free (R640 previously filled pool to 512MiB → no BAR hole).
     // Stage 46 iron product-ISO holds (no E4 SHELL): prefer PRECISE so a
     // 256 MiB virtio-blk plus report-RAM fit. Nested / iso=0 stay GUEST_RAM.
+    // An armed PERC post (READY H740P, `perc_fwstate_probe` ran above) is
+    // the same product case without an ESP ISO: the spare image latches
+    // after this pick, and the Ubuntu-tail boots that lived (`c3a70e62`)
+    // all had the 512 MiB pool. Iron `250dc961` on a bare Lexar got the
+    // 256 MiB pool here. Host / nested never arm the post.
     const MIN_PREF_PAGES: u64 = 256; // 1 MiB
     const MIN_POOL_PAGES: u64 = 16;
     let prefer_end = crate::mgmt::iso_install::product_iso_frame_pool_prefer_end(
-        crate::mgmt::iso_install::product_iso_retained_bytes().is_some(),
+        crate::mgmt::iso_install::product_iso_retained_bytes().is_some()
+            || crate::mgmt::megaraid::perc_post_armed(),
         crate::arch::cpu::host_hypervisor_present(),
     );
     let precise_end = crate::memory::PRECISE_BYTES;
@@ -227,7 +233,13 @@ pub unsafe fn leave_firmware() -> Handoff {
         }
     }
 
-    if crate::mgmt::iso_install::product_iso_retained_bytes().is_some() {
+    // Leftover DRAM seeds report-RAM for any product guest: ESP ISO **or**
+    // the PERC spare image the fusion post latched just above. Iron
+    // `250dc961` (fresh Lexar ESP, no `linux.iso`) skipped this block, so
+    // the Ubuntu tail got 32 slots and GRUB aborted. The frame-pool pick
+    // above cannot use the latch (the post needs the pool first); it keys
+    // off the armed post instead.
+    if crate::mgmt::iso_install::product_guest_ram_armed() {
         let above_pages = mem::conventional_pages_above(&regions[..region_count], precise_end);
         serial::write_str("boot: conventional above PRECISE pages=");
         write_u64(above_pages);
