@@ -550,7 +550,7 @@
           "status": "lived",
           "ships": "S1",
           "ref": "M8.9.4 / ADR-013 App. C",
-          "note": "`02e0acba` (PR #414, CI `40495122788`): `arm_egress` runs the tg3 `reset_hw` sequence on `01:00.1` through its own APE window (`ape-evt=sent`, `ape-grc=yes`, `fw-magic=yes`, `memarb=1 bufmgr=1`); COM2 `txp=8/7 wtx=6/536 rcb=11 vrx=35`, guest `RX 378 MB / 258048 packets, 0 errors`, ARP `10.99.99.1 lladdr 28:87:ba:a6:b6:04`, 30 MB `apt-get update` over `:39`; docs/evidence/r640/2026-10-27-02e0acba-guest-lan-ssh-ok.md. Before: `99f003c1` had `txp=8/0 wtx=0/0 rcb=0` (no reset, no `GRC_MODE`, no driver START on function 1)",
+          "note": "`02e0acba` (PR #414, CI `40495122788`): `arm_egress` runs the tg3 `reset_hw` sequence on `01:00.1` through its own APE window (`ape-evt=sent`, `ape-grc=yes`, `fw-magic=yes`, `memarb=1 bufmgr=1`); COM2 `txp=8/7 wtx=6/536 rcb=11 vrx=35`, guest `RX 378 MB / 258048 packets, 0 errors`, ARP `10.99.99.1 lladdr 28:87:ba:a6:b6:04`, apt and a kernel update over `:39`; Stop after 44 min `sent=29983 held=0 wrx=279744/411010703 fcs=0`; docs/evidence/r640/2026-10-27-02e0acba-guest-lan-ssh-ok.md. Before: `99f003c1` had `txp=8/0 wtx=0/0 rcb=0` (no reset, no `GRC_MODE`, no driver START on function 1)",
           "wave": "1"
         },
         {

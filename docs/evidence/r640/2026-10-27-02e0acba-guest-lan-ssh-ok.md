@@ -129,6 +129,25 @@ kernel update, all through the guest NIC. The first
 `openssh-server` was not on the minimized image; that RST was itself a
 full round trip.
 
+## Stop, after 44 minutes
+
+```text
+boot: RayNu-F stop spa-stop exits=131914 wall_ms=2655032 svc=1414 svc_err=605 conout_ok=1 blk_rd=605 blk_wr=1 allocs=23 free_pages=477455 (F2b; not ISO-INSTALL-OK)
+boot: M8.9 net tx=29983 rx=259308 sent=29983 held=0 (not ISO-INSTALL-OK)
+boot: M8.9 net post-tx stop ms=2481206 exits=102365254 pre=34742 pace=14282 io=1361442 ept=521793 ext=0 win=59992 hlt=0 oth=100387284 pit=34742 inj=215059 … take0=34742 take4=3335 take11=176623 eoi_m=214700 eoi_s=176623 idtv=1 reinj=1 pic_m=0/e8/0 pic_s=0/f6/0 … vtx=29983 vrx=259308 sent=29983 held=0 wire=up bmsr=796d bmcr=1100 lpa=45e1 macst=400000 macmode=19e04804 wtx=29976/2800148 wrx=279744/411010703 fcs=0 txp=0/31 rcb=12 reason=0x1e rip=0xffffffff819a6103 (not ISO-INSTALL-OK)
+boot: SPA stop idle — guest off; Start on that row boots it again (not ISO-INSTALL-OK)
+```
+
+The Stop line printed whole (the `flush_guest_tx()` after the trace
+lived; `99f003c1` cut it at `ms=1`). Over the session: every guest frame
+was handed to function 1 and transmitted (`sent=29983 held=0`,
+`wtx=29976` — the seven missing were counted before the firmware cleared
+the statistics at +2 s); `wrx=279744/411010703` with `fcs=0`, 411 MB on
+the wire and no FCS error; `vrx=259308` delivered to virtio-net (the rest
+is broadcast/multicast the guest discarded); `txp=0/31`, the send ring
+wrapped and the consumer caught up. Interrupt chain clean at Stop
+(`pic_m=0 pic_s=0`, `take11=176623` virtio interrupts taken).
+
 ## Not closed here (D7)
 
 The address `10.99.99.200/24` was typed into the guest by the operator.
