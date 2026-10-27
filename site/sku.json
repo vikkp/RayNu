@@ -586,7 +586,7 @@
           "status": "in flight",
           "ships": "S1",
           "ref": "M8.9.5",
-          "note": "DHCP discover leaves `:39` (`02e0acba`); address field on Guests saves `mode=2`. `02e0acba`: the address `10.99.99.200/24` was typed into the guest by the operator; the `ip=` token is inert on this Ubuntu (no `CONFIG_IP_PNP`, dracut without network) and no DHCP client ran. Needs another path to the guest (netplan on the disk, cloud-init seed, or guest agent)",
+          "note": "DHCP discover leaves `:39` (`02e0acba`); address field on Guests saves `mode=2`. `02e0acba`: the address `10.99.99.200/24` was typed into the guest by the operator; the `ip=` token did not configure this Ubuntu by itself and no DHCP client ran. Branch `cursor/m8-9-d7-guest-address-50bb`: RayNu-F publishes the saved address as a systemd credential in SMBIOS Type 11 (`io.systemd.credential.binary:network.network.10-raynu=<base64 .network>`, `[Match] MACAddress=<guest mac>`, static `Address=`/`Gateway=`/`DNS=`) through `EFI_SMBIOS3_TABLE_GUID` in the configuration table; `systemd-network-generator` writes `/run/systemd/network/10-raynu.network`. Disk not written. Host tests `smbios_type11_credential_rides_the_configuration_table`, `network_credential_is_the_saved_address_as_a_systemd_network_file`. Lives when a boot brings `enp0s5` up on the saved address with no operator command",
           "wave": "1"
         },
         {
