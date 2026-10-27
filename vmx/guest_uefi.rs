@@ -9400,13 +9400,21 @@ fn raynu_f_publish_guest_address(layout: &crate::raynu_f::FirmwareImageLayout, i
         serial::write_line("boot: M8.9 WARN smbios credential not built (no address on this Start)");
         return;
     };
-    match crate::raynu_f::publish_smbios(img, layout, &[cred.string_bytes()]) {
+    // Iron `d588148f`: the credential was imported (`systemd-creds list`,
+    // 103 B) but Ubuntu ships the generator disabled, so no `.network` was
+    // written. The second string is a `sysinit.target` drop-in that wants it.
+    let mut dropin = [0u8; crate::mgmt::guest_addr::GENERATOR_DROPIN_CREDENTIAL_CAP];
+    let Some(dn) = crate::mgmt::guest_addr::generator_dropin_credential(&mut dropin) else {
+        serial::write_line("boot: M8.9 WARN smbios drop-in credential not built");
+        return;
+    };
+    match crate::raynu_f::publish_smbios(img, layout, &[cred.string_bytes(), &dropin[..dn]]) {
         Ok(table_len) => {
             serial::write_str("boot: M8.9 smbios type11 network.network.10-raynu table=");
             write_dec(table_len as u64);
             serial::write_str(" file=");
             write_dec(cred.file_len as u64);
-            serial::write_line(" (this boot only; disk unchanged)");
+            serial::write_line(" + unit-dropin sysinit.target~10-raynu (this boot only; disk unchanged)");
         }
         Err(_) => serial::write_line("boot: M8.9 WARN smbios publish failed (credential too long)"),
     }

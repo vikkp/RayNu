@@ -54,6 +54,32 @@ impl NetworkCredential {
     }
 }
 
+/// Iron `d588148f`: Ubuntu 26.04 ships `systemd-network-generator.service`
+/// **disabled** (`preset: enabled`; netplan is their renderer), so PID 1
+/// imported `network.network.10-raynu` and nothing read it. systemd 256+
+/// also imports `systemd.unit-dropin.<unit>~<name>` credentials and writes
+/// them to `/run/systemd/system/<unit>.d/<name>.conf` before loading units.
+/// A `Wants=` drop-in on `sysinit.target` pulls the generator in whatever
+/// its enable state. Runtime only; the guest disk is not written.
+pub const GENERATOR_DROPIN_CREDENTIAL_NAME: &[u8] = b"systemd.unit-dropin.sysinit.target~10-raynu";
+pub const GENERATOR_DROPIN_FILE: &[u8] = b"[Unit]\nWants=systemd-network-generator.service\n";
+/// Largest Type 11 string for the drop-in credential.
+pub const GENERATOR_DROPIN_CREDENTIAL_CAP: usize = 160;
+
+/// Type 11 string that makes the guest run `systemd-network-generator`.
+/// Constant text; `None` only if the cap is wrong.
+pub fn generator_dropin_credential(out: &mut [u8]) -> Option<usize> {
+    let mut n = 0usize;
+    if !push(out, &mut n, crate::raynu_f::smbios::CREDENTIAL_BINARY_PREFIX)
+        || !push(out, &mut n, GENERATOR_DROPIN_CREDENTIAL_NAME)
+        || !push(out, &mut n, b"=")
+    {
+        return None;
+    }
+    let enc = base64_encode(GENERATOR_DROPIN_FILE, &mut out[n..])?;
+    Some(n + enc)
+}
+
 /// systemd `.network` for the saved NIC: match on the guest MAC, static
 /// address, gateway and DNS when saved. `None` for the same records
 /// [`ip_token`] refuses (SPA/egress/multicast MAC, no address, bad prefix).
@@ -518,6 +544,17 @@ mod guest_addr_test {
         assert_eq!(base64_encode(b"foobar", &mut out).map(|n| &out[..n]), Some(&b"Zm9vYmFy"[..]));
         let mut tight = [0u8; 3];
         assert_eq!(base64_encode(b"f", &mut tight), None);
+
+        // The drop-in that makes Ubuntu run the generator (iron d588148f:
+        // the unit is disabled there). Binary credential, runtime unit dir.
+        let mut d = [0u8; GENERATOR_DROPIN_CREDENTIAL_CAP];
+        let n = generator_dropin_credential(&mut d).unwrap();
+        let s = core::str::from_utf8(&d[..n]).unwrap();
+        let head = "io.systemd.credential.binary:systemd.unit-dropin.sysinit.target~10-raynu=";
+        assert!(s.starts_with(head));
+        assert_eq!(&s[head.len()..], std_base64(b"[Unit]\nWants=systemd-network-generator.service\n"));
+        assert!(!d[..n].contains(&0));
+        assert!(!s.contains("enable"));
     }
 
     fn std_base64(input: &[u8]) -> String {

@@ -3861,7 +3861,10 @@ fn smbios_type11_credential_rides_the_configuration_table() {
         egress_phy: EGRESS_PHY_MAC,
     };
     let cred = network_credential(&nic).unwrap();
-    let table_len = publish_smbios(&mut mem[tb..tb + IMAGE_BYTES], &layout, &[cred.string_bytes()]).unwrap();
+    let mut dropin = [0u8; crate::mgmt::guest_addr::GENERATOR_DROPIN_CREDENTIAL_CAP];
+    let dn = crate::mgmt::guest_addr::generator_dropin_credential(&mut dropin).unwrap();
+    let strings: [&[u8]; 2] = [cred.string_bytes(), &dropin[..dn]];
+    let table_len = publish_smbios(&mut mem[tb..tb + IMAGE_BYTES], &layout, &strings).unwrap();
 
     // Entry point: anchor, 0x18 long, checksum sums to zero, 3.0.0, rev 1.
     let ep = &mem[tb + IMAGE_SMBIOS_OFF..tb + IMAGE_SMBIOS_OFF + SMBIOS3_ENTRY_BYTES];
@@ -3878,18 +3881,26 @@ fn smbios_type11_credential_rides_the_configuration_table() {
     bad[5] ^= 1;
     assert!(!entry_point_valid(&bad));
 
-    // Structure table: Type 11 (len 5, count 1) + one string, then Type 127.
+    // Structure table: Type 11 (len 5, count 2) + the .network credential +
+    // the sysinit.target drop-in credential (iron d588148f: Ubuntu ships the
+    // generator disabled), then Type 127.
     let t = &mem[tb + IMAGE_SMBIOS_OFF + STRUCTURE_TABLE_OFF..tb + IMAGE_SMBIOS_OFF + STRUCTURE_TABLE_OFF + table_len];
     assert_eq!(t[0], TYPE_OEM_STRINGS);
     assert_eq!(t[1], TYPE11_FORMATTED_LEN);
-    assert_eq!(t[4], 1);
+    assert_eq!(t[4], 2);
     let (ranges, n) = type11_strings(t).unwrap();
-    assert_eq!(n, 1);
+    assert_eq!(n, 2);
     let (s0, e0) = ranges[0].unwrap();
     assert_eq!(&t[s0..e0], cred.string_bytes());
     assert!(t[s0..e0].starts_with(CREDENTIAL_BINARY_PREFIX));
     assert!(t[s0..e0].starts_with(b"io.systemd.credential.binary:network.network.10-raynu="));
+    assert_eq!(t[e0], 0);
+    let (s1, e1) = ranges[1].unwrap();
+    assert_eq!(s1, e0 + 1);
+    assert_eq!(&t[s1..e1], &dropin[..dn]);
+    assert!(t[s1..e1].starts_with(b"io.systemd.credential.binary:systemd.unit-dropin.sysinit.target~10-raynu="));
     // Double NUL ends the string-set, then Type 127 with its own double NUL.
+    let e0 = e1;
     assert_eq!(&t[e0..e0 + 2], &[0, 0]);
     let t127 = e0 + 2;
     assert_eq!(t[t127], TYPE_END_OF_TABLE);
