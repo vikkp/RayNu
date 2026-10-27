@@ -3813,3 +3813,143 @@ fn set_virtual_address_map_relocates_runtime_pointers() {
     );
     assert!(!bare.virtual_mode);
 }
+
+/// M8.9.5 / ADR-021 D7: the saved guest address rides to Linux as a systemd
+/// credential in SMBIOS Type 11, reached through `EFI_SMBIOS3_TABLE_GUID`
+/// in the configuration table. Byte-exact: `_SM3_` entry point that sums to
+/// zero, structure table of Type 11 + Type 127, config entry 0, count 1,
+/// system-table CRC still valid, and a guest's later
+/// `InstallConfigurationTable` appends behind it. Host only.
+#[test]
+fn smbios_type11_credential_rides_the_configuration_table() {
+    use super::smbios::{
+        entry_point_table, entry_point_valid, type11_strings, SmbiosError, CREDENTIAL_BINARY_PREFIX,
+        SMBIOS3_ANCHOR, SMBIOS3_ENTRY_BYTES, SMBIOS3_TABLE_GUID, STRUCTURE_TABLE_OFF, TYPE11_FORMATTED_LEN,
+        TYPE127_FORMATTED_LEN, TYPE_END_OF_TABLE, TYPE_OEM_STRINGS,
+    };
+    use super::tables::{
+        publish_smbios, CONFIG_TABLE_ENTRY_BYTES, IMAGE_CONFIG_TABLE_OFF, IMAGE_SMBIOS_BYTES,
+        IMAGE_SMBIOS_OFF, SYSTEM_TABLE_CONFIG_TABLE_OFF, SYSTEM_TABLE_NUM_TABLE_ENTRIES_OFF,
+    };
+    use crate::mgmt::guest_addr::network_credential;
+    use crate::mgmt::guest_nic::{mint_mac, EGRESS_PHY_MAC};
+    use crate::mgmt::guest_nic_start::StartNic;
+
+    // GUID bytes are the mixed-endian form of f2fd1544-9794-4a2c-992e-e5bbcf20e394.
+    assert_eq!(&SMBIOS3_TABLE_GUID[..4], &0xf2fd_1544u32.to_le_bytes());
+    assert_eq!(&SMBIOS3_TABLE_GUID[4..6], &0x9794u16.to_le_bytes());
+    assert_eq!(&SMBIOS3_TABLE_GUID[6..8], &0x4a2cu16.to_le_bytes());
+    assert_eq!(&SMBIOS3_TABLE_GUID[8..], &[0x99, 0x2e, 0xe5, 0xbb, 0xcf, 0x20, 0xe3, 0x94]);
+
+    let tb = 0x0080_0000usize;
+    let base = tb as u64;
+    let mut mem = vec![0u8; tb + IMAGE_BYTES];
+    let layout = build_firmware_image(base, &mut mem[tb..tb + IMAGE_BYTES]).unwrap();
+    assert_eq!(layout.smbios, base + IMAGE_SMBIOS_OFF as u64);
+    assert_eq!(IMAGE_BYTES, 0x4000);
+    // Unpublished: the SMBIOS page is zero and the config table is empty.
+    assert!(mem[tb + IMAGE_SMBIOS_OFF..tb + IMAGE_SMBIOS_OFF + IMAGE_SMBIOS_BYTES].iter().all(|b| *b == 0));
+    assert_eq!(get_u64(&mem[tb..], IMAGE_SYSTEM_TABLE_OFF + SYSTEM_TABLE_NUM_TABLE_ENTRIES_OFF), 0);
+
+    let nic = StartNic {
+        spare_off: 8u64 << 30,
+        mac: mint_mac(8u64 << 30),
+        ipv4: [10, 99, 99, 200],
+        prefix: 24,
+        gateway: [10, 99, 99, 1],
+        dns: [10, 99, 99, 1],
+        egress_phy: EGRESS_PHY_MAC,
+    };
+    let cred = network_credential(&nic).unwrap();
+    let table_len = publish_smbios(&mut mem[tb..tb + IMAGE_BYTES], &layout, &[cred.string_bytes()]).unwrap();
+
+    // Entry point: anchor, 0x18 long, checksum sums to zero, 3.0.0, rev 1.
+    let ep = &mem[tb + IMAGE_SMBIOS_OFF..tb + IMAGE_SMBIOS_OFF + SMBIOS3_ENTRY_BYTES];
+    assert_eq!(&ep[..5], SMBIOS3_ANCHOR);
+    assert_eq!(ep[6], 0x18);
+    assert_eq!((ep[7], ep[8], ep[9], ep[10], ep[11]), (3, 0, 0, 1, 0));
+    assert_eq!(ep.iter().fold(0u8, |a, b| a.wrapping_add(*b)), 0);
+    assert!(entry_point_valid(ep));
+    let (len, addr) = entry_point_table(ep).unwrap();
+    assert_eq!(len as usize, table_len);
+    assert_eq!(addr, layout.smbios + STRUCTURE_TABLE_OFF as u64);
+    assert!(STRUCTURE_TABLE_OFF + table_len <= IMAGE_SMBIOS_BYTES);
+    let mut bad = ep.to_vec();
+    bad[5] ^= 1;
+    assert!(!entry_point_valid(&bad));
+
+    // Structure table: Type 11 (len 5, count 1) + one string, then Type 127.
+    let t = &mem[tb + IMAGE_SMBIOS_OFF + STRUCTURE_TABLE_OFF..tb + IMAGE_SMBIOS_OFF + STRUCTURE_TABLE_OFF + table_len];
+    assert_eq!(t[0], TYPE_OEM_STRINGS);
+    assert_eq!(t[1], TYPE11_FORMATTED_LEN);
+    assert_eq!(t[4], 1);
+    let (ranges, n) = type11_strings(t).unwrap();
+    assert_eq!(n, 1);
+    let (s0, e0) = ranges[0].unwrap();
+    assert_eq!(&t[s0..e0], cred.string_bytes());
+    assert!(t[s0..e0].starts_with(CREDENTIAL_BINARY_PREFIX));
+    assert!(t[s0..e0].starts_with(b"io.systemd.credential.binary:network.network.10-raynu="));
+    // Double NUL ends the string-set, then Type 127 with its own double NUL.
+    assert_eq!(&t[e0..e0 + 2], &[0, 0]);
+    let t127 = e0 + 2;
+    assert_eq!(t[t127], TYPE_END_OF_TABLE);
+    assert_eq!(t[t127 + 1], TYPE127_FORMATTED_LEN);
+    assert_eq!(&t[t127 + 4..t127 + 6], &[0, 0]);
+    assert_eq!(t127 + 6, table_len);
+
+    // Configuration table entry 0 names the SMBIOS GUID and the entry point.
+    let ct = tb + IMAGE_CONFIG_TABLE_OFF;
+    assert_eq!(&mem[ct..ct + 16], &SMBIOS3_TABLE_GUID);
+    assert_eq!(get_u64(&mem[tb..], IMAGE_CONFIG_TABLE_OFF + 16), layout.smbios);
+    assert_eq!(get_u64(&mem[tb..], IMAGE_SYSTEM_TABLE_OFF + SYSTEM_TABLE_NUM_TABLE_ENTRIES_OFF), 1);
+    assert_eq!(get_u64(&mem[tb..], IMAGE_SYSTEM_TABLE_OFF + SYSTEM_TABLE_CONFIG_TABLE_OFF), layout.config_table);
+    assert!(header_crc_valid(&mem[tb..], IMAGE_SYSTEM_TABLE_OFF));
+
+    // The Linux stub's InstallConfigurationTable appends behind it.
+    let guest = MockGuest::new(0, mem);
+    let mut st = FirmwareState::new();
+    st.system_table = layout.system_table;
+    st.config_table = layout.config_table;
+    let clk = ManualClock { now: Cell::new(1_000_000), step: 100_000 };
+    let mut sink = CaptureSink::default();
+    // The GUID argument lives in low guest RAM, outside the image.
+    let mut initrd_guid = [0u8; 16];
+    initrd_guid[0] = 0x5a;
+    initrd_guid[15] = 0x68;
+    assert_eq!(guest.write(0x1000, &initrd_guid), 16);
+    assert_eq!(
+        dispatch(ServiceId::InstallConfigurationTable, ServiceArgs::regs(0x1000, 0x1234_0000, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB).status,
+        EFI_SUCCESS
+    );
+    assert_eq!(guest.u64_at(layout.system_table + SYSTEM_TABLE_NUM_TABLE_ENTRIES_OFF as u64), 2);
+    let mut e0 = [0u8; 16];
+    guest.read(layout.config_table, &mut e0);
+    assert_eq!(e0, SMBIOS3_TABLE_GUID);
+    assert_eq!(guest.u64_at(layout.config_table + 16), layout.smbios);
+    let mut e1 = [0u8; 16];
+    guest.read(layout.config_table + CONFIG_TABLE_ENTRY_BYTES as u64, &mut e1);
+    assert_eq!(e1, initrd_guid);
+    assert_eq!(guest.u64_at(layout.config_table + CONFIG_TABLE_ENTRY_BYTES as u64 + 16), 0x1234_0000);
+    assert!(header_crc_valid(&guest.mem.borrow()[tb..], IMAGE_SYSTEM_TABLE_OFF));
+
+    // Strings must be NUL-free and non-empty; too long does not fit the page.
+    let mut img = vec![0u8; IMAGE_BYTES];
+    let l2 = build_firmware_image(base, &mut img).unwrap();
+    assert_eq!(publish_smbios(&mut img, &l2, &[b"a\0b"]), Err(BuildError::Smbios(SmbiosError::BadString)));
+    assert_eq!(publish_smbios(&mut img, &l2, &[b""]), Err(BuildError::Smbios(SmbiosError::BadString)));
+    let long = vec![b'x'; IMAGE_SMBIOS_BYTES];
+    assert_eq!(
+        publish_smbios(&mut img, &l2, &[&long]),
+        Err(BuildError::Smbios(SmbiosError::BufferTooSmall))
+    );
+    // An empty string list is a Type 11 with Count = 0 and a double NUL.
+    let n0 = publish_smbios(&mut img, &l2, &[]).unwrap();
+    assert_eq!(n0, 5 + 2 + 4 + 2);
+    let t0 = &img[IMAGE_SMBIOS_OFF + STRUCTURE_TABLE_OFF..IMAGE_SMBIOS_OFF + STRUCTURE_TABLE_OFF + n0];
+    assert_eq!(t0[4], 0);
+    assert_eq!(&t0[5..7], &[0, 0]);
+    assert_eq!(t0[7], TYPE_END_OF_TABLE);
+    assert!(type11_strings(t0).is_some_and(|(_, n)| n == 0));
+    // The memory map still covers the whole image as runtime code.
+    assert_eq!(super::launch_plan::plan_f2(SLAB).unwrap().tables_base + IMAGE_BYTES as u64, base + 0x4000);
+}

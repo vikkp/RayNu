@@ -7874,6 +7874,10 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
         st.system_table = layout.system_table;
         st.config_table = layout.config_table;
     }
+    // M8.9.5 / ADR-021 D7: the saved address rides to the guest as a systemd
+    // credential in SMBIOS Type 11, found through `EFI_SMBIOS3_TABLE_GUID`
+    // in the configuration table. Architected input; the disk is not written.
+    raynu_f_publish_guest_address(&layout, &mut slab[tb..tb + IMAGE_BYTES]);
     // F4: publish BlockIo for the retained CD and the virtio-blk install
     // target, with real media geometry, then bind the backing stores.
     raynu_f_publish_block_devices(&layout, &mut slab[tb..tb + IMAGE_BYTES]);
@@ -9379,6 +9383,33 @@ unsafe fn raynu_f_stage_iso_bootloader(
         None,
         false,
     )
+}
+
+/// M8.9.5 / ADR-021 D7: when this Start carries a saved NIC, publish its
+/// address as a systemd credential (`network.network.10-raynu`) in SMBIOS
+/// Type 11 and point the configuration table at it. PID 1 imports the
+/// credential and `systemd-network-generator` writes
+/// `/run/systemd/network/10-raynu.network` before networkd starts. A Start
+/// with no saved NIC publishes nothing and the table count stays zero.
+#[cfg(target_os = "uefi")]
+fn raynu_f_publish_guest_address(layout: &crate::raynu_f::FirmwareImageLayout, img: &mut [u8]) {
+    let Some(nic) = crate::mgmt::guest_nic_start::armed_start() else {
+        return;
+    };
+    let Some(cred) = crate::mgmt::guest_addr::network_credential(&nic) else {
+        serial::write_line("boot: M8.9 WARN smbios credential not built (no address on this Start)");
+        return;
+    };
+    match crate::raynu_f::publish_smbios(img, layout, &[cred.string_bytes()]) {
+        Ok(table_len) => {
+            serial::write_str("boot: M8.9 smbios type11 network.network.10-raynu table=");
+            write_dec(table_len as u64);
+            serial::write_str(" file=");
+            write_dec(cred.file_len as u64);
+            serial::write_line(" (this boot only; disk unchanged)");
+        }
+        Err(_) => serial::write_line("boot: M8.9 WARN smbios publish failed (credential too long)"),
+    }
 }
 
 /// F4: fill in real media geometry and publish `BlockIo` on the CD and disk

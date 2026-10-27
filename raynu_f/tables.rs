@@ -138,9 +138,19 @@ pub const IMAGE_FILE_PROTO_STRIDE: usize = 0x60;
 pub const IMAGE_CONFIG_TABLE_OFF: usize = 0x2000;
 pub const CONFIG_TABLE_ENTRY_BYTES: usize = 24;
 pub const CONFIG_TABLE_MAX_ENTRIES: usize = 16;
-/// Total bytes the image needs (three 4 KiB pages: tables + 16 file protos +
-/// the configuration table array).
-pub const IMAGE_BYTES: usize = 0x3000;
+/// M8.9.5 / ADR-021 D7: one page for the SMBIOS 3.0 entry point and its
+/// structure table (Type 11 systemd credentials, Type 127). Published
+/// through the configuration table as `EFI_SMBIOS3_TABLE_GUID` when the
+/// Start carries a saved NIC; left zero otherwise.
+pub const IMAGE_SMBIOS_OFF: usize = 0x3000;
+pub const IMAGE_SMBIOS_BYTES: usize = 0x1000;
+/// Total bytes the image needs (four 4 KiB pages: tables + 16 file protos +
+/// the configuration table array + SMBIOS).
+pub const IMAGE_BYTES: usize = 0x4000;
+const _: () = assert!(IMAGE_SMBIOS_OFF + IMAGE_SMBIOS_BYTES <= IMAGE_BYTES);
+const _: () = assert!(
+    IMAGE_CONFIG_TABLE_OFF + CONFIG_TABLE_MAX_ENTRIES * CONFIG_TABLE_ENTRY_BYTES <= IMAGE_SMBIOS_OFF
+);
 const _: () = assert!(IMAGE_DEVICE_PATH_OFF + IMAGE_DEVICE_PATH_CAP <= IMAGE_FILE_PROTO_OFF);
 const _: () = assert!(IMAGE_INITRD_END_OFF + 4 <= IMAGE_SYSTEM_TABLE_OFF);
 const _: () = assert!(IMAGE_DEVICE_PATH_OFF + super::protocol::DEVICE_PATH_BYTES <= IMAGE_FILE_PROTO_OFF);
@@ -182,12 +192,16 @@ pub struct FirmwareImageLayout {
     pub file_proto_base: u64,
     /// GPA of the `EFI_CONFIGURATION_TABLE` array (count lives in the system table).
     pub config_table: u64,
+    /// GPA of the SMBIOS 3.0 entry point page (zero bytes until published).
+    pub smbios: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BuildError {
     BufferTooSmall,
     BaseUnaligned,
+    /// SMBIOS strings do not fit the SMBIOS page, or a string is malformed.
+    Smbios(super::smbios::SmbiosError),
 }
 
 /// Incremental CRC32 state (IEEE 802.3, reflected, poly `0xEDB88320`).
@@ -302,6 +316,7 @@ pub fn build_firmware_image(base: u64, buf: &mut [u8]) -> Result<FirmwareImageLa
         device_path: base + IMAGE_DEVICE_PATH_OFF as u64,
         file_proto_base: base + IMAGE_FILE_PROTO_OFF as u64,
         config_table: base + IMAGE_CONFIG_TABLE_OFF as u64,
+        smbios: base + IMAGE_SMBIOS_OFF as u64,
     };
 
     // Trampoline page: one stub per service slot.
@@ -499,4 +514,44 @@ pub fn write_block_media(buf: &mut [u8], off: usize, media: &super::blockio::Blo
     let mut m = [0u8; super::blockio::MEDIA_SIZE];
     media.encode(&mut m);
     buf[off..off + super::blockio::MEDIA_SIZE].copy_from_slice(&m);
+}
+
+/// Publish an SMBIOS 3.0 table whose Type 11 strings are `strings`, and
+/// make it the first `EFI_CONFIGURATION_TABLE` entry (`EFI_SMBIOS3_TABLE_GUID`).
+///
+/// Call once, right after [`build_firmware_image`] and before launch: the
+/// configuration table must still be empty, because a guest's later
+/// `InstallConfigurationTable` reads the count from the system table and
+/// appends behind this entry. Sets `NumberOfTableEntries = 1` and
+/// recomputes the system table header CRC. Returns the structure table
+/// byte length the guest will walk.
+///
+/// `buf` is the whole image (`IMAGE_BYTES`) based at `layout.base`.
+pub fn publish_smbios(
+    buf: &mut [u8],
+    layout: &FirmwareImageLayout,
+    strings: &[&[u8]],
+) -> Result<usize, BuildError> {
+    if buf.len() < IMAGE_BYTES {
+        return Err(BuildError::BufferTooSmall);
+    }
+    let img = super::smbios::write_smbios(
+        &mut buf[IMAGE_SMBIOS_OFF..IMAGE_SMBIOS_OFF + IMAGE_SMBIOS_BYTES],
+        layout.smbios,
+        strings,
+    )
+    .map_err(BuildError::Smbios)?;
+    let e = IMAGE_CONFIG_TABLE_OFF;
+    buf[e..e + 16].copy_from_slice(&super::smbios::SMBIOS3_TABLE_GUID);
+    put_u64(buf, e + 16, layout.smbios);
+    let st = IMAGE_SYSTEM_TABLE_OFF;
+    put_u64(buf, st + SYSTEM_TABLE_NUM_TABLE_ENTRIES_OFF, 1);
+    write_header(
+        buf,
+        st,
+        EFI_SYSTEM_TABLE_SIGNATURE,
+        EFI_2_10_SYSTEM_TABLE_REVISION,
+        SYSTEM_TABLE_SIZE,
+    );
+    Ok(img.table_len)
 }

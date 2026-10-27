@@ -4,16 +4,165 @@
 //! Proven Core: **outside** (ADR-002 / ADR-013 Appendix C).
 //! VERIFICATION: L1 host tests. Host/CI never print an iron marker.
 //!
-//! `cloud-init` is disabled on this disk. The address is a kernel `ip=`
-//! token for that boot (Documentation/admin-guide/kernel-parameters.txt).
-//! The guest disk is not written. The token is not appended at StartImage
-//! yet: the virtio device is not programmed, and a line with no device
-//! would sit on the installed command line unused.
+//! `cloud-init` is disabled on this disk. The address reaches the guest as
+//! a systemd credential in SMBIOS Type 11 (`io.systemd.credential.binary:
+//! network.network.10-raynu=<base64 .network>`), which PID 1 imports and
+//! `systemd-network-generator` writes to `/run/systemd/network/` before
+//! `systemd-networkd` starts. The file matches the guest's MAC, so the
+//! address lands on the virtio NIC and nowhere else. The guest disk is not
+//! written; the table is this boot only. The earlier kernel `ip=` token
+//! stays as a second view (Documentation/admin-guide/kernel-parameters.txt);
+//! iron `02e0acba` showed it does not configure this Ubuntu by itself.
+//!
+//! ADR-013: the guest uses the saved address. Get from DHCP pinned a lease
+//! and manual entry typed one; both are a static `Address=` here. RayNu-V
+//! does not run a second DHCP client on that MAC.
 
 use core::sync::atomic::{AtomicU8, Ordering};
 
 use crate::mgmt::guest_nic::{EGRESS_PHY_MAC, SPA_MAC};
 use crate::mgmt::guest_nic_start::StartNic;
+
+/// Credential name. `systemd-network-generator` strips `network.network.`
+/// and writes `/run/systemd/network/10-raynu.network`.
+pub const NETWORK_CREDENTIAL_NAME: &[u8] = b"network.network.10-raynu";
+/// Largest `.network` text we emit (match + address + gateway + DNS).
+pub const NETWORK_FILE_CAP: usize = 160;
+/// Largest Type 11 string: prefix + name + `=` + base64 of the file.
+pub const NETWORK_CREDENTIAL_CAP: usize = 320;
+
+/// The `.network` file text and its Type 11 credential string.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NetworkCredential {
+    pub file: [u8; NETWORK_FILE_CAP],
+    pub file_len: usize,
+    pub string: [u8; NETWORK_CREDENTIAL_CAP],
+    pub string_len: usize,
+}
+
+impl NetworkCredential {
+    pub fn file_str(&self) -> &str {
+        core::str::from_utf8(&self.file[..self.file_len]).unwrap_or("")
+    }
+
+    pub fn string_bytes(&self) -> &[u8] {
+        &self.string[..self.string_len]
+    }
+
+    pub fn string_str(&self) -> &str {
+        core::str::from_utf8(self.string_bytes()).unwrap_or("")
+    }
+}
+
+/// systemd `.network` for the saved NIC: match on the guest MAC, static
+/// address, gateway and DNS when saved. `None` for the same records
+/// [`ip_token`] refuses (SPA/egress/multicast MAC, no address, bad prefix).
+pub fn network_file(nic: &StartNic, out: &mut [u8]) -> Option<usize> {
+    if nic.mac == SPA_MAC || nic.mac == EGRESS_PHY_MAC || nic.mac[0] & 1 != 0 {
+        return None;
+    }
+    if nic.egress_phy != EGRESS_PHY_MAC {
+        return None;
+    }
+    if nic.ipv4 == [0, 0, 0, 0] || nic.ipv4 == [255, 255, 255, 255] {
+        return None;
+    }
+    if nic.prefix == 0 || nic.prefix > 32 {
+        return None;
+    }
+    let mut n = 0usize;
+    let ok = push(out, &mut n, b"[Match]\nMACAddress=")
+        && push_mac(out, &mut n, nic.mac)
+        && push(out, &mut n, b"\n\n[Network]\nAddress=")
+        && push_ip(out, &mut n, nic.ipv4)
+        && push(out, &mut n, b"/")
+        && push_u8(out, &mut n, nic.prefix)
+        && push(out, &mut n, b"\n");
+    if !ok {
+        return None;
+    }
+    if nic.gateway != [0, 0, 0, 0] {
+        if !(push(out, &mut n, b"Gateway=")
+            && push_ip(out, &mut n, nic.gateway)
+            && push(out, &mut n, b"\n"))
+        {
+            return None;
+        }
+    }
+    if nic.dns != [0, 0, 0, 0] {
+        if !(push(out, &mut n, b"DNS=") && push_ip(out, &mut n, nic.dns) && push(out, &mut n, b"\n"))
+        {
+            return None;
+        }
+    }
+    Some(n)
+}
+
+/// Type 11 string carrying the `.network` as a binary systemd credential.
+pub fn network_credential(nic: &StartNic) -> Option<NetworkCredential> {
+    let mut file = [0u8; NETWORK_FILE_CAP];
+    let file_len = network_file(nic, &mut file)?;
+    let mut string = [0u8; NETWORK_CREDENTIAL_CAP];
+    let mut n = 0usize;
+    if !push(&mut string, &mut n, crate::raynu_f::smbios::CREDENTIAL_BINARY_PREFIX)
+        || !push(&mut string, &mut n, NETWORK_CREDENTIAL_NAME)
+        || !push(&mut string, &mut n, b"=")
+    {
+        return None;
+    }
+    let enc = base64_encode(&file[..file_len], &mut string[n..])?;
+    n += enc;
+    Some(NetworkCredential {
+        file,
+        file_len,
+        string,
+        string_len: n,
+    })
+}
+
+/// Standard base64 with `=` padding (RFC 4648 §4). Returns the byte count
+/// written, or `None` when `out` is too small.
+pub fn base64_encode(input: &[u8], out: &mut [u8]) -> Option<usize> {
+    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let need = input.len().div_ceil(3) * 4;
+    if out.len() < need {
+        return None;
+    }
+    let mut o = 0usize;
+    for chunk in input.chunks(3) {
+        let b0 = chunk[0];
+        let b1 = chunk.get(1).copied().unwrap_or(0);
+        let b2 = chunk.get(2).copied().unwrap_or(0);
+        out[o] = T[usize::from(b0 >> 2)];
+        out[o + 1] = T[usize::from(((b0 & 0x03) << 4) | (b1 >> 4))];
+        out[o + 2] = if chunk.len() > 1 {
+            T[usize::from(((b1 & 0x0f) << 2) | (b2 >> 6))]
+        } else {
+            b'='
+        };
+        out[o + 3] = if chunk.len() > 2 {
+            T[usize::from(b2 & 0x3f)]
+        } else {
+            b'='
+        };
+        o += 4;
+    }
+    Some(o)
+}
+
+fn push_mac(buf: &mut [u8], n: &mut usize, mac: [u8; 6]) -> bool {
+    const H: &[u8; 16] = b"0123456789abcdef";
+    for (i, b) in mac.iter().enumerate() {
+        if i > 0 && !push(buf, n, b":") {
+            return false;
+        }
+        let pair = [H[usize::from(b >> 4)], H[usize::from(b & 0xf)]];
+        if !push(buf, n, &pair) {
+            return false;
+        }
+    }
+    true
+}
 
 /// Kernel `ip=` text. `len` is the used prefix of `bytes`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -310,5 +459,79 @@ mod guest_addr_test {
         let grub = ["grub", ".cfg"].concat();
         assert!(!src.contains(&disk));
         assert!(!src.contains(&grub));
+    }
+
+    #[test]
+    fn network_credential_is_the_saved_address_as_a_systemd_network_file() {
+        let n = nic();
+        let cred = network_credential(&n).unwrap();
+        let mac = n.mac;
+        let want = format!(
+            "[Match]\nMACAddress={:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}\n\n[Network]\nAddress=10.99.99.40/24\nGateway=10.99.99.1\nDNS=1.1.1.1\n",
+            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]
+        );
+        assert_eq!(cred.file_str(), want);
+        // The Type 11 string is the binary-credential form systemd imports.
+        let s = cred.string_str();
+        assert!(s.starts_with("io.systemd.credential.binary:network.network.10-raynu="));
+        let b64 = &s["io.systemd.credential.binary:network.network.10-raynu=".len()..];
+        assert_eq!(b64, std_base64(want.as_bytes()));
+        assert!(!cred.string_bytes().contains(&0));
+        assert!(!cred.string_bytes().contains(&b'\n'));
+        assert!(cred.string_len <= NETWORK_CREDENTIAL_CAP);
+
+        // No gateway and no DNS drop their lines; no second DHCP client.
+        let mut bare = nic();
+        bare.gateway = [0, 0, 0, 0];
+        bare.dns = [0, 0, 0, 0];
+        let c = network_credential(&bare).unwrap();
+        assert!(!c.file_str().contains("Gateway="));
+        assert!(!c.file_str().contains("DNS="));
+        assert!(!c.file_str().contains("DHCP="));
+        let mut wide = nic();
+        wide.prefix = 16;
+        assert!(network_credential(&wide).unwrap().file_str().contains("Address=10.99.99.40/16\n"));
+
+        // The same records ip_token refuses.
+        let mut bad = nic();
+        bad.ipv4 = [0, 0, 0, 0];
+        assert!(network_credential(&bad).is_none());
+        bad = nic();
+        bad.prefix = 33;
+        assert!(network_credential(&bad).is_none());
+        bad = nic();
+        bad.mac = EGRESS_PHY_MAC;
+        assert!(network_credential(&bad).is_none());
+        bad = nic();
+        bad.mac[0] |= 1;
+        assert!(network_credential(&bad).is_none());
+
+        // base64 known answers (RFC 4648 §10).
+        let mut out = [0u8; 16];
+        assert_eq!(base64_encode(b"", &mut out), Some(0));
+        assert_eq!(base64_encode(b"f", &mut out).map(|n| &out[..n]), Some(&b"Zg=="[..]));
+        let mut out = [0u8; 16];
+        assert_eq!(base64_encode(b"fo", &mut out).map(|n| &out[..n]), Some(&b"Zm8="[..]));
+        let mut out = [0u8; 16];
+        assert_eq!(base64_encode(b"foo", &mut out).map(|n| &out[..n]), Some(&b"Zm9v"[..]));
+        let mut out = [0u8; 16];
+        assert_eq!(base64_encode(b"foobar", &mut out).map(|n| &out[..n]), Some(&b"Zm9vYmFy"[..]));
+        let mut tight = [0u8; 3];
+        assert_eq!(base64_encode(b"f", &mut tight), None);
+    }
+
+    fn std_base64(input: &[u8]) -> String {
+        const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let mut s = String::new();
+        for c in input.chunks(3) {
+            let v = (u32::from(c[0]) << 16)
+                | (u32::from(*c.get(1).unwrap_or(&0)) << 8)
+                | u32::from(*c.get(2).unwrap_or(&0));
+            s.push(T[(v >> 18) as usize & 63] as char);
+            s.push(T[(v >> 12) as usize & 63] as char);
+            s.push(if c.len() > 1 { T[(v >> 6) as usize & 63] as char } else { '=' });
+            s.push(if c.len() > 2 { T[v as usize & 63] as char } else { '=' });
+        }
+        s
     }
 }

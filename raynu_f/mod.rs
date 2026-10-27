@@ -31,6 +31,7 @@ pub mod memory;
 pub mod pe;
 pub mod protocol;
 pub mod services;
+pub mod smbios;
 pub mod tables;
 pub mod testapp;
 pub mod vars;
@@ -102,8 +103,8 @@ pub const RAYNU_F_EBS_OK_MARKER: &str = "RAYNU-V-RAYNU-F-EBS-OK";
 /// clock, and the v2 test app round-trips. Host only.
 pub const RAYNU_F_SERVICES_OK_MARKER: &str = "RAYNU-V-RAYNU-F-SERVICES-OK";
 pub use tables::{
-    build_firmware_image, crc32, header_crc_valid, BuildError, FirmwareImageLayout,
-    IMAGE_BYTES,
+    build_firmware_image, crc32, header_crc_valid, publish_smbios, BuildError,
+    FirmwareImageLayout, IMAGE_BYTES,
 };
 pub use gpt::{
     disk_has_gpt_esp, find_esp, find_esp_skip_array_crc, raynu_f_boot_source, BootSource,
