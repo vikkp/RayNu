@@ -19,14 +19,14 @@
   },
   "counts": {
     "S1": {
-      "lived": 26,
-      "in flight": 4,
+      "lived": 28,
+      "in flight": 2,
       "planned": 37,
       "total": 67
     },
     "Final": {
-      "lived": 26,
-      "in flight": 4,
+      "lived": 28,
+      "in flight": 2,
       "planned": 99,
       "total": 129
     }
@@ -547,10 +547,10 @@
         {
           "id": "D3",
           "capability": "Guest frames leave and return on the second LOM port (`:39` / port 4)",
-          "status": "in flight",
+          "status": "lived",
           "ships": "S1",
           "ref": "M8.9.4 / ADR-013 App. C",
-          "note": "PR #409 brings the PHY up; `250dc961` on the new Lexar showed `bmsr=796d` on `:39` but GRUB ran out of RAM (no ESP ISO). Branch `cursor/m8-9-close-50bb` (PR #414): report-RAM arms on the PERC image latch (lived `ac1f8619`); the product window and tail-disk attach arm on it too (lived `99f003c1`: bare Lexar to `login:`, `:39` `lpa=45e1`). `99f003c1` then showed `txp=8/0 wtx=0/0 rcb=0` and the firmware re-took the port (`macmode 19e04804`): `arm_egress` had no chip reset, no `GRC_MODE`, no APE driver START on function 1. Next F11: `arm_egress` runs the tg3 `reset_hw` sequence on `01:00.1` through its own APE window",
+          "note": "`02e0acba` (PR #414, CI `40495122788`): `arm_egress` runs the tg3 `reset_hw` sequence on `01:00.1` through its own APE window (`ape-evt=sent`, `ape-grc=yes`, `fw-magic=yes`, `memarb=1 bufmgr=1`); COM2 `txp=8/7 wtx=6/536 rcb=11 vrx=35`, guest `RX 378 MB / 258048 packets, 0 errors`, ARP `10.99.99.1 lladdr 28:87:ba:a6:b6:04`, 30 MB `apt-get update` over `:39`; docs/evidence/r640/2026-10-27-02e0acba-guest-lan-ssh-ok.md. Before: `99f003c1` had `txp=8/0 wtx=0/0 rcb=0` (no reset, no `GRC_MODE`, no driver START on function 1)",
           "wave": "1"
         },
         {
@@ -586,16 +586,16 @@
           "status": "in flight",
           "ships": "S1",
           "ref": "M8.9.5",
-          "note": "DHCP discover leaves `:39`; address field on Guests",
+          "note": "DHCP discover leaves `:39` (`02e0acba`); address field on Guests saves `mode=2`. `02e0acba`: the address `10.99.99.200/24` was typed into the guest by the operator; the `ip=` token is inert on this Ubuntu (no `CONFIG_IP_PNP`, dracut without network) and no DHCP client ran. Needs another path to the guest (netplan on the disk, cloud-init seed, or guest agent)",
           "wave": "1"
         },
         {
           "id": "D8",
           "capability": "SSH to the guest from another machine",
-          "status": "in flight",
+          "status": "lived",
           "ships": "S1",
           "ref": "M8.9.6",
-          "note": "The M8.9 close marker",
+          "note": "`02e0acba` (PR #414): `vikkp@Mac % ssh vikkp@10.99.99.200` → `Welcome to Ubuntu 26.04 LTS` on `raynusrv2`, through port 4 / `:39` / virtio-net; docs/evidence/r640/2026-10-27-02e0acba-guest-lan-ssh-ok.md. The address was operator-set (D7 open)",
           "wave": "1"
         },
         {
@@ -736,14 +736,14 @@
       ],
       "counts": {
         "S1": {
-          "lived": 2,
-          "in flight": 3,
+          "lived": 4,
+          "in flight": 1,
           "planned": 6,
           "total": 11
         },
         "Final": {
-          "lived": 2,
-          "in flight": 3,
+          "lived": 4,
+          "in flight": 1,
           "planned": 18,
           "total": 23
         }
@@ -1487,8 +1487,8 @@
       "iron": "D3",
       "why": "Never open new work with an iron loop half-done. The port 4 cable arrives, this closes.",
       "counts": {
-        "lived": 0,
-        "in flight": 3,
+        "lived": 2,
+        "in flight": 1,
         "planned": 0,
         "total": 3
       },
@@ -1853,20 +1853,8 @@
   "current_wave": "1",
   "next_up": [
     {
-      "id": "D3",
-      "capability": "Guest frames leave and return on the second LOM port (`:39` / port 4)",
-      "status": "in flight",
-      "role": "iron thread"
-    },
-    {
       "id": "D7",
       "capability": "Guest address on the customer LAN: DHCP from their server or static from the SPA",
-      "status": "in flight",
-      "role": "host-first"
-    },
-    {
-      "id": "D8",
-      "capability": "SSH to the guest from another machine",
       "status": "in flight",
       "role": "host-first"
     }

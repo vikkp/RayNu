@@ -266,7 +266,7 @@ Guests rows keep Start and Stop on the row. Each row follows that guest alone. A
 
 **Goal:** The admin attaches a virtio NIC on a Guests row. Create does not attach one. **Get from DHCP** fills the form from a lease on that guest’s MAC through `01:00.1` / `b0:26:28:5c:5a:39`. **Save** pins the address on that guest. Manual entry uses the same Save. The record lives on the spare and survives a hypervisor Force Off until the admin saves again or detaches it. The next Start applies it. The SPA stays on `:38`.
 
-**Close when:** COM2 shows a guest frame leaving `:39`, and a login to that guest address from another machine. That close is M8.9.6. Scores stay put until then.
+**Close when:** COM2 shows a guest frame leaving `:39`, and a login to that guest address from another machine. That close is M8.9.6. Scores stay put until then. **Iron `02e0acba` (2026-10-27):** both facts printed — `boot: M8.9 guest frame leaves :39 len=90`, `txp=8/7 wtx=6/536 rcb=11 vrx=35`, and `ssh vikkp@10.99.99.200` from the Mac reached `raynusrv2` (ADR-021 D3 and D8 lived; [evidence](evidence/r640/2026-10-27-02e0acba-guest-lan-ssh-ok.md)). The address was typed into the guest by the operator: the `ip=` token (M8.9.5) is inert on this Ubuntu (no `CONFIG_IP_PNP`, dracut without network), so M8.9.5 / ADR-021 D7 stays open and the wave does not close yet.
 
 | Step | What | Close when |
 |------|------|------------|
