@@ -9529,6 +9529,10 @@ unsafe fn raynu_f_stop(why: &str) -> ! {
     write_dec(u64::from(held));
     serial::write_line(" (not ISO-INSTALL-OK)");
     net_trace_on_stop();
+    // The trace goes through the guest UART ring and no VM exit drains it
+    // once the guest is off — iron `99f003c1` printed `post-tx stop ms=1`
+    // and lost the rest of the line.
+    let _ = serial::flush_guest_tx();
     leave_to_e4();
 }
 
