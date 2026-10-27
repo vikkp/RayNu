@@ -176,6 +176,30 @@ fn persist_image_is_marker_only_for_iron_size() {
 }
 
 #[test]
+fn product_guest_ram_armed_by_esp_iso_or_perc_spare_image() {
+    let _g = iso_install_host_test_lock();
+    clear_product_iso_retain();
+    // Iron 250dc961: bare Lexar ESP, Ubuntu tail latched on the spare. The
+    // ISO-only gate left GRUB with the slab pool. The spare image must arm.
+    assert!(product_guest_ram_armed_from(false, true));
+    assert!(product_guest_ram_armed_from(true, false));
+    assert!(product_guest_ram_armed_from(true, true));
+    // Host / nested E4 SHELL: neither medium, lazy 32-slot path stays.
+    assert!(!product_guest_ram_armed_from(false, false));
+    assert!(
+        !crate::mgmt::megaraid::perc_image_boot_latched(),
+        "host never latches the PERC spare image"
+    );
+    assert!(!product_guest_ram_armed());
+    let iso = vec![0x5Au8; crate::devices::ide_cdrom::GUEST_CD_ISO_CAP + 2048];
+    let leaked: &'static [u8] = Box::leak(iso.into_boxed_slice());
+    assert!(retain_product_iso_bytes(leaked));
+    assert!(product_guest_ram_armed());
+    clear_product_iso_retain();
+    assert!(!product_guest_ram_armed());
+}
+
+#[test]
 fn product_iso_esp_retain_rejects_lab_size_and_hold_follows_window() {
     let _g = iso_install_host_test_lock();
     clear_product_iso_retain();

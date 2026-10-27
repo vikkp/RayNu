@@ -564,3 +564,99 @@ fn egress_phy_plan_brings_a_dark_function_1_link_up_without_touching_a_live_one(
     assert!(src.contains("const MAC_TX_STATS_OCTETS: u32 = 0x800;"));
     assert!(src.contains("const MAC_RX_STATS_OCTETS: u32 = 0x880;"));
 }
+
+#[test]
+fn egress_arm_runs_the_tg3_reset_hw_sequence_on_function_1() {
+    // Iron 99f003c1 (first boot with :39 cabled, lpa=45e1): the rings were
+    // programmed on what UNDI left at ExitBootServices. txp=8/0, wtx=0/0,
+    // rcb=0, then MAC_MODE e04804 -> 19e04804 (APE_TX_EN|APE_RX_EN|KEEP_
+    // FRAME_IN_WOL) two seconds after the first guest frame: the firmware
+    // re-took the port because no driver START ever named function 1.
+    let src = include_str!("bcm5720_mmio.rs");
+    let arm = src
+        .split_once("unsafe fn arm_egress()")
+        .expect("arm")
+        .1
+        .split_once("pub fn mac_address")
+        .expect("mac")
+        .0;
+    // Linux probe order: APE driver START through this function's BAR2,
+    // MISC_HOST_CTRL, halt, CORECLK_RESET under the GRC lock, bootcode
+    // magic, core blocks, bus master, rings, MAC, DMA, HOSTCC, completion.
+    let order = [
+        "ape_ctx_for(bus, dev, func)",
+        "ape_lock_init_at(ape);",
+        "ape_host_driver_start_at(ape)",
+        "TG3PCI_MISC_HOST_CTRL as u8,",
+        "halt_mac_dma(bar);",
+        "chip_reset_at(bar, bus, dev, func, ape, egress_say)",
+        "wait_fw_magic(bus, dev, func)",
+        "enable_core_blocks(bar)",
+        "enable_bus_master(bus, dev, func);",
+        "init_rings(dma);",
+        "program_rings(bar, bus, dev, func, dma);",
+        "enable_mac(bar, crate::mgmt::guest_nic::EGRESS_PHY_MAC)",
+        "enable_dma_engines(bar);",
+        "enable_hostcc(bar);",
+        "enable_completion_blocks(bar);",
+        "MAILBOX_SNDHOST_PROD_IDX_0, 0);",
+        "egress_phy_kick(bar);",
+    ];
+    let mut at = 0usize;
+    for step in order {
+        let rel = arm[at..]
+            .find(step)
+            .unwrap_or_else(|| panic!("arm_egress is missing `{step}` after offset {at}"));
+        at += rel + step.len();
+    }
+    // The old arm programmed rings on the UNDI state. It must not come back.
+    let before_reset = arm.split_once("chip_reset_at(").expect("reset").0;
+    assert!(!before_reset.contains("program_rings("), "rings only after the chip reset");
+    assert!(!before_reset.contains("enable_mac("), "MAC only after the chip reset");
+    // The PHY lock stays with iDRAC: no `ape_lock_now` / phylock take here.
+    assert!(!arm.contains("ape_lock_now()"), "no PHY lock on a port iDRAC may share");
+    assert!(arm.contains("phylock: false,"));
+    // The arm runs inside a Linux VM exit where `write_str` is hushed; every
+    // COM2 line of the arm goes through the nowait path.
+    assert!(!arm.contains("serial_step("), "serial_step is dropped under earlycon share");
+    assert!(!arm.contains("crate::boot::serial::write_str("), "write_str is hushed");
+    assert!(arm.contains("egress_say(\"boot: M8.9 egress :39 ape=\");"));
+    assert!(arm.contains("fw-magic=yes"));
+    assert!(arm.contains("grc=bswap+wswap memarb=1 bufmgr=1"));
+    assert!(arm.contains("egress_say(\"boot: M8.9 egress rings armed pci=\");"));
+    // chip_reset_at takes the GRC lock with the caller's APE context and
+    // prints through the caller's `say`, so function 1 does not claim the
+    // SPA's lock bits or lose its lines.
+    let reset = src
+        .split_once("unsafe fn chip_reset_at(")
+        .expect("reset_at")
+        .1
+        .split_once("fn wait_fw_magic")
+        .expect("fw")
+        .0;
+    assert!(reset.contains("ape_lock_num_at(ape, TG3_APE_LOCK_GRC)"));
+    assert!(reset.contains("ape_unlock_num_at(ape, TG3_APE_LOCK_GRC);"));
+    assert!(!reset.contains("serial_step("), "chip_reset_at prints via `say`");
+    assert!(src.contains("chip_reset_at(mmio, bus, dev, func, ape_ctx_spa(), serial_step)"));
+    // The SPA path still runs the same core-block writes through the helper.
+    let hw = src.split_once("unsafe fn hw_init(").expect("hw").1;
+    let hw = hw.split_once("unsafe fn enable_core_blocks").expect("core").0;
+    assert!(hw.contains("enable_core_blocks(mmio)"));
+    assert!(hw.contains("grc=bswap+wswap (Linux LE tg3)"));
+    let core = src.split_once("unsafe fn enable_core_blocks(mmio: u64) -> bool {").expect("core").1;
+    let core = core.split_once("unsafe fn chip_reset(").expect("end").0;
+    for reg in [
+        "MEMARB_MODE, MODE_ENABLE",
+        "GRC_MODE, grc",
+        "BUFMGR_MODE, MODE_ENABLE",
+        "FTQ_RESET, 0xFFFF_FFFF",
+    ] {
+        assert!(core.contains(reg), "enable_core_blocks writes {reg}");
+    }
+    // The APE START names the function it runs on (Linux keeps one
+    // `aperegs` per port): the lock bits come from `ape.pci_fn`.
+    let start = src.split_once("unsafe fn ape_host_driver_start_at(ape: ApeCtx) -> bool {").expect("start").1;
+    let start = start.split_once("unsafe fn read_mac").expect("end").0;
+    assert!(start.contains("TG3_APE_HOST_DRVR_STATE_START"));
+    assert!(start.contains("ape_lock_req_bit(TG3_APE_LOCK_MEM, ape.pci_fn)"));
+}

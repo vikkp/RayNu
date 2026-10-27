@@ -143,8 +143,10 @@
               on the stick. There is no operator account.
             </li>
             <li>
-              The guest NIC transmits. Its uplink, LOM port 4, had no link on
-              the lab box; no packet has yet returned to the guest.
+              The guest NIC carries traffic on LOM port 4 (<code>02e0acba</code>:
+              411 MB in, <code>fcs=0</code>, SSH from another machine). The
+              address was typed into the guest; the SPA-saved address does
+              not reach it yet (D7).
             </li>
             <li>
               <strong>not PERC</strong> fleet: the rest of the 2.9 TB virtual
@@ -179,7 +181,7 @@
           <p data-reveal>
             Today's lab box already does part of that paragraph: the install
             loop, Ubuntu to <code>login:</code>, the PERC array, persist across
-            power-off, HTTPS, a guest NIC that transmits. The rows below say
+            power-off, HTTPS, a guest NIC on the LAN with SSH from another machine. The rows below say
             which part, and what is still only a sentence here.
           </p>
           <div class="sku-cabling" data-reveal>

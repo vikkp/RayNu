@@ -872,8 +872,10 @@ pub const GUEST_UEFI_REPORT_RAM_PRODUCT_EXTRA: usize = 976;
 const REPORT_RAM_ARRAY: usize =
     GUEST_UEFI_REPORT_RAM_SLOTS + GUEST_UEFI_REPORT_RAM_PRODUCT_EXTRA;
 
+/// 1008 slots for any product guest (ESP ISO or latched PERC spare image);
+/// `iso=0` without a spare (host, nested E4 SHELL) stays 32.
 fn report_ram_slots_alloc() -> usize {
-    if crate::mgmt::iso_install::product_iso_retained_bytes().is_some() {
+    if crate::mgmt::iso_install::product_guest_ram_armed() {
         REPORT_RAM_ARRAY
     } else {
         GUEST_UEFI_REPORT_RAM_SLOTS
@@ -2376,10 +2378,13 @@ pub fn guest_uefi_report_ram_gpa_2m(gpa: u64) -> u64 {
 /// Iron `113a08a`: hush-on-bootimg + LSR pacing printed a complete PAT
 /// line, then COM2 went quiet. Linux `init_mem_mapping` after
 /// `pat_bp_init` walks ~2 GiB; each first touch was an EPT miss, and an
-/// EPT cap stop is hushed. Not GPA=HPA identity (`89c3731`). iso=0 stays
-/// lazy. report-RAM EPT pre-map. Not `ISO-INSTALL-OK`.
-pub fn guest_uefi_report_ram_should_premap(product_iso: bool) -> bool {
-    product_iso
+/// EPT cap stop is hushed. Not GPA=HPA identity (`89c3731`). iso=0 without a
+/// latched PERC spare stays lazy. The caller passes
+/// [`crate::mgmt::iso_install::product_guest_ram_armed`] (ESP ISO **or**
+/// spare image); iron `250dc961` on a bare Lexar ESP showed that keying this
+/// off the ISO alone leaves GRUB with the 20 MiB slab pool. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_report_ram_should_premap(product_guest_armed: bool) -> bool {
+    product_guest_armed
 }
 
 /// GPA for report-RAM slot `i` covering `[32MiB, 2GiB)` in order.
@@ -5361,6 +5366,8 @@ pub unsafe fn run_retained_ovmf_vmlaunch(
 
 /// Product-ISO virtio-blk backing. No-op when the window is idle or a disk
 /// is already attached. `warn` prints only when this call is the last chance.
+/// The window is also armed by the latched PERC image (iron `ac1f8619`: no
+/// ESP ISO, no attach, `disk_bytes=0`, GRUB `EFI_NO_MEDIA` at LBA 0).
 #[cfg(target_os = "uefi")]
 unsafe fn attach_product_iso_install_disk(alloc: &mut FrameAllocator, warn: bool) {
     if !crate::devices::ide_cdrom::product_iso_window_armed() {
@@ -5687,10 +5694,11 @@ unsafe fn launch_uefi(
         }
         // report-RAM EPT pre-map: product ISO fills `[32MiB, 2GiB)` WB
         // leaves from leftover HPA so Linux `init_mem_mapping` after PAT
-        // is not ~1000 EPT misses (iron `113a08a`). iso=0 stays lazy.
-        if guest_uefi_report_ram_should_premap(
-            crate::mgmt::iso_install::product_iso_retained_bytes().is_some(),
-        ) {
+        // is not ~1000 EPT misses (iron `113a08a`). The PERC spare image
+        // counts as product media too (iron `250dc961`, bare Lexar ESP);
+        // iso=0 with no spare stays lazy.
+        if guest_uefi_report_ram_should_premap(crate::mgmt::iso_install::product_guest_ram_armed())
+        {
             let mut pre = 0u64;
             for i in 0..report_n as usize {
                 let Some(gpa) = guest_uefi_report_ram_premap_gpa(i, report_n as usize) else {
@@ -5837,9 +5845,14 @@ unsafe fn launch_uefi(
         serial::write_str(" bytes=");
         write_dec(crate::devices::ide_cdrom::retained_len() as u64);
         serial::write_byte(b'\n');
-        if crate::devices::ide_cdrom::product_iso_window_armed() {
+        if crate::devices::ide_cdrom::retained_len() > crate::devices::ide_cdrom::GUEST_CD_ISO_CAP
+        {
             serial::write_line(
                 "boot: guest-UEFI product ISO window (Stage 46; not ISO-INSTALL-OK)",
+            );
+        } else if crate::devices::ide_cdrom::product_iso_window_armed() {
+            serial::write_line(
+                "boot: guest-UEFI product guest from the PERC image (no ESP ISO; lab stub CD; not ISO-INSTALL-OK)",
             );
         }
     }
@@ -9516,6 +9529,10 @@ unsafe fn raynu_f_stop(why: &str) -> ! {
     write_dec(u64::from(held));
     serial::write_line(" (not ISO-INSTALL-OK)");
     net_trace_on_stop();
+    // The trace goes through the guest UART ring and no VM exit drains it
+    // once the guest is off — iron `99f003c1` printed `post-tx stop ms=1`
+    // and lost the rest of the line.
+    let _ = serial::flush_guest_tx();
     leave_to_e4();
 }
 

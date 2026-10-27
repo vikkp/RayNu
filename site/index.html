@@ -6,12 +6,12 @@
     <title>RayNu-V — Single-binary hypervisor, designed for proof</title>
     <meta
       name="description"
-      content="RayNu-V is a single-binary Type-1 hypervisor. Mount Everest closed on a real PowerEdge R640. An Ubuntu 26.04 ISO stored on the PERC spare installed and reached vikkp@raynusrv2. M8.9.1 is the spare NIC record."
+      content="RayNu-V is a single-binary Type-1 hypervisor. Mount Everest closed on a real PowerEdge R640. An Ubuntu 26.04 ISO stored on the PERC spare installed and reached vikkp@raynusrv2. M8.9: that guest has a LAN on LOM port 4 and took an SSH login from another machine (02e0acba)."
     />
     <meta property="og:title" content="RayNu-V — Ubuntu logged in from the PERC spare" />
     <meta
       property="og:description"
-      content="Everest closed on a real R640. Ubuntu 26.04 from a library ISO on the PERC spare reached vikkp@raynusrv2. Clear ISO wiped the signature sector only. M8.9.1 is the spare NIC record."
+      content="Everest closed on a real R640. Ubuntu 26.04 from a library ISO on the PERC spare reached vikkp@raynusrv2. Clear ISO wiped the signature sector only. M8.9: the guest has a LAN on port 4; SSH from another machine lived on 02e0acba."
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://raynuv.com/" />
@@ -33,7 +33,7 @@
     />
     <meta
       name="twitter:description"
-      content="Everest closed. Ubuntu 26.04 on a 10 GiB PERC tail reached vikkp@raynusrv2. M8.9.1 is the spare NIC record. The 2.9 TB VD is not that disk."
+      content="Everest closed. Ubuntu 26.04 on a 10 GiB PERC tail reached vikkp@raynusrv2. M8.9: guest LAN on port 4, SSH from another machine (02e0acba). The 2.9 TB VD is not that disk."
     />
     <meta name="twitter:image" content="https://raynuv.com/assets/hero.jpg" />
     <link rel="canonical" href="https://raynuv.com/" />
@@ -158,8 +158,13 @@
             Mount Everest, the Alpine install loop of 11 September, stays
             closed on <code>f72b4276</code>. Next is
             <strong>M8.9</strong>, in the same kind of stages as M8.8.
-            M8.9.1 keeps a NIC record on the spare and does not attach one.
-            This shell still has no network.
+            On <code>02e0acba</code> (27 October) that guest got a virtio NIC
+            on LOM port 4 (<code>:39</code>): frames left and returned
+            (<code>sent=29983 held=0</code>, 411 MB in, <code>fcs=0</code>),
+            <code>apt-get update</code> ran, and
+            <code>ssh vikkp@10.99.99.200</code> from a Mac reached it.
+            The address was typed by the operator; the SPA-saved address
+            reaching the guest (M8.9.5) is still open.
             The 2.9 TB virtual disk is not this 10 GiB tail.
             Auth is still open.
             Summit rollback remains
@@ -735,7 +740,7 @@ boot: M8.8 library ISO cleared (signature sector only; disks unchanged)</code></
               <p class="journey__era-note">
                 Same R640. TLS and a standing SPA came first. M8.8 then put
                 an Ubuntu ISO on the PERC spare, installed it, and logged in.
-                Next is M8.9. M8.9.1 is the spare NIC record. The guest still has no NIC.
+                M8.9 then gave that guest a LAN on LOM port 4 and an SSH login from another machine (02e0acba). The SPA-saved address reaching the guest is still open.
               </p>
               <ol class="journey__list">
                 <li>
@@ -923,7 +928,7 @@ boot: M8.8 library ISO cleared (signature sector only; disks unchanged)</code></
             <code>RAYNU-V-M7-ISO-INSTALL-OK</code> +
             <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code> (E5 + Phase B, 2026-09-11).
             M8 TLS and USB persist are closed on COM2. Ubuntu 26.04 then
-            logged in from a 10 GiB PERC tail. Next is M8.9. M8.9.1 is the spare NIC record.
+            logged in from a 10 GiB PERC tail. M8.9: that guest has a LAN on port 4 and took SSH from another machine (02e0acba).
             Auth is still open. See
             <a href="hda.html">HDA</a> and <a href="loi.html">LOI</a>.
           </p>

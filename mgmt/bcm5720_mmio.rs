@@ -1398,7 +1398,7 @@ unsafe fn egress_send_uefi(frame: &[u8]) -> EgressSend {
     }
     let Some(n) = EGRESS_NIC.as_mut() else {
         if !EGRESS_HELD_LOGGED.swap(true, Ordering::AcqRel) {
-            serial_step(
+            egress_say(
                 "boot: M8.9 egress tx held (phylock stays with iDRAC; SPA port stays)\n",
             );
         }
@@ -1407,9 +1407,9 @@ unsafe fn egress_send_uefi(frame: &[u8]) -> EgressSend {
     let dma = &mut *core::ptr::addr_of_mut!(EGRESS_DMA);
     if tx_one(n, dma, frame) {
         if !EGRESS_SENT_LOGGED.swap(true, Ordering::AcqRel) {
-            serial_step("boot: M8.9 guest frame leaves :39 len=");
-            write_u16_dec(frame.len().min(FRAME_MAX) as u16);
-            serial_step("\n");
+            egress_say("boot: M8.9 guest frame leaves :39 len=");
+            egress_dec_u16(frame.len().min(FRAME_MAX) as u16);
+            egress_say("\n");
         }
         EgressSend::Sent(frame.len().min(FRAME_MAX))
     } else {
@@ -1574,25 +1574,25 @@ unsafe fn egress_phy_kick(mmio: u64) {
     let phy = egress_phy_addr(mmio);
     let bmcr = phy_read(mmio, phy, MII_BMCR).unwrap_or(0);
     let plan = egress_phy_plan(bmsr, bmcr);
-    serial_step("boot: M8.9 egress :39 phy bmsr=");
-    write_hex_u16(bmsr);
-    serial_step(" bmcr=");
-    write_hex_u16(bmcr);
+    egress_say("boot: M8.9 egress :39 phy bmsr=");
+    egress_hex_u16(bmsr);
+    egress_say(" bmcr=");
+    egress_hex_u16(bmcr);
     match plan {
         EgressPhyPlan::Up => {
             EGRESS_LINK_UP.store(true, Ordering::Release);
+            egress_say(" link=up\n");
             egress_adjust_mac(mmio, phy);
-            serial_step(" link=up\n");
         }
         EgressPhyPlan::ClearThenRestart => {
             let _ = phy_write(mmio, phy, MII_BMCR, BMCR_ANENABLE);
             tsc_spin_ms(1);
             let _ = phy_write(mmio, phy, MII_BMCR, BMCR_ANENABLE | BMCR_ANRESTART);
-            serial_step(" link=down pdown/isolate cleared, AN restarted\n");
+            egress_say(" link=down pdown/isolate cleared, AN restarted\n");
         }
         EgressPhyPlan::Restart => {
             let _ = phy_write(mmio, phy, MII_BMCR, BMCR_ANENABLE | BMCR_ANRESTART);
-            serial_step(" link=down AN restarted\n");
+            egress_say(" link=down AN restarted\n");
         }
     }
     EGRESS_LINK_LAST_POLL.store(crate::arch::cpu::rdtsc(), Ordering::Release);
@@ -1611,9 +1611,49 @@ unsafe fn egress_adjust_mac(mmio: u64, phy: u32) {
     mmio_write(mmio, MAC_MODE, mac_mode_from_link(speed, full));
     tsc_spin_us(40);
     mmio_write(mmio, MAC_RX_MODE, RX_MODE_ENABLE | RX_MODE_PROMISC);
-    serial_step("boot: M8.9 egress :39 link=up speed=");
-    write_u16_dec(speed);
-    serial_step(if full { " duplex=full\n" } else { " duplex=half\n" });
+    egress_say("boot: M8.9 egress :39 link=up speed=");
+    egress_dec_u16(speed);
+    egress_say(if full { " duplex=full\n" } else { " duplex=half\n" });
+}
+
+/// COM2 for the guest egress path. The arm runs inside a Linux VM exit,
+/// where [`crate::boot::serial::write_str`] is hushed (iron `99f003c1`:
+/// no `egress arm` / `rings armed` line ever reached COM2); the nowait
+/// path goes through the guest UART ring like the post-TX trace.
+#[cfg(feature = "uefi-bin")]
+fn egress_say(s: &str) {
+    crate::boot::serial::write_str_nowait(s);
+}
+
+#[cfg(feature = "uefi-bin")]
+fn egress_hex_u8(b: u8) {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    crate::boot::serial::write_byte_nowait(HEX[(b >> 4) as usize]);
+    crate::boot::serial::write_byte_nowait(HEX[(b & 0xf) as usize]);
+}
+
+#[cfg(feature = "uefi-bin")]
+fn egress_hex_u16(n: u16) {
+    egress_hex_u8((n >> 8) as u8);
+    egress_hex_u8(n as u8);
+}
+
+#[cfg(feature = "uefi-bin")]
+fn egress_dec_u16(n: u16) {
+    let mut buf = [0u8; 5];
+    let mut i = buf.len();
+    let mut v = n;
+    loop {
+        i -= 1;
+        buf[i] = b'0' + (v % 10) as u8;
+        v /= 10;
+        if v == 0 {
+            break;
+        }
+    }
+    for &b in &buf[i..] {
+        crate::boot::serial::write_byte_nowait(b);
+    }
 }
 
 /// Per-exit hook (rate limited): once the `:39` link comes up after the
@@ -1640,9 +1680,22 @@ unsafe fn egress_link_tick(mmio: u64) {
 #[cfg(feature = "uefi-bin")]
 static EGRESS_SENT_LOGGED: AtomicBool = AtomicBool::new(false);
 
+/// Bring function 1 up as a driver-owned port and arm its rings.
+///
+/// Iron `99f003c1` (first boot with `:39` cabled, `lpa=45e1`): the rings
+/// were programmed on whatever the UEFI UNDI driver left at
+/// ExitBootServices — no chip reset, no `GRC_MODE`, no memory arbiter, no
+/// buffer manager, no driver START to bootcode or APE. The send ring sat at
+/// `txp=8/0` with `wtx=0/0`, nothing reached the return ring (`rcb=0`), and
+/// two seconds after the first guest frame the firmware re-took the port
+/// (`MAC_MODE` `e04804` → `19e04804`, stats cleared, PHY bounced). This is
+/// now the function-0 sequence (Linux `tg3_reset_hw`) on function 1: APE
+/// driver START through function 1's BAR2, halt, `CORECLK_RESET` under the
+/// GRC lock with the bootcode magic, core blocks, then rings, MAC, DMA and
+/// host coalescing. The PHY lock still stays with iDRAC.
 #[cfg(feature = "uefi-bin")]
 unsafe fn arm_egress() {
-    serial_step("boot: M8.9 egress arm (no phylock, SPA DMA stays)\n");
+    egress_say("boot: M8.9 egress arm (no phylock, SPA DMA stays)\n");
     let spa_bar = NIC.as_ref().map(|n| n.mmio).unwrap_or(0);
     let mut found: Option<(u8, u8, u8, u64, [u8; 6])> = None;
     for bus in 0u8..=15 {
@@ -1672,11 +1725,11 @@ unsafe fn arm_egress() {
         }
     }
     let Some((bus, dev, func, bar, mac)) = found else {
-        serial_step("boot: M8.9 egress arm held (no function 1)\n");
+        egress_say("boot: M8.9 egress arm held (no function 1)\n");
         return;
     };
     if mac != crate::mgmt::guest_nic::EGRESS_PHY_MAC {
-        serial_step("boot: M8.9 egress arm held (function 1 MAC is not :39)\n");
+        egress_say("boot: M8.9 egress arm held (function 1 MAC is not :39)\n");
         return;
     }
     let port = crate::mgmt::guest_egress::EgressPort {
@@ -1691,20 +1744,60 @@ unsafe fn arm_egress() {
         crate::mgmt::guest_egress::rings_ready(&port, bar, spa_func, spa_bar),
         crate::mgmt::guest_egress::RingArm::Ready { .. }
     ) {
-        serial_step("boot: M8.9 egress arm held (shared BAR or missing SPA BAR)\n");
+        egress_say("boot: M8.9 egress arm held (shared BAR or missing SPA BAR)\n");
         return;
     }
+    // Driver START on function 1's own APE window first (Linux probe
+    // order), so the firmware stops managing this port before the reset.
+    let ape = ape_ctx_for(bus, dev, func).unwrap_or(ApeCtx {
+        base: 0,
+        pci_fn: func,
+    });
+    let ape_evt = if ape.base != 0 {
+        ape_lock_init_at(ape);
+        ape_host_driver_start_at(ape)
+    } else {
+        false
+    };
+    egress_say("boot: M8.9 egress :39 ape=");
+    egress_say(if ape.base != 0 { "yes" } else { "no" });
+    egress_say(" ape-evt=");
+    egress_say(if ape_evt { "sent" } else { "skip" });
+    egress_say(" (driver START on function 1; phylock stays with iDRAC)\n");
+    pci_write32(
+        bus,
+        dev,
+        func,
+        TG3PCI_MISC_HOST_CTRL as u8,
+        misc_host_ctrl(),
+    );
+    mmio_write(bar, TG3PCI_MISC_HOST_CTRL, misc_host_ctrl());
+    halt_mac_dma(bar);
+    if chip_reset_at(bar, bus, dev, func, ape, egress_say).is_err() {
+        egress_say("boot: M8.9 egress arm held (function 1 did not return from reset)\n");
+        return;
+    }
+    egress_say(if wait_fw_magic(bus, dev, func) {
+        "boot: M8.9 egress :39 fw-magic=yes\n"
+    } else {
+        "boot: M8.9 egress :39 fw-magic=timeout (continuing)\n"
+    });
+    egress_say(if enable_core_blocks(bar) {
+        "boot: M8.9 egress :39 grc=bswap+wswap memarb=1 bufmgr=1\n"
+    } else {
+        "boot: WARN — M8.9 egress :39 bufmgr timeout (continuing)\n"
+    });
     enable_bus_master(bus, dev, func);
     let dma = &mut *core::ptr::addr_of_mut!(EGRESS_DMA);
     init_rings(dma);
     program_rings(bar, bus, dev, func, dma);
     if enable_mac(bar, crate::mgmt::guest_nic::EGRESS_PHY_MAC).is_err() {
-        serial_step("boot: M8.9 egress arm held (MAC)\n");
+        egress_say("boot: M8.9 egress arm held (MAC)\n");
         return;
     }
     enable_dma_engines(bar);
-    enable_completion_blocks(bar);
     enable_hostcc(bar);
+    enable_completion_blocks(bar);
     // SPA posts RING-1 buffers before the first receive. Leaving the
     // producer at 0 means a SYN-ACK on :39 is never DMA'd.
     mailbox_write(
@@ -1713,6 +1806,7 @@ unsafe fn arm_egress() {
         (RING as u32).saturating_sub(1),
     );
     mailbox_write(bar, MAILBOX_RCVRET_CON_IDX_0, 0);
+    mailbox_write(bar, MAILBOX_SNDHOST_PROD_IDX_0, 0);
     kick_hostcc(bar);
     // Iron d7e2e24f: 15 guest frames out, nothing back, ARP FAILED. The
     // function-1 PHY was never looked at; firmware left it without link.
@@ -1729,17 +1823,17 @@ unsafe fn arm_egress() {
         let disc = crate::mgmt::guest_dhcp::discover_frame(&nic.mac, 1);
         if let Some(n) = EGRESS_NIC.as_mut() {
             if tx_one(n, dma, &disc.bytes[..disc.len]) {
-                serial_step("boot: M8.9 dhcp discover leaves :39\n");
+                egress_say("boot: M8.9 dhcp discover leaves :39\n");
             }
         }
     }
-    serial_step("boot: M8.9 egress rings armed pci=");
-    write_hex_u8(bus);
-    crate::boot::serial::write_byte(b':');
-    write_hex_u8(dev);
-    crate::boot::serial::write_byte(b'.');
-    write_hex_u8(func);
-    serial_step(" phylock=no\n");
+    egress_say("boot: M8.9 egress rings armed pci=");
+    egress_hex_u8(bus);
+    crate::boot::serial::write_byte_nowait(b':');
+    egress_hex_u8(dev);
+    crate::boot::serial::write_byte_nowait(b'.');
+    egress_hex_u8(func);
+    egress_say(" phylock=no\n");
 }
 
 pub fn mac_address() -> Option<[u8; 6]> {
@@ -2018,41 +2112,10 @@ unsafe fn hw_init(
             "boot: HOST-NIC BCM5720 fw-magic=timeout (continuing)\n"
         });
     }
-    mmio_write(mmio, MEMARB_MODE, MODE_ENABLE);
-    mmio_write(mmio, TG3PCI_MISC_HOST_CTRL, misc_host_ctrl());
-
-    let grc = grc_mode_le_host();
-    mmio_write(mmio, GRC_MODE, grc);
     serial_step("boot: HOST-NIC BCM5720 grc=bswap+wswap (Linux LE tg3)\n");
-    // Prescalar only (bits 7:0). Preserve GRC_MISC_CFG_PRESERVE_PCIE.
-    let mut misc = mmio_read(mmio, GRC_MISC_CFG);
-    misc &= !0xFF;
-    misc |= 65 << GRC_MISC_CFG_PRESCALAR_SHIFT;
-    mmio_write(mmio, GRC_MISC_CFG, misc);
-
-    // 5750_PLUS / BCM5720: firmware owns the mbuf pool. Linux tg3 does
-    // nothing at 0x4408/0x440C/0x442C/0x4430. Watermarks are 57765_PLUS
-    // (PG Table 38): MACRX 0x2A, high 0xA0 — not the 5700 0x20/0x60 defaults.
-    mmio_write(
-        mmio,
-        BUFMGR_MB_RDMA_LOW_WATER,
-        DEFAULT_MB_RDMA_LOW_WATER_5705,
-    );
-    mmio_write(
-        mmio,
-        BUFMGR_MB_MACRX_LOW_WATER,
-        DEFAULT_MB_MACRX_LOW_WATER_57765,
-    );
-    mmio_write(mmio, BUFMGR_MB_HIGH_WATER, DEFAULT_MB_HIGH_WATER_57765);
-    mmio_write(mmio, BUFMGR_DMA_LOW_WATER, DEFAULT_DMA_LOW_WATER);
-    mmio_write(mmio, BUFMGR_DMA_HIGH_WATER, DEFAULT_DMA_HIGH_WATER);
-    mmio_write(mmio, BUFMGR_MODE, MODE_ENABLE);
-    if !wait_bits(mmio, BUFMGR_MODE, MODE_ENABLE, 200) {
+    if !enable_core_blocks(mmio) {
         serial_step("boot: WARN — HOST-NIC BCM5720 bufmgr timeout (continuing)\n");
     }
-    mmio_write(mmio, FTQ_RESET, 0xFFFF_FFFF);
-    mmio_write(mmio, FTQ_RESET, 0);
-    let _ = wait_eq(mmio, FTQ_RESET, 0, 200);
 
     init_rings(dma);
     program_rings(mmio, bus, dev, func, dma);
@@ -2078,6 +2141,54 @@ unsafe fn hw_init(
     Ok((station, up))
 }
 
+/// After the chip reset, the blocks every port needs before a ring can move
+/// (Linux `tg3_reset_hw` between `tg3_chip_reset` and the ring setup):
+/// memory arbiter, `MISC_HOST_CTRL`, the LE `GRC_MODE` (byte/word swap and
+/// `HOST_SENDBDS`, so send BDs are read from host memory at all), the GRC
+/// prescaler, the buffer-manager watermarks, and an FTQ reset. Returns
+/// false when `BUFMGR_MODE` did not come up (the SPA path continues).
+///
+/// Iron `99f003c1`: the guest egress port skipped all of this and only
+/// programmed rings on what the UEFI UNDI driver had left at
+/// ExitBootServices. The send ring never advanced (`txp=8/0`, `wtx=0/0`)
+/// and no received frame reached the return ring (`rcb=0`).
+#[cfg(feature = "uefi-bin")]
+unsafe fn enable_core_blocks(mmio: u64) -> bool {
+    mmio_write(mmio, MEMARB_MODE, MODE_ENABLE);
+    mmio_write(mmio, TG3PCI_MISC_HOST_CTRL, misc_host_ctrl());
+
+    let grc = grc_mode_le_host();
+    mmio_write(mmio, GRC_MODE, grc);
+    // Prescalar only (bits 7:0). Preserve GRC_MISC_CFG_PRESERVE_PCIE.
+    let mut misc = mmio_read(mmio, GRC_MISC_CFG);
+    misc &= !0xFF;
+    misc |= 65 << GRC_MISC_CFG_PRESCALAR_SHIFT;
+    mmio_write(mmio, GRC_MISC_CFG, misc);
+
+    // 5750_PLUS / BCM5720: firmware owns the mbuf pool. Linux tg3 does
+    // nothing at 0x4408/0x440C/0x442C/0x4430. Watermarks are 57765_PLUS
+    // (PG Table 38): MACRX 0x2A, high 0xA0 — not the 5700 0x20/0x60 defaults.
+    mmio_write(
+        mmio,
+        BUFMGR_MB_RDMA_LOW_WATER,
+        DEFAULT_MB_RDMA_LOW_WATER_5705,
+    );
+    mmio_write(
+        mmio,
+        BUFMGR_MB_MACRX_LOW_WATER,
+        DEFAULT_MB_MACRX_LOW_WATER_57765,
+    );
+    mmio_write(mmio, BUFMGR_MB_HIGH_WATER, DEFAULT_MB_HIGH_WATER_57765);
+    mmio_write(mmio, BUFMGR_DMA_LOW_WATER, DEFAULT_DMA_LOW_WATER);
+    mmio_write(mmio, BUFMGR_DMA_HIGH_WATER, DEFAULT_DMA_HIGH_WATER);
+    mmio_write(mmio, BUFMGR_MODE, MODE_ENABLE);
+    let bufmgr = wait_bits(mmio, BUFMGR_MODE, MODE_ENABLE, 200);
+    mmio_write(mmio, FTQ_RESET, 0xFFFF_FFFF);
+    mmio_write(mmio, FTQ_RESET, 0);
+    let _ = wait_eq(mmio, FTQ_RESET, 0, 200);
+    bufmgr
+}
+
 /// Linux `tg3_write_sig_pre_reset` then `tg3_chip_reset` (PG 7.1/7.2).
 /// MAGIC1 goes to SRAM 0xB50 **before** CORECLK_RESET. Bit 29 keeps PCIe.
 /// Iron `1404f055`: CORECLK without BMCR still `cand bmsr=7949`. This path
@@ -2085,18 +2196,33 @@ unsafe fn hw_init(
 /// GRC lock around the reset pulse.
 #[cfg(feature = "uefi-bin")]
 unsafe fn chip_reset(mmio: u64, bus: u8, dev: u8, func: u8) -> Result<(), Bcm5720Error> {
-    serial_step("boot: HOST-NIC BCM5720 reset…\n");
+    chip_reset_at(mmio, bus, dev, func, ape_ctx_spa(), serial_step)
+}
+
+/// [`chip_reset`] for any function: the GRC lock is requested with that
+/// function's APE bit and COM2 goes through `say` (the egress arm runs
+/// inside a Linux VM exit, where `write_str` is hushed).
+#[cfg(feature = "uefi-bin")]
+unsafe fn chip_reset_at(
+    mmio: u64,
+    bus: u8,
+    dev: u8,
+    func: u8,
+    ape: ApeCtx,
+    say: fn(&str),
+) -> Result<(), Bcm5720Error> {
+    say("boot: HOST-NIC BCM5720 reset…\n");
     let n = pci_cfg_save_dword_count();
     let mut cfg = [0u32; 64];
     for i in 0..n {
         cfg[i] = pci_read32(bus, dev, func, (i * 4) as u8);
     }
-    let grc = ape_lock_num(TG3_APE_LOCK_GRC);
-    serial_step("boot: HOST-NIC BCM5720 ape-grc=");
-    serial_step(if grc { "yes" } else { "timeout" });
-    serial_step(" pci-restore=");
-    write_u16_dec(n as u16);
-    serial_step("\n");
+    let grc = ape_lock_num_at(ape, TG3_APE_LOCK_GRC);
+    say("boot: HOST-NIC BCM5720 ape-grc=");
+    say(if grc { "yes" } else { "timeout" });
+    say(" pci-restore=");
+    say(if n == 64 { "64" } else { "?" });
+    say("\n");
     mmio_write(mmio, GRC_FASTBOOT_PC, 0);
     sram_write(
         bus,
@@ -2121,7 +2247,7 @@ unsafe fn chip_reset(mmio: u64, bus: u8, dev: u8, func: u8) -> Result<(), Bcm572
         pci_write32(bus, dev, func, off, cfg[i]);
     }
     pci_write32(bus, dev, func, 0x04, cfg[1]);
-    ape_unlock_num(TG3_APE_LOCK_GRC);
+    ape_unlock_num_at(ape, TG3_APE_LOCK_GRC);
     pci_write32(
         bus,
         dev,
@@ -2733,59 +2859,98 @@ unsafe fn phy_read(mmio: u64, phy: u32, reg: u32) -> Option<u16> {
     out
 }
 
-/// Linux `pci_ioremap_bar(pdev, BAR_2)` then `tg3_ape_lock_init` + driver START.
+/// One PCI function's view of the APE: its BAR2 window and the lock bits
+/// that function requests with. Linux `tg3` keeps one `aperegs` per
+/// function; the SPA (function 0) binding lives in the statics below, the
+/// guest egress port (function 1) carries its own so the driver START and
+/// the GRC lock around its reset name function 1, not the SPA.
 #[cfg(feature = "uefi-bin")]
-fn bind_ape(bus: u8, dev: u8, func: u8) {
-    APE_EVT_SENT.store(false, Ordering::Relaxed);
+#[derive(Clone, Copy)]
+struct ApeCtx {
+    base: u64,
+    pci_fn: u8,
+}
+
+#[cfg(feature = "uefi-bin")]
+fn ape_ctx_spa() -> ApeCtx {
+    ApeCtx {
+        base: APE_MMIO.load(Ordering::Relaxed),
+        pci_fn: APE_PCI_FN.load(Ordering::Relaxed) as u8,
+    }
+}
+
+/// `NIC_SRAM_DATA_CFG` APE bit and a mapped BAR2 for this function, or
+/// `None`. Does not touch the SPA statics.
+#[cfg(feature = "uefi-bin")]
+fn ape_ctx_for(bus: u8, dev: u8, func: u8) -> Option<ApeCtx> {
     let nic_cfg = sram_read(bus, dev, func, NIC_SRAM_DATA_CFG);
     if nic_cfg & NIC_SRAM_DATA_CFG_APE_ENABLE == 0 {
-        APE_MMIO.store(0, Ordering::Relaxed);
-        return;
+        return None;
     }
     let lo = pci_read32(bus, dev, func, PCI_BAR2_OFF);
     let hi = pci_read32(bus, dev, func, PCI_BAR2_OFF + 4);
     let bar = pci_mem_bar_addr(lo, hi);
     if bar == 0 || lo == 0xFFFF_FFFF {
-        APE_MMIO.store(0, Ordering::Relaxed);
-        return;
+        return None;
     }
     enable_mem(bus, dev, func);
-    APE_MMIO.store(bar, Ordering::Relaxed);
+    Some(ApeCtx {
+        base: bar,
+        pci_fn: func,
+    })
+}
+
+/// Linux `pci_ioremap_bar(pdev, BAR_2)` then `tg3_ape_lock_init` + driver START.
+#[cfg(feature = "uefi-bin")]
+fn bind_ape(bus: u8, dev: u8, func: u8) {
+    APE_EVT_SENT.store(false, Ordering::Relaxed);
+    let Some(ape) = ape_ctx_for(bus, dev, func) else {
+        APE_MMIO.store(0, Ordering::Relaxed);
+        return;
+    };
+    APE_MMIO.store(ape.base, Ordering::Relaxed);
     APE_LOCKNUM.store(ape_phy_lock_num(func), Ordering::Relaxed);
     APE_PCI_FN.store(u32::from(func), Ordering::Relaxed);
     // SAFETY: firmware BAR2 APE window; identity-mapped like BAR0.
     // KANI-TARGET: ape_phy_lock_num / ape_lock_req_bit / pci_mem_bar_addr (host).
     unsafe {
-        ape_lock_init();
-        ape_host_driver_start();
+        ape_lock_init_at(ape);
+        APE_EVT_SENT.store(ape_host_driver_start_at(ape), Ordering::Relaxed);
     }
 }
 
 #[cfg(feature = "uefi-bin")]
 unsafe fn ape_write(off: u32, val: u32) {
-    let base = APE_MMIO.load(Ordering::Relaxed);
-    if base == 0 {
-        return;
-    }
-    mmio_write(base, off, val);
+    ape_write_at(ape_ctx_spa(), off, val);
 }
 
 #[cfg(feature = "uefi-bin")]
 unsafe fn ape_read(off: u32) -> u32 {
-    let base = APE_MMIO.load(Ordering::Relaxed);
-    if base == 0 {
+    ape_read_at(ape_ctx_spa(), off)
+}
+
+#[cfg(feature = "uefi-bin")]
+unsafe fn ape_write_at(ape: ApeCtx, off: u32, val: u32) {
+    if ape.base == 0 {
+        return;
+    }
+    mmio_write(ape.base, off, val);
+}
+
+#[cfg(feature = "uefi-bin")]
+unsafe fn ape_read_at(ape: ApeCtx, off: u32) -> u32 {
+    if ape.base == 0 {
         return 0;
     }
-    mmio_read(base, off)
+    mmio_read(ape.base, off)
 }
 
 /// Linux `tg3_ape_lock_init`: drop stale grants on PHY0..=GPIO.
 #[cfg(feature = "uefi-bin")]
-unsafe fn ape_lock_init() {
-    let fn_ = APE_PCI_FN.load(Ordering::Relaxed) as u8;
+unsafe fn ape_lock_init_at(ape: ApeCtx) {
     for locknum in TG3_APE_LOCK_PHY0..=TG3_APE_LOCK_GPIO {
-        let bit = ape_lock_init_grant_bit(locknum, fn_);
-        ape_write(ape_per_lock_grant(locknum), bit);
+        let bit = ape_lock_init_grant_bit(locknum, ape.pci_fn);
+        ape_write_at(ape, ape_per_lock_grant(locknum), bit);
     }
 }
 
@@ -2820,25 +2985,28 @@ fn ape_lock_now() -> bool {
 /// uses `TG3_APE_LOCK_GRC`.
 #[cfg(feature = "uefi-bin")]
 fn ape_lock_num(locknum: u32) -> bool {
-    let base = APE_MMIO.load(Ordering::Relaxed);
-    if base == 0 {
+    ape_lock_num_at(ape_ctx_spa(), locknum)
+}
+
+#[cfg(feature = "uefi-bin")]
+fn ape_lock_num_at(ape: ApeCtx, locknum: u32) -> bool {
+    if ape.base == 0 {
         return true;
     }
-    let fn_ = APE_PCI_FN.load(Ordering::Relaxed) as u8;
-    let bit = ape_lock_req_bit(locknum, fn_);
+    let bit = ape_lock_req_bit(locknum, ape.pci_fn);
     let req = ape_per_lock_req(locknum);
     let gnt = ape_per_lock_grant(locknum);
-    // SAFETY: APE_MMIO is BAR2 from bind_ape.
+    // SAFETY: `ape.base` is that function's BAR2 from `ape_ctx_for`.
     // KANI-TARGET: ape_lock_req_bit (host).
     unsafe {
-        ape_write(req, bit);
+        ape_write_at(ape, req, bit);
         for _ in 0..100 {
-            if ape_read(gnt) == bit {
+            if ape_read_at(ape, gnt) == bit {
                 return true;
             }
             tsc_spin_us(10);
         }
-        ape_write(gnt, bit);
+        ape_write_at(ape, gnt, bit);
     }
     false
 }
@@ -2850,27 +3018,38 @@ fn ape_unlock_now() {
 
 #[cfg(feature = "uefi-bin")]
 fn ape_unlock_num(locknum: u32) {
-    let base = APE_MMIO.load(Ordering::Relaxed);
-    if base == 0 {
+    ape_unlock_num_at(ape_ctx_spa(), locknum);
+}
+
+#[cfg(feature = "uefi-bin")]
+fn ape_unlock_num_at(ape: ApeCtx, locknum: u32) {
+    if ape.base == 0 {
         return;
     }
-    let fn_ = APE_PCI_FN.load(Ordering::Relaxed) as u8;
-    let bit = ape_lock_req_bit(locknum, fn_);
+    let bit = ape_lock_req_bit(locknum, ape.pci_fn);
+    // SAFETY: `ape.base` is that function's BAR2 from `ape_ctx_for`.
+    // KANI-TARGET: ape_lock_req_bit (host).
     unsafe {
-        ape_write(ape_per_lock_grant(locknum), bit);
+        ape_write_at(ape, ape_per_lock_grant(locknum), bit);
     }
 }
 
-/// Linux `tg3_ape_driver_state_change(RESET_KIND_INIT)` (no heartbeat timer).
+/// Linux `tg3_ape_driver_state_change(RESET_KIND_INIT)` (no heartbeat
+/// timer) through one function's APE window. Returns whether the START
+/// event was accepted. Iron `99f003c1`: function 1 never sent this, and
+/// two seconds after the first guest frame the firmware re-took the port
+/// (`MAC_MODE` gained `APE_TX_EN | APE_RX_EN | KEEP_FRAME_IN_WOL`, stats
+/// cleared, PHY bounced) while our send ring sat at `txp=8/0`.
 #[cfg(feature = "uefi-bin")]
-unsafe fn ape_host_driver_start() {
-    ape_write(TG3_APE_HOST_HEARTBEAT_COUNT, 1);
-    ape_write(TG3_APE_HOST_SEG_SIG, APE_HOST_SEG_SIG_MAGIC);
-    ape_write(TG3_APE_HOST_SEG_LEN, APE_HOST_SEG_LEN_MAGIC);
-    let n = ape_read(TG3_APE_HOST_INIT_COUNT).wrapping_add(1);
-    ape_write(TG3_APE_HOST_INIT_COUNT, n);
-    ape_write(TG3_APE_HOST_DRIVER_ID, APE_HOST_DRIVER_ID_LINUX);
-    ape_write(
+unsafe fn ape_host_driver_start_at(ape: ApeCtx) -> bool {
+    ape_write_at(ape, TG3_APE_HOST_HEARTBEAT_COUNT, 1);
+    ape_write_at(ape, TG3_APE_HOST_SEG_SIG, APE_HOST_SEG_SIG_MAGIC);
+    ape_write_at(ape, TG3_APE_HOST_SEG_LEN, APE_HOST_SEG_LEN_MAGIC);
+    let n = ape_read_at(ape, TG3_APE_HOST_INIT_COUNT).wrapping_add(1);
+    ape_write_at(ape, TG3_APE_HOST_INIT_COUNT, n);
+    ape_write_at(ape, TG3_APE_HOST_DRIVER_ID, APE_HOST_DRIVER_ID_LINUX);
+    ape_write_at(
+        ape,
         TG3_APE_HOST_BEHAVIOR,
         if ape_host_nophylock() {
             APE_HOST_BEHAV_NO_PHYLOCK
@@ -2878,44 +3057,47 @@ unsafe fn ape_host_driver_start() {
             0
         },
     );
-    ape_write(
+    ape_write_at(
+        ape,
         TG3_APE_HOST_HEARTBEAT_INT_MS,
         APE_HOST_HEARTBEAT_INT_DISABLE,
     );
-    ape_write(TG3_APE_HOST_DRVR_STATE, TG3_APE_HOST_DRVR_STATE_START);
+    ape_write_at(ape, TG3_APE_HOST_DRVR_STATE, TG3_APE_HOST_DRVR_STATE_START);
     let ev =
         APE_EVENT_STATUS_STATE_START | APE_EVENT_STATUS_DRIVER_EVNT | APE_EVENT_STATUS_STATE_CHNGE;
-    APE_EVT_SENT.store(ape_send_event(ev), Ordering::Relaxed);
+    ape_send_event_at(ape, ev)
 }
 
 /// Linux `tg3_ape_send_event`: skip if APE FW not ready; wait EVENT_PENDING clear.
 #[cfg(feature = "uefi-bin")]
-unsafe fn ape_send_event(event: u32) -> bool {
-    if !ape_fw_ready(ape_read(TG3_APE_SEG_SIG), ape_read(TG3_APE_FW_STATUS)) {
+unsafe fn ape_send_event_at(ape: ApeCtx, event: u32) -> bool {
+    if !ape_fw_ready(
+        ape_read_at(ape, TG3_APE_SEG_SIG),
+        ape_read_at(ape, TG3_APE_FW_STATUS),
+    ) {
         return false;
     }
-    let fn_ = APE_PCI_FN.load(Ordering::Relaxed) as u8;
-    let bit = ape_lock_req_bit(TG3_APE_LOCK_MEM, fn_);
+    let bit = ape_lock_req_bit(TG3_APE_LOCK_MEM, ape.pci_fn);
     let req = ape_per_lock_req(TG3_APE_LOCK_MEM);
     let gnt = ape_per_lock_grant(TG3_APE_LOCK_MEM);
     let mut locked = false;
     for _ in 0..2000 {
-        ape_write(req, bit);
-        if ape_read(gnt) == bit {
-            if ape_read(TG3_APE_EVENT_STATUS) & APE_EVENT_STATUS_EVENT_PENDING == 0 {
+        ape_write_at(ape, req, bit);
+        if ape_read_at(ape, gnt) == bit {
+            if ape_read_at(ape, TG3_APE_EVENT_STATUS) & APE_EVENT_STATUS_EVENT_PENDING == 0 {
                 locked = true;
                 break;
             }
-            ape_write(gnt, bit);
+            ape_write_at(ape, gnt, bit);
         }
         tsc_spin_us(10);
     }
     if !locked {
         return false;
     }
-    ape_write(TG3_APE_EVENT_STATUS, event | APE_EVENT_STATUS_EVENT_PENDING);
-    ape_write(gnt, bit);
-    ape_write(TG3_APE_EVENT, APE_EVENT_1);
+    ape_write_at(ape, TG3_APE_EVENT_STATUS, event | APE_EVENT_STATUS_EVENT_PENDING);
+    ape_write_at(ape, gnt, bit);
+    ape_write_at(ape, TG3_APE_EVENT, APE_EVENT_1);
     true
 }
 
