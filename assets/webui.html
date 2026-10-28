@@ -75,6 +75,7 @@ input.token{min-width:12rem}
 <section class="pg on" data-pg="overview">
 <h2>Overview</h2>
 <div class="toolbar"><button class="danger" id="btn-poweroff" type="button">Power off host</button></div>
+<div id="ports" class="empty">Ports: no link sample yet.</div>
 </section>
 <section class="pg" data-pg="guests">
 <h2>Guests</h2>
@@ -220,7 +221,22 @@ async function loadSpare(){
 if(up)return;let r;try{r=await api("GET","/perc/guests")}catch(e){return}
 hostOk=r.ok||hostOk;if(!r.ok)return;
 let b={};try{b=await r.json()}catch(e){}
-spareBody=b;capNote(b);paintSpare(b);
+spareBody=b;capNote(b);paintSpare(b);paintPorts(b);
+}
+function paintPorts(b){
+const box=document.getElementById("ports");if(!box)return;const l=b.link||[];
+if(!l.length){box.className="empty";box.textContent="Ports: no link sample yet.";return}
+box.className="";box.innerHTML="";
+l.forEach(function(p){
+const row=document.createElement("div");row.className="row";
+const id=document.createElement("span");id.className="id";id.textContent="Port "+p.lom;
+const mid=document.createElement("div");
+const who=document.createElement("div");who.textContent=(p.role==="spa"?"SPA":"Guest LAN")+" "+(p.mac||"");
+const st=document.createElement("span");st.className="st"+(p.up?" run":"");
+st.textContent=p.up?("Up "+p.mbps+" "+p.duplex):(p.driven?"Down":"not driven yet");
+const meta=document.createElement("div");meta.className="meta";meta.textContent=(p.changes||0)+" change"+(p.changes===1?"":"s");
+mid.appendChild(who);mid.appendChild(st);row.appendChild(id);row.appendChild(mid);row.appendChild(meta);box.appendChild(row);
+});
 }
 function capNote(b){const cap=document.getElementById("spare-cap");if(cap)cap.textContent=(b.cap||"")+(b.note?(" "+b.note):"");}
 function nicOff(vm){return vm.off_mib?vm.off_mib*1048576:0}

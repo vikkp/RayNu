@@ -449,6 +449,8 @@ pub fn tick_bcm5720_coexist() {
         );
         let millis = COEXIST_MILLIS;
         let ts = Instant::from_millis(millis);
+        // ADR-021 D5: both LOM links, twice a second, idle or under a guest.
+        crate::mgmt::bcm5720_mmio::host_link_tick();
         let _ = bounded_poll(HOST_NIC_POLL_BUDGET, || {
             matches!(
                 iface.poll(ts, device, sockets),
