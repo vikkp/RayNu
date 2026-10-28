@@ -1,7 +1,7 @@
 # 2026-10-28 — `8df4407d`: one cable pull on port 4 (ADR-021 D6 lived; D5 page half lived, audit mirror hushed; D4 discovery `match=yes`)
 
 **EFI:** `8df4407d3630` (PR #418, CI push run `40612757544`, SHA256 `83d41c4dc36a12efa0740c1dbf1e1ec5bf8f544995d7ec5bc57215c7cce61f87`, 2,490,880 bytes).
-**Flash:** Cruzer, F11 one-shot. Ubuntu 26.04 standing on UBUNTU0. Guest: the 10 GiB tail on RAYNU-SPARE (`c3a70e62` install, kernel `7.0.0-38`), vNIC Saved on the Guests row (`10.99.99.200/24`), then Start.
+**Flash:** Cruzer, F11 one-shot. COM2 `build: sha=8df4407d3630`. Ubuntu 26.04 standing on UBUNTU0. Guest: the 10 GiB tail on RAYNU-SPARE (`c3a70e62` install, kernel `7.0.0-38`), vNIC Saved on the Guests row (`10.99.99.200/24`), then Start.
 **Operator order:** login over `ssh vikkp@10.99.99.200` (so `:39` was armed and driven), a one-second `ip -br link` loop started in the guest, then the port 4 (LOM 4, `b0:26:28:5c:5a:39`) cable pulled for about twenty seconds and replugged.
 **Rollback:** `v0.1.0-m8-9-lan`. Disks unchanged. No doorbell.
 
@@ -48,7 +48,15 @@ Both LOM ports with role, MAC, speed, duplex, and the change count on the pull/r
 
 The `=== host UART ===` ring holds the two `boot: D5 link` lines and **no** `RAYNU-V-AUDIT: HostLinkChanged` line. `mirror_audit_to_com1` writes through `serial::write_str`, which returns early once a Linux guest owns the console (`linux_earlycon_share`); the `boot:` lines reached the ring because `egress_say` uses `write_str_nowait`. The event was appended to the audit ring (`record_event` does that before the mirror, unconditionally), but nothing on this boot could show it, and there is no HTTP reader for the ring. **D5 stays in flight**: the page half lived here; the "audit event on change" half needs the mirror on the no-wait path (fixed on the branch after this boot) and one more pull.
 
+The full COM2 confirms the diagnosis from the other side. Before the guest launched the mirror was live (`RAYNU-V-AUDIT: GuestNicSaved off=19327352832 mode=2`, `PercSpaChoice choice=4`, `VmxEnabled vcpu_id=0`); through the whole guest run, including the pull, no audit line; the moment the SPA stopped the guest (`boot: SPA stop idle — guest off`) the mirror came back (`RAYNU-V-AUDIT: AuthAllowed method_tag=1`, `HostPowerOff source=1`). The hush is Linux owning the console, nothing else.
+
 The same hush applies to every other audit mirror that fires under a running guest (`GuestNicDetached`, `VmStopped`, …). Not changed here; noted for the catalog.
+
+## Arm timing and the pre-arm peek
+
+The sampler peeked function 1 read-only at 2 Hz from the moment the standing SPA armed until the guest's first frame — several minutes on this boot (the SPA sat at `perc image present — waiting for SPA Guests`). No MDIO timeout, no `WARN`, and the arm sequence that followed was the lived one: `ape-evt=sent`, `fw-magic=yes`, `memarb=1 bufmgr=1`, `phy bmsr=796d`, `link=up speed=100`. The arm fired at guest `[   16.8]`, during `systemd-networkd.service` start (networkd's first ARP is the frame that arms `:39`), with `discovered … match=yes` printed first.
+
+Run totals at stop: `tx=2405 rx=18128 sent=2405 held=0 fcs=0`, `wall_ms=3458954`. `macmode=19e04804` held from `t2s` to stop — no bounce, no stats reset, no firmware re-take across 57 minutes of 2 Hz sampling and one cable pull. The pre-arm peek risk noted in PR #418 did not show.
 
 ## The D4 line (found later in the same COM2 session)
 
