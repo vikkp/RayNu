@@ -1112,6 +1112,7 @@ fn write_list_json(
     }
     w.s("]");
     write_nic_json(&mut w);
+    crate::mgmt::host_link::write_json(&mut w);
     w.s("}");
     if w.fit {
         w.n
@@ -1323,6 +1324,15 @@ impl<'a> JsonBuf<'a> {
     }
 }
 
+impl crate::mgmt::host_link::JsonSink for JsonBuf<'_> {
+    fn s(&mut self, t: &str) {
+        JsonBuf::s(self, t)
+    }
+    fn u(&mut self, v: u64) {
+        JsonBuf::u(self, v)
+    }
+}
+
 /// Host package: Guests owns the choice. Overview no longer posts it.
 /// Host tests do not print an iron marker.
 pub fn prop_guest_catalog() -> bool {
@@ -1398,6 +1408,89 @@ mod guest_catalog_test {
         assert_eq!(st, 200, "{body}");
         assert!(body.contains("\"reason\":\"noffer\""), "{body}");
         assert!(!body.contains("\"ip\""), "{body}");
+        crate::mgmt::guest_nic::clear_panel_for_test();
+    }
+
+    #[test]
+    fn d5_link_rows_ride_the_guest_list() {
+        // ADR-021 D5: both LOM ports in `/perc/guests`, rendered on the
+        // Overview page. Nothing is emitted until the sampler has a row,
+        // so host and QEMU bodies are byte-for-byte what they were.
+        use crate::mgmt::host_link::{observe, reset_for_test, LinkSample};
+        crate::mgmt::guest_nic::clear_panel_for_test();
+        reset_for_test();
+        let list = "GET /perc/guests HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n";
+        let (st, body) = nic_exchange(list);
+        assert_eq!(st, 200, "{body}");
+        assert!(!body.contains("\"link\""), "{body}");
+        let spa = LinkSample {
+            up: true,
+            mbps: 1000,
+            full_duplex: true,
+            bmsr: 0x796d,
+            driven: true,
+        };
+        let lan = LinkSample {
+            up: false,
+            mbps: 0,
+            full_duplex: false,
+            bmsr: 0x7949,
+            driven: false,
+        };
+        assert!(observe(0, [0xb0, 0x26, 0x28, 0x5c, 0x5a, 0x38], spa).is_none());
+        assert!(observe(1, [0xb0, 0x26, 0x28, 0x5c, 0x5a, 0x39], lan).is_none());
+        let (st, body) = nic_exchange(list);
+        assert_eq!(st, 200, "{body}");
+        assert!(
+            body.contains(
+                "\"link\":[{\"lom\":3,\"func\":0,\"role\":\"spa\",\"mac\":\"b0:26:28:5c:5a:38\",\"seen\":true,\"driven\":true,\"up\":true,\"mbps\":1000,\"duplex\":\"full\",\"changes\":0}"
+            ),
+            "{body}"
+        );
+        assert!(
+            body.contains(
+                "{\"lom\":4,\"func\":1,\"role\":\"guest-lan\",\"mac\":\"b0:26:28:5c:5a:39\",\"seen\":true,\"driven\":false,\"up\":false,\"mbps\":0,\"duplex\":\"-\",\"changes\":0}]}"
+            ),
+            "{body}"
+        );
+        // A flip counts and the body still fits with a vNIC row and two
+        // guests on the spare (the fullest list the SPA can ask for).
+        let lit = LinkSample { up: true, driven: true, ..spa };
+        assert!(observe(1, [0; 6], lit).is_some());
+        let save = "POST /perc/nic/0/m/10.99.99.145/24/10.99.99.1/1.1.1.1 HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n";
+        let (st, _) = nic_exchange(save);
+        assert_eq!(st, 200);
+        let ten = 10_240u64 * 1024 * 1024;
+        let disks = [
+            FoundDisk {
+                spare_off: SLICE1_WINDOW_BYTES,
+                disk_bytes: ten,
+            },
+            FoundDisk {
+                spare_off: SLICE1_WINDOW_BYTES + ten,
+                disk_bytes: ten,
+            },
+        ];
+        let mut buf = [0u8; CATALOG_BODY_CAP];
+        let n = write_list_json(
+            &mut buf,
+            catalog_numbers(IRON_LD1_BYTES, SLICE1_WINDOW_BYTES, true),
+            true,
+            PercSpaChoice::Pending,
+            true,
+            &disks,
+        );
+        let full = core::str::from_utf8(&buf[..n]).unwrap_or("");
+        assert!(n > 0 && n + 128 < CATALOG_BODY_CAP, "{n} {full}");
+        assert!(full.contains("\"nic\":["), "{full}");
+        assert!(full.contains("\"changes\":1}]}"), "{full}");
+        assert!(full.contains("\"mbps\":1000,\"duplex\":\"full\",\"changes\":1"), "{full}");
+        let html = include_str!("../assets/webui.html");
+        assert!(html.contains("id=\"ports\""), "Overview lists both ports");
+        assert!(html.contains("function paintPorts"));
+        assert!(html.contains("b.link"));
+        assert!(html.contains("not driven yet"));
+        reset_for_test();
         crate::mgmt::guest_nic::clear_panel_for_test();
     }
 

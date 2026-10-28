@@ -34,7 +34,19 @@ const OFF_NOTIFY: u16 = 0x300;
 const OFF_DEVICE: u16 = 0x200;
 const VIRTIO_F_VERSION_1: u64 = 1 << 32;
 const VIRTIO_NET_F_MAC: u64 = 1 << 5;
-const FEATURES: u64 = VIRTIO_F_VERSION_1 | VIRTIO_NET_F_MAC;
+/// Device config carries a `status` word; the driver reads it at probe and
+/// on every config-change interrupt (`virtnet_config_changed_work`) and
+/// calls `netif_carrier_on/off`. ADR-021 D6: the bit follows the `:39`
+/// wire once RayNu-V drives that port, so a dark cable is `NO-CARRIER`
+/// in the guest instead of frames that go nowhere (iron `d7e2e24f`).
+const VIRTIO_NET_F_STATUS: u64 = 1 << 16;
+const FEATURES: u64 = VIRTIO_F_VERSION_1 | VIRTIO_NET_F_MAC | VIRTIO_NET_F_STATUS;
+const VIRTIO_NET_S_LINK_UP: u16 = 1;
+/// Device config layout (virtio 1.x `virtio_net_config`): MAC at 0,
+/// `status` at 6. Our config length is 12 (`cfg_dword(0x80)`).
+const DEVCFG_STATUS_OFF: u16 = 6;
+/// ISR bit 1: configuration change (bit 0 is a queue interrupt).
+const ISR_CONFIG: u8 = 0x2;
 const STATUS_DRIVER_OK: u8 = 4;
 /// Linux 7 `virtnet_probe`: `VIRTIO_F_VERSION_1` selects
 /// `sizeof(virtio_net_hdr_mrg_rxbuf)` even when `MRG_RXBUF` is off.
@@ -62,6 +74,8 @@ struct Net {
     drv_feat: u64,
     status: u8,
     isr: u8,
+    /// Common cfg `config_generation` (0x15); bumps on each carrier change.
+    cfg_gen: u8,
     qsel: u16,
     q: [Queue; 2],
     notify: bool,
@@ -77,6 +91,7 @@ static mut NET: Net = Net {
     drv_feat: 0,
     status: 0,
     isr: 0,
+    cfg_gen: 0,
     qsel: 0,
     q: [Queue {
         enable: 0,
@@ -97,6 +112,8 @@ static LOGGED_TX: AtomicBool = AtomicBool::new(false);
 /// The completion IRQ was armed only for a preemption-timer exit, and the
 /// guest was leaving on serial I/O, so the driver never reaped the packet.
 static TX_IRQ_ARM: AtomicU8 = AtomicU8::new(0);
+/// 1 when a config-change interrupt (carrier flip) waits for the next exit.
+static CFG_IRQ_ARM: AtomicU8 = AtomicU8::new(0);
 static LOGGED_KICK_IDLE: AtomicBool = AtomicBool::new(false);
 static LOGGED_RX: AtomicBool = AtomicBool::new(false);
 static LOGGED_RX_IDLE: AtomicBool = AtomicBool::new(false);
@@ -268,7 +285,39 @@ pub fn mmio_read(gpa: u64, size: u8) -> u64 {
         let i = (off - OFF_DEVICE) as usize;
         return u64::from(mac[i]);
     }
+    if off == OFF_DEVICE + DEVCFG_STATUS_OFF {
+        return u64::from(link_status_word()) & if size == 1 { 0xff } else { 0xffff };
+    }
+    if off == OFF_DEVICE + DEVCFG_STATUS_OFF + 1 {
+        return u64::from(link_status_word() >> 8);
+    }
     0
+}
+
+/// `virtio_net_config.status`: `VIRTIO_NET_S_LINK_UP` while the guest LAN
+/// port has carrier (or is not yet driven, see `host_link::guest_carrier`).
+pub fn link_status_word() -> u16 {
+    if crate::mgmt::host_link::guest_carrier() {
+        VIRTIO_NET_S_LINK_UP
+    } else {
+        0
+    }
+}
+
+/// The `:39` link flipped while a Start is armed: mark a config change so
+/// the driver re-reads `status` and moves the carrier. The interrupt is
+/// raised on the next VM exit like a TX completion.
+pub fn note_carrier_change() {
+    if armed_start().is_none() {
+        return;
+    }
+    with_net(|n| {
+        n.cfg_gen = n.cfg_gen.wrapping_add(1);
+        if n.status & STATUS_DRIVER_OK != 0 {
+            n.isr |= ISR_CONFIG;
+            CFG_IRQ_ARM.store(1, Ordering::Release);
+        }
+    });
 }
 
 pub fn mmio_write(gpa: u64, size: u8, val: u64) {
@@ -383,6 +432,7 @@ fn common_byte(off: u16) -> u8 {
             0x12 => 2,
             0x13 => 0,
             0x14 => n.status,
+            0x15 => n.cfg_gen,
             0x16 => n.qsel as u8,
             0x17 => (n.qsel >> 8) as u8,
             0x18 => QSIZE as u8,
@@ -646,7 +696,9 @@ fn drain_one(translate: &impl Fn(u64) -> Option<u64>) -> bool {
 /// already run, so the raise happens on the following exit.
 pub fn raise_deferred_tx_irq(now: u64) {
     let _ = now;
-    if TX_IRQ_ARM.swap(0, Ordering::AcqRel) == 1 {
+    let tx = TX_IRQ_ARM.swap(0, Ordering::AcqRel) == 1;
+    let cfg = CFG_IRQ_ARM.swap(0, Ordering::AcqRel) == 1;
+    if tx || cfg {
         crate::devices::guest_irq::raise_virtio();
     }
 }
@@ -1074,6 +1126,112 @@ mod guest_virtio_net_test {
             arm.contains("MAILBOX_RCV_STD_PROD_IDX"),
             "function 1 must post RX buffers or a reply is never DMA'd"
         );
+    }
+
+    #[test]
+    fn carrier_follows_the_guest_lan_port_once_it_is_driven() {
+        // ADR-021 D6. Iron `d7e2e24f`: the guest kept `UP` on a dark `:39`
+        // because the device never offered `F_STATUS`. Now the status word
+        // follows `host_link`, and a flip raises a config-change interrupt.
+        use crate::mgmt::host_link::{observe, reset_for_test, LinkSample};
+        let _guard = lock();
+        clear_panel_for_test();
+        clear_start_for_test();
+        reset_for_test();
+        crate::devices::guest_irq::reset();
+        // Linux owns the VMCS; IOAPIC pin for the virtio GSI is unmasked.
+        crate::devices::guest_irq::note_linux_dev_irq();
+        crate::devices::guest_irq::ioapic_write(
+            0,
+            0x10 + 2 * u32::from(crate::devices::guest_irq::VIRTIO_GSI),
+        );
+        crate::devices::guest_irq::ioapic_write(0x10, 0x51);
+        let off = 8u64 * 1024 * 1024 * 1024;
+        panel_save(
+            0,
+            NicDraft {
+                spare_off: off,
+                mode: NicMode::Manual,
+                prefix: 24,
+                ipv4: [10, 99, 99, 145],
+                gateway: [10, 99, 99, 1],
+                dns: [1, 1, 1, 1],
+            },
+        )
+        .unwrap();
+        on_accepted_start(off);
+        let bar = u64::from(GUEST_NET_BAR);
+        mmio_write(bar, 4, 0);
+        let feat0 = mmio_read(bar + 0x04, 4);
+        assert_ne!(feat0 & (1 << 16), 0, "VIRTIO_NET_F_STATUS offered");
+        assert_ne!(feat0 & (1 << 5), 0, "VIRTIO_NET_F_MAC still offered");
+        let status = bar + u64::from(OFF_DEVICE) + u64::from(DEVCFG_STATUS_OFF);
+        let gen = bar + 0x15;
+        // Never sampled: optimistic, so the guest's first frame can arm `:39`.
+        assert_eq!(mmio_read(status, 2), 1);
+        // Sampled before the arm (firmware-held, `driven=false`): still up.
+        let dark = LinkSample {
+            up: false,
+            mbps: 0,
+            full_duplex: false,
+            bmsr: 0x7949,
+            driven: false,
+        };
+        assert!(observe(1, [0xb0, 0x26, 0x28, 0x5c, 0x5a, 0x39], dark).is_none());
+        assert_eq!(mmio_read(status, 2), 1);
+        let gen0 = mmio_read(gen, 1);
+        // Driven and up: carrier.
+        let lit = LinkSample {
+            up: true,
+            mbps: 1000,
+            full_duplex: true,
+            bmsr: 0x796d,
+            driven: true,
+        };
+        let change = observe(1, [0; 6], lit).expect("down→up is a change");
+        assert_eq!(change.mbps, 1000);
+        assert_eq!(mmio_read(status, 2), 1);
+        assert_eq!(mmio_read(status, 1), 1);
+        assert_eq!(mmio_read(status + 1, 1), 0);
+        // Driven and dark: NO-CARRIER. A flip before DRIVER_OK bumps the
+        // generation but raises nothing (the driver is not listening yet).
+        mmio_write(bar + 0x14, 1, 0);
+        let dark_driven = LinkSample { driven: true, ..dark };
+        assert!(observe(1, [0; 6], dark_driven).is_some());
+        note_carrier_change();
+        assert_eq!(mmio_read(status, 2), 0);
+        assert_eq!(mmio_read(gen, 1), (gen0 + 1) & 0xff);
+        assert_eq!(mmio_read(bar + 0x100, 1), 0, "no ISR before DRIVER_OK");
+        raise_deferred_tx_irq(0);
+        assert!(crate::devices::guest_irq::take_inject_vector().is_none());
+        // After DRIVER_OK a flip is a config interrupt on the next exit.
+        mmio_write(bar + 0x14, 1, u64::from(STATUS_DRIVER_OK));
+        assert!(observe(1, [0; 6], lit).is_some());
+        note_carrier_change();
+        assert_eq!(mmio_read(status, 2), 1);
+        assert_eq!(mmio_read(gen, 1), (gen0 + 2) & 0xff);
+        raise_deferred_tx_irq(0);
+        assert_eq!(
+            crate::devices::guest_irq::take_inject_vector(),
+            Some(0x51),
+            "virtio interrupt for the config change"
+        );
+        assert_eq!(mmio_read(bar + 0x100, 1), u64::from(ISR_CONFIG));
+        assert_eq!(mmio_read(bar + 0x100, 1), 0, "ISR clears on read");
+        // The sampler calls in here when function 1 flips (`report_link`).
+        let report = include_str!("../mgmt/bcm5720_mmio.rs")
+            .split_once("fn report_link")
+            .expect("report_link")
+            .1
+            .split_once("egress_say(\"boot: D5 link lom=\")")
+            .expect("say")
+            .0;
+        assert!(report.contains("note_carrier_change()"));
+        assert!(report.contains("c.func == 1"));
+        reset_for_test();
+        crate::devices::guest_irq::reset();
+        clear_panel_for_test();
+        clear_start_for_test();
     }
 
     #[test]

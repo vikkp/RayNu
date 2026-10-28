@@ -405,6 +405,14 @@ pub enum AuditEvent {
     GuestNicDetached {
         spare_off: u64,
     },
+    /// A LOM port's physical link flipped (ADR-021 D5). `func` is the
+    /// BCM5720 PCI function (0 = SPA port, LOM 3; 1 = guest LAN, LOM 4).
+    /// `up` 1 = link, 0 = dark. `mbps` is the negotiated speed when up.
+    HostLinkChanged {
+        func: u8,
+        up: u8,
+        mbps: u16,
+    },
 }
 
 /// One sealed audit record in the hash chain.
@@ -624,6 +632,7 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::PercSpaChoice { .. } => 75,
         AuditEvent::GuestNicSaved { .. } => 76,
         AuditEvent::GuestNicDetached { .. } => 77,
+        AuditEvent::HostLinkChanged { .. } => 78,
     }
 }
 
@@ -1156,6 +1165,13 @@ fn mirror_audit_to_com1(event: AuditEvent) {
         AuditEvent::GuestNicDetached { spare_off } => {
             serial::write_str("RAYNU-V-AUDIT: GuestNicDetached off=");
             write_u64(spare_off);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::HostLinkChanged { func, up, mbps } => {
+            serial::write_str("RAYNU-V-AUDIT: HostLinkChanged func=");
+            write_u32(u32::from(func));
+            serial::write_str(if up != 0 { " up=1 mbps=" } else { " up=0 mbps=" });
+            write_u32(u32::from(mbps));
             serial::write_byte(b'\n');
         }
         AuditEvent::FrameAllocated { .. } | AuditEvent::FrameFreed { .. } => {}

@@ -325,6 +325,7 @@ pub mod fault;
 pub mod guest_fw;
 pub mod guest_image;
 pub mod ha;
+pub mod host_link;
 pub mod host_nic;
 pub mod host_nic_coexist;
 #[cfg(feature = "uefi-bin")]

@@ -8,8 +8,8 @@ use super::{
     pick_bcm5720_pci, pick_bcm5720_try_order, ring_idx, rx_bd_packet_len, rx_dump_is_interesting,
     rx_return_pending, skip_bmcr_reset, skip_coreclk_reset, skip_http_listen_without_lstatus,
     station_mac, Bcm5720PickReason, BCM5720_DEVICE, BCM5720_VENDOR, ETHERTYPE_ARP, ETH_FCS_LEN,
-    egress_link_poll_due, egress_phy_plan, egress_wire, EgressPhyPlan, EgressWire,
-    EGRESS_LINK_POLL_TSC, FRAME_MAX, RING, RING_MASK, RX_LEN_MAX_HW,
+    egress_phy_plan, egress_wire, EgressPhyPlan, EgressWire,
+    FRAME_MAX, RING, RING_MASK, RX_LEN_MAX_HW,
 };
 
 /// R640 dual-port BCM5720 from COM2: func 0 = unused jack, func 1 = SNP / LAN.
@@ -536,12 +536,7 @@ fn egress_phy_plan_brings_a_dark_function_1_link_up_without_touching_a_live_one(
     assert_eq!(egress_phy_plan(0x7949, 0x1940), EgressPhyPlan::ClearThenRestart, "PDOWN");
     assert_eq!(egress_phy_plan(0x7949, 0x1540), EgressPhyPlan::ClearThenRestart, "ISOLATE");
     assert_eq!(egress_phy_plan(0x7949, 0x0000), EgressPhyPlan::Restart, "AN off, no link");
-    // The link poll is rate limited and stops once up.
-    assert!(egress_link_poll_due(false, 0, 123), "first poll at once");
-    assert!(!egress_link_poll_due(false, 1000, 1000 + EGRESS_LINK_POLL_TSC - 1));
-    assert!(egress_link_poll_due(false, 1000, 1000 + EGRESS_LINK_POLL_TSC));
-    assert!(!egress_link_poll_due(true, 0, 0), "never once up");
-    assert!(!egress_link_poll_due(true, 1000, u64::MAX));
+    // Link polling moved to host_link::poll_due (both directions, both ports).
     // Host builds have no function 1.
     assert_eq!(egress_wire(), EgressWire::default());
     assert!(!egress_wire().armed);

@@ -1472,20 +1472,6 @@ pub fn egress_phy_plan(bmsr: u16, bmcr: u16) -> EgressPhyPlan {
     }
 }
 
-/// Poll the `:39` link no more often than this (TSC ticks at the 2.1 GHz
-/// fallback ≈ 500 ms). One MDIO read per poll, not one per VM exit.
-pub const EGRESS_LINK_POLL_TSC: u64 = 1_050_000_000;
-
-/// Whether an exit at `now` should poll the `:39` link again.
-///
-/// INVARIANTS:
-/// - Never while the link is already up
-/// - First poll happens at once (`last == 0`)
-/// - Then at most once per [`EGRESS_LINK_POLL_TSC`]
-pub fn egress_link_poll_due(link_up: bool, last: u64, now: u64) -> bool {
-    !link_up && (last == 0 || now.wrapping_sub(last) >= EGRESS_LINK_POLL_TSC)
-}
-
 /// Function-1 wire view for the M8.9 post-TX trace and the Stop line.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct EgressWire {
@@ -1514,7 +1500,7 @@ pub fn egress_wire() -> EgressWire {
     {
         // SAFETY: BSP trace path; function-1 BAR0 is identity-mapped MMIO
         // and reads here are status/statistics only.
-        // KANI-TARGET: egress_phy_plan / egress_link_poll_due (host).
+        // KANI-TARGET: egress_phy_plan / host_link::poll_due (host).
         return unsafe { egress_wire_uefi() };
     }
     #[cfg(not(feature = "uefi-bin"))]
@@ -1656,26 +1642,211 @@ fn egress_dec_u16(n: u16) {
     }
 }
 
-/// Per-exit hook (rate limited): once the `:39` link comes up after the
-/// AN restart, set the MAC port mode for it. Nothing to do once up.
+/// Per-exit hook (rate limited): follow the `:39` link both ways. When it
+/// comes up (after the AN restart, or a cable back in) set the MAC port
+/// mode for the negotiated speed; when it goes dark, say so. The sample
+/// lands in [`crate::mgmt::host_link`] (D5 page row, D6 guest carrier).
+///
+/// Iron `d7e2e24f`–`02e0acba` polled only while down; a cable pulled
+/// after the link was up was never seen (ADR-021 D5: iDRAC showed port 4
+/// Down, the page showed nothing).
 #[cfg(feature = "uefi-bin")]
 unsafe fn egress_link_tick(mmio: u64) {
     let now = crate::arch::cpu::rdtsc();
-    if !egress_link_poll_due(
-        EGRESS_LINK_UP.load(Ordering::Acquire),
-        EGRESS_LINK_LAST_POLL.load(Ordering::Acquire),
-        now,
-    ) {
+    if !crate::mgmt::host_link::poll_due(EGRESS_LINK_LAST_POLL.load(Ordering::Acquire), now) {
         return;
     }
     EGRESS_LINK_LAST_POLL.store(now, Ordering::Release);
     let phy = egress_phy_addr(mmio);
-    let _ = phy_read(mmio, phy, MII_BMSR);
-    let bmsr = phy_read(mmio, phy, MII_BMSR).unwrap_or(0);
-    if bmsr_link_up(bmsr) {
-        EGRESS_LINK_UP.store(true, Ordering::Release);
+    let Some(s) = sample_phy(mmio, phy, true) else {
+        return;
+    };
+    let was_up = EGRESS_LINK_UP.swap(s.up, Ordering::AcqRel);
+    if s.up && !was_up {
         egress_adjust_mac(mmio, phy);
     }
+    let mac = EGRESS_NIC.as_ref().map(|n| n.mac).unwrap_or([0; 6]);
+    report_link(crate::mgmt::host_link::observe(1, mac, s));
+}
+
+/// One PHY read for the link table: `BMSR` twice (the first read clears
+/// the latched link-down bit), then `LPA` + `1000BASE-T status` for the
+/// speed when up. `None` when MDIO timed out (the port is not ours yet).
+#[cfg(feature = "uefi-bin")]
+unsafe fn sample_phy(mmio: u64, phy: u32, driven: bool) -> Option<crate::mgmt::host_link::LinkSample> {
+    let _ = phy_read(mmio, phy, MII_BMSR)?;
+    let bmsr = phy_read(mmio, phy, MII_BMSR)?;
+    let up = bmsr_link_up(bmsr);
+    let (mbps, full_duplex) = if up {
+        match (
+            phy_read(mmio, phy, MII_LPA),
+            phy_read(mmio, phy, MII_STAT1000),
+        ) {
+            (Some(lpa), Some(stat1000)) => decode_phy_link(lpa, stat1000),
+            _ => (0, false),
+        }
+    } else {
+        (0, false)
+    };
+    Some(crate::mgmt::host_link::LinkSample {
+        up,
+        mbps,
+        full_duplex,
+        bmsr,
+        driven,
+    })
+}
+
+/// A link flip: one audit record and one COM2 line. Runs in the exit path
+/// too, so the line takes the nowait route.
+#[cfg(feature = "uefi-bin")]
+fn report_link(change: Option<crate::mgmt::host_link::LinkChange>) {
+    let Some(c) = change else {
+        return;
+    };
+    crate::audit_log!(crate::audit::AuditEvent::HostLinkChanged {
+        func: c.func,
+        up: u8::from(c.up),
+        mbps: c.mbps,
+    });
+    if c.func == 1 {
+        // ADR-021 D6: the guest's virtio-net carrier follows this port.
+        crate::devices::guest_virtio_net::note_carrier_change();
+    }
+    egress_say("boot: D5 link lom=");
+    egress_dec_u16(u16::from(crate::mgmt::host_link::LOM_OF_FUNC0.saturating_add(c.func)));
+    egress_say(" func=");
+    egress_dec_u16(u16::from(c.func));
+    if c.up {
+        egress_say(" up mbps=");
+        egress_dec_u16(c.mbps);
+        egress_say("\n");
+    } else {
+        egress_say(" down\n");
+    }
+}
+
+#[cfg(feature = "uefi-bin")]
+static LINK_LAST_POLL: AtomicU64 = AtomicU64::new(0);
+/// Function-1 BAR for the pre-arm peek: 0 = not scanned, `u64::MAX` = none.
+#[cfg(feature = "uefi-bin")]
+static LINK_PEEK_BAR1: AtomicU64 = AtomicU64::new(0);
+#[cfg(feature = "uefi-bin")]
+static LINK_PEEK_MAC1: AtomicU64 = AtomicU64::new(0);
+/// Polls to skip after a pre-arm MDIO timeout on the firmware-held port.
+#[cfg(feature = "uefi-bin")]
+static LINK_PEEK_BACKOFF: AtomicU32 = AtomicU32::new(0);
+
+/// D5 sampler for the standing SPA tick: function 0 (the SPA port) from
+/// the armed NIC, and function 1 before the egress arm from a read-only
+/// peek of its PHY (`driven=false`). After the arm, [`egress_link_tick`]
+/// owns function 1. Rate limited to [`crate::mgmt::host_link::LINK_POLL_TSC`].
+/// Host builds are a no-op.
+pub fn host_link_tick() {
+    #[cfg(feature = "uefi-bin")]
+    {
+        // SAFETY: BSP-only (standing-SPA tick or Linux exit path); BAR0s are
+        // identity-mapped MMIO and every access here is an MDIO read.
+        // KANI-TARGET: host_link::observe / carrier_rule (host).
+        unsafe { host_link_tick_uefi() }
+    }
+}
+
+#[cfg(feature = "uefi-bin")]
+unsafe fn host_link_tick_uefi() {
+    let now = crate::arch::cpu::rdtsc();
+    if !crate::mgmt::host_link::poll_due(LINK_LAST_POLL.load(Ordering::Acquire), now) {
+        return;
+    }
+    LINK_LAST_POLL.store(now, Ordering::Release);
+    if let Some((mmio, mac)) = with_nic(|n, _| (n.mmio, n.mac)) {
+        let phy = phy_addr_5717_plus(0, mmio_read(mmio, SG_DIG_STATUS));
+        if let Some(s) = sample_phy(mmio, phy, true) {
+            PHY_LINK_UP.store(s.up, Ordering::Relaxed);
+            report_link(crate::mgmt::host_link::observe(0, mac, s));
+        }
+    }
+    if let Some(n) = EGRESS_NIC.as_ref() {
+        egress_link_tick(n.mmio);
+        return;
+    }
+    if LINK_PEEK_BACKOFF.load(Ordering::Relaxed) > 0 {
+        LINK_PEEK_BACKOFF.fetch_sub(1, Ordering::Relaxed);
+        return;
+    }
+    let mut bar = LINK_PEEK_BAR1.load(Ordering::Acquire);
+    if bar == 0 {
+        let found = find_function1();
+        bar = found.map(|(b, _)| b).unwrap_or(u64::MAX);
+        LINK_PEEK_BAR1.store(bar, Ordering::Release);
+        LINK_PEEK_MAC1.store(
+            found.map(|(_, m)| pack_mac(m)).unwrap_or(0),
+            Ordering::Release,
+        );
+    }
+    if bar == u64::MAX {
+        return;
+    }
+    let phy = phy_addr_5717_plus(1, mmio_read(bar, SG_DIG_STATUS));
+    match sample_phy(bar, phy, false) {
+        Some(s) => report_link(crate::mgmt::host_link::observe(
+            1,
+            unpack_mac(LINK_PEEK_MAC1.load(Ordering::Acquire)),
+            s,
+        )),
+        // Firmware holds the MI interface: five MDIO timeouts cost 25 ms.
+        // Come back in ten seconds, not on the next tick.
+        None => LINK_PEEK_BACKOFF.store(20, Ordering::Relaxed),
+    }
+}
+
+/// The BCM5720 function 1 on this chassis: its BAR0 and station MAC.
+/// Memory decode is enabled; nothing else is written. Same walk as
+/// [`arm_egress`], which still owns the reset and the rings.
+#[cfg(feature = "uefi-bin")]
+unsafe fn find_function1() -> Option<(u64, [u8; 6])> {
+    let mut found = None;
+    for bus in 0u8..=15 {
+        for dev in 0u8..32 {
+            for func in 0u8..2 {
+                let id = pci_read32(bus, dev, func, 0);
+                if id == 0xFFFF_FFFF {
+                    if func == 0 {
+                        break;
+                    }
+                    continue;
+                }
+                if func != 1 || !pci_id_is_bcm5720(id as u16, (id >> 16) as u16) {
+                    continue;
+                }
+                let bar = (pci_read32(bus, dev, func, 0x10) as u64) & !0xF;
+                if bar == 0 {
+                    continue;
+                }
+                enable_mem(bus, dev, func);
+                found = Some((bar, peek_mac(bar, bus, dev, func)));
+            }
+        }
+    }
+    found
+}
+
+#[cfg(feature = "uefi-bin")]
+fn pack_mac(mac: [u8; 6]) -> u64 {
+    let mut v = 0u64;
+    for (i, b) in mac.iter().enumerate() {
+        v |= u64::from(*b) << (8 * i);
+    }
+    v
+}
+
+#[cfg(feature = "uefi-bin")]
+fn unpack_mac(v: u64) -> [u8; 6] {
+    let mut mac = [0u8; 6];
+    for (i, b) in mac.iter_mut().enumerate() {
+        *b = (v >> (8 * i)) as u8;
+    }
+    mac
 }
 #[cfg(feature = "uefi-bin")]
 static EGRESS_SENT_LOGGED: AtomicBool = AtomicBool::new(false);
