@@ -559,7 +559,7 @@
           "status": "in flight",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "`cursor/wave-2-link-state-50bb`: `guest_egress::discover` picks the SPA's pair partner by bus/dev; `arm_egress` prints `boot: M8.9 egress discovered pci=.. mac=.. constant=:39 match=yes` or `match=no`. Not captured on `8df4407d` (COM2 dropped before arm time; 4 KiB ring rolled). The arm still holds on `EGRESS_PHY_MAC`; the constant goes after iron prints `match=yes`",
+          "note": "`cursor/wave-2-link-state-50bb`. Discovery lived on `8df4407d`: COM2 `boot: M8.9 egress discovered pci=01:00.01 mac=b0:26:28:5c:5a:39 constant=:39 match=yes` at arm time (`guest_egress::discover` from the SPA's bus/dev). The arm still holds on `EGRESS_PHY_MAC`; the row closes when the arm and the port checks use the discovered port and one boot arms `:39` through it",
           "wave": "2"
         },
         {
