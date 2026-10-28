@@ -1,4 +1,4 @@
-# 2026-10-28 — `8df4407d`: one cable pull on port 4 (ADR-021 D6 lived; D5 page half lived, audit mirror hushed; D4 line not captured)
+# 2026-10-28 — `8df4407d`: one cable pull on port 4 (ADR-021 D6 lived; D5 page half lived, audit mirror hushed; D4 discovery `match=yes`)
 
 **EFI:** `8df4407d3630` (PR #418, CI push run `40612757544`, SHA256 `83d41c4dc36a12efa0740c1dbf1e1ec5bf8f544995d7ec5bc57215c7cce61f87`, 2,490,880 bytes).
 **Flash:** Cruzer, F11 one-shot. Ubuntu 26.04 standing on UBUNTU0. Guest: the 10 GiB tail on RAYNU-SPARE (`c3a70e62` install, kernel `7.0.0-38`), vNIC Saved on the Guests row (`10.99.99.200/24`), then Start.
@@ -50,9 +50,24 @@ The `=== host UART ===` ring holds the two `boot: D5 link` lines and **no** `RAY
 
 The same hush applies to every other audit mirror that fires under a running guest (`GuestNicDetached`, `VmStopped`, …). Not changed here; noted for the catalog.
 
-## What was not captured: the D4 line
+## The D4 line (found later in the same COM2 session)
 
-`boot: M8.9 egress discovered pci=… mac=… constant=:39 match=…` is printed once, at arm time (the guest's first frame). The COM2 session had dropped before that and the 4 KiB host ring had rolled past it by the time Activity was read. **D4 stays in flight**; a plain boot with COM2 attached from power-on captures it. No pull needed.
+```
+boot: M8.9 egress arm (no phylock, SPA DMA stays)
+boot: M8.9 egress discovered pci=01:00.01 mac=b0:26:28:5c:5a:39 constant=:39 match=yes
+boot: M8.9 egress :39 ape=yes ape-evt=sent (driver START on function 1; phylock stays with iDRAC)
+boot: HOST-NIC BCM5720 reset…
+boot: HOST-NIC BCM5720 ape-grc=yes pci-restore=64
+boot: M8.9 egress :39 fw-magic=yes
+boot: M8.9 egress :39 grc=bswap+wswap memarb=1 bufmgr=1
+boot: M8.9 egress :39 phy bmsr=796d bmcr=1100 link=up
+boot: M8.9 egress :39 link=up speed=100 duplex=full
+boot: M8.9 dhcp discover leaves :39
+boot: M8.9 egress rings armed pci=01:00.01 phylock=no
+boot: M8.9 guest frame leaves :39 len=86
+```
+
+`guest_egress::discover` named the SPA's pair partner from the SPA's own PCI position (`01:00.0` → `01:00.1`), read its station MAC, and it matched the lab constant. **Discovery lived.** The function number prints as `.01` (two hex digits); cosmetic. **D4 stays in flight** until the arm and the port checks use the discovered port instead of `EGRESS_PHY_MAC` and one boot arms `:39` through that path.
 
 ## Not claimed
 
