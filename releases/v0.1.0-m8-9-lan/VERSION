@@ -1,0 +1,6 @@
+0.1.0-m8-9-lan
+efi_source 0d865c7fcb0a53ef95039463c8d40ff1c7707db5
+ci 40603110937
+com2 build: sha=0d865c7fcb0a
+lived guest took the SPA-saved address by itself (10.99.99.200/24), SSH from the LAN reached raynusrv2
+not_github_latest

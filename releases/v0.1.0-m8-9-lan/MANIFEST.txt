@@ -1,0 +1,16 @@
+RayNu-V EFI release kit
+Version: 0.1.0-m8-9-lan
+EFI source: 0d865c7fcb0a53ef95039463c8d40ff1c7707db5
+CI: 40603110937
+COM2: build: sha=0d865c7fcb0a
+Lived: boot: M8.9 smbios type11 network.network.10-raynu table=345 file=103 + unit-dropin sysinit.target~10-raynu, then the guest's networkd took 10.99.99.200/24 from /run/systemd/network/10-raynu.network and SSH from the LAN reached raynusrv2
+Not GitHub Latest. Everest Latest remains v0.1.0-everest-closed.
+Current rollback for a wave 2 flash. v0.1.0-m8-8-ubuntu stays the older M8.8 pin.
+Contents:
+  r640-hypervisor.efi
+  r640-hypervisor.efi.sha256
+  VERSION
+  SHA256SUMS
+  MANIFEST.txt
+  README.md
+Flash this file. Do not rebuild and expect the same COM2 stamp.

@@ -501,7 +501,11 @@ qemu-system-x86_64 \
 
 ### Deploy to R640
 
-**M8.8 close rollback (current, for an M8.9 flash):** [`v0.1.0-m8-8-ubuntu`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-m8-8-ubuntu)
+**M8.9 close rollback (current, for a wave 2 flash):** [`v0.1.0-m8-9-lan`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-m8-9-lan)
+→ EFI `0d865c7fcb0a53ef95039463c8d40ff1c7707db5` / CI `--run 40603110937` /
+SHA256 `df6fc3465cecf1eaf058d5c8e675501827c16eb55e7b2c9758bc5e68326ad91b`.
+COM2 must read `build: sha=0d865c7fcb0a`. Not GitHub Latest.
+**M8.8 close rollback (older, guest without a LAN):** [`v0.1.0-m8-8-ubuntu`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-m8-8-ubuntu)
 → EFI `c3a70e623aec376e548d2553932ce3fe54026468` / CI `--run 38454398693` /
 SHA256 `08ef31ba87136577102ac378d8e0a512327994e8794c41c64444f5be5f8812c4`.
 COM2 must read `build: sha=c3a70e623aec`. Not GitHub Latest.

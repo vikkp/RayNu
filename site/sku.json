@@ -1178,7 +1178,7 @@
           "status": "lived",
           "ships": "S1",
           "ref": "ADR-018",
-          "note": "`v0.1.0-everest-closed` (`f72b4276`), `v0.1.0-m8-8-ubuntu` (`c3a70e62`)",
+          "note": "`v0.1.0-everest-closed` (`f72b4276`), `v0.1.0-m8-8-ubuntu` (`c3a70e62`), `v0.1.0-m8-9-lan` (`0d865c7f`)",
           "wave": "0"
         },
         {

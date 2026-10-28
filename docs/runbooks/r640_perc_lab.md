@@ -180,7 +180,8 @@ GitHub Latest stays the Everest loop. Do not move Latest.
 
 | Pin | When to use it | Identity |
 |-----|----------------|----------|
-| `v0.1.0-m8-8-ubuntu` (not Latest) | M8.8 close. Current rollback for an M8.9 flash | `c3a70e623aec` / CI `38454398693` / EFI 2,404,352 bytes / SHA256 `08ef31ba87136577102ac378d8e0a512327994e8794c41c64444f5be5f8812c4` / COM2 `build: sha=c3a70e623aec` |
+| `v0.1.0-m8-9-lan` (not Latest) | M8.9 close. Guest on the customer LAN from the SPA-saved address. Current rollback for a wave 2 flash | `0d865c7fcb0a` / CI `40603110937` / EFI 2,485,760 bytes / SHA256 `df6fc3465cecf1eaf058d5c8e675501827c16eb55e7b2c9758bc5e68326ad91b` / COM2 `build: sha=0d865c7fcb0a` |
+| `v0.1.0-m8-8-ubuntu` (not Latest) | M8.8 close. Older pin; the Ubuntu disk without a guest LAN | `c3a70e623aec` / CI `38454398693` / EFI 2,404,352 bytes / SHA256 `08ef31ba87136577102ac378d8e0a512327994e8794c41c64444f5be5f8812c4` / COM2 `build: sha=c3a70e623aec` |
 | `v0.1.0-m8-perc-spa` (not Latest) | Older lived SPA choice on the 8 GiB spare window | `8ad2ac89125e` / CI `36362775808` / EFI 2,088,960 bytes / SHA256 `6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849` / COM2 `build: sha=8ad2ac89125e` |
 | `v0.1.0-everest-closed` (Latest) | Original ISO loop on leftover DRAM | `f72b4276` / CI `34552377351` / SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc` / COM2 `build: sha=f72b4276d198` |
 | `v0.1.0-m8-a4s` (not Latest) | Standing SPA rollback, no keyboard, no power button | `1f33eeda72f9` / CI `36137732145` / SHA256 `5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693` |

@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-9-d7-lived-wave-1-closed |
-| Summary | **Iron `0d865c7f`: the SPA-saved address reached the guest by itself. ADR-021 D7 lived; M8.9 and wave 1 closed.** SMBIOS Type 11 credentials (`network.network.10-raynu` + a `sysinit.target` drop-in wanting the generator Ubuntu ships disabled) → `Installed /run/systemd/network/10-raynu.network from credential.` → `enp0s5` `routable (configured)` on `10.99.99.200/24` gw `10.99.99.1` DNS `1.1.1.1` with nothing typed → `ssh vikkp@10.99.99.200` from the Mac → `raynusrv2`. Guest disk not written. **Bar A 92→94. Bar B 70→72. Overall 78→80. SKU 92→94.** PERC 86 held (no new VD I/O). Unmodified 45 held. Months held. Previous: **Iron `d588148f`: SMBIOS Type 11 credential imported by PID 1 (`network.network.10-raynu secure 103B`, body identical); Ubuntu ships `systemd-network-generator.service` disabled, so no `.network` and `enp0s5` stayed unmanaged.** Next EFI adds a `systemd.unit-dropin.sysinit.target~10-raynu` credential (`Wants=systemd-network-generator.service`, runtime unit dir). Disk not written. Not D7. Bar A 92. Bar B 70. Overall 78. |
+| Commit | m8-9-lan-release |
+| Summary | **Rollback pin `v0.1.0-m8-9-lan`.** The CI EFI from `0d865c7fcb0a` (run `40603110937`) that closed M8.9 — guest on the customer LAN from the SPA-saved address — is now an in-tree kit and a GitHub tag. Not Latest. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
-| LOI impact | Bar A 92→94 (M8.9 guest LAN with the SPA-saved address, lived). Bar B 70→72 (the PERC-tail guest now has a LAN address from the SPA). SKU 92→94. perc 86 held. unmodified 45 held. Overall 78→80. Months A 0.25 held (A5 parked). Months B 1.25 held (whole VD and auth remain). |
-| Gates touched | ADR-021 **D7 lived** (`0d865c7f`; docs/evidence/r640/2026-10-27-0d865c7f-guest-address-from-spa-d7-ok.md). Wave 1 closed; wave 2 current. M8.9 closed. ADR-021 D7 in flight (`d588148f` evidence: docs/evidence/r640/2026-10-27-d588148f-smbios-credential-imported-generator-disabled.md). ADR-021 D7 in flight (`cursor/m8-9-d7-guest-address-50bb`): SMBIOS Type 11 credential, `raynu_f/smbios.rs`, `publish_smbios`, `network_credential`. Previous: ADR-021 D3 lived, D8 lived (`02e0acba`); D7 in flight. Previous: `arm_egress` on `01:00.1`: APE START, `chip_reset_at`, `enable_core_blocks`, rings, MAC, DMA, HOSTCC; nowait COM2. |
+| LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. |
+| Gates touched | Release kit only. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-9-lan`; older `v0.1.0-m8-8-ubuntu`. |
 
 ---
 
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-10-27 | m8-9-lan-release | 94 | 72 | **Rollback pin `v0.1.0-m8-9-lan`.** CI `40603110937`, `build: sha=0d865c7fcb0a`. M8.9 close, not Latest. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-27 | m8-9-d7-lived-wave-1-closed | 94 | 72 | **Iron `0d865c7f`: SPA-saved address on `enp0s5` with nothing typed (`Installed /run/systemd/network/10-raynu.network from credential.`, `routable (configured)` `10.99.99.200/24`); `ssh vikkp@10.99.99.200` from the Mac.** ADR-021 D7 lived; M8.9 and wave 1 closed. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-27 | m8-9-d7-generator-dropin | 92 | 70 | **Iron `d588148f`: credential imported by PID 1 (103 B, body identical); Ubuntu ships the network generator disabled, so the address did not land.** Next EFI adds a `sysinit.target` drop-in credential that wants it. Not D7. Scores held. Bar A 92. Bar B 70. Overall 78. PERC 86. Unmodified 45. SKU 92. |
 | 2026-10-27 | m8-9-d7-smbios-credential | 92 | 70 | **M8.9.5 / D7 host: saved address as a systemd credential in SMBIOS Type 11 (`network.network.10-raynu`) via `EFI_SMBIOS3_TABLE_GUID`.** Static `.network` on the guest MAC; disk not written. Host tests 890. Not lived; scores held until `enp0s5` comes up on the saved address by itself. Bar A 92. Bar B 70. Overall 78. PERC 86. Unmodified 45. SKU 92. |
@@ -402,13 +403,13 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 ```
 LOI:           NOT OPEN. Tracker born 2026-09-14.
-Bar A:         92% · 0.25 months · dedicated-box non-prod
-Bar B:         70% · 1.25 months · Ubuntu login on a 10 GiB spare tail (c3a70e62); whole VD still hidden
-Overall:       78% · confidence medium
-NOW:           SKU card is what a signature holds today. One dedicated box. Ubuntu on a 10 GiB tail. 33c9b141 reached vikkp. virtio_net returned -22. 4933dc61 is the EFI under test. No guest LAN. M8.9.6 stays open. Rollback v0.1.0-m8-8-ubuntu. Do not format UBUNTU0. The 2.9 TB VD is not this disk. A5 parked. Bar A 92. Bar B 70. Overall 78. perc 86. unmodified 45. SKU 92. months A 0.25. months B 1.25. docs/adr/ADR-019.md
-Open:          guest NIC · iron AUTH-OK (parked) · unmodified ISO without the serial amendment · the whole spare VD · cluster
+Bar A:         94% · 0.25 months · dedicated-box non-prod
+Bar B:         72% · 1.25 months · Ubuntu login on a 10 GiB spare tail (c3a70e62) with a LAN address from the SPA (0d865c7f); whole VD still hidden
+Overall:       80% · confidence medium
+NOW:           SKU card is what a signature holds today. One dedicated box. Ubuntu on a 10 GiB tail. M8.9 closed on 0d865c7f: the guest took the SPA-saved address by itself and SSH from the LAN reached raynusrv2. Pinned as v0.1.0-m8-9-lan (not Latest). Wave 2 is current (D5 iron thread). Save the vNIC before Start after any F11. Do not format UBUNTU0. The 2.9 TB VD is not this disk. A5 parked. Bar A 94. Bar B 72. Overall 80. perc 86. unmodified 45. SKU 94. months A 0.25. months B 1.25. docs/adr/ADR-019.md
+Open:          link state on the SPA (D5) · iron AUTH-OK (parked) · unmodified ISO without the serial amendment · the whole spare VD · cluster
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
-Rollback:      v0.1.0-m8-8-ubuntu → M8.8 close (COM2 sha=c3a70e623aec, CI 38454398693, SHA256 08ef31ba87136577102ac378d8e0a512327994e8794c41c64444f5be5f8812c4). v0.1.0-m8-perc-spa → older SPA choice (8ad2ac89125e, CI 36362775808). v0.1.0-m8-a4s → older standing SPA (1f33eeda72f9, CI 36137732145). v0.1.0-m8-a6 → keyboard + power-off (fd2ca12e, CI 36166108942), not Latest. Everest Latest stays v0.1.0-everest-closed (f72b4276).
+Rollback:      v0.1.0-m8-9-lan → M8.9 close (COM2 sha=0d865c7fcb0a, CI 40603110937, SHA256 df6fc3465cecf1eaf058d5c8e675501827c16eb55e7b2c9758bc5e68326ad91b). v0.1.0-m8-8-ubuntu → older M8.8 close (c3a70e623aec, CI 38454398693). v0.1.0-m8-perc-spa → older SPA choice (8ad2ac89125e, CI 36362775808). v0.1.0-m8-a4s → older standing SPA (1f33eeda72f9, CI 36137732145). v0.1.0-m8-a6 → keyboard + power-off (fd2ca12e, CI 36166108942), not Latest. Everest Latest stays v0.1.0-everest-closed (f72b4276).
 Sit:           Ubuntu is the OS. Do not setup-disk. Do not format the ~298 GB Toshiba. Identify disks by size, never by sdX.
 ```
 

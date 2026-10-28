@@ -76,4 +76,4 @@ raynusrv2
 
 ## Not claimed
 
-Not a DHCP client in the guest: the saved address is static for both NIC modes (ADR-013). Not auth (A5 parked). Not PERC fleet. Not GA. HDA stays 99. Rollback for an M8.9-era flash: this EFI is a candidate pin; until tagged, `v0.1.0-m8-8-ubuntu`.
+Not a DHCP client in the guest: the saved address is static for both NIC modes (ADR-013). Not auth (A5 parked). Not PERC fleet. Not GA. HDA stays 99. This EFI is pinned as `v0.1.0-m8-9-lan` (`releases/v0.1.0-m8-9-lan/`), the rollback for a wave 2 flash; `v0.1.0-m8-8-ubuntu` is the older pin.

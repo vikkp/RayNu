@@ -10,7 +10,20 @@ M8 is the polish table that used to read as “Everest residual.” It is **not*
 
 ## Iron rollback
 
-Four pins. GitHub Latest stays the Everest loop. The current rollback for an M8.9 flash is the M8.8 close. The PERC SPA pin is the older path. The standing-SPA pin is the older path back to `1f33eeda`. Do **not** treat an untagged tip as any of these pins.
+Five pins. GitHub Latest stays the Everest loop. The current rollback for a wave 2 flash is the M8.9 close. The M8.8 close is the older pin without a guest LAN. The PERC SPA pin is older still. The standing-SPA pin is the older path back to `1f33eeda`. Do **not** treat an untagged tip as any of these pins.
+
+### M8.9 close (`v0.1.0-m8-9-lan`)
+
+| Field | Value |
+|-------|-------|
+| GitHub | https://github.com/vikkp/RayNu/releases/tag/v0.1.0-m8-9-lan (not Latest) |
+| EFI source | `0d865c7fcb0a53ef95039463c8d40ff1c7707db5` |
+| CI | `--run 40603110937` · COM2 `build: sha=0d865c7fcb0a` |
+| EFI SHA256 | `df6fc3465cecf1eaf058d5c8e675501827c16eb55e7b2c9758bc5e68326ad91b` |
+| In-tree kit | `releases/v0.1.0-m8-9-lan/` |
+| Lived | `boot: M8.9 smbios type11 network.network.10-raynu table=345 file=103 + unit-dropin sysinit.target~10-raynu`, then the guest's networkd took `10.99.99.200/24` from the credential and SSH from the LAN reached `raynusrv2` |
+
+Flash the kit file to leave a wave 2 experiment. Save the vNIC on the Guests row before Start. Do not rebuild it and expect the same COM2 stamp.
 
 ### M8.8 close (`v0.1.0-m8-8-ubuntu`)
 
@@ -23,7 +36,7 @@ Four pins. GitHub Latest stays the Everest loop. The current rollback for an M8.
 | In-tree kit | `releases/v0.1.0-m8-8-ubuntu/` |
 | Lived | `vikkp@raynusrv2:~$`, then `boot: M8.8 library ISO cleared (signature sector only; disks unchanged)` |
 
-Flash the kit file to leave an M8.9 experiment. Do not rebuild it and expect the same COM2 stamp.
+Flash the kit file to return to the Ubuntu disk without a guest LAN. Do not rebuild it and expect the same COM2 stamp.
 
 ### PERC SPA choice (`v0.1.0-m8-perc-spa`)
 

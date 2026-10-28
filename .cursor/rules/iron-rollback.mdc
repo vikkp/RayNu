@@ -5,13 +5,28 @@ globs:
 alwaysApply: true
 ---
 
-# Iron rollback (four pins)
+# Iron rollback (five pins)
 
-You are working in **RayNu-V** (`vikkp/RayNu`). Mount Everest (M7) **closed on iron**. Next numbered work is **M8 operator product hardening** ([ADR-018](docs/adr/ADR-018.md), [docs/m8_plan.md](docs/m8_plan.md)). The current rollback for an M8.9 flash is `v0.1.0-m8-8-ubuntu`. **`v0.1.0-m8-perc-spa`** remains the older SPA-choice pin. **A4s** remains the older standing-SPA pin.
+You are working in **RayNu-V** (`vikkp/RayNu`). Mount Everest (M7) **closed on iron**. Next numbered work is **M8 operator product hardening** ([ADR-018](docs/adr/ADR-018.md), [docs/m8_plan.md](docs/m8_plan.md)); M8.9 closed on `0d865c7f` and ADR-021 wave 2 is current. The current rollback for a wave 2 flash is `v0.1.0-m8-9-lan`. **`v0.1.0-m8-8-ubuntu`** remains the older M8.8 pin. **`v0.1.0-m8-perc-spa`** remains the older SPA-choice pin. **A4s** remains the older standing-SPA pin.
+
+## Flash `v0.1.0-m8-9-lan` to return to the M8.9 close
+
+This is the rollback when a wave 2 EFI (D5 link state, D4 uplink discovery, D6 carrier) misbehaves. It is **not** GitHub Latest. COM2 on this file printed `boot: M8.9 smbios type11 network.network.10-raynu table=345 file=103 + unit-dropin sysinit.target~10-raynu (this boot only; disk unchanged)`; the guest then installed `/run/systemd/network/10-raynu.network` from the credential with nothing typed, `enp0s5` was routable on `10.99.99.200/24`, and SSH from the LAN reached `raynusrv2`.
+
+| Field | Value |
+|----|----|
+| GitHub | https://github.com/vikkp/RayNu/releases/tag/v0.1.0-m8-9-lan |
+| EFI source | `0d865c7fcb0a53ef95039463c8d40ff1c7707db5` |
+| CI | `--run 40603110937` · COM2 `build: sha=0d865c7fcb0a` |
+| EFI SHA256 | `df6fc3465cecf1eaf058d5c8e675501827c16eb55e7b2c9758bc5e68326ad91b` |
+| In-tree kit | `releases/v0.1.0-m8-9-lan/` |
+| Lived | SPA-saved address reached the guest by itself (D7); Ubuntu login on the 10 GiB tail; SSH from the LAN |
+
+Flash the kit file. A rebuild of a later commit will not stamp `0d865c7fcb0a`. After F11, Save the vNIC on the Guests row before Start; the NIC record is not on disk.
 
 ## Flash `v0.1.0-m8-8-ubuntu` to return to the M8.8 close
 
-This is the rollback when an M8.9 EFI misbehaves. It is **not** GitHub Latest. COM2 on this file reached `vikkp@raynusrv2:~$` and then `boot: M8.8 library ISO cleared (signature sector only; disks unchanged)`.
+This is the older rollback from before the guest had a LAN. It is **not** GitHub Latest. COM2 on this file reached `vikkp@raynusrv2:~$` and then `boot: M8.8 library ISO cleared (signature sector only; disks unchanged)`.
 
 | Field | Value |
 |-------|-------|
