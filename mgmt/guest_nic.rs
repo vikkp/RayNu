@@ -16,7 +16,10 @@ use crate::mgmt::megaraid::{classify_ld_bytes, LdClass, NIC_CATALOG_BYTES, SPARE
 
 /// SPA LOM `01:00.0`. A guest MAC must not be this.
 pub const SPA_MAC: [u8; 6] = [0xb0, 0x26, 0x28, 0x5c, 0x5a, 0x38];
-/// Guest-egress PHY `01:00.1`. A guest MAC must not be this either.
+/// This lab's guest-LAN PHY `01:00.1`. It does not choose the egress port
+/// (ADR-021 D4: `guest_egress::discover` does, from the SPA's position);
+/// it is kept so a minted guest MAC never collides with it, and as the
+/// test fixture for that port.
 pub const EGRESS_PHY_MAC: [u8; 6] = [0xb0, 0x26, 0x28, 0x5c, 0x5a, 0x39];
 
 const MAGIC: &[u8; 8] = b"RAYNUNIC";

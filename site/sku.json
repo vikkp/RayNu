@@ -559,7 +559,7 @@
           "status": "in flight",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "`cursor/wave-2-link-state-50bb`. Discovery lived on `8df4407d`: COM2 `boot: M8.9 egress discovered pci=01:00.01 mac=b0:26:28:5c:5a:39 constant=:39 match=yes` at arm time (`guest_egress::discover` from the SPA's bus/dev). The arm still holds on `EGRESS_PHY_MAC`; the row closes when the arm and the port checks use the discovered port and one boot arms `:39` through it",
+          "note": "`cursor/wave-2-link-state-50bb`. Discovery lived on `8df4407d`: COM2 `boot: M8.9 egress discovered pci=01:00.01 mac=b0:26:28:5c:5a:39 constant=:39 match=yes` at arm time (`guest_egress::discover` from the SPA's bus/dev). Constant gate removed after that boot: `init_bcm5720` records `guest_egress::discover` (`note_discovered`), `arm_egress` reads `discovered()` and programs `port.phy_mac`; `port_ok`, `handoff`, `preview_offer`, `StartNic.egress_phy`, `ip_token` / `network_file` and `guest_close::judge` all take the discovered MAC, `EGRESS_PHY_MAC` is a mint-collision guard and test fixture only. Gate: one quiet boot (no cable pull) prints `egress discovered pci=01:00.1 … (SPA partner; no constant)` at NIC init, `(SPA partner; arm)` at the arm, then `rings armed` and the guest's lease / SSH over port 4",
           "wave": "2"
         },
         {

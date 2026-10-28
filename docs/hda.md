@@ -1,6 +1,6 @@
 ---
 hda_version: 1
-last_updated: 2026-10-27
+last_updated: 2026-10-28
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-28 | wave-2-d4-no-constant | 0.0 | 99 | **D4 code close on `cursor/wave-2-link-state-50bb`: the egress constant gate is gone.** `init_bcm5720` records `guest_egress::discover` from the census (`note_discovered`), `arm_egress` reads `discovered()` back and programs `port.phy_mac`; `port_ok` / `handoff` / `preview_offer` / `StartNic.egress_phy` / `ip_token` / `guest_close::judge` take the discovered MAC. `EGRESS_PHY_MAC` remains only as a mint-collision guard and test fixture. 896 host tests, UEFI build clean. Not lived: one quiet boot (no cable pull) with the guest's lease over the discovered port closes D4. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-28 | wave-2-d4-match-yes | 0.0 | 99 | **Iron `8df4407d`, same boot: D4 discovery lived** — COM2 `egress discovered pci=01:00.01 mac=b0:26:28:5c:5a:39 constant=:39 match=yes` at arm time. D4 stays in flight until the arm uses the discovered port and the constant goes. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-28 | wave-2-cable-pull-d6 | 0.0 | 99 | **Iron `8df4407d`: D6 lived on one cable pull** (guest `NO-CARRIER` → `LOWER_UP`, COM2 `D5 link … down` / `up mbps=100`, Overview Port 4 at 2 changes). D5 in flight: audit mirror hushed under Linux (`write_str`); moved to the no-wait writer. D4 in flight: `discovered` line not captured. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-27 | wave-2-link-state | 0.0 | 99 | **ADR-021 wave 2 packed (D5 + D6 + D4), in flight on `cursor/wave-2-link-state-50bb`.** Two-port link sampler (`host_link`), `link[]` on `/perc/guests` + Overview ports, `HostLinkChanged` audit, virtio-net `F_STATUS` carrier, egress discovery print with the constant still gating. 894 host tests. Not lived; one F11 and one cable pull decide D5/D6, `match=yes` on COM2 decides D4. Scores held. months 0.0 held; overall 99 held |
