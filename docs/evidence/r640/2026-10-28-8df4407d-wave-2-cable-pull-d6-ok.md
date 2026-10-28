@@ -75,7 +75,7 @@ boot: M8.9 egress rings armed pci=01:00.01 phylock=no
 boot: M8.9 guest frame leaves :39 len=86
 ```
 
-`guest_egress::discover` named the SPA's pair partner from the SPA's own PCI position (`01:00.0` → `01:00.1`), read its station MAC, and it matched the lab constant. **Discovery lived.** The function number prints as `.01` (two hex digits); cosmetic. **D4 stays in flight** until the arm and the port checks use the discovered port instead of `EGRESS_PHY_MAC` and one boot arms `:39` through that path.
+`guest_egress::discover` named the SPA's pair partner from the SPA's own PCI position (`01:00.0` → `01:00.1`), read its station MAC, and it matched the lab constant. **Discovery lived.** The function number prints as `.01` (two hex digits); cosmetic. **D4 stays in flight** until the arm and the port checks use the discovered port instead of `EGRESS_PHY_MAC` and one boot arms `:39` through that path. That code landed on the branch after this boot: discovery moved to `init_bcm5720` (where every BCM5720 function has just been peeked), the arm reads `guest_egress::discovered()` back and programs its station MAC, and the `constant=:39 match=` print is gone. The D4 close needs no cable pull — a quiet boot where the guest gets its lease over the discovered port is the gate.
 
 ## Not claimed
 

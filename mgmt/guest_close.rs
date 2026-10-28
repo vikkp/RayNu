@@ -9,7 +9,9 @@
 //! fact, so [`live_close`] stays open. Scores do not move here.
 
 use crate::mgmt::guest_addr::ip_token;
-use crate::mgmt::guest_nic::{EGRESS_PHY_MAC, SPA_MAC};
+use crate::mgmt::guest_nic::SPA_MAC;
+#[cfg(test)]
+use crate::mgmt::guest_nic::EGRESS_PHY_MAC;
 use crate::mgmt::guest_nic_start::StartNic;
 
 /// Whether M8.9.6's two facts are both in hand.
@@ -38,19 +40,20 @@ pub struct SeenLogin {
 
 /// Judge a frame and a login against the saved NIC.
 ///
-/// The frame source is the guest MAC. The PHY is `:39`. The phylock stays
-/// with iDRAC. The login address is the saved IP, from another machine.
+/// The frame source is the guest MAC. The PHY is the discovered egress
+/// port the start plan carries (`nic.egress_phy`). The phylock stays with
+/// iDRAC. The login address is the saved IP, from another machine.
 /// The kernel `ip=` token has to name that same address.
 pub fn judge(nic: &StartNic, frame: Option<SeenFrame>, login: Option<SeenLogin>) -> Close {
     let (Some(frame), Some(login)) = (frame, login) else {
         return Close::Open;
     };
-    if frame.phylock || frame.phy_mac != EGRESS_PHY_MAC {
+    if frame.phylock || frame.phy_mac != nic.egress_phy || nic.egress_phy == [0; 6] {
         return Close::Open;
     }
     if frame.src_mac != nic.mac
         || frame.src_mac == SPA_MAC
-        || frame.src_mac == EGRESS_PHY_MAC
+        || frame.src_mac == nic.egress_phy
         || frame.src_mac[0] & 1 != 0
     {
         return Close::Open;

@@ -1319,6 +1319,31 @@ pub fn init_bcm5720(prefer_mac: [u8; 6]) -> Result<[u8; 6], Bcm5720Error> {
         if let Some((mac, bar)) = last_ok {
             if let Some((b, d, f)) = last_pick {
                 SPA_PCI.store(pack_pci(b, d, f), Ordering::Release);
+                // ADR-021 D4: the guest LAN port is the other function of
+                // this device, from the census just taken. No MAC constant.
+                match crate::mgmt::guest_egress::discover((b, d, f, mac), &cands[..n]) {
+                    Some(port) => {
+                        crate::mgmt::guest_egress::note_discovered(&port);
+                        serial_step("boot: M8.9 egress discovered pci=");
+                        write_hex_u8(port.bus);
+                        crate::boot::serial::write_byte(b':');
+                        write_hex_u8(port.dev);
+                        crate::boot::serial::write_byte(b'.');
+                        write_hex_u8(port.func);
+                        crate::boot::serial::write_str(" mac=");
+                        write_mac(port.phy_mac);
+                        serial_step(" (SPA partner; no constant)\n");
+                    }
+                    None => {
+                        serial_step("boot: M8.9 egress discovered none (SPA pci=");
+                        write_hex_u8(b);
+                        crate::boot::serial::write_byte(b':');
+                        write_hex_u8(d);
+                        crate::boot::serial::write_byte(b'.');
+                        write_hex_u8(f);
+                        serial_step(" has no other function; guest LAN held)\n");
+                    }
+                }
             }
             PHY_LINK_UP.store(last_up, Ordering::Relaxed);
             RX_OK.store(0, Ordering::Relaxed);
@@ -1904,95 +1929,40 @@ static EGRESS_SENT_LOGGED: AtomicBool = AtomicBool::new(false);
 unsafe fn arm_egress() {
     egress_say("boot: M8.9 egress arm (no phylock, SPA DMA stays)\n");
     let spa_bar = NIC.as_ref().map(|n| n.mmio).unwrap_or(0);
-    let mut found: Option<(u8, u8, u8, u64, [u8; 6])> = None;
-    for bus in 0u8..=15 {
-        for dev in 0u8..32 {
-            for func in 0u8..2 {
-                let id = pci_read32(bus, dev, func, 0);
-                if id == 0xFFFF_FFFF {
-                    if func == 0 {
-                        break;
-                    }
-                    continue;
-                }
-                if !pci_id_is_bcm5720(id as u16, (id >> 16) as u16) {
-                    continue;
-                }
-                if func != 1 {
-                    continue;
-                }
-                let bar = (pci_read32(bus, dev, func, 0x10) as u64) & !0xF;
-                if bar == 0 {
-                    continue;
-                }
-                enable_mem(bus, dev, func);
-                let mac = peek_mac(bar, bus, dev, func);
-                found = Some((bus, dev, func, bar, mac));
-            }
-        }
-    }
-    // ADR-021 D4: say which port is the SPA's partner before the constant
-    // decides anything. Function 0 is the running SPA (its MAC from
-    // `NIC`, not a second peek); function 1 is what the walk just read.
-    {
-        let spa_mac = NIC.as_ref().map(|n| n.mac).unwrap_or([0; 6]);
-        let spa = spa_pci().map(|(b, d, f)| (b, d, f, spa_mac));
-        let mut cands = [(0u8, 0u8, 0u8, [0u8; 6]); 2];
-        let mut n = 0usize;
-        if let Some(s) = spa {
-            cands[n] = s;
-            n += 1;
-        }
-        if let Some((b, d, f, _, m)) = found {
-            cands[n] = (b, d, f, m);
-            n += 1;
-        }
-        match spa.and_then(|s| crate::mgmt::guest_egress::discover(s, &cands[..n])) {
-            Some(d) => {
-                egress_say("boot: M8.9 egress discovered pci=");
-                egress_hex_u8(d.port.bus);
-                egress_say(":");
-                egress_hex_u8(d.port.dev);
-                egress_say(".");
-                egress_hex_u8(d.port.func);
-                egress_say(" mac=");
-                egress_mac(d.port.phy_mac);
-                egress_say(" constant=:39 match=");
-                egress_say(if d.matches_constant { "yes" } else { "no" });
-                egress_say("\n");
-            }
-            None => {
-                egress_say("boot: M8.9 egress discovered none (spa pci=");
-                match spa {
-                    Some((b, d, f, _)) => {
-                        egress_hex_u8(b);
-                        egress_say(":");
-                        egress_hex_u8(d);
-                        egress_say(".");
-                        egress_hex_u8(f);
-                    }
-                    None => egress_say("unknown"),
-                }
-                egress_say(") constant=:39 match=no\n");
-            }
-        }
-    }
-    let Some((bus, dev, func, bar, mac)) = found else {
-        egress_say("boot: M8.9 egress arm held (no function 1)\n");
+    // ADR-021 D4: the port is what the SPA NIC init discovered — the other
+    // function of the SPA's own BCM5720. Its BAR is read now; the station
+    // MAC is peeked again and must still be the one recorded.
+    let Some(port) = crate::mgmt::guest_egress::discovered() else {
+        egress_say("boot: M8.9 egress arm held (no discovered partner port)\n");
         return;
     };
-    if mac != crate::mgmt::guest_nic::EGRESS_PHY_MAC {
-        egress_say("boot: M8.9 egress arm held (function 1 MAC is not :39)\n");
+    let (bus, dev, func) = (port.bus, port.dev, port.func);
+    let id = pci_read32(bus, dev, func, 0);
+    if id == 0xFFFF_FFFF || !pci_id_is_bcm5720(id as u16, (id >> 16) as u16) {
+        egress_say("boot: M8.9 egress arm held (discovered port is not a BCM5720 now)\n");
         return;
     }
-    let port = crate::mgmt::guest_egress::EgressPort {
-        bus,
-        dev,
-        func,
-        phy_mac: mac,
-        phylock: false,
-    };
-    let spa_func = 0u8;
+    let bar = (pci_read32(bus, dev, func, 0x10) as u64) & !0xF;
+    if bar == 0 {
+        egress_say("boot: M8.9 egress arm held (discovered port has no BAR)\n");
+        return;
+    }
+    enable_mem(bus, dev, func);
+    let mac = peek_mac(bar, bus, dev, func);
+    egress_say("boot: M8.9 egress discovered pci=");
+    egress_hex_u8(bus);
+    egress_say(":");
+    egress_hex_u8(dev);
+    egress_say(".");
+    egress_hex_u8(func);
+    egress_say(" mac=");
+    egress_mac(mac);
+    egress_say(" (SPA partner; arm)\n");
+    if mac != port.phy_mac {
+        egress_say("boot: M8.9 egress arm held (station MAC moved since discovery)\n");
+        return;
+    }
+    let spa_func = spa_pci().map_or(0, |(_, _, f)| f);
     if !matches!(
         crate::mgmt::guest_egress::rings_ready(&port, bar, spa_func, spa_bar),
         crate::mgmt::guest_egress::RingArm::Ready { .. }
@@ -2044,7 +2014,7 @@ unsafe fn arm_egress() {
     let dma = &mut *core::ptr::addr_of_mut!(EGRESS_DMA);
     init_rings(dma);
     program_rings(bar, bus, dev, func, dma);
-    if enable_mac(bar, crate::mgmt::guest_nic::EGRESS_PHY_MAC).is_err() {
+    if enable_mac(bar, port.phy_mac).is_err() {
         egress_say("boot: M8.9 egress arm held (MAC)\n");
         return;
     }
@@ -2066,7 +2036,7 @@ unsafe fn arm_egress() {
     egress_phy_kick(bar);
     EGRESS_NIC = Some(NicState {
         mmio: bar,
-        mac: crate::mgmt::guest_nic::EGRESS_PHY_MAC,
+        mac: port.phy_mac,
         rx_rcb_ptr: 0,
         rx_std_prod: (RING as u16).saturating_sub(1),
         tx_prod: 0,

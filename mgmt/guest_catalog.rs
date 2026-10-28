@@ -1383,6 +1383,9 @@ mod guest_catalog_test {
     #[test]
     fn m893_offer_fills_fields_and_does_not_save() {
         crate::mgmt::guest_nic::clear_panel_for_test();
+        // On iron the SPA NIC init records the partner port before HTTP
+        // listens; the host test records the lab fixture.
+        crate::mgmt::guest_egress::note_discovered(&crate::mgmt::guest_egress::iron_port());
         crate::mgmt::guest_dhcp::inject_offer_for_test(Some(crate::mgmt::guest_dhcp::DhcpFields {
             ipv4: [10, 99, 99, 50],
             prefix: 24,

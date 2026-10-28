@@ -20,7 +20,7 @@
 
 use core::sync::atomic::{AtomicU8, Ordering};
 
-use crate::mgmt::guest_nic::{EGRESS_PHY_MAC, SPA_MAC};
+use crate::mgmt::guest_nic::SPA_MAC;
 use crate::mgmt::guest_nic_start::StartNic;
 
 /// Credential name. `systemd-network-generator` strips `network.network.`
@@ -84,10 +84,10 @@ pub fn generator_dropin_credential(out: &mut [u8]) -> Option<usize> {
 /// address, gateway and DNS when saved. `None` for the same records
 /// [`ip_token`] refuses (SPA/egress/multicast MAC, no address, bad prefix).
 pub fn network_file(nic: &StartNic, out: &mut [u8]) -> Option<usize> {
-    if nic.mac == SPA_MAC || nic.mac == EGRESS_PHY_MAC || nic.mac[0] & 1 != 0 {
+    if nic.mac == SPA_MAC || nic.mac == nic.egress_phy || nic.mac[0] & 1 != 0 {
         return None;
     }
-    if nic.egress_phy != EGRESS_PHY_MAC {
+    if nic.egress_phy == [0; 6] || nic.egress_phy[0] & 1 != 0 {
         return None;
     }
     if nic.ipv4 == [0, 0, 0, 0] || nic.ipv4 == [255, 255, 255, 255] {
@@ -213,10 +213,10 @@ static AMEND_LOGGED: core::sync::atomic::AtomicBool = core::sync::atomic::Atomic
 /// kernel does not start DHCP. A zero DNS is omitted. `0.0.0.0` and
 /// `255.255.255.255` are not a client address.
 pub fn ip_token(nic: &StartNic) -> Option<IpToken> {
-    if nic.mac == SPA_MAC || nic.mac == EGRESS_PHY_MAC || nic.mac[0] & 1 != 0 {
+    if nic.mac == SPA_MAC || nic.mac == nic.egress_phy || nic.mac[0] & 1 != 0 {
         return None;
     }
-    if nic.egress_phy != EGRESS_PHY_MAC {
+    if nic.egress_phy == [0; 6] || nic.egress_phy[0] & 1 != 0 {
         return None;
     }
     if nic.ipv4 == [0, 0, 0, 0] || nic.ipv4 == [255, 255, 255, 255] {
@@ -420,6 +420,7 @@ fn push_u8(buf: &mut [u8], n: &mut usize, v: u8) -> bool {
 #[cfg(test)]
 mod guest_addr_test {
     use super::*;
+    use crate::mgmt::guest_nic::EGRESS_PHY_MAC;
     use crate::mgmt::guest_nic::mint_mac;
 
     fn nic() -> StartNic {

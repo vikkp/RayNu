@@ -590,7 +590,7 @@ fn egress_arm_runs_the_tg3_reset_hw_sequence_on_function_1() {
         "enable_bus_master(bus, dev, func);",
         "init_rings(dma);",
         "program_rings(bar, bus, dev, func, dma);",
-        "enable_mac(bar, crate::mgmt::guest_nic::EGRESS_PHY_MAC)",
+        "enable_mac(bar, port.phy_mac)",
         "enable_dma_engines(bar);",
         "enable_hostcc(bar);",
         "enable_completion_blocks(bar);",
@@ -610,7 +610,17 @@ fn egress_arm_runs_the_tg3_reset_hw_sequence_on_function_1() {
     assert!(!before_reset.contains("enable_mac("), "MAC only after the chip reset");
     // The PHY lock stays with iDRAC: no `ape_lock_now` / phylock take here.
     assert!(!arm.contains("ape_lock_now()"), "no PHY lock on a port iDRAC may share");
-    assert!(arm.contains("phylock: false,"));
+    // ADR-021 D4: the port is the one the SPA NIC init discovered; that
+    // record is always built with the phylock not taken.
+    assert!(arm.contains("guest_egress::discovered()"));
+    let disc = include_str!("guest_egress.rs")
+        .split_once("pub fn discovered()")
+        .expect("discovered")
+        .1
+        .split_once("pub fn discovered_phy_mac")
+        .expect("phy")
+        .0;
+    assert!(disc.contains("phylock: false,"));
     // The arm runs inside a Linux VM exit where `write_str` is hushed; every
     // COM2 line of the arm goes through the nowait path.
     assert!(!arm.contains("serial_step("), "serial_step is dropped under earlycon share");

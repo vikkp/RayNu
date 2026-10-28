@@ -7,11 +7,16 @@
 //! Create leaves the guest with no NIC. A Start that is accepted copies
 //! the saved MAC and address into the start plan. A guest that is already
 //! on is not hot-plugged. This module does not program a virtio device
-//! and does not send a frame on `:39`.
+//! and does not send a frame on the egress port.
+//!
+//! `egress_phy` is the station MAC of the port
+//! `guest_egress::discovered()` named (ADR-021 D4), all-zero before the
+//! SPA NIC init has run.
 
 use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, Ordering};
 
-use crate::mgmt::guest_nic::{panel_snapshot, NicRecord, EGRESS_PHY_MAC, SPA_MAC};
+use crate::mgmt::guest_egress::discovered_phy_mac;
+use crate::mgmt::guest_nic::{panel_snapshot, NicRecord, SPA_MAC};
 
 /// NIC the next accepted Start will carry. Not a hot-plug.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -22,7 +27,8 @@ pub struct StartNic {
     pub prefix: u8,
     pub gateway: [u8; 4],
     pub dns: [u8; 4],
-    /// Station MAC of the egress port. The guest MAC is `mac`.
+    /// Station MAC of the discovered egress port (zero when none). The
+    /// guest MAC is `mac`.
     pub egress_phy: [u8; 6],
 }
 
@@ -38,7 +44,8 @@ pub fn plan(spare_off: u64, guest_already_on: bool) -> Option<StartNic> {
 }
 
 fn from_record(rec: NicRecord) -> Option<StartNic> {
-    if rec.mac == SPA_MAC || rec.mac == EGRESS_PHY_MAC || rec.mac[0] & 1 != 0 {
+    let egress_phy = discovered_phy_mac();
+    if rec.mac == SPA_MAC || rec.mac == egress_phy || rec.mac[0] & 1 != 0 {
         return None;
     }
     Some(StartNic {
@@ -48,7 +55,7 @@ fn from_record(rec: NicRecord) -> Option<StartNic> {
         prefix: rec.prefix,
         gateway: rec.gateway,
         dns: rec.dns,
-        egress_phy: EGRESS_PHY_MAC,
+        egress_phy,
     })
 }
 
@@ -112,7 +119,7 @@ pub fn armed_start() -> Option<StartNic> {
         prefix: PX.load(Ordering::Relaxed),
         gateway: GW.load(Ordering::Relaxed).to_be_bytes(),
         dns: DNS.load(Ordering::Relaxed).to_be_bytes(),
-        egress_phy: EGRESS_PHY_MAC,
+        egress_phy: discovered_phy_mac(),
     })
 }
 
@@ -124,7 +131,10 @@ pub fn clear_start_for_test() {
 #[cfg(test)]
 mod guest_nic_start_test {
     use super::*;
-    use crate::mgmt::guest_nic::{clear_panel_for_test, panel_save, NicDraft, NicMode};
+    use crate::mgmt::guest_egress::{iron_port, note_discovered};
+    use crate::mgmt::guest_nic::{
+        clear_panel_for_test, panel_save, NicDraft, NicMode, EGRESS_PHY_MAC,
+    };
 
     fn draft(off: u64) -> NicDraft {
         NicDraft {
@@ -141,6 +151,7 @@ mod guest_nic_start_test {
     fn next_start_carries_the_saved_nic() {
         clear_panel_for_test();
         clear_start_for_test();
+        note_discovered(&iron_port());
         let off = 8u64 * 1024 * 1024 * 1024 + 10u64 * 1024 * 1024 * 1024;
         assert!(plan(off, false).is_none());
         let saved = panel_save(0, draft(off)).unwrap();

@@ -154,11 +154,12 @@ pub fn parse_offer(buf: &[u8]) -> Option<DhcpFields> {
 
 /// Offer for `mac`, if one is already in hand. Does not Save.
 ///
-/// The discover is handed to function 1. A shared BAR with the SPA, or a
-/// phylock, does not arm rings. With no reply in hand this returns none.
+/// The discover is handed to the discovered partner port. A shared BAR
+/// with the SPA, or a phylock, does not arm rings. With no port discovered
+/// or no reply in hand this returns none.
 pub fn preview_offer(mac: [u8; 6]) -> Option<DhcpFields> {
     let frame = discover_frame(&mac, 1);
-    let port = crate::mgmt::guest_egress::iron_port();
+    let port = crate::mgmt::guest_egress::discovered()?;
     let Some(hand) = crate::mgmt::guest_egress::handoff(mac, &frame.bytes, frame.len, port) else {
         return None;
     };
@@ -298,6 +299,9 @@ mod guest_dhcp_test {
     #[test]
     fn preview_hands_the_discover_to_function_1() {
         let mac = mint_mac(0);
+        // Tests share the process; another test may already have recorded
+        // the lab port, so only the recorded case is asserted here.
+        crate::mgmt::guest_egress::note_discovered(&crate::mgmt::guest_egress::iron_port());
         inject_offer_for_test(Some(DhcpFields {
             ipv4: [10, 99, 99, 50],
             prefix: 24,
