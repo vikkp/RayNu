@@ -386,4 +386,24 @@ mod host_link_test {
         assert!(carrier_rule(&r));
         reset_for_test();
     }
+
+    #[test]
+    fn link_change_mirror_is_not_hushed_under_a_guest() {
+        // Iron `8df4407d`: the page row and the guest carrier moved, the
+        // `boot: D5 link` lines reached the host ring, but no
+        // `RAYNU-V-AUDIT: HostLinkChanged` did — `write_str` is silent
+        // once Linux owns the console. The mirror must use the no-wait path.
+        let arm = include_str!("../audit/integrity.rs")
+            .split_once("AuditEvent::HostLinkChanged { func, up, mbps } => {")
+            .expect("mirror arm")
+            .1
+            .split_once("AuditEvent::FrameAllocated")
+            .expect("end of arm")
+            .0;
+        assert!(arm.contains("write_str_nowait(\"RAYNU-V-AUDIT: HostLinkChanged func=\")"));
+        assert!(arm.contains("write_u32_nowait("));
+        assert!(arm.contains("write_byte_nowait(b'\\n')"));
+        assert!(!arm.contains("serial::write_str("), "{arm}");
+        assert!(!arm.contains("serial::write_byte("), "{arm}");
+    }
 }
