@@ -19,14 +19,14 @@
   },
   "counts": {
     "S1": {
-      "lived": 30,
-      "in flight": 3,
+      "lived": 31,
+      "in flight": 2,
       "planned": 34,
       "total": 67
     },
     "Final": {
-      "lived": 30,
-      "in flight": 3,
+      "lived": 31,
+      "in flight": 2,
       "planned": 96,
       "total": 129
     }
@@ -556,10 +556,10 @@
         {
           "id": "D4",
           "capability": "Uplink discovery: egress is the other BCM5720 function on any R640, not one MAC constant",
-          "status": "in flight",
+          "status": "lived",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "`cursor/wave-2-link-state-50bb`. Discovery lived on `8df4407d`: COM2 `boot: M8.9 egress discovered pci=01:00.01 mac=b0:26:28:5c:5a:39 constant=:39 match=yes` at arm time (`guest_egress::discover` from the SPA's bus/dev). Constant gate removed after that boot: `init_bcm5720` records `guest_egress::discover` (`note_discovered`), `arm_egress` reads `discovered()` and programs `port.phy_mac`; `port_ok`, `handoff`, `preview_offer`, `StartNic.egress_phy`, `ip_token` / `network_file` and `guest_close::judge` all take the discovered MAC, `EGRESS_PHY_MAC` is a mint-collision guard and test fixture only. Gate: one quiet boot (no cable pull) prints `egress discovered pci=01:00.1 … (SPA partner; no constant)` at NIC init, `(SPA partner; arm)` at the arm, then `rings armed` and the guest's lease / SSH over port 4",
+          "note": "`aeb2d79b` (PR #418, CI `40687568692`): one quiet boot, no constant on the arm path — COM2 `boot: M8.9 egress discovered pci=01:00.01 mac=b0:26:28:5c:5a:39 (SPA partner; no constant)` at NIC init, `(SPA partner; arm)` at the arm, `rings armed pci=01:00.01 phylock=no`, `t10s vtx=10 vrx=50 sent=10 held=0 fcs=0`; `ssh vikkp@10.99.99.200` from the Mac, `enp0s5 UP 10.99.99.200/24`, gateway `10.99.99.1` `REACHABLE`. `init_bcm5720` records `guest_egress::discover` (`note_discovered`), `arm_egress` reads `discovered()` and programs `port.phy_mac`; `port_ok`, `handoff`, `preview_offer`, `StartNic.egress_phy`, `ip_token` / `network_file` and `guest_close::judge` take the discovered MAC; `EGRESS_PHY_MAC` is a mint-collision guard and test fixture only. Discovery first seen on `8df4407d` (`constant=:39 match=yes`). docs/evidence/r640/2026-10-28-aeb2d79b-wave-2-d4-discovered-port-ok.md",
           "wave": "2"
         },
         {
@@ -736,14 +736,14 @@
       ],
       "counts": {
         "S1": {
-          "lived": 6,
-          "in flight": 2,
+          "lived": 7,
+          "in flight": 1,
           "planned": 3,
           "total": 11
         },
         "Final": {
-          "lived": 6,
-          "in flight": 2,
+          "lived": 7,
+          "in flight": 1,
           "planned": 15,
           "total": 23
         }
@@ -1507,8 +1507,8 @@
       "iron": "D5",
       "why": "Cheap, in code just touched; each would have saved a day in October.",
       "counts": {
-        "lived": 1,
-        "in flight": 2,
+        "lived": 2,
+        "in flight": 1,
         "planned": 2,
         "total": 5
       },
@@ -1857,12 +1857,6 @@
       "capability": "Physical link state of both LOM ports on the SPA; audit event on change",
       "status": "in flight",
       "role": "iron thread"
-    },
-    {
-      "id": "D4",
-      "capability": "Uplink discovery: egress is the other BCM5720 function on any R640, not one MAC constant",
-      "status": "in flight",
-      "role": "host-first"
     },
     {
       "id": "B20",
