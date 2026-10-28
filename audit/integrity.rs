@@ -1168,11 +1168,15 @@ fn mirror_audit_to_com1(event: AuditEvent) {
             serial::write_byte(b'\n');
         }
         AuditEvent::HostLinkChanged { func, up, mbps } => {
-            serial::write_str("RAYNU-V-AUDIT: HostLinkChanged func=");
-            write_u32(u32::from(func));
-            serial::write_str(if up != 0 { " up=1 mbps=" } else { " up=0 mbps=" });
-            write_u32(u32::from(mbps));
-            serial::write_byte(b'\n');
+            // Fires while a Linux guest owns the console. `write_str` is
+            // hushed then (`linux_earlycon_share`), so iron `8df4407d`
+            // recorded the event but showed no mirror on COM2 or on the
+            // Activity page. Use the no-wait writer like the `boot:` lines.
+            serial::write_str_nowait("RAYNU-V-AUDIT: HostLinkChanged func=");
+            write_u32_nowait(u32::from(func));
+            serial::write_str_nowait(if up != 0 { " up=1 mbps=" } else { " up=0 mbps=" });
+            write_u32_nowait(u32::from(mbps));
+            serial::write_byte_nowait(b'\n');
         }
         AuditEvent::FrameAllocated { .. } | AuditEvent::FrameFreed { .. } => {}
     }
@@ -1195,6 +1199,29 @@ fn milestone_tag(m: Milestone) -> u32 {
 #[cfg(target_os = "uefi")]
 fn write_u32(n: u32) {
     write_u64(n as u64);
+}
+
+/// Decimal through the no-wait writer (guest UART ring + host log ring),
+/// for mirrors that fire while a guest holds the console.
+#[cfg(target_os = "uefi")]
+fn write_u32_nowait(n: u32) {
+    use crate::boot::serial;
+    let mut n = u64::from(n);
+    if n == 0 {
+        serial::write_byte_nowait(b'0');
+        return;
+    }
+    let mut buf = [0u8; 20];
+    let mut i = 0;
+    while n > 0 {
+        buf[i] = b'0' + (n % 10) as u8;
+        n /= 10;
+        i += 1;
+    }
+    while i > 0 {
+        i -= 1;
+        serial::write_byte_nowait(buf[i]);
+    }
 }
 
 #[cfg(target_os = "uefi")]
