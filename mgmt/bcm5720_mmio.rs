@@ -1069,7 +1069,28 @@ struct NicState {
 }
 
 static NIC_LOCK: AtomicBool = AtomicBool::new(false);
+/// Where the SPA port sits on PCI (`pack_pci`), 0 until a NIC is chosen.
+/// ADR-021 D4 discovery looks for the other function of this device.
+static SPA_PCI: AtomicU32 = AtomicU32::new(0);
 static mut DMA: DmaArena = DmaArena::zeroed();
+
+/// `1 << 24 | bus << 16 | dev << 8 | func`; bit 24 makes `00:00.0` non-zero.
+pub fn pack_pci(bus: u8, dev: u8, func: u8) -> u32 {
+    1 << 24 | u32::from(bus) << 16 | u32::from(dev) << 8 | u32::from(func)
+}
+
+/// Inverse of [`pack_pci`]; `None` for 0 (no SPA NIC yet).
+pub fn unpack_pci(v: u32) -> Option<(u8, u8, u8)> {
+    if v == 0 {
+        return None;
+    }
+    Some(((v >> 16) as u8, (v >> 8) as u8, v as u8))
+}
+
+/// The SPA port's PCI position, once `init_bcm5720` chose it.
+pub fn spa_pci() -> Option<(u8, u8, u8)> {
+    unpack_pci(SPA_PCI.load(Ordering::Acquire))
+}
 static mut NIC: Option<NicState> = None;
 /// APE BAR2 + lock id for the one bound mgmt function. Written once in
 /// `hw_init`; MDIO leaves read them. Justification: phy_read/write cannot
@@ -1230,6 +1251,7 @@ pub fn init_bcm5720(prefer_mac: [u8; 6]) -> Result<[u8; 6], Bcm5720Error> {
     let result = unsafe {
         let dma = &mut *core::ptr::addr_of_mut!(DMA);
         let mut last_ok: Option<([u8; 6], u64)> = None;
+        let mut last_pick: Option<(u8, u8, u8)> = None;
         let mut last_up = false;
         let mut last_err = Bcm5720Error::NotFound;
         let mut prev_bar: Option<u64> = None;
@@ -1274,6 +1296,7 @@ pub fn init_bcm5720(prefer_mac: [u8; 6]) -> Result<[u8; 6], Bcm5720Error> {
             match hw_init(bar, pick.bus, pick.dev, pick.func, dma, prefer_mac) {
                 Ok((mac, up)) => {
                     last_ok = Some((mac, bar));
+                    last_pick = Some((pick.bus, pick.dev, pick.func));
                     last_up = up;
                     if up {
                         break;
@@ -1294,6 +1317,9 @@ pub fn init_bcm5720(prefer_mac: [u8; 6]) -> Result<[u8; 6], Bcm5720Error> {
             }
         }
         if let Some((mac, bar)) = last_ok {
+            if let Some((b, d, f)) = last_pick {
+                SPA_PCI.store(pack_pci(b, d, f), Ordering::Release);
+            }
             PHY_LINK_UP.store(last_up, Ordering::Relaxed);
             RX_OK.store(0, Ordering::Relaxed);
             RX_DROP.store(0, Ordering::Relaxed);
@@ -1619,6 +1645,16 @@ fn egress_hex_u8(b: u8) {
 }
 
 #[cfg(feature = "uefi-bin")]
+fn egress_mac(mac: [u8; 6]) {
+    for (i, b) in mac.iter().enumerate() {
+        if i > 0 {
+            egress_say(":");
+        }
+        egress_hex_u8(*b);
+    }
+}
+
+#[cfg(feature = "uefi-bin")]
 fn egress_hex_u16(n: u16) {
     egress_hex_u8((n >> 8) as u8);
     egress_hex_u8(n as u8);
@@ -1892,6 +1928,52 @@ unsafe fn arm_egress() {
                 enable_mem(bus, dev, func);
                 let mac = peek_mac(bar, bus, dev, func);
                 found = Some((bus, dev, func, bar, mac));
+            }
+        }
+    }
+    // ADR-021 D4: say which port is the SPA's partner before the constant
+    // decides anything. Function 0 is the running SPA (its MAC from
+    // `NIC`, not a second peek); function 1 is what the walk just read.
+    {
+        let spa_mac = NIC.as_ref().map(|n| n.mac).unwrap_or([0; 6]);
+        let spa = spa_pci().map(|(b, d, f)| (b, d, f, spa_mac));
+        let mut cands = [(0u8, 0u8, 0u8, [0u8; 6]); 2];
+        let mut n = 0usize;
+        if let Some(s) = spa {
+            cands[n] = s;
+            n += 1;
+        }
+        if let Some((b, d, f, _, m)) = found {
+            cands[n] = (b, d, f, m);
+            n += 1;
+        }
+        match spa.and_then(|s| crate::mgmt::guest_egress::discover(s, &cands[..n])) {
+            Some(d) => {
+                egress_say("boot: M8.9 egress discovered pci=");
+                egress_hex_u8(d.port.bus);
+                egress_say(":");
+                egress_hex_u8(d.port.dev);
+                egress_say(".");
+                egress_hex_u8(d.port.func);
+                egress_say(" mac=");
+                egress_mac(d.port.phy_mac);
+                egress_say(" constant=:39 match=");
+                egress_say(if d.matches_constant { "yes" } else { "no" });
+                egress_say("\n");
+            }
+            None => {
+                egress_say("boot: M8.9 egress discovered none (spa pci=");
+                match spa {
+                    Some((b, d, f, _)) => {
+                        egress_hex_u8(b);
+                        egress_say(":");
+                        egress_hex_u8(d);
+                        egress_say(".");
+                        egress_hex_u8(f);
+                    }
+                    None => egress_say("unknown"),
+                }
+                egress_say(") constant=:39 match=no\n");
             }
         }
     }

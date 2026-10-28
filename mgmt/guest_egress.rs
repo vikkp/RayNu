@@ -67,6 +67,60 @@ pub fn pick(cands: &[(u8, u8, u8, [u8; 6])]) -> Option<EgressPort> {
     None
 }
 
+/// ADR-021 D4: the guest LAN port found from the SPA's own position, not
+/// named by a MAC constant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Discovered {
+    pub port: EgressPort,
+    /// The found station MAC equals [`EGRESS_PHY_MAC`]. The arm still
+    /// holds on `false` until iron has printed `match=yes` once; then the
+    /// constant goes and this field with it.
+    pub matches_constant: bool,
+}
+
+/// The other function of the SPA's BCM5720: same bus and device, a
+/// different function, a unicast station MAC that is not the SPA's.
+/// The pair partner (`func ^ 1`) wins over any further function.
+///
+/// INVARIANTS:
+/// - Never returns the SPA's own function or MAC
+/// - Never returns a multicast or all-zero MAC
+/// - Ignores every candidate on another bus/device (an H840 slot card,
+///   a second LOM) so a customer R640 with more ports still gets the
+///   partner of the SPA port
+pub fn discover(
+    spa: (u8, u8, u8, [u8; 6]),
+    cands: &[(u8, u8, u8, [u8; 6])],
+) -> Option<Discovered> {
+    let (sbus, sdev, sfunc, smac) = spa;
+    // Rank 0 is the pair partner; any other function ranks by its number.
+    let rank = |func: u8| if func == sfunc ^ 1 { 0u16 } else { 1 + u16::from(func) };
+    let mut best: Option<(u16, (u8, u8, u8, [u8; 6]))> = None;
+    for &c in cands {
+        let (bus, dev, func, mac) = c;
+        if bus != sbus || dev != sdev || func == sfunc {
+            continue;
+        }
+        if mac == smac || mac == [0; 6] || mac[0] & 1 != 0 {
+            continue;
+        }
+        if best.map_or(true, |(r, _)| rank(func) < r) {
+            best = Some((rank(func), c));
+        }
+    }
+    let (_, (bus, dev, func, mac)) = best?;
+    Some(Discovered {
+        port: EgressPort {
+            bus,
+            dev,
+            func,
+            phy_mac: mac,
+            phylock: false,
+        },
+        matches_constant: mac == EGRESS_PHY_MAC,
+    })
+}
+
 /// Rings may be programmed only on a legal port with its own non-zero BAR.
 ///
 /// The SPA stays on function 0. The same BAR as the SPA is a hold, even
@@ -180,6 +234,61 @@ mod guest_egress_test {
     use super::*;
     use crate::mgmt::guest_dhcp::discover_frame;
     use crate::mgmt::guest_nic::mint_mac;
+
+    #[test]
+    fn discover_finds_the_spa_partner_on_any_r640() {
+        // ADR-021 D4. This lab: SPA on 01:00.0 `:38`, partner 01:00.1 `:39`.
+        let spa = (1u8, 0u8, 0u8, SPA_MAC);
+        let lab = (1u8, 0u8, 1u8, EGRESS_PHY_MAC);
+        let got = discover(spa, &[spa, lab]).unwrap();
+        assert_eq!(got.port, iron_port());
+        assert!(got.matches_constant);
+        assert!(port_ok(&got.port));
+        // Another customer's R640: other MACs, same shape. Found, and the
+        // field says the constant does not match, so the arm still holds.
+        let other_spa = (1u8, 0u8, 0u8, [0xd0, 0x94, 0x66, 0x12, 0x34, 0x56]);
+        let other_lan = (1u8, 0u8, 1u8, [0xd0, 0x94, 0x66, 0x12, 0x34, 0x57]);
+        let got = discover(other_spa, &[other_spa, other_lan]).unwrap();
+        assert_eq!(got.port.phy_mac, other_lan.3);
+        assert_eq!((got.port.bus, got.port.dev, got.port.func), (1, 0, 1));
+        assert!(!got.matches_constant);
+        // SPA on function 1 (firmware picked the other port): egress is
+        // function 0, never the SPA's own function.
+        let spa1 = (1u8, 0u8, 1u8, EGRESS_PHY_MAC);
+        let lan0 = (1u8, 0u8, 0u8, SPA_MAC);
+        let got = discover(spa1, &[lan0, spa1]).unwrap();
+        assert_eq!(got.port.func, 0);
+        assert_eq!(got.port.phy_mac, SPA_MAC);
+        // A slot card on another bus, a different device, a multicast or
+        // zero station MAC, or the SPA MAC on a second function: ignored.
+        let h840_bus = (0x3bu8, 0u8, 1u8, [0xd0, 0x94, 0x66, 0xaa, 0xbb, 0xcc]);
+        let other_dev = (1u8, 1u8, 1u8, [0xd0, 0x94, 0x66, 0xaa, 0xbb, 0xcd]);
+        let mcast = (1u8, 0u8, 1u8, [0x01, 0x00, 0x5e, 0, 0, 1]);
+        let zero = (1u8, 0u8, 1u8, [0u8; 6]);
+        let dup = (1u8, 0u8, 1u8, SPA_MAC);
+        assert!(discover(spa, &[spa, h840_bus, other_dev, mcast, zero, dup]).is_none());
+        assert!(discover(spa, &[spa]).is_none());
+        assert!(discover(spa, &[]).is_none());
+        // Quad-port LOM: the pair partner wins over functions 2 and 3.
+        let f2 = (1u8, 0u8, 2u8, [0xb0, 0x26, 0x28, 0x5c, 0x5a, 0x3a]);
+        let f3 = (1u8, 0u8, 3u8, [0xb0, 0x26, 0x28, 0x5c, 0x5a, 0x3b]);
+        let got = discover(spa, &[spa, f3, f2, lab]).unwrap();
+        assert_eq!(got.port.func, 1);
+        let got = discover(spa, &[spa, f3, f2]).unwrap();
+        assert_eq!(got.port.func, 2, "lowest other function when the partner is missing");
+        // The arm prints what it found and still gates on the constant.
+        let arm = include_str!("bcm5720_mmio.rs")
+            .split_once("unsafe fn arm_egress")
+            .expect("arm")
+            .1
+            .split_once("pub fn mac_address")
+            .expect("mac")
+            .0;
+        assert!(arm.contains("guest_egress::discover("));
+        assert!(arm.contains("boot: M8.9 egress discovered pci="));
+        assert!(arm.contains(" constant=:39 match="));
+        assert!(arm.contains("mac != crate::mgmt::guest_nic::EGRESS_PHY_MAC"));
+    }
 
     #[test]
     fn pick_is_function_1_and_refuses_the_spa() {
