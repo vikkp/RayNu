@@ -20,14 +20,14 @@
   "counts": {
     "S1": {
       "lived": 29,
-      "in flight": 1,
-      "planned": 37,
+      "in flight": 4,
+      "planned": 34,
       "total": 67
     },
     "Final": {
       "lived": 29,
-      "in flight": 1,
-      "planned": 99,
+      "in flight": 4,
+      "planned": 96,
       "total": 129
     }
   },
@@ -556,28 +556,28 @@
         {
           "id": "D4",
           "capability": "Uplink discovery: egress is the other BCM5720 function on any R640, not one MAC constant",
-          "status": "planned",
+          "status": "in flight",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "`EGRESS_PHY_MAC` is this lab's `…:39`",
+          "note": "`cursor/wave-2-link-state-50bb`: `guest_egress::discover` picks the SPA's pair partner by bus/dev; `arm_egress` prints `boot: M8.9 egress discovered pci=.. mac=.. constant=:39 match=yes` or `match=no`. The arm still holds on `EGRESS_PHY_MAC`; the constant goes after iron prints `match=yes`",
           "wave": "2"
         },
         {
           "id": "D5",
           "capability": "Physical link state of both LOM ports on the SPA; audit event on change",
-          "status": "planned",
+          "status": "in flight",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "iDRAC showed port 4 Down; the page showed nothing",
+          "note": "`cursor/wave-2-link-state-50bb`: `mgmt/host_link.rs` samples both functions twice a second from the standing-SPA tick (`host_link_tick`); `/perc/guests` carries `link[]`; Overview lists Port 3 / Port 4; `HostLinkChanged` audit (kind 78) and COM2 `boot: D5 link lom=4 func=1 down`. Gate: pull and replug the port 4 cable while the guest runs",
           "wave": "2"
         },
         {
           "id": "D6",
           "capability": "virtio-net carrier follows the uplink (guest sees `NO-CARRIER` when port is dark)",
-          "status": "planned",
+          "status": "in flight",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Device always reports link up today",
+          "note": "`cursor/wave-2-link-state-50bb`: `VIRTIO_NET_F_STATUS` offered, `status` word follows `host_link::guest_carrier` (optimistic until `:39` is driven), config-change ISR on a flip. Gate: `ip link` shows `NO-CARRIER` on the pull and `LOWER_UP` on the replug",
           "wave": "2"
         },
         {
@@ -737,14 +737,14 @@
       "counts": {
         "S1": {
           "lived": 5,
-          "in flight": 0,
-          "planned": 6,
+          "in flight": 3,
+          "planned": 3,
           "total": 11
         },
         "Final": {
           "lived": 5,
-          "in flight": 0,
-          "planned": 18,
+          "in flight": 3,
+          "planned": 15,
           "total": 23
         }
       }
@@ -1508,8 +1508,8 @@
       "why": "Cheap, in code just touched; each would have saved a day in October.",
       "counts": {
         "lived": 0,
-        "in flight": 0,
-        "planned": 5,
+        "in flight": 3,
+        "planned": 2,
         "total": 5
       },
       "closed": false
@@ -1855,19 +1855,19 @@
     {
       "id": "D5",
       "capability": "Physical link state of both LOM ports on the SPA; audit event on change",
-      "status": "planned",
+      "status": "in flight",
       "role": "iron thread"
     },
     {
       "id": "D6",
       "capability": "virtio-net carrier follows the uplink (guest sees `NO-CARRIER` when port is dark)",
-      "status": "planned",
+      "status": "in flight",
       "role": "host-first"
     },
     {
       "id": "D4",
       "capability": "Uplink discovery: egress is the other BCM5720 function on any R640, not one MAC constant",
-      "status": "planned",
+      "status": "in flight",
       "role": "host-first"
     },
     {

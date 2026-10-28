@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-9-lan-release |
-| Summary | **Rollback pin `v0.1.0-m8-9-lan`.** The CI EFI from `0d865c7fcb0a` (run `40603110937`) that closed M8.9 — guest on the customer LAN from the SPA-saved address — is now an in-tree kit and a GitHub tag. Not Latest. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-2-link-state |
+| Summary | **ADR-021 wave 2 packed, not lived.** D5 both-port link state on the SPA with an audit event, D6 virtio-net carrier from the `:39` wire, D4 egress discovery printed before the constant goes. Host tests only. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
-| LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. |
-| Gates touched | Release kit only. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-9-lan`; older `v0.1.0-m8-8-ubuntu`. |
+| LOI impact | none until COM2. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. |
+| Gates touched | ADR-021 D4 / D5 / D6 in flight. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-9-lan`. |
 
 ---
 
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-10-27 | wave-2-link-state | 94 | 72 | **Wave 2 packed (D5 + D6 + D4) on `cursor/wave-2-link-state-50bb`.** Link sampler, Overview ports, `HostLinkChanged`, virtio-net `F_STATUS`, egress discovery print. Host only; not lived. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-27 | m8-9-lan-release | 94 | 72 | **Rollback pin `v0.1.0-m8-9-lan`.** CI `40603110937`, `build: sha=0d865c7fcb0a`. M8.9 close, not Latest. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-27 | m8-9-d7-lived-wave-1-closed | 94 | 72 | **Iron `0d865c7f`: SPA-saved address on `enp0s5` with nothing typed (`Installed /run/systemd/network/10-raynu.network from credential.`, `routable (configured)` `10.99.99.200/24`); `ssh vikkp@10.99.99.200` from the Mac.** ADR-021 D7 lived; M8.9 and wave 1 closed. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-27 | m8-9-d7-generator-dropin | 92 | 70 | **Iron `d588148f`: credential imported by PID 1 (103 B, body identical); Ubuntu ships the network generator disabled, so the address did not land.** Next EFI adds a `sysinit.target` drop-in credential that wants it. Not D7. Scores held. Bar A 92. Bar B 70. Overall 78. PERC 86. Unmodified 45. SKU 92. |

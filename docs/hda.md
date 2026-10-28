@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-9-lan-release |
-| Summary | **Rollback pin `v0.1.0-m8-9-lan`.** The CI EFI from `0d865c7fcb0a` / run `40603110937` is the M8.9 close (ADR-021 D7 lived; wave 1 closed): SPA-saved address reached the guest by itself, SSH from the LAN. In-tree kit `releases/v0.1.0-m8-9-lan/`, EFI SHA256 `df6fc3465cecf1eaf058d5c8e675501827c16eb55e7b2c9758bc5e68326ad91b`. Not Latest. A wave 2 flash rolls back here. `v0.1.0-m8-8-ubuntu` becomes the older M8.8 pin. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-2-link-state |
+| Summary | **ADR-021 wave 2 packed: D5 + D6 + D4 on `cursor/wave-2-link-state-50bb`, in flight, not lived.** `mgmt/host_link.rs` samples both BCM5720 functions twice a second from the standing-SPA tick (`host_link_tick`, idle or under a guest); `/perc/guests` carries `link[]` and the Overview lists Port 3 (SPA) / Port 4 (guest LAN); a flip is `HostLinkChanged` (audit kind 78) and COM2 `boot: D5 link lom=4 func=1 down`. virtio-net offers `F_STATUS`; the status word follows `host_link::guest_carrier` (optimistic until `:39` is driven) with a config-change ISR on a flip (D6). `guest_egress::discover` names the SPA's pair partner by bus/dev; `arm_egress` prints `boot: M8.9 egress discovered pci=01:00.1 mac=… constant=:39 match=yes` and still holds on the constant (D4). Host: 894 tests pass. Nothing printed on iron yet. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
-| Gates touched | Release kit only (ADR-021 H6 note gains the new tag). No code. No doorbell. No format of UBUNTU0. Sector not written. |
+| Gates touched | ADR-021 D4 / D5 / D6 `planned → in flight`. No iron marker. Rollback for this flash: `v0.1.0-m8-9-lan`. No doorbell. No format of UBUNTU0. Sector not written. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
 
 ## Blockers & risks (Everest-relevant)
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-27 | wave-2-link-state | 0.0 | 99 | **ADR-021 wave 2 packed (D5 + D6 + D4), in flight on `cursor/wave-2-link-state-50bb`.** Two-port link sampler (`host_link`), `link[]` on `/perc/guests` + Overview ports, `HostLinkChanged` audit, virtio-net `F_STATUS` carrier, egress discovery print with the constant still gating. 894 host tests. Not lived; one F11 and one cable pull decide D5/D6, `match=yes` on COM2 decides D4. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-27 | m8-9-lan-release | 0.0 | 99 | **Rollback pin `v0.1.0-m8-9-lan`.** CI `40603110937`, `build: sha=0d865c7fcb0a`, SHA256 `df6fc346…ad91b`. M8.9 close; not Latest. Wave 2 flashes roll back here; `v0.1.0-m8-8-ubuntu` is the older M8.8 pin. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-27 | m8-9-d7-lived-wave-1-closed | 0.0 | 99 | **ADR-021 D7 lived on `0d865c7f`; wave 1 closed; current wave → 2.** SMBIOS Type 11 credentials (`network.network.10-raynu` + `sysinit.target` drop-in) → `Installed /run/systemd/network/10-raynu.network from credential.` → `enp0s5` `routable (configured)` on `10.99.99.200/24` with nothing typed → `ssh vikkp@10.99.99.200` from the Mac. M8.9 closed. LOIHDA Bar A 92→94, Bar B 70→72, overall 78→80, SKU 92→94. months 0.0 held; overall 99 held |
 | 2026-10-27 | m8-9-d7-generator-dropin | 0.0 | 99 | **Iron `d588148f`: SMBIOS Type 11 credential reached PID 1 (`systemd-creds` 103 B, `dmi/entries/11-0`); Ubuntu's `systemd-network-generator` is disabled, so no `.network`, `enp0s5` unmanaged; `/proc/cmdline` no `ip=`.** Fix: second credential `systemd.unit-dropin.sysinit.target~10-raynu` wants the generator (runtime unit dir, disk not written). Not D7. Scores held. months 0.0 held; overall 99 held |
