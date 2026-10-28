@@ -19,14 +19,14 @@
   },
   "counts": {
     "S1": {
-      "lived": 29,
-      "in flight": 4,
+      "lived": 30,
+      "in flight": 3,
       "planned": 34,
       "total": 67
     },
     "Final": {
-      "lived": 29,
-      "in flight": 4,
+      "lived": 30,
+      "in flight": 3,
       "planned": 96,
       "total": 129
     }
@@ -559,7 +559,7 @@
           "status": "in flight",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "`cursor/wave-2-link-state-50bb`: `guest_egress::discover` picks the SPA's pair partner by bus/dev; `arm_egress` prints `boot: M8.9 egress discovered pci=.. mac=.. constant=:39 match=yes` or `match=no`. The arm still holds on `EGRESS_PHY_MAC`; the constant goes after iron prints `match=yes`",
+          "note": "`cursor/wave-2-link-state-50bb`: `guest_egress::discover` picks the SPA's pair partner by bus/dev; `arm_egress` prints `boot: M8.9 egress discovered pci=.. mac=.. constant=:39 match=yes` or `match=no`. Not captured on `8df4407d` (COM2 dropped before arm time; 4 KiB ring rolled). The arm still holds on `EGRESS_PHY_MAC`; the constant goes after iron prints `match=yes`",
           "wave": "2"
         },
         {
@@ -568,16 +568,16 @@
           "status": "in flight",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "`cursor/wave-2-link-state-50bb`: `mgmt/host_link.rs` samples both functions twice a second from the standing-SPA tick (`host_link_tick`); `/perc/guests` carries `link[]`; Overview lists Port 3 / Port 4; `HostLinkChanged` audit (kind 78) and COM2 `boot: D5 link lom=4 func=1 down`. Gate: pull and replug the port 4 cable while the guest runs",
+          "note": "`cursor/wave-2-link-state-50bb`. Page half lived on `8df4407d`: Overview Port 3 (SPA `:38`) / Port 4 (guest LAN `:39`) rows, Port 4 `UP 100 FULL` 2 changes after the pull; COM2 `boot: D5 link lom=4 func=1 down` / `up mbps=100`. Audit half not shown: `RAYNU-V-AUDIT: HostLinkChanged` was recorded but its COM1 mirror went through `write_str`, hushed under Linux; mirror moved to the no-wait path after that boot. Gate: one more pull shows the audit line on Activity",
           "wave": "2"
         },
         {
           "id": "D6",
           "capability": "virtio-net carrier follows the uplink (guest sees `NO-CARRIER` when port is dark)",
-          "status": "in flight",
+          "status": "lived",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "`cursor/wave-2-link-state-50bb`: `VIRTIO_NET_F_STATUS` offered, `status` word follows `host_link::guest_carrier` (optimistic until `:39` is driven), config-change ISR on a flip. Gate: `ip link` shows `NO-CARRIER` on the pull and `LOWER_UP` on the replug",
+          "note": "`8df4407d` (PR #418, CI `40612757544`): port 4 cable pulled with the guest SSH'd in over `:39` — guest `ip -br link` `NO-CARRIER` for the pull, `LOWER_UP` after, SSH resumed; device offers `VIRTIO_NET_F_STATUS`, status word follows `host_link::guest_carrier`, config-change ISR on the flip. docs/evidence/r640/2026-10-28-8df4407d-wave-2-cable-pull-d6-ok.md",
           "wave": "2"
         },
         {
@@ -736,14 +736,14 @@
       ],
       "counts": {
         "S1": {
-          "lived": 5,
-          "in flight": 3,
+          "lived": 6,
+          "in flight": 2,
           "planned": 3,
           "total": 11
         },
         "Final": {
-          "lived": 5,
-          "in flight": 3,
+          "lived": 6,
+          "in flight": 2,
           "planned": 15,
           "total": 23
         }
@@ -1507,8 +1507,8 @@
       "iron": "D5",
       "why": "Cheap, in code just touched; each would have saved a day in October.",
       "counts": {
-        "lived": 0,
-        "in flight": 3,
+        "lived": 1,
+        "in flight": 2,
         "planned": 2,
         "total": 5
       },
@@ -1857,12 +1857,6 @@
       "capability": "Physical link state of both LOM ports on the SPA; audit event on change",
       "status": "in flight",
       "role": "iron thread"
-    },
-    {
-      "id": "D6",
-      "capability": "virtio-net carrier follows the uplink (guest sees `NO-CARRIER` when port is dark)",
-      "status": "in flight",
-      "role": "host-first"
     },
     {
       "id": "D4",
