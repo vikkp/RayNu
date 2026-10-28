@@ -9,17 +9,17 @@ months_to_loi_a: 0.25
 months_to_loi_a_prev: 0.5
 months_to_loi_b: 1.25
 months_to_loi_b_prev: 1.5
-overall_pct: 78
+overall_pct: 80
 confidence: medium
 baseline_date: 2026-09-14
 baseline_months: 1.5
 loi_a_eta_month: "2026-10"
 loi_b_eta_month: "2026-12"
-bar_a_pct: 92
-bar_b_pct: 70
+bar_a_pct: 94
+bar_b_pct: 72
 piece_everest_pct: 100
 piece_persist_pct: 93
-piece_sku_pct: 92
+piece_sku_pct: 94
 piece_tls_pct: 80
 piece_auth_pct: 38
 piece_console_pct: 82
@@ -43,17 +43,17 @@ Lived: [`docs/progress.md`](progress.md) · M8: [`docs/m8_plan.md`](m8_plan.md) 
 
 | Metric | Value | Meaning |
 |--------|------:|---------|
-| **Overall LOI readiness** | **78%** | Bar A stays the nearer conversation. M8.8 lived: Ubuntu on the PERC spare reached `vikkp@raynusrv2:~$`, then Clear ISO. Auth is still open. The library CD view still adds `console=ttyS0`. The 2.9 TB VD is still not the guest disk. |
-| **Bar A — dedicated-box** | **92%** | One PowerEdge we own or they dedicate. A1 Everest, A3 SKU, A4 TLS, A4s standing SPA **DONE**. A2 persist **repeated** (sixth `login:`, UUID `a0ad99ac-…`). A6 **lived once**. A5 parked. USB ≠ PERC. Held. |
-| **Bar B — RAID-fleet** | **70%** | `c3a70e62` installed Ubuntu 26.04 from the library file onto a 10 GiB tail of RAYNU-SPARE and reached `vikkp@raynusrv2:~$`. Clear ISO then wiped the signature sector only. The 2.9 TB VD is still not the guest disk. Auth still blocks a fleet conversation. |
+| **Overall LOI readiness** | **80%** | Bar A stays the nearer conversation. M8.9 lived on `0d865c7f`: the guest has a LAN on port 4 and the SPA-saved address reaches it by itself; SSH from another machine. M8.8 lived before it. Auth is still open. The library CD view still adds `console=ttyS0`. The 2.9 TB VD is still not the guest disk. |
+| **Bar A — dedicated-box** | **94%** | One PowerEdge we own or they dedicate. A1 Everest, A3 SKU, A4 TLS, A4s standing SPA **DONE**. A2 persist **repeated**. **M8.9 guest LAN lived** (`0d865c7f`: SPA-saved `10.99.99.200/24` on `enp0s5` with nothing typed; SSH from the Mac). A6 lived once. A5 parked. Was 92. |
+| **Bar B — RAID-fleet** | **72%** | `c3a70e62` installed Ubuntu 26.04 from the library file onto a 10 GiB tail of RAYNU-SPARE and reached `vikkp@raynusrv2:~$`; `0d865c7f` gave that guest a LAN address from the SPA. Clear ISO then wiped the signature sector only. Was 70. The 2.9 TB VD is still not the guest disk. Auth still blocks a fleet conversation. |
 | **Months to Bar A** | **0.25** | Baseline 2026-09-14. ETA **2026-10**. Held. A6 lived once. A5 is parked, not closed. Do not go to 0. |
 | **Months to Bar B** | **1.25** | Was 1.5. The Ubuntu login on the spare tail closed the “no installed Ubuntu disk” residual. ETA **2026-12** held. The whole VD and auth remain. |
 | **Confidence** | medium | Everest is high-confidence. A6 lived once. Iron `8ad2ac89` reinstalled the 8 GiB window, then booted that UUID after a new HV boot. The whole 2.9 TB VD is not the guest disk. A5 parked. |
 
 ```
-Bar A (dedicated-box)  ██████████████████░░  92%
-Bar B (RAID fleet)      ██████████████░░░░░░  70%
-Overall LOI             ████████████████░░░░  78%
+Bar A (dedicated-box)  ███████████████████░  94%
+Bar B (RAID fleet)      ██████████████░░░░░░  72%
+Overall LOI             ████████████████░░░░  80%
 ```
 
 **How the month number moves:** same honesty as Everest HDA. Closed iron gates shrink `months_to_loi_*`. Nested QEMU, host tests, and design docs do **not**. Stalls or new scope slip the ETA. Prefer under-claiming.
@@ -128,11 +128,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 **Honest remainder.** 8 GiB slice, USB ≠ PERC, unclean shutdown still dirties the FAT. Do not claim 100%. Never flash the Toshiba.
 
-### 3. SKU card — 92%
+### 3. SKU card — 94%
 
 **What it is.** A one-page “what you are buying.” Dedicated-box vs fleet. USB vs PERC. Alpine-patched vs unmodified. No cluster. No Windows.
 
-**Product effect.** The card exists: [`docs/sku.md`](sku.md) / [`site/sku.html`](../site/sku.html). A3 is **DONE**. Native coexist is **HTTPS** (lab millicert). PRE-EBS SNP remains **plaintext HTTP**. Dedicated-box **8 GiB** USB slice. **lab latch** until ESP `auth.token`. 8% remainder is keeping the page in lockstep with A5–A6 — not a missing page.
+**Product effect.** The card exists: [`docs/sku.md`](sku.md) / [`site/sku.html`](../site/sku.html). A3 is **DONE**. Native coexist is **HTTPS** (lab millicert). PRE-EBS SNP remains **plaintext HTTP**. Dedicated-box **8 GiB** USB slice. **lab latch** until ESP `auth.token`. The card now says the guest has a LAN on port 4 with the SPA-saved address (`0d865c7f`). 6% remainder is keeping the page in lockstep with A5–A6 — not a missing page.
 
 ### 4. TLS — 80%
 
@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | m8-9-d7-generator-dropin |
-| Summary | **Iron `d588148f`: SMBIOS Type 11 credential imported by PID 1 (`network.network.10-raynu secure 103B`, body identical); Ubuntu ships `systemd-network-generator.service` disabled, so no `.network` and `enp0s5` stayed unmanaged.** Next EFI adds a `systemd.unit-dropin.sysinit.target~10-raynu` credential (`Wants=systemd-network-generator.service`, runtime unit dir). Disk not written. Not D7. Bar A 92. Bar B 70. Overall 78. Previous: **M8.9.5 / ADR-021 D7 host: the saved address reaches the guest as a systemd credential in SMBIOS Type 11.** RayNu-F publishes `network.network.10-raynu` (`[Match] MACAddress=<guest mac>`, static `Address=`/`Gateway=`/`DNS=`) through `EFI_SMBIOS3_TABLE_GUID`; `systemd-network-generator` writes `/run/systemd/network/10-raynu.network`. Iron `02e0acba` showed the `ip=` view did not do this. Disk not written. Host tests 890. Not lived: scores hold until a boot brings `enp0s5` up on the saved address with no operator command and SSH from the Mac reaches it (then D7 lives, wave 1 closes, and the SKU card's guest-LAN line moves). Bar A 92. Bar B 70. Overall 78. |
+| Commit | m8-9-d7-lived-wave-1-closed |
+| Summary | **Iron `0d865c7f`: the SPA-saved address reached the guest by itself. ADR-021 D7 lived; M8.9 and wave 1 closed.** SMBIOS Type 11 credentials (`network.network.10-raynu` + a `sysinit.target` drop-in wanting the generator Ubuntu ships disabled) → `Installed /run/systemd/network/10-raynu.network from credential.` → `enp0s5` `routable (configured)` on `10.99.99.200/24` gw `10.99.99.1` DNS `1.1.1.1` with nothing typed → `ssh vikkp@10.99.99.200` from the Mac → `raynusrv2`. Guest disk not written. **Bar A 92→94. Bar B 70→72. Overall 78→80. SKU 92→94.** PERC 86 held (no new VD I/O). Unmodified 45 held. Months held. Previous: **Iron `d588148f`: SMBIOS Type 11 credential imported by PID 1 (`network.network.10-raynu secure 103B`, body identical); Ubuntu ships `systemd-network-generator.service` disabled, so no `.network` and `enp0s5` stayed unmanaged.** Next EFI adds a `systemd.unit-dropin.sysinit.target~10-raynu` credential (`Wants=systemd-network-generator.service`, runtime unit dir). Disk not written. Not D7. Bar A 92. Bar B 70. Overall 78. |
 | Everest impact | none — HDA months 0.0 / 99% held |
-| LOI impact | Bar A 92 held. Bar B 70 held. perc 86 held (a boot that reached GRUB from the spare and then stopped is not a new PERC close). unmodified 45 held. SKU 92 held. Overall 78 held. Months A 0.25 held. Months B 1.25 held. |
-| Gates touched | ADR-021 D7 in flight (`d588148f` evidence: docs/evidence/r640/2026-10-27-d588148f-smbios-credential-imported-generator-disabled.md). ADR-021 D7 in flight (`cursor/m8-9-d7-guest-address-50bb`): SMBIOS Type 11 credential, `raynu_f/smbios.rs`, `publish_smbios`, `network_credential`. Previous: ADR-021 D3 lived, D8 lived (`02e0acba`); D7 in flight. Previous: `arm_egress` on `01:00.1`: APE START, `chip_reset_at`, `enable_core_blocks`, rings, MAC, DMA, HOSTCC; nowait COM2. Previous: `product_guest_ram_armed()` at the leftover seed, slot count and pre-map. M8.9.6 stays open. No doorbell. No format of UBUNTU0 or RAYNU-SPARE. |
+| LOI impact | Bar A 92→94 (M8.9 guest LAN with the SPA-saved address, lived). Bar B 70→72 (the PERC-tail guest now has a LAN address from the SPA). SKU 92→94. perc 86 held. unmodified 45 held. Overall 78→80. Months A 0.25 held (A5 parked). Months B 1.25 held (whole VD and auth remain). |
+| Gates touched | ADR-021 **D7 lived** (`0d865c7f`; docs/evidence/r640/2026-10-27-0d865c7f-guest-address-from-spa-d7-ok.md). Wave 1 closed; wave 2 current. M8.9 closed. ADR-021 D7 in flight (`d588148f` evidence: docs/evidence/r640/2026-10-27-d588148f-smbios-credential-imported-generator-disabled.md). ADR-021 D7 in flight (`cursor/m8-9-d7-guest-address-50bb`): SMBIOS Type 11 credential, `raynu_f/smbios.rs`, `publish_smbios`, `network_credential`. Previous: ADR-021 D3 lived, D8 lived (`02e0acba`); D7 in flight. Previous: `arm_egress` on `01:00.1`: APE START, `chip_reset_at`, `enable_core_blocks`, rings, MAC, DMA, HOSTCC; nowait COM2. |
 
 ---
 
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-10-27 | m8-9-d7-lived-wave-1-closed | 94 | 72 | **Iron `0d865c7f`: SPA-saved address on `enp0s5` with nothing typed (`Installed /run/systemd/network/10-raynu.network from credential.`, `routable (configured)` `10.99.99.200/24`); `ssh vikkp@10.99.99.200` from the Mac.** ADR-021 D7 lived; M8.9 and wave 1 closed. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-27 | m8-9-d7-generator-dropin | 92 | 70 | **Iron `d588148f`: credential imported by PID 1 (103 B, body identical); Ubuntu ships the network generator disabled, so the address did not land.** Next EFI adds a `sysinit.target` drop-in credential that wants it. Not D7. Scores held. Bar A 92. Bar B 70. Overall 78. PERC 86. Unmodified 45. SKU 92. |
 | 2026-10-27 | m8-9-d7-smbios-credential | 92 | 70 | **M8.9.5 / D7 host: saved address as a systemd credential in SMBIOS Type 11 (`network.network.10-raynu`) via `EFI_SMBIOS3_TABLE_GUID`.** Static `.network` on the guest MAC; disk not written. Host tests 890. Not lived; scores held until `enp0s5` comes up on the saved address by itself. Bar A 92. Bar B 70. Overall 78. PERC 86. Unmodified 45. SKU 92. |
 | 2026-10-27 | m8-9-guest-lan-ssh | 92 | 70 | **Iron `02e0acba`: guest frames leave and return on `:39` (`txp=8/7 rcb=11 vrx=35`, guest `RX 947`, 30 MB apt pull); `ssh vikkp@10.99.99.200` from the Mac reached the guest.** ADR-021 D3 and D8 lived. D7 open (operator-typed address; `ip=` inert). Scores held until wave 1 closes. Bar A 92. Bar B 70. Overall 78. PERC 86. Unmodified 45. SKU 92. |

@@ -11,7 +11,7 @@
     <meta property="og:title" content="RayNu-V · Path to LOI" />
     <meta
       property="og:description"
-              content="Bar A 92%. Bar B 70%. Overall 78%. PERC 86%. Ubuntu 26.04 on a 10 GiB PERC tail reached vikkp@raynusrv2. Unmodified media is 45%. M8.9: the guest has a LAN on port 4 and took SSH from another machine (02e0acba); the saved address reaching it is still open."
+              content="Bar A 94%. Bar B 72%. Overall 80%. PERC 86%. Ubuntu 26.04 on a 10 GiB PERC tail reached vikkp@raynusrv2. Unmodified media is 45%. M8.9 closed (0d865c7f): the guest has a LAN on port 4, the SPA-saved address reaches it by itself, SSH from another machine."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -58,14 +58,14 @@
           and reached <code>vikkp@raynusrv2:~$</code>. An LOI still asks a
           different question — would a fleet owner put <em>non-production
           intent</em> in writing? HDA 99% is not that answer. The 2.9 TB
-          virtual disk is not this 10 GiB tail. M8.9 on <code>02e0acba</code>: the guest has a LAN on LOM port 4 and took <code>ssh</code> from a Mac. The SPA-saved address reaching the guest is still open.
+          virtual disk is not this 10 GiB tail. M8.9 closed on <code>0d865c7f</code>: the guest has a LAN on LOM port 4, the SPA-saved address reaches it with nothing typed in the guest (an SMBIOS Type 11 systemd credential), and it took <code>ssh</code> from a Mac.
         </p>
         <p
           class="hda-path reveal reveal--delay-3"
           id="loi-path"
           aria-label="Path to LOI"
         >
-          Everest 100% → Persist 93% → SKU 92% → TLS 80% → Auth 38% → Console 82% → PERC 86% → Unmodified 45% → Bar A 92% → Bar B 70% → Overall 78%
+          Everest 100% → Persist 93% → SKU 94% → TLS 80% → Auth 38% → Console 82% → PERC 86% → Unmodified 45% → Bar A 94% → Bar B 72% → Overall 80%
         </p>
       </div>
     </header>
@@ -85,7 +85,7 @@
             <dl class="hda-tracker__meta">
               <div>
                 <dt>Overall LOI readiness</dt>
-                <dd id="loi-overall">78%</dd>
+                <dd id="loi-overall">80%</dd>
               </div>
               <div>
                 <dt>Bar A ETA</dt>
@@ -109,36 +109,36 @@
             <div class="hda-bar">
               <div class="hda-bar__head">
                 <span>Bar A · dedicated-box</span>
-                <span id="loi-bar-a-label">92%</span>
+                <span id="loi-bar-a-label">94%</span>
               </div>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill" id="loi-bar-a" style="width: 92%"></span>
+                <span class="hda-bar__fill" id="loi-bar-a" style="width: 94%"></span>
               </div>
             </div>
             <div class="hda-bar">
               <div class="hda-bar__head">
                 <span>Bar B · RAID fleet</span>
-                <span id="loi-bar-b-label">70%</span>
+                <span id="loi-bar-b-label">72%</span>
               </div>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill loi-bar__fill--fleet" id="loi-bar-b" style="width: 70%"></span>
+                <span class="hda-bar__fill loi-bar__fill--fleet" id="loi-bar-b" style="width: 72%"></span>
               </div>
             </div>
             <div class="hda-bar">
               <div class="hda-bar__head">
                 <span>Overall LOI readiness</span>
-                <span id="loi-bar-overall-label">78%</span>
+                <span id="loi-bar-overall-label">80%</span>
               </div>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill" id="loi-bar-overall" style="width: 78%"></span>
+                <span class="hda-bar__fill" id="loi-bar-overall" style="width: 80%"></span>
               </div>
             </div>
           </div>
           <p class="hda-aside" data-reveal>
             These numbers move only with COM2 evidence. Nested QEMU and host
-            tests do not. Bar A is <span data-loi-pct="bars.a">92%</span>.
-            Bar B is <span data-loi-pct="bars.b">70%</span>. Overall is
-            <span data-loi-pct="overall">78%</span>. The PERC piece is
+            tests do not. Bar A is <span data-loi-pct="bars.a">94%</span>.
+            Bar B is <span data-loi-pct="bars.b">72%</span>. Overall is
+            <span data-loi-pct="overall">80%</span>. The PERC piece is
             <span data-loi-pct="pieces.perc">86%</span>.
             Ubuntu 26.04 on a 10 GiB tail of RAYNU-SPARE reached
             <code>vikkp@raynusrv2:~$</code>. The 2.9 TB virtual disk is not
@@ -161,7 +161,7 @@
           </p>
           <div class="loi-cards" data-reveal>
             <article class="loi-card">
-              <p class="loi-card__kicker" id="loi-kicker-a" data-bar-kicker="a">Bar A · 92%</p>
+              <p class="loi-card__kicker" id="loi-kicker-a" data-bar-kicker="a">Bar A · 94%</p>
               <h3>Dedicated box</h3>
               <p>
                 One PowerEdge we own, or they can afford to dedicate. The guest
@@ -175,11 +175,11 @@
               </p>
             </article>
             <article class="loi-card">
-              <p class="loi-card__kicker" id="loi-kicker-b" data-bar-kicker="b">Bar B · 70%</p>
+              <p class="loi-card__kicker" id="loi-kicker-b" data-bar-kicker="b">Bar B · 72%</p>
               <h3>RAID fleet</h3>
               <p>
                 Keep the iron. Replace the licensed hypervisor. This bar is
-                <span data-loi-pct="bars.b">70%</span>. The PERC I/O piece
+                <span data-loi-pct="bars.b">72%</span>. The PERC I/O piece
                 inside it is <span data-loi-pct="pieces.perc">86%</span>.
                 Those are two scores for two questions: the fleet conversation,
                 and how far spare I/O has come. USB persist does not close this.
@@ -245,16 +245,16 @@
             <li data-reveal>
               <header>
                 <span class="loi-pieces__name">SKU card</span>
-                <span class="loi-pieces__pct" data-piece="sku">92%</span>
+                <span class="loi-pieces__pct" data-piece="sku">94%</span>
               </header>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill" data-piece-fill="sku" style="width: 92%"></span>
+                <span class="hda-bar__fill" data-piece-fill="sku" style="width: 94%"></span>
               </div>
               <p>
                 One page: what ships, what does not. Dedicated-box versus fleet.
                 USB versus PERC. Alpine-patched versus unmodified. No cluster.
                 No Windows. This piece is
-                <span data-loi-pct="pieces.sku">92%</span>. The card is written
+                <span data-loi-pct="pieces.sku">94%</span>. The card is written
                 (<a href="sku.html">dedicated-box SKU</a>). Persist is
                 evidence-closed on the 8 GiB USB slice. Native coexist is
                 HTTPS with a lab millicert. PRE-EBS SNP remains
@@ -334,7 +334,7 @@
                 10 GiB tail, and <code>c3a70e62</code> reached
                 <code>vikkp@raynusrv2:~$</code>. This piece is
                 <span data-loi-pct="pieces.perc">86%</span>.
-                Bar B is <span data-loi-pct="bars.b">70%</span>.
+                Bar B is <span data-loi-pct="bars.b">72%</span>.
                 The 2.9 TB VD is not the guest disk.
                 The mailbox probe LBA 0 is not written. The H840 was not
                 mapped. Do not format UBUNTU0.
@@ -365,7 +365,7 @@
 
       <section class="section section--hda-com2" id="now">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>Show and tell · M8.8 · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">70%</span> · overall <span data-loi-pct="overall">78%</span> · PERC <span data-loi-pct="pieces.perc">86%</span> · unmodified <span data-loi-pct="pieces.unmodified">45%</span></p>
+          <p class="milestone-kicker" data-reveal>Show and tell · M8.8 · Bar A <span data-loi-pct="bars.a">94%</span> · Bar B <span data-loi-pct="bars.b">72%</span> · overall <span data-loi-pct="overall">80%</span> · PERC <span data-loi-pct="pieces.perc">86%</span> · unmodified <span data-loi-pct="pieces.unmodified">45%</span></p>
           <h2 class="section__title">The Ubuntu ISO lived on the PERC. M8.9 put that guest on the LAN.</h2>
           <p class="section__lede">
             M8.8 is four steps, and all four have COM2. The file sits at the
@@ -383,9 +383,10 @@ M8.9.1  record        lived · GuestNicSaved off=19327352832 mode=2
 M8.9.2  Guests panel  lived · attach, DHCP, manual, Save
 M8.9.3  DHCP preview  lived · boot: M8.9 dhcp discover leaves :39
 M8.9.4  egress        lived · 02e0acba: txp=8/7 rcb=11 vrx=35; 411 MB in, fcs=0
-M8.9.5  address       open  · ip= is inert on this Ubuntu; operator typed 10.99.99.200
-M8.9.6  close         lived · ssh vikkp@10.99.99.200 from a Mac (address operator-set)
-scores  unmodified <span data-loi-pct="pieces.unmodified">45%</span> · Bar A <span data-loi-pct="bars.a">92%</span> · Bar B <span data-loi-pct="bars.b">70%</span> · overall <span data-loi-pct="overall">78%</span> · PERC <span data-loi-pct="pieces.perc">86%</span></code></pre>
+M8.9.5  address       lived · 0d865c7f: SMBIOS Type 11 credential → /run/systemd/network/10-raynu.network
+                              enp0s5 routable (configured) 10.99.99.200/24, nothing typed
+M8.9.6  close         lived · ssh vikkp@10.99.99.200 from a Mac (0d865c7f: address from the SPA)
+scores  unmodified <span data-loi-pct="pieces.unmodified">45%</span> · Bar A <span data-loi-pct="bars.a">94%</span> · Bar B <span data-loi-pct="bars.b">72%</span> · overall <span data-loi-pct="overall">80%</span> · PERC <span data-loi-pct="pieces.perc">86%</span></code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
             Rollback remains GitHub Latest
             <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed"
@@ -408,7 +409,7 @@ scores  unmodified <span data-loi-pct="pieces.unmodified">45%</span> · Bar A <s
           </p>
           <ul class="loi-locks">
             <li>A USB persist demonstration is the dedicated-box mechanism. RAID-fleet LOI waits on PERC virtual-disk persist.</li>
-            <li>TLS piece is <span data-loi-pct="pieces.tls">80%</span>. The iron marker <code>RAYNU-V-M8-TLS-OK</code> is closed; the remainder is the lab millicert. SKU piece is <span data-loi-pct="pieces.sku">92%</span>. Console, unmodified ISO, and cluster stay open.</li>
+            <li>TLS piece is <span data-loi-pct="pieces.tls">80%</span>. The iron marker <code>RAYNU-V-M8-TLS-OK</code> is closed; the remainder is the lab millicert. SKU piece is <span data-loi-pct="pieces.sku">94%</span>. Console, unmodified ISO, and cluster stay open.</li>
             <li>Everest remains closed. A patched Alpine ISO is a named residual, not a reason to reopen the summit.</li>
             <li>Iron install and persist markers are printed on R640 COM2 only. Host and CI do not emit them.</li>
             <li>Latitude and nested QEMU are not PowerEdge R640 evidence.</li>

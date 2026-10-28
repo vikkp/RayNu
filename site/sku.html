@@ -145,8 +145,10 @@
             <li>
               The guest NIC carries traffic on LOM port 4 (<code>02e0acba</code>:
               411 MB in, <code>fcs=0</code>, SSH from another machine). The
-              address was typed into the guest; the SPA-saved address does
-              not reach it yet (D7).
+              SPA-saved address reaches the guest by itself
+              (<code>0d865c7f</code>: an SMBIOS Type 11 systemd credential;
+              nothing typed in the guest). Static for both NIC modes; no DHCP
+              client runs in the guest.
             </li>
             <li>
               <strong>not PERC</strong> fleet: the rest of the 2.9 TB virtual

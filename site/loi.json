@@ -1,7 +1,7 @@
 {
   "bars": {
-    "a": 92,
-    "b": 70
+    "a": 94,
+    "b": 72
   },
   "baseline_date": "2026-09-14",
   "baseline_months": 1.5,
@@ -28,14 +28,14 @@
   "months_to_loi_a_prev": 0.5,
   "months_to_loi_b": 1.25,
   "months_to_loi_b_prev": 1.5,
-  "overall_pct": 78,
+  "overall_pct": 80,
   "pieces": {
     "auth": 38,
     "console": 82,
     "everest": 100,
     "perc": 86,
     "persist": 93,
-    "sku": 92,
+    "sku": 94,
     "tls": 80,
     "unmodified": 45
   },
