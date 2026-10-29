@@ -2142,6 +2142,8 @@ fn perc_fusion_post(bar: u64, bus: u8, dev: u8, func: u8, base: u64) {
         return;
     }
 
+    perc_load_nic_catalog(bar, target, bytes, dcmd_phys, data_phys);
+
     // The read chain already lived. A write miss still arms read-only virtio.
     perc_spare_write_last(bar, bus, dev, func, target, bytes, dcmd_phys, data_phys);
     // Image copy may write spare LBA 0. A miss still arms read-only virtio.
@@ -2162,6 +2164,158 @@ fn perc_fusion_post(bar: u64, bus: u8, dev: u8, func: u8, base: u64) {
         write_dec64(bytes);
         serial::write_line(" (not PERC-LUN-OK)");
     }
+}
+
+/// Read the NIC catalog sector into the SPA panel. One READ(16) of the
+/// reserved LBA. A miss or a sector that is not a catalog leaves the panel
+/// empty. Does not write. Does not print a PERC marker.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn perc_load_nic_catalog(bar: u64, target: u8, bytes: u64, frame_phys: u64, data_phys: u64) {
+    use crate::boot::serial;
+    let Some(lba) = crate::mgmt::guest_nic::catalog_lba(bytes) else {
+        serial::write_line("boot: perc nic catalog skip lba");
+        return;
+    };
+    serial::write_str("boot: perc nic catalog rd lba=");
+    write_dec64(lba);
+    let Some((st, timed_out)) = issue_ld_read16(bar, target, lba, frame_phys, data_phys) else {
+        serial::write_line(" skip frame");
+        return;
+    };
+    if timed_out || st != MFI_STAT_OK {
+        serial::write_str(" status=0x");
+        write_hex8(st);
+        serial::write_line(" (panel stays empty)");
+        return;
+    }
+    core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+    let mut sector = [0u8; 512];
+    // SAFETY: the READ(16) completed into the 512-byte payload page. Copy
+    // it out before the probe write reuses the page.
+    // KANI-TARGET: host tests cover decode, not this load.
+    unsafe {
+        core::ptr::copy_nonoverlapping(data_phys as *const u8, sector.as_mut_ptr(), 512);
+    }
+    crate::mgmt::guest_nic::restore_from_sector(&sector);
+    let mut n = 0u32;
+    let cat = crate::mgmt::guest_nic::panel_snapshot();
+    for i in 0..8 {
+        if cat.slot(i).is_some() {
+            n += 1;
+        }
+    }
+    serial::write_str(" n=");
+    write_dec(n);
+    serial::write_line("");
+}
+
+/// Write a staged NIC catalog while no product guest owns the CPU.
+/// One WRITE(16) of the reserved LBA, then a READ. The probe LBA is not
+/// this LBA. LBA 0 is not encoded. No doorbell.
+pub fn flush_nic_catalog() {
+    #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+    {
+        flush_nic_catalog_uefi();
+    }
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn flush_nic_catalog_uefi() {
+    use crate::boot::serial;
+    use crate::mgmt::perc_boot_choice::{vmcs_guest, VmcsGuest};
+    if !matches!(vmcs_guest(), VmcsGuest::None) {
+        return;
+    }
+    let Some((gen, sector)) = crate::mgmt::guest_nic::copy_dirty() else {
+        return;
+    };
+    let bar = PERC_SPARE_BAR.load(core::sync::atomic::Ordering::Acquire);
+    let target = PERC_SPARE_TARGET.load(core::sync::atomic::Ordering::Acquire);
+    let frame = PERC_SPARE_FRAME.load(core::sync::atomic::Ordering::Acquire);
+    let data = PERC_SPARE_DATA.load(core::sync::atomic::Ordering::Acquire);
+    let bytes = PERC_SPARE_BYTES.load(core::sync::atomic::Ordering::Acquire);
+    let Some(lba) = crate::mgmt::guest_nic::catalog_lba(bytes) else {
+        return;
+    };
+    if bar == 0 || frame == 0 || data == 0 {
+        return;
+    }
+    serial::write_str("boot: perc nic catalog wr lba=");
+    write_dec64(lba);
+    let Some((st, timed_out)) = issue_ld_write16_sector(bar, target, lba, frame, data, &sector)
+    else {
+        serial::write_line(" skip frame");
+        return;
+    };
+    if timed_out || st != MFI_STAT_OK {
+        serial::write_str(" status=0x");
+        write_hex8(st);
+        serial::write_line(" (staged, not acked)");
+        return;
+    }
+    let Some((rst, rto)) = issue_ld_read16(bar, target, lba, frame, data) else {
+        serial::write_line(" rd skip");
+        return;
+    };
+    if rto || rst != MFI_STAT_OK {
+        serial::write_line(" rd status (staged, not acked)");
+        return;
+    }
+    core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+    let mut back = [0u8; 512];
+    // SAFETY: the READ(16) completed into the payload page.
+    // KANI-TARGET: host tests cover the sector bytes, not this load.
+    unsafe {
+        core::ptr::copy_nonoverlapping(data as *const u8, back.as_mut_ptr(), 512);
+    }
+    if back == sector {
+        crate::mgmt::guest_nic::ack_dirty(gen);
+        serial::write_line(" match");
+    } else {
+        serial::write_line(" mismatch (staged, not acked)");
+    }
+}
+
+/// One polled WRITE(16) of `lba` with `sector` as the payload.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn issue_ld_write16_sector(
+    bar: u64,
+    target: u8,
+    lba: u64,
+    frame_phys: u64,
+    data_phys: u64,
+    sector: &[u8; 512],
+) -> Option<(u8, bool)> {
+    if lba == 0
+        || data_phys == 0
+        || data_phys >= 0x1_0000_0000
+        || data_phys & 0x1FF != 0
+        || frame_phys == 0
+    {
+        return None;
+    }
+    let wr = pack_ld_write16(target, lba, 1, data_phys, 512).ok()?;
+    let desc = pack_mfa_descriptor(frame_phys)?;
+    // SAFETY: frame and payload are the spare DMA pages stored at boot.
+    // The CDB is one WRITE(16) of the catalog LBA. No doorbell. LBA 0 is
+    // not in the frame.
+    // KANI-TARGET: host tests cover the packed WRITE, not this copy.
+    unsafe {
+        let frame = frame_phys as *mut u8;
+        core::ptr::write_bytes(frame, 0, 4096);
+        core::ptr::copy_nonoverlapping(wr.as_ptr(), frame, wr.len());
+        core::ptr::copy_nonoverlapping(sector.as_ptr(), data_phys as *mut u8, 512);
+        core::ptr::write_bytes((data_phys + 512) as *mut u8, 0, 32);
+    }
+    core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+    // SAFETY: one 64-bit store to the low inbound queue port. Not doorbell 0x00.
+    unsafe {
+        core::ptr::write_volatile(
+            (bar + u64::from(MFI_INBOUND_LOW_QUEUE_PORT)) as *mut u64,
+            desc,
+        );
+    }
+    Some(poll_mfi_status(frame_phys as *mut u8))
 }
 
 /// One polled WRITE(16) of the spare's last LBA, then a READ of that LBA.

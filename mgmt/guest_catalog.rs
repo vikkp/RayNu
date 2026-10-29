@@ -512,6 +512,7 @@ fn nic_rest(method: RestMethod, route: NicRoute, authed: bool) -> GuestCatalogHt
         NicRoute::Discover(spare_off) => discover_nic(spare_off),
         NicRoute::Detach(spare_off) => {
             if crate::mgmt::guest_nic::panel_detach(spare_off) {
+                crate::mgmt::megaraid::flush_nic_catalog();
                 crate::audit_log!(crate::audit::AuditEvent::GuestNicDetached { spare_off });
                 ready(200, b"{\"ok\":true,\"detached\":true}", None)
             } else {
@@ -538,6 +539,7 @@ fn nic_rest(method: RestMethod, route: NicRoute, authed: bool) -> GuestCatalogHt
                 },
             ) {
                 Ok(rec) => {
+                    crate::mgmt::megaraid::flush_nic_catalog();
                     crate::audit_log!(crate::audit::AuditEvent::GuestNicSaved {
                         spare_off,
                         mode: mode as u8,

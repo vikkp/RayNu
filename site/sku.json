@@ -20,14 +20,14 @@
   "counts": {
     "S1": {
       "lived": 34,
-      "in flight": 1,
-      "planned": 32,
+      "in flight": 2,
+      "planned": 31,
       "total": 67
     },
     "Final": {
       "lived": 34,
-      "in flight": 1,
-      "planned": 94,
+      "in flight": 2,
+      "planned": 93,
       "total": 129
     }
   },
@@ -418,10 +418,10 @@
         {
           "id": "C8",
           "capability": "Config store on disk: guests, NICs, settings survive host reboot",
-          "status": "planned",
+          "status": "in flight",
           "ships": "S1",
           "ref": "M8.5",
-          "note": "vNIC is RAM-only today; re-saved every boot",
+          "note": "`cursor/wave-3-c8-config-50bb`. Save and Detach stage the NIC catalog sector. While no product guest owns the CPU, one WRITE(16) of the reserved LBA (the sector before the spare probe, not LBA 0) stores it and a READ acks it. Boot reads that LBA into the panel before the guest starts. Gate: Save, reboot the hypervisor, the same MAC and address are on the Guests row with nothing typed. Host round-trip is not that close",
           "wave": "3"
         },
         {
@@ -509,14 +509,14 @@
       "counts": {
         "S1": {
           "lived": 5,
-          "in flight": 0,
-          "planned": 4,
+          "in flight": 1,
+          "planned": 3,
           "total": 9
         },
         "Final": {
           "lived": 5,
-          "in flight": 0,
-          "planned": 12,
+          "in flight": 1,
+          "planned": 11,
           "total": 17
         }
       }
@@ -1526,8 +1526,8 @@
       "why": "M8.5 in ADR-018 terms. Everything after depends on it.",
       "counts": {
         "lived": 0,
-        "in flight": 0,
-        "planned": 3,
+        "in flight": 1,
+        "planned": 2,
         "total": 3
       },
       "closed": false
@@ -1855,7 +1855,7 @@
     {
       "id": "C8",
       "capability": "Config store on disk: guests, NICs, settings survive host reboot",
-      "status": "planned",
+      "status": "in flight",
       "role": "iron thread"
     },
     {
