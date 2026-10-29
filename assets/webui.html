@@ -73,6 +73,7 @@ input.token{min-width:12rem}
 <div class="card"><div class="dot" id="d-iso"></div><b>Install media</b><span id="t-iso">No ISO yet</span></div>
 </div>
 <p class="note" id="build-id"></p>
+<p class="note" id="guest-stop"></p>
 <section class="pg on" data-pg="overview">
 <h2>Overview</h2>
 <div class="toolbar"><button class="danger" id="btn-poweroff" type="button">Power off host</button></div>
@@ -163,6 +164,7 @@ dot("hv","ok","Hypervisor is running");
 dot("host",hostOk?"ok":"bad",hostOk?"Server is answering":"Cannot reach the server");
 let run=0,defd=0,isoOn=0,rid=0;
 items.forEach(function(vm){const st=String(vm.state||"").toLowerCase();if(st==="running"){run++;rid=vm.guest_id}else defd++;if(vm.iso_id)isoOn++});
+if(spareBody&&spareBody.guests)spareBody.guests.forEach(function(vm){const st=String(vm.state||"").toLowerCase();if(st==="running"){run++;if(!rid)rid=vm.id}else if(st==="stopped")defd++});
 if(run)dot("guest","ok",run===1?("Guest "+rid+" is running"):(run+" guests running"));
 else if(defd)dot("guest","wn","Guest is stopped");else dot("guest","","No guest yet");
 if(isoP==="loading")dot("iso","wn","ISO is being loaded…");
@@ -215,6 +217,7 @@ const c=document.createElement("button");c.className="ghost";c.textContent="Stop
 if(vm.act!=="ISO"){const v=document.createElement("button");v.className="ghost";v.textContent="vNIC";v.onclick=function(){openVnic(vm)};acts.appendChild(v)}
 box.appendChild(row);
 });
+if(b.last_stop){const line=document.createElement("div");line.className="meta";line.textContent=(b.last_stop.text||"")+" reason="+(b.last_stop.reason||"")+" rip="+(b.last_stop.rip||"");box.appendChild(line)}
 }
 async function guestStart(vm){if(up)return;const id=vm.id;const path=vm.boot?vm.boot:(id==3||vm.act==="ISO"?"/perc/guests/1/linux/"+num("f-disk",10240):(id===2?"/perc/guests/2/start":"/perc/guests/1/start"));setS("Starting "+id+"…");const res=await api("POST",path);let t="";try{t=await res.text()}catch(e){}setS(!res.ok?("Start refused ("+res.status+")"):t.indexOf("busy")>=0?"Guest stays off":("Booting guest "+id));loadSpare()}
 async function guestStop(){if(up)return;setS("Stopping guest…");const res=await api("POST","/perc/guests/stop");setS(res.ok?"Guest stopped":"Stop refused ("+res.status+")");loadSpare()}
@@ -222,7 +225,12 @@ async function loadSpare(){
 if(up)return;let r;try{r=await api("GET","/perc/guests")}catch(e){return}
 hostOk=r.ok||hostOk;if(!r.ok)return;
 let b={};try{b=await r.json()}catch(e){}
-spareBody=b;capNote(b);paintSpare(b);paintPorts(b);paintBuild(b);
+spareBody=b;capNote(b);paintSpare(b);paintPorts(b);paintBuild(b);paintStop(b);paint();
+}
+function paintStop(b){
+const el=document.getElementById("guest-stop");if(!el)return;
+const s=b&&b.last_stop;
+el.textContent=s?((s.text||"")+" reason="+(s.reason||"")+" rip="+(s.rip||"")):"";
 }
 function paintBuild(b){
 const el=document.getElementById("build-id");if(!el)return;

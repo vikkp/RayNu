@@ -1114,6 +1114,7 @@ fn write_list_json(
     write_nic_json(&mut w);
     crate::mgmt::host_link::write_json(&mut w);
     write_build_identity(&mut w);
+    write_last_stop(&mut w);
     w.s("}");
     if w.fit {
         w.n
@@ -1135,6 +1136,40 @@ fn write_build_identity(w: &mut JsonBuf<'_>) {
         w.s(crate::BUILD_RUN);
     }
     w.s("\"");
+}
+
+/// ADR-021 B20: the latest stop, omitted until one has been recorded so a
+/// body with no stop stays what it was.
+fn write_last_stop(w: &mut JsonBuf<'_>) {
+    let Some(rec) = crate::mgmt::guest_stop::last() else {
+        return;
+    };
+    w.s(",\"last_stop\":{\"kind\":\"");
+    w.s(rec.kind.name());
+    w.s("\",\"text\":\"");
+    w.s(rec.kind.sentence());
+    w.s("\",\"reason\":\"");
+    write_hex_field(w, u64::from(rec.reason));
+    w.s("\",\"rip\":\"");
+    write_hex_field(w, rec.rip);
+    w.s("\"}");
+}
+
+fn write_hex_field(w: &mut JsonBuf<'_>, mut n: u64) {
+    w.s("0x");
+    if n == 0 {
+        w.s("0");
+        return;
+    }
+    let mut buf = [0u8; 16];
+    let mut i = 16;
+    while n > 0 && i > 0 {
+        i -= 1;
+        let d = (n & 0xf) as usize;
+        buf[i] = b"0123456789abcdef"[d];
+        n >>= 4;
+    }
+    w.s(core::str::from_utf8(&buf[i..]).unwrap_or("0"));
 }
 
 /// Start and Stop follow this guest alone. Another guest being on does not
@@ -1262,7 +1297,9 @@ fn window_state(choice: PercSpaChoice) -> &'static str {
 fn tail_row_state(choice: PercSpaChoice) -> &'static str {
     match choice {
         PercSpaChoice::Tail { .. } => "installing",
-        PercSpaChoice::TailBoot { .. } => "booting",
+        // The tail guest at login is on the CPU. "booting" never matched
+        // the Guest tile, which only counts state "running".
+        PercSpaChoice::TailBoot { .. } => "running",
         _ => "installed",
     }
 }
@@ -1367,6 +1404,9 @@ pub fn prop_guest_catalog() -> bool {
         && html.contains("function paintBuild")
         && html.contains("https://github.com/vikkp/RayNu/actions/runs/")
         && html.contains("/^[0-9]+$/.test(run)")
+        && html.contains("id=\"guest-stop\"")
+        && html.contains("b.last_stop")
+        && html.contains("st===\"running\"")
         && html.contains("id=\"n-ip\"")
         && html.contains("btn-nic")
         && html.contains("btn-dhcp")
@@ -1393,6 +1433,34 @@ mod guest_catalog_test {
     use crate::mgmt::megaraid::IRON_LD1_BYTES;
     use crate::mgmt::perc_boot_choice::clear_perc_spa_choice_for_test;
     use crate::mgmt::{ImageTable, VmTable};
+
+    #[test]
+    fn b20_last_stop_rides_the_guest_list_only_after_a_stop() {
+        use crate::mgmt::guest_stop::{last, note_raynu_f, reset_for_test, StopKind};
+        reset_for_test();
+        crate::mgmt::guest_nic::clear_panel_for_test();
+        let get = "GET /perc/guests HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n";
+        let (st, body) = exchange(get);
+        assert_eq!(st, 200, "{body}");
+        assert!(!body.contains("\"last_stop\""), "{body}");
+        note_raynu_f("spa-stop", 0x1c, 0xffff_fe94, 3, 8, 0);
+        let (st, body) = exchange(get);
+        assert_eq!(st, 200, "{body}");
+        assert!(
+            body.contains(
+                "\"last_stop\":{\"kind\":\"operator\",\"text\":\"Stopped from the Guests page.\",\"reason\":\"0x1c\",\"rip\":\"0xfffffe94\"}"
+            ),
+            "{body}"
+        );
+        assert_eq!(last().unwrap().kind, StopKind::OperatorStop);
+        assert_eq!(
+            tail_row_state(PercSpaChoice::TailBoot { disk_bytes: 1 }),
+            "running"
+        );
+        let html = include_str!("../assets/webui.html");
+        assert!(html.contains("Guest \"+rid+\" is running"));
+        reset_for_test();
+    }
 
     #[test]
     fn a3_build_identity_rides_the_guest_list() {

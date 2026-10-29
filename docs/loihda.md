@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-2-a3-lived |
-| Summary | **Iron `bc50d59aa77a`: ADR-021 A3 lived.** The Overview line under the tiles matches COM2 `build: sha=bc50d59aa77a run=40876033671`, and the run links to that Actions page. B20 still planned. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-2-b20-stop-reason |
+| Summary | **ADR-021 B20 in flight.** The page can show why the guest stopped, and a running tail guest is `running` on the Guest tile. Host only; not lived until the next F11 and a Stop. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. |
-| Gates touched | ADR-021 A3 lived. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-9-lan`. |
+| Gates touched | ADR-021 B20 in flight. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-9-lan`. |
 
 ---
 
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-10-29 | wave-2-b20-stop-reason | 94 | 72 | **B20 in flight on `cursor/wave-2-b20-a3-50bb`.** Last stop on the page; a running tail guest is `running`. Not lived until the next F11 and a Stop. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-29 | wave-2-a3-lived | 94 | 72 | **Iron `bc50d59aa77a`: A3 lived** — Overview `build bc50d59aa77a · CI 40876033671` matches COM2. B20 still planned. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-29 | wave-2-a3-build-id | 94 | 72 | **A3 in flight on `cursor/wave-2-b20-a3-50bb`.** Overview build SHA and CI run from `/perc/guests`. Not lived. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-29 | wave-2-d5-lived | 94 | 72 | **Iron `aeb2d79b`: D5 lived on one port 4 pull** — `HostLinkChanged` audit line on COM2 and Activity, down and up, under the running guest. Wave 2 iron thread closed; B20 / A3 host-first remain. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |

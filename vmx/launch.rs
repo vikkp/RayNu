@@ -5522,6 +5522,9 @@ fn finish_boot(ok: bool) -> ! {
 /// not. Start was audited (`choice=4`) and the guest stayed off. This idle
 /// consumes that Start. Not `ISO-INSTALL-OK`.
 pub fn enter_spa_stop_idle() -> ! {
+    // A RayNu-F stop already recorded its why. This only fills the gap
+    // when idle is reached with no record.
+    crate::mgmt::guest_stop::note_operator_if_empty();
     serial::write_line(
         "boot: SPA stop idle — guest off; Start on that row boots it again (not ISO-INSTALL-OK)",
     );
