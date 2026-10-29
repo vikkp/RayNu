@@ -19,15 +19,15 @@
   },
   "counts": {
     "S1": {
-      "lived": 37,
+      "lived": 38,
       "in flight": 1,
-      "planned": 29,
+      "planned": 28,
       "total": 67
     },
     "Final": {
-      "lived": 37,
+      "lived": 38,
       "in flight": 1,
-      "planned": 91,
+      "planned": 90,
       "total": 129
     }
   },
@@ -190,10 +190,10 @@
         {
           "id": "B5",
           "capability": "Guests autostart at host boot, in operator order, with a delay",
-          "status": "planned",
+          "status": "lived",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Power cut today leaves guests off",
+          "note": "Iron `e6ed42a31ba4` / run `40938025112`. Boot next wrote `boot: B5 autostart wr lba=6190268909 match`. The next F11, with the SPA never opened, printed `boot: B5 autostart rd lba=6190268909 n=1` and `boot: B5 autostart start off=19327352832`, then the tail boot and `raynusrv2 login:`. Same boot kept the NIC catalog (`n=1`), the audit chain (`n=32`), and `boot: C7 virtio flush sync status=0x00`. That COM2 PCI probe had virtio-blk `00:02.0` and no virtio-net `00:05.0`; `systemd-networkd-wait-online` failed because this start did not call `on_accepted_start`. The branch now does, and prints `boot: B5 autostart nic` or `nic none`. That line is not on this COM2. Evidence `docs/evidence/r640/2026-10-29-e6ed42a3-wave-4-b5-autostart-ok.md`. Wave 4 stays open on B4",
           "wave": "4"
         },
         {
@@ -334,15 +334,15 @@
       ],
       "counts": {
         "S1": {
-          "lived": 4,
+          "lived": 5,
           "in flight": 0,
-          "planned": 6,
+          "planned": 5,
           "total": 10
         },
         "Final": {
-          "lived": 4,
+          "lived": 5,
           "in flight": 0,
-          "planned": 16,
+          "planned": 15,
           "total": 20
         }
       }
@@ -1545,9 +1545,9 @@
       "iron": "B5",
       "why": "The first \"walk away from the rack\" moment. Needs wave 3.",
       "counts": {
-        "lived": 0,
+        "lived": 1,
         "in flight": 0,
-        "planned": 5,
+        "planned": 4,
         "total": 5
       },
       "closed": false
@@ -1852,12 +1852,6 @@
   ],
   "current_wave": "4",
   "next_up": [
-    {
-      "id": "B5",
-      "capability": "Guests autostart at host boot, in operator order, with a delay",
-      "status": "planned",
-      "role": "iron thread"
-    },
     {
       "id": "B4",
       "capability": "Clean shutdown and reboot from the SPA (ACPI power button), Stop as the hard fallback",

@@ -2244,6 +2244,7 @@ fn perc_fusion_post(bar: u64, bus: u8, dev: u8, func: u8, base: u64) {
 
     perc_load_nic_catalog(bar, target, bytes, dcmd_phys, data_phys);
     perc_load_audit_chain(bar, target, bytes, dcmd_phys, data_phys);
+    perc_load_autostart(bar, target, bytes, dcmd_phys, data_phys);
 
     // The read chain already lived. A write miss still arms read-only virtio.
     perc_spare_write_last(bar, bus, dev, func, target, bytes, dcmd_phys, data_phys);
@@ -2350,6 +2351,40 @@ fn perc_load_audit_chain(bar: u64, target: u8, bytes: u64, frame_phys: u64, data
         serial::write_line("");
     } else {
         serial::write_line("boot: audit chain rd none");
+    }
+}
+
+/// Read the autostart sector. A miss leaves the SPA wait in place.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn perc_load_autostart(bar: u64, target: u8, bytes: u64, frame_phys: u64, data_phys: u64) {
+    use crate::boot::serial;
+    let Some(lba) = crate::mgmt::guest_autostart::autostart_lba(bytes) else {
+        serial::write_line("boot: B5 autostart skip lba");
+        return;
+    };
+    let Some((st, timed_out)) = issue_ld_read16(bar, target, lba, frame_phys, data_phys) else {
+        serial::write_line("boot: B5 autostart rd skip frame");
+        return;
+    };
+    if timed_out || st != MFI_STAT_OK {
+        serial::write_line("boot: B5 autostart rd skip status");
+        return;
+    }
+    core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+    let mut sector = [0u8; 512];
+    // SAFETY: the READ(16) completed into the payload page.
+    // KANI-TARGET: host tests cover the sector, not this load.
+    unsafe {
+        core::ptr::copy_nonoverlapping(data_phys as *const u8, sector.as_mut_ptr(), 512);
+    }
+    if crate::mgmt::guest_autostart::restore(&sector) {
+        serial::write_str("boot: B5 autostart rd lba=");
+        write_dec64(lba);
+        serial::write_str(" n=");
+        write_dec(u32::from(crate::mgmt::guest_autostart::saved_count()));
+        serial::write_line("");
+    } else {
+        serial::write_line("boot: B5 autostart none");
     }
 }
 
@@ -2516,6 +2551,71 @@ fn flush_nic_catalog_uefi() {
     }
     if back == sector {
         crate::mgmt::guest_nic::ack_dirty(gen);
+        serial::write_line(" match");
+    } else {
+        serial::write_line(" mismatch (staged, not acked)");
+    }
+}
+
+/// Write a staged autostart sector while no product guest owns the CPU.
+/// One WRITE(16), then a READ. The audit image and the NIC catalog are not
+/// this LBA. LBA 0 is not encoded. No doorbell.
+pub fn flush_autostart() {
+    #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+    {
+        flush_autostart_uefi();
+    }
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn flush_autostart_uefi() {
+    use crate::boot::serial;
+    use crate::mgmt::perc_boot_choice::{vmcs_guest, VmcsGuest};
+    if !matches!(vmcs_guest(), VmcsGuest::None) {
+        return;
+    }
+    let Some((gen, sector)) = crate::mgmt::guest_autostart::copy_dirty() else {
+        return;
+    };
+    let bar = PERC_SPARE_BAR.load(core::sync::atomic::Ordering::Acquire);
+    let target = PERC_SPARE_TARGET.load(core::sync::atomic::Ordering::Acquire);
+    let frame = PERC_SPARE_FRAME.load(core::sync::atomic::Ordering::Acquire);
+    let data = PERC_SPARE_DATA.load(core::sync::atomic::Ordering::Acquire);
+    let bytes = PERC_SPARE_BYTES.load(core::sync::atomic::Ordering::Acquire);
+    let Some(lba) = crate::mgmt::guest_autostart::autostart_lba(bytes) else {
+        return;
+    };
+    if bar == 0 || frame == 0 || data == 0 {
+        return;
+    }
+    serial::write_str("boot: B5 autostart wr lba=");
+    write_dec64(lba);
+    let Some((st, timed_out)) = issue_ld_write16_sector(bar, target, lba, frame, data, &sector)
+    else {
+        serial::write_line(" skip frame");
+        return;
+    };
+    if timed_out || st != MFI_STAT_OK {
+        serial::write_line(" (staged, not acked)");
+        return;
+    }
+    let Some((rst, rto)) = issue_ld_read16(bar, target, lba, frame, data) else {
+        serial::write_line(" rd skip");
+        return;
+    };
+    if rto || rst != MFI_STAT_OK {
+        serial::write_line(" rd status (staged, not acked)");
+        return;
+    }
+    core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+    let mut back = [0u8; 512];
+    // SAFETY: the READ(16) completed into the payload page.
+    // KANI-TARGET: host tests cover the sector bytes, not this load.
+    unsafe {
+        core::ptr::copy_nonoverlapping(data as *const u8, back.as_mut_ptr(), 512);
+    }
+    if back == sector {
+        crate::mgmt::guest_autostart::ack_dirty(gen);
         serial::write_line(" match");
     } else {
         serial::write_line(" mismatch (staged, not acked)");

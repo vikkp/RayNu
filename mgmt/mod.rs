@@ -312,18 +312,31 @@ pub fn prop_lifecycle_roundtrip() -> bool {
 }
 
 pub mod api;
+pub mod auth;
 #[cfg(feature = "uefi-bin")]
 pub mod bcm5720;
 pub mod bcm5720_mmio;
+pub mod console;
 pub mod datastore;
+pub mod disk_persist;
+pub mod durable_lun;
 #[cfg(feature = "uefi-bin")]
 pub mod e1000;
 pub mod e1000_mmio;
 pub mod el_torito;
 pub mod ext;
 pub mod fault;
+pub mod guest_addr;
+pub mod guest_autostart;
+pub mod guest_catalog;
+pub mod guest_close;
+pub mod guest_dhcp;
+pub mod guest_egress;
 pub mod guest_fw;
 pub mod guest_image;
+pub mod guest_nic;
+pub mod guest_nic_start;
+pub mod guest_stop;
 pub mod ha;
 pub mod host_link;
 pub mod host_nic;
@@ -331,42 +344,13 @@ pub mod host_nic_coexist;
 #[cfg(feature = "uefi-bin")]
 pub mod host_nic_listen;
 pub mod host_nic_poll;
+pub mod host_power;
 pub mod http;
 pub mod http_listen;
 pub mod iso;
 pub mod iso_install;
-pub mod disk_persist;
-pub mod durable_lun;
-pub mod nvme;
-pub mod megaraid;
-pub mod m8_perc_gate;
-pub mod usb_bot;
-pub mod xhci;
-pub mod m8_disk_persist_gate;
-pub mod tls;
-pub mod tls_coexist;
-#[cfg(any(test, feature = "uefi-bin"))]
-pub mod tls12;
-pub mod m8_tls_gate;
-pub mod m8_tls_fw_gate;
-pub mod auth;
-pub mod m8_auth_gate;
-pub mod console;
-pub mod host_power;
-pub mod perc_boot_choice;
-pub mod guest_catalog;
-pub mod guest_stop;
-pub mod m8_console_gate;
-pub mod sku_card;
-pub mod guest_egress;
-pub mod guest_dhcp;
-pub mod guest_nic;
-pub mod guest_nic_start;
-pub mod guest_addr;
-pub mod guest_close;
 pub mod iso_library;
 pub mod iso_upload;
-pub mod m8_iso_upload_gate;
 pub mod m5_api_gate;
 pub mod m5_life_gate;
 pub mod m5_webui_gate;
@@ -376,54 +360,54 @@ pub mod m6_fault_gate;
 pub mod m6_ha_gate;
 pub mod m6_soak_gate;
 pub mod m7_e4_spa_gate;
-pub mod m7_e5_phase_b_gate;
 pub mod m7_e5_alias_ept_gate;
 pub mod m7_e5_boot_spec_gate;
 pub mod m7_e5_cdrom_attach_gate;
 pub mod m7_e5_cdrom_firmware_gate;
+pub mod m7_e5_ept_install_gate;
 pub mod m7_e5_esp_launch_gate;
 pub mod m7_e5_esp_map_gate;
-pub mod m7_e5_ept_install_gate;
 pub mod m7_e5_fw_alias_gate;
-pub mod m7_e5_real_esp_gate;
-pub mod m7_e5_real_launch_gate;
-pub mod m7_e5_live_exec_gate;
-pub mod m7_e5_priv_vmcs_gate;
-pub mod m7_e5_live_issue_gate;
-pub mod m7_e5_live_bytes_gate;
-pub mod m7_e5_live_fd_gate;
-pub mod m7_e5_live_present_gate;
-pub mod m7_e5_live_admit_gate;
-pub mod m7_e5_live_read_gate;
-pub mod m7_e5_live_copy_gate;
-pub mod m7_e5_live_place_gate;
-pub mod m7_e5_live_apply_gate;
-pub mod m7_e5_live_commit_gate;
-pub mod m7_e5_live_latch_gate;
-pub mod m7_e5_live_seal_gate;
-pub mod m7_e5_live_lock_gate;
-pub mod m7_e5_live_hold_gate;
-pub mod m7_e5_ovmf_retain_gate;
-pub mod m7_e5_ovmf_vmlaunch_gate;
-pub mod m7_e5_ovmf_alive_gate;
-pub mod m7_e5_ovmf_past_sec_gate;
-pub mod m7_e5_ovmf_cdrom_gate;
-pub mod m7_e5_ovmf_dxe_gate;
-pub mod m7_e5_ovmf_virtio_gate;
-pub mod m7_e5_ovmf_both_gate;
-pub mod m7_e5_ovmf_atapi_gate;
-pub mod m7_e5_ovmf_eltorito_gate;
 pub mod m7_e5_fw_bind_gate;
 pub mod m7_e5_fw_edk2_gate;
 pub mod m7_e5_fw_floor_gate;
 pub mod m7_e5_fw_prep_gate;
 pub mod m7_e5_guest_fw_gate;
 pub mod m7_e5_guest_fw_load_gate;
+pub mod m7_e5_live_admit_gate;
+pub mod m7_e5_live_apply_gate;
+pub mod m7_e5_live_bytes_gate;
+pub mod m7_e5_live_commit_gate;
+pub mod m7_e5_live_copy_gate;
+pub mod m7_e5_live_exec_gate;
+pub mod m7_e5_live_fd_gate;
+pub mod m7_e5_live_hold_gate;
+pub mod m7_e5_live_issue_gate;
+pub mod m7_e5_live_latch_gate;
+pub mod m7_e5_live_lock_gate;
+pub mod m7_e5_live_place_gate;
+pub mod m7_e5_live_present_gate;
+pub mod m7_e5_live_read_gate;
+pub mod m7_e5_live_seal_gate;
+pub mod m7_e5_ovmf_alive_gate;
+pub mod m7_e5_ovmf_atapi_gate;
+pub mod m7_e5_ovmf_both_gate;
+pub mod m7_e5_ovmf_cdrom_gate;
+pub mod m7_e5_ovmf_dxe_gate;
+pub mod m7_e5_ovmf_eltorito_gate;
 pub mod m7_e5_ovmf_esp_gate;
+pub mod m7_e5_ovmf_past_sec_gate;
 pub mod m7_e5_ovmf_probe_gate;
+pub mod m7_e5_ovmf_retain_gate;
 pub mod m7_e5_ovmf_slot_gate;
-pub mod m7_e5_reset_vec_gate;
+pub mod m7_e5_ovmf_virtio_gate;
+pub mod m7_e5_ovmf_vmlaunch_gate;
+pub mod m7_e5_phase_b_gate;
+pub mod m7_e5_priv_vmcs_gate;
 pub mod m7_e5_raynu_f_f7_gate;
+pub mod m7_e5_real_esp_gate;
+pub mod m7_e5_real_launch_gate;
+pub mod m7_e5_reset_vec_gate;
 pub mod m7_host_nic_gate;
 pub mod m7_http_gate;
 pub mod m7_iso_gate;
@@ -434,13 +418,24 @@ pub mod m7_ship_gate;
 pub mod m7_store_gate;
 pub mod m7_uefi_http_gate;
 pub mod m7_ui_gate;
+pub mod m8_auth_gate;
+pub mod m8_console_gate;
+pub mod m8_disk_persist_gate;
+pub mod m8_iso_upload_gate;
+pub mod m8_perc_gate;
+pub mod m8_tls_fw_gate;
+pub mod m8_tls_gate;
+pub mod megaraid;
 pub mod mgmt_arena;
 pub mod mgmt_lease;
 #[cfg(feature = "uefi-bin")]
 pub mod net_probe_uefi;
+pub mod nvme;
 pub mod pci_census;
+pub mod perc_boot_choice;
 pub mod pre_ebs_mgmt;
 pub mod ship;
+pub mod sku_card;
 #[cfg(feature = "uefi-bin")]
 pub mod snp_listen_uefi;
 #[cfg(feature = "uefi-bin")]
@@ -449,7 +444,13 @@ pub mod soak;
 pub mod spa_launch;
 #[cfg(feature = "uefi-bin")]
 pub mod tcp4_uefi;
+pub mod tls;
+#[cfg(any(test, feature = "uefi-bin"))]
+pub mod tls12;
+pub mod tls_coexist;
+pub mod usb_bot;
 pub mod webui;
+pub mod xhci;
 
 pub use api::{
     clear_operator_token, dispatch_cli, dispatch_rest, parse_cli, parse_rest_method,
@@ -460,6 +461,7 @@ pub use datastore::{
     dispatch_store_rest, prop_datastore_package, ImageKind, ImageTable, M7_STORE_OK_MARKER,
     STORE_GAP_NOTE,
 };
+pub use durable_lun::{init_durable_lun_io, init_durable_lun_usb_io, probe_durable_lun};
 pub use el_torito::{parse_el_torito, ElToritoError, ElToritoImage};
 pub use ext::{
     prop_external_audit_package, prop_findings_no_open_critical, prop_spec_review_filed,
@@ -470,15 +472,17 @@ pub use fault::{
     prop_kill_vcpu_recover, prop_net_partition_recover, FAULT_GAP_NOTE, M6_FAULT_OK_MARKER,
 };
 pub use guest_fw::{
-    arm_ovmf_esp_launch, arm_ovmf_firmware_alias, arm_ovmf_firmware_slot, arm_ovmf_reset_vector,
-    bind_ovmf_firmware_guest, box_guest_firmware, dispatch_guest_fw_rest, load_guest_firmware,
-    load_ovmf_from_esp, map_live_esp_ovmf, prepare_ovmf_firmware_launch, probe_ovmf_firmware,
-    arm_ovmf_real_launch, install_ovmf_alias_ept, program_ovmf_alias_ept, qualify_real_esp_ovmf,
-    arm_ovmf_live_issue, arm_ovmf_private_vmcs, admit_ovmf_live_esp, present_ovmf_live_esp, probe_ovmf_live_bytes, read_ovmf_live_esp, require_ovmf_live_esp, require_ovmf_live_fd, stage_edk2_ovmf_firmware,
-    stage_ovmf_firmware_floor, try_vmlaunch_ovmf_firmware, GuestFwBlob, GuestFwError, GuestFwKind,
-    OvmfAlias, OvmfAliasEpt, OvmfAliasEptInstall, OvmfBind, OvmfEdk2, OvmfEspLaunch, OvmfFloor,
-    OvmfFv, OvmfLaunchPrep, OvmfLiveAdmit, OvmfLiveBytes, OvmfLiveExec, OvmfLiveFd, OvmfLiveIssue, OvmfLiveMap, OvmfLivePresent, OvmfLiveRead, OvmfPrivateVmcs, OvmfRealEsp,
-    OvmfRealLaunch, OvmfResetVec, OvmfSlot,
+    admit_ovmf_live_esp, arm_ovmf_esp_launch, arm_ovmf_firmware_alias, arm_ovmf_firmware_slot,
+    arm_ovmf_live_issue, arm_ovmf_private_vmcs, arm_ovmf_real_launch, arm_ovmf_reset_vector,
+    bind_ovmf_firmware_guest, box_guest_firmware, dispatch_guest_fw_rest, install_ovmf_alias_ept,
+    load_guest_firmware, load_ovmf_from_esp, map_live_esp_ovmf, prepare_ovmf_firmware_launch,
+    present_ovmf_live_esp, probe_ovmf_firmware, probe_ovmf_live_bytes, program_ovmf_alias_ept,
+    qualify_real_esp_ovmf, read_ovmf_live_esp, require_ovmf_live_esp, require_ovmf_live_fd,
+    stage_edk2_ovmf_firmware, stage_ovmf_firmware_floor, try_vmlaunch_ovmf_firmware, GuestFwBlob,
+    GuestFwError, GuestFwKind, OvmfAlias, OvmfAliasEpt, OvmfAliasEptInstall, OvmfBind, OvmfEdk2,
+    OvmfEspLaunch, OvmfFloor, OvmfFv, OvmfLaunchPrep, OvmfLiveAdmit, OvmfLiveBytes, OvmfLiveExec,
+    OvmfLiveFd, OvmfLiveIssue, OvmfLiveMap, OvmfLivePresent, OvmfLiveRead, OvmfPrivateVmcs,
+    OvmfRealEsp, OvmfRealLaunch, OvmfResetVec, OvmfSlot,
 };
 pub use guest_image::{GuestBootSpec, GuestFirmware, GuestImageType};
 pub use ha::{
@@ -492,7 +496,6 @@ pub use host_nic::{
 pub use host_nic_coexist::{
     maybe_tick_standing_spa, prop_coexist_wired, tick_native_coexist, try_arm_native_coexist,
 };
-pub use perc_boot_choice::wait_perc_spa_choice_if_latched;
 pub use http::{prop_http_mgmt_package, HTTP_GAP_NOTE, HTTP_LAB_NOTE, M7_HTTP_OK_MARKER};
 pub use http_listen::{
     run_post_ebs_http_idle, run_post_ebs_http_snp_warn_only, run_post_ebs_mgmt_listen,
@@ -506,16 +509,14 @@ pub use iso::{
 };
 pub use iso_install::{
     disk_bytes_for_virtio_launch, dispatch_iso_install_rest, install_disk_armed_for_launch,
-    install_disk_preload_bytes, lab_reboot_armed, probe_iso_install_lab_flag,
-    probe_iso_persist_reboot, probe_iso_reboot_lab_flag, probe_product_linux_iso,
-    present_product_iso_if_retained, prop_iso_install_lab_package, prop_iso_install_package,
-    prop_iso_reboot_lab_package, phase_b_continue_e4_for_spa, phase_b_e4_for_spa,
-    stage46_hold_e4_shell, stage46_live_hold, InstallToDiskPlan, ISO_INSTALL_GAP_NOTE,
-    M7_ISO_INSTALL_OK_MARKER,
+    install_disk_preload_bytes, lab_reboot_armed, phase_b_continue_e4_for_spa, phase_b_e4_for_spa,
+    present_product_iso_if_retained, probe_iso_install_lab_flag, probe_iso_persist_reboot,
+    probe_iso_reboot_lab_flag, probe_product_linux_iso, prop_iso_install_lab_package,
+    prop_iso_install_package, prop_iso_reboot_lab_package, stage46_hold_e4_shell,
+    stage46_live_hold, InstallToDiskPlan, ISO_INSTALL_GAP_NOTE, M7_ISO_INSTALL_OK_MARKER,
     M7_ISO_INSTALL_SCAFFOLD_MARKER, M7_PHASE_B_COEXIST_IDLE_NOTE, M7_PHASE_B_E4_CONTINUE_NOTE,
     M7_PHASE_B_E4_CONTINUE_OK_MARKER, M7_STAGE46_HOLD_E4_NOTE,
 };
-pub use durable_lun::{init_durable_lun_io, init_durable_lun_usb_io, probe_durable_lun};
 pub use m5_api_gate::run_m5_api_gate;
 pub use m5_life_gate::run_m5_life_gate;
 pub use m5_webui_gate::run_m5_webui_gate;
@@ -525,56 +526,56 @@ pub use m6_fault_gate::{run_m6_fault_gate, M6_FAULT_GATE_MARKER};
 pub use m6_ha_gate::{run_m6_ha_gate, M6_HA_GATE_MARKER};
 pub use m6_soak_gate::{run_m6_soak_gate, M6_SOAK_GATE_MARKER};
 pub use m7_e4_spa_gate::run_m7_e4_spa_gate;
-pub use m7_e5_phase_b_gate::{run_m7_phase_b_spa_wire_gate, M7_PHASE_B_SPA_WIRE_GATE_MARKER};
 pub use m7_e5_alias_ept_gate::{run_m7_e5_alias_ept_gate, M7_E5_ALIAS_EPT_OK_MARKER};
 pub use m7_e5_boot_spec_gate::{run_m7_e5_boot_spec_gate, M7_E5_BOOT_SPEC_OK_MARKER};
 pub use m7_e5_cdrom_attach_gate::{run_m7_e5_cdrom_attach_gate, M7_E5_CDROM_ATTACH_OK_MARKER};
 pub use m7_e5_cdrom_firmware_gate::{
     run_m7_e5_cdrom_firmware_gate, M7_E5_CDROM_FIRMWARE_OK_MARKER,
 };
+pub use m7_e5_ept_install_gate::{run_m7_e5_ept_install_gate, M7_E5_EPT_INSTALL_OK_MARKER};
 pub use m7_e5_esp_launch_gate::{run_m7_e5_esp_launch_gate, M7_E5_ESP_LAUNCH_OK_MARKER};
 pub use m7_e5_esp_map_gate::{run_m7_e5_esp_map_gate, M7_E5_ESP_MAP_OK_MARKER};
-pub use m7_e5_ept_install_gate::{run_m7_e5_ept_install_gate, M7_E5_EPT_INSTALL_OK_MARKER};
 pub use m7_e5_fw_alias_gate::{run_m7_e5_fw_alias_gate, M7_E5_FW_ALIAS_OK_MARKER};
-pub use m7_e5_real_esp_gate::{run_m7_e5_real_esp_gate, M7_E5_REAL_ESP_OK_MARKER};
-pub use m7_e5_real_launch_gate::{run_m7_e5_real_launch_gate, M7_E5_REAL_LAUNCH_OK_MARKER};
-pub use m7_e5_live_exec_gate::{run_m7_e5_live_exec_gate, M7_E5_LIVE_EXEC_OK_MARKER};
-pub use m7_e5_priv_vmcs_gate::{run_m7_e5_priv_vmcs_gate, M7_E5_PRIV_VMCS_OK_MARKER};
-pub use m7_e5_live_issue_gate::{run_m7_e5_live_issue_gate, M7_E5_LIVE_ISSUE_OK_MARKER};
-pub use m7_e5_live_bytes_gate::{run_m7_e5_live_bytes_gate, M7_E5_LIVE_BYTES_OK_MARKER};
-pub use m7_e5_live_fd_gate::{run_m7_e5_live_fd_gate, M7_E5_LIVE_FD_OK_MARKER};
-pub use m7_e5_live_present_gate::{run_m7_e5_live_present_gate, M7_E5_LIVE_PRESENT_OK_MARKER};
-pub use m7_e5_live_admit_gate::{run_m7_e5_live_admit_gate, M7_E5_LIVE_ADMIT_OK_MARKER};
-pub use m7_e5_live_read_gate::{run_m7_e5_live_read_gate, M7_E5_LIVE_READ_OK_MARKER};
-pub use m7_e5_live_copy_gate::{run_m7_e5_live_copy_gate, M7_E5_LIVE_COPY_OK_MARKER};
-pub use m7_e5_live_place_gate::{run_m7_e5_live_place_gate, M7_E5_LIVE_PLACE_OK_MARKER};
-pub use m7_e5_live_apply_gate::{run_m7_e5_live_apply_gate, M7_E5_LIVE_APPLY_OK_MARKER};
-pub use m7_e5_live_commit_gate::{run_m7_e5_live_commit_gate, M7_E5_LIVE_COMMIT_OK_MARKER};
-pub use m7_e5_live_latch_gate::{run_m7_e5_live_latch_gate, M7_E5_LIVE_LATCH_OK_MARKER};
-pub use m7_e5_live_seal_gate::{run_m7_e5_live_seal_gate, M7_E5_LIVE_SEAL_OK_MARKER};
-pub use m7_e5_live_lock_gate::{run_m7_e5_live_lock_gate, M7_E5_LIVE_LOCK_OK_MARKER};
-pub use m7_e5_live_hold_gate::{run_m7_e5_live_hold_gate, M7_E5_LIVE_HOLD_OK_MARKER};
-pub use m7_e5_ovmf_retain_gate::{run_m7_e5_ovmf_retain_gate, M7_E5_OVMF_RETAIN_OK_MARKER};
-pub use m7_e5_ovmf_vmlaunch_gate::{run_m7_e5_ovmf_vmlaunch_gate, M7_E5_OVMF_VMLAUNCH_GATE_MARKER};
-pub use m7_e5_ovmf_alive_gate::{run_m7_e5_ovmf_alive_gate, M7_E5_OVMF_ALIVE_GATE_MARKER};
-pub use m7_e5_ovmf_past_sec_gate::{run_m7_e5_ovmf_past_sec_gate, M7_E5_OVMF_PAST_SEC_GATE_MARKER};
-pub use m7_e5_ovmf_cdrom_gate::{run_m7_e5_ovmf_cdrom_gate, M7_E5_OVMF_CDROM_GATE_MARKER};
-pub use m7_e5_ovmf_dxe_gate::{run_m7_e5_ovmf_dxe_gate, M7_E5_OVMF_DXE_GATE_MARKER};
-pub use m7_e5_ovmf_virtio_gate::{run_m7_e5_ovmf_virtio_gate, M7_E5_OVMF_VIRTIO_GATE_MARKER};
-pub use m7_e5_ovmf_both_gate::{run_m7_e5_ovmf_both_gate, M7_E5_OVMF_BOTH_GATE_MARKER};
-pub use m7_e5_ovmf_atapi_gate::{run_m7_e5_ovmf_atapi_gate, M7_E5_OVMF_ATAPI_GATE_MARKER};
-pub use m7_e5_ovmf_eltorito_gate::{run_m7_e5_ovmf_eltorito_gate, M7_E5_OVMF_ELTORITO_GATE_MARKER};
 pub use m7_e5_fw_bind_gate::{run_m7_e5_fw_bind_gate, M7_E5_FW_BIND_OK_MARKER};
 pub use m7_e5_fw_edk2_gate::{run_m7_e5_fw_edk2_gate, M7_E5_FW_EDK2_OK_MARKER};
 pub use m7_e5_fw_floor_gate::{run_m7_e5_fw_floor_gate, M7_E5_FW_FLOOR_OK_MARKER};
 pub use m7_e5_fw_prep_gate::{run_m7_e5_fw_prep_gate, M7_E5_FW_PREP_OK_MARKER};
 pub use m7_e5_guest_fw_gate::{run_m7_e5_guest_fw_gate, M7_E5_GUEST_FW_OK_MARKER};
 pub use m7_e5_guest_fw_load_gate::{run_m7_e5_guest_fw_load_gate, M7_E5_GUEST_FW_LOAD_OK_MARKER};
+pub use m7_e5_live_admit_gate::{run_m7_e5_live_admit_gate, M7_E5_LIVE_ADMIT_OK_MARKER};
+pub use m7_e5_live_apply_gate::{run_m7_e5_live_apply_gate, M7_E5_LIVE_APPLY_OK_MARKER};
+pub use m7_e5_live_bytes_gate::{run_m7_e5_live_bytes_gate, M7_E5_LIVE_BYTES_OK_MARKER};
+pub use m7_e5_live_commit_gate::{run_m7_e5_live_commit_gate, M7_E5_LIVE_COMMIT_OK_MARKER};
+pub use m7_e5_live_copy_gate::{run_m7_e5_live_copy_gate, M7_E5_LIVE_COPY_OK_MARKER};
+pub use m7_e5_live_exec_gate::{run_m7_e5_live_exec_gate, M7_E5_LIVE_EXEC_OK_MARKER};
+pub use m7_e5_live_fd_gate::{run_m7_e5_live_fd_gate, M7_E5_LIVE_FD_OK_MARKER};
+pub use m7_e5_live_hold_gate::{run_m7_e5_live_hold_gate, M7_E5_LIVE_HOLD_OK_MARKER};
+pub use m7_e5_live_issue_gate::{run_m7_e5_live_issue_gate, M7_E5_LIVE_ISSUE_OK_MARKER};
+pub use m7_e5_live_latch_gate::{run_m7_e5_live_latch_gate, M7_E5_LIVE_LATCH_OK_MARKER};
+pub use m7_e5_live_lock_gate::{run_m7_e5_live_lock_gate, M7_E5_LIVE_LOCK_OK_MARKER};
+pub use m7_e5_live_place_gate::{run_m7_e5_live_place_gate, M7_E5_LIVE_PLACE_OK_MARKER};
+pub use m7_e5_live_present_gate::{run_m7_e5_live_present_gate, M7_E5_LIVE_PRESENT_OK_MARKER};
+pub use m7_e5_live_read_gate::{run_m7_e5_live_read_gate, M7_E5_LIVE_READ_OK_MARKER};
+pub use m7_e5_live_seal_gate::{run_m7_e5_live_seal_gate, M7_E5_LIVE_SEAL_OK_MARKER};
+pub use m7_e5_ovmf_alive_gate::{run_m7_e5_ovmf_alive_gate, M7_E5_OVMF_ALIVE_GATE_MARKER};
+pub use m7_e5_ovmf_atapi_gate::{run_m7_e5_ovmf_atapi_gate, M7_E5_OVMF_ATAPI_GATE_MARKER};
+pub use m7_e5_ovmf_both_gate::{run_m7_e5_ovmf_both_gate, M7_E5_OVMF_BOTH_GATE_MARKER};
+pub use m7_e5_ovmf_cdrom_gate::{run_m7_e5_ovmf_cdrom_gate, M7_E5_OVMF_CDROM_GATE_MARKER};
+pub use m7_e5_ovmf_dxe_gate::{run_m7_e5_ovmf_dxe_gate, M7_E5_OVMF_DXE_GATE_MARKER};
+pub use m7_e5_ovmf_eltorito_gate::{run_m7_e5_ovmf_eltorito_gate, M7_E5_OVMF_ELTORITO_GATE_MARKER};
 pub use m7_e5_ovmf_esp_gate::{run_m7_e5_ovmf_esp_gate, M7_E5_OVMF_ESP_OK_MARKER};
+pub use m7_e5_ovmf_past_sec_gate::{run_m7_e5_ovmf_past_sec_gate, M7_E5_OVMF_PAST_SEC_GATE_MARKER};
 pub use m7_e5_ovmf_probe_gate::{run_m7_e5_ovmf_probe_gate, M7_E5_OVMF_PROBE_OK_MARKER};
+pub use m7_e5_ovmf_retain_gate::{run_m7_e5_ovmf_retain_gate, M7_E5_OVMF_RETAIN_OK_MARKER};
 pub use m7_e5_ovmf_slot_gate::{run_m7_e5_ovmf_slot_gate, M7_E5_OVMF_SLOT_OK_MARKER};
-pub use m7_e5_reset_vec_gate::{run_m7_e5_reset_vec_gate, M7_E5_RESET_VEC_OK_MARKER};
+pub use m7_e5_ovmf_virtio_gate::{run_m7_e5_ovmf_virtio_gate, M7_E5_OVMF_VIRTIO_GATE_MARKER};
+pub use m7_e5_ovmf_vmlaunch_gate::{run_m7_e5_ovmf_vmlaunch_gate, M7_E5_OVMF_VMLAUNCH_GATE_MARKER};
+pub use m7_e5_phase_b_gate::{run_m7_phase_b_spa_wire_gate, M7_PHASE_B_SPA_WIRE_GATE_MARKER};
+pub use m7_e5_priv_vmcs_gate::{run_m7_e5_priv_vmcs_gate, M7_E5_PRIV_VMCS_OK_MARKER};
 pub use m7_e5_raynu_f_f7_gate::{run_m7_e5_raynu_f_f7_gate, M7_E5_RAYNU_F_F7_OK_MARKER};
+pub use m7_e5_real_esp_gate::{run_m7_e5_real_esp_gate, M7_E5_REAL_ESP_OK_MARKER};
+pub use m7_e5_real_launch_gate::{run_m7_e5_real_launch_gate, M7_E5_REAL_LAUNCH_OK_MARKER};
+pub use m7_e5_reset_vec_gate::{run_m7_e5_reset_vec_gate, M7_E5_RESET_VEC_OK_MARKER};
 pub use m7_host_nic_gate::{run_m7_host_nic_scaffold_gate, M7_HOST_NIC_GATE_MARKER};
 pub use m7_http_gate::{run_m7_http_gate, M7_HTTP_GATE_MARKER};
 pub use m7_iso_gate::{run_m7_iso_gate, M7_ISO_GATE_MARKER};
@@ -592,6 +593,7 @@ pub use mgmt_arena::{
     MGMT_FATAL_INJECT_N,
 };
 pub use pci_census::{census_pick, iron_marker_allowed, run_pre_ebs_pci_census, CENSUS_NOTE};
+pub use perc_boot_choice::wait_perc_spa_choice_if_latched;
 pub use pre_ebs_mgmt::{prop_pre_ebs_mgmt_durable, reset_pre_ebs_mgmt};
 pub use ship::{prop_release_kit_package, M7_SHIP_OK_MARKER, SHIP_GAP_NOTE};
 pub use soak::{
