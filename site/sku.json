@@ -19,14 +19,14 @@
   },
   "counts": {
     "S1": {
-      "lived": 34,
-      "in flight": 2,
+      "lived": 35,
+      "in flight": 1,
       "planned": 31,
       "total": 67
     },
     "Final": {
-      "lived": 34,
-      "in flight": 2,
+      "lived": 35,
+      "in flight": 1,
       "planned": 93,
       "total": 129
     }
@@ -418,10 +418,10 @@
         {
           "id": "C8",
           "capability": "Config store on disk: guests, NICs, settings survive host reboot",
-          "status": "in flight",
+          "status": "lived",
           "ships": "S1",
           "ref": "M8.5",
-          "note": "`cursor/wave-3-c8-config-50bb`. Save and Detach stage the NIC catalog sector. While no product guest owns the CPU, one WRITE(16) of the reserved LBA (the sector before the spare probe, not LBA 0) stores it and a READ acks it. Boot reads that LBA into the panel before the guest starts. Gate: Save, reboot the hypervisor, the same MAC and address are on the Guests row with nothing typed. Host round-trip is not that close. Iron `94d0d369` printed `perc nic catalog wr lba=6190268926 mismatch (staged, not acked)`: the write frame was not in poll mode, so the READ came back before the WRITE finished. The next EFI posts that WRITE the same way as the spare-probe write",
+          "note": "`4ac1a629` (PR #420): Save wrote `boot: perc nic catalog wr lba=6190268926 match` (`GuestNicSaved off=19327352832 mode=2`, MAC `02:52:4e:38:0b:0d`, `10.99.99.200/24`). A second F11 of the same stick, no reflash, printed `boot: perc nic catalog rd lba=6190268926 n=1` before the guest, and vNIC opened already filled. The sector is the one before the probe LBA `6190268927`. `94d0d369` had printed `mismatch` (write frame was not polled). Other settings are still RAM. docs/evidence/r640/2026-10-29-4ac1a629-wave-3-c8-nic-catalog-reboot-ok.md",
           "wave": "3"
         },
         {
@@ -508,14 +508,14 @@
       ],
       "counts": {
         "S1": {
-          "lived": 5,
-          "in flight": 1,
+          "lived": 6,
+          "in flight": 0,
           "planned": 3,
           "total": 9
         },
         "Final": {
-          "lived": 5,
-          "in flight": 1,
+          "lived": 6,
+          "in flight": 0,
           "planned": 11,
           "total": 17
         }
@@ -1525,8 +1525,8 @@
       "iron": "C8",
       "why": "M8.5 in ADR-018 terms. Everything after depends on it.",
       "counts": {
-        "lived": 0,
-        "in flight": 1,
+        "lived": 1,
+        "in flight": 0,
         "planned": 2,
         "total": 3
       },
@@ -1852,12 +1852,6 @@
   ],
   "current_wave": "3",
   "next_up": [
-    {
-      "id": "C8",
-      "capability": "Config store on disk: guests, NICs, settings survive host reboot",
-      "status": "in flight",
-      "role": "iron thread"
-    },
     {
       "id": "G4",
       "capability": "Audit survives host reboot (persisted, chained across boots)",
