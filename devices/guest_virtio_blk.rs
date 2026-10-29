@@ -105,6 +105,42 @@ pub const VIRTIO_BLK_T_GET_ID: u32 = 8;
 pub const VIRTIO_BLK_S_OK: u8 = 0;
 pub const VIRTIO_BLK_S_IOERR: u8 = 1;
 
+/// Virtio FLUSH status. A read-only device has no dirty cache. A writable
+/// device reports OK only when `backend_ok` is true, which for the latched
+/// spare means SYNCHRONIZE CACHE has already returned.
+pub fn flush_status(readonly: bool, backend_ok: bool) -> u8 {
+    if readonly || backend_ok {
+        VIRTIO_BLK_S_OK
+    } else {
+        VIRTIO_BLK_S_IOERR
+    }
+}
+
+#[cfg(test)]
+std::thread_local! {
+    static FORCE_FLUSH_FAIL: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+#[cfg(test)]
+fn force_flush_fail_for_test(on: bool) {
+    FORCE_FLUSH_FAIL.with(|c| c.set(on));
+}
+
+fn virtio_flush_status(readonly: bool) -> u8 {
+    #[cfg(test)]
+    if !readonly && FORCE_FLUSH_FAIL.with(|c| c.get()) {
+        return VIRTIO_BLK_S_IOERR;
+    }
+    let backend_ok = if readonly {
+        true
+    } else if crate::mgmt::megaraid::perc_image_boot_latched() {
+        crate::mgmt::megaraid::perc_image_flush()
+    } else {
+        true
+    };
+    flush_status(readonly, backend_ok)
+}
+
 const OFF_COMMON: u16 = 0x00;
 const OFF_ISR: u16 = 0x100;
 const OFF_DEVICE: u16 = 0x200;
@@ -1358,7 +1394,8 @@ fn blk_sector_rw_with(
     allow_lun: bool,
 ) -> u8 {
     if ty == VIRTIO_BLK_T_FLUSH {
-        return VIRTIO_BLK_S_OK;
+        let readonly = !allow_lun || PERC_XFER.load(Ordering::Acquire);
+        return virtio_flush_status(readonly);
     }
     if !allow_lun && crate::mgmt::iso_library::present_as_cd() {
         if ty != VIRTIO_BLK_T_IN || buf.is_empty() || buf.len() % SECTOR != 0 {
@@ -1901,7 +1938,8 @@ fn process_blk_queue(
         let mut req_bytes = 0u32;
         let mut in_len = 0u32;
         if ty == VIRTIO_BLK_T_FLUSH {
-            status = VIRTIO_BLK_S_OK;
+            // Status is stored in the used ring only after this returns.
+            status = virtio_flush_status(readonly);
         } else if ty == VIRTIO_BLK_T_GET_ID {
             // virtio GET_ID. Empty serial is OK; IOERR hung some guests.
             status = VIRTIO_BLK_S_OK;
