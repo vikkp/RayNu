@@ -20,14 +20,14 @@
   "counts": {
     "S1": {
       "lived": 33,
-      "in flight": 1,
-      "planned": 33,
+      "in flight": 2,
+      "planned": 32,
       "total": 67
     },
     "Final": {
       "lived": 33,
-      "in flight": 1,
-      "planned": 95,
+      "in flight": 2,
+      "planned": 94,
       "total": 129
     }
   },
@@ -325,24 +325,24 @@
         {
           "id": "B20",
           "capability": "Guest exit/stop reasons readable on the page (why did it stop)",
-          "status": "planned",
+          "status": "in flight",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Today on COM2 `reason=0x… rip=0x…`",
+          "note": "PR #419 `cursor/wave-2-b20-a3-50bb`. `guest_stop` records the last stop from `guest-UEFI stop n=` and `RayNu-F stop <why>`; SPA-stop idle fills an operator stop only when nothing was recorded. `/perc/guests` adds `last_stop` (kind, sentence, `reason`, `rip`) once a stop exists. Guests row and the line under the tiles show it. A tail boot's state is `running`, and the Guest tile counts that. Gate: the next F11, Stop the guest, and the page names why",
           "wave": "2"
         }
       ],
       "counts": {
         "S1": {
           "lived": 3,
-          "in flight": 0,
-          "planned": 7,
+          "in flight": 1,
+          "planned": 6,
           "total": 10
         },
         "Final": {
           "lived": 3,
-          "in flight": 0,
-          "planned": 17,
+          "in flight": 1,
+          "planned": 16,
           "total": 20
         }
       }
@@ -1508,8 +1508,8 @@
       "why": "Cheap, in code just touched; each would have saved a day in October.",
       "counts": {
         "lived": 4,
-        "in flight": 0,
-        "planned": 1,
+        "in flight": 1,
+        "planned": 0,
         "total": 5
       },
       "closed": false
@@ -1855,7 +1855,7 @@
     {
       "id": "B20",
       "capability": "Guest exit/stop reasons readable on the page (why did it stop)",
-      "status": "planned",
+      "status": "in flight",
       "role": "host-first"
     }
   ],

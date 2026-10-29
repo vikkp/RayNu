@@ -355,6 +355,7 @@ pub mod console;
 pub mod host_power;
 pub mod perc_boot_choice;
 pub mod guest_catalog;
+pub mod guest_stop;
 pub mod m8_console_gate;
 pub mod sku_card;
 pub mod guest_egress;

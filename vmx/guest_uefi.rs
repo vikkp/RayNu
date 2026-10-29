@@ -7508,6 +7508,15 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     }
     // linux unhandled nowait stop (iron 1a2544d Freeing initrd then
     // restore host xcr0; share hushes HV `write_str` stop n=).
+    crate::mgmt::guest_stop::note_exit(
+        reason,
+        rip,
+        n as u64,
+        resume_cap as u64,
+        tf,
+        entry_fail,
+        intr,
+    );
     serial::write_str_nowait("boot: guest-UEFI stop n=");
     write_dec_nowait(n as u64);
     serial::write_str_nowait(" cap=");
@@ -9529,6 +9538,14 @@ unsafe extern "C" fn raynu_f_launch_failed() -> ! {
 #[cfg(target_os = "uefi")]
 unsafe fn raynu_f_stop(why: &str) -> ! {
     RAYNU_F_MODE.store(false, Ordering::Release);
+    crate::mgmt::guest_stop::note_raynu_f(
+        why,
+        ops::vmread(EXIT_REASON).unwrap_or(0) as u32,
+        ops::vmread(GUEST_RIP).unwrap_or(0),
+        u64::from(RAYNU_F_EXITS.load(Ordering::Acquire)),
+        u64::from(RAYNU_F_EXIT_CAP),
+        ops::vmread(VM_EXIT_INTR_INFO).unwrap_or(0),
+    );
     serial::write_str("boot: RayNu-F stop ");
     serial::write_str(why);
     serial::write_str(" exits=");
