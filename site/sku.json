@@ -184,7 +184,7 @@
           "status": "in flight",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "`cursor/wave-4-b4-acpi-50bb`. `POST /perc/guests/power/shutdown` and `POST /perc/guests/power/reboot` raise PM1_STS bit 8 on a guest word read of `0xB000`. A write-1-to-clear of that bit acks the ask (`boot: B4 power ack` on the firmware build). Stop stays `POST /perc/guests/stop` and is still the hard path. The Guests page has no new button, and there is no SCI, so Ubuntu does not power off from this slice. Not lived",
+          "note": "`cursor/wave-4-b4-acpi-50bb`. RayNu-F publishes an RSDP (power button `PNP0C0C`, `_S5` type 5, no MADT) and COM2 prints `boot: B4 acpi rsdp`. Guests Shut down / Reboot raise PM1_STS bit 8 and, once the guest enables the button, SCI IRQ 9 (`boot: B4 sci`). The guest's write-1-to-clear prints `boot: B4 power ack`. `_S5` then prints `boot: B4 power off` and stops, or `boot: B4 power cycle` and boots the guest again. Stop stays the hard path. Not lived until that COM2 on iron",
           "wave": "4"
         },
         {
