@@ -20,14 +20,14 @@
   "counts": {
     "S1": {
       "lived": 38,
-      "in flight": 1,
-      "planned": 28,
+      "in flight": 2,
+      "planned": 27,
       "total": 67
     },
     "Final": {
       "lived": 38,
-      "in flight": 1,
-      "planned": 90,
+      "in flight": 2,
+      "planned": 89,
       "total": 129
     }
   },
@@ -181,10 +181,10 @@
         {
           "id": "B4",
           "capability": "Clean shutdown and reboot from the SPA (ACPI power button), Stop as the hard fallback",
-          "status": "planned",
+          "status": "in flight",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Stop kills the guest today",
+          "note": "`cursor/wave-4-b4-acpi-50bb`. `POST /perc/guests/power/shutdown` and `POST /perc/guests/power/reboot` raise PM1_STS bit 8 on a guest word read of `0xB000`. A write-1-to-clear of that bit acks the ask (`boot: B4 power ack` on the firmware build). Stop stays `POST /perc/guests/stop` and is still the hard path. The Guests page has no new button, and there is no SCI, so Ubuntu does not power off from this slice. Not lived",
           "wave": "4"
         },
         {
@@ -335,14 +335,14 @@
       "counts": {
         "S1": {
           "lived": 5,
-          "in flight": 0,
-          "planned": 5,
+          "in flight": 1,
+          "planned": 4,
           "total": 10
         },
         "Final": {
           "lived": 5,
-          "in flight": 0,
-          "planned": 15,
+          "in flight": 1,
+          "planned": 14,
           "total": 20
         }
       }
@@ -1546,8 +1546,8 @@
       "why": "The first \"walk away from the rack\" moment. Needs wave 3.",
       "counts": {
         "lived": 1,
-        "in flight": 0,
-        "planned": 4,
+        "in flight": 1,
+        "planned": 3,
         "total": 5
       },
       "closed": false
@@ -1855,7 +1855,7 @@
     {
       "id": "B4",
       "capability": "Clean shutdown and reboot from the SPA (ACPI power button), Stop as the hard fallback",
-      "status": "planned",
+      "status": "in flight",
       "role": "host-first"
     },
     {

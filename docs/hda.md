@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-4-b5-lived |
-| Summary | **Iron `e6ed42a3`: ADR-021 B5 lived.** No SPA, no click: `boot: B5 autostart rd lba=6190268909 n=1`, `start off=19327352832`, then `raynusrv2 login:`. Same boot kept the NIC catalog, the audit chain, and the C7 flush line. That PCI probe had no virtio-net; the branch now arms the saved address before the guest starts. That line is not on this COM2. Wave 4 stays open on B4. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-4-b4-pm1 |
+| Summary | **ADR-021 B4 in flight on `cursor/wave-4-b4-acpi-50bb`.** A shutdown or reboot ask raises the ACPI power-button status bit. The guest clears it by writing 1. Stop stays the hard path. The page has no new button and there is no SCI, so Ubuntu does not power off yet. B5 stays lived. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
-| Gates touched | ADR-021 B5 `in flight → lived`. Wave 4 stays open (B4, D9, D10, H2). Rollback `v0.1.0-m8-9-lan`. No doorbell. No format of UBUNTU0. |
+| Gates touched | ADR-021 B4 `planned → in flight`. Wave 4 stays open. Rollback `v0.1.0-m8-9-lan`. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
 
 ## Blockers & risks (Everest-relevant)
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-29 | wave-4-b4-pm1 | 0.0 | 99 | **B4 in flight on `cursor/wave-4-b4-acpi-50bb`.** A power ask sets PM1_STS bit 8. The guest write-1-to-clear acks it. Stop stays the hard path. No page button and no SCI, so Ubuntu does not power off yet. B5 stays lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-29 | wave-4-b5-lived | 0.0 | 99 | **Iron `e6ed42a3`: B5 lived.** No SPA: `rd lba=6190268909 n=1`, `start off=19327352832`, then `raynusrv2 login:`. The PCI probe had no virtio-net `00:05.0`; the next EFI arms the saved address and prints `boot: B5 autostart nic`. Wave 4 stays open on B4. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-29 | wave-4-b5-uefi-buf | 0.0 | 99 | **B5 still in flight.** The autostart line used a 24-byte buffer; `fmt_dec` takes 20, so the UEFI build failed and no stick exists. Buffer matches. Not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-29 | wave-4-b5-boot-next | 0.0 | 99 | **B5 still in flight.** Guests **Boot next** stages the autostart sector. Next boot starts the first entry. Not lived until that reboot starts the guest with no click. Scores held. months 0.0 held; overall 99 held |
@@ -1153,7 +1154,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     Wave 4 "Survives a power cut, unattended". B5 lived on e6ed42a3: the Ubuntu tail reached raynusrv2 login with the SPA never opened. That boot did not attach virtio-net. Next is B4 (ACPI shutdown from the SPA; Stop stays the hard fallback). D9, D10, H2 stay planned. Rollback for a wave 2 flash is v0.1.0-m8-9-lan. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/m8_plan.md.
+Next move:     Wave 4 "Survives a power cut, unattended". B5 lived on e6ed42a3: the Ubuntu tail reached raynusrv2 login with the SPA never opened. That boot did not attach virtio-net. B4 is in flight: a power ask sets the ACPI power-button status bit, and Stop stays the hard path. The page has no new button and there is no SCI, so Ubuntu does not power off yet. D9, D10, H2 stay planned. Rollback for a wave 2 flash is v0.1.0-m8-9-lan. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/m8_plan.md.
 Rollback:      M8.9 close: v0.1.0-m8-9-lan → CI 40603110937 / COM2 sha=0d865c7fcb0a / EFI SHA256 df6fc3465cecf1eaf058d5c8e675501827c16eb55e7b2c9758bc5e68326ad91b
 Older M8.8:    v0.1.0-m8-8-ubuntu → CI 38454398693 / COM2 sha=c3a70e623aec / EFI SHA256 08ef31ba87136577102ac378d8e0a512327994e8794c41c64444f5be5f8812c4
 Older SPA:     v0.1.0-m8-perc-spa → CI 36362775808 / COM2 sha=8ad2ac89125e / EFI SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849
