@@ -184,7 +184,7 @@
           "status": "in flight",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "`cursor/wave-4-b4-acpi-50bb`. RayNu-F publishes an RSDP (power button `PNP0C0C`, `_S5` type 5, no MADT) and COM2 prints `boot: B4 acpi rsdp`. Guests Shut down / Reboot raise PM1_STS bit 8 and, once the guest enables the button, SCI IRQ 9 (`boot: B4 sci`). The guest's write-1-to-clear prints `boot: B4 power ack`. `_S5` then prints `boot: B4 power off` and stops, or `boot: B4 power cycle` and boots the guest again. Stop stays the hard path. Not lived until that COM2 on iron",
+          "note": "`cursor/wave-4-b4-acpi-50bb`. Iron `84ad5422` / run `40946792977` printed `boot: B4 acpi rsdp gpa=0x804000`, Linux loaded `PNP0C0C`, and the initrd never saw `vda` (`dracut-initqueue: timeout` on the Ubuntu UUIDs). That DSDT had no `PCI0`, so Linux skipped PCI. The next EFI keeps the power button and adds `\\_SB.PCI0` with slot 2 and slot 3 INTA on PIC IRQ 11 (no MADT). Shut down / Reboot and `_S5` are unchanged. Not lived",
           "wave": "4"
         },
         {
