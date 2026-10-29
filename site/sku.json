@@ -19,14 +19,14 @@
   },
   "counts": {
     "S1": {
-      "lived": 33,
-      "in flight": 2,
+      "lived": 34,
+      "in flight": 1,
       "planned": 32,
       "total": 67
     },
     "Final": {
-      "lived": 33,
-      "in flight": 2,
+      "lived": 34,
+      "in flight": 1,
       "planned": 94,
       "total": 129
     }
@@ -325,23 +325,23 @@
         {
           "id": "B20",
           "capability": "Guest exit/stop reasons readable on the page (why did it stop)",
-          "status": "in flight",
+          "status": "lived",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "PR #419 `cursor/wave-2-b20-a3-50bb`. `guest_stop` records the last stop from `guest-UEFI stop n=` and `RayNu-F stop <why>`; SPA-stop idle fills an operator stop only when nothing was recorded. `/perc/guests` adds `last_stop` (kind, sentence, `reason`, `rip`) once a stop exists. Guests row and the line under the tiles show it. A tail boot's state is `running`, and the Guest tile counts that. Gate: the next F11, Stop the guest, and the page names why",
+          "note": "`ddbaf11cd11c` (PR #419, CI `40900796962`; pull-request merge of `cff61509`): Guest tile `Guest 3 is running` with the tail row `RUNNING`; after Stop, tile `Guest is stopped`, rows `STOPPED`, line `Stopped from the Guests page. reason=0x34 rip=0xffffffff85b2bebd`. While it ran, the line still showed the OVMF first-exit handoff (`Exit cap reached. reason=0x1c rip=0xfffffe94`); Stop replaced it. docs/evidence/r640/2026-10-29-ddbaf11c-wave-2-b20-stop-on-page-ok.md",
           "wave": "2"
         }
       ],
       "counts": {
         "S1": {
-          "lived": 3,
-          "in flight": 1,
+          "lived": 4,
+          "in flight": 0,
           "planned": 6,
           "total": 10
         },
         "Final": {
-          "lived": 3,
-          "in flight": 1,
+          "lived": 4,
+          "in flight": 0,
           "planned": 16,
           "total": 20
         }
@@ -1507,12 +1507,12 @@
       "iron": "D5",
       "why": "Cheap, in code just touched; each would have saved a day in October.",
       "counts": {
-        "lived": 4,
-        "in flight": 1,
+        "lived": 5,
+        "in flight": 0,
         "planned": 0,
         "total": 5
       },
-      "closed": false
+      "closed": true
     },
     {
       "id": "3",
@@ -1850,25 +1850,47 @@
       "closed": false
     }
   ],
-  "current_wave": "2",
+  "current_wave": "3",
   "next_up": [
     {
-      "id": "B20",
-      "capability": "Guest exit/stop reasons readable on the page (why did it stop)",
-      "status": "in flight",
+      "id": "C8",
+      "capability": "Config store on disk: guests, NICs, settings survive host reboot",
+      "status": "planned",
+      "role": "iron thread"
+    },
+    {
+      "id": "G4",
+      "capability": "Audit survives host reboot (persisted, chained across boots)",
+      "status": "planned",
+      "role": "host-first"
+    },
+    {
+      "id": "C7",
+      "capability": "virtio-blk FLUSH honored before completion (power-safe guest filesystems)",
+      "status": "planned",
       "role": "host-first"
     }
   ],
   "filler": [
     {
-      "id": "G4",
-      "capability": "Audit survives host reboot (persisted, chained across boots)",
-      "wave": "3"
+      "id": "B4",
+      "capability": "Clean shutdown and reboot from the SPA (ACPI power button), Stop as the hard fallback",
+      "wave": "4"
     },
     {
-      "id": "C7",
-      "capability": "virtio-blk FLUSH honored before completion (power-safe guest filesystems)",
-      "wave": "3"
+      "id": "D9",
+      "capability": "Host management address: static IP, gateway, DNS, hostname set from the SPA and persisted",
+      "wave": "4"
+    },
+    {
+      "id": "D10",
+      "capability": "Host NTP client; host clock correct for TLS and audit timestamps",
+      "wave": "4"
+    },
+    {
+      "id": "H2",
+      "capability": "Host panic: dump to COM2 and iDRAC, then reboot; guests autostart",
+      "wave": "4"
     }
   ]
 }

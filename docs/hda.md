@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-2-b20-stop-reason |
-| Summary | **ADR-021 B20 in flight on `cursor/wave-2-b20-a3-50bb`.** The last guest stop is recorded from the `guest-UEFI stop n=` line and from `RayNu-F stop <why>` (wall-cap, exit-cap, triple-fault, entry-fail, spa-stop). SPA-stop idle does not overwrite a reason already recorded. `/perc/guests` gains `last_stop` only after a stop. The Guests row and the line under the tiles show the sentence plus `reason=` and `rip=`. A tail boot reports `state` `running`, and the Guest tile counts spare guests, so a guest at login is no longer "No guest yet". Host tests. Not lived: the next F11, then Stop, is the gate. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-2-b20-lived |
+| Summary | **Iron `ddbaf11cd11c`: ADR-021 B20 lived. Wave 2 closed.** Pull-request build of `cff61509`, CI `40900796962`. Guest tile `Guest 3 is running`, tail row `RUNNING`. After Stop: tile `Guest is stopped`, rows `STOPPED`, line `Stopped from the Guests page. reason=0x34 rip=0xffffffff85b2bebd` (`0x34` is the preemption-timer exit Stop landed in). While the guest ran, the line still showed the OVMF first-exit handoff `Exit cap reached. reason=0x1c rip=0xfffffe94`; Stop replaced it. Evidence: [2026-10-29-ddbaf11c-wave-2-b20-stop-on-page-ok.md](evidence/r640/2026-10-29-ddbaf11c-wave-2-b20-stop-on-page-ok.md). HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
-| Gates touched | ADR-021 B20 `planned → in flight`. No new iron marker. Rollback `v0.1.0-m8-9-lan`. No doorbell. No format of UBUNTU0. |
+| Gates touched | ADR-021 B20 `in flight → lived`. Wave 2 (D5, D6, D4, B20, A3) closed. No new iron marker. Rollback `v0.1.0-m8-9-lan`. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
 
 ## Blockers & risks (Everest-relevant)
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-29 | wave-2-b20-lived | 0.0 | 99 | **Iron `ddbaf11cd11c`: B20 lived. Wave 2 closed.** Tile `Guest 3 is running`, then Stop: `Guest is stopped` and `Stopped from the Guests page. reason=0x34 rip=0xffffffff85b2bebd`. The earlier `Exit cap reached. reason=0x1c rip=0xfffffe94` was the OVMF first-exit handoff, replaced by Stop. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-29 | wave-2-b20-stop-reason | 0.0 | 99 | **B20 in flight on `cursor/wave-2-b20-a3-50bb`.** Last stop recorded from `guest-UEFI stop n=` and `RayNu-F stop <why>`; idle does not overwrite it. `/perc/guests` `last_stop` after a stop. Tail boot state is `running` and the Guest tile counts it. Not lived until the next F11 and a Stop. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-29 | wave-2-a3-lived | 0.0 | 99 | **Iron `bc50d59aa77a`: A3 lived** — COM2 `build: sha=bc50d59aa77a run=40876033671` and the Overview line under the tiles match, run linked to that Actions page. The stamp is the pull-request merge of `9ee60cb3` (CI `40876033671`). B20 still planned. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-29 | wave-2-a3-build-id | 0.0 | 99 | **A3 in flight on `cursor/wave-2-b20-a3-50bb`.** COM2 `build: sha=<12> run=<id>` (`build: sha=` stays first; a local build omits `run=`). `/perc/guests` `build_sha` / `build_run`; Overview `#build-id` links the run. Not lived until the next F11 matches COM2. B20 still planned. Scores held. months 0.0 held; overall 99 held |
@@ -1140,7 +1141,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     Wave 2 "The box tells the truth": D6 / D4 / D5 / A3 lived. B20 (why the guest stopped, on the page) is in flight on cursor/wave-2-b20-a3-50bb. `./tools/sync-sku-site.sh --next` says B20, host-first; no iron until wave 3. After any F11, Save the vNIC on the Guests row before Start (the NIC record is not on disk). Rollback for a wave 2 flash is v0.1.0-m8-9-lan. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/m8_plan.md.
+Next move:     Wave 2 closed on ddbaf11cd11c (B20 lived). `./tools/sync-sku-site.sh --next` says wave 3 "State survives": C8 [iron thread] config store on disk (guests, NICs, settings survive host reboot); host-first G4 (audit survives reboot) and C7 (virtio-blk FLUSH). After any F11, Save the vNIC on the Guests row before Start (the NIC record is not on disk). Rollback for a wave 2 flash is v0.1.0-m8-9-lan. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/m8_plan.md.
 Rollback:      M8.9 close: v0.1.0-m8-9-lan → CI 40603110937 / COM2 sha=0d865c7fcb0a / EFI SHA256 df6fc3465cecf1eaf058d5c8e675501827c16eb55e7b2c9758bc5e68326ad91b
 Older M8.8:    v0.1.0-m8-8-ubuntu → CI 38454398693 / COM2 sha=c3a70e623aec / EFI SHA256 08ef31ba87136577102ac378d8e0a512327994e8794c41c64444f5be5f8812c4
 Older SPA:     v0.1.0-m8-perc-spa → CI 36362775808 / COM2 sha=8ad2ac89125e / EFI SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849
