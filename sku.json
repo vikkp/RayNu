@@ -1,0 +1,1896 @@
+{
+  "generated_from": "docs/adr/ADR-021.md",
+  "adr": "ADR-021",
+  "adr_date": "2026-10-19",
+  "statuses": [
+    "lived",
+    "in flight",
+    "planned"
+  ],
+  "shipments": {
+    "S1": {
+      "name": "Shipment 1",
+      "lede": "The dedicated-box letter: one R640, one Ubuntu guest, no RayNu-V engineer in the room."
+    },
+    "Final": {
+      "name": "Final SKU",
+      "lede": "Everything a professional operator expects from a PowerEdge hypervisor, through cluster and VMware migration. If it is not a row here, it is not the product."
+    }
+  },
+  "counts": {
+    "S1": {
+      "lived": 34,
+      "in flight": 1,
+      "planned": 32,
+      "total": 67
+    },
+    "Final": {
+      "lived": 34,
+      "in flight": 1,
+      "planned": 94,
+      "total": 129
+    }
+  },
+  "areas": [
+    {
+      "id": "A",
+      "name": "Boot, binary and platform",
+      "pillars": [
+        "Z",
+        "D"
+      ],
+      "items": [
+        {
+          "id": "A1",
+          "capability": "One EFI binary, no OS, no packages, no config files",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "ADR-003",
+          "note": "`f72b4276` on R640; size gate `./tools/check-size.sh` within 15 MB",
+          "wave": "0"
+        },
+        {
+          "id": "A2",
+          "capability": "Boot on Dell PowerEdge R640 from iDRAC virtual media or USB",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "M7.5",
+          "note": "`RAYNU-V-R640-BOOT-OK`; runbook `docs/runbooks/usb_idrac.md`",
+          "wave": "0"
+        },
+        {
+          "id": "A3",
+          "capability": "Build identity (git SHA, CI run) visible on the SPA, not only COM2",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "ADR-021",
+          "note": "`bc50d59aa77a` (PR #419, CI `40876033671`; pull-request merge of `9ee60cb3`): COM2 `build: sha=bc50d59aa77a run=40876033671`, Overview under the tiles `build bc50d59aa77a · CI 40876033671` with the run linked to that Actions page. `build: sha=` stays the first token. docs/evidence/r640/2026-10-29-bc50d59a-wave-2-a3-build-on-overview-ok.md",
+          "wave": "2"
+        },
+        {
+          "id": "A4",
+          "capability": "Headless operation: nothing the operator does requires COM2 or SOL",
+          "status": "planned",
+          "ships": "S1",
+          "ref": "ADR-021",
+          "note": "Today iron verification reads COM2 markers",
+          "wave": "6"
+        },
+        {
+          "id": "A5",
+          "capability": "Signed EFI for UEFI Secure Boot (customer enrolls RayNu-V key or shim)",
+          "status": "planned",
+          "ships": "S1",
+          "ref": "ADR-021",
+          "note": "Unsigned today; R640 Secure Boot must be off",
+          "wave": "6"
+        },
+        {
+          "id": "A6",
+          "capability": "TPM 2.0 measured boot; EFI hash in PCR, readable via iDRAC/Redfish",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-021",
+          "note": "Attestation of what is running",
+          "wave": "13"
+        },
+        {
+          "id": "A7",
+          "capability": "In-place hypervisor update from the SPA with A/B slots and rollback",
+          "status": "planned",
+          "ships": "S1",
+          "ref": "ADR-021",
+          "note": "Today: flash USB, F11. Rollback is a GitHub tag",
+          "wave": "6"
+        },
+        {
+          "id": "A8",
+          "capability": "Hardware support matrix published: R640 lived; R650/R660; BCM5720/57416; X710; PERC H740P/H750; NVMe",
+          "status": "planned",
+          "ships": "S1",
+          "ref": "ADR-005",
+          "note": "R640 + BCM5720 + H740P lived; rest planned",
+          "wave": "7"
+        },
+        {
+          "id": "A9",
+          "capability": "Boot-to-SPA time budget stated and measured on iron",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-021",
+          "note": "Operators plan maintenance windows around it",
+          "wave": "13"
+        },
+        {
+          "id": "A10",
+          "capability": "Dark-site install: no internet reachability needed at any step",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "ADR-003",
+          "note": "Single binary (`./tools/check-pe-assets.sh`); ISO comes from the operator; the lab LAN `10.99.99.0/24` has no route out",
+          "wave": "0"
+        }
+      ],
+      "counts": {
+        "S1": {
+          "lived": 4,
+          "in flight": 0,
+          "planned": 4,
+          "total": 8
+        },
+        "Final": {
+          "lived": 4,
+          "in flight": 0,
+          "planned": 6,
+          "total": 10
+        }
+      }
+    },
+    {
+      "id": "B",
+      "name": "Compute and guest lifecycle",
+      "pillars": [],
+      "items": [
+        {
+          "id": "B1",
+          "capability": "Linux guest boots unmodified ISO via RayNu-F UEFI (Gen 1)",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "ADR-016 / ADR-020",
+          "note": "Alpine `f72b4276`; Ubuntu 26.04 `c3a70e62` to `login:`",
+          "wave": "0"
+        },
+        {
+          "id": "B2",
+          "capability": "Create / Start / Stop / Delete from the browser",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "M7 E4",
+          "note": "`RAYNU-V-M7-E4-SPA-LAUNCH-OK` (2026-08-21); Start/Stop of Ubuntu on `d7e2e24f`",
+          "wave": "0"
+        },
+        {
+          "id": "B3",
+          "capability": "Guest CPU, RAM, disk size chosen at create",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "ADR-019",
+          "note": "Guests row `linux_iso 10240 MiB@18432` booted on `c3a70e62`",
+          "wave": "0"
+        },
+        {
+          "id": "B4",
+          "capability": "Clean shutdown and reboot from the SPA (ACPI power button), Stop as the hard fallback",
+          "status": "planned",
+          "ships": "S1",
+          "ref": "ADR-021",
+          "note": "Stop kills the guest today",
+          "wave": "4"
+        },
+        {
+          "id": "B5",
+          "capability": "Guests autostart at host boot, in operator order, with a delay",
+          "status": "planned",
+          "ships": "S1",
+          "ref": "ADR-021",
+          "note": "Power cut today leaves guests off",
+          "wave": "4"
+        },
+        {
+          "id": "B6",
+          "capability": "Multiple concurrent guests on one R640",
+          "status": "planned",
+          "ships": "S1",
+          "ref": "M4",
+          "note": "`RAYNU-V-M4-2VM-OK` on iron for lab guests; product guests one at a time",
+          "wave": "7"
+        },
+        {
+          "id": "B7",
+          "capability": "Multi-vCPU (SMP) product guests",
+          "status": "planned",
+          "ships": "S1",
+          "ref": "M4.5",
+          "note": "Dual-vCPU probe lived on Latitude only (`RAYNU-V-M4-SMP-OK`)",
+          "wave": "7"
+        },
+        {
+          "id": "B8",
+          "capability": "Guest interrupt controller beyond 8259: IOAPIC/LAPIC, MSI/MSI-X for virtio",
+          "status": "planned",
+          "ships": "S1",
+          "ref": "ADR-021",
+          "note": "PIC + IRQ 11 shared lived on `d7e2e24f`; SMP and performance need APIC",
+          "wave": "7"
+        },
+        {
+          "id": "B9",
+          "capability": "Guest clock: TSC/kvmclock-style stable time source, no drift at idle",
+          "status": "planned",
+          "ships": "S1",
+          "ref": "ADR-021",
+          "note": "PIT 100 Hz lived on `c9f4451a`; drift under load untested",
+          "wave": "7"
+        },
+        {
+          "id": "B10",
+          "capability": "Pause / resume a guest",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-021",
+          "note": "",
+          "wave": "11"
+        },
+        {
+          "id": "B11",
+          "capability": "Guest agent: IP report, time sync, clean shutdown without ACPI",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-021",
+          "note": "",
+          "wave": "11"
+        },
+        {
+          "id": "B12",
+          "capability": "cloud-init NoCloud seed (user, SSH key, hostname) from the SPA at create",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-021",
+          "note": "Removes the serial install step",
+          "wave": "11"
+        },
+        {
+          "id": "B13",
+          "capability": "Windows guests (UEFI + virtio drivers)",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-014 / M8.6",
+          "note": "Same UEFI+virtio model, no parallel firmware",
+          "wave": "11"
+        },
+        {
+          "id": "B14",
+          "capability": "Other Linux distros verified: Debian, RHEL-family, SUSE",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-014",
+          "note": "Typed ISO path",
+          "wave": "11"
+        },
+        {
+          "id": "B15",
+          "capability": "Templates and clone (create from an existing guest disk)",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-021",
+          "note": "",
+          "wave": "11"
+        },
+        {
+          "id": "B16",
+          "capability": "Snapshots of guest disk and memory; revert",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-021",
+          "note": "",
+          "wave": "11"
+        },
+        {
+          "id": "B17",
+          "capability": "CPU pinning and NUMA-aware placement on the two R640 sockets",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-021",
+          "note": "SRAT/SLIT already parsed (M0)",
+          "wave": "11"
+        },
+        {
+          "id": "B18",
+          "capability": "Per-guest resource limits and quotas",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "[A]",
+          "note": "Metered for FinOps rows (G5)",
+          "wave": "11"
+        },
+        {
+          "id": "B19",
+          "capability": "Hot-add CPU / RAM / disk to a running guest",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "M9",
+          "note": "Cluster-era",
+          "wave": "17"
+        },
+        {
+          "id": "B20",
+          "capability": "Guest exit/stop reasons readable on the page (why did it stop)",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "ADR-021",
+          "note": "`ddbaf11cd11c` (PR #419, CI `40900796962`; pull-request merge of `cff61509`): Guest tile `Guest 3 is running` with the tail row `RUNNING`; after Stop, tile `Guest is stopped`, rows `STOPPED`, line `Stopped from the Guests page. reason=0x34 rip=0xffffffff85b2bebd`. While it ran, the line still showed the OVMF first-exit handoff (`Exit cap reached. reason=0x1c rip=0xfffffe94`); Stop replaced it. docs/evidence/r640/2026-10-29-ddbaf11c-wave-2-b20-stop-on-page-ok.md",
+          "wave": "2"
+        }
+      ],
+      "counts": {
+        "S1": {
+          "lived": 4,
+          "in flight": 0,
+          "planned": 6,
+          "total": 10
+        },
+        "Final": {
+          "lived": 4,
+          "in flight": 0,
+          "planned": 16,
+          "total": 20
+        }
+      }
+    },
+    {
+      "id": "C",
+      "name": "Storage",
+      "pillars": [],
+      "items": [
+        {
+          "id": "C1",
+          "capability": "Install disk survives host reboot and chassis power-off",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "M8.0",
+          "note": "`RAYNU-V-M8-DISK-PERSIST-OK` on `928d6224` (8 GiB USB window)",
+          "wave": "0"
+        },
+        {
+          "id": "C2",
+          "capability": "PERC H740P read/write through the MFI mailbox",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "M8.7",
+          "note": "`RAYNU-V-M8-PERC-LUN-OK` `9c37fcae`; `PERC-WRITE-OK` `f0a7aabb`",
+          "wave": "0"
+        },
+        {
+          "id": "C3",
+          "capability": "Guest disk on the PERC virtual disk (RAYNU-SPARE)",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "M8.7 / M8.8",
+          "note": "Ubuntu login from a 10 GiB tail, `c3a70e62`",
+          "wave": "0"
+        },
+        {
+          "id": "C4",
+          "capability": "Datastore: carve, grow, delete guest disks across the whole VD from the SPA",
+          "status": "planned",
+          "ships": "S1",
+          "ref": "ADR-021",
+          "note": "Fixed 10 GiB tail today; 2.9 TB hidden",
+          "wave": "7"
+        },
+        {
+          "id": "C5",
+          "capability": "ISO library on the array with browser upload",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "M8.8.2",
+          "note": "`93088c32` stored `ubuntu-26.04-live-server-amd64.iso`",
+          "wave": "0"
+        },
+        {
+          "id": "C6",
+          "capability": "Upload progress, resume, checksum shown before use",
+          "status": "planned",
+          "ships": "S1",
+          "ref": "ADR-021",
+          "note": "Chunked upload lived; no resume",
+          "wave": "7"
+        },
+        {
+          "id": "C7",
+          "capability": "virtio-blk FLUSH honored before completion (power-safe guest filesystems)",
+          "status": "planned",
+          "ships": "S1",
+          "ref": "ADR-021",
+          "note": "Unverified on iron; required before \"production data\"",
+          "wave": "3"
+        },
+        {
+          "id": "C8",
+          "capability": "Config store on disk: guests, NICs, settings survive host reboot",
+          "status": "planned",
+          "ships": "S1",
+          "ref": "M8.5",
+          "note": "vNIC is RAM-only today; re-saved every boot",
+          "wave": "3"
+        },
+        {
+          "id": "C9",
+          "capability": "NVMe as a datastore (direct, not through PERC)",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-021",
+          "note": "NVMe Identify/Read/Write TCG-proven, not iron",
+          "wave": "12"
+        },
+        {
+          "id": "C10",
+          "capability": "NVMe / PCI device passthrough to a guest",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-005",
+          "note": "",
+          "wave": "12"
+        },
+        {
+          "id": "C11",
+          "capability": "Second controller (H840 / second PERC)",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-018",
+          "note": "Explicitly held closed in M8.7",
+          "wave": "12"
+        },
+        {
+          "id": "C12",
+          "capability": "Thin provisioning",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-021",
+          "note": "",
+          "wave": "12"
+        },
+        {
+          "id": "C13",
+          "capability": "Disk snapshots and clones at the datastore layer",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-021",
+          "note": "Pairs with B16",
+          "wave": "12"
+        },
+        {
+          "id": "C14",
+          "capability": "Export / import guest disks (raw, qcow2, VMDK)",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "M5.5",
+          "note": "VMDK convert is the migration engine",
+          "wave": "12"
+        },
+        {
+          "id": "C15",
+          "capability": "Scheduled backup hook: export to a network target",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-021",
+          "note": "",
+          "wave": "12"
+        },
+        {
+          "id": "C16",
+          "capability": "Disk health on the page: VD state, rebuild, predictive failure",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-005 Tier 2",
+          "note": "Redfish OEM schemas",
+          "wave": "12"
+        },
+        {
+          "id": "C17",
+          "capability": "UBUNTU0 and other operator disks never written by RayNu-V unless attached",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "ADR-018",
+          "note": "`skip PERC` rule; LBA 0 signature stayed 16 zeros on `f0a7aabb`; UBUNTU0 untouched through M8.8",
+          "wave": "0"
+        }
+      ],
+      "counts": {
+        "S1": {
+          "lived": 5,
+          "in flight": 0,
+          "planned": 4,
+          "total": 9
+        },
+        "Final": {
+          "lived": 5,
+          "in flight": 0,
+          "planned": 12,
+          "total": 17
+        }
+      }
+    },
+    {
+      "id": "D",
+      "name": "Networking",
+      "pillars": [],
+      "items": [
+        {
+          "id": "D1",
+          "capability": "Management SPA on a native BCM5720 LOM port (smoltcp, lifetime)",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "ADR-013 E3b",
+          "note": "`RAYNU-V-M7-HOST-NIC-HTTP-OK` (2026-08-20) on `:38` / port 3; docs/evidence/r640/2026-08-20-e3b-host-nic-http-ok.md",
+          "wave": "0"
+        },
+        {
+          "id": "D2",
+          "capability": "Guest virtio-net with 256-entry queues; Linux driver stable, no watchdog",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "M8.9.4",
+          "note": "`d7e2e24f`: `TX 15` frames, no `NETDEV WATCHDOG`",
+          "wave": "0"
+        },
+        {
+          "id": "D3",
+          "capability": "Guest frames leave and return on the second LOM port (`:39` / port 4)",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "M8.9.4 / ADR-013 App. C",
+          "note": "`02e0acba` (PR #414, CI `40495122788`): `arm_egress` runs the tg3 `reset_hw` sequence on `01:00.1` through its own APE window (`ape-evt=sent`, `ape-grc=yes`, `fw-magic=yes`, `memarb=1 bufmgr=1`); COM2 `txp=8/7 wtx=6/536 rcb=11 vrx=35`, guest `RX 378 MB / 258048 packets, 0 errors`, ARP `10.99.99.1 lladdr 28:87:ba:a6:b6:04`, apt and a kernel update over `:39`; Stop after 44 min `sent=29983 held=0 wrx=279744/411010703 fcs=0`; docs/evidence/r640/2026-10-27-02e0acba-guest-lan-ssh-ok.md. Before: `99f003c1` had `txp=8/0 wtx=0/0 rcb=0` (no reset, no `GRC_MODE`, no driver START on function 1)",
+          "wave": "1"
+        },
+        {
+          "id": "D4",
+          "capability": "Uplink discovery: egress is the other BCM5720 function on any R640, not one MAC constant",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "ADR-021",
+          "note": "`aeb2d79b` (PR #418, CI `40687568692`): one quiet boot, no constant on the arm path — COM2 `boot: M8.9 egress discovered pci=01:00.01 mac=b0:26:28:5c:5a:39 (SPA partner; no constant)` at NIC init, `(SPA partner; arm)` at the arm, `rings armed pci=01:00.01 phylock=no`, `t10s vtx=10 vrx=50 sent=10 held=0 fcs=0`; `ssh vikkp@10.99.99.200` from the Mac, `enp0s5 UP 10.99.99.200/24`, gateway `10.99.99.1` `REACHABLE`. `init_bcm5720` records `guest_egress::discover` (`note_discovered`), `arm_egress` reads `discovered()` and programs `port.phy_mac`; `port_ok`, `handoff`, `preview_offer`, `StartNic.egress_phy`, `ip_token` / `network_file` and `guest_close::judge` take the discovered MAC; `EGRESS_PHY_MAC` is a mint-collision guard and test fixture only. Discovery first seen on `8df4407d` (`constant=:39 match=yes`). docs/evidence/r640/2026-10-28-aeb2d79b-wave-2-d4-discovered-port-ok.md",
+          "wave": "2"
+        },
+        {
+          "id": "D5",
+          "capability": "Physical link state of both LOM ports on the SPA; audit event on change",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "ADR-021",
+          "note": "`aeb2d79b` (PR #418, CI `40687568692`), 2026-10-29 pull: COM2 and the Activity `=== host UART ===` ring both show `RAYNU-V-AUDIT: HostLinkChanged func=1 up=0 mbps=0` / `boot: D5 link lom=4 func=1 down`, then `HostLinkChanged func=1 up=1 mbps=100` / `up mbps=100` (mirror on the no-wait writer, `f57bd265`). Page half lived on `8df4407d`: Overview Port 3 (SPA `:38`) / Port 4 (guest LAN `:39`) rows, Port 4 `UP 100 FULL` 2 changes. docs/evidence/r640/2026-10-29-aeb2d79b-wave-2-d5-audit-on-cable-pull-ok.md",
+          "wave": "2"
+        },
+        {
+          "id": "D6",
+          "capability": "virtio-net carrier follows the uplink (guest sees `NO-CARRIER` when port is dark)",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "ADR-021",
+          "note": "`8df4407d` (PR #418, CI `40612757544`): port 4 cable pulled with the guest SSH'd in over `:39` — guest `ip -br link` `NO-CARRIER` for the pull, `LOWER_UP` after, SSH resumed; device offers `VIRTIO_NET_F_STATUS`, status word follows `host_link::guest_carrier`, config-change ISR on the flip. docs/evidence/r640/2026-10-28-8df4407d-wave-2-cable-pull-d6-ok.md",
+          "wave": "2"
+        },
+        {
+          "id": "D7",
+          "capability": "Guest address on the customer LAN: DHCP from their server or static from the SPA",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "M8.9.5",
+          "note": "`0d865c7f` (PR #416, CI `40603110937`): RayNu-F publishes the saved address as systemd credentials in SMBIOS Type 11 through `EFI_SMBIOS3_TABLE_GUID` (`network.network.10-raynu` = `[Match] MACAddress=<guest mac>` + static `Address=`/`Gateway=`/`DNS=`; `systemd.unit-dropin.sysinit.target~10-raynu` wants `systemd-network-generator`, which Ubuntu ships disabled). Guest untouched: `Installed /run/systemd/network/10-raynu.network from credential.`, `networkctl` `routable (configured)` on `10.99.99.200/24` gw `10.99.99.1` DNS `1.1.1.1`; `ssh vikkp@10.99.99.200` from the Mac → `raynusrv2`. Disk not written; this boot only. docs/evidence/r640/2026-10-27-0d865c7f-guest-address-from-spa-d7-ok.md. Earlier: `d588148f` credential imported but generator disabled; `02e0acba` operator-typed, `ip=` view inert",
+          "wave": "1"
+        },
+        {
+          "id": "D8",
+          "capability": "SSH to the guest from another machine",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "M8.9.6",
+          "note": "`02e0acba` (PR #414): `vikkp@Mac % ssh vikkp@10.99.99.200` → `Welcome to Ubuntu 26.04 LTS` on `raynusrv2`, through port 4 / `:39` / virtio-net; docs/evidence/r640/2026-10-27-02e0acba-guest-lan-ssh-ok.md. The address was operator-set (D7 open)",
+          "wave": "1"
+        },
+        {
+          "id": "D9",
+          "capability": "Host management address: static IP, gateway, DNS, hostname set from the SPA and persisted",
+          "status": "planned",
+          "ships": "S1",
+          "ref": "ADR-021",
+          "note": "DHCP lease only today",
+          "wave": "4"
+        },
+        {
+          "id": "D10",
+          "capability": "Host NTP client; host clock correct for TLS and audit timestamps",
+          "status": "planned",
+          "ships": "S1",
+          "ref": "ADR-021",
+          "note": "",
+          "wave": "4"
+        },
+        {
+          "id": "D11",
+          "capability": "Cabling and port roles documented: iDRAC dedicated or shared LOM, port 3 mgmt, port 4 guests",
+          "status": "planned",
+          "ships": "S1",
+          "ref": "ADR-021",
+          "note": "Install guide row (H6)",
+          "wave": "6"
+        },
+        {
+          "id": "D12",
+          "capability": "Operator chooses which port is management and which is guest uplink",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-021",
+          "note": "Fixed roles in S1",
+          "wave": "10"
+        },
+        {
+          "id": "D13",
+          "capability": "Single-port mode: management and guests share one uplink behind a MAC demux",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-013 App. B",
+          "note": "For the one-cable customer",
+          "wave": "10"
+        },
+        {
+          "id": "D14",
+          "capability": "802.1Q VLAN tag per vNIC; trunk uplink",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-013",
+          "note": "Not built; untagged only",
+          "wave": "14"
+        },
+        {
+          "id": "D15",
+          "capability": "Multiple vNICs per guest",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-021",
+          "note": "One per guest in M8.9",
+          "wave": "14"
+        },
+        {
+          "id": "D16",
+          "capability": "On-host switching between guests (vSwitch with L2 learning)",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "M4",
+          "note": "Lab pair exists; not a product switch",
+          "wave": "14"
+        },
+        {
+          "id": "D17",
+          "capability": "Uplink bonding / LACP",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-021",
+          "note": "",
+          "wave": "14"
+        },
+        {
+          "id": "D18",
+          "capability": "Jumbo frames (MTU 9000) end to end",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-021",
+          "note": "1536 today",
+          "wave": "14"
+        },
+        {
+          "id": "D19",
+          "capability": "10G uplinks: BCM57416 (rNDC ports 1–2), Intel X710",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-005",
+          "note": "",
+          "wave": "14"
+        },
+        {
+          "id": "D20",
+          "capability": "SR-IOV VF passthrough",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-005",
+          "note": "",
+          "wave": "14"
+        },
+        {
+          "id": "D21",
+          "capability": "Per-vNIC MAC anti-spoof and basic L2/L3 filtering",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "[A]",
+          "note": "",
+          "wave": "14"
+        },
+        {
+          "id": "D22",
+          "capability": "MSI-X and interrupt-driven host NIC (replace polling)",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-013",
+          "note": "Performance",
+          "wave": "14"
+        },
+        {
+          "id": "D23",
+          "capability": "IPv6 on management and guest paths",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-021",
+          "note": "",
+          "wave": "14"
+        }
+      ],
+      "counts": {
+        "S1": {
+          "lived": 8,
+          "in flight": 0,
+          "planned": 3,
+          "total": 11
+        },
+        "Final": {
+          "lived": 8,
+          "in flight": 0,
+          "planned": 15,
+          "total": 23
+        }
+      }
+    },
+    {
+      "id": "E",
+      "name": "Management plane: SPA, REST, identity",
+      "pillars": [],
+      "items": [
+        {
+          "id": "E1",
+          "capability": "Browser SPA served from the binary (Overview, Guests, library)",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "M7 E4",
+          "note": "`.assets.webui` section (`./tools/check-pe-assets.sh`); `RAYNU-V-M7-E4-SPA-LAUNCH-OK`",
+          "wave": "0"
+        },
+        {
+          "id": "E2",
+          "capability": "Guest list is server state, not browser memory",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "ADR-019",
+          "note": "Guests screen reads the spare boot policy; a new browser saw the running row on `c3a70e62`",
+          "wave": "0"
+        },
+        {
+          "id": "E3",
+          "capability": "TLS on `:8443`",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "M8.1",
+          "note": "`RAYNU-V-M8-TLS-OK` `928d6224`; TLS 1.2, lab millicert",
+          "wave": "0"
+        },
+        {
+          "id": "E4",
+          "capability": "Operator-supplied certificate and key (upload or ACME); TLS 1.3",
+          "status": "planned",
+          "ships": "S1",
+          "ref": "ADR-021",
+          "note": "Millicert is not a customer certificate",
+          "wave": "5"
+        },
+        {
+          "id": "E5",
+          "capability": "Plaintext PRE-EBS window closed (HTTPS or nothing from first packet)",
+          "status": "planned",
+          "ships": "S1",
+          "ref": "M8.1",
+          "note": "Boot minutes are HTTP today",
+          "wave": "5"
+        },
+        {
+          "id": "E6",
+          "capability": "Operator account with password; bring-up latch removed as default",
+          "status": "planned",
+          "ships": "S1",
+          "ref": "M8.2",
+          "note": "`raynu-v-bringup` is a lab latch",
+          "wave": "5"
+        },
+        {
+          "id": "E7",
+          "capability": "Roles: admin, operator, auditor (read-only)",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-021",
+          "note": "",
+          "wave": "13"
+        },
+        {
+          "id": "E8",
+          "capability": "LDAP / Active Directory / OIDC sign-in",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-021",
+          "note": "",
+          "wave": "13"
+        },
+        {
+          "id": "E9",
+          "capability": "API tokens for automation; token audit",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-021",
+          "note": "",
+          "wave": "13"
+        },
+        {
+          "id": "E10",
+          "capability": "Session expiry, lockout after failed logins, optional TOTP",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-021",
+          "note": "",
+          "wave": "13"
+        },
+        {
+          "id": "E11",
+          "capability": "Guest console in the browser (serial and framebuffer), keyboard works",
+          "status": "in flight",
+          "ships": "S1",
+          "ref": "M8.3",
+          "note": "Typed into Alpine once; Ubuntu via COM2",
+          "wave": "7"
+        },
+        {
+          "id": "E12",
+          "capability": "REST API documented (OpenAPI), versioned, stable for the SKU",
+          "status": "planned",
+          "ships": "S1",
+          "ref": "ADR-021",
+          "note": "Endpoints exist; no published contract",
+          "wave": "5"
+        },
+        {
+          "id": "E13",
+          "capability": "CLI client for the REST API (runs on the operator's machine, not the host)",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-021",
+          "note": "Host stays shell-less",
+          "wave": "13"
+        },
+        {
+          "id": "E14",
+          "capability": "Per-guest metrics: CPU, RAM, disk I/O, network; Prometheus endpoint",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "[A]",
+          "note": "",
+          "wave": "13"
+        },
+        {
+          "id": "E15",
+          "capability": "Alerts: email / webhook on guest stop, link down, hardware event",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-021",
+          "note": "",
+          "wave": "13"
+        },
+        {
+          "id": "E16",
+          "capability": "Host log export (syslog forwarding) and support bundle download",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-021",
+          "note": "COM2 is the log today",
+          "wave": "13"
+        },
+        {
+          "id": "E17",
+          "capability": "Guest log separated from host log on the page",
+          "status": "planned",
+          "ships": "S1",
+          "ref": "ADR-021",
+          "note": "\"The guest log still mixes host lines\"",
+          "wave": "7"
+        }
+      ],
+      "counts": {
+        "S1": {
+          "lived": 3,
+          "in flight": 1,
+          "planned": 5,
+          "total": 9
+        },
+        "Final": {
+          "lived": 3,
+          "in flight": 1,
+          "planned": 13,
+          "total": 17
+        }
+      }
+    },
+    {
+      "id": "F",
+      "name": "Hardware and iDRAC",
+      "pillars": [
+        "D"
+      ],
+      "items": [
+        {
+          "id": "F1",
+          "capability": "iDRAC virtual media boot and SOL console for bring-up",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "M7.5",
+          "note": "`docs/runbooks/usb_idrac.md`",
+          "wave": "0"
+        },
+        {
+          "id": "F2",
+          "capability": "Coexist with iDRAC shared-LOM NCSI (never take the APE PHY lock)",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "ADR-013",
+          "note": "`ape-nophylock=yes` on every iron boot since 2026-08-19; docs/evidence/r640/2026-08-17-phase0-census.md",
+          "wave": "0"
+        },
+        {
+          "id": "F3",
+          "capability": "Redfish Tier 1 on the page: thermal, fans, PSU",
+          "status": "planned",
+          "ships": "S1",
+          "ref": "ADR-005",
+          "note": "",
+          "wave": "8"
+        },
+        {
+          "id": "F4",
+          "capability": "SMBIOS DIMM and NUMA topology on the page",
+          "status": "planned",
+          "ships": "S1",
+          "ref": "ADR-005",
+          "note": "Parsed at boot; not shown",
+          "wave": "8"
+        },
+        {
+          "id": "F5",
+          "capability": "Hardware events into the audit log (thermal, PSU, DIMM)",
+          "status": "planned",
+          "ships": "S1",
+          "ref": "ADR-005",
+          "note": "",
+          "wave": "8"
+        },
+        {
+          "id": "F6",
+          "capability": "PERC health via Dell OEM Redfish",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-005 Tier 2",
+          "note": "",
+          "wave": "15"
+        },
+        {
+          "id": "F7",
+          "capability": "Predictive failure → throttle or evacuate guests",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-005 Tier 2",
+          "note": "",
+          "wave": "15"
+        },
+        {
+          "id": "F8",
+          "capability": "Hardware watchdog (iDRAC/IPMI) resets a wedged host; guests autostart after",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-021",
+          "note": "Pairs with B5",
+          "wave": "15"
+        },
+        {
+          "id": "F9",
+          "capability": "R650 / R660 boot and NIC support",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-005",
+          "note": "",
+          "wave": "15"
+        },
+        {
+          "id": "F10",
+          "capability": "iDRAC NIC Selection matrix: Dedicated and Shared LOM both documented and tested",
+          "status": "planned",
+          "ships": "S1",
+          "ref": "ADR-021",
+          "note": "Lab runs one cable on port 3 (shared)",
+          "wave": "6"
+        }
+      ],
+      "counts": {
+        "S1": {
+          "lived": 2,
+          "in flight": 0,
+          "planned": 4,
+          "total": 6
+        },
+        "Final": {
+          "lived": 2,
+          "in flight": 0,
+          "planned": 8,
+          "total": 10
+        }
+      }
+    },
+    {
+      "id": "G",
+      "name": "Audit and compliance",
+      "pillars": [
+        "A"
+      ],
+      "items": [
+        {
+          "id": "G1",
+          "capability": "Audit ring with hash chain inside the Proven Core",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "M5 / ADR-002",
+          "note": "`./tools/m5-audit-smoke.sh`; `RAYNU-V-M6-EXT-OK` auditor path (host artifact)",
+          "wave": "0"
+        },
+        {
+          "id": "G2",
+          "capability": "Every VM lifecycle and admin action emits an audit event",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "CLAUDE.md audit rule",
+          "note": "`audit_log!` categories; `./tools/m5-life-smoke.sh` (host artifact)",
+          "wave": "0"
+        },
+        {
+          "id": "G3",
+          "capability": "Audit export (JSON/CSV) from the SPA and REST",
+          "status": "planned",
+          "ships": "S1",
+          "ref": "ADR-021",
+          "note": "Ring is in memory; export path missing",
+          "wave": "5"
+        },
+        {
+          "id": "G4",
+          "capability": "Audit survives host reboot (persisted, chained across boots)",
+          "status": "planned",
+          "ships": "S1",
+          "ref": "ADR-021",
+          "note": "",
+          "wave": "3"
+        },
+        {
+          "id": "G5",
+          "capability": "FinOps metering: per-guest CPU-hours, GiB-hours, I/O",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "[A]",
+          "note": "",
+          "wave": "15"
+        },
+        {
+          "id": "G6",
+          "capability": "SOX / ISO 27001 report templates (PDF/JSON/CSV)",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "M5",
+          "note": "Generator exists outside Proven Core; templates not shipped",
+          "wave": "15"
+        },
+        {
+          "id": "G7",
+          "capability": "External anchoring of the hash chain (write head to a remote or TPM NV)",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-021",
+          "note": "Tamper evidence beyond the box",
+          "wave": "15"
+        }
+      ],
+      "counts": {
+        "S1": {
+          "lived": 2,
+          "in flight": 0,
+          "planned": 2,
+          "total": 4
+        },
+        "Final": {
+          "lived": 2,
+          "in flight": 0,
+          "planned": 5,
+          "total": 7
+        }
+      }
+    },
+    {
+      "id": "H",
+      "name": "Reliability, operations, documentation",
+      "pillars": [],
+      "items": [
+        {
+          "id": "H1",
+          "capability": "Guest fault isolation: a crashing guest does not take the host",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "M6 / ADR-004",
+          "note": "`./tools/m6-fault-smoke.sh` (Latitude); iron guests stopped cleanly and the SPA stayed up on `d7e2e24f`",
+          "wave": "0"
+        },
+        {
+          "id": "H2",
+          "capability": "Host panic: dump to COM2 and iDRAC, then reboot; guests autostart",
+          "status": "planned",
+          "ships": "S1",
+          "ref": "ADR-021",
+          "note": "Pairs with B5, F8",
+          "wave": "4"
+        },
+        {
+          "id": "H3",
+          "capability": "72-hour soak on the R640 with a guest under load",
+          "status": "planned",
+          "ships": "S1",
+          "ref": "M6 bar",
+          "note": "M6 soak was QEMU",
+          "wave": "9"
+        },
+        {
+          "id": "H4",
+          "capability": "Guest watchdog: restart a guest that stops responding",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-021",
+          "note": "",
+          "wave": "13"
+        },
+        {
+          "id": "H5",
+          "capability": "Install guide, cabling guide, operator runbook, support matrix as customer documents",
+          "status": "planned",
+          "ships": "S1",
+          "ref": "ADR-021",
+          "note": "Runbooks exist for the lab",
+          "wave": "6"
+        },
+        {
+          "id": "H6",
+          "capability": "Rollback documented per release (GitHub tag, SHA256, COM2 `build:` line)",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "ADR-018",
+          "note": "`v0.1.0-everest-closed` (`f72b4276`), `v0.1.0-m8-8-ubuntu` (`c3a70e62`), `v0.1.0-m8-9-lan` (`0d865c7f`)",
+          "wave": "0"
+        },
+        {
+          "id": "H7",
+          "capability": "Published performance baseline (boot, guest I/O, guest network) on R640",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-021",
+          "note": "",
+          "wave": "13"
+        },
+        {
+          "id": "H8",
+          "capability": "Release cadence and support policy stated (what a customer gets for a year)",
+          "status": "planned",
+          "ships": "S1",
+          "ref": "ADR-021",
+          "note": "",
+          "wave": "6"
+        }
+      ],
+      "counts": {
+        "S1": {
+          "lived": 2,
+          "in flight": 0,
+          "planned": 4,
+          "total": 6
+        },
+        "Final": {
+          "lived": 2,
+          "in flight": 0,
+          "planned": 6,
+          "total": 8
+        }
+      }
+    },
+    {
+      "id": "I",
+      "name": "Verification",
+      "pillars": [
+        "V"
+      ],
+      "items": [
+        {
+          "id": "I1",
+          "capability": "Frame allocator L3 proof under pinned Verus",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "M3.17",
+          "note": "`RAYNU-V-M3-L3-VERIFY-OK`",
+          "wave": "0"
+        },
+        {
+          "id": "I2",
+          "capability": "Proven Core specs written (L2) across all ten modules",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-006",
+          "note": "`80 verified, 0 errors` covers part; not all L2",
+          "wave": "V"
+        },
+        {
+          "id": "I3",
+          "capability": "EPT isolation theorem proved for N guests, 4K and large pages",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-004",
+          "note": "Partial; the headline proof",
+          "wave": "V"
+        },
+        {
+          "id": "I4",
+          "capability": "Kani bounded checks on every `unsafe` block in the Proven Core",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "ADR-001",
+          "note": "",
+          "wave": "V"
+        },
+        {
+          "id": "I5",
+          "capability": "External spec review and external auditor runs `verus --verify`",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "M6 bar",
+          "note": "",
+          "wave": "V"
+        },
+        {
+          "id": "I6",
+          "capability": "Living verification paper updated with evidence",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "ADR-010",
+          "note": "`site/paper.html`; docs/adr/ADR-010.md evidence-only sections",
+          "wave": "0"
+        },
+        {
+          "id": "I7",
+          "capability": "Toolchain pinned, nightly proof regression",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "ADR-008",
+          "note": "`rust-toolchain.toml`, `verus-version.toml`; `./tools/verus-verify-smoke.sh`",
+          "wave": "0"
+        },
+        {
+          "id": "I8",
+          "capability": "Proven Core LOC under 15,000 with the budget published",
+          "status": "lived",
+          "ships": "S1",
+          "ref": "ADR-002",
+          "note": "Budget table in CLAUDE.md; docs/progress.md verification checkpoint",
+          "wave": "0"
+        }
+      ],
+      "counts": {
+        "S1": {
+          "lived": 4,
+          "in flight": 0,
+          "planned": 0,
+          "total": 4
+        },
+        "Final": {
+          "lived": 4,
+          "in flight": 0,
+          "planned": 4,
+          "total": 8
+        }
+      }
+    },
+    {
+      "id": "J",
+      "name": "Migration from VMware",
+      "pillars": [],
+      "items": [
+        {
+          "id": "J1",
+          "capability": "Read vCenter inventory (read-only)",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "M5.5 / ADR-007",
+          "note": "",
+          "wave": "16"
+        },
+        {
+          "id": "J2",
+          "capability": "Convert VMDK to a RayNu-V disk on the array",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "M5.5",
+          "note": "",
+          "wave": "16"
+        },
+        {
+          "id": "J3",
+          "capability": "Translate VMX/OVF config to a guest record",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "M5.5",
+          "note": "",
+          "wave": "16"
+        },
+        {
+          "id": "J4",
+          "capability": "Ten guests migrated in one command, with a report",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "M5.5",
+          "note": "The M5.5 gate",
+          "wave": "16"
+        }
+      ],
+      "counts": {
+        "S1": {
+          "lived": 0,
+          "in flight": 0,
+          "planned": 0,
+          "total": 0
+        },
+        "Final": {
+          "lived": 0,
+          "in flight": 0,
+          "planned": 4,
+          "total": 4
+        }
+      }
+    },
+    {
+      "id": "K",
+      "name": "Cluster and elasticity (M9)",
+      "pillars": [],
+      "items": [
+        {
+          "id": "K1",
+          "capability": "Second host joins a cluster; one SPA for both",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "M9",
+          "note": "",
+          "wave": "17"
+        },
+        {
+          "id": "K2",
+          "capability": "Shared storage between hosts",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "M9",
+          "note": "",
+          "wave": "17"
+        },
+        {
+          "id": "K3",
+          "capability": "Live migration of a running guest (vMotion-like), backed by the EPT page-transfer proof",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "M9 / ADR-004",
+          "note": "",
+          "wave": "17"
+        },
+        {
+          "id": "K4",
+          "capability": "Load-aware placement (DRS-like)",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "M9",
+          "note": "",
+          "wave": "17"
+        },
+        {
+          "id": "K5",
+          "capability": "HA: restart guests of a failed host on a survivor",
+          "status": "planned",
+          "ships": "Final",
+          "ref": "M9",
+          "note": "",
+          "wave": "17"
+        }
+      ],
+      "counts": {
+        "S1": {
+          "lived": 0,
+          "in flight": 0,
+          "planned": 0,
+          "total": 0
+        },
+        "Final": {
+          "lived": 0,
+          "in flight": 0,
+          "planned": 5,
+          "total": 5
+        }
+      }
+    }
+  ],
+  "waves": [
+    {
+      "id": "0",
+      "theme": "Base, already lived",
+      "rows": [
+        "A1",
+        "A2",
+        "A10",
+        "B1",
+        "B2",
+        "B3",
+        "C1",
+        "C2",
+        "C3",
+        "C5",
+        "C17",
+        "D1",
+        "D2",
+        "E1",
+        "E2",
+        "E3",
+        "F1",
+        "F2",
+        "G1",
+        "G2",
+        "H1",
+        "H6",
+        "I1",
+        "I6",
+        "I7",
+        "I8"
+      ],
+      "iron": "",
+      "why": "What Everest and M8.0–M8.8 left on the R640. Regression set for every later wave.",
+      "counts": {
+        "lived": 26,
+        "in flight": 0,
+        "planned": 0,
+        "total": 26
+      },
+      "closed": true
+    },
+    {
+      "id": "1",
+      "theme": "Close M8.9",
+      "rows": [
+        "D3",
+        "D7",
+        "D8"
+      ],
+      "iron": "D3",
+      "why": "Never open new work with an iron loop half-done. The port 4 cable arrives, this closes.",
+      "counts": {
+        "lived": 3,
+        "in flight": 0,
+        "planned": 0,
+        "total": 3
+      },
+      "closed": true
+    },
+    {
+      "id": "2",
+      "theme": "The box tells the truth",
+      "rows": [
+        "D5",
+        "D6",
+        "D4",
+        "B20",
+        "A3"
+      ],
+      "iron": "D5",
+      "why": "Cheap, in code just touched; each would have saved a day in October.",
+      "counts": {
+        "lived": 5,
+        "in flight": 0,
+        "planned": 0,
+        "total": 5
+      },
+      "closed": true
+    },
+    {
+      "id": "3",
+      "theme": "State survives",
+      "rows": [
+        "C8",
+        "G4",
+        "C7"
+      ],
+      "iron": "C8",
+      "why": "M8.5 in ADR-018 terms. Everything after depends on it.",
+      "counts": {
+        "lived": 0,
+        "in flight": 0,
+        "planned": 3,
+        "total": 3
+      },
+      "closed": false
+    },
+    {
+      "id": "4",
+      "theme": "Survives a power cut, unattended",
+      "rows": [
+        "B5",
+        "B4",
+        "D9",
+        "D10",
+        "H2"
+      ],
+      "iron": "B5",
+      "why": "The first \"walk away from the rack\" moment. Needs wave 3.",
+      "counts": {
+        "lived": 0,
+        "in flight": 0,
+        "planned": 5,
+        "total": 5
+      },
+      "closed": false
+    },
+    {
+      "id": "5",
+      "theme": "A customer can be let in",
+      "rows": [
+        "E6",
+        "E4",
+        "E5",
+        "G3",
+        "E12"
+      ],
+      "iron": "E6",
+      "why": "Security and audit together; what diligence asks for first. Host-heavy, overlaps wave 4 iron time.",
+      "counts": {
+        "lived": 0,
+        "in flight": 0,
+        "planned": 5,
+        "total": 5
+      },
+      "closed": false
+    },
+    {
+      "id": "6",
+      "theme": "Installable like a product",
+      "rows": [
+        "A5",
+        "A7",
+        "A4",
+        "H5",
+        "F10",
+        "D11",
+        "H8"
+      ],
+      "iron": "A7",
+      "why": "Needs C8 so an update keeps guests. Signing (A5) needs a key decision from the operator.",
+      "counts": {
+        "lived": 0,
+        "in flight": 0,
+        "planned": 7,
+        "total": 7
+      },
+      "closed": false
+    },
+    {
+      "id": "7",
+      "theme": "More than one guest, properly",
+      "rows": [
+        "B6",
+        "B8",
+        "B7",
+        "B9",
+        "C4",
+        "C6",
+        "E11",
+        "E17",
+        "A8"
+      ],
+      "iron": "B8",
+      "why": "Performance and capacity. B8 before B7: SMP on an 8259 is misery.",
+      "counts": {
+        "lived": 0,
+        "in flight": 1,
+        "planned": 8,
+        "total": 9
+      },
+      "closed": false
+    },
+    {
+      "id": "8",
+      "theme": "See the hardware",
+      "rows": [
+        "F3",
+        "F4",
+        "F5"
+      ],
+      "iron": "F3",
+      "why": "Tier 1 only. Host work plus one iron screenshot.",
+      "counts": {
+        "lived": 0,
+        "in flight": 0,
+        "planned": 3,
+        "total": 3
+      },
+      "closed": false
+    },
+    {
+      "id": "9",
+      "theme": "Prove it: Shipment 1",
+      "rows": [
+        "H3"
+      ],
+      "iron": "H3",
+      "why": "72 hours on the R640 with a guest under load, then rerun wave 0. The S1 release.",
+      "counts": {
+        "lived": 0,
+        "in flight": 0,
+        "planned": 1,
+        "total": 1
+      },
+      "closed": false
+    },
+    {
+      "id": "10",
+      "theme": "Port roles and the one-cable customer",
+      "rows": [
+        "D12",
+        "D13"
+      ],
+      "iron": "D13",
+      "why": "First Final wave; the question the lab asked on 2026-10-19.",
+      "counts": {
+        "lived": 0,
+        "in flight": 0,
+        "planned": 2,
+        "total": 2
+      },
+      "closed": false
+    },
+    {
+      "id": "11",
+      "theme": "Guest features",
+      "rows": [
+        "B10",
+        "B11",
+        "B12",
+        "B13",
+        "B14",
+        "B15",
+        "B16",
+        "B17",
+        "B18"
+      ],
+      "iron": "B13",
+      "why": "Windows is the iron thread; the rest is host-first.",
+      "counts": {
+        "lived": 0,
+        "in flight": 0,
+        "planned": 9,
+        "total": 9
+      },
+      "closed": false
+    },
+    {
+      "id": "12",
+      "theme": "Storage depth",
+      "rows": [
+        "C9",
+        "C10",
+        "C11",
+        "C12",
+        "C13",
+        "C14",
+        "C15",
+        "C16"
+      ],
+      "iron": "C9",
+      "why": "NVMe first; it is TCG-proven already.",
+      "counts": {
+        "lived": 0,
+        "in flight": 0,
+        "planned": 8,
+        "total": 8
+      },
+      "closed": false
+    },
+    {
+      "id": "13",
+      "theme": "Identity and operations depth",
+      "rows": [
+        "E7",
+        "E8",
+        "E9",
+        "E10",
+        "E13",
+        "E14",
+        "E15",
+        "E16",
+        "H4",
+        "H7",
+        "A6",
+        "A9"
+      ],
+      "iron": "A6",
+      "why": "TPM measured boot is the only iron row.",
+      "counts": {
+        "lived": 0,
+        "in flight": 0,
+        "planned": 12,
+        "total": 12
+      },
+      "closed": false
+    },
+    {
+      "id": "14",
+      "theme": "Network depth",
+      "rows": [
+        "D14",
+        "D15",
+        "D16",
+        "D17",
+        "D18",
+        "D19",
+        "D20",
+        "D21",
+        "D22",
+        "D23"
+      ],
+      "iron": "D14",
+      "why": "VLAN first; it unlocks most customer topologies.",
+      "counts": {
+        "lived": 0,
+        "in flight": 0,
+        "planned": 10,
+        "total": 10
+      },
+      "closed": false
+    },
+    {
+      "id": "15",
+      "theme": "Audit and hardware depth",
+      "rows": [
+        "G5",
+        "G6",
+        "G7",
+        "F6",
+        "F7",
+        "F8",
+        "F9"
+      ],
+      "iron": "F8",
+      "why": "Watchdog is the iron row; Tier 2 Redfish stays non-blocking (ADR-005).",
+      "counts": {
+        "lived": 0,
+        "in flight": 0,
+        "planned": 7,
+        "total": 7
+      },
+      "closed": false
+    },
+    {
+      "id": "16",
+      "theme": "Migration from VMware",
+      "rows": [
+        "J1",
+        "J2",
+        "J3",
+        "J4"
+      ],
+      "iron": "J4",
+      "why": "M5.5 as its own workstream (ADR-007).",
+      "counts": {
+        "lived": 0,
+        "in flight": 0,
+        "planned": 4,
+        "total": 4
+      },
+      "closed": false
+    },
+    {
+      "id": "17",
+      "theme": "Cluster (M9)",
+      "rows": [
+        "K1",
+        "K2",
+        "K3",
+        "K4",
+        "K5",
+        "B19"
+      ],
+      "iron": "K3",
+      "why": "Live migration is the iron thread; hot-add rides with it.",
+      "counts": {
+        "lived": 0,
+        "in flight": 0,
+        "planned": 6,
+        "total": 6
+      },
+      "closed": false
+    },
+    {
+      "id": "V",
+      "theme": "Verification, continuous",
+      "rows": [
+        "I2",
+        "I3",
+        "I4",
+        "I5"
+      ],
+      "iron": "",
+      "why": "[V] north star. Runs beside every wave; never waits for one.",
+      "counts": {
+        "lived": 0,
+        "in flight": 0,
+        "planned": 4,
+        "total": 4
+      },
+      "closed": false
+    }
+  ],
+  "current_wave": "3",
+  "next_up": [
+    {
+      "id": "C8",
+      "capability": "Config store on disk: guests, NICs, settings survive host reboot",
+      "status": "planned",
+      "role": "iron thread"
+    },
+    {
+      "id": "G4",
+      "capability": "Audit survives host reboot (persisted, chained across boots)",
+      "status": "planned",
+      "role": "host-first"
+    },
+    {
+      "id": "C7",
+      "capability": "virtio-blk FLUSH honored before completion (power-safe guest filesystems)",
+      "status": "planned",
+      "role": "host-first"
+    }
+  ],
+  "filler": [
+    {
+      "id": "B4",
+      "capability": "Clean shutdown and reboot from the SPA (ACPI power button), Stop as the hard fallback",
+      "wave": "4"
+    },
+    {
+      "id": "D9",
+      "capability": "Host management address: static IP, gateway, DNS, hostname set from the SPA and persisted",
+      "wave": "4"
+    },
+    {
+      "id": "D10",
+      "capability": "Host NTP client; host clock correct for TLS and audit timestamps",
+      "wave": "4"
+    },
+    {
+      "id": "H2",
+      "capability": "Host panic: dump to COM2 and iDRAC, then reboot; guests autostart",
+      "wave": "4"
+    }
+  ]
+}
