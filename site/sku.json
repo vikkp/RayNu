@@ -20,14 +20,14 @@
   "counts": {
     "S1": {
       "lived": 36,
-      "in flight": 1,
-      "planned": 30,
+      "in flight": 2,
+      "planned": 29,
       "total": 67
     },
     "Final": {
       "lived": 36,
-      "in flight": 1,
-      "planned": 92,
+      "in flight": 2,
+      "planned": 91,
       "total": 129
     }
   },
@@ -409,10 +409,10 @@
         {
           "id": "C7",
           "capability": "virtio-blk FLUSH honored before completion (power-safe guest filesystems)",
-          "status": "planned",
+          "status": "in flight",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Unverified on iron; required before \"production data\"",
+          "note": "`cursor/wave-3-c7-flush-50bb`. A latched spare image does not complete virtio FLUSH until SYNCHRONIZE CACHE (10) on that LD returns. IMMED is clear, the range is the whole LD, and an Ubuntu-sized LD is not posted. RAM and read-only devices complete without a command. Not lived until COM2 shows `boot: C7 virtio flush sync status=0x00` from a guest FLUSH. USB and NVMe device caches are not this command",
           "wave": "3"
         },
         {
@@ -509,14 +509,14 @@
       "counts": {
         "S1": {
           "lived": 6,
-          "in flight": 0,
-          "planned": 3,
+          "in flight": 1,
+          "planned": 2,
           "total": 9
         },
         "Final": {
           "lived": 6,
-          "in flight": 0,
-          "planned": 11,
+          "in flight": 1,
+          "planned": 10,
           "total": 17
         }
       }
@@ -1526,8 +1526,8 @@
       "why": "M8.5 in ADR-018 terms. Everything after depends on it.",
       "counts": {
         "lived": 2,
-        "in flight": 0,
-        "planned": 1,
+        "in flight": 1,
+        "planned": 0,
         "total": 3
       },
       "closed": false
@@ -1855,7 +1855,7 @@
     {
       "id": "C7",
       "capability": "virtio-blk FLUSH honored before completion (power-safe guest filesystems)",
-      "status": "planned",
+      "status": "in flight",
       "role": "host-first"
     }
   ],

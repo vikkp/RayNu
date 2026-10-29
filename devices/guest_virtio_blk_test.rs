@@ -1,17 +1,17 @@
 use super::{
     attach_disk, attach_disk_keep, blk_sector_rw, decode_mmio_insn, disk_bytes, disk_bytes_written,
-    is_virtio_bar_2m_gpa, is_virtio_bar_gpa, iso_visible, latch_dxe_virtio_did, mmio_decoded_len,
-    mmio_effective_len, mmio_insn_bytes_this_page, mmio_read, mmio_read_iso, mmio_write,
-    mmio_write_iso, pci_addr_selects_owned, pci_addr_selects_slot0, pci_addr_selects_virtio,
-    pci_addr_selects_virtio_iso, pci_addr_selects_virtio_spare, pci_config_addr,
-    pci_config_addr_iso, pci_config_addr_slot0, pci_config_addr_spare, pci_enumerated,
-    pci_read_data, pci_write_addr, pci_write_data, pei_host_bridge_did, present,
-    process_blk_queue_in, process_iso_queue_in, queues_armed, raynu_f_disk_read,
-    raynu_f_disk_write, reset, reset_keep_disk, take_marker, virtio_disk_evidence,
-    virtio_needs_pit_over_uart, GUEST_VIRTIO_BAR0_DEFAULT, GUEST_VIRTIO_BAR0_SIZE_MASK,
-    GUEST_VIRTIO_ISO_BAR0_DEFAULT, GUEST_VIRTIO_PCI_DEVICE, GUEST_VIRTIO_PCI_VENDOR,
-    M7_E5_OVMF_VIRTIO_OK_MARKER, VIRTIO_BLK_F_RO, VIRTIO_BLK_S_IOERR, VIRTIO_BLK_S_OK,
-    VIRTIO_BLK_T_FLUSH, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, VIRTIO_F_VERSION_1,
+    flush_status, force_flush_fail_for_test, is_virtio_bar_2m_gpa, is_virtio_bar_gpa, iso_visible,
+    latch_dxe_virtio_did, mmio_decoded_len, mmio_effective_len, mmio_insn_bytes_this_page,
+    mmio_read, mmio_read_iso, mmio_write, mmio_write_iso, pci_addr_selects_owned,
+    pci_addr_selects_slot0, pci_addr_selects_virtio, pci_addr_selects_virtio_iso,
+    pci_addr_selects_virtio_spare, pci_config_addr, pci_config_addr_iso, pci_config_addr_slot0,
+    pci_config_addr_spare, pci_enumerated, pci_read_data, pci_write_addr, pci_write_data,
+    pei_host_bridge_did, present, process_blk_queue_in, process_iso_queue_in, queues_armed,
+    raynu_f_disk_read, raynu_f_disk_write, reset, reset_keep_disk, take_marker,
+    virtio_disk_evidence, virtio_needs_pit_over_uart, GUEST_VIRTIO_BAR0_DEFAULT,
+    GUEST_VIRTIO_BAR0_SIZE_MASK, GUEST_VIRTIO_ISO_BAR0_DEFAULT, GUEST_VIRTIO_PCI_DEVICE,
+    GUEST_VIRTIO_PCI_VENDOR, M7_E5_OVMF_VIRTIO_OK_MARKER, VIRTIO_BLK_F_RO, VIRTIO_BLK_S_IOERR,
+    VIRTIO_BLK_S_OK, VIRTIO_BLK_T_FLUSH, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, VIRTIO_F_VERSION_1,
     VIRTIO_PCI_CAP_COMMON, VIRTIO_PCI_CAP_NOTIFY, VIRTIO_PCI_CAP_VNDR, VIRTIO_XFER_CHUNK,
 };
 use crate::devices::guest_platform::{
@@ -401,6 +401,54 @@ fn blk_queue_flush_completes_zero_bytes() {
     assert_eq!(n, 0, "FLUSH has no data bytes");
     assert_eq!(last, 1, "virtio drain FLUSH still advances used idx");
     assert_eq!(guest[st_gpa as usize], VIRTIO_BLK_S_OK);
+    assert_eq!(flush_status(true, false), VIRTIO_BLK_S_OK);
+    assert_eq!(flush_status(false, true), VIRTIO_BLK_S_OK);
+    assert_eq!(flush_status(false, false), VIRTIO_BLK_S_IOERR);
+}
+
+#[test]
+fn blk_queue_flush_ioerr_does_not_report_ok() {
+    let mut guest = vec![0u8; 4096];
+    let qsize = 8u16;
+    let desc = 0u64;
+    let avail = 256u64;
+    let used = 512u64;
+    let hdr_gpa = 0x300u64;
+    guest[hdr_gpa as usize..hdr_gpa as usize + 4].copy_from_slice(&VIRTIO_BLK_T_OUT.to_le_bytes());
+    let data_gpa = 0x400u64;
+    guest[data_gpa as usize..data_gpa as usize + 512].fill(0x5A);
+    let st_out = 0x700u64;
+    guest[st_out as usize] = 0xFF;
+    let flush_gpa = 0x310u64;
+    guest[flush_gpa as usize..flush_gpa as usize + 4]
+        .copy_from_slice(&VIRTIO_BLK_T_FLUSH.to_le_bytes());
+    let st_flush = 0x710u64;
+    guest[st_flush as usize] = 0xFF;
+    fn put_desc(mem: &mut [u8], i: u16, addr: u64, len: u32, flags: u16, next: u16) {
+        let o = (i as usize) * 16;
+        mem[o..o + 8].copy_from_slice(&addr.to_le_bytes());
+        mem[o + 8..o + 12].copy_from_slice(&len.to_le_bytes());
+        mem[o + 12..o + 14].copy_from_slice(&flags.to_le_bytes());
+        mem[o + 14..o + 16].copy_from_slice(&next.to_le_bytes());
+    }
+    put_desc(&mut guest, 0, hdr_gpa, 16, 1, 1);
+    put_desc(&mut guest, 1, data_gpa, 512, 1, 2);
+    put_desc(&mut guest, 2, st_out, 1, 2, 0);
+    put_desc(&mut guest, 3, flush_gpa, 16, 1, 4);
+    put_desc(&mut guest, 4, st_flush, 1, 2, 0);
+    guest[avail as usize + 2..avail as usize + 4].copy_from_slice(&2u16.to_le_bytes());
+    guest[avail as usize + 4..avail as usize + 6].copy_from_slice(&0u16.to_le_bytes());
+    guest[avail as usize + 6..avail as usize + 8].copy_from_slice(&3u16.to_le_bytes());
+    let mut last = 0u16;
+    let mut disk = vec![0u8; 4096];
+    force_flush_fail_for_test(true);
+    let n = process_blk_queue_in(&mut guest, &mut disk, qsize, &mut last, desc, avail, used);
+    force_flush_fail_for_test(false);
+    assert_eq!(n, 512);
+    assert_eq!(disk[0], 0x5A);
+    assert_eq!(guest[st_out as usize], VIRTIO_BLK_S_OK);
+    assert_eq!(guest[st_flush as usize], VIRTIO_BLK_S_IOERR);
+    assert_eq!(last, 2);
 }
 
 #[test]
