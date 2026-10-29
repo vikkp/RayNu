@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-2-a3-build-id |
-| Summary | **ADR-021 A3 in flight on `cursor/wave-2-b20-a3-50bb`.** The COM2 banner is `build: sha=<12>` and ` run=<id>` when the CI run is set, with `build: sha=` still the first token. `/perc/guests` carries `build_sha` and `build_run`; the Overview line under the tiles renders `build <sha> · CI <run>` and links the run, and omits the link when the run is empty. Host tests. Not lived: the next F11 must show that line matching COM2. B20 is still planned. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-2-a3-lived |
+| Summary | **Iron `bc50d59aa77a`: ADR-021 A3 lived.** F11 of the PR #419 pull-request build (merge of `9ee60cb3`, CI `40876033671`). COM2 `build: sha=bc50d59aa77a run=40876033671`. Overview, under the tiles, `build bc50d59aa77a · CI 40876033671` with the run linked to that Actions page. No guest started. B20 still planned; wave 2 stays open on it. Evidence: [2026-10-29-bc50d59a-wave-2-a3-build-on-overview-ok.md](evidence/r640/2026-10-29-bc50d59a-wave-2-a3-build-on-overview-ok.md). HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
-| Gates touched | ADR-021 A3 `planned → in flight`. No new iron marker. Rollback `v0.1.0-m8-9-lan`. No doorbell. No format of UBUNTU0. |
+| Gates touched | ADR-021 A3 `in flight → lived`. B20 planned. No new iron marker. Rollback `v0.1.0-m8-9-lan`. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
 
 ## Blockers & risks (Everest-relevant)
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-29 | wave-2-a3-lived | 0.0 | 99 | **Iron `bc50d59aa77a`: A3 lived** — COM2 `build: sha=bc50d59aa77a run=40876033671` and the Overview line under the tiles match, run linked to that Actions page. The stamp is the pull-request merge of `9ee60cb3` (CI `40876033671`). B20 still planned. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-29 | wave-2-a3-build-id | 0.0 | 99 | **A3 in flight on `cursor/wave-2-b20-a3-50bb`.** COM2 `build: sha=<12> run=<id>` (`build: sha=` stays first; a local build omits `run=`). `/perc/guests` `build_sha` / `build_run`; Overview `#build-id` links the run. Not lived until the next F11 matches COM2. B20 still planned. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-29 | wave-2-d5-lived | 0.0 | 99 | **Iron `aeb2d79b`: D5 lived on one port 4 pull** — `RAYNU-V-AUDIT: HostLinkChanged func=1 up=0 mbps=0` / `up=1 mbps=100` on COM2 and in the Activity host UART ring, each leading its `boot: D5 link` line; the no-wait mirror held under Linux. D4 / D5 / D6 lived: the wave 2 iron thread is closed; B20 / A3 host-first remain before the wave closes. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-28 | wave-2-d4-lived | 0.0 | 99 | **Iron `aeb2d79b`: D4 lived on one quiet boot** — `egress discovered pci=01:00.01 mac=b0:26:28:5c:5a:39 (SPA partner; no constant)` at NIC init and `(SPA partner; arm)` at the arm, `rings armed`, `t10s sent=10 held=0 fcs=0`, `ssh vikkp@10.99.99.200` from the Mac with the gateway `REACHABLE`. `free -m` 1637 MiB; the `Memory:` line was accounting. D5 in flight (no pull); wave 2 open on D5 + B20 / A3. Scores held. months 0.0 held; overall 99 held |
@@ -1138,7 +1139,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     Wave 2 "The box tells the truth": D6 / D4 / D5 lived; the iron thread is closed. A3 (build SHA and CI run on the Overview) is in flight on cursor/wave-2-b20-a3-50bb. `./tools/sync-sku-site.sh --next` says B20 (guest exit/stop reasons on the page) then A3, both host-first; no iron until wave 3. After any F11, Save the vNIC on the Guests row before Start (the NIC record is not on disk). Rollback for a wave 2 flash is v0.1.0-m8-9-lan. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/m8_plan.md.
+Next move:     Wave 2 "The box tells the truth": D6 / D4 / D5 lived; A3 lived on bc50d59aa77a (Overview build line matches COM2, CI 40876033671). `./tools/sync-sku-site.sh --next` says B20 (guest exit/stop reasons on the page), host-first; no iron until wave 3. After any F11, Save the vNIC on the Guests row before Start (the NIC record is not on disk). Rollback for a wave 2 flash is v0.1.0-m8-9-lan. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/m8_plan.md.
 Rollback:      M8.9 close: v0.1.0-m8-9-lan → CI 40603110937 / COM2 sha=0d865c7fcb0a / EFI SHA256 df6fc3465cecf1eaf058d5c8e675501827c16eb55e7b2c9758bc5e68326ad91b
 Older M8.8:    v0.1.0-m8-8-ubuntu → CI 38454398693 / COM2 sha=c3a70e623aec / EFI SHA256 08ef31ba87136577102ac378d8e0a512327994e8794c41c64444f5be5f8812c4
 Older SPA:     v0.1.0-m8-perc-spa → CI 36362775808 / COM2 sha=8ad2ac89125e / EFI SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849
