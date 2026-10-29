@@ -8,7 +8,7 @@
 //! `delay_secs`. Later entries stay in the sector for when more than one
 //! guest runs. Reinstall and a new tail install are not entries.
 //!
-//! A power cut still leaves guests off until this sector is saved.
+//! Guests **Boot next** stages the sector. The next hypervisor boot reads it.
 
 use crate::mgmt::megaraid::{classify_ld_bytes, LdClass};
 use crate::mgmt::perc_boot_choice::{CHOICE_BOOT, CHOICE_TAIL_BOOT};
@@ -184,17 +184,149 @@ fn with_saved<R>(f: impl FnOnce(&mut AutoPolicy) -> R) -> R {
     out
 }
 
-/// Install a decoded sector. A bad image clears the list.
+/// Install a decoded sector. A bad image clears the list. This boot's
+/// start decision uses that list. Edits from the page stage a sector for
+/// the next boot and do not start a guest that is already waiting.
 pub fn restore(buf: &[u8]) -> bool {
     match decode(buf) {
         Some(p) => {
             with_saved(|s| *s = p);
+            with_shown(|s| *s = p);
             true
         }
         None => {
             with_saved(|s| *s = AutoPolicy::empty());
+            with_shown(|s| *s = AutoPolicy::empty());
             false
         }
+    }
+}
+
+struct Shown(core::cell::UnsafeCell<AutoPolicy>);
+// SAFETY: exclusive access is `SHOWN_LOCK`.
+// KANI-TARGET: host encode of the staged list, not this cell.
+unsafe impl Sync for Shown {}
+static SHOWN: Shown = Shown(core::cell::UnsafeCell::new(AutoPolicy::empty()));
+static SHOWN_LOCK: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+
+struct Dirty(core::cell::UnsafeCell<[u8; 512]>);
+// SAFETY: exclusive access is `SHOWN_LOCK`, same as [`SHOWN`].
+// KANI-TARGET: host sector round-trip, not this cell.
+unsafe impl Sync for Dirty {}
+static DIRTY: Dirty = Dirty(core::cell::UnsafeCell::new([0u8; 512]));
+static DIRTY_ON: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+static DIRTY_GEN: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
+
+fn with_shown<R>(f: impl FnOnce(&mut AutoPolicy) -> R) -> R {
+    while SHOWN_LOCK.swap(true, core::sync::atomic::Ordering::Acquire) {
+        core::hint::spin_loop();
+    }
+    // SAFETY: lock held.
+    let out = unsafe { f(&mut *SHOWN.0.get()) };
+    SHOWN_LOCK.store(false, core::sync::atomic::Ordering::Release);
+    out
+}
+
+fn stage_locked(policy: &AutoPolicy) -> bool {
+    let mut buf = [0u8; 512];
+    if !encode(policy, &mut buf) {
+        return false;
+    }
+    // SAFETY: `SHOWN_LOCK` is held by the caller.
+    unsafe {
+        *DIRTY.0.get() = buf;
+    }
+    DIRTY_GEN.fetch_add(1, core::sync::atomic::Ordering::Release);
+    DIRTY_ON.store(true, core::sync::atomic::Ordering::Release);
+    true
+}
+
+/// The list the page shows. Edits land here. This boot still uses [`restore`].
+pub fn shown() -> AutoPolicy {
+    with_shown(|s| *s)
+}
+
+/// Put `entry` on the saved list for the next boot. A repeat updates that
+/// row. `delay_secs` is how long the next boot waits before the first entry.
+pub fn remember(entry: AutoEntry, delay_secs: u16) -> bool {
+    if entry.kind != CHOICE_BOOT && entry.kind != CHOICE_TAIL_BOOT {
+        return false;
+    }
+    with_shown(|s| {
+        s.delay_secs = delay_secs;
+        let mut found = false;
+        for i in 0..s.count as usize {
+            if let Some(e) = s.entries[i].as_mut() {
+                if e.spare_off == entry.spare_off && e.kind == entry.kind {
+                    *e = entry;
+                    found = true;
+                    break;
+                }
+            }
+        }
+        if !found {
+            if s.count as usize >= MAX_ENTRIES {
+                return false;
+            }
+            s.entries[s.count as usize] = Some(entry);
+            s.count += 1;
+        }
+        stage_locked(s)
+    })
+}
+
+/// Drop one disk from the next-boot list.
+pub fn forget(spare_off: u64, kind: u8) -> bool {
+    with_shown(|s| {
+        let mut next = [None; MAX_ENTRIES];
+        let mut n = 0u8;
+        let mut dropped = false;
+        for i in 0..s.count as usize {
+            let Some(e) = s.entries[i] else {
+                continue;
+            };
+            if e.spare_off == spare_off && e.kind == kind {
+                dropped = true;
+                continue;
+            }
+            next[n as usize] = Some(e);
+            n += 1;
+        }
+        if !dropped {
+            return false;
+        }
+        s.entries = next;
+        s.count = n;
+        stage_locked(s)
+    })
+}
+
+/// Next boot waits for Guests again.
+pub fn clear() -> bool {
+    with_shown(|s| {
+        *s = AutoPolicy::empty();
+        stage_locked(s)
+    })
+}
+
+/// Staged sector for one WRITE(16). `None` when the page has not edited it.
+pub fn copy_dirty() -> Option<(u32, [u8; 512])> {
+    if !DIRTY_ON.load(core::sync::atomic::Ordering::Acquire) {
+        return None;
+    }
+    while SHOWN_LOCK.swap(true, core::sync::atomic::Ordering::Acquire) {
+        core::hint::spin_loop();
+    }
+    let gen = DIRTY_GEN.load(core::sync::atomic::Ordering::Acquire);
+    // SAFETY: lock held.
+    let sector = unsafe { *DIRTY.0.get() };
+    SHOWN_LOCK.store(false, core::sync::atomic::Ordering::Release);
+    Some((gen, sector))
+}
+
+pub fn ack_dirty(gen: u32) {
+    if DIRTY_GEN.load(core::sync::atomic::Ordering::Acquire) == gen {
+        DIRTY_ON.store(false, core::sync::atomic::Ordering::Release);
     }
 }
 
@@ -215,6 +347,12 @@ pub fn take_due(elapsed_secs: u32) -> Option<AutoEntry> {
 
 pub fn saved_count() -> u8 {
     with_saved(|s| s.count)
+}
+
+#[cfg(test)]
+pub fn test_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 #[cfg(test)]
@@ -274,5 +412,34 @@ mod autostart_test {
         let mut p = tail();
         p.delay_secs = 0;
         assert!(matches!(step(&p, 0), BootStep::Start(_)));
+    }
+
+    #[test]
+    fn remember_stages_the_next_boot_and_does_not_start_this_one() {
+        let _guard = super::test_lock();
+        clear();
+        restore(&[0u8; 512]);
+        assert!(take_due(10_000).is_none());
+        assert!(remember(
+            AutoEntry {
+                spare_off: 19_327_352_832,
+                disk_bytes: 10 * 1024 * 1024 * 1024,
+                kind: CHOICE_TAIL_BOOT,
+            },
+            0,
+        ));
+        assert!(
+            take_due(10_000).is_none(),
+            "this boot stays on the SPA wait"
+        );
+        let (gen, sector) = copy_dirty().unwrap();
+        let p = decode(&sector).unwrap();
+        assert_eq!(p.count, 1);
+        assert_eq!(p.delay_secs, 0);
+        ack_dirty(gen);
+        assert!(copy_dirty().is_none());
+        assert!(forget(19_327_352_832, CHOICE_TAIL_BOOT));
+        let (_, cleared) = copy_dirty().unwrap();
+        assert_eq!(decode(&cleared).unwrap().count, 0);
     }
 }

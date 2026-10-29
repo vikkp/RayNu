@@ -2557,6 +2557,71 @@ fn flush_nic_catalog_uefi() {
     }
 }
 
+/// Write a staged autostart sector while no product guest owns the CPU.
+/// One WRITE(16), then a READ. The audit image and the NIC catalog are not
+/// this LBA. LBA 0 is not encoded. No doorbell.
+pub fn flush_autostart() {
+    #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+    {
+        flush_autostart_uefi();
+    }
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn flush_autostart_uefi() {
+    use crate::boot::serial;
+    use crate::mgmt::perc_boot_choice::{vmcs_guest, VmcsGuest};
+    if !matches!(vmcs_guest(), VmcsGuest::None) {
+        return;
+    }
+    let Some((gen, sector)) = crate::mgmt::guest_autostart::copy_dirty() else {
+        return;
+    };
+    let bar = PERC_SPARE_BAR.load(core::sync::atomic::Ordering::Acquire);
+    let target = PERC_SPARE_TARGET.load(core::sync::atomic::Ordering::Acquire);
+    let frame = PERC_SPARE_FRAME.load(core::sync::atomic::Ordering::Acquire);
+    let data = PERC_SPARE_DATA.load(core::sync::atomic::Ordering::Acquire);
+    let bytes = PERC_SPARE_BYTES.load(core::sync::atomic::Ordering::Acquire);
+    let Some(lba) = crate::mgmt::guest_autostart::autostart_lba(bytes) else {
+        return;
+    };
+    if bar == 0 || frame == 0 || data == 0 {
+        return;
+    }
+    serial::write_str("boot: B5 autostart wr lba=");
+    write_dec64(lba);
+    let Some((st, timed_out)) = issue_ld_write16_sector(bar, target, lba, frame, data, &sector)
+    else {
+        serial::write_line(" skip frame");
+        return;
+    };
+    if timed_out || st != MFI_STAT_OK {
+        serial::write_line(" (staged, not acked)");
+        return;
+    }
+    let Some((rst, rto)) = issue_ld_read16(bar, target, lba, frame, data) else {
+        serial::write_line(" rd skip");
+        return;
+    };
+    if rto || rst != MFI_STAT_OK {
+        serial::write_line(" rd status (staged, not acked)");
+        return;
+    }
+    core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+    let mut back = [0u8; 512];
+    // SAFETY: the READ(16) completed into the payload page.
+    // KANI-TARGET: host tests cover the sector bytes, not this load.
+    unsafe {
+        core::ptr::copy_nonoverlapping(data as *const u8, back.as_mut_ptr(), 512);
+    }
+    if back == sector {
+        crate::mgmt::guest_autostart::ack_dirty(gen);
+        serial::write_line(" match");
+    } else {
+        serial::write_line(" mismatch (staged, not acked)");
+    }
+}
+
 /// One polled WRITE(16) of `lba` with `sector` as the payload.
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn issue_ld_write16_sector(

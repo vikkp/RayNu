@@ -590,6 +590,7 @@ fn firmware_wait() {
         // coexist idle, so the audit image stayed staged and COM2 never
         // printed `audit chain wr`. No guest owns the CPU here.
         crate::mgmt::megaraid::flush_audit_chain();
+        crate::mgmt::megaraid::flush_autostart();
         let now = crate::arch::cpu::rdtsc();
         let elapsed = (now.wrapping_sub(wait_start) / hz) as u32;
         try_autostart(elapsed);
