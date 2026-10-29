@@ -130,6 +130,12 @@
             TLS session. Older standing-SPA kit <code>v0.1.0-m8-a4s</code>.
             M8.9 closed on <code>0d865c7f</code>: the guest took the
             SPA-saved address by itself and SSH from the LAN reached it.
+            ADR-021 wave 2 iron lived on <code>8df4407d</code> /
+            <code>aeb2d79b</code>: a pulled port 4 cable showed as
+            <code>NO-CARRIER</code> in the guest, the egress port was
+            discovered from the SPA's own BCM5720 with no MAC constant,
+            and each link change is a <code>HostLinkChanged</code> audit
+            line on COM2 and on the Activity page.
             Current rollback is <code>v0.1.0-m8-9-lan</code>
             (<code>0d865c7fcb0a</code>, not Latest). Older pins
             <code>v0.1.0-m8-8-ubuntu</code> and
@@ -252,9 +258,10 @@ localhost:~# cat /proc/cmdline</code></pre>
             the <a href="loi.html">LOI tracker</a>. M8.8 lived:
             Ubuntu 26.04 from the PERC spare reached
             <code>vikkp@raynusrv2:~$</code>, then Clear ISO. M8.9 on
-            <code>02e0acba</code>: that guest has a LAN on LOM port 4 and
-            took <code>ssh</code> from a Mac; the SPA-saved address reaching
-            the guest is still open. Cluster /
+            <code>0d865c7f</code>: that guest has a LAN on LOM port 4 with
+            the SPA-saved address and took <code>ssh</code> from a Mac.
+            Wave 2 (<code>aeb2d79b</code>): the port is discovered, a
+            pulled cable is seen in the guest and audited on the page. Cluster /
             vMotion-like is <strong>M9</strong>. Rollback kit:
             <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed"
               ><code>v0.1.0-everest-closed</code></a

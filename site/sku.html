@@ -148,7 +148,11 @@
               SPA-saved address reaches the guest by itself
               (<code>0d865c7f</code>: an SMBIOS Type 11 systemd credential;
               nothing typed in the guest). Static for both NIC modes; no DHCP
-              client runs in the guest.
+              client runs in the guest. The egress port is the other function
+              of the SPA's BCM5720, found at boot (<code>aeb2d79b</code>, D4);
+              a pulled cable is <code>NO-CARRIER</code> in the guest
+              (<code>8df4407d</code>, D6) and a <code>HostLinkChanged</code>
+              audit line on the page (D5).
             </li>
             <li>
               <strong>not PERC</strong> fleet: the rest of the 2.9 TB virtual

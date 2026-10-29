@@ -11,7 +11,7 @@
     <meta property="og:title" content="RayNu-V · Path to LOI" />
     <meta
       property="og:description"
-              content="Bar A 94%. Bar B 72%. Overall 80%. PERC 86%. Ubuntu 26.04 on a 10 GiB PERC tail reached vikkp@raynusrv2. Unmodified media is 45%. M8.9 closed (0d865c7f): the guest has a LAN on port 4, the SPA-saved address reaches it by itself, SSH from another machine."
+              content="Bar A 94%. Bar B 72%. Overall 80%. PERC 86%. Ubuntu 26.04 on a 10 GiB PERC tail reached vikkp@raynusrv2. Unmodified media is 45%. M8.9 closed (0d865c7f): the guest has a LAN on port 4, the SPA-saved address reaches it by itself, SSH from another machine. Wave 2 iron lived (aeb2d79b): cable pull seen in the guest, egress port discovered, link change audited."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -58,7 +58,7 @@
           and reached <code>vikkp@raynusrv2:~$</code>. An LOI still asks a
           different question — would a fleet owner put <em>non-production
           intent</em> in writing? HDA 99% is not that answer. The 2.9 TB
-          virtual disk is not this 10 GiB tail. M8.9 closed on <code>0d865c7f</code>: the guest has a LAN on LOM port 4, the SPA-saved address reaches it with nothing typed in the guest (an SMBIOS Type 11 systemd credential), and it took <code>ssh</code> from a Mac.
+          virtual disk is not this 10 GiB tail. M8.9 closed on <code>0d865c7f</code>: the guest has a LAN on LOM port 4, the SPA-saved address reaches it with nothing typed in the guest (an SMBIOS Type 11 systemd credential), and it took <code>ssh</code> from a Mac. ADR-021 wave 2 iron (<code>8df4407d</code>, <code>aeb2d79b</code>): the guest sees a pulled cable, the egress port is discovered rather than named, and a link change is an audit line on the Activity page.
         </p>
         <p
           class="hda-path reveal reveal--delay-3"
@@ -386,6 +386,9 @@ M8.9.4  egress        lived · 02e0acba: txp=8/7 rcb=11 vrx=35; 411 MB in, fcs=0
 M8.9.5  address       lived · 0d865c7f: SMBIOS Type 11 credential → /run/systemd/network/10-raynu.network
                               enp0s5 routable (configured) 10.99.99.200/24, nothing typed
 M8.9.6  close         lived · ssh vikkp@10.99.99.200 from a Mac (0d865c7f: address from the SPA)
+wave 2  D6 carrier    lived · 8df4407d: port 4 pulled, guest NO-CARRIER then LOWER_UP, SSH resumed
+wave 2  D4 discovery  lived · aeb2d79b: egress discovered pci=01:00.1 (SPA partner; no constant), SSH over it
+wave 2  D5 link audit lived · aeb2d79b: RAYNU-V-AUDIT: HostLinkChanged func=1 up=0 / up=1 mbps=100 on COM2 + Activity
 scores  unmodified <span data-loi-pct="pieces.unmodified">45%</span> · Bar A <span data-loi-pct="bars.a">94%</span> · Bar B <span data-loi-pct="bars.b">72%</span> · overall <span data-loi-pct="overall">80%</span> · PERC <span data-loi-pct="pieces.perc">86%</span></code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
             Rollback remains GitHub Latest
