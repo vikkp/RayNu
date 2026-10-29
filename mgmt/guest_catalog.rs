@@ -1113,12 +1113,28 @@ fn write_list_json(
     w.s("]");
     write_nic_json(&mut w);
     crate::mgmt::host_link::write_json(&mut w);
+    write_build_identity(&mut w);
     w.s("}");
     if w.fit {
         w.n
     } else {
         0
     }
+}
+
+/// ADR-021 A3: this binary's SHA and CI run on the body Overview already
+/// polls. A run id that is not digits is omitted, so the page has nothing
+/// to turn into a link.
+fn write_build_identity(w: &mut JsonBuf<'_>) {
+    w.s(",\"build_sha\":\"");
+    if !crate::BUILD_SHA.is_empty() && crate::BUILD_SHA.bytes().all(|b| b.is_ascii_alphanumeric()) {
+        w.s(crate::BUILD_SHA);
+    }
+    w.s("\",\"build_run\":\"");
+    if crate::build_run_is_linkable(crate::BUILD_RUN) {
+        w.s(crate::BUILD_RUN);
+    }
+    w.s("\"");
 }
 
 /// Start and Stop follow this guest alone. Another guest being on does not
@@ -1347,6 +1363,10 @@ pub fn prop_guest_catalog() -> bool {
         && !html.contains("btn-perc-boot")
         && http.contains("guest_catalog_rest")
         && html.contains("b.note")
+        && html.contains("id=\"build-id\"")
+        && html.contains("function paintBuild")
+        && html.contains("https://github.com/vikkp/RayNu/actions/runs/")
+        && html.contains("/^[0-9]+$/.test(run)")
         && html.contains("id=\"n-ip\"")
         && html.contains("btn-nic")
         && html.contains("btn-dhcp")
@@ -1373,6 +1393,27 @@ mod guest_catalog_test {
     use crate::mgmt::megaraid::IRON_LD1_BYTES;
     use crate::mgmt::perc_boot_choice::clear_perc_spa_choice_for_test;
     use crate::mgmt::{ImageTable, VmTable};
+
+    #[test]
+    fn a3_build_identity_rides_the_guest_list() {
+        crate::mgmt::guest_nic::clear_panel_for_test();
+        let (st, body) = exchange(
+            "GET /perc/guests HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
+        );
+        assert_eq!(st, 200, "{body}");
+        let sha = format!("\"build_sha\":\"{}\"", crate::BUILD_SHA);
+        assert!(body.contains(&sha), "{body}");
+        let run = if crate::build_run_is_linkable(crate::BUILD_RUN) {
+            crate::BUILD_RUN
+        } else {
+            ""
+        };
+        let run = format!("\"build_run\":\"{run}\"");
+        assert!(body.contains(&run), "{body}");
+        let html = include_str!("../assets/webui.html");
+        assert!(html.contains("id=\"build-id\""));
+        assert!(html.contains("/^[0-9]+$/.test(run)"), "{html}");
+    }
 
     #[test]
     fn row_power_stays_on_the_row() {
@@ -1452,7 +1493,7 @@ mod guest_catalog_test {
         );
         assert!(
             body.contains(
-                "{\"lom\":4,\"func\":1,\"role\":\"guest-lan\",\"mac\":\"b0:26:28:5c:5a:39\",\"seen\":true,\"driven\":false,\"up\":false,\"mbps\":0,\"duplex\":\"-\",\"changes\":0}]}"
+                "{\"lom\":4,\"func\":1,\"role\":\"guest-lan\",\"mac\":\"b0:26:28:5c:5a:39\",\"seen\":true,\"driven\":false,\"up\":false,\"mbps\":0,\"duplex\":\"-\",\"changes\":0}]"
             ),
             "{body}"
         );
@@ -1486,7 +1527,7 @@ mod guest_catalog_test {
         let full = core::str::from_utf8(&buf[..n]).unwrap_or("");
         assert!(n > 0 && n + 128 < CATALOG_BODY_CAP, "{n} {full}");
         assert!(full.contains("\"nic\":["), "{full}");
-        assert!(full.contains("\"changes\":1}]}"), "{full}");
+        assert!(full.contains("\"changes\":1}]"), "{full}");
         assert!(full.contains("\"mbps\":1000,\"duplex\":\"full\",\"changes\":1"), "{full}");
         let html = include_str!("../assets/webui.html");
         assert!(html.contains("id=\"ports\""), "Overview lists both ports");
@@ -1580,7 +1621,8 @@ mod guest_catalog_test {
         }];
         let n = write_list_json(&mut buf, n, true, PercSpaChoice::Pending, true, &disks);
         let body = core::str::from_utf8(&buf[..n]).unwrap_or("");
-        assert!(body.ends_with("]}"), "{body}");
+        assert!(body.ends_with('}'), "{body}");
+        assert!(body.contains("\"build_sha\":\""), "{body}");
         assert!(n < buf.len(), "{n}");
         assert!(
             body.contains(
