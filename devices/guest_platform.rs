@@ -700,9 +700,19 @@ fn pm1_write(p: &mut Platform, off: u16, size: u8, val: u64) {
         crate::mgmt::guest_power::note_cleared(cleared);
     }
     if touched_cnt {
+        let written = p.pm1_cnt;
         p.pm1_cnt &= !PM1_CNT_SLP_EN;
+        if written & PM1_CNT_SLP_EN != 0 {
+            let typ = (written >> 10) & 7;
+            crate::mgmt::guest_power::note_s5(typ);
+        }
         note_pm1_sci(p.pm1_cnt);
     }
+}
+
+/// PM1 enable word. Bit 8 is the power button.
+pub fn pm1_enable() -> u16 {
+    with_plat(|p| p.pm1_en)
 }
 
 fn note_pm1_sci(cnt: u16) {
@@ -1780,6 +1790,8 @@ pub enum ResetSrc {
     Cf9,
     Kbc,
     Tf,
+    /// Guest finished `_S5` after a reboot ask. The relaunch is ours.
+    Acpi,
 }
 
 impl ResetSrc {
@@ -1788,6 +1800,7 @@ impl ResetSrc {
             ResetSrc::Cf9 => "cf9",
             ResetSrc::Kbc => "kbc",
             ResetSrc::Tf => "tf",
+            ResetSrc::Acpi => "acpi",
         }
     }
 }

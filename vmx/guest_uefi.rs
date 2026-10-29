@@ -6827,6 +6827,7 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
         serial::set_linux_high_half(false);
         raynu_f_stop("spa-stop");
     }
+    b4_service();
     // A TX completion armed on the previous exit. Serial I/O exits are the
     // ones Linux takes while the watchdog is printing (iron 03906000).
     crate::devices::guest_virtio_net::raise_deferred_tx_irq(0);
@@ -7887,6 +7888,7 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
     // credential in SMBIOS Type 11, found through `EFI_SMBIOS3_TABLE_GUID`
     // in the configuration table. Architected input; the disk is not written.
     raynu_f_publish_guest_address(&layout, &mut slab[tb..tb + IMAGE_BYTES]);
+    raynu_f_publish_acpi(&layout, &mut slab[tb..tb + IMAGE_BYTES]);
     // F4: publish BlockIo for the retained CD and the virtio-blk install
     // target, with real media geometry, then bind the backing stores.
     raynu_f_publish_block_devices(&layout, &mut slab[tb..tb + IMAGE_BYTES]);
@@ -9429,6 +9431,43 @@ fn raynu_f_publish_guest_address(layout: &crate::raynu_f::FirmwareImageLayout, i
     }
 }
 
+/// B4: publish the power-button ACPI page on the EFI configuration table.
+/// No MADT, so Linux keeps the 8259 path the disk already uses.
+#[cfg(target_os = "uefi")]
+fn raynu_f_publish_acpi(layout: &crate::raynu_f::FirmwareImageLayout, img: &mut [u8]) {
+    match crate::raynu_f::publish_acpi(img, layout) {
+        Ok(gpa) => {
+            serial::write_str("boot: B4 acpi rsdp gpa=0x");
+            write_hex(gpa);
+            serial::write_line(" (power button; no MADT)");
+        }
+        Err(_) => serial::write_line("boot: B4 WARN acpi publish failed"),
+    }
+}
+
+/// Raise SCI once the guest has enabled the power button. When the guest
+/// finishes `_S5`, stop it or boot it again. Stop remains the hard path.
+#[cfg(target_os = "uefi")]
+unsafe fn b4_service() {
+    if crate::mgmt::guest_power::arm_sci(crate::devices::guest_platform::pm1_enable()) {
+        crate::devices::guest_irq::raise_gsi(crate::mgmt::guest_power::SCI_GSI);
+        serial::write_line_nowait("boot: B4 sci");
+    }
+    let Some(ask) = crate::mgmt::guest_power::take_s5() else {
+        return;
+    };
+    match ask {
+        crate::mgmt::guest_power::PowerAsk::Shutdown => {
+            serial::write_line_nowait("boot: B4 power off");
+            raynu_f_stop("acpi-s5");
+        }
+        crate::mgmt::guest_power::PowerAsk::Reboot => {
+            serial::write_line_nowait("boot: B4 power cycle");
+            raynu_f_on_guest_reset(crate::devices::guest_platform::ResetSrc::Acpi);
+        }
+    }
+}
+
 /// F4: fill in real media geometry and publish `BlockIo` on the CD and disk
 /// handles so a loader can find them the architected way.
 #[cfg(target_os = "uefi")]
@@ -9600,6 +9639,7 @@ unsafe fn raynu_f_vmexit(reason: u32, qual: u64, rip: u64, intr: u64) -> ! {
     if crate::mgmt::perc_boot_choice::take_guest_stop() {
         raynu_f_stop("spa-stop");
     }
+    b4_service();
     // Do not poll_host_rx / reassert_irq on every RayNu-F vmexit.
     // Iron b5e290be did host COM2 LSR+RBR inb at GRUB (~2M exits/s) and
     // the chassis powered off. RayNu-F SOL RX to guest COM1 (GRUB serial)

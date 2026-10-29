@@ -1561,6 +1561,11 @@ pub fn prop_guest_catalog() -> bool {
         && html.contains(GUEST_START_PATH)
         && html.contains("/perc/guests/2/start")
         && html.contains("/perc/guests/stop")
+        && html.contains("\"/perc/guests/power/\"+kind")
+        && html.contains("guestPower(\"shutdown\")")
+        && html.contains("guestPower(\"reboot\")")
+        && html.contains("Shut down")
+        && html.contains("textContent=\"Reboot\"")
         && html.contains("/perc/guests/1/linux/")
         && html.contains("/perc/guests/1/windows/")
         && !html.contains("btn-perc-boot")
@@ -2191,7 +2196,7 @@ mod guest_catalog_test {
             "GET /perc/guests/power HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
         );
         assert_eq!(st, 200, "{body}");
-        assert!(body.contains("\"ask\":\"none\""), "{body}");
+        assert!(body.contains("\"ask\":\"shutdown\""), "{body}");
         assert!(body.contains("\"acked\":true"), "{body}");
         drop(_power);
         crate::mgmt::guest_power::reset_for_test();

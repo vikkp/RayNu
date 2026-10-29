@@ -788,7 +788,8 @@ fn raynu_f_memory_events_timer_services() {
             // The firmware image (trampolines + tables) is runtime code the
             // OS keeps mapped and executable after EBS (nested 0ab0f9d: Linux
             // executed our SetVirtualAddressMap trampoline from an NX page).
-            assert_eq!(pages * 4096, super::tables::IMAGE_BYTES as u64);
+            // The following page is the ACPI power-button table (reclaim).
+            assert_eq!(pages * 4096, super::tables::IMAGE_ACPI_OFF as u64);
             assert_eq!(typ, super::memory::EFI_RUNTIME_SERVICES_CODE);
             assert_ne!(attr & super::memory::EFI_MEMORY_RUNTIME, 0);
             saw_rt = true;
@@ -3846,7 +3847,7 @@ fn smbios_type11_credential_rides_the_configuration_table() {
     let mut mem = vec![0u8; tb + IMAGE_BYTES];
     let layout = build_firmware_image(base, &mut mem[tb..tb + IMAGE_BYTES]).unwrap();
     assert_eq!(layout.smbios, base + IMAGE_SMBIOS_OFF as u64);
-    assert_eq!(IMAGE_BYTES, 0x4000);
+    assert_eq!(IMAGE_BYTES, 0x5000);
     // Unpublished: the SMBIOS page is zero and the config table is empty.
     assert!(mem[tb + IMAGE_SMBIOS_OFF..tb + IMAGE_SMBIOS_OFF + IMAGE_SMBIOS_BYTES].iter().all(|b| *b == 0));
     assert_eq!(get_u64(&mem[tb..], IMAGE_SYSTEM_TABLE_OFF + SYSTEM_TABLE_NUM_TABLE_ENTRIES_OFF), 0);
@@ -3962,5 +3963,8 @@ fn smbios_type11_credential_rides_the_configuration_table() {
     assert_eq!(t0[7], TYPE_END_OF_TABLE);
     assert!(type11_strings(t0).is_some_and(|(_, n)| n == 0));
     // The memory map still covers the whole image as runtime code.
-    assert_eq!(super::launch_plan::plan_f2(SLAB).unwrap().tables_base + IMAGE_BYTES as u64, base + 0x4000);
+    assert_eq!(
+        super::launch_plan::plan_f2(SLAB).unwrap().tables_base + IMAGE_BYTES as u64,
+        base + IMAGE_BYTES as u64
+    );
 }
