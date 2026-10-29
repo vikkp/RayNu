@@ -24,6 +24,7 @@ pub fn tick_native_coexist() {
     #[cfg(feature = "uefi-bin")]
     {
         crate::mgmt::host_nic_listen::tick_bcm5720_coexist();
+        crate::mgmt::megaraid::flush_nic_catalog();
     }
 }
 

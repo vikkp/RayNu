@@ -7,8 +7,10 @@
 //! Create does not write a record. An empty or unrecognized sector means
 //! the guest has no NIC, including the Ubuntu disk at 8 GiB + 10 GiB.
 //! Save pins a minted MAC and an address. A later Save keeps that MAC.
-//! Detach removes that guest only. This module does not write the sector
-//! and does not attach a virtio device.
+//! Detach removes that guest only. Save and Detach stage the catalog sector
+//! for the spare LBA reserved above the guest disks (ADR-021 C8). The PERC
+//! path writes that sector while no guest owns the CPU and reads it back
+//! on the next boot. This module does not attach a virtio device.
 
 use core::sync::atomic::{AtomicU32, AtomicU64, AtomicU8, Ordering};
 
@@ -163,6 +165,17 @@ fn accept_draft(spare_bytes: u64, draft: &NicDraft) -> Result<(), NicError> {
         return Err(NicError::BadAddress);
     }
     Ok(())
+}
+
+/// LBA of the catalog sector. The probe occupies the last LBA, so this is
+/// the one before it. `None` for UBUNTU0 and any size that is not the spare.
+pub fn catalog_lba(spare_bytes: u64) -> Option<u64> {
+    let off = catalog_off(spare_bytes)?;
+    let lba = off / 512;
+    if lba == 0 {
+        return None;
+    }
+    Some(lba)
 }
 
 /// Spare offset of the catalog sector. `None` when `spare_bytes` is not RAYNU-SPARE.
@@ -337,6 +350,56 @@ impl AtomSlot {
 }
 
 static PANEL_SEQ: AtomicU32 = AtomicU32::new(0);
+/// Staged catalog sector. Written under the panel lock. The PERC flush
+/// copies it out and clears it only when that generation is still current.
+struct DirtySector(core::cell::UnsafeCell<[u8; 512]>);
+// SAFETY: exclusive access is the panel lock in `publish_dirty_locked` / `copy_dirty`.
+// KANI-TARGET: host round-trip of the staged sector.
+unsafe impl Sync for DirtySector {}
+static DIRTY_SECTOR: DirtySector = DirtySector(core::cell::UnsafeCell::new([0u8; 512]));
+static DIRTY_GEN: AtomicU32 = AtomicU32::new(0);
+static DIRTY_ON: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+
+fn publish_dirty_locked(cat: &NicCatalog) {
+    let sector = encode(cat);
+    // SAFETY: `lock_panel` is held. One writer.
+    unsafe {
+        *DIRTY_SECTOR.0.get() = sector;
+    }
+    DIRTY_GEN.fetch_add(1, Ordering::Release);
+    DIRTY_ON.store(true, Ordering::Release);
+}
+
+/// The sector waiting to be written, with the generation that published it.
+pub fn copy_dirty() -> Option<(u32, [u8; 512])> {
+    if !DIRTY_ON.load(Ordering::Acquire) {
+        return None;
+    }
+    lock_panel();
+    let gen = DIRTY_GEN.load(Ordering::Acquire);
+    // SAFETY: panel lock held.
+    let sector = unsafe { *DIRTY_SECTOR.0.get() };
+    let on = DIRTY_ON.load(Ordering::Acquire);
+    unlock_panel();
+    if on { Some((gen, sector)) } else { None }
+}
+
+/// Drop the staged sector when `gen` is still the one that was written.
+pub fn ack_dirty(gen: u32) {
+    lock_panel();
+    if DIRTY_GEN.load(Ordering::Acquire) == gen {
+        DIRTY_ON.store(false, Ordering::Release);
+    }
+    unlock_panel();
+}
+
+/// Install a sector read from the spare. Does not stage another write.
+pub fn restore_from_sector(sector: &[u8]) {
+    let cat = decode(sector);
+    lock_panel();
+    catalog_to_slots(&cat);
+    unlock_panel();
+}
 static PANEL: [AtomSlot; SLOT_CAP] = [
     AtomSlot::new(),
     AtomSlot::new(),
@@ -435,6 +498,7 @@ pub fn panel_save(spare_bytes: u64, draft: NicDraft) -> Result<NicRecord, NicErr
     let result = cat.save(spare_bytes, draft);
     if result.is_ok() {
         catalog_to_slots(&cat);
+        publish_dirty_locked(&cat);
     }
     unlock_panel();
     result
@@ -447,6 +511,7 @@ pub fn panel_detach(spare_off: u64) -> bool {
     let removed = cat.detach(spare_off);
     if removed {
         catalog_to_slots(&cat);
+        publish_dirty_locked(&cat);
     }
     unlock_panel();
     removed
@@ -457,6 +522,7 @@ pub fn panel_detach(spare_off: u64) -> bool {
 pub fn clear_panel_for_test() {
     lock_panel();
     catalog_to_slots(&NicCatalog::empty());
+    DIRTY_ON.store(false, Ordering::Release);
     unlock_panel();
 }
 
@@ -477,6 +543,31 @@ mod guest_nic_test {
             gateway: [10, 99, 99, 1],
             dns: [10, 99, 99, 1],
         }
+    }
+
+    #[test]
+    #[test]
+    fn c8_catalog_sector_round_trips_across_a_cleared_panel() {
+        clear_panel_for_test();
+        let spare = IRON_LD1_BYTES;
+        let lba = catalog_lba(spare).unwrap();
+        let last = crate::mgmt::megaraid::spare_write_lba(spare).unwrap();
+        assert_eq!(lba + 1, last, "catalog sits in the sector before the probe");
+        assert!(catalog_lba(LAB_UBUNTU0_BYTES).is_none());
+        let off = PERC_IMAGE_BYTES + 10 * 1024 * 1024 * 1024;
+        let saved = panel_save(spare, draft(off, [10, 99, 99, 200])).unwrap();
+        let (gen, sector) = copy_dirty().unwrap();
+        assert_eq!(&sector[..8], b"RAYNUNIC");
+        clear_panel_for_test();
+        assert!(panel_snapshot().get(off).is_none());
+        restore_from_sector(&sector);
+        let back = panel_snapshot().get(off).unwrap();
+        assert_eq!(back.mac, saved.mac);
+        assert_eq!(back.ipv4, [10, 99, 99, 200]);
+        assert_eq!(back.mode, NicMode::Manual);
+        assert!(copy_dirty().is_none(), "a boot load does not stage another write");
+        let _ = gen;
+        clear_panel_for_test();
     }
 
     #[test]

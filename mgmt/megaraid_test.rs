@@ -285,6 +285,11 @@ fn fwstate_load_is_one_harpoon_and_does_not_bus_master() {
     assert!(super::frame_is_write(&wr));
     assert!(!super::frame_is_read(&wr));
     assert_eq!(u64::from_be_bytes(wr[0x22..0x2A].try_into().unwrap()), last);
+    let cat = last - 1;
+    let cat_wr = super::pack_ld_write16_one_polled(1, cat, 0x1006000).unwrap();
+    assert_eq!(cat_wr[2], super::MFI_CMD_STATUS_POLL);
+    assert_eq!(u64::from_be_bytes(cat_wr[0x22..0x2A].try_into().unwrap()), cat);
+    assert!(super::pack_ld_write16_one_polled(1, 0, 0x1006000).is_none());
     let wflags = u16::from_le_bytes(wr[0x10..0x12].try_into().unwrap());
     assert_ne!(wflags & super::MFI_FRAME_DIR_WRITE, 0);
     assert_eq!(wflags & super::MFI_FRAME_DIR_READ, 0);
