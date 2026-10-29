@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-3-c7-lived |
-| Summary | **Iron `4b81da7f`: ADR-021 C7 lived. Wave 3 closed.** Tail boot, then `boot: C7 virtio flush sync status=0x00` during the sysroot mount, then `raynusrv2 login:`. Current wave advances to 4. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-4-b5-autostart |
+| Summary | **ADR-021 B5 in flight on `cursor/wave-4-b5-autostart-50bb`.** A saved list in the sector before the audit image starts the first installed guest after a delay. An absent sector keeps the SPA wait. The SPA control that writes the list is not in this slice, so a power cut still leaves the guest off. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
-| Gates touched | ADR-021 C7 `in flight → lived`. Wave 3 (C8, G4, C7) closed. Wave 4 opens on B5. No new iron marker. Rollback `v0.1.0-m8-9-lan`. No doorbell. No format of UBUNTU0. |
+| Gates touched | ADR-021 B5 `planned → in flight`. Wave 3 stays closed. No new iron marker. Rollback `v0.1.0-m8-9-lan`. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
 
 ## Blockers & risks (Everest-relevant)
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-29 | wave-4-b5-autostart | 0.0 | 99 | **B5 in flight on `cursor/wave-4-b5-autostart-50bb`.** Saved autostart list starts the first installed guest after a delay. Absent sector keeps the SPA wait. SPA writer not in this slice, so a power cut still leaves the guest off. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-29 | wave-3-c7-lived | 0.0 | 99 | **Iron `4b81da7f`: C7 lived. Wave 3 closed.** `boot: C7 virtio flush sync status=0x00` during the sysroot mount, then `raynusrv2 login:`. Same boot `audit chain rd n=16` and NIC catalog `n=1`. Current wave → 4 (B5 autostart). Scores held. months 0.0 held; overall 99 held |
 | 2026-10-29 | wave-3-c7-flush | 0.0 | 99 | **C7 in flight on `cursor/wave-3-c7-flush-50bb`.** Virtio FLUSH on the latched spare waits for SYNCHRONIZE CACHE (10) before status OK. Not lived until COM2 `boot: C7 virtio flush sync status=0x00`. Wave 3 stays open. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-29 | wave-3-g4-lived | 0.0 | 99 | **Iron `33488fb7`: G4 lived.** `wr lba=6190268910 match`, then a second F11 of the same stick `rd lba=6190268910 n=9` (spare chain verifies from genesis; this boot's `BootStarted` and `OvmfLiveEspBytesRetained` sit on top). Wave 3 stays open on C7. Scores held. months 0.0 held; overall 99 held |
@@ -1149,7 +1150,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     Wave 3 closed on `4b81da7f` (C8, G4, C7). Wave 4 "Survives a power cut, unattended" is current. Iron thread is B5 (guests autostart at host boot). A power cut today still leaves the guest off. Rollback for a wave 2 flash is v0.1.0-m8-9-lan. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/m8_plan.md.
+Next move:     Wave 4 "Survives a power cut, unattended". B5 is in flight on cursor/wave-4-b5-autostart-50bb: a saved list starts the first installed guest after a delay. The SPA control that writes that list is not in this slice, so a power cut still leaves the guest off. Rollback for a wave 2 flash is v0.1.0-m8-9-lan. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/m8_plan.md.
 Rollback:      M8.9 close: v0.1.0-m8-9-lan → CI 40603110937 / COM2 sha=0d865c7fcb0a / EFI SHA256 df6fc3465cecf1eaf058d5c8e675501827c16eb55e7b2c9758bc5e68326ad91b
 Older M8.8:    v0.1.0-m8-8-ubuntu → CI 38454398693 / COM2 sha=c3a70e623aec / EFI SHA256 08ef31ba87136577102ac378d8e0a512327994e8794c41c64444f5be5f8812c4
 Older SPA:     v0.1.0-m8-perc-spa → CI 36362775808 / COM2 sha=8ad2ac89125e / EFI SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849

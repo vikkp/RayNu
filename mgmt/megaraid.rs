@@ -2244,6 +2244,7 @@ fn perc_fusion_post(bar: u64, bus: u8, dev: u8, func: u8, base: u64) {
 
     perc_load_nic_catalog(bar, target, bytes, dcmd_phys, data_phys);
     perc_load_audit_chain(bar, target, bytes, dcmd_phys, data_phys);
+    perc_load_autostart(bar, target, bytes, dcmd_phys, data_phys);
 
     // The read chain already lived. A write miss still arms read-only virtio.
     perc_spare_write_last(bar, bus, dev, func, target, bytes, dcmd_phys, data_phys);
@@ -2350,6 +2351,40 @@ fn perc_load_audit_chain(bar: u64, target: u8, bytes: u64, frame_phys: u64, data
         serial::write_line("");
     } else {
         serial::write_line("boot: audit chain rd none");
+    }
+}
+
+/// Read the autostart sector. A miss leaves the SPA wait in place.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn perc_load_autostart(bar: u64, target: u8, bytes: u64, frame_phys: u64, data_phys: u64) {
+    use crate::boot::serial;
+    let Some(lba) = crate::mgmt::guest_autostart::autostart_lba(bytes) else {
+        serial::write_line("boot: B5 autostart skip lba");
+        return;
+    };
+    let Some((st, timed_out)) = issue_ld_read16(bar, target, lba, frame_phys, data_phys) else {
+        serial::write_line("boot: B5 autostart rd skip frame");
+        return;
+    };
+    if timed_out || st != MFI_STAT_OK {
+        serial::write_line("boot: B5 autostart rd skip status");
+        return;
+    }
+    core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+    let mut sector = [0u8; 512];
+    // SAFETY: the READ(16) completed into the payload page.
+    // KANI-TARGET: host tests cover the sector, not this load.
+    unsafe {
+        core::ptr::copy_nonoverlapping(data_phys as *const u8, sector.as_mut_ptr(), 512);
+    }
+    if crate::mgmt::guest_autostart::restore(&sector) {
+        serial::write_str("boot: B5 autostart rd lba=");
+        write_dec64(lba);
+        serial::write_str(" n=");
+        write_dec(u32::from(crate::mgmt::guest_autostart::saved_count()));
+        serial::write_line("");
+    } else {
+        serial::write_line("boot: B5 autostart none");
     }
 }
 

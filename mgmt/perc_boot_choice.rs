@@ -434,12 +434,10 @@ pub fn vmcs_guest() -> VmcsGuest {
     match perc_spa_choice() {
         PercSpaChoice::Pending => VmcsGuest::None,
         PercSpaChoice::BootInstalled | PercSpaChoice::CleanReinstall => VmcsGuest::Window,
-        PercSpaChoice::Tail { .. } | PercSpaChoice::TailBoot { .. } => {
-            match armed_tail() {
-                Some((off, _)) => VmcsGuest::Tail(off),
-                None => VmcsGuest::None,
-            }
-        }
+        PercSpaChoice::Tail { .. } | PercSpaChoice::TailBoot { .. } => match armed_tail() {
+            Some((off, _)) => VmcsGuest::Tail(off),
+            None => VmcsGuest::None,
+        },
     }
 }
 
@@ -529,6 +527,33 @@ pub fn wait_perc_spa_choice_if_latched() {
     firmware_wait();
 }
 
+/// Start the first saved guest once its delay has elapsed. An empty list
+/// returns without touching the choice.
+#[cfg(feature = "uefi-bin")]
+fn try_autostart(elapsed_secs: u32) {
+    use crate::boot::serial;
+    let Some(e) = crate::mgmt::guest_autostart::take_due(elapsed_secs) else {
+        return;
+    };
+    let installed = crate::mgmt::megaraid::perc_image_boot_latched();
+    let spare = crate::mgmt::megaraid::perc_spare_bytes();
+    let applied = if e.kind == CHOICE_TAIL_BOOT {
+        apply_tail_boot_at(installed, spare, e.spare_off, e.disk_bytes)
+    } else {
+        apply_spa_choice(installed, CHOICE_BOOT)
+    };
+    if !matches!(applied, PercChoiceApply::Accepted) {
+        serial::write_line("boot: B5 autostart miss");
+        return;
+    }
+    crate::boot::raynu_f_flag::request_installed_boot();
+    let mut buf = [0u8; 24];
+    let s = crate::boot::raynu_f_flag::fmt_dec(e.spare_off, &mut buf);
+    serial::write_str("boot: B5 autostart start off=");
+    serial::write_str(s);
+    serial::write_line("");
+}
+
 #[cfg(feature = "uefi-bin")]
 fn firmware_wait() {
     use crate::boot::serial;
@@ -550,7 +575,8 @@ fn firmware_wait() {
         }
     };
     let beat = crate::mgmt::xhci::usb_tsc_ticks_for_ms(hz, 60_000);
-    let mut last = crate::arch::cpu::rdtsc();
+    let wait_start = crate::arch::cpu::rdtsc();
+    let mut last = wait_start;
     let mut t_s: u32 = 0;
     loop {
         if !perc_spa_wait_required(
@@ -564,8 +590,10 @@ fn firmware_wait() {
         // coexist idle, so the audit image stayed staged and COM2 never
         // printed `audit chain wr`. No guest owns the CPU here.
         crate::mgmt::megaraid::flush_audit_chain();
-        core::hint::spin_loop();
         let now = crate::arch::cpu::rdtsc();
+        let elapsed = (now.wrapping_sub(wait_start) / hz) as u32;
+        try_autostart(elapsed);
+        core::hint::spin_loop();
         if now.wrapping_sub(last) >= beat {
             last = now;
             t_s = t_s.saturating_add(60);

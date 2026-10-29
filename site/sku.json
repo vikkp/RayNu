@@ -20,14 +20,14 @@
   "counts": {
     "S1": {
       "lived": 37,
-      "in flight": 1,
-      "planned": 29,
+      "in flight": 2,
+      "planned": 28,
       "total": 67
     },
     "Final": {
       "lived": 37,
-      "in flight": 1,
-      "planned": 91,
+      "in flight": 2,
+      "planned": 90,
       "total": 129
     }
   },
@@ -190,10 +190,10 @@
         {
           "id": "B5",
           "capability": "Guests autostart at host boot, in operator order, with a delay",
-          "status": "planned",
+          "status": "in flight",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Power cut today leaves guests off",
+          "note": "`cursor/wave-4-b5-autostart-50bb`. One sector before the audit image (`RAYNUAUT`). An absent sector keeps the SPA wait. A saved list starts the first installed entry after `delay_secs`. Reinstall is refused. The SPA control that writes the sector is not in this slice, so a power cut still leaves the guest off. Not lived until a reboot with a saved list starts the guest with no Guests click",
           "wave": "4"
         },
         {
@@ -335,14 +335,14 @@
       "counts": {
         "S1": {
           "lived": 4,
-          "in flight": 0,
-          "planned": 6,
+          "in flight": 1,
+          "planned": 5,
           "total": 10
         },
         "Final": {
           "lived": 4,
-          "in flight": 0,
-          "planned": 16,
+          "in flight": 1,
+          "planned": 15,
           "total": 20
         }
       }
@@ -1546,8 +1546,8 @@
       "why": "The first \"walk away from the rack\" moment. Needs wave 3.",
       "counts": {
         "lived": 0,
-        "in flight": 0,
-        "planned": 5,
+        "in flight": 1,
+        "planned": 4,
         "total": 5
       },
       "closed": false
@@ -1855,7 +1855,7 @@
     {
       "id": "B5",
       "capability": "Guests autostart at host boot, in operator order, with a delay",
-      "status": "planned",
+      "status": "in flight",
       "role": "iron thread"
     },
     {
