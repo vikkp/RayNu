@@ -509,6 +509,22 @@ fn af00_pm_timer_ticks_dword_in() {
 }
 
 #[test]
+fn word_read_of_b000_shows_the_power_button_until_the_guest_clears_it() {
+    use crate::mgmt::guest_power::{acked, pending, request, PowerAsk, PM1_STS_PWRBTN};
+    reset();
+    let _g = crate::mgmt::guest_power::test_lock();
+    assert_eq!(io(0xB000, true, 2, 0xFFFF) as u16, 0);
+    request(PowerAsk::Shutdown);
+    assert_eq!(io(0xB000, true, 2, 0xFFFF) as u16, PM1_STS_PWRBTN);
+    let _ = io(0xB000, false, 2, u64::from(PM1_STS_PWRBTN));
+    assert!(acked());
+    assert!(pending().is_none());
+    assert_eq!(io(0xB000, true, 2, 0xFFFF) as u16, 0);
+    drop(_g);
+    reset();
+}
+
+#[test]
 fn b000_pm_timer_ticks_dword_in() {
     reset();
     assert!(is_platform_io_port(0xB000));
