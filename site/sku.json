@@ -20,14 +20,14 @@
   "counts": {
     "S1": {
       "lived": 32,
-      "in flight": 1,
-      "planned": 34,
+      "in flight": 2,
+      "planned": 33,
       "total": 67
     },
     "Final": {
       "lived": 32,
-      "in flight": 1,
-      "planned": 96,
+      "in flight": 2,
+      "planned": 95,
       "total": 129
     }
   },
@@ -61,10 +61,10 @@
         {
           "id": "A3",
           "capability": "Build identity (git SHA, CI run) visible on the SPA, not only COM2",
-          "status": "planned",
+          "status": "in flight",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "COM2 prints `build: sha=`; the page does not",
+          "note": "`cursor/wave-2-b20-a3-50bb`. COM2 line is `build: sha=<12>` and ` run=<id>` when `GITHUB_RUN_ID` is set (`format_build_banner`; `build: sha=` stays the first token). `/perc/guests` carries `build_sha` and `build_run`; Overview `#build-id` renders `build <sha> · CI <run>` with the run linked to the Actions page, and omits the link when the run is empty. Gate: the next F11 shows that line on Overview matching the COM2 `build: sha=`",
           "wave": "2"
         },
         {
@@ -134,14 +134,14 @@
       "counts": {
         "S1": {
           "lived": 3,
-          "in flight": 0,
-          "planned": 5,
+          "in flight": 1,
+          "planned": 4,
           "total": 8
         },
         "Final": {
           "lived": 3,
-          "in flight": 0,
-          "planned": 7,
+          "in flight": 1,
+          "planned": 6,
           "total": 10
         }
       }
@@ -1508,8 +1508,8 @@
       "why": "Cheap, in code just touched; each would have saved a day in October.",
       "counts": {
         "lived": 3,
-        "in flight": 0,
-        "planned": 2,
+        "in flight": 1,
+        "planned": 1,
         "total": 5
       },
       "closed": false
@@ -1861,7 +1861,7 @@
     {
       "id": "A3",
       "capability": "Build identity (git SHA, CI run) visible on the SPA, not only COM2",
-      "status": "planned",
+      "status": "in flight",
       "role": "host-first"
     }
   ],

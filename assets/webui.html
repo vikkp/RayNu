@@ -72,6 +72,7 @@ input.token{min-width:12rem}
 <div class="card"><div class="dot" id="d-guest"></div><b>Guest</b><span id="t-guest">No guest yet</span></div>
 <div class="card"><div class="dot" id="d-iso"></div><b>Install media</b><span id="t-iso">No ISO yet</span></div>
 </div>
+<p class="note" id="build-id"></p>
 <section class="pg on" data-pg="overview">
 <h2>Overview</h2>
 <div class="toolbar"><button class="danger" id="btn-poweroff" type="button">Power off host</button></div>
@@ -221,7 +222,21 @@ async function loadSpare(){
 if(up)return;let r;try{r=await api("GET","/perc/guests")}catch(e){return}
 hostOk=r.ok||hostOk;if(!r.ok)return;
 let b={};try{b=await r.json()}catch(e){}
-spareBody=b;capNote(b);paintSpare(b);paintPorts(b);
+spareBody=b;capNote(b);paintSpare(b);paintPorts(b);paintBuild(b);
+}
+function paintBuild(b){
+const el=document.getElementById("build-id");if(!el)return;
+const sha=String(b.build_sha||""),run=String(b.build_run||"");
+el.textContent="";
+if(!sha)return;
+el.appendChild(document.createTextNode("build "+sha));
+if(/^[0-9]+$/.test(run)){
+el.appendChild(document.createTextNode(" · CI "));
+const a=document.createElement("a");
+a.href="https://github.com/vikkp/RayNu/actions/runs/"+run;
+a.textContent=run;
+el.appendChild(a);
+}
 }
 function paintPorts(b){
 const box=document.getElementById("ports");if(!box)return;const l=b.link||[];

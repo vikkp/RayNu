@@ -15,7 +15,13 @@ fi
 RAYNU_BUILD_SHA="${RAYNU_BUILD_SHA:0:12}"
 export RAYNU_BUILD_SHA
 
-echo "==> Building r640-hypervisor ($PROFILE / $TARGET) sha=$RAYNU_BUILD_SHA"
+# CI run id on the same banner (` run=…`). Empty on a local build.
+if [[ -z "${RAYNU_BUILD_RUN:-}" ]]; then
+  RAYNU_BUILD_RUN="${GITHUB_RUN_ID:-}"
+fi
+export RAYNU_BUILD_RUN
+
+echo "==> Building r640-hypervisor ($PROFILE / $TARGET) sha=$RAYNU_BUILD_SHA run=${RAYNU_BUILD_RUN:-}"
 cargo build \
   --"$PROFILE" \
   --target "$TARGET" \
