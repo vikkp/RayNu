@@ -6,12 +6,12 @@
     <title>RayNu-V — Single-binary hypervisor, designed for proof</title>
     <meta
       name="description"
-      content="RayNu-V is a single-binary Type-1 hypervisor. Mount Everest closed on a real PowerEdge R640. An Ubuntu 26.04 ISO stored on the PERC spare installed and reached vikkp@raynusrv2. M8.9: that guest has a LAN on LOM port 4 and took an SSH login from another machine (02e0acba)."
+      content="RayNu-V is a single-binary Type-1 hypervisor. Mount Everest closed on a real PowerEdge R640. An Ubuntu 26.04 ISO stored on the PERC spare installed and reached vikkp@raynusrv2. M8.9: that guest has a LAN on LOM port 4 and took an SSH login from another machine (0d865c7f). ADR-021 wave 2: a pulled cable shows in the guest, the egress port is discovered, a link change is audited on the page (aeb2d79b)."
     />
     <meta property="og:title" content="RayNu-V — Ubuntu logged in from the PERC spare" />
     <meta
       property="og:description"
-      content="Everest closed on a real R640. Ubuntu 26.04 from a library ISO on the PERC spare reached vikkp@raynusrv2. Clear ISO wiped the signature sector only. M8.9: the guest has a LAN on port 4; SSH from another machine lived on 02e0acba."
+      content="Everest closed on a real R640. Ubuntu 26.04 from a library ISO on the PERC spare reached vikkp@raynusrv2. Clear ISO wiped the signature sector only. M8.9: the guest has a LAN on port 4 with the SPA-saved address; SSH from another machine lived on 0d865c7f. Wave 2: cable pull seen, egress port discovered, link change audited (aeb2d79b)."
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://raynuv.com/" />
@@ -33,7 +33,7 @@
     />
     <meta
       name="twitter:description"
-      content="Everest closed. Ubuntu 26.04 on a 10 GiB PERC tail reached vikkp@raynusrv2. M8.9 closed: guest LAN on port 4 with the SPA-saved address, SSH from another machine (0d865c7f). The 2.9 TB VD is not that disk."
+      content="Everest closed. Ubuntu 26.04 on a 10 GiB PERC tail reached vikkp@raynusrv2. M8.9 closed: guest LAN on port 4 with the SPA-saved address, SSH from another machine (0d865c7f). Wave 2 iron: cable pull seen in the guest, egress port discovered, link change audited (aeb2d79b). The 2.9 TB VD is not that disk."
     />
     <meta name="twitter:image" content="https://raynuv.com/assets/hero.jpg" />
     <link rel="canonical" href="https://raynuv.com/" />
@@ -166,7 +166,14 @@
             On <code>0d865c7f</code> the SPA-saved address reached that guest
             with nothing typed (M8.9.5, an SMBIOS Type 11 systemd
             credential), and the Mac logged in to it. M8.9 is closed.
-            The 2.9 TB virtual disk is not this 10 GiB tail.
+            ADR-021 wave 2 then made the box tell the truth about that
+            port: on <code>8df4407d</code> a pulled port 4 cable showed as
+            <code>NO-CARRIER</code> inside the guest and came back by
+            itself; on <code>aeb2d79b</code> the egress port was found from
+            the SPA's own BCM5720 (no MAC constant) and the Mac logged in
+            over it, and a second pull put
+            <code>RAYNU-V-AUDIT: HostLinkChanged</code> on COM2 and on the
+            Activity page. The 2.9 TB virtual disk is not this 10 GiB tail.
             Auth is still open.
             Summit rollback remains
             <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed"
@@ -741,7 +748,7 @@ boot: M8.8 library ISO cleared (signature sector only; disks unchanged)</code></
               <p class="journey__era-note">
                 Same R640. TLS and a standing SPA came first. M8.8 then put
                 an Ubuntu ISO on the PERC spare, installed it, and logged in.
-                M8.9 then gave that guest a LAN on LOM port 4 and an SSH login from another machine (02e0acba). The SPA-saved address reaching the guest is still open.
+                M8.9 then gave that guest a LAN on LOM port 4 with the SPA-saved address and an SSH login from another machine (0d865c7f). ADR-021 wave 2: the guest sees a pulled cable, the egress port is discovered rather than named, and a link change is an audit event on the page (8df4407d, aeb2d79b).
               </p>
               <ol class="journey__list">
                 <li>
@@ -929,7 +936,7 @@ boot: M8.8 library ISO cleared (signature sector only; disks unchanged)</code></
             <code>RAYNU-V-M7-ISO-INSTALL-OK</code> +
             <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code> (E5 + Phase B, 2026-09-11).
             M8 TLS and USB persist are closed on COM2. Ubuntu 26.04 then
-            logged in from a 10 GiB PERC tail. M8.9: that guest has a LAN on port 4 and took SSH from another machine (02e0acba).
+            logged in from a 10 GiB PERC tail. M8.9: that guest has a LAN on port 4 with the SPA-saved address and took SSH from another machine (0d865c7f). ADR-021 wave 2 iron: cable pull seen in the guest, egress port discovered, link change audited on the page (aeb2d79b).
             Auth is still open. See
             <a href="hda.html">HDA</a> and <a href="loi.html">LOI</a>.
           </p>
