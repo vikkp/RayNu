@@ -19,14 +19,14 @@
   },
   "counts": {
     "S1": {
-      "lived": 36,
-      "in flight": 2,
+      "lived": 37,
+      "in flight": 1,
       "planned": 29,
       "total": 67
     },
     "Final": {
-      "lived": 36,
-      "in flight": 2,
+      "lived": 37,
+      "in flight": 1,
       "planned": 91,
       "total": 129
     }
@@ -409,10 +409,10 @@
         {
           "id": "C7",
           "capability": "virtio-blk FLUSH honored before completion (power-safe guest filesystems)",
-          "status": "in flight",
+          "status": "lived",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "`cursor/wave-3-c7-flush-50bb`. A latched spare image does not complete virtio FLUSH until SYNCHRONIZE CACHE (10) on that LD returns. IMMED is clear, the range is the whole LD, and an Ubuntu-sized LD is not posted. RAM and read-only devices complete without a command. Not lived until COM2 shows `boot: C7 virtio flush sync status=0x00` from a guest FLUSH. USB and NVMe device caches are not this command",
+          "note": "Iron `4b81da7f` / run `40930163881`. Tail boot (`choice=4`, 10 GiB at `19327352832`). During the sysroot mount COM2 printed `boot: C7 virtio flush sync status=0x00`, then Ubuntu 26.04 reached `raynusrv2 login:`. Same boot: `audit chain rd lba=6190268910 n=16` and `perc nic catalog rd n=1`. Evidence `docs/evidence/r640/2026-10-29-4b81da7f-wave-3-c7-flush-ok.md`. USB and NVMe device caches are not this command",
           "wave": "3"
         },
         {
@@ -508,14 +508,14 @@
       ],
       "counts": {
         "S1": {
-          "lived": 6,
-          "in flight": 1,
+          "lived": 7,
+          "in flight": 0,
           "planned": 2,
           "total": 9
         },
         "Final": {
-          "lived": 6,
-          "in flight": 1,
+          "lived": 7,
+          "in flight": 0,
           "planned": 10,
           "total": 17
         }
@@ -1525,12 +1525,12 @@
       "iron": "C8",
       "why": "M8.5 in ADR-018 terms. Everything after depends on it.",
       "counts": {
-        "lived": 2,
-        "in flight": 1,
+        "lived": 3,
+        "in flight": 0,
         "planned": 0,
         "total": 3
       },
-      "closed": false
+      "closed": true
     },
     {
       "id": "4",
@@ -1850,35 +1850,59 @@
       "closed": false
     }
   ],
-  "current_wave": "3",
+  "current_wave": "4",
   "next_up": [
     {
-      "id": "C7",
-      "capability": "virtio-blk FLUSH honored before completion (power-safe guest filesystems)",
-      "status": "in flight",
+      "id": "B5",
+      "capability": "Guests autostart at host boot, in operator order, with a delay",
+      "status": "planned",
+      "role": "iron thread"
+    },
+    {
+      "id": "B4",
+      "capability": "Clean shutdown and reboot from the SPA (ACPI power button), Stop as the hard fallback",
+      "status": "planned",
+      "role": "host-first"
+    },
+    {
+      "id": "D9",
+      "capability": "Host management address: static IP, gateway, DNS, hostname set from the SPA and persisted",
+      "status": "planned",
+      "role": "host-first"
+    },
+    {
+      "id": "D10",
+      "capability": "Host NTP client; host clock correct for TLS and audit timestamps",
+      "status": "planned",
+      "role": "host-first"
+    },
+    {
+      "id": "H2",
+      "capability": "Host panic: dump to COM2 and iDRAC, then reboot; guests autostart",
+      "status": "planned",
       "role": "host-first"
     }
   ],
   "filler": [
     {
-      "id": "B4",
-      "capability": "Clean shutdown and reboot from the SPA (ACPI power button), Stop as the hard fallback",
-      "wave": "4"
+      "id": "E4",
+      "capability": "Operator-supplied certificate and key (upload or ACME); TLS 1.3",
+      "wave": "5"
     },
     {
-      "id": "D9",
-      "capability": "Host management address: static IP, gateway, DNS, hostname set from the SPA and persisted",
-      "wave": "4"
+      "id": "E5",
+      "capability": "Plaintext PRE-EBS window closed (HTTPS or nothing from first packet)",
+      "wave": "5"
     },
     {
-      "id": "D10",
-      "capability": "Host NTP client; host clock correct for TLS and audit timestamps",
-      "wave": "4"
+      "id": "G3",
+      "capability": "Audit export (JSON/CSV) from the SPA and REST",
+      "wave": "5"
     },
     {
-      "id": "H2",
-      "capability": "Host panic: dump to COM2 and iDRAC, then reboot; guests autostart",
-      "wave": "4"
+      "id": "E12",
+      "capability": "REST API documented (OpenAPI), versioned, stable for the SKU",
+      "wave": "5"
     }
   ]
 }
