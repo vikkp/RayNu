@@ -19,14 +19,14 @@
   },
   "counts": {
     "S1": {
-      "lived": 35,
-      "in flight": 2,
+      "lived": 36,
+      "in flight": 1,
       "planned": 30,
       "total": 67
     },
     "Final": {
-      "lived": 35,
-      "in flight": 2,
+      "lived": 36,
+      "in flight": 1,
       "planned": 92,
       "total": 129
     }
@@ -1073,10 +1073,10 @@
         {
           "id": "G4",
           "capability": "Audit survives host reboot (persisted, chained across boots)",
-          "status": "in flight",
+          "status": "lived",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "`cursor/wave-3-g4-audit-50bb`. Sixteen sectors immediately before the NIC catalog (that LBA does not move). The image is `RAYNUAUD`: each sealed link's seq, kind, and prev-hash. Boot reads it and appends this boot's events onto that chain. The hash still ignores payloads, so a restored link keeps its kind and hash with zeroed fields. The latched-image SPA wait flushes the image; iron `0421c2fd` served HTTPS in that wait and never printed `audit chain wr` because the flush lived only on the coexist idle. Gate: two hypervisor boots, the second COM2 `boot: audit chain rd` and the chain still verifies from genesis",
+          "note": "Iron `33488fb7` / run `40923163642`. Sixteen sectors at LBA `6190268910`, immediately before the NIC catalog. Boot 1: `boot: audit chain rd none`, then `boot: audit chain wr lba=6190268910 match`. Boot 2, same stick, no reflash: `boot: audit chain rd lba=6190268910 n=9`. That line prints only after `adopt_image` verifies the spare chain from genesis and appends this boot's `BootStarted` and `OvmfLiveEspBytesRetained`. Payloads stay out of the hash. Evidence `docs/evidence/r640/2026-10-29-33488fb7-wave-3-g4-audit-chain-reboot-ok.md`. `0421c2fd` never printed `wr`",
           "wave": "3"
         },
         {
@@ -1109,14 +1109,14 @@
       ],
       "counts": {
         "S1": {
-          "lived": 2,
-          "in flight": 1,
+          "lived": 3,
+          "in flight": 0,
           "planned": 1,
           "total": 4
         },
         "Final": {
-          "lived": 2,
-          "in flight": 1,
+          "lived": 3,
+          "in flight": 0,
           "planned": 4,
           "total": 7
         }
@@ -1525,8 +1525,8 @@
       "iron": "C8",
       "why": "M8.5 in ADR-018 terms. Everything after depends on it.",
       "counts": {
-        "lived": 1,
-        "in flight": 1,
+        "lived": 2,
+        "in flight": 0,
         "planned": 1,
         "total": 3
       },
@@ -1852,12 +1852,6 @@
   ],
   "current_wave": "3",
   "next_up": [
-    {
-      "id": "G4",
-      "capability": "Audit survives host reboot (persisted, chained across boots)",
-      "status": "in flight",
-      "role": "host-first"
-    },
     {
       "id": "C7",
       "capability": "virtio-blk FLUSH honored before completion (power-safe guest filesystems)",
