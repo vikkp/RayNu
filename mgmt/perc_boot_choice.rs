@@ -546,6 +546,14 @@ fn try_autostart(elapsed_secs: u32) {
         serial::write_line("boot: B5 autostart miss");
         return;
     }
+    // A Guests click calls this before the guest starts. Without it the
+    // disk comes up and the saved address does not (no virtio-net).
+    crate::mgmt::guest_nic_start::on_accepted_start(e.spare_off);
+    if crate::mgmt::guest_nic_start::armed_start().is_some() {
+        serial::write_line("boot: B5 autostart nic");
+    } else {
+        serial::write_line("boot: B5 autostart nic none");
+    }
     crate::boot::raynu_f_flag::request_installed_boot();
     let mut buf = [0u8; 20];
     let s = crate::boot::raynu_f_flag::fmt_dec(e.spare_off, &mut buf);
@@ -852,5 +860,22 @@ mod perc_boot_choice_test {
         assert!(launch.contains("fn enter_spa_stop_idle() -> !"));
         assert!(launch.contains("relaunch_perc_guest_from_spa()"));
         assert!(launch.contains("SPA stop idle — guest off"));
+    }
+
+    #[test]
+    fn autostart_arms_the_saved_nic_before_the_guest_starts() {
+        let src = include_str!("perc_boot_choice.rs");
+        let body = src
+            .split_once("fn try_autostart")
+            .expect("try_autostart")
+            .1
+            .split_once("fn firmware_wait")
+            .expect("firmware_wait")
+            .0;
+        let nic = body.find("on_accepted_start").expect("nic handoff");
+        let boot = body.find("request_installed_boot").expect("boot request");
+        assert!(nic < boot, "the saved address is armed before the guest starts");
+        assert!(body.contains("boot: B5 autostart nic"));
+        assert!(body.contains("boot: B5 autostart nic none"));
     }
 }
