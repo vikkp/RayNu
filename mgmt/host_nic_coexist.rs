@@ -25,6 +25,7 @@ pub fn tick_native_coexist() {
     {
         crate::mgmt::host_nic_listen::tick_bcm5720_coexist();
         crate::mgmt::megaraid::flush_nic_catalog();
+        crate::mgmt::megaraid::flush_audit_chain();
     }
 }
 
@@ -43,6 +44,7 @@ pub fn prop_coexist_wired() -> bool {
     let coexist = include_str!("host_nic_coexist.rs");
     let guest = include_str!("../vmx/guest_uefi.rs");
     let xhci = include_str!("xhci.rs");
+    let spa_wait = include_str!("perc_boot_choice.rs");
     launch.contains("tick_native_coexist")
         && launch.contains("try_arm_native_coexist")
         && launch.contains("try_spa_vmlaunch")
@@ -61,6 +63,7 @@ pub fn prop_coexist_wired() -> bool {
         && coexist.contains("fn maybe_tick_standing_spa(")
         && guest.contains("maybe_tick_standing_spa")
         && xhci.contains("maybe_tick_standing_spa")
+        && spa_wait.contains("crate::mgmt::megaraid::flush_audit_chain()")
         && !listen.contains("CURL NOW (post-EBS)")
 }
 
