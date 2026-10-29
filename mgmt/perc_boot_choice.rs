@@ -560,6 +560,10 @@ fn firmware_wait() {
             break;
         }
         crate::mgmt::maybe_tick_standing_spa();
+        // Iron `0421c2fd`: this wait served HTTPS and never entered the
+        // coexist idle, so the audit image stayed staged and COM2 never
+        // printed `audit chain wr`. No guest owns the CPU here.
+        crate::mgmt::megaraid::flush_audit_chain();
         core::hint::spin_loop();
         let now = crate::arch::cpu::rdtsc();
         if now.wrapping_sub(last) >= beat {

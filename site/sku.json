@@ -1076,7 +1076,7 @@
           "status": "in flight",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "`cursor/wave-3-g4-audit-50bb`. Sixteen sectors immediately before the NIC catalog (that LBA does not move). The image is `RAYNUAUD`: each sealed link's seq, kind, and prev-hash. Boot reads it and appends this boot's events onto that chain. The hash still ignores payloads, so a restored link keeps its kind and hash with zeroed fields. Gate: two hypervisor boots, the second COM2 `boot: audit chain rd` and the chain still verifies from genesis",
+          "note": "`cursor/wave-3-g4-audit-50bb`. Sixteen sectors immediately before the NIC catalog (that LBA does not move). The image is `RAYNUAUD`: each sealed link's seq, kind, and prev-hash. Boot reads it and appends this boot's events onto that chain. The hash still ignores payloads, so a restored link keeps its kind and hash with zeroed fields. The latched-image SPA wait flushes the image; iron `0421c2fd` served HTTPS in that wait and never printed `audit chain wr` because the flush lived only on the coexist idle. Gate: two hypervisor boots, the second COM2 `boot: audit chain rd` and the chain still verifies from genesis",
           "wave": "3"
         },
         {

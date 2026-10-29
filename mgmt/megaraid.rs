@@ -2305,8 +2305,15 @@ pub fn audit_image_lba(size_bytes: u64) -> Option<u64> {
     }
 }
 
+/// Last TSC of an audit-image flush attempt. Zero means none yet.
+/// The SPA wait and the coexist idle both call the flush on a tight loop,
+/// and each HTTP accept records `AuthAllowed`, which stages the image again.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+static AUDIT_FLUSH_LAST_TSC: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+
 /// Write the staged audit image while no product guest owns the CPU.
 /// Sixteen WRITE(16)s, then sixteen READs. The NIC catalog LBA is not written.
+/// A new stage sooner than two seconds is left for the next call.
 pub fn flush_audit_chain() {
     #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
     {
@@ -2335,6 +2342,15 @@ fn flush_audit_chain_uefi() {
     let Some((gen, _)) = crate::audit::persist::staged_sector(0) else {
         return;
     };
+    let now = crate::arch::cpu::rdtsc();
+    let gap = crate::mgmt::xhci::usb_tsc_ticks_for_ms(crate::boot::raynu_f_flag::tsc_hz(), 2_000);
+    let last = AUDIT_FLUSH_LAST_TSC.load(core::sync::atomic::Ordering::Acquire);
+    if !crate::audit::persist::flush_interval_elapsed(last, now, gap) {
+        return;
+    }
+    // Arm before the WRITEs so a poll that re-enters this function does not
+    // start a second image while the first is still on the wire.
+    AUDIT_FLUSH_LAST_TSC.store(now, core::sync::atomic::Ordering::Release);
     for i in 0..16usize {
         let Some((_, sector)) = crate::audit::persist::staged_sector(i) else {
             return;

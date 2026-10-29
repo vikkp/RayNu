@@ -148,6 +148,13 @@ pub fn staged_on() -> bool {
     STAGED_ON.load(core::sync::atomic::Ordering::Acquire)
 }
 
+/// Whether a flush that finished at `last` may run again at `now`.
+/// `last == 0` has never flushed. Otherwise `gap` TSC ticks must have passed.
+/// Wrapping-safe for a free-running counter.
+pub fn flush_interval_elapsed(last: u64, now: u64, gap: u64) -> bool {
+    last == 0 || now.wrapping_sub(last) >= gap
+}
+
 fn checksum(bytes: &[u8]) -> u32 {
     bytes.iter().fold(0u32, |a, b| a.wrapping_add(u32::from(*b)))
 }
@@ -265,5 +272,14 @@ mod persist_test {
         assert_eq!(boot2.get(0).unwrap().prev_hash, AUDIT_GENESIS_HASH);
         assert_eq!(boot2.get(2).unwrap().prev_hash, tip);
         assert_eq!(boot2.get(1).unwrap().hash, tip);
+    }
+
+    #[test]
+    fn flush_waits_out_the_gap_then_runs_again() {
+        assert!(flush_interval_elapsed(0, 50, 100));
+        assert!(!flush_interval_elapsed(100, 150, 100));
+        assert!(flush_interval_elapsed(100, 200, 100));
+        assert!(flush_interval_elapsed(u64::MAX - 10, 90, 100));
+        assert!(!flush_interval_elapsed(u64::MAX - 10, 50, 100));
     }
 }

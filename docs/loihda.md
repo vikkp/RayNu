@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-3-g4-audit-chain |
-| Summary | **ADR-021 G4 in flight.** The audit hash chain is a 16-sector image before the NIC catalog. A later boot continues it. Not lived. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-3-g4-spa-wait-flush |
+| Summary | **ADR-021 G4 still in flight.** Iron `0421c2fd` printed `audit chain rd none` from the SPA wait and never `wr`. That wait now flushes the 16-sector image. Not lived. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. |
-| Gates touched | ADR-021 G4 in flight. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-9-lan`. |
+| Gates touched | ADR-021 G4 stays in flight. Iron `0421c2fd` did not close it. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-9-lan`. |
 
 ---
 
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-10-29 | wave-3-g4-spa-wait-flush | 94 | 72 | **G4 still in flight.** Iron `0421c2fd` never printed `audit chain wr` from the SPA wait. That wait now flushes the image. Not lived. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-29 | wave-3-g4-audit-chain | 94 | 72 | **G4 in flight on `cursor/wave-3-g4-audit-50bb`.** Audit image continues the hash chain across a boot. Not lived. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-29 | wave-3-c8-lived | 94 | 72 | **Iron `4ac1a629`: C8 lived for the NIC catalog.** `wr lba=6190268926 match`, second F11 `rd n=1`, vNIC already filled. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-29 | wave-3-c8-poll-write | 94 | 72 | **Iron `94d0d369`: catalog write `mismatch` at lba 6190268926.** Frame was not polled. Fix is the probe write's poll bits. Still in flight. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
