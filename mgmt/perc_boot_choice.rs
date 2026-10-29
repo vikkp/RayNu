@@ -547,7 +547,7 @@ fn try_autostart(elapsed_secs: u32) {
         return;
     }
     crate::boot::raynu_f_flag::request_installed_boot();
-    let mut buf = [0u8; 24];
+    let mut buf = [0u8; 20];
     let s = crate::boot::raynu_f_flag::fmt_dec(e.spare_off, &mut buf);
     serial::write_str("boot: B5 autostart start off=");
     serial::write_str(s);

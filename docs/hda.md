@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-29 | wave-4-b5-uefi-buf | 0.0 | 99 | **B5 still in flight.** The autostart line used a 24-byte buffer; `fmt_dec` takes 20, so the UEFI build failed and no stick exists. Buffer matches. Not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-29 | wave-4-b5-boot-next | 0.0 | 99 | **B5 still in flight.** Guests **Boot next** stages the autostart sector. Next boot starts the first entry. Not lived until that reboot starts the guest with no click. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-29 | wave-4-b5-autostart | 0.0 | 99 | **B5 in flight on `cursor/wave-4-b5-autostart-50bb`.** Saved autostart list starts the first installed guest after a delay. Absent sector keeps the SPA wait. SPA writer not in this slice, so a power cut still leaves the guest off. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-29 | wave-3-c7-lived | 0.0 | 99 | **Iron `4b81da7f`: C7 lived. Wave 3 closed.** `boot: C7 virtio flush sync status=0x00` during the sysroot mount, then `raynusrv2 login:`. Same boot `audit chain rd n=16` and NIC catalog `n=1`. Current wave → 4 (B5 autostart). Scores held. months 0.0 held; overall 99 held |

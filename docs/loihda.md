@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-10-29 | wave-4-b5-uefi-buf | 94 | 72 | **B5 still in flight.** UEFI build failed on the autostart number buffer. Fixed. Not lived. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-29 | wave-4-b5-boot-next | 94 | 72 | **B5 still in flight.** Guests Boot next stages the list. Not lived until a reboot starts the guest with no click. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-29 | wave-4-b5-autostart | 94 | 72 | **B5 in flight.** Saved autostart list starts the first guest after a delay. SPA writer not in this slice. A power cut still leaves the guest off. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-29 | wave-3-c7-lived | 94 | 72 | **Iron `4b81da7f`: C7 lived. Wave 3 closed.** Flush line during sysroot mount, then `raynusrv2 login:`. Wave 4 opens on B5. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
