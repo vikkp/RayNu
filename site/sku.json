@@ -20,14 +20,14 @@
   "counts": {
     "S1": {
       "lived": 35,
-      "in flight": 1,
-      "planned": 31,
+      "in flight": 2,
+      "planned": 30,
       "total": 67
     },
     "Final": {
       "lived": 35,
-      "in flight": 1,
-      "planned": 93,
+      "in flight": 2,
+      "planned": 92,
       "total": 129
     }
   },
@@ -1073,10 +1073,10 @@
         {
           "id": "G4",
           "capability": "Audit survives host reboot (persisted, chained across boots)",
-          "status": "planned",
+          "status": "in flight",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "",
+          "note": "`cursor/wave-3-g4-audit-50bb`. Sixteen sectors immediately before the NIC catalog (that LBA does not move). The image is `RAYNUAUD`: each sealed link's seq, kind, and prev-hash. Boot reads it and appends this boot's events onto that chain. The hash still ignores payloads, so a restored link keeps its kind and hash with zeroed fields. Gate: two hypervisor boots, the second COM2 `boot: audit chain rd` and the chain still verifies from genesis",
           "wave": "3"
         },
         {
@@ -1110,14 +1110,14 @@
       "counts": {
         "S1": {
           "lived": 2,
-          "in flight": 0,
-          "planned": 2,
+          "in flight": 1,
+          "planned": 1,
           "total": 4
         },
         "Final": {
           "lived": 2,
-          "in flight": 0,
-          "planned": 5,
+          "in flight": 1,
+          "planned": 4,
           "total": 7
         }
       }
@@ -1526,8 +1526,8 @@
       "why": "M8.5 in ADR-018 terms. Everything after depends on it.",
       "counts": {
         "lived": 1,
-        "in flight": 0,
-        "planned": 2,
+        "in flight": 1,
+        "planned": 1,
         "total": 3
       },
       "closed": false
@@ -1855,7 +1855,7 @@
     {
       "id": "G4",
       "capability": "Audit survives host reboot (persisted, chained across boots)",
-      "status": "planned",
+      "status": "in flight",
       "role": "host-first"
     },
     {

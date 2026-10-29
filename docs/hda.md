@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-3-c8-lived |
-| Summary | **Iron `4ac1a629`: ADR-021 C8 lived for the NIC catalog.** Save printed `boot: perc nic catalog wr lba=6190268926 match` (`GuestNicSaved off=19327352832 mode=2`, MAC `02:52:4e:38:0b:0d`, `10.99.99.200/24`, gateway `10.99.99.1`, DNS `1.1.1.1`). A second F11 of the same stick, no reflash, printed `boot: perc nic catalog rd lba=6190268926 n=1` in the PERC section, and vNIC opened already filled. The row stayed `INSTALLED`. `94d0d369` had printed `mismatch` on that LBA. Other settings are still RAM. Wave 3 stays open on G4 and C7. Evidence: [2026-10-29-4ac1a629-wave-3-c8-nic-catalog-reboot-ok.md](evidence/r640/2026-10-29-4ac1a629-wave-3-c8-nic-catalog-reboot-ok.md). HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-3-g4-audit-chain |
+| Summary | **ADR-021 G4 in flight on `cursor/wave-3-g4-audit-50bb`.** The audit ring exports a 16-sector image that sits immediately before the NIC catalog. A later boot reads it and appends the new events, so the hash chain still starts at genesis and the new tip's prev-hash is the previous boot's tip. Payloads are not in the hash, so a restored link keeps its kind with zeroed fields. Not lived until two hypervisor boots show `boot: audit chain rd`. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
-| Gates touched | ADR-021 C8 `in flight → lived`. Wave 3 iron thread closed; G4 / C7 remain. No new iron marker. Rollback `v0.1.0-m8-9-lan`. No doorbell. No format of UBUNTU0. |
+| Gates touched | ADR-021 G4 `planned → in flight`. C8 stays lived. C7 stays planned. No new iron marker. Rollback `v0.1.0-m8-9-lan`. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
 
 ## Blockers & risks (Everest-relevant)
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-29 | wave-3-g4-audit-chain | 0.0 | 99 | **G4 in flight on `cursor/wave-3-g4-audit-50bb`.** Audit image before the NIC catalog; the next boot continues the hash chain. Payloads are not in the hash. Not lived until two boots. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-29 | wave-3-c8-lived | 0.0 | 99 | **Iron `4ac1a629`: C8 lived for the NIC catalog.** `wr lba=6190268926 match`, then a second F11 of the same stick `rd lba=6190268926 n=1`, vNIC already `02:52:4e:38:0b:0d` / `10.99.99.200/24`. Wave 3 stays open on G4 and C7. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-29 | wave-3-c8-poll-write | 0.0 | 99 | **Iron `94d0d369`: C8 write missed.** Save printed `perc nic catalog wr lba=6190268926 mismatch (staged, not acked)`. The catalog WRITE was not in poll mode, so the READ won the race. Next EFI uses the probe write's poll frame. Still in flight. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-29 | wave-3-c8-nic-catalog | 0.0 | 99 | **C8 in flight on `cursor/wave-3-c8-config-50bb`.** NIC catalog sector staged on Save/Detach and written to the reserved spare LBA while the CPU is free; boot reads it back. Not lived until a hypervisor reboot keeps the NIC. Scores held. months 0.0 held; overall 99 held |
@@ -1144,7 +1145,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     Wave 3 "State survives". C8 lived on 4ac1a629 (NIC catalog sector survives a second F11 of the same stick). `./tools/sync-sku-site.sh --next` says G4 [host-first] audit survives host reboot, then C7 virtio-blk FLUSH. The wave 3 iron thread is closed. After any F11, Save the vNIC on the Guests row before Start (the NIC record is not on disk). Rollback for a wave 2 flash is v0.1.0-m8-9-lan. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/m8_plan.md.
+Next move:     Wave 3 "State survives". C8 lived. G4 (audit chain across boots) is in flight on cursor/wave-3-g4-audit-50bb. C7 (virtio-blk FLUSH) is still planned. Both are host-first. After any F11, Save the vNIC on the Guests row before Start (the NIC record is not on disk). Rollback for a wave 2 flash is v0.1.0-m8-9-lan. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/m8_plan.md.
 Rollback:      M8.9 close: v0.1.0-m8-9-lan → CI 40603110937 / COM2 sha=0d865c7fcb0a / EFI SHA256 df6fc3465cecf1eaf058d5c8e675501827c16eb55e7b2c9758bc5e68326ad91b
 Older M8.8:    v0.1.0-m8-8-ubuntu → CI 38454398693 / COM2 sha=c3a70e623aec / EFI SHA256 08ef31ba87136577102ac378d8e0a512327994e8794c41c64444f5be5f8812c4
 Older SPA:     v0.1.0-m8-perc-spa → CI 36362775808 / COM2 sha=8ad2ac89125e / EFI SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849

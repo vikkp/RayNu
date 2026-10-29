@@ -512,6 +512,30 @@ impl AuditRing {
         true
     }
 
+    /// Replace this ring with `image`, then append the events that were
+    /// already here so they continue that chain. A bad image leaves `self`
+    /// unchanged. The joined chain still starts at [`AUDIT_GENESIS_HASH`].
+    pub fn adopt_image(&mut self, image: &[u8]) -> bool {
+        let Some(prior) = crate::audit::persist::decode_ring(image) else {
+            return false;
+        };
+        if !prior.verify_chain() || prior.len() + self.len > AUDIT_RING_CAP {
+            return false;
+        }
+        let mut kept = [None; AUDIT_RING_CAP];
+        let n = self.len;
+        for i in 0..n {
+            kept[i] = Some(self.get(i).unwrap().event);
+        }
+        *self = prior;
+        for i in 0..n {
+            if self.append(kept[i].unwrap()).is_err() {
+                return false;
+            }
+        }
+        self.verify_chain()
+    }
+
     /// Read a sealed record by index (for verify/tamper hosts).
     pub fn get(&self, index: usize) -> Option<&AuditRecord> {
         if index >= self.len {
@@ -543,7 +567,7 @@ impl Default for AuditRing {
 }
 
 /// FNV-1a style stub hash (not cryptographic — replace for production [A]).
-fn hash_record(seq: u64, event: AuditEvent, prev: u64) -> u64 {
+pub(crate) fn hash_record(seq: u64, event: AuditEvent, prev: u64) -> u64 {
     let mut h = 0xcbf29ce484222325u64;
     h ^= seq;
     h = h.wrapping_mul(0x100000001b3);
@@ -553,7 +577,7 @@ fn hash_record(seq: u64, event: AuditEvent, prev: u64) -> u64 {
     h.wrapping_mul(0x100000001b3)
 }
 
-fn event_discriminant(event: AuditEvent) -> u64 {
+pub(crate) fn event_discriminant(event: AuditEvent) -> u64 {
     match event {
         AuditEvent::BootStarted { .. } => 1,
         AuditEvent::VmxEnabled { .. } => 2,
@@ -665,8 +689,19 @@ fn with_boot_ring<R>(f: impl FnOnce(&mut AuditRing) -> R) -> R {
 /// Console / SOL capture sees audit activity (see `docs/runbooks/idrac_logging.md`).
 pub fn record_event(event: AuditEvent) {
     let _ = with_boot_ring(|ring| ring.append(event).map(|_| ()));
+    crate::audit::persist::stage_boot_ring();
     #[cfg(target_os = "uefi")]
     mirror_audit_to_com1(event);
+}
+
+/// Encode the boot ring. Called with the staged-image lock held, not this one.
+pub fn encode_boot_ring(buf: &mut [u8]) -> bool {
+    with_boot_ring(|ring| crate::audit::persist::encode_ring(ring, buf))
+}
+
+/// Continue the boot ring from a disk image. This boot's events stay at the tip.
+pub fn adopt_boot_image(image: &[u8]) -> bool {
+    with_boot_ring(|ring| ring.adopt_image(image))
 }
 
 /// COM1 mirror for iDRAC capture. Skips high-churn frame events.
@@ -1259,10 +1294,15 @@ pub fn boot_ring_verify() -> bool {
     with_boot_ring(|ring| ring.verify_chain())
 }
 
+/// Records currently in the boot ring.
+pub fn boot_ring_len() -> usize {
+    with_boot_ring(|ring| ring.len())
+}
+
 /// Test-only access to the boot ring length.
 #[cfg(test)]
 pub fn boot_ring_len_for_test() -> usize {
-    with_boot_ring(|ring| ring.len())
+    boot_ring_len()
 }
 
 /// Test-only: reset the shared boot ring so length-delta asserts stay reliable

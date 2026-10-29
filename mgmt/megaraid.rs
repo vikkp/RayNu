@@ -363,6 +363,9 @@ pub const SPARE_PROBE_BYTES: u64 = 512;
 pub const NIC_CATALOG_BYTES: u64 = 512;
 /// Bytes at the high end of a spare that are not a guest disk and not a library file.
 pub const SPARE_HIGH_RESERVE: u64 = SPARE_PROBE_BYTES + NIC_CATALOG_BYTES;
+/// Audit image, 16 sectors, immediately before the NIC catalog. The catalog
+/// LBA does not move. Guest placement stops before this image.
+pub const AUDIT_PERSIST_BYTES: u64 = 8192;
 /// ~2.882 TiB, rounded down to a 512-byte multiple so a sector round-trip matches.
 pub const LAB_SPARE_BYTES: u64 = (2882 * (TIB / 512) / 1000) * 512;
 /// Old single-VD usable capacity, 3351.75 GiB. Must not classify as the spare.
@@ -766,7 +769,9 @@ pub fn place_in_free_tail(
     let end = spare_off.checked_add(disk_bytes)?;
     // Stop before the NIC catalog and the mailbox probe. A disk that fills
     // the VD would cover both.
-    let limit = spare_bytes.checked_sub(SPARE_HIGH_RESERVE)?;
+    let limit = spare_bytes
+        .checked_sub(SPARE_HIGH_RESERVE)?
+        .checked_sub(AUDIT_PERSIST_BYTES)?;
     if end > limit {
         return None;
     }
@@ -2178,6 +2183,7 @@ fn perc_fusion_post(bar: u64, bus: u8, dev: u8, func: u8, base: u64) {
     }
 
     perc_load_nic_catalog(bar, target, bytes, dcmd_phys, data_phys);
+    perc_load_audit_chain(bar, target, bytes, dcmd_phys, data_phys);
 
     // The read chain already lived. A write miss still arms read-only virtio.
     perc_spare_write_last(bar, bus, dev, func, target, bytes, dcmd_phys, data_phys);
@@ -2242,6 +2248,135 @@ fn perc_load_nic_catalog(bar: u64, target: u8, bytes: u64, frame_phys: u64, data
     serial::write_str(" n=");
     write_dec(n);
     serial::write_line("");
+}
+
+/// Read the 16-sector audit image that sits before the NIC catalog and
+/// continue the boot ring from it. A missing or bad image leaves the ring
+/// as this boot started it. Does not write. Does not print a PERC marker.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn perc_load_audit_chain(bar: u64, target: u8, bytes: u64, frame_phys: u64, data_phys: u64) {
+    use crate::boot::serial;
+    let Some(base) = audit_image_lba(bytes) else {
+        serial::write_line("boot: audit chain skip lba");
+        return;
+    };
+    let mut image = [0u8; crate::audit::persist::IMAGE_BYTES];
+    for i in 0..16u64 {
+        let Some((st, timed_out)) = issue_ld_read16(bar, target, base + i, frame_phys, data_phys)
+        else {
+            serial::write_line("boot: audit chain rd skip frame");
+            return;
+        };
+        if timed_out || st != MFI_STAT_OK {
+            serial::write_line("boot: audit chain rd skip status");
+            return;
+        }
+        core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+        // SAFETY: the READ(16) completed into the 512-byte payload page.
+        // KANI-TARGET: host tests cover the image, not this load.
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                data_phys as *const u8,
+                image.as_mut_ptr().add((i as usize) * 512),
+                512,
+            );
+        }
+    }
+    if crate::audit::integrity::adopt_boot_image(&image) {
+        serial::write_str("boot: audit chain rd lba=");
+        write_dec64(base);
+        serial::write_str(" n=");
+        write_dec(crate::audit::integrity::boot_ring_len() as u32);
+        serial::write_line("");
+    } else {
+        serial::write_line("boot: audit chain rd none");
+    }
+}
+
+/// First LBA of the audit image. Sixteen sectors, ending where the NIC
+/// catalog starts. `None` for anything that is not the spare.
+pub fn audit_image_lba(size_bytes: u64) -> Option<u64> {
+    let cat = crate::mgmt::guest_nic::catalog_lba(size_bytes)?;
+    let lba = cat.checked_sub(AUDIT_PERSIST_BYTES / 512)?;
+    if lba == 0 {
+        None
+    } else {
+        Some(lba)
+    }
+}
+
+/// Write the staged audit image while no product guest owns the CPU.
+/// Sixteen WRITE(16)s, then sixteen READs. The NIC catalog LBA is not written.
+pub fn flush_audit_chain() {
+    #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+    {
+        flush_audit_chain_uefi();
+    }
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn flush_audit_chain_uefi() {
+    use crate::boot::serial;
+    use crate::mgmt::perc_boot_choice::{vmcs_guest, VmcsGuest};
+    if !matches!(vmcs_guest(), VmcsGuest::None) || !crate::audit::persist::staged_on() {
+        return;
+    }
+    let bar = PERC_SPARE_BAR.load(core::sync::atomic::Ordering::Acquire);
+    let target = PERC_SPARE_TARGET.load(core::sync::atomic::Ordering::Acquire);
+    let frame = PERC_SPARE_FRAME.load(core::sync::atomic::Ordering::Acquire);
+    let data = PERC_SPARE_DATA.load(core::sync::atomic::Ordering::Acquire);
+    let bytes = PERC_SPARE_BYTES.load(core::sync::atomic::Ordering::Acquire);
+    let Some(base) = audit_image_lba(bytes) else {
+        return;
+    };
+    if bar == 0 || frame == 0 || data == 0 {
+        return;
+    }
+    let Some((gen, _)) = crate::audit::persist::staged_sector(0) else {
+        return;
+    };
+    for i in 0..16usize {
+        let Some((_, sector)) = crate::audit::persist::staged_sector(i) else {
+            return;
+        };
+        let Some((st, timed_out)) =
+            issue_ld_write16_sector(bar, target, base + i as u64, frame, data, &sector)
+        else {
+            return;
+        };
+        if timed_out || st != MFI_STAT_OK {
+            serial::write_line("boot: audit chain wr skip status");
+            return;
+        }
+    }
+    for i in 0..16usize {
+        let Some((_, sector)) = crate::audit::persist::staged_sector(i) else {
+            return;
+        };
+        let Some((st, timed_out)) = issue_ld_read16(bar, target, base + i as u64, frame, data)
+        else {
+            return;
+        };
+        if timed_out || st != MFI_STAT_OK {
+            serial::write_line("boot: audit chain rdback skip");
+            return;
+        }
+        core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+        let mut back = [0u8; 512];
+        // SAFETY: the READ(16) completed into the payload page.
+        // KANI-TARGET: host tests cover the image bytes, not this load.
+        unsafe {
+            core::ptr::copy_nonoverlapping(data as *const u8, back.as_mut_ptr(), 512);
+        }
+        if back != sector {
+            serial::write_line("boot: audit chain wr mismatch");
+            return;
+        }
+    }
+    crate::audit::persist::ack_staged(gen);
+    serial::write_str("boot: audit chain wr lba=");
+    write_dec64(base);
+    serial::write_line(" match");
 }
 
 /// Write a staged NIC catalog while no product guest owns the CPU.

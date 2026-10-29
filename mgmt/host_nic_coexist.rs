@@ -25,6 +25,7 @@ pub fn tick_native_coexist() {
     {
         crate::mgmt::host_nic_listen::tick_bcm5720_coexist();
         crate::mgmt::megaraid::flush_nic_catalog();
+        crate::mgmt::megaraid::flush_audit_chain();
     }
 }
 
