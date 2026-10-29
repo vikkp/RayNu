@@ -421,7 +421,7 @@
           "status": "in flight",
           "ships": "S1",
           "ref": "M8.5",
-          "note": "`cursor/wave-3-c8-config-50bb`. Save and Detach stage the NIC catalog sector. While no product guest owns the CPU, one WRITE(16) of the reserved LBA (the sector before the spare probe, not LBA 0) stores it and a READ acks it. Boot reads that LBA into the panel before the guest starts. Gate: Save, reboot the hypervisor, the same MAC and address are on the Guests row with nothing typed. Host round-trip is not that close",
+          "note": "`cursor/wave-3-c8-config-50bb`. Save and Detach stage the NIC catalog sector. While no product guest owns the CPU, one WRITE(16) of the reserved LBA (the sector before the spare probe, not LBA 0) stores it and a READ acks it. Boot reads that LBA into the panel before the guest starts. Gate: Save, reboot the hypervisor, the same MAC and address are on the Guests row with nothing typed. Host round-trip is not that close. Iron `94d0d369` printed `perc nic catalog wr lba=6190268926 mismatch (staged, not acked)`: the write frame was not in poll mode, so the READ came back before the WRITE finished. The next EFI posts that WRITE the same way as the spare-probe write",
           "wave": "3"
         },
         {

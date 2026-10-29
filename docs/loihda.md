@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-10-29 | wave-3-c8-poll-write | 94 | 72 | **Iron `94d0d369`: catalog write `mismatch` at lba 6190268926.** Frame was not polled. Fix is the probe write's poll bits. Still in flight. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-29 | wave-3-c8-nic-catalog | 94 | 72 | **C8 in flight on `cursor/wave-3-c8-config-50bb`.** NIC catalog sector written while the CPU is free, read on the next boot. Not lived. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-29 | wave-2-b20-lived | 94 | 72 | **Iron `ddbaf11cd11c`: B20 lived. Wave 2 closed.** Tile followed the guest up and down. Stop: `Stopped from the Guests page. reason=0x34`. The exit-cap line while it ran was the OVMF handoff. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-29 | wave-2-b20-stop-reason | 94 | 72 | **B20 in flight on `cursor/wave-2-b20-a3-50bb`.** Last stop on the page; a running tail guest is `running`. Not lived until the next F11 and a Stop. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |

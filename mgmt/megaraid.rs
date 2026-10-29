@@ -1074,6 +1074,41 @@ pub fn pack_ld_write16_last_polled(
     Some(f)
 }
 
+/// Polled one-block WRITE(16) of `lba`. Same poll, sense, and reply-queue
+/// bits as the spare-probe write. LBA 0 is refused. The catalog LBA uses
+/// this; the probe write keeps [`pack_ld_write16_last_polled`].
+pub fn pack_ld_write16_one_polled(
+    target_id: u8,
+    lba: u64,
+    data_phys: u64,
+) -> Option<[u8; MFI_FRAME_BYTES]> {
+    if lba == 0
+        || data_phys == 0
+        || data_phys >= 0x1_0000_0000
+        || data_phys & 0x1FF != 0
+        || data_phys.saturating_add(512 + 32) > 0x1_0000_0000
+    {
+        return None;
+    }
+    let mut f = pack_ld_write16(target_id, lba, 1, data_phys, 512).ok()?;
+    f[1] = 32;
+    f[2] = MFI_CMD_STATUS_POLL;
+    put_u64(&mut f, 0x18, data_phys + 512);
+    let flags = u16::from_le_bytes(f[0x10..0x12].try_into().unwrap());
+    put_u16(&mut f, 0x10, flags | MFI_FRAME_DONT_POST_IN_REPLY_QUEUE);
+    if !frame_is_write(&f) || frame_is_read(&f) || f[0] != MFI_CMD_LD_SCSI_IO {
+        return None;
+    }
+    if !cdb_is_single_write16(&f[0x20..0x30]) {
+        return None;
+    }
+    let cdb_lba = u64::from_be_bytes(f[0x22..0x2A].try_into().ok()?);
+    if cdb_lba != lba || cdb_lba == 0 {
+        return None;
+    }
+    Some(f)
+}
+
 /// True for the one management opcode we encode.
 pub fn dcmd_is_allowed(opcode: u32) -> bool {
     opcode == MR_DCMD_LD_GET_LIST
@@ -2294,7 +2329,7 @@ fn issue_ld_write16_sector(
     {
         return None;
     }
-    let wr = pack_ld_write16(target, lba, 1, data_phys, 512).ok()?;
+    let wr = pack_ld_write16_one_polled(target, lba, data_phys)?;
     let desc = pack_mfa_descriptor(frame_phys)?;
     // SAFETY: frame and payload are the spare DMA pages stored at boot.
     // The CDB is one WRITE(16) of the catalog LBA. No doorbell. LBA 0 is

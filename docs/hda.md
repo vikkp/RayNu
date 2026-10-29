@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-29 | wave-3-c8-poll-write | 0.0 | 99 | **Iron `94d0d369`: C8 write missed.** Save printed `perc nic catalog wr lba=6190268926 mismatch (staged, not acked)`. The catalog WRITE was not in poll mode, so the READ won the race. Next EFI uses the probe write's poll frame. Still in flight. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-29 | wave-3-c8-nic-catalog | 0.0 | 99 | **C8 in flight on `cursor/wave-3-c8-config-50bb`.** NIC catalog sector staged on Save/Detach and written to the reserved spare LBA while the CPU is free; boot reads it back. Not lived until a hypervisor reboot keeps the NIC. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-29 | wave-2-b20-lived | 0.0 | 99 | **Iron `ddbaf11cd11c`: B20 lived. Wave 2 closed.** Tile `Guest 3 is running`, then Stop: `Guest is stopped` and `Stopped from the Guests page. reason=0x34 rip=0xffffffff85b2bebd`. The earlier `Exit cap reached. reason=0x1c rip=0xfffffe94` was the OVMF first-exit handoff, replaced by Stop. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-29 | wave-2-b20-stop-reason | 0.0 | 99 | **B20 in flight on `cursor/wave-2-b20-a3-50bb`.** Last stop recorded from `guest-UEFI stop n=` and `RayNu-F stop <why>`; idle does not overwrite it. `/perc/guests` `last_stop` after a stop. Tail boot state is `running` and the Guest tile counts it. Not lived until the next F11 and a Stop. Scores held. months 0.0 held; overall 99 held |
