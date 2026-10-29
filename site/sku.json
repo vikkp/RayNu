@@ -19,14 +19,14 @@
   },
   "counts": {
     "S1": {
-      "lived": 32,
-      "in flight": 2,
+      "lived": 33,
+      "in flight": 1,
       "planned": 33,
       "total": 67
     },
     "Final": {
-      "lived": 32,
-      "in flight": 2,
+      "lived": 33,
+      "in flight": 1,
       "planned": 95,
       "total": 129
     }
@@ -61,10 +61,10 @@
         {
           "id": "A3",
           "capability": "Build identity (git SHA, CI run) visible on the SPA, not only COM2",
-          "status": "in flight",
+          "status": "lived",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "`cursor/wave-2-b20-a3-50bb`. COM2 line is `build: sha=<12>` and ` run=<id>` when `GITHUB_RUN_ID` is set (`format_build_banner`; `build: sha=` stays the first token). `/perc/guests` carries `build_sha` and `build_run`; Overview `#build-id` renders `build <sha> · CI <run>` with the run linked to the Actions page, and omits the link when the run is empty. Gate: the next F11 shows that line on Overview matching the COM2 `build: sha=`",
+          "note": "`bc50d59aa77a` (PR #419, CI `40876033671`; pull-request merge of `9ee60cb3`): COM2 `build: sha=bc50d59aa77a run=40876033671`, Overview under the tiles `build bc50d59aa77a · CI 40876033671` with the run linked to that Actions page. `build: sha=` stays the first token. docs/evidence/r640/2026-10-29-bc50d59a-wave-2-a3-build-on-overview-ok.md",
           "wave": "2"
         },
         {
@@ -133,14 +133,14 @@
       ],
       "counts": {
         "S1": {
-          "lived": 3,
-          "in flight": 1,
+          "lived": 4,
+          "in flight": 0,
           "planned": 4,
           "total": 8
         },
         "Final": {
-          "lived": 3,
-          "in flight": 1,
+          "lived": 4,
+          "in flight": 0,
           "planned": 6,
           "total": 10
         }
@@ -1507,8 +1507,8 @@
       "iron": "D5",
       "why": "Cheap, in code just touched; each would have saved a day in October.",
       "counts": {
-        "lived": 3,
-        "in flight": 1,
+        "lived": 4,
+        "in flight": 0,
         "planned": 1,
         "total": 5
       },
@@ -1856,12 +1856,6 @@
       "id": "B20",
       "capability": "Guest exit/stop reasons readable on the page (why did it stop)",
       "status": "planned",
-      "role": "host-first"
-    },
-    {
-      "id": "A3",
-      "capability": "Build identity (git SHA, CI run) visible on the SPA, not only COM2",
-      "status": "in flight",
       "role": "host-first"
     }
   ],
