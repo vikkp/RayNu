@@ -6,9 +6,10 @@
 //!
 //! The installed Ubuntu guest looks for an RSDP in the EFI configuration
 //! table. This page is that RSDP plus an RSDT, an XSDT, a FADT, a FACS, and
-//! a DSDT whose only device is the power button (`PNP0C0C`) and `_S5`.
-//! There is no MADT: a MADT would move Linux onto the I/O APIC, and the
-//! virtio disk that reaches `login:` is on the 8259.
+//! a DSDT with the power button (`PNP0C0C`), `_S5`, and `\_SB.PCI0`.
+//! `PCI0` `_PRT` sends slot 2 and slot 3 INTA to PIC IRQ 11, the line
+//! virtio already uses. There is no MADT: a MADT would move Linux onto
+//! the I/O APIC.
 
 /// Page inside the firmware image (`tables::IMAGE_ACPI_OFF`).
 pub const ACPI_PAGE: usize = 0x1000;
@@ -18,7 +19,7 @@ pub const RSDT_OFF: usize = 0x040;
 pub const XSDT_OFF: usize = 0x080;
 pub const FACP_OFF: usize = 0x0C0;
 pub const DSDT_OFF: usize = 0x160;
-pub const FACS_OFF: usize = 0x200;
+pub const FACS_OFF: usize = 0x300;
 
 pub const FACP_LEN: usize = 129;
 pub const FACS_LEN: usize = 64;
@@ -101,22 +102,56 @@ fn write_facs(buf: &mut [u8]) {
 }
 
 fn write_dsdt(buf: &mut [u8]) -> usize {
-    // AML after the 36-byte header.
-    // Name(_S5, Package(4){5,5,0,0})
-    // Device(PWRB) { Name(_HID, EisaId("PNP0C0C")) Name(_UID, Zero) }
-    const AML: &[u8] = &[
+    // Name(_S5) and Device(PWRB), then the fw_cfg PCI0 scope with INTA on
+    // PIC IRQ 11. Iron `84ad5422` published the button alone: Linux enabled
+    // the interpreter, skipped PCI, and the initrd never saw vda.
+    const BUTTON: &[u8] = &[
         0x08, 0x5F, 0x53, 0x35, 0x5F, 0x12, 0x08, 0x04, 0x0A, S5_SLP_TYP, 0x0A, S5_SLP_TYP, 0x00,
         0x00, 0x5B, 0x82, 0x15, b'P', b'W', b'R', b'B', 0x08, 0x5F, 0x48, 0x49, 0x44, 0x0C, 0x41,
         0xD0, 0x0C, 0x0C, 0x08, 0x5F, 0x55, 0x49, 0x44, 0x00,
     ];
-    let len = 36 + AML.len();
+    let Some(scope) = pci_scope_irq11() else {
+        return 0;
+    };
+    let len = 36 + BUTTON.len() + scope.len();
     if buf.len() < len {
         return 0;
     }
     sdt_header(buf, b"DSDT", len as u32, 2);
-    buf[36..len].copy_from_slice(AML);
+    buf[36..36 + BUTTON.len()].copy_from_slice(BUTTON);
+    buf[36 + BUTTON.len()..len].copy_from_slice(&scope);
     fix_checksum(&mut buf[..len], 9);
     len
+}
+
+/// `Scope(\_SB){ Device(PCI0) }` from the fw_cfg DSDT, with slot 2 and
+/// slot 3 INTA on PIC IRQ 11 instead of GSI 17 and 18.
+fn pci_scope_irq11() -> Option<[u8; 189]> {
+    let body = crate::devices::guest_acpi::dsdt_aml_body();
+    if body.len() != 189 {
+        return None;
+    }
+    let mut scope = [0u8; 189];
+    scope.copy_from_slice(body);
+    let slot2 = [0x0C, 0xFF, 0xFF, 0x02, 0x00, 0x00, 0x00, 0x0A, 0x11];
+    let slot3 = [0x0C, 0xFF, 0xFF, 0x03, 0x00, 0x00, 0x00, 0x0A, 0x12];
+    let irq11_2 = [0x0C, 0xFF, 0xFF, 0x02, 0x00, 0x00, 0x00, 0x0A, 0x0B];
+    let irq11_3 = [0x0C, 0xFF, 0xFF, 0x03, 0x00, 0x00, 0x00, 0x0A, 0x0B];
+    if !replace_once(&mut scope, &slot2, &irq11_2) || !replace_once(&mut scope, &slot3, &irq11_3) {
+        return None;
+    }
+    Some(scope)
+}
+
+fn replace_once(buf: &mut [u8], from: &[u8], to: &[u8]) -> bool {
+    if from.len() != to.len() {
+        return false;
+    }
+    let Some(at) = buf.windows(from.len()).position(|w| w == from) else {
+        return false;
+    };
+    buf[at..at + to.len()].copy_from_slice(to);
+    true
 }
 
 fn write_facp(buf: &mut [u8], facs: u64, dsdt: u64) {
@@ -189,6 +224,9 @@ mod acpi_publish_test {
         assert!(DSDT_OFF + dsdt_len <= FACS_OFF);
         let dsdt = &page[DSDT_OFF..DSDT_OFF + dsdt_len];
         assert!(dsdt.windows(4).any(|w| w == [0x41, 0xD0, 0x0C, 0x0C]));
+        assert!(dsdt.windows(4).any(|w| w == [0x41, 0xD0, 0x0A, 0x03]));
+        assert!(dsdt.windows(9).any(|w| w == [0xFF, 0xFF, 0x02, 0x00, 0x00, 0x00, 0x0A, 0x0B, 0x12]));
+        assert!(!dsdt.windows(2).any(|w| w == [0x0A, 0x11]));
         assert_eq!(sum(dsdt), 0);
         assert_eq!(sum(&page[FACP_OFF..FACP_OFF + FACP_LEN]), 0);
         assert_eq!(u32::from_le_bytes(page[XSDT_OFF + 4..XSDT_OFF + 8].try_into().unwrap()), 44);

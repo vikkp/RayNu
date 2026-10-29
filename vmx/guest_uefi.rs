@@ -9439,7 +9439,7 @@ fn raynu_f_publish_acpi(layout: &crate::raynu_f::FirmwareImageLayout, img: &mut 
         Ok(gpa) => {
             serial::write_str("boot: B4 acpi rsdp gpa=0x");
             write_hex(gpa);
-            serial::write_line(" (power button; no MADT)");
+            serial::write_line(" (power button and PCI0 IRQ 11; no MADT)");
         }
         Err(_) => serial::write_line("boot: B4 WARN acpi publish failed"),
     }
