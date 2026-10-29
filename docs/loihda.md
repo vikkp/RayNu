@@ -1,6 +1,6 @@
 ---
 loihda_version: 1
-last_updated: 2026-10-28
+last_updated: 2026-10-29
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-2-d4-lived |
-| Summary | **Iron `aeb2d79b`: ADR-021 D4 lived on one quiet boot** — the egress port came from `guest_egress::discover` at NIC init and again at the arm (`pci=01:00.01 mac=b0:26:28:5c:5a:39`, no constant on the path), rings armed, and the Mac reached the guest over it (`ssh vikkp@10.99.99.200`, gateway `REACHABLE`). D5 waits for one pull. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-2-d5-lived |
+| Summary | **Iron `aeb2d79b`, 2026-10-29: ADR-021 D5 lived on one port 4 pull** — `RAYNU-V-AUDIT: HostLinkChanged func=1 up=0 mbps=0` and `up=1 mbps=100` on COM2 and in the Activity host UART ring, under a running Linux guest. D4 / D5 / D6 lived; the wave 2 iron thread is closed, B20 / A3 host-first remain. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. |
-| Gates touched | ADR-021 D4 lived; D5 in flight. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-9-lan`. |
+| Gates touched | ADR-021 D5 lived. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-9-lan`. |
 
 ---
 
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-10-29 | wave-2-d5-lived | 94 | 72 | **Iron `aeb2d79b`: D5 lived on one port 4 pull** — `HostLinkChanged` audit line on COM2 and Activity, down and up, under the running guest. Wave 2 iron thread closed; B20 / A3 host-first remain. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-28 | wave-2-d4-lived | 94 | 72 | **Iron `aeb2d79b`: D4 lived on one quiet boot** — egress port discovered at NIC init and at the arm with no constant on the path, rings armed, `ssh vikkp@10.99.99.200` from the Mac. D5 waits for one pull. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-28 | wave-2-cable-pull-d6 | 94 | 72 | **Iron `8df4407d`: D6 lived on one port 4 cable pull** (guest `NO-CARRIER` / `LOWER_UP`, Overview Port 4 2 changes). D5 audit mirror hushed under Linux, fixed; D4 line not captured. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-27 | wave-2-link-state | 94 | 72 | **Wave 2 packed (D5 + D6 + D4) on `cursor/wave-2-link-state-50bb`.** Link sampler, Overview ports, `HostLinkChanged`, virtio-net `F_STATUS`, egress discovery print. Host only; not lived. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |

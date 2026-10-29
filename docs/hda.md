@@ -1,6 +1,6 @@
 ---
 hda_version: 1
-last_updated: 2026-10-28
+last_updated: 2026-10-29
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-2-d4-lived |
-| Summary | **Iron `aeb2d79b`: one quiet boot, no cable pull. ADR-021 D4 lived.** Nothing on the arm path reads `EGRESS_PHY_MAC`: COM2 `boot: M8.9 egress discovered pci=01:00.01 mac=b0:26:28:5c:5a:39 (SPA partner; no constant)` at NIC init, `(SPA partner; arm)` at the arm, `rings armed pci=01:00.01 phylock=no`, `t10s vtx=10 vrx=50 sent=10 held=0 fcs=0`; `ssh vikkp@10.99.99.200` from the Mac, `enp0s5 UP 10.99.99.200/24`, gateway `10.99.99.1` `REACHABLE`. `free -m` `total 1637` MiB — the kernel's `Memory: 451660K available` line was printk-time accounting, not a loss. **D5 stays in flight:** no pull on this boot, so the no-wait `HostLinkChanged` mirror (`f57bd265`, in this EFI) waits for one. Evidence: [2026-10-28-aeb2d79b-wave-2-d4-discovered-port-ok.md](evidence/r640/2026-10-28-aeb2d79b-wave-2-d4-discovered-port-ok.md). HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-2-d5-lived |
+| Summary | **Iron `aeb2d79b`, 2026-10-29: one port 4 cable pull. ADR-021 D5 lived; the wave 2 iron thread is closed.** Same stick as the D4 boot, fresh guest boot, `:39` armed (`t10s sent=104 held=0 fcs=0`). Pull and replug: COM2 and the Activity `=== host UART ===` ring both show `RAYNU-V-AUDIT: HostLinkChanged func=1 up=0 mbps=0` / `boot: D5 link lom=4 func=1 down`, then `HostLinkChanged func=1 up=1 mbps=100` / `up mbps=100` — the no-wait mirror (`f57bd265`) carried the audit line under a running Linux guest. One down, one up, audit line leading its `boot:` line both times. D4 / D5 / D6 all lived. Wave 2 stays open on B20 and A3 (host-first, no iron). Evidence: [2026-10-29-aeb2d79b-wave-2-d5-audit-on-cable-pull-ok.md](evidence/r640/2026-10-29-aeb2d79b-wave-2-d5-audit-on-cable-pull-ok.md). HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
-| Gates touched | ADR-021 D4 `in flight → lived`. D5 in flight; wave 2 open on D5 (iron) with B20 / A3 host-first. No new iron marker. Rollback `v0.1.0-m8-9-lan`. No doorbell. No format of UBUNTU0. |
+| Gates touched | ADR-021 D5 `in flight → lived`. Wave 2 iron thread closed; B20 / A3 host-first remain. No new iron marker. Rollback `v0.1.0-m8-9-lan`. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
 
 ## Blockers & risks (Everest-relevant)
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-29 | wave-2-d5-lived | 0.0 | 99 | **Iron `aeb2d79b`: D5 lived on one port 4 pull** — `RAYNU-V-AUDIT: HostLinkChanged func=1 up=0 mbps=0` / `up=1 mbps=100` on COM2 and in the Activity host UART ring, each leading its `boot: D5 link` line; the no-wait mirror held under Linux. D4 / D5 / D6 lived: the wave 2 iron thread is closed; B20 / A3 host-first remain before the wave closes. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-28 | wave-2-d4-lived | 0.0 | 99 | **Iron `aeb2d79b`: D4 lived on one quiet boot** — `egress discovered pci=01:00.01 mac=b0:26:28:5c:5a:39 (SPA partner; no constant)` at NIC init and `(SPA partner; arm)` at the arm, `rings armed`, `t10s sent=10 held=0 fcs=0`, `ssh vikkp@10.99.99.200` from the Mac with the gateway `REACHABLE`. `free -m` 1637 MiB; the `Memory:` line was accounting. D5 in flight (no pull); wave 2 open on D5 + B20 / A3. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-28 | wave-2-d4-no-constant | 0.0 | 99 | **D4 code close on `cursor/wave-2-link-state-50bb`: the egress constant gate is gone.** `init_bcm5720` records `guest_egress::discover` from the census (`note_discovered`), `arm_egress` reads `discovered()` back and programs `port.phy_mac`; `port_ok` / `handoff` / `preview_offer` / `StartNic.egress_phy` / `ip_token` / `guest_close::judge` take the discovered MAC. `EGRESS_PHY_MAC` remains only as a mint-collision guard and test fixture. 896 host tests, UEFI build clean. Not lived: one quiet boot (no cable pull) with the guest's lease over the discovered port closes D4. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-28 | wave-2-d4-match-yes | 0.0 | 99 | **Iron `8df4407d`, same boot: D4 discovery lived** — COM2 `egress discovered pci=01:00.01 mac=b0:26:28:5c:5a:39 constant=:39 match=yes` at arm time. D4 stays in flight until the arm uses the discovered port and the constant goes. Scores held. months 0.0 held; overall 99 held |
@@ -1136,7 +1137,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     Wave 2 "The box tells the truth": D6 lived on 8df4407d (cable pull), D4 lived on aeb2d79b (quiet boot, no constant on the arm path). `./tools/sync-sku-site.sh --next` says D5 [iron thread] needs one more port 4 pull on an EFI with f57bd265 (aeb2d79b has it) to show RAYNU-V-AUDIT: HostLinkChanged on COM2 / Activity; host-first B20 / A3. After any F11, Save the vNIC on the Guests row before Start (the NIC record is not on disk). Rollback for a wave 2 flash is v0.1.0-m8-9-lan. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/m8_plan.md.
+Next move:     Wave 2 "The box tells the truth": D6 lived on 8df4407d (cable pull), D4 lived on aeb2d79b (quiet boot), D5 lived on aeb2d79b (2026-10-29 pull, HostLinkChanged on COM2 and Activity). The wave 2 iron thread is closed. `./tools/sync-sku-site.sh --next` says B20 (guest exit/stop reasons on the page) then A3 (build SHA / CI run on the SPA), both host-first; no iron until wave 3. After any F11, Save the vNIC on the Guests row before Start (the NIC record is not on disk). Rollback for a wave 2 flash is v0.1.0-m8-9-lan. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/m8_plan.md.
 Rollback:      M8.9 close: v0.1.0-m8-9-lan → CI 40603110937 / COM2 sha=0d865c7fcb0a / EFI SHA256 df6fc3465cecf1eaf058d5c8e675501827c16eb55e7b2c9758bc5e68326ad91b
 Older M8.8:    v0.1.0-m8-8-ubuntu → CI 38454398693 / COM2 sha=c3a70e623aec / EFI SHA256 08ef31ba87136577102ac378d8e0a512327994e8794c41c64444f5be5f8812c4
 Older SPA:     v0.1.0-m8-perc-spa → CI 36362775808 / COM2 sha=8ad2ac89125e / EFI SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849
