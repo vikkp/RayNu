@@ -227,6 +227,11 @@ pub struct Tls12Listen {
     write_seq: u64,
     ems: bool,
     state: u8,
+    /// Certificate the next ServerHello flight sends. Lab millicert unless
+    /// an operator certificate is saved (ADR-021 E4). Still TLS 1.2.
+    cert: [u8; crate::mgmt::host_cert::CERT_MAX],
+    cert_len: usize,
+    operator_cert: bool,
 }
 
 impl Tls12Listen {
@@ -253,7 +258,11 @@ impl Tls12Listen {
             write_seq: 0,
             ems: false,
             state: ST_CH,
+            cert: [0; crate::mgmt::host_cert::CERT_MAX],
+            cert_len: 0,
+            operator_cert: false,
         };
+        s.apply_identity();
         MixRng.fill_bytes(&mut s.server_random);
         crate::mgmt::host_clock::stamp_server_random(&mut s.server_random);
         s
@@ -282,20 +291,40 @@ impl Tls12Listen {
             write_seq: 0,
             ems: false,
             state: ST_CH,
+            cert: [0; crate::mgmt::host_cert::CERT_MAX],
+            cert_len: 0,
+            operator_cert: false,
         }
     }
 
     pub fn load_lab_material(&mut self) {
-        if self.key.is_none() {
-            self.key = RsaPrivateKey::from_pkcs8_der(LAB_KEY).ok();
-        }
+        self.apply_identity();
         MixRng.fill_bytes(&mut self.server_random);
         crate::mgmt::host_clock::stamp_server_random(&mut self.server_random);
         self.state = ST_CH;
     }
 
+    /// Saved certificate replaces the millicert. TLS 1.2 either way.
+    fn apply_identity(&mut self) {
+        let mut cert = [0u8; crate::mgmt::host_cert::CERT_MAX];
+        if let Some(n) = crate::mgmt::host_cert::copy_cert(&mut cert) {
+            if let Some(key) = crate::mgmt::host_cert::load_key() {
+                self.cert[..n].copy_from_slice(&cert[..n]);
+                self.cert_len = n;
+                self.key = Some(key);
+                self.operator_cert = true;
+                return;
+            }
+        }
+        let n = LAB_CERT.len();
+        self.cert[..n].copy_from_slice(LAB_CERT);
+        self.cert_len = n;
+        self.key = RsaPrivateKey::from_pkcs8_der(LAB_KEY).ok();
+        self.operator_cert = false;
+    }
+
     pub fn reset(&mut self) {
-        let key = self.key.take();
+        self.key = None;
         self.ecdhe = None;
         self.rx_len = 0;
         self.tx_len = 0;
@@ -312,7 +341,7 @@ impl Tls12Listen {
         self.write_seq = 0;
         self.ems = false;
         self.state = ST_CH;
-        self.key = key.or_else(|| RsaPrivateKey::from_pkcs8_der(LAB_KEY).ok());
+        self.apply_identity();
         MixRng.fill_bytes(&mut self.server_random);
         crate::mgmt::host_clock::stamp_server_random(&mut self.server_random);
     }
@@ -621,13 +650,16 @@ impl Tls12Listen {
         }
         self.ecdhe = Some(secret);
 
-        let mut hs = [0u8; 2048];
+        let mut hs = [0u8; 4096];
         let mut n = 0;
         let Some(a) = push_sh(&mut hs[n..], &self.server_random, self.ems) else {
             return false;
         };
         n += a;
-        let Some(b) = push_cert(&mut hs[n..], LAB_CERT) else {
+        if self.cert_len == 0 || self.cert_len > self.cert.len() {
+            return false;
+        }
+        let Some(b) = push_cert(&mut hs[n..], &self.cert[..self.cert_len]) else {
             return false;
         };
         n += b;

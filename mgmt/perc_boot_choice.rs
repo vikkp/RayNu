@@ -601,6 +601,7 @@ fn firmware_wait() {
         crate::mgmt::megaraid::flush_autostart();
         crate::mgmt::megaraid::flush_host_addr();
         crate::mgmt::megaraid::flush_operator();
+        crate::mgmt::megaraid::flush_host_cert();
         let now = crate::arch::cpu::rdtsc();
         let elapsed = (now.wrapping_sub(wait_start) / hz) as u32;
         try_autostart(elapsed);
@@ -876,7 +877,10 @@ mod perc_boot_choice_test {
             .0;
         let nic = body.find("on_accepted_start").expect("nic handoff");
         let boot = body.find("request_installed_boot").expect("boot request");
-        assert!(nic < boot, "the saved address is armed before the guest starts");
+        assert!(
+            nic < boot,
+            "the saved address is armed before the guest starts"
+        );
         assert!(body.contains("boot: B5 autostart nic"));
         assert!(body.contains("boot: B5 autostart nic none"));
     }
