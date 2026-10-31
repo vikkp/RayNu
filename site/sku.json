@@ -20,14 +20,14 @@
   "counts": {
     "S1": {
       "lived": 39,
-      "in flight": 1,
-      "planned": 27,
+      "in flight": 2,
+      "planned": 26,
       "total": 67
     },
     "Final": {
       "lived": 39,
-      "in flight": 1,
-      "planned": 89,
+      "in flight": 2,
+      "planned": 88,
       "total": 129
     }
   },
@@ -601,10 +601,10 @@
         {
           "id": "D9",
           "capability": "Host management address: static IP, gateway, DNS, hostname set from the SPA and persisted",
-          "status": "planned",
+          "status": "in flight",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "DHCP lease only today",
+          "note": "`cursor/wave-4-d9-host-addr-50bb`. Sector `RAYNUHST`, one LBA before autostart. Overview Save address / Use DHCP. The next boot's standing SPA binds that record and prints `boot: D9 host addr static`. An absent sector prints `boot: D9 host addr dhcp` and keeps DHCP. Save does not move the address this boot is already using. Not lived until a later F11 shows the static line and the SPA answers on that address",
           "wave": "4"
         },
         {
@@ -737,14 +737,14 @@
       "counts": {
         "S1": {
           "lived": 8,
-          "in flight": 0,
-          "planned": 3,
+          "in flight": 1,
+          "planned": 2,
           "total": 11
         },
         "Final": {
           "lived": 8,
-          "in flight": 0,
-          "planned": 15,
+          "in flight": 1,
+          "planned": 14,
           "total": 23
         }
       }
@@ -1546,8 +1546,8 @@
       "why": "The first \"walk away from the rack\" moment. Needs wave 3.",
       "counts": {
         "lived": 2,
-        "in flight": 0,
-        "planned": 3,
+        "in flight": 1,
+        "planned": 2,
         "total": 5
       },
       "closed": false
@@ -1855,7 +1855,7 @@
     {
       "id": "D9",
       "capability": "Host management address: static IP, gateway, DNS, hostname set from the SPA and persisted",
-      "status": "planned",
+      "status": "in flight",
       "role": "host-first"
     },
     {

@@ -531,6 +531,24 @@ pub fn handle_http_request(
             return format_http_response(status, "application/json", &body[..len], out);
         }
     }
+    // ADR-021 D9. Overview saves the management address for the next boot.
+    // This listener stays on the address it already bound.
+    match crate::mgmt::host_addr::host_addr_rest(
+        parsed.method,
+        parsed.path,
+        auth_allows(parsed.auth_token),
+    ) {
+        crate::mgmt::host_addr::HostAddrHttp::NotMine => {}
+        crate::mgmt::host_addr::HostAddrHttp::Unauthorized => {
+            return format_http_response(401, "text/plain; charset=utf-8", b"unauthorized", out);
+        }
+        crate::mgmt::host_addr::HostAddrHttp::Bad => {
+            return format_http_response(400, "text/plain; charset=utf-8", b"bad request", out);
+        }
+        crate::mgmt::host_addr::HostAddrHttp::Json { status, len, body } => {
+            return format_http_response(status, "application/json", &body[..len], out);
+        }
+    }
     // SPA Overview: turn this chassis off. 200 is queued here. Firmware
     // coexist drains it, then VMXOFF and ResetSystem. Not a guest command.
     if parsed.path == crate::mgmt::host_power::HOST_POWEROFF_PATH {
