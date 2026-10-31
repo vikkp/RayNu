@@ -19,15 +19,15 @@
   },
   "counts": {
     "S1": {
-      "lived": 42,
+      "lived": 43,
       "in flight": 1,
-      "planned": 24,
+      "planned": 23,
       "total": 67
     },
     "Final": {
-      "lived": 42,
+      "lived": 43,
       "in flight": 1,
-      "planned": 86,
+      "planned": 85,
       "total": 129
     }
   },
@@ -802,10 +802,10 @@
         {
           "id": "E6",
           "capability": "Operator account with password; bring-up latch removed as default",
-          "status": "planned",
+          "status": "lived",
           "ships": "S1",
           "ref": "M8.2",
-          "note": "`raynu-v-bringup` is a lab latch",
+          "note": "Iron `f2828d95d33d` / run `41206547641`. Save: `boot: E6 operator wr lba=6190268907 match` and `RAYNU-V-AUDIT: OperatorAccountSet name_len=5` (name `vikkp`; password not stored or printed). Next F11: `boot: E6 operator rd lba=6190268907 set`. Standing SPA GET with the lab token: `RAYNU-V-AUDIT: AuthDenied method_tag=1`. Sign in then opened the page (`Operator: vikkp`, host answering). The ESP probe still prints `boot: E4 auth: bring-up token (lab; no auth.token)` because that file is absent. Evidence `docs/evidence/r640/2026-10-31-f2828d95-wave-5-e6-operator-ok.md`. Wave 5 stays open",
           "wave": "5"
         },
         {
@@ -910,15 +910,15 @@
       ],
       "counts": {
         "S1": {
-          "lived": 3,
+          "lived": 4,
           "in flight": 1,
-          "planned": 5,
+          "planned": 4,
           "total": 9
         },
         "Final": {
-          "lived": 3,
+          "lived": 4,
           "in flight": 1,
-          "planned": 13,
+          "planned": 12,
           "total": 17
         }
       }
@@ -1565,9 +1565,9 @@
       "iron": "E6",
       "why": "Security and audit together; what diligence asks for first. Host-heavy, overlaps wave 4 iron time.",
       "counts": {
-        "lived": 0,
+        "lived": 1,
         "in flight": 0,
-        "planned": 5,
+        "planned": 4,
         "total": 5
       },
       "closed": false
@@ -1852,12 +1852,6 @@
   ],
   "current_wave": "5",
   "next_up": [
-    {
-      "id": "E6",
-      "capability": "Operator account with password; bring-up latch removed as default",
-      "status": "planned",
-      "role": "iron thread"
-    },
     {
       "id": "E4",
       "capability": "Operator-supplied certificate and key (upload or ACME); TLS 1.3",

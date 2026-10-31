@@ -90,6 +90,14 @@ input.token{min-width:12rem}
 <button class="ghost" id="btn-host-dhcp" type="button">Use DHCP</button>
 </div>
 <p class="note" id="host-addr-note">Used on the next boot. This page stays on the address it already has.</p>
+<p class="note" id="op-line">Operator: checking</p>
+<div class="toolbar" id="op-box">
+<label>Name <input id="op-name" maxlength="32" autocomplete="username"/></label>
+<label>Password <input id="op-pass" type="password" maxlength="64" autocomplete="current-password"/></label>
+<button class="pri" id="btn-op-login" type="button">Sign in</button>
+<button class="ghost" id="btn-op-save" type="button">Save account</button>
+</div>
+<p class="note" id="op-note">A saved account replaces raynu-v-bringup. The password is the next boot's login.</p>
 <div id="ports" class="empty">Ports: no link sample yet.</div>
 </section>
 <section class="pg" data-pg="guests">
@@ -359,13 +367,17 @@ document.getElementById("btn-poweroff").onclick=powerOff;
 document.getElementById("btn-panic").onclick=panicDump;
 document.getElementById("btn-host-addr").onclick=saveHostAddr;
 document.getElementById("btn-host-dhcp").onclick=clearHostAddr;
+document.getElementById("btn-op-login").onclick=function(){postOp("/auth/login")};
+document.getElementById("btn-op-save").onclick=function(){postOp("/auth/operator")};
 document.getElementById("btn-vnic-x").onclick=closeVnic;
 document.getElementById("btn-nic").onclick=saveNic;
 document.getElementById("btn-det").onclick=detachNic;
 document.getElementById("btn-dhcp").onclick=async function(){if(up||!vnicVm)return;const off=String(nicOff(vnicVm));setS("DHCP…");const res=await api("POST","/perc/nic/"+off+"/dhcp");let j=null;try{j=await res.json()}catch(e){}if(j&&j.ip){document.getElementById("n-ip").value=j.ip;document.getElementById("n-px").value=j.px;document.getElementById("n-gw").value=j.gw||"";document.getElementById("n-dns").value=j.dns||"";document.getElementById("n-mode").value="d";if(j.mac)document.getElementById("n-mac").textContent=j.mac;setS("Offer filled")}else setS("No offer")};
 document.getElementById("g-keys").onkeydown=function(e){if(e.key==="Enter"){e.preventDefault();sendKeys()}};
 window.raynuWebUi={listVms:listVms,startVm:startVm,stopVm:stopVm,createVm:createVm,listImages:listImages,refreshLogs:refreshLogs,sendKeys:sendKeys,powerOff:powerOff,loadSpare:loadSpare};
-dot("hv","ok","Hypervisor is running");listVms();loadSpare();loadHostAddr();loadClock();setInterval(listVms,30000);setInterval(loadSpare,2000);setInterval(loadHostAddr,2000);setInterval(loadClock,2000);setInterval(function(){if(document.querySelector('.pg.on[data-pg="activity"]'))refreshLogs()},2000);
+async function loadOp(){let r;try{r=await fetch("/auth/operator")}catch(e){return}if(!r.ok)return;let j=null;try{j=await r.json()}catch(e){return}const line=document.getElementById("op-line");if(!line||!j)return;if(j.set){line.textContent="Operator: "+j.name;if((T.value||"")===def()){T.value="";saveT("")}}else line.textContent="Operator: none yet"}
+async function postOp(path){const name=document.getElementById("op-name").value;const pass=document.getElementById("op-pass").value;if(!name||!pass){setS("Name and password");return}const headers={};if(path==="/auth/operator")headers.Authorization=auth();let res;try{res=await fetch(path,{method:"POST",headers:headers,body:name+"\n"+pass})}catch(e){setS("Account dropped");return}let j=null;try{j=await res.json()}catch(e){}if(res.ok&&j&&j.token){T.value=j.token;saveT(j.token);document.getElementById("op-pass").value="";setS(path==="/auth/login"?"Signed in":"Account saved")}else setS(res.status===401?"Sign-in refused":"Account refused ("+res.status+")");loadOp()}
+dot("hv","ok","Hypervisor is running");listVms();loadSpare();loadHostAddr();loadClock();loadOp();setInterval(listVms,30000);setInterval(loadSpare,2000);setInterval(loadHostAddr,2000);setInterval(loadClock,2000);setInterval(loadOp,2000);setInterval(function(){if(document.querySelector('.pg.on[data-pg="activity"]'))refreshLogs()},2000);
 })();
 </script>
 </body>

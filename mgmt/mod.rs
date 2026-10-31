@@ -348,6 +348,7 @@ pub mod host_nic_coexist;
 pub mod host_nic_listen;
 pub mod host_nic_poll;
 pub mod host_panic;
+pub mod operator;
 pub mod host_power;
 pub mod http;
 pub mod http_listen;

@@ -420,6 +420,11 @@ pub enum AuditEvent {
         mode: u8,
         prefix: u8,
     },
+    /// SPA saved an operator account (ADR-021 E6). `name_len` is the
+    /// name's byte length. The password and its hash are not in the event.
+    OperatorAccountSet {
+        name_len: u8,
+    },
 }
 
 /// One sealed audit record in the hash chain.
@@ -665,6 +670,7 @@ pub(crate) fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::GuestNicDetached { .. } => 77,
         AuditEvent::HostLinkChanged { .. } => 78,
         AuditEvent::HostAddrSaved { .. } => 79,
+        AuditEvent::OperatorAccountSet { .. } => 80,
     }
 }
 
@@ -1227,6 +1233,11 @@ fn mirror_audit_to_com1(event: AuditEvent) {
             write_u32_nowait(u32::from(mode));
             serial::write_str_nowait(" prefix=");
             write_u32_nowait(u32::from(prefix));
+            serial::write_byte_nowait(b'\n');
+        }
+        AuditEvent::OperatorAccountSet { name_len } => {
+            serial::write_str_nowait("RAYNU-V-AUDIT: OperatorAccountSet name_len=");
+            write_u32_nowait(u32::from(name_len));
             serial::write_byte_nowait(b'\n');
         }
         AuditEvent::FrameAllocated { .. } | AuditEvent::FrameFreed { .. } => {}
