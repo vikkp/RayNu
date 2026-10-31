@@ -255,6 +255,7 @@ impl Tls12Listen {
             state: ST_CH,
         };
         MixRng.fill_bytes(&mut s.server_random);
+        crate::mgmt::host_clock::stamp_server_random(&mut s.server_random);
         s
     }
 
@@ -289,6 +290,7 @@ impl Tls12Listen {
             self.key = RsaPrivateKey::from_pkcs8_der(LAB_KEY).ok();
         }
         MixRng.fill_bytes(&mut self.server_random);
+        crate::mgmt::host_clock::stamp_server_random(&mut self.server_random);
         self.state = ST_CH;
     }
 
@@ -312,6 +314,7 @@ impl Tls12Listen {
         self.state = ST_CH;
         self.key = key.or_else(|| RsaPrivateKey::from_pkcs8_der(LAB_KEY).ok());
         MixRng.fill_bytes(&mut self.server_random);
+        crate::mgmt::host_clock::stamp_server_random(&mut self.server_random);
     }
 
     pub fn feed_tcp(&mut self, chunk: &[u8]) -> usize {

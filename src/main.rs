@@ -1150,3 +1150,8 @@ fn write_hex(mut n: u64) {
         boot::serial::write_byte(b);
     }
 }
+
+#[panic_handler]
+fn raynu_panic(info: &core::panic::PanicInfo) -> ! {
+    r640_hypervisor::mgmt::host_panic::firmware_panic(info)
+}

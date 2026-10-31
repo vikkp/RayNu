@@ -340,12 +340,14 @@ pub mod guest_power;
 pub mod guest_stop;
 pub mod ha;
 pub mod host_addr;
+pub mod host_clock;
 pub mod host_link;
 pub mod host_nic;
 pub mod host_nic_coexist;
 #[cfg(feature = "uefi-bin")]
 pub mod host_nic_listen;
 pub mod host_nic_poll;
+pub mod host_panic;
 pub mod host_power;
 pub mod http;
 pub mod http_listen;

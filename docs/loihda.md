@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-4-d9-lived |
-| Summary | **Iron `5d09631e`: ADR-021 D9 lived.** The saved address came back on the next F11 and the standing SPA listened on `10.99.99.146`. Wave 4 stays open on D10. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-4-h2-lived |
+| Summary | **Iron `11688cbf`: ADR-021 H2 lived. Wave 4 closed.** Panic dump reset the chassis. The next F11 started the guest with no click. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. |
-| Gates touched | ADR-021 D9 lived. Wave 4 stays open on D10 and H2. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-9-lan`. |
+| Gates touched | ADR-021 H2 lived. Wave 4 closed. Next wave is 5, E6. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-9-lan`. |
 
 ---
 
@@ -219,6 +219,9 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-10-31 | wave-4-h2-lived | 94 | 72 | **Iron `11688cbf`: H2 lived. Wave 4 closed.** Panic dump reset the chassis. Next F11, no click: `start off=19327352832`, `raynusrv2 login:`. Current wave → 5. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
+| 2026-10-31 | wave-4-d10-lived | 94 | 72 | **Iron `11688cbf`: D10 lived.** `unix=1793452595` is 2026-10-31 08:16 CT. H2 stays in flight. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
+| 2026-10-31 | wave-4-d10-h2 | 94 | 72 | **D10 and H2 in flight.** SNTP query and a COM2 panic dump that cold-resets. Not lived. D9 stays lived. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-31 | wave-4-d9-lived | 94 | 72 | **Iron `5d09631e`: D9 lived.** `rd lba=6190268908 static`, `boot: D9 host addr static 10.99.99.146/24`, standing SPA on that address. Wave 4 stays open on D10. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-31 | wave-4-d9-host-addr | 94 | 72 | **D9 in flight.** Overview can save a static management address on the spare. The next boot binds it. This boot stays on DHCP. Not lived. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-29 | wave-4-b4-lived | 94 | 72 | **Iron `62165436`: B4 lived.** Shut down: `boot: B4 power off` after `reboot: Power down`. Reboot: `boot: B4 power cycle`, `src=acpi`, then `raynusrv2 login:`. Wave 4 stays open on D9. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
@@ -432,7 +435,7 @@ LOI:           NOT OPEN. Tracker born 2026-09-14.
 Bar A:         94% · 0.25 months · dedicated-box non-prod
 Bar B:         72% · 1.25 months · Ubuntu login on a 10 GiB spare tail (c3a70e62) with a LAN address from the SPA (0d865c7f); whole VD still hidden
 Overall:       80% · confidence medium
-NOW:           SKU card is what a signature holds today. One dedicated box. Ubuntu on a 10 GiB tail. M8.9 closed on 0d865c7f: the guest took the SPA-saved address by itself and SSH from the LAN reached raynusrv2. Pinned as v0.1.0-m8-9-lan (not Latest). Wave 4 is current. B5 lived on e6ed42a3. B4 lived on 62165436. D9 lived on 5d09631e: the next F11 bound 10.99.99.146/24 from the spare. Next is D10. Do not format UBUNTU0. The 2.9 TB VD is not this disk. A5 parked. Bar A 94. Bar B 72. Overall 80. perc 86. unmodified 45. SKU 94. months A 0.25. months B 1.25. docs/adr/ADR-019.md
+NOW:           SKU card is what a signature holds today. One dedicated box. Ubuntu on a 10 GiB tail. M8.9 closed on 0d865c7f: the guest took the SPA-saved address by itself and SSH from the LAN reached raynusrv2. Pinned as v0.1.0-m8-9-lan (not Latest). Wave 4 closed on 11688cbf: autostart, ACPI power, static 10.99.99.146, host clock, and a panic dump whose next F11 started the guest with no click. Current wave is 5, E6 operator account. Do not format UBUNTU0. The 2.9 TB VD is not this disk. A5 parked. Bar A 94. Bar B 72. Overall 80. perc 86. unmodified 45. SKU 94. months A 0.25. months B 1.25. docs/adr/ADR-019.md
 Open:          link state on the SPA (D5) · iron AUTH-OK (parked) · unmodified ISO without the serial amendment · the whole spare VD · cluster
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
 Rollback:      v0.1.0-m8-9-lan → M8.9 close (COM2 sha=0d865c7fcb0a, CI 40603110937, SHA256 df6fc3465cecf1eaf058d5c8e675501827c16eb55e7b2c9758bc5e68326ad91b). v0.1.0-m8-8-ubuntu → older M8.8 close (c3a70e623aec, CI 38454398693). v0.1.0-m8-perc-spa → older SPA choice (8ad2ac89125e, CI 36362775808). v0.1.0-m8-a4s → older standing SPA (1f33eeda72f9, CI 36137732145). v0.1.0-m8-a6 → keyboard + power-off (fd2ca12e, CI 36166108942), not Latest. Everest Latest stays v0.1.0-everest-closed (f72b4276).

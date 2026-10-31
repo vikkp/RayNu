@@ -6,12 +6,12 @@
     <title>RayNu-V — Single-binary hypervisor, designed for proof</title>
     <meta
       name="description"
-      content="RayNu-V is a single-binary Type-1 hypervisor. Mount Everest closed on a real PowerEdge R640. An Ubuntu 26.04 ISO stored on the PERC spare installed and reached vikkp@raynusrv2. M8.9: that guest has a LAN on LOM port 4 and took an SSH login from another machine (0d865c7f). ADR-021 wave 2: a pulled cable shows in the guest, the egress port is discovered, a link change is audited on the page (aeb2d79b)."
+      content="RayNu-V is a single-binary Type-1 hypervisor. Mount Everest closed on a real PowerEdge R640. An Ubuntu 26.04 ISO stored on the PERC spare installed and reached vikkp@raynusrv2. M8.9: that guest has a LAN on LOM port 4 and took an SSH login from another machine (0d865c7f). ADR-021 wave 4: unattended start, ACPI power, a saved SPA address, and a host clock at 2026-10-31 08:16 CT (11688cbf)."
     />
     <meta property="og:title" content="RayNu-V — Ubuntu logged in from the PERC spare" />
     <meta
       property="og:description"
-      content="Everest closed on a real R640. Ubuntu 26.04 from a library ISO on the PERC spare reached vikkp@raynusrv2. Clear ISO wiped the signature sector only. M8.9: the guest has a LAN on port 4 with the SPA-saved address; SSH from another machine lived on 0d865c7f. Wave 2: cable pull seen, egress port discovered, link change audited (aeb2d79b)."
+      content="Everest closed on a real R640. Ubuntu 26.04 from a library ISO on the PERC spare reached vikkp@raynusrv2. M8.9 closed on 0d865c7f. Wave 4: unattended start, ACPI shutdown and reboot, and a saved host address 10.99.99.146 on the next boot (5d09631e)."
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://raynuv.com/" />
@@ -33,7 +33,7 @@
     />
     <meta
       name="twitter:description"
-      content="Everest closed. Ubuntu 26.04 on a 10 GiB PERC tail reached vikkp@raynusrv2. M8.9 closed: guest LAN on port 4 with the SPA-saved address, SSH from another machine (0d865c7f). Wave 2 iron: cable pull seen in the guest, egress port discovered, link change audited (aeb2d79b). The 2.9 TB VD is not that disk."
+      content="Everest closed. Ubuntu 26.04 on a 10 GiB PERC tail reached vikkp@raynusrv2. M8.9 closed (0d865c7f). Wave 4 so far: the guest starts with no click, ACPI Shut down and Reboot, and the SPA stays on a saved address (5d09631e). The 2.9 TB VD is not that disk."
     />
     <meta name="twitter:image" content="https://raynuv.com/assets/hero.jpg" />
     <link rel="canonical" href="https://raynuv.com/" />
@@ -156,8 +156,7 @@
             <code>boot: M8.8 library ISO cleared</code> — the signature
             sector only. UBUNTU0 and the Ubuntu disk stayed.
             Mount Everest, the Alpine install loop of 11 September, stays
-            closed on <code>f72b4276</code>. Next is
-            <strong>M8.9</strong>, in the same kind of stages as M8.8.
+            closed on <code>f72b4276</code>.
             On <code>02e0acba</code> (27 October) that guest got a virtio NIC
             on LOM port 4 (<code>:39</code>): frames left and returned
             (<code>sent=29983 held=0</code>, 411 MB in, <code>fcs=0</code>),
@@ -173,7 +172,19 @@
             the SPA's own BCM5720 (no MAC constant) and the Mac logged in
             over it, and a second pull put
             <code>RAYNU-V-AUDIT: HostLinkChanged</code> on COM2 and on the
-            Activity page. The 2.9 TB virtual disk is not this 10 GiB tail.
+            Activity page. ADR-021 wave 4 is the unattended box. On
+            <code>e6ed42a3</code> the Ubuntu guest started after a power-on
+            with no SPA click. On <code>62165436</code> Shut down left it
+            down and Reboot brought <code>raynusrv2 login:</code> back. On
+            <code>5d09631e</code> Overview saved
+            <code>10.99.99.146/24</code> and the next boot's standing SPA
+            listened there (<code>boot: D9 host addr static</code>). On
+            <code>11688cbf</code> the host clock read
+            <code>unix=1793452595</code> (2026-10-31 08:16 CT) from
+            <code>162.159.200.123</code>. On the same stick a panic dump
+            reset the chassis, and the next boot started the Ubuntu guest
+            with no click. Wave 4 is closed.
+            The 2.9 TB virtual disk is not this 10 GiB tail.
             Auth is still open.
             Summit rollback remains
             <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed"

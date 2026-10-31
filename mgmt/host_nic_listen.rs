@@ -46,7 +46,7 @@ use crate::mgmt::tls_coexist::{http_request_wants_close, COEXIST_HTTP_OUT_N, COE
 use core::mem::MaybeUninit;
 use smoltcp::iface::{Config, Interface, SocketHandle, SocketSet, SocketStorage};
 use smoltcp::phy::Device;
-use smoltcp::socket::{dhcpv4, tcp};
+use smoltcp::socket::{dhcpv4, tcp, udp};
 use smoltcp::time::Instant;
 use smoltcp::wire::{EthernetAddress, IpAddress, IpCidr, Ipv4Address};
 
@@ -58,7 +58,12 @@ static mut MGMT_ARENA: MgmtArena = MgmtArena::new();
 static mut COEXIST_ARMED: bool = false;
 static mut COEXIST_DEVICE: MaybeUninit<Bcm5720Device> = MaybeUninit::uninit();
 static mut COEXIST_IFACE: MaybeUninit<Interface> = MaybeUninit::uninit();
-static mut COEXIST_SOCK_STORAGE: [SocketStorage<'static>; 1] = [SocketStorage::EMPTY; 1];
+static mut COEXIST_SOCK_STORAGE: [SocketStorage<'static>; 2] = [SocketStorage::EMPTY; 2];
+static mut COEXIST_UDP_RX_META: [udp::PacketMetadata; 2] = [udp::PacketMetadata::EMPTY; 2];
+static mut COEXIST_UDP_RX_BUF: [u8; 128] = [0; 128];
+static mut COEXIST_UDP_TX_META: [udp::PacketMetadata; 2] = [udp::PacketMetadata::EMPTY; 2];
+static mut COEXIST_UDP_TX_BUF: [u8; 128] = [0; 128];
+static mut COEXIST_UDP_HANDLE: Option<SocketHandle> = None;
 static mut COEXIST_SOCKETS: MaybeUninit<SocketSet<'static>> = MaybeUninit::uninit();
 static mut COEXIST_TCP_HANDLE: MaybeUninit<SocketHandle> = MaybeUninit::uninit();
 static mut COEXIST_TCP_RX: [u8; COEXIST_TCP_RX_N] = [0; COEXIST_TCP_RX_N];
@@ -88,6 +93,10 @@ static mut COEXIST_PENDING_POWEROFF: bool = false;
 static mut COEXIST_POWEROFF_ARMED_AT_MS: i64 = 0;
 /// `millis` when the power-off TX queue first read empty. 0 = not yet.
 static mut COEXIST_POWEROFF_EMPTY_AT_MS: i64 = 0;
+/// SPA `POST /host/panic` accepted. Drain the 200, then VMXOFF + cold reset.
+static mut COEXIST_PENDING_PANIC: bool = false;
+static mut COEXIST_PANIC_ARMED_AT_MS: i64 = 0;
+static mut COEXIST_PANIC_EMPTY_AT_MS: i64 = 0;
 /// Last TSC we polled the standing SPA (RayNu-F / USB waits).
 static mut LAST_SPA_TICK_TSC: u64 = 0;
 
@@ -349,6 +358,24 @@ pub fn arm_bcm5720_coexist() -> bool {
             serial::write_line("boot: WARN — HOST-NIC coexist skip (tcp bind)");
             return false;
         }
+        let udp_sock = udp::Socket::new(
+            udp::PacketBuffer::new(
+                (&mut *core::ptr::addr_of_mut!(COEXIST_UDP_RX_META)).as_mut_slice(),
+                (&mut *core::ptr::addr_of_mut!(COEXIST_UDP_RX_BUF)).as_mut_slice(),
+            ),
+            udp::PacketBuffer::new(
+                (&mut *core::ptr::addr_of_mut!(COEXIST_UDP_TX_META)).as_mut_slice(),
+                (&mut *core::ptr::addr_of_mut!(COEXIST_UDP_TX_BUF)).as_mut_slice(),
+            ),
+        );
+        let udp_handle = sockets.add(udp_sock);
+        if sockets
+            .get_mut::<udp::Socket>(udp_handle)
+            .bind(12345u16)
+            .is_ok()
+        {
+            COEXIST_UDP_HANDLE = Some(udp_handle);
+        }
         COEXIST_DEVICE.write(device);
         COEXIST_IFACE.write(iface);
         COEXIST_SOCKETS.write(sockets);
@@ -364,6 +391,9 @@ pub fn arm_bcm5720_coexist() -> bool {
         COEXIST_PENDING_POWEROFF = false;
         COEXIST_POWEROFF_ARMED_AT_MS = 0;
         COEXIST_POWEROFF_EMPTY_AT_MS = 0;
+        COEXIST_PENDING_PANIC = false;
+        COEXIST_PANIC_ARMED_AT_MS = 0;
+        COEXIST_PANIC_EMPTY_AT_MS = 0;
         tls_session().reset();
         COEXIST_LAST_DIAG = 0;
         COEXIST_LAST_RX_DROP = 0;
@@ -426,6 +456,51 @@ pub fn maybe_tick_bcm5720_standing_spa() {
     tick_bcm5720_coexist();
 }
 
+/// One SNTP query after the SPA is up. A reply sets the host clock.
+/// Eight seconds with no reply prints `boot: D10 ntp none` and stops.
+fn d10_ntp_tick(sockets: &mut SocketSet, millis: i64) {
+    use core::sync::atomic::{AtomicBool, Ordering};
+    static SENT: AtomicBool = AtomicBool::new(false);
+    static DONE: AtomicBool = AtomicBool::new(false);
+    if DONE.load(Ordering::Acquire) {
+        return;
+    }
+    let Some(handle) = (unsafe { COEXIST_UDP_HANDLE }) else {
+        if !DONE.swap(true, Ordering::AcqRel) {
+            serial::write_line_nowait("boot: D10 ntp none");
+        }
+        return;
+    };
+    let sock = sockets.get_mut::<udp::Socket>(handle);
+    if !SENT.load(Ordering::Acquire) {
+        let mut req = [0u8; 48];
+        crate::mgmt::host_clock::encode_request(&mut req);
+        let server = crate::mgmt::host_clock::NTP_SERVER;
+        let ip = Ipv4Address::new(server[0], server[1], server[2], server[3]);
+        let ep = smoltcp::wire::IpEndpoint::new(IpAddress::Ipv4(ip), 123);
+        if sock.send_slice(&req, ep).is_ok() {
+            SENT.store(true, Ordering::Release);
+            serial::write_line_nowait("boot: D10 ntp query 162.159.200.123");
+        }
+        return;
+    }
+    if let Ok((data, _)) = sock.recv() {
+        if let Some(unix) = crate::mgmt::host_clock::decode_reply(data) {
+            crate::mgmt::host_clock::note_sync(unix);
+            serial::write_str_nowait("boot: D10 ntp 162.159.200.123 unix=");
+            let mut buf = [0u8; 20];
+            let n = crate::mgmt::host_clock::fmt_u64(unix, &mut buf);
+            serial::write_str_nowait(core::str::from_utf8(&buf[..n]).unwrap_or("0"));
+            serial::write_line_nowait("");
+            DONE.store(true, Ordering::Release);
+            return;
+        }
+    }
+    if millis > 8_000 && !DONE.swap(true, Ordering::AcqRel) {
+        serial::write_line_nowait("boot: D10 ntp none");
+    }
+}
+
 /// One scheduler-quantum NIC/HTTP step. No-op if not armed. Does not spin.
 pub fn tick_bcm5720_coexist() {
     if !unsafe { COEXIST_ARMED } {
@@ -457,8 +532,34 @@ pub fn tick_bcm5720_coexist() {
                 smoltcp::iface::PollResult::SocketStateChanged
             )
         });
+        d10_ntp_tick(sockets, millis);
 
         let mut skip_accept = false;
+        if COEXIST_PENDING_PANIC {
+            let _ = iface.poll(Instant::from_millis(millis + 1), device, sockets);
+            let queued = sockets.get::<tcp::Socket>(tcp_handle).send_queue();
+            let armed_for = millis.saturating_sub(COEXIST_PANIC_ARMED_AT_MS);
+            if queued == 0 {
+                if COEXIST_PANIC_EMPTY_AT_MS == 0 {
+                    COEXIST_PANIC_EMPTY_AT_MS = millis;
+                }
+            } else {
+                COEXIST_PANIC_EMPTY_AT_MS = 0;
+            }
+            let drained = COEXIST_PANIC_EMPTY_AT_MS != 0
+                && millis.saturating_sub(COEXIST_PANIC_EMPTY_AT_MS) >= 8;
+            let forced = armed_for >= 2000;
+            if drained || forced {
+                // H2: reboot_after_dump does ResetType::COLD after VMXOFF.
+                if !crate::mgmt::host_panic::reboot_after_dump("spa") {
+                    COEXIST_PENDING_PANIC = false;
+                    COEXIST_PANIC_ARMED_AT_MS = 0;
+                    COEXIST_PANIC_EMPTY_AT_MS = 0;
+                    crate::mgmt::host_panic::clear_request();
+                }
+            }
+            skip_accept = true;
+        }
         if COEXIST_PENDING_POWEROFF {
             let _ = iface.poll(Instant::from_millis(millis + 1), device, sockets);
             let queued = sockets.get::<tcp::Socket>(tcp_handle).send_queue();
@@ -619,6 +720,7 @@ pub fn tick_bcm5720_coexist() {
         if COEXIST_KEPT
             && !COEXIST_PENDING_CLOSE
             && !COEXIST_PENDING_POWEROFF
+            && !COEXIST_PENDING_PANIC
             && !did_keepalive
             && coexist_keepalive_idle(millis, COEXIST_LAST_HTTP_MS, COEXIST_KEEPALIVE_IDLE_MS)
         {
@@ -643,6 +745,12 @@ pub fn tick_bcm5720_coexist() {
                 COEXIST_POWEROFF_EMPTY_AT_MS = 0;
                 do_close = false;
             }
+            if crate::mgmt::host_panic::requested() {
+                COEXIST_PENDING_PANIC = true;
+                COEXIST_PANIC_ARMED_AT_MS = millis;
+                COEXIST_PANIC_EMPTY_AT_MS = 0;
+                do_close = false;
+            }
             let _ = iface.poll(Instant::from_millis(millis + 1), device, sockets);
             if !library_exchange && !guest_console {
                 pci_census::print_host_nic_exchange_ok_marker();
@@ -651,7 +759,7 @@ pub fn tick_bcm5720_coexist() {
         if did_keepalive && !library_exchange && !guest_console {
             serial::write_line_nowait("boot: HOST-NIC HTTP keep-alive");
         }
-        if do_close && !COEXIST_PENDING_POWEROFF {
+        if do_close && !COEXIST_PENDING_POWEROFF && !COEXIST_PENDING_PANIC {
             // Connection: close, peer FIN after a reply, or 10 min idle.
             // abort() without drain RSTs Firefox nssFailure2 (MAC of last
             // TLS record). close() after drain left FIN_WAIT on the only
