@@ -20,14 +20,14 @@
   "counts": {
     "S1": {
       "lived": 42,
-      "in flight": 1,
-      "planned": 24,
+      "in flight": 2,
+      "planned": 23,
       "total": 67
     },
     "Final": {
       "lived": 42,
-      "in flight": 1,
-      "planned": 86,
+      "in flight": 2,
+      "planned": 85,
       "total": 129
     }
   },
@@ -802,10 +802,10 @@
         {
           "id": "E6",
           "capability": "Operator account with password; bring-up latch removed as default",
-          "status": "planned",
+          "status": "in flight",
           "ships": "S1",
           "ref": "M8.2",
-          "note": "`raynu-v-bringup` is a lab latch",
+          "note": "`cursor/wave-5-e6-operator-50bb`. Overview Save account writes `RAYNUOPR` one LBA before the host-address sector (name, salt, SHA-256; the password is not stored). Until that sector exists, `raynu-v-bringup` still opens the page. After it is saved, the latch is refused and Sign in returns a session. Not lived until a boot prints `boot: E6 operator rd` `set` and the latch is refused",
           "wave": "5"
         },
         {
@@ -911,14 +911,14 @@
       "counts": {
         "S1": {
           "lived": 3,
-          "in flight": 1,
-          "planned": 5,
+          "in flight": 2,
+          "planned": 4,
           "total": 9
         },
         "Final": {
           "lived": 3,
-          "in flight": 1,
-          "planned": 13,
+          "in flight": 2,
+          "planned": 12,
           "total": 17
         }
       }
@@ -1566,8 +1566,8 @@
       "why": "Security and audit together; what diligence asks for first. Host-heavy, overlaps wave 4 iron time.",
       "counts": {
         "lived": 0,
-        "in flight": 0,
-        "planned": 5,
+        "in flight": 1,
+        "planned": 4,
         "total": 5
       },
       "closed": false
@@ -1855,7 +1855,7 @@
     {
       "id": "E6",
       "capability": "Operator account with password; bring-up latch removed as default",
-      "status": "planned",
+      "status": "in flight",
       "role": "iron thread"
     },
     {
