@@ -191,6 +191,13 @@ fn dsdt_byte(off: u16) -> u8 {
     DSDT_AML.get(off as usize).copied().unwrap_or(0)
 }
 
+/// AML body of the fw_cfg DSDT (`Scope(\_SB) { Device(PCI0) ... }`).
+/// Slot 2 INTA is GSI 17 and slot 3 INTA is GSI 18. The RayNu-F RSDP
+/// patches those to PIC IRQ 11. This table stays the IOAPIC routing.
+pub fn dsdt_aml_body() -> &'static [u8] {
+    &DSDT_AML[36..]
+}
+
 /// ACPI 1.0 FACS. No SDT checksum (offset 8 is hardware_signature).
 /// FADT FACS. Not `ISO-INSTALL-OK`.
 fn facs_byte(off: u16) -> u8 {

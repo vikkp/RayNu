@@ -19,15 +19,15 @@
   },
   "counts": {
     "S1": {
-      "lived": 38,
+      "lived": 39,
       "in flight": 1,
-      "planned": 28,
+      "planned": 27,
       "total": 67
     },
     "Final": {
-      "lived": 38,
+      "lived": 39,
       "in flight": 1,
-      "planned": 90,
+      "planned": 89,
       "total": 129
     }
   },
@@ -181,10 +181,10 @@
         {
           "id": "B4",
           "capability": "Clean shutdown and reboot from the SPA (ACPI power button), Stop as the hard fallback",
-          "status": "planned",
+          "status": "lived",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Stop kills the guest today",
+          "note": "Iron `621654369b68` / run `40958321431`. `boot: B4 acpi rsdp gpa=0x804000 (power button and PCI0 IRQ 11; no MADT)`. Shut down: `boot: B4 sci`, `systemd-poweroff.service`, `reboot: Power down`, `boot: B4 power off`; the guest stayed down. Reboot on a later F11 of the same stick: `boot: B4 sci`, `reboot: Power down`, `boot: B4 power cycle`, `guest reset requested src=acpi n=1`, then `raynusrv2 login:` again. Stop was not the path. `84ad5422` had no `PCI0` and the initrd never saw `vda`. Evidence `docs/evidence/r640/2026-10-29-62165436-wave-4-b4-power-ok.md`. Wave 4 stays open on D9",
           "wave": "4"
         },
         {
@@ -334,15 +334,15 @@
       ],
       "counts": {
         "S1": {
-          "lived": 5,
+          "lived": 6,
           "in flight": 0,
-          "planned": 5,
+          "planned": 4,
           "total": 10
         },
         "Final": {
-          "lived": 5,
+          "lived": 6,
           "in flight": 0,
-          "planned": 15,
+          "planned": 14,
           "total": 20
         }
       }
@@ -1545,9 +1545,9 @@
       "iron": "B5",
       "why": "The first \"walk away from the rack\" moment. Needs wave 3.",
       "counts": {
-        "lived": 1,
+        "lived": 2,
         "in flight": 0,
-        "planned": 4,
+        "planned": 3,
         "total": 5
       },
       "closed": false
@@ -1852,12 +1852,6 @@
   ],
   "current_wave": "4",
   "next_up": [
-    {
-      "id": "B4",
-      "capability": "Clean shutdown and reboot from the SPA (ACPI power button), Stop as the hard fallback",
-      "status": "planned",
-      "role": "host-first"
-    },
     {
       "id": "D9",
       "capability": "Host management address: static IP, gateway, DNS, hostname set from the SPA and persisted",
