@@ -183,9 +183,12 @@
             <code>unix=1793452595</code> (2026-10-31 08:16 CT) from
             <code>162.159.200.123</code>. On the same stick a panic dump
             reset the chassis, and the next boot started the Ubuntu guest
-            with no click. Wave 4 is closed.
+            with no click. Wave 4 is closed. On
+            <code>f2828d95</code> the next boot read
+            <code>boot: E6 operator rd lba=6190268907 set</code>, a lab-token
+            GET was <code>AuthDenied</code>, and Sign in opened the page.
             The 2.9 TB virtual disk is not this 10 GiB tail.
-            Auth is still open.
+            Roles and the PRE-EBS window are still open.
             Summit rollback remains
             <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed"
               ><code>v0.1.0-everest-closed</code></a
@@ -948,7 +951,8 @@ boot: M8.8 library ISO cleared (signature sector only; disks unchanged)</code></
             <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code> (E5 + Phase B, 2026-09-11).
             M8 TLS and USB persist are closed on COM2. Ubuntu 26.04 then
             logged in from a 10 GiB PERC tail. M8.9: that guest has a LAN on port 4 with the SPA-saved address and took SSH from another machine (0d865c7f). ADR-021 wave 2 iron: cable pull seen in the guest, egress port discovered, link change audited on the page (aeb2d79b).
-            Auth is still open. See
+            An operator password is the standing login on
+            <code>f2828d95</code>. Roles are still open. See
             <a href="hda.html">HDA</a> and <a href="loi.html">LOI</a>.
           </p>
           <pre class="ship-code" data-reveal><code># Lab: Latitude / QEMU · R640 iron: E2 BOOT-OK + E3 UEFI-HTTP-OK + E5 stamps

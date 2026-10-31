@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-5-e6-operator |
-| Summary | **ADR-021 E6 in flight.** An operator password can be saved. The lab latch stays until that save. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-5-e6-lived |
+| Summary | **Iron `f2828d95`: ADR-021 E6 lived.** The spare account came back and the lab token was refused. Sign in opened the page. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. |
-| Gates touched | ADR-021 E6 in flight. Not lived. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-9-lan`. |
+| Gates touched | ADR-021 E6 lived. Wave 5 stays open. No doorbell. No format of UBUNTU0. Rollback `11688cbf` for this stick. |
 
 ---
 
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-10-31 | wave-5-e6-lived | 94 | 72 | **Iron `f2828d95`: E6 lived.** `rd lba=6190268907 set`. Lab-token GET `AuthDenied`. Sign in opened the page. Wave 5 stays open. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-31 | wave-5-e6-operator | 94 | 72 | **E6 in flight.** Operator password on the spare. Lab latch stays until Save. Not lived. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-31 | wave-4-h2-lived | 94 | 72 | **Iron `11688cbf`: H2 lived. Wave 4 closed.** Panic dump reset the chassis. Next F11, no click: `start off=19327352832`, `raynusrv2 login:`. Current wave → 5. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-31 | wave-4-d10-lived | 94 | 72 | **Iron `11688cbf`: D10 lived.** `unix=1793452595` is 2026-10-31 08:16 CT. H2 stays in flight. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
@@ -436,7 +437,7 @@ LOI:           NOT OPEN. Tracker born 2026-09-14.
 Bar A:         94% · 0.25 months · dedicated-box non-prod
 Bar B:         72% · 1.25 months · Ubuntu login on a 10 GiB spare tail (c3a70e62) with a LAN address from the SPA (0d865c7f); whole VD still hidden
 Overall:       80% · confidence medium
-NOW:           SKU card is what a signature holds today. One dedicated box. Ubuntu on a 10 GiB tail. M8.9 closed on 0d865c7f: the guest took the SPA-saved address by itself and SSH from the LAN reached raynusrv2. Pinned as v0.1.0-m8-9-lan (not Latest). Wave 4 closed on 11688cbf. Wave 5 E6 is in flight: an operator password on the spare, and the lab latch stays until that save. Not lived. Do not format UBUNTU0. The 2.9 TB VD is not this disk. A5 parked. Bar A 94. Bar B 72. Overall 80. perc 86. unmodified 45. SKU 94. months A 0.25. months B 1.25. docs/adr/ADR-019.md
+NOW:           SKU card is what a signature holds today. One dedicated box. Ubuntu on a 10 GiB tail. M8.9 closed on 0d865c7f: the guest took the SPA-saved address by itself and SSH from the LAN reached raynusrv2. Pinned as v0.1.0-m8-9-lan (not Latest). Wave 4 closed on 11688cbf. Wave 5 E6 lived on f2828d95: the spare account came back, the lab token was refused, and Sign in opened the page. Roles and the PRE-EBS window stay open. Do not format UBUNTU0. The 2.9 TB VD is not this disk. A5 parked. Bar A 94. Bar B 72. Overall 80. perc 86. unmodified 45. SKU 94. months A 0.25. months B 1.25. docs/adr/ADR-019.md
 Open:          link state on the SPA (D5) · iron AUTH-OK (parked) · unmodified ISO without the serial amendment · the whole spare VD · cluster
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
 Rollback:      v0.1.0-m8-9-lan → M8.9 close (COM2 sha=0d865c7fcb0a, CI 40603110937, SHA256 df6fc3465cecf1eaf058d5c8e675501827c16eb55e7b2c9758bc5e68326ad91b). v0.1.0-m8-8-ubuntu → older M8.8 close (c3a70e623aec, CI 38454398693). v0.1.0-m8-perc-spa → older SPA choice (8ad2ac89125e, CI 36362775808). v0.1.0-m8-a4s → older standing SPA (1f33eeda72f9, CI 36137732145). v0.1.0-m8-a6 → keyboard + power-off (fd2ca12e, CI 36166108942), not Latest. Everest Latest stays v0.1.0-everest-closed (f72b4276).
