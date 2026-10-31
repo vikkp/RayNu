@@ -294,7 +294,7 @@ pub fn arm_bcm5720_coexist() -> bool {
             return false;
         }
     };
-    let Some(lease) = mgmt_lease::load_usable().or_else(|| dhcp_bcm5720(&mut device)) else {
+    let Some(lease) = bcm_mgmt_lease(&mut device) else {
         serial::write_line(
             "boot: WARN — HOST-NIC coexist skip (no parked SNP lease; native DHCP failed)",
         );
@@ -798,10 +798,62 @@ fn fatal_kind(e: MgmtFatal) -> u8 {
     }
 }
 
+/// Standing SPA address. A restored static record replaces the lease IP
+/// and keeps the device MAC. No record keeps DHCP. Prints the D9 line.
+fn bcm_mgmt_lease(device: &mut Bcm5720Device) -> Option<mgmt_lease::ParkedMgmtLease> {
+    let mac = device.mac();
+    match crate::mgmt::host_addr::choose(mac, MGMT_HTTP_DEFAULT_PORT, mgmt_lease::load_usable()) {
+        crate::mgmt::host_addr::LeaseChoice::Static { lease, addr } => {
+            say_d9_static(&addr);
+            crate::mgmt::host_addr::note_using_static(addr);
+            Some(lease)
+        }
+        crate::mgmt::host_addr::LeaseChoice::Parked(lease) => {
+            say_d9_dhcp();
+            crate::mgmt::host_addr::note_using_dhcp(lease);
+            Some(lease)
+        }
+        crate::mgmt::host_addr::LeaseChoice::NeedDhcp => {
+            let lease = dhcp_bcm5720(device)?;
+            say_d9_dhcp();
+            crate::mgmt::host_addr::note_using_dhcp(lease);
+            Some(lease)
+        }
+    }
+}
+
+fn say_d9_static(addr: &crate::mgmt::host_addr::StaticAddr) {
+    serial::write_str("boot: D9 host addr static ");
+    write_ipv4(Ipv4Address::new(
+        addr.ip[0],
+        addr.ip[1],
+        addr.ip[2],
+        addr.ip[3],
+    ));
+    serial::write_byte(b'/');
+    write_u16_dec(u16::from(addr.prefix));
+    serial::write_str(" gw=");
+    write_ipv4(Ipv4Address::new(
+        addr.gateway[0],
+        addr.gateway[1],
+        addr.gateway[2],
+        addr.gateway[3],
+    ));
+    serial::write_str(" dns=");
+    write_ipv4(Ipv4Address::new(addr.dns[0], addr.dns[1], addr.dns[2], addr.dns[3]));
+    serial::write_str(" name=");
+    serial::write_str(addr.name_str());
+    serial::write_line("");
+}
+
+fn say_d9_dhcp() {
+    serial::write_line("boot: D9 host addr dhcp");
+}
+
 fn listen_bcm5720(port: u16, when: ListenWhen, arena: &mut MgmtArena) -> Result<(), MgmtFatal> {
     let mut device =
         Bcm5720Device::init(mgmt_lease::prefer_mac()).map_err(|_| MgmtFatal::Device)?;
-    let Some(lease) = mgmt_lease::load_usable().or_else(|| dhcp_bcm5720(&mut device)) else {
+    let Some(lease) = bcm_mgmt_lease(&mut device) else {
         serial::write_line(
             "boot: WARN — HOST-NIC BCM5720: no parked SNP lease (native DHCP failed; skip MMIO)",
         );
