@@ -19,14 +19,14 @@
   },
   "counts": {
     "S1": {
-      "lived": 41,
-      "in flight": 2,
+      "lived": 42,
+      "in flight": 1,
       "planned": 24,
       "total": 67
     },
     "Final": {
-      "lived": 41,
-      "in flight": 2,
+      "lived": 42,
+      "in flight": 1,
       "planned": 86,
       "total": 129
     }
@@ -1139,10 +1139,10 @@
         {
           "id": "H2",
           "capability": "Host panic: dump to COM2 and iDRAC, then reboot; guests autostart",
-          "status": "in flight",
+          "status": "lived",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "`cursor/wave-4-d10-h2-50bb`. A panic, and Overview Panic dump, print `boot: H2 panic` on COM2 (iDRAC SOL) then `boot: H2 reboot` and `ResetSystem` COLD after `VMXOFF`. Saved guests start on the next RayNu boot (B5). This lab's F11 is one-shot, so a cold reset returns to Ubuntu until the stick is booted again. Not lived until COM2 shows the dump and the reboot",
+          "note": "Iron `11688cbfa078` / run `41203867999`. Overview Panic dump: COM2 `boot: H2 panic sp` on the iDRAC SOL session as the chassis reset (the `spa` reason and the reboot line were cut by the reset). Cold reset returned to Ubuntu because F11 is one-shot. The next F11 of the same stick, no SPA click: `boot: B5 autostart rd n=1`, `boot: B5 autostart start off=19327352832`, `raynusrv2 login:`. The saved address was still `boot: D9 host addr static 10.99.99.146/24`. Evidence `docs/evidence/r640/2026-10-31-11688cbf-wave-4-h2-panic-reboot-ok.md`. Wave 4 closed",
           "wave": "4"
         },
         {
@@ -1202,14 +1202,14 @@
       ],
       "counts": {
         "S1": {
-          "lived": 2,
-          "in flight": 1,
+          "lived": 3,
+          "in flight": 0,
           "planned": 3,
           "total": 6
         },
         "Final": {
-          "lived": 2,
-          "in flight": 1,
+          "lived": 3,
+          "in flight": 0,
           "planned": 5,
           "total": 8
         }
@@ -1545,12 +1545,12 @@
       "iron": "B5",
       "why": "The first \"walk away from the rack\" moment. Needs wave 3.",
       "counts": {
-        "lived": 4,
-        "in flight": 1,
+        "lived": 5,
+        "in flight": 0,
         "planned": 0,
         "total": 5
       },
-      "closed": false
+      "closed": true
     },
     {
       "id": "5",
@@ -1850,35 +1850,69 @@
       "closed": false
     }
   ],
-  "current_wave": "4",
+  "current_wave": "5",
   "next_up": [
     {
-      "id": "H2",
-      "capability": "Host panic: dump to COM2 and iDRAC, then reboot; guests autostart",
-      "status": "in flight",
+      "id": "E6",
+      "capability": "Operator account with password; bring-up latch removed as default",
+      "status": "planned",
+      "role": "iron thread"
+    },
+    {
+      "id": "E4",
+      "capability": "Operator-supplied certificate and key (upload or ACME); TLS 1.3",
+      "status": "planned",
+      "role": "host-first"
+    },
+    {
+      "id": "E5",
+      "capability": "Plaintext PRE-EBS window closed (HTTPS or nothing from first packet)",
+      "status": "planned",
+      "role": "host-first"
+    },
+    {
+      "id": "G3",
+      "capability": "Audit export (JSON/CSV) from the SPA and REST",
+      "status": "planned",
+      "role": "host-first"
+    },
+    {
+      "id": "E12",
+      "capability": "REST API documented (OpenAPI), versioned, stable for the SKU",
+      "status": "planned",
       "role": "host-first"
     }
   ],
   "filler": [
     {
-      "id": "E4",
-      "capability": "Operator-supplied certificate and key (upload or ACME); TLS 1.3",
-      "wave": "5"
+      "id": "A5",
+      "capability": "Signed EFI for UEFI Secure Boot (customer enrolls RayNu-V key or shim)",
+      "wave": "6"
     },
     {
-      "id": "E5",
-      "capability": "Plaintext PRE-EBS window closed (HTTPS or nothing from first packet)",
-      "wave": "5"
+      "id": "A4",
+      "capability": "Headless operation: nothing the operator does requires COM2 or SOL",
+      "wave": "6"
     },
     {
-      "id": "G3",
-      "capability": "Audit export (JSON/CSV) from the SPA and REST",
-      "wave": "5"
+      "id": "H5",
+      "capability": "Install guide, cabling guide, operator runbook, support matrix as customer documents",
+      "wave": "6"
     },
     {
-      "id": "E12",
-      "capability": "REST API documented (OpenAPI), versioned, stable for the SKU",
-      "wave": "5"
+      "id": "F10",
+      "capability": "iDRAC NIC Selection matrix: Dedicated and Shared LOM both documented and tested",
+      "wave": "6"
+    },
+    {
+      "id": "D11",
+      "capability": "Cabling and port roles documented: iDRAC dedicated or shared LOM, port 3 mgmt, port 4 guests",
+      "wave": "6"
+    },
+    {
+      "id": "H8",
+      "capability": "Release cadence and support policy stated (what a customer gets for a year)",
+      "wave": "6"
     }
   ]
 }
