@@ -6,7 +6,7 @@
     <title>RayNu-V — Single-binary hypervisor, designed for proof</title>
     <meta
       name="description"
-      content="RayNu-V is a single-binary Type-1 hypervisor. Mount Everest closed on a real PowerEdge R640. An Ubuntu 26.04 ISO stored on the PERC spare installed and reached vikkp@raynusrv2. M8.9: that guest has a LAN on LOM port 4 and took an SSH login from another machine (0d865c7f). ADR-021 wave 4: the guest starts after a power-on, Shut down and Reboot are ACPI, and the standing SPA can keep 10.99.99.146 (5d09631e)."
+      content="RayNu-V is a single-binary Type-1 hypervisor. Mount Everest closed on a real PowerEdge R640. An Ubuntu 26.04 ISO stored on the PERC spare installed and reached vikkp@raynusrv2. M8.9: that guest has a LAN on LOM port 4 and took an SSH login from another machine (0d865c7f). ADR-021 wave 4: unattended start, ACPI power, a saved SPA address, and a host clock at 2026-10-31 08:16 CT (11688cbf)."
     />
     <meta property="og:title" content="RayNu-V — Ubuntu logged in from the PERC spare" />
     <meta
@@ -178,8 +178,11 @@
             down and Reboot brought <code>raynusrv2 login:</code> back. On
             <code>5d09631e</code> Overview saved
             <code>10.99.99.146/24</code> and the next boot's standing SPA
-            listened there (<code>boot: D9 host addr static</code>). The
-            host clock and a panic reboot are still open on that wave.
+            listened there (<code>boot: D9 host addr static</code>). On
+            <code>11688cbf</code> the host clock read
+            <code>unix=1793452595</code> (2026-10-31 08:16 CT) from
+            <code>162.159.200.123</code>. A panic reboot is still open on
+            that wave.
             The 2.9 TB virtual disk is not this 10 GiB tail.
             Auth is still open.
             Summit rollback remains

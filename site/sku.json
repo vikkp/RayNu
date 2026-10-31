@@ -19,14 +19,14 @@
   },
   "counts": {
     "S1": {
-      "lived": 40,
-      "in flight": 3,
+      "lived": 41,
+      "in flight": 2,
       "planned": 24,
       "total": 67
     },
     "Final": {
-      "lived": 40,
-      "in flight": 3,
+      "lived": 41,
+      "in flight": 2,
       "planned": 86,
       "total": 129
     }
@@ -610,10 +610,10 @@
         {
           "id": "D10",
           "capability": "Host NTP client; host clock correct for TLS and audit timestamps",
-          "status": "in flight",
+          "status": "lived",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "`cursor/wave-4-d10-h2-50bb`. One SNTP query to `162.159.200.123` after the standing SPA is up. A reply prints `boot: D10 ntp 162.159.200.123 unix=` and that unix time is the TLS `server_random` prefix and one `boot: D10 audit unix=` line. No reply in eight seconds prints `boot: D10 ntp none`. Not lived until COM2 shows a unix time from this decade",
+          "note": "Iron `11688cbfa078` / run `41203867999`. `boot: D10 ntp query 162.159.200.123` then `boot: D10 ntp 162.159.200.123 unix=1793452595` (2026-10-31 08:16:35 CT). The next `HOST-NIC HTTP exchange ok` is the standing SPA handshake after that reply. Evidence `docs/evidence/r640/2026-10-31-11688cbf-wave-4-d10-ntp-ok.md`. Wave 4 stays open on H2",
           "wave": "4"
         },
         {
@@ -736,14 +736,14 @@
       ],
       "counts": {
         "S1": {
-          "lived": 9,
-          "in flight": 1,
+          "lived": 10,
+          "in flight": 0,
           "planned": 1,
           "total": 11
         },
         "Final": {
-          "lived": 9,
-          "in flight": 1,
+          "lived": 10,
+          "in flight": 0,
           "planned": 13,
           "total": 23
         }
@@ -1545,8 +1545,8 @@
       "iron": "B5",
       "why": "The first \"walk away from the rack\" moment. Needs wave 3.",
       "counts": {
-        "lived": 3,
-        "in flight": 2,
+        "lived": 4,
+        "in flight": 1,
         "planned": 0,
         "total": 5
       },
@@ -1852,12 +1852,6 @@
   ],
   "current_wave": "4",
   "next_up": [
-    {
-      "id": "D10",
-      "capability": "Host NTP client; host clock correct for TLS and audit timestamps",
-      "status": "in flight",
-      "role": "host-first"
-    },
     {
       "id": "H2",
       "capability": "Host panic: dump to COM2 and iDRAC, then reboot; guests autostart",

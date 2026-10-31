@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-4-d10-h2 |
-| Summary | **D10 and H2 in flight on `cursor/wave-4-d10-h2-50bb`.** The standing SPA sends one SNTP query and, on a reply, stamps TLS and one audit line. A panic and Overview Panic dump print `boot: H2 panic` on COM2 and cold-reset after VMXOFF. Not lived. Wave 4 stays open. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-4-d10-lived |
+| Summary | **Iron `11688cbf`: ADR-021 D10 lived.** `boot: D10 ntp 162.159.200.123 unix=1793452595` is 2026-10-31 08:16 CT, then the standing SPA completed HTTPS. H2 stays in flight. Wave 4 stays open. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
-| Gates touched | ADR-021 D10 and H2 `planned → in flight`. D9, B4, and B5 stay lived. Rollback `v0.1.0-m8-9-lan`. No doorbell. No format of UBUNTU0. |
+| Gates touched | ADR-021 D10 `in flight → lived`. H2 stays in flight. D9, B4, and B5 stay lived. Rollback `v0.1.0-m8-9-lan`. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
 
 ## Blockers & risks (Everest-relevant)
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-31 | wave-4-d10-lived | 0.0 | 99 | **Iron `11688cbf`: D10 lived.** `boot: D10 ntp 162.159.200.123 unix=1793452595` is 2026-10-31 08:16 CT, then `HOST-NIC HTTP exchange ok`. H2 stays in flight. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-31 | wave-4-d10-h2 | 0.0 | 99 | **D10 and H2 in flight on `cursor/wave-4-d10-h2-50bb`.** SNTP to `162.159.200.123` stamps TLS and one audit line. Panic dump prints `boot: H2 panic` on COM2 and cold-resets. Not lived. D9 stays lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-31 | wave-4-d9-lived | 0.0 | 99 | **Iron `5d09631e`: D9 lived.** Save `wr lba=6190268908 match`. Next F11 `rd lba=6190268908 static`, `boot: D9 host addr static 10.99.99.146/24`, standing SPA on that address. Wave 4 stays open on D10. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-31 | wave-4-d9-host-addr | 0.0 | 99 | **D9 in flight on `cursor/wave-4-d9-host-addr-50bb`.** Overview Save address stages `RAYNUHST` one LBA before autostart. Next boot prints `boot: D9 host addr static` and the SPA binds that address. This boot stays on DHCP. Not lived. D10 and H2 stay planned. Scores held. months 0.0 held; overall 99 held |
@@ -1160,7 +1161,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     Wave 4 "Survives a power cut, unattended". B5 lived on e6ed42a3. B4 lived on 62165436. D9 lived on 5d09631e. D10 and H2 are in flight on cursor/wave-4-d10-h2-50bb: one SNTP query, and a panic dump that cold-resets. Not lived until COM2 prints boot: D10 ntp with a unix time and boot: H2 panic then boot: H2 reboot. Rollback for a wave 2 flash is v0.1.0-m8-9-lan. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/m8_plan.md.
+Next move:     Wave 4 "Survives a power cut, unattended". B5 lived on e6ed42a3. B4 lived on 62165436. D9 lived on 5d09631e. D10 lived on 11688cbf: boot: D10 ntp 162.159.200.123 unix=1793452595 (2026-10-31 08:16 CT). H2 is still in flight on the same stick: Overview Panic dump should print boot: H2 panic and boot: H2 reboot, then a cold reset. Rollback for a wave 2 flash is v0.1.0-m8-9-lan. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/m8_plan.md.
 Rollback:      M8.9 close: v0.1.0-m8-9-lan → CI 40603110937 / COM2 sha=0d865c7fcb0a / EFI SHA256 df6fc3465cecf1eaf058d5c8e675501827c16eb55e7b2c9758bc5e68326ad91b
 Older M8.8:    v0.1.0-m8-8-ubuntu → CI 38454398693 / COM2 sha=c3a70e623aec / EFI SHA256 08ef31ba87136577102ac378d8e0a512327994e8794c41c64444f5be5f8812c4
 Older SPA:     v0.1.0-m8-perc-spa → CI 36362775808 / COM2 sha=8ad2ac89125e / EFI SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849
