@@ -1,7 +1,7 @@
 use super::{
-    coexist_keepalive_idle, coexist_millis_from_tsc, coexist_reclaim_slot, http_accept_idle_limit_ms,
-    http_accept_should_idle_abort, prop_http_accept_idle_abort, CoexistSlotIdle,
-    COEXIST_KEEPALIVE_IDLE_MS, COEXIST_RECLAIM_IDLE_MS, COEXIST_TCP_SLOTS, COEXIST_TSC_HZ_FALLBACK,
+    coexist_keepalive_idle, coexist_millis_from_tsc, http_accept_idle_limit_ms,
+    http_accept_should_idle_abort, prop_http_accept_idle_abort, COEXIST_KEEPALIVE_IDLE_MS,
+    COEXIST_TCP_SLOTS, COEXIST_TSC_HZ_FALLBACK,
     HOST_NIC_DHCP_MS, HOST_NIC_HTTP_HS_IDLE_MS, HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS,
     PRE_RAYNUF_HTTPS_MS,
 };
@@ -110,63 +110,15 @@ fn coexist_millis_from_tsc_wraps() {
 }
 
 #[test]
-fn a_listening_slot_blocks_reclaim_and_the_oldest_kept_slot_is_the_one() {
-    assert_eq!(COEXIST_TCP_SLOTS, 6);
-    assert_eq!(COEXIST_RECLAIM_IDLE_MS, 15_000);
-    assert!(COEXIST_KEEPALIVE_IDLE_MS > COEXIST_RECLAIM_IDLE_MS);
+fn eight_slots_leave_two_listening_beside_a_browser_pool() {
+    assert_eq!(COEXIST_TCP_SLOTS, 8);
+    assert!(COEXIST_TCP_SLOTS > 6);
+    assert_eq!(COEXIST_KEEPALIVE_IDLE_MS, 600_000);
     let listen = include_str!("host_nic_listen.rs");
     assert!(listen.contains("COEXIST_TCP_SLOTS"));
     assert!(listen.contains("COEXIST_CLOSE_FORCE_MS"));
-    assert!(listen.contains("coexist_reclaim_slot"));
+    assert!(listen.contains("stay in LISTEN"));
     assert!(listen.contains("filled all six slots"));
     assert!(listen.contains("FIN, not RST"));
-    let young = CoexistSlotIdle {
-        listening: false,
-        held: true,
-        kept: true,
-        closing: false,
-        idle_ms: 0,
-    };
-    let old = CoexistSlotIdle {
-        listening: false,
-        held: true,
-        kept: true,
-        closing: false,
-        idle_ms: 50,
-    };
-    let older = CoexistSlotIdle {
-        listening: false,
-        held: true,
-        kept: true,
-        closing: false,
-        idle_ms: 500,
-    };
-    let open = CoexistSlotIdle {
-        listening: true,
-        held: false,
-        kept: false,
-        closing: false,
-        idle_ms: 0,
-    };
-    let handshake = CoexistSlotIdle {
-        listening: false,
-        held: true,
-        kept: false,
-        closing: false,
-        idle_ms: COEXIST_RECLAIM_IDLE_MS + 1,
-    };
-    let closing = CoexistSlotIdle {
-        listening: false,
-        held: true,
-        kept: false,
-        closing: true,
-        idle_ms: 0,
-    };
-    assert_eq!(coexist_reclaim_slot(&[young]), Some(0));
-    assert_eq!(coexist_reclaim_slot(&[young, old]), Some(1));
-    assert_eq!(coexist_reclaim_slot(&[older, old, open]), None);
-    assert_eq!(coexist_reclaim_slot(&[old, older, young]), Some(1));
-    assert_eq!(coexist_reclaim_slot(&[handshake]), None);
-    assert_eq!(coexist_reclaim_slot(&[handshake, young]), Some(1));
-    assert_eq!(coexist_reclaim_slot(&[old, closing]), None);
+    assert!(!listen.contains("coexist_reclaim_slot"));
 }

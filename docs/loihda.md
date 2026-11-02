@@ -184,7 +184,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 ```
 2026-09  ████████  Everest closed
 2026-10  ████████  M8.8 lived; M8.9.1 is the spare NIC record (host); whole VD still hidden; A5 parked
-2026-11  ░░░░░░░░  wave 5: E6 lived; E4 certificate presented; 1e7d44c9 page loaded and the Host card flipped; SPA fetch keeps the session; TLS stays 1.2; scores held
+2026-11  ░░░░░░░░  wave 5: E6 lived; E4 certificate presented; 87bee04b page once then reload refused; eight sockets, two stay listening; TLS stays 1.2; scores held
 2026-12  ░░░░░░░░  Bar B: the guest disk is the spare VD, not an 8 GiB window
 ```
 
@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-5-e4-keepalive |
-| Summary | **ADR-021 E4 still in flight.** Iron `1e7d44c9` loaded the page, then the Host card flipped because every SPA reply closed the socket. A normal fetch keeps the TLS session. TLS stays 1.2. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-5-e4-listen-spare |
+| Summary | **ADR-021 E4 still in flight.** Iron `87bee04b` loaded the page once. The reload was refused while a live session was closed to free a listener. Eight sockets, two left listening. TLS stays 1.2. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. |
 | Gates touched | ADR-021 E4 in flight. Not lived. No doorbell. No format of UBUNTU0. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-02 | wave-5-e4-listen-spare | 94 | 72 | **E4 still in flight.** Iron `87bee04b` page once, reload refused during a FIN of a live session. Eight sockets, two stay listening. Not lived. TLS 80. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-02 | wave-5-e4-keepalive | 94 | 72 | **E4 still in flight.** Iron `1e7d44c9` page and one reload, then the Host card flipped. Every SPA reply closed. A normal fetch keeps the session; the oldest finished session is FIN'd only when nothing is listening. Not lived. TLS 80. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-02 | wave-5-e4-fin | 94 | 72 | **E4 still in flight.** Iron `d3faa4d7` `re-listen after HTTP` on all six slots, browser "Unable to connect". Drained reply now FINs. Not lived. TLS 80. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-02 | wave-5-e4-slot-return | 94 | 72 | **E4 still in flight.** Iron `643f13de` six accepts and sign-in. Reload refused: keep-alive held every slot. SPA exchanges return the slot. Not lived. TLS 80. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |

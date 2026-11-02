@@ -98,57 +98,18 @@ pub fn http_accept_should_idle_abort(
 /// a standing page, not a second ClientHello.
 pub const COEXIST_KEEPALIVE_IDLE_MS: i64 = 600_000;
 
-/// Listen sockets armed together. One browser origin opens about six
-/// connections (the page, then the status polls). Iron `6dc1f554` had
-/// one: the sign-in accept never returned to listen, and every later
-/// SYN was refused.
-pub const COEXIST_TCP_SLOTS: usize = 6;
+/// Listen sockets armed together.
+///
+/// smoltcp's listening socket becomes the connection. A browser keeps 6
+/// persistent connections to one host (Firefox and Chrome). Two sockets
+/// stay in `LISTEN` so the next SYN, including a reload, has a place to
+/// land. Iron `6dc1f554` had one socket. Iron `87bee04b` had six and
+/// closed a live session whenever none were listening; the reload was
+/// refused while that FIN was in flight.
+pub const COEXIST_TCP_SLOTS: usize = 8;
 
 /// A close whose TX queue never drains still gives the slot back.
 pub const COEXIST_CLOSE_FORCE_MS: i64 = 2_000;
-
-/// Idle-abort budget for a connection that never finished a reply.
-///
-/// A full pool does not wait this long. When every socket is busy, the
-/// oldest session that has already finished a reply is closed at once
-/// so one socket can accept. [`COEXIST_KEEPALIVE_IDLE_MS`] is still the
-/// quiet-page timeout.
-pub const COEXIST_RECLAIM_IDLE_MS: i64 = 15_000;
-
-/// One coexist TCP slot, as the reclaim policy sees it.
-#[derive(Clone, Copy)]
-pub struct CoexistSlotIdle {
-    pub listening: bool,
-    pub held: bool,
-    /// Finished at least one HTTP reply and is still on that TLS session.
-    pub kept: bool,
-    /// FIN already armed. One slot on its way back to listen is enough.
-    pub closing: bool,
-    pub idle_ms: i64,
-}
-
-/// Slot to FIN so a new connection can land.
-///
-/// `None` while any slot is listening, while one is already closing, or
-/// while every busy slot is still in its first handshake (`held` and not
-/// `kept`). Otherwise the kept slot with the greatest `idle_ms`, including
-/// a session that just answered.
-pub fn coexist_reclaim_slot(slots: &[CoexistSlotIdle]) -> Option<usize> {
-    if slots.iter().any(|s| s.listening || s.closing) {
-        return None;
-    }
-    let mut best: Option<(usize, i64)> = None;
-    for (i, s) in slots.iter().enumerate() {
-        if !s.kept {
-            continue;
-        }
-        match best {
-            Some((_, idle)) if idle >= s.idle_ms => {}
-            _ => best = Some((i, s.idle_ms)),
-        }
-    }
-    best.map(|(i, _)| i)
-}
 
 /// True when a kept session has been idle long enough to accept again.
 pub fn coexist_keepalive_idle(now_ms: i64, last_http_ms: i64, idle_ms: i64) -> bool {

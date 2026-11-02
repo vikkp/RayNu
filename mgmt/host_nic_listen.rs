@@ -29,9 +29,9 @@ use crate::mgmt::bcm5720::Bcm5720Device;
 use crate::mgmt::console::{maybe_print_iron_console_ok, take_spa_keys_injected};
 use crate::mgmt::e1000::E1000Device;
 use crate::mgmt::host_nic::{
-    coexist_keepalive_idle, coexist_millis_from_tsc, coexist_reclaim_slot, host_nic_lab_armed,
-    http_accept_idle_limit_ms, http_accept_should_idle_abort, CoexistSlotIdle,
-    COEXIST_CLOSE_FORCE_MS, COEXIST_KEEPALIVE_IDLE_MS, COEXIST_TCP_SLOTS, HOST_NIC_DHCP_MS,
+    coexist_keepalive_idle, coexist_millis_from_tsc, host_nic_lab_armed, http_accept_idle_limit_ms,
+    http_accept_should_idle_abort, COEXIST_CLOSE_FORCE_MS, COEXIST_KEEPALIVE_IDLE_MS,
+    COEXIST_TCP_SLOTS, HOST_NIC_DHCP_MS,
     HOST_NIC_LISTEN_MS, HOST_NIC_MAX_EXCHANGES, M7_HOST_NIC_QEMU_MARKER, PRE_RAYNUF_HTTPS_MS,
     QEMU_USERNET_GW, QEMU_USERNET_IPV4, QEMU_USERNET_PREFIX,
 };
@@ -151,12 +151,13 @@ const _: () = assert!(SCRATCH_N + 16 <= crate::mgmt::mgmt_arena::MGMT_ARENA_BYTE
 ///
 /// A normal SPA `fetch()` does not send `Connection: close`. Iron
 /// `1e7d44c9` closed every reply anyway. Overview polls five URLs every
-/// 2 s, each poll was a new handshake, COM2 filled with accept and
-/// re-listen, and a poll that found all six slots busy painted the Host
+/// 2 s, each poll was a new handshake, and a full table painted the Host
 /// card down. Keeping the session is the SPA path again. `643f13de`
-/// filled all six slots that way and the reload was refused; when none
-/// are listening, the oldest finished session is the one that ends with
-/// FIN, not RST. A slot still in its first handshake is left alone.
+/// filled all six slots that way and the reload was refused. `87bee04b`
+/// then closed a live session to free a listener; the reload's SYN
+/// arrived during that FIN and was refused. Two sockets stay in LISTEN.
+/// A finished reply still ends with FIN, not RST, when the client asked
+/// to close.
 fn wrap_session_try_exchange(
     session: &mut Tls12Listen,
     sock: &mut tcp::Socket,
@@ -825,42 +826,10 @@ pub fn tick_bcm5720_coexist() {
                     SLOT_RT[i] = rt;
                 }
             }
-            let mut views = [CoexistSlotIdle {
-                listening: false,
-                held: false,
-                kept: false,
-                closing: false,
-                idle_ms: 0,
-            }; COEXIST_TCP_SLOTS];
-            for i in 0..COEXIST_TCP_SLOTS {
-                let sock = sockets.get::<tcp::Socket>(SLOT_HANDLE[i].assume_init());
-                let rt = SLOT_RT[i];
-                let idle = if rt.last_http_ms != 0 {
-                    millis.saturating_sub(rt.last_http_ms)
-                } else if rt.accept_at_ms != 0 {
-                    millis.saturating_sub(rt.accept_at_ms)
-                } else {
-                    0
-                };
-                views[i] = CoexistSlotIdle {
-                    listening: sock.is_listening(),
-                    held: sock.is_active(),
-                    kept: rt.kept,
-                    closing: rt.pending_close,
-                    idle_ms: idle,
-                };
-            }
-            if let Some(i) = coexist_reclaim_slot(&views) {
-                // FIN, not RST. abort() would drop a reply the browser
-                // already accepted. One finished session is enough; a
-                // slot already closing keeps the rest of the pool.
-                let mut rt = SLOT_RT[i];
-                rt.pending_close = true;
-                rt.close_armed_at_ms = millis;
-                rt.drain_empty_at_ms = 0;
-                rt.kept = false;
-                SLOT_RT[i] = rt;
-            }
+            // A live keep-alive is not closed to manufacture a listener.
+            // Two of [`COEXIST_TCP_SLOTS`] stay in LISTEN. Iron `87bee04b`
+            // FINed the oldest finished session when the table was full,
+            // and the reload was refused during that FIN.
         }
         let library_exchange = crate::mgmt::iso_library::take_exchange_quiet();
         // Linux owns COM2 for the installer. SPA polls stay on the socket.
