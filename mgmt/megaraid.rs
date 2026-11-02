@@ -2247,6 +2247,7 @@ fn perc_fusion_post(bar: u64, bus: u8, dev: u8, func: u8, base: u64) {
     perc_load_autostart(bar, target, bytes, dcmd_phys, data_phys);
     perc_load_host_addr(bar, target, bytes, dcmd_phys, data_phys);
     perc_load_operator(bar, target, bytes, dcmd_phys, data_phys);
+    perc_load_host_cert(bar, target, bytes, dcmd_phys, data_phys);
 
     // The read chain already lived. A write miss still arms read-only virtio.
     perc_spare_write_last(bar, bus, dev, func, target, bytes, dcmd_phys, data_phys);
@@ -2812,6 +2813,109 @@ fn flush_operator_uefi() {
     } else {
         serial::write_line_nowait(" mismatch (staged, not acked)");
     }
+}
+
+/// Read the certificate image. A miss leaves the lab millicert.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn perc_load_host_cert(bar: u64, target: u8, bytes: u64, frame_phys: u64, data_phys: u64) {
+    use crate::boot::serial;
+    let Some(lba0) = crate::mgmt::host_cert::cert_lba(bytes) else {
+        serial::write_line("boot: E4 cert skip lba");
+        return;
+    };
+    let mut image = [0u8; 16 * 512];
+    for i in 0..crate::mgmt::host_cert::WINDOW {
+        let Some((st, timed_out)) = issue_ld_read16(bar, target, lba0 + i, frame_phys, data_phys)
+        else {
+            serial::write_line("boot: E4 cert rd skip frame");
+            return;
+        };
+        if timed_out || st != MFI_STAT_OK {
+            serial::write_line("boot: E4 cert rd skip status");
+            return;
+        }
+        core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+        let off = (i as usize) * 512;
+        // SAFETY: the READ(16) completed into the payload page.
+        // KANI-TARGET: host tests cover the image, not this load.
+        unsafe {
+            core::ptr::copy_nonoverlapping(data_phys as *const u8, image[off..].as_mut_ptr(), 512);
+        }
+    }
+    if crate::mgmt::host_cert::restore(&image) {
+        serial::write_str("boot: E4 cert rd lba=");
+        write_dec64(lba0);
+        serial::write_line(" operator");
+    } else {
+        serial::write_line("boot: E4 cert millicert");
+    }
+}
+
+/// Write a staged certificate image. Sixteen WRITE(16)s, each read back.
+/// The operator-account sector is the next LBA up. LBA 0 is not encoded.
+/// No doorbell. The private key is not printed. TLS stays 1.2.
+pub fn flush_host_cert() {
+    #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+    {
+        flush_host_cert_uefi();
+    }
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn flush_host_cert_uefi() {
+    use crate::boot::serial;
+    let Some((gen, image)) = crate::mgmt::host_cert::copy_dirty() else {
+        return;
+    };
+    let bar = PERC_SPARE_BAR.load(core::sync::atomic::Ordering::Acquire);
+    let target = PERC_SPARE_TARGET.load(core::sync::atomic::Ordering::Acquire);
+    let frame = PERC_SPARE_FRAME.load(core::sync::atomic::Ordering::Acquire);
+    let data = PERC_SPARE_DATA.load(core::sync::atomic::Ordering::Acquire);
+    let bytes = PERC_SPARE_BYTES.load(core::sync::atomic::Ordering::Acquire);
+    let Some(lba0) = crate::mgmt::host_cert::cert_lba(bytes) else {
+        return;
+    };
+    if bar == 0 || frame == 0 || data == 0 {
+        return;
+    }
+    serial::write_str_nowait("boot: E4 cert wr lba=");
+    write_dec64_nowait(lba0);
+    for i in 0..crate::mgmt::host_cert::WINDOW {
+        let off = (i as usize) * 512;
+        let mut sector = [0u8; 512];
+        sector.copy_from_slice(&image[off..off + 512]);
+        let Some((st, timed_out)) =
+            issue_ld_write16_sector(bar, target, lba0 + i, frame, data, &sector)
+        else {
+            serial::write_line_nowait(" skip frame");
+            return;
+        };
+        if timed_out || st != MFI_STAT_OK {
+            serial::write_line_nowait(" (staged, not acked)");
+            return;
+        }
+        let Some((rst, rto)) = issue_ld_read16(bar, target, lba0 + i, frame, data) else {
+            serial::write_line_nowait(" rd skip");
+            return;
+        };
+        if rto || rst != MFI_STAT_OK {
+            serial::write_line_nowait(" rd status (staged, not acked)");
+            return;
+        }
+        core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+        let mut back = [0u8; 512];
+        // SAFETY: the READ(16) completed into the payload page.
+        // KANI-TARGET: host tests cover the image bytes, not this load.
+        unsafe {
+            core::ptr::copy_nonoverlapping(data as *const u8, back.as_mut_ptr(), 512);
+        }
+        if back != sector {
+            serial::write_line_nowait(" mismatch (staged, not acked)");
+            return;
+        }
+    }
+    crate::mgmt::host_cert::ack_dirty(gen);
+    serial::write_line_nowait(" match");
 }
 
 /// One polled WRITE(16) of `lba` with `sector` as the payload.

@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-5-e6-lived |
-| Summary | **Iron `f2828d95`: ADR-021 E6 lived.** Next F11 read `boot: E6 operator rd lba=6190268907 set`. A lab-token GET was `AuthDenied`. Sign in opened the page. Wave 5 stays open. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-5-e4-cert |
+| Summary | **ADR-021 E4 in flight.** Overview can save a certificate for the next handshake. The lab millicert stays until that save. The listener is still TLS 1.2. Not lived. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
-| Gates touched | ADR-021 E6 `in flight → lived`. Wave 5 stays open. D9 static and D10 clock still printed on this boot. Rollback for this stick is `11688cbf`. No doorbell. No format of UBUNTU0. |
+| Gates touched | ADR-021 E4 `planned → in flight` on `cursor/wave-5-e4-cert-50bb`. E6 stays lived. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
 
 ## Blockers & risks (Everest-relevant)
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-10-31 | wave-5-e4-cert | 0.0 | 99 | **E4 in flight.** Save certificate writes the spare. The next handshake uses it. TLS stays 1.2. Not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-31 | wave-5-e6-lived | 0.0 | 99 | **Iron `f2828d95`: E6 lived.** `rd lba=6190268907 set`. Lab-token GET `AuthDenied method_tag=1`. Sign in opened the page. Wave 5 stays open. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-31 | wave-5-e6-operator | 0.0 | 99 | **E6 in flight.** Operator account on the spare. Lab latch stays until Save. Not lived. Wave 4 stays closed. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-31 | wave-4-h2-lived | 0.0 | 99 | **Iron `11688cbf`: H2 lived. Wave 4 closed.** Panic dump reset the chassis. Next F11, no click: `boot: B5 autostart start off=19327352832`, `raynusrv2 login:`. Current wave → 5 (E6 operator account). Scores held. months 0.0 held; overall 99 held |
@@ -1164,7 +1165,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     Wave 4 closed on 11688cbf. Wave 5 is current. E6 lived on f2828d95: the spare account came back, the lab token was refused, and Sign in opened the page. Next row is the operator certificate. Rollback for this stick is 11688cbf. Rollback for a wave 2 flash is v0.1.0-m8-9-lan. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/m8_plan.md.
+Next move:     Wave 5 is current. E6 lived on f2828d95. E4 is in flight on cursor/wave-5-e4-cert-50bb: Save certificate stores an RSA-2048 certificate on the spare and the next handshake sends it. The lab millicert stays until that save. TLS 1.3 is still open. Not lived. Rollback for the booted stick is f2828d95. Rollback for a wave 2 flash is v0.1.0-m8-9-lan. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/m8_plan.md.
 Rollback:      M8.9 close: v0.1.0-m8-9-lan → CI 40603110937 / COM2 sha=0d865c7fcb0a / EFI SHA256 df6fc3465cecf1eaf058d5c8e675501827c16eb55e7b2c9758bc5e68326ad91b
 Older M8.8:    v0.1.0-m8-8-ubuntu → CI 38454398693 / COM2 sha=c3a70e623aec / EFI SHA256 08ef31ba87136577102ac378d8e0a512327994e8794c41c64444f5be5f8812c4
 Older SPA:     v0.1.0-m8-perc-spa → CI 36362775808 / COM2 sha=8ad2ac89125e / EFI SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849

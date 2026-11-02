@@ -425,6 +425,14 @@ pub enum AuditEvent {
     OperatorAccountSet {
         name_len: u8,
     },
+    /// SPA saved or cleared the standing certificate (ADR-021 E4).
+    /// `source` 1 = operator certificate, 0 = back to the lab millicert.
+    /// `cert_len` is the DER length when `source` is 1. The key is not here.
+    /// The listener is still TLS 1.2.
+    HostCertSaved {
+        source: u8,
+        cert_len: u16,
+    },
 }
 
 /// One sealed audit record in the hash chain.
@@ -671,6 +679,7 @@ pub(crate) fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::HostLinkChanged { .. } => 78,
         AuditEvent::HostAddrSaved { .. } => 79,
         AuditEvent::OperatorAccountSet { .. } => 80,
+        AuditEvent::HostCertSaved { .. } => 81,
     }
 }
 
@@ -1224,7 +1233,11 @@ fn mirror_audit_to_com1(event: AuditEvent) {
             // Activity page. Use the no-wait writer like the `boot:` lines.
             serial::write_str_nowait("RAYNU-V-AUDIT: HostLinkChanged func=");
             write_u32_nowait(u32::from(func));
-            serial::write_str_nowait(if up != 0 { " up=1 mbps=" } else { " up=0 mbps=" });
+            serial::write_str_nowait(if up != 0 {
+                " up=1 mbps="
+            } else {
+                " up=0 mbps="
+            });
             write_u32_nowait(u32::from(mbps));
             serial::write_byte_nowait(b'\n');
         }
@@ -1238,6 +1251,13 @@ fn mirror_audit_to_com1(event: AuditEvent) {
         AuditEvent::OperatorAccountSet { name_len } => {
             serial::write_str_nowait("RAYNU-V-AUDIT: OperatorAccountSet name_len=");
             write_u32_nowait(u32::from(name_len));
+            serial::write_byte_nowait(b'\n');
+        }
+        AuditEvent::HostCertSaved { source, cert_len } => {
+            serial::write_str_nowait("RAYNU-V-AUDIT: HostCertSaved source=");
+            write_u32_nowait(u32::from(source));
+            serial::write_str_nowait(" cert=");
+            write_u32_nowait(u32::from(cert_len));
             serial::write_byte_nowait(b'\n');
         }
         AuditEvent::FrameAllocated { .. } | AuditEvent::FrameFreed { .. } => {}

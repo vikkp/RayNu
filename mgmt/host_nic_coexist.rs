@@ -29,6 +29,7 @@ pub fn tick_native_coexist() {
         crate::mgmt::megaraid::flush_autostart();
         crate::mgmt::megaraid::flush_host_addr();
         crate::mgmt::megaraid::flush_operator();
+        crate::mgmt::megaraid::flush_host_cert();
     }
 }
 

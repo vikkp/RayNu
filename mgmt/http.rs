@@ -16,8 +16,9 @@ use super::api::{
 use super::datastore::{dispatch_store_rest, ImageTable};
 use super::guest_fw::{dispatch_guest_fw_rest, is_guest_fw_path};
 use super::iso::{
-    dispatch_iso_attach_locked, dispatch_iso_firmware_locked, dispatch_iso_rest, dispatch_iso_uefi_locked,
-    is_iso_attach_path, is_iso_firmware_path, is_iso_uefi_path, IsoDeployPlan,
+    dispatch_iso_attach_locked, dispatch_iso_firmware_locked, dispatch_iso_rest,
+    dispatch_iso_uefi_locked, is_iso_attach_path, is_iso_firmware_path, is_iso_uefi_path,
+    IsoDeployPlan,
 };
 use super::iso_install::{dispatch_iso_install_rest, InstallToDiskPlan};
 use super::webui::{load_webui, webui_raw_bytes};
@@ -83,7 +84,9 @@ pub struct ParsedHttpRequest<'a> {
 /// Extract `Bearer` token from an `Authorization` header value.
 pub fn extract_bearer_token(authorization_value: &str) -> Option<&str> {
     let v = authorization_value.trim();
-    let rest = v.strip_prefix("Bearer ").or_else(|| v.strip_prefix("bearer "))?;
+    let rest = v
+        .strip_prefix("Bearer ")
+        .or_else(|| v.strip_prefix("bearer "))?;
     let tok = rest.trim();
     if tok.is_empty() {
         None
@@ -120,7 +123,10 @@ pub fn http_body(raw: &str) -> &str {
 /// Parse a complete HTTP/1.1 request (headers ended; body via [`http_body`]).
 pub fn parse_http_request(raw: &str) -> Result<ParsedHttpRequest<'_>, HttpParseError> {
     let raw = raw.trim_start_matches('\u{feff}');
-    let (req_line, rest) = raw.split_once("\r\n").or_else(|| raw.split_once('\n')).ok_or(HttpParseError::Truncated)?;
+    let (req_line, rest) = raw
+        .split_once("\r\n")
+        .or_else(|| raw.split_once('\n'))
+        .ok_or(HttpParseError::Truncated)?;
     let mut parts = req_line.split_whitespace();
     let method_s = parts.next().ok_or(HttpParseError::BadRequestLine)?;
     let path = parts.next().ok_or(HttpParseError::BadRequestLine)?;
@@ -137,7 +143,8 @@ pub fn parse_http_request(raw: &str) -> Result<ParsedHttpRequest<'_>, HttpParseE
     let headers = rest.split("\r\n\r\n").next().unwrap_or(rest);
     let headers = headers.split("\n\n").next().unwrap_or(headers);
     let path_only = path.split('?').next().unwrap_or(path);
-    let is_spa = matches!(method, RestMethod::Get) && (path_only == "/" || path_only == "/index.html");
+    let is_spa =
+        matches!(method, RestMethod::Get) && (path_only == "/" || path_only == "/index.html");
     let auth_token = auth_token_from_headers(headers);
     Ok(ParsedHttpRequest {
         method,
@@ -197,9 +204,7 @@ fn format_reply_json<'a>(reply: Option<ApiReply>, buf: &'a mut [u8]) -> &'a [u8]
         }) => {
             let st = state_str(state);
             let img = image_type.map(|t| t.as_str()).unwrap_or("");
-            let fw = image_type
-                .map(|t| t.firmware().as_str())
-                .unwrap_or("none");
+            let fw = image_type.map(|t| t.firmware().as_str()).unwrap_or("none");
             let order = if image_type.is_some() { "cd,disk" } else { "" };
             // {"ok":true,"record":true,...,"image_type":"...","firmware":"...","boot_order":"cd,disk"}
             let mut tmp = [0u8; 320];
@@ -547,6 +552,25 @@ pub fn handle_http_request(
             return format_http_response(400, "text/plain; charset=utf-8", b"bad request", out);
         }
         crate::mgmt::operator::OperatorHttp::Json { status, len, body } => {
+            return format_http_response(status, "application/json", &body[..len], out);
+        }
+    }
+    // ADR-021 E4. A saved certificate is presented on the next handshake.
+    // The listener stays TLS 1.2. The lab millicert remains until Save.
+    match crate::mgmt::host_cert::host_cert_rest(
+        parsed.method,
+        parsed.path,
+        auth_allows(parsed.auth_token),
+        http_body(raw),
+    ) {
+        crate::mgmt::host_cert::HostCertHttp::NotMine => {}
+        crate::mgmt::host_cert::HostCertHttp::Unauthorized => {
+            return format_http_response(401, "text/plain; charset=utf-8", b"unauthorized", out);
+        }
+        crate::mgmt::host_cert::HostCertHttp::Bad => {
+            return format_http_response(400, "text/plain; charset=utf-8", b"bad request", out);
+        }
+        crate::mgmt::host_cert::HostCertHttp::Json { status, len, body } => {
             return format_http_response(status, "application/json", &body[..len], out);
         }
     }

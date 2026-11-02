@@ -98,6 +98,14 @@ input.token{min-width:12rem}
 <button class="ghost" id="btn-op-save" type="button">Save account</button>
 </div>
 <p class="note" id="op-note">A saved account replaces raynu-v-bringup. The password is the next boot's login.</p>
+<p class="note" id="cert-line">Certificate: lab</p>
+<div class="toolbar" id="host-cert">
+<label>Certificate PEM <textarea id="cert-pem" rows="4" spellcheck="false"></textarea></label>
+<label>Key PEM <textarea id="key-pem" rows="4" spellcheck="false"></textarea></label>
+<button class="pri" id="btn-cert" type="button">Save certificate</button>
+<button class="ghost" id="btn-cert-lab" type="button">Use lab certificate</button>
+</div>
+<p class="note" id="cert-note">Used on the next connection. TLS 1.2. This page stays on the certificate it already has.</p>
 <div id="ports" class="empty">Ports: no link sample yet.</div>
 </section>
 <section class="pg" data-pg="guests">
@@ -369,6 +377,8 @@ document.getElementById("btn-host-addr").onclick=saveHostAddr;
 document.getElementById("btn-host-dhcp").onclick=clearHostAddr;
 document.getElementById("btn-op-login").onclick=function(){postOp("/auth/login")};
 document.getElementById("btn-op-save").onclick=function(){postOp("/auth/operator")};
+document.getElementById("btn-cert").onclick=saveCert;
+document.getElementById("btn-cert-lab").onclick=clearCert;
 document.getElementById("btn-vnic-x").onclick=closeVnic;
 document.getElementById("btn-nic").onclick=saveNic;
 document.getElementById("btn-det").onclick=detachNic;
@@ -377,7 +387,10 @@ document.getElementById("g-keys").onkeydown=function(e){if(e.key==="Enter"){e.pr
 window.raynuWebUi={listVms:listVms,startVm:startVm,stopVm:stopVm,createVm:createVm,listImages:listImages,refreshLogs:refreshLogs,sendKeys:sendKeys,powerOff:powerOff,loadSpare:loadSpare};
 async function loadOp(){let r;try{r=await fetch("/auth/operator")}catch(e){return}if(!r.ok)return;let j=null;try{j=await r.json()}catch(e){return}const line=document.getElementById("op-line");if(!line||!j)return;if(j.set){line.textContent="Operator: "+j.name;if((T.value||"")===def()){T.value="";saveT("")}}else line.textContent="Operator: none yet"}
 async function postOp(path){const name=document.getElementById("op-name").value;const pass=document.getElementById("op-pass").value;if(!name||!pass){setS("Name and password");return}const headers={};if(path==="/auth/operator")headers.Authorization=auth();let res;try{res=await fetch(path,{method:"POST",headers:headers,body:name+"\n"+pass})}catch(e){setS("Account dropped");return}let j=null;try{j=await res.json()}catch(e){}if(res.ok&&j&&j.token){T.value=j.token;saveT(j.token);document.getElementById("op-pass").value="";setS(path==="/auth/login"?"Signed in":"Account saved")}else setS(res.status===401?"Sign-in refused":"Account refused ("+res.status+")");loadOp()}
-dot("hv","ok","Hypervisor is running");listVms();loadSpare();loadHostAddr();loadClock();loadOp();setInterval(listVms,30000);setInterval(loadSpare,2000);setInterval(loadHostAddr,2000);setInterval(loadClock,2000);setInterval(loadOp,2000);setInterval(function(){if(document.querySelector('.pg.on[data-pg="activity"]'))refreshLogs()},2000);
+async function loadCert(){let r;try{r=await api("GET","/host/cert")}catch(e){return}if(!r.ok)return;let j=null;try{j=await r.json()}catch(e){return}const line=document.getElementById("cert-line");if(!line||!j)return;line.textContent=j.source==="operator"?("Certificate: operator "+j.cert+" bytes"):"Certificate: lab"}
+async function saveCert(){const c=document.getElementById("cert-pem").value;const k=document.getElementById("key-pem").value;if(!c||!k){setS("Certificate and key");return}let res;try{res=await fetch("/host/cert",{method:"POST",headers:{Authorization:auth(),"Content-Type":"text/plain"},body:c+"\n"+k})}catch(e){setS("Certificate dropped");return}setS(res.ok?"Certificate saved":"Certificate refused ("+res.status+")");if(res.ok){document.getElementById("key-pem").value=""}loadCert()}
+async function clearCert(){let res;try{res=await api("POST","/host/cert/clear")}catch(e){setS("Certificate dropped");return}setS(res.ok?"Lab certificate":"Certificate refused ("+res.status+")");loadCert()}
+dot("hv","ok","Hypervisor is running");listVms();loadSpare();loadHostAddr();loadClock();loadOp();loadCert();setInterval(listVms,30000);setInterval(loadSpare,2000);setInterval(loadHostAddr,2000);setInterval(loadClock,2000);setInterval(loadOp,2000);setInterval(loadCert,2000);setInterval(function(){if(document.querySelector('.pg.on[data-pg="activity"]'))refreshLogs()},2000);
 })();
 </script>
 </body>
