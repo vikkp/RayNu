@@ -202,6 +202,11 @@ pub fn auth_allows(token: Option<&str>) -> bool {
     let Some(t) = token else {
         return false;
     };
+    // A saved operator account replaces the lab latch and any ESP token.
+    // The bearer is the session from sign-in, not the password.
+    if crate::mgmt::operator::account_armed() {
+        return crate::mgmt::operator::session_matches(t);
+    }
     if let Some(op) = operator_token_str() {
         return t == op;
     }

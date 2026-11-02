@@ -2246,6 +2246,7 @@ fn perc_fusion_post(bar: u64, bus: u8, dev: u8, func: u8, base: u64) {
     perc_load_audit_chain(bar, target, bytes, dcmd_phys, data_phys);
     perc_load_autostart(bar, target, bytes, dcmd_phys, data_phys);
     perc_load_host_addr(bar, target, bytes, dcmd_phys, data_phys);
+    perc_load_operator(bar, target, bytes, dcmd_phys, data_phys);
 
     // The read chain already lived. A write miss still arms read-only virtio.
     perc_spare_write_last(bar, bus, dev, func, target, bytes, dcmd_phys, data_phys);
@@ -2714,6 +2715,99 @@ fn flush_host_addr_uefi() {
     }
     if back == sector {
         crate::mgmt::host_addr::ack_dirty(gen);
+        serial::write_line_nowait(" match");
+    } else {
+        serial::write_line_nowait(" mismatch (staged, not acked)");
+    }
+}
+
+/// Read the operator sector. A miss leaves the lab latch in place.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn perc_load_operator(bar: u64, target: u8, bytes: u64, frame_phys: u64, data_phys: u64) {
+    use crate::boot::serial;
+    let Some(lba) = crate::mgmt::operator::operator_lba(bytes) else {
+        serial::write_line("boot: E6 operator skip lba");
+        return;
+    };
+    let Some((st, timed_out)) = issue_ld_read16(bar, target, lba, frame_phys, data_phys) else {
+        serial::write_line("boot: E6 operator rd skip frame");
+        return;
+    };
+    if timed_out || st != MFI_STAT_OK {
+        serial::write_line("boot: E6 operator rd skip status");
+        return;
+    }
+    core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+    let mut sector = [0u8; 512];
+    // SAFETY: the READ(16) completed into the payload page.
+    // KANI-TARGET: host tests cover the sector, not this load.
+    unsafe {
+        core::ptr::copy_nonoverlapping(data_phys as *const u8, sector.as_mut_ptr(), 512);
+    }
+    if crate::mgmt::operator::restore(&sector) {
+        serial::write_str("boot: E6 operator rd lba=");
+        write_dec64(lba);
+        serial::write_line(" set");
+    } else {
+        serial::write_line("boot: E6 operator absent");
+    }
+}
+
+/// Write a staged operator sector. One WRITE(16), then a READ.
+/// The host-address sector is the next LBA up. LBA 0 is not encoded.
+/// No doorbell. The password is not printed.
+pub fn flush_operator() {
+    #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+    {
+        flush_operator_uefi();
+    }
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn flush_operator_uefi() {
+    use crate::boot::serial;
+    let Some((gen, sector)) = crate::mgmt::operator::copy_dirty() else {
+        return;
+    };
+    let bar = PERC_SPARE_BAR.load(core::sync::atomic::Ordering::Acquire);
+    let target = PERC_SPARE_TARGET.load(core::sync::atomic::Ordering::Acquire);
+    let frame = PERC_SPARE_FRAME.load(core::sync::atomic::Ordering::Acquire);
+    let data = PERC_SPARE_DATA.load(core::sync::atomic::Ordering::Acquire);
+    let bytes = PERC_SPARE_BYTES.load(core::sync::atomic::Ordering::Acquire);
+    let Some(lba) = crate::mgmt::operator::operator_lba(bytes) else {
+        return;
+    };
+    if bar == 0 || frame == 0 || data == 0 {
+        return;
+    }
+    serial::write_str_nowait("boot: E6 operator wr lba=");
+    write_dec64_nowait(lba);
+    let Some((st, timed_out)) = issue_ld_write16_sector(bar, target, lba, frame, data, &sector)
+    else {
+        serial::write_line_nowait(" skip frame");
+        return;
+    };
+    if timed_out || st != MFI_STAT_OK {
+        serial::write_line_nowait(" (staged, not acked)");
+        return;
+    }
+    let Some((rst, rto)) = issue_ld_read16(bar, target, lba, frame, data) else {
+        serial::write_line_nowait(" rd skip");
+        return;
+    };
+    if rto || rst != MFI_STAT_OK {
+        serial::write_line_nowait(" rd status (staged, not acked)");
+        return;
+    }
+    core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+    let mut back = [0u8; 512];
+    // SAFETY: the READ(16) completed into the payload page.
+    // KANI-TARGET: host tests cover the sector bytes, not this load.
+    unsafe {
+        core::ptr::copy_nonoverlapping(data as *const u8, back.as_mut_ptr(), 512);
+    }
+    if back == sector {
+        crate::mgmt::operator::ack_dirty(gen);
         serial::write_line_nowait(" match");
     } else {
         serial::write_line_nowait(" mismatch (staged, not acked)");

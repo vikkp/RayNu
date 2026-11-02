@@ -600,6 +600,7 @@ fn firmware_wait() {
         crate::mgmt::megaraid::flush_audit_chain();
         crate::mgmt::megaraid::flush_autostart();
         crate::mgmt::megaraid::flush_host_addr();
+        crate::mgmt::megaraid::flush_operator();
         let now = crate::arch::cpu::rdtsc();
         let elapsed = (now.wrapping_sub(wait_start) / hz) as u32;
         try_autostart(elapsed);

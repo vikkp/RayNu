@@ -531,6 +531,25 @@ pub fn handle_http_request(
             return format_http_response(status, "application/json", &body[..len], out);
         }
     }
+    // ADR-021 E6. GET needs no bearer. Login checks the password.
+    // Save accepts the lab latch only until an account exists.
+    match crate::mgmt::operator::operator_rest(
+        parsed.method,
+        parsed.path,
+        parsed.auth_token,
+        http_body(raw),
+    ) {
+        crate::mgmt::operator::OperatorHttp::NotMine => {}
+        crate::mgmt::operator::OperatorHttp::Unauthorized => {
+            return format_http_response(401, "text/plain; charset=utf-8", b"unauthorized", out);
+        }
+        crate::mgmt::operator::OperatorHttp::Bad => {
+            return format_http_response(400, "text/plain; charset=utf-8", b"bad request", out);
+        }
+        crate::mgmt::operator::OperatorHttp::Json { status, len, body } => {
+            return format_http_response(status, "application/json", &body[..len], out);
+        }
+    }
     if parsed.path == "/host/clock" {
         if !matches!(parsed.method, RestMethod::Get) {
             return format_http_response(400, "text/plain; charset=utf-8", b"bad request", out);

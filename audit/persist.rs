@@ -241,6 +241,7 @@ pub fn event_from_disc(disc: u64) -> Option<AuditEvent> {
         77 => AuditEvent::GuestNicDetached { spare_off: 0 },
         78 => AuditEvent::HostLinkChanged { func: 0, up: 0, mbps: 0 },
         79 => AuditEvent::HostAddrSaved { mode: 0, prefix: 0 },
+        80 => AuditEvent::OperatorAccountSet { name_len: 0 },
         _ => return None,
     })
 }
