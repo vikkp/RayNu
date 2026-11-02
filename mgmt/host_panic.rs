@@ -103,22 +103,27 @@ pub fn reboot_after_dump(reason: &str) -> bool {
     }
 }
 
-/// `boot: H2 heap used=N of M (post-EBS bump)`. No allocation: the panic
-/// may be the bump itself returning null.
+/// `boot: H2 heap used=N high=H of M`. No allocation: the panic may be
+/// the heap itself returning null. `used` is what is still held.
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn heap_line() {
     use core::fmt::Write;
-    let mut buf = [0u8; 96];
+    let mut buf = [0u8; 160];
     let mut w = LineBuf {
         buf: &mut buf,
         n: 0,
     };
     let _ = write!(
         &mut w,
-        "{HEAP_PREFIX}used={} of {} (post-EBS bump {})",
+        "{HEAP_PREFIX}used={} high={} of {} ({})",
         crate::boot::uefi_alloc::bump_used(),
+        crate::boot::uefi_alloc::bump_high(),
         crate::boot::uefi_alloc::BUMP_N,
-        if crate::boot::uefi_alloc::post_ebs() { "active" } else { "not yet" },
+        if crate::boot::uefi_alloc::post_ebs() {
+            "post-EBS heap"
+        } else {
+            "post-EBS heap not yet"
+        },
     );
     let n = w.n;
     if let Ok(text) = core::str::from_utf8(&buf[..n]) {

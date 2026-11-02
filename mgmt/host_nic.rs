@@ -98,6 +98,48 @@ pub fn http_accept_should_idle_abort(
 /// a standing page, not a second ClientHello.
 pub const COEXIST_KEEPALIVE_IDLE_MS: i64 = 600_000;
 
+/// Listen sockets armed together. One browser origin opens about six
+/// connections (the page, then the status polls). Iron `6dc1f554` had
+/// one: the sign-in accept never returned to listen, and every later
+/// SYN was refused.
+pub const COEXIST_TCP_SLOTS: usize = 6;
+
+/// A close whose TX queue never drains still gives the slot back.
+pub const COEXIST_CLOSE_FORCE_MS: i64 = 2_000;
+
+/// When no slot is listening, a held connection idle this long is
+/// aborted so the next SYN has a socket. An open page polls faster
+/// than this, so the slot it is using is not the one reclaimed.
+pub const COEXIST_RECLAIM_IDLE_MS: i64 = 15_000;
+
+/// One coexist TCP slot, as the reclaim policy sees it.
+#[derive(Clone, Copy)]
+pub struct CoexistSlotIdle {
+    pub listening: bool,
+    pub held: bool,
+    pub idle_ms: i64,
+}
+
+/// Slot to abort so a new connection can land. `None` while any slot
+/// is still listening, or while every held slot is younger than
+/// [`COEXIST_RECLAIM_IDLE_MS`].
+pub fn coexist_reclaim_slot(slots: &[CoexistSlotIdle]) -> Option<usize> {
+    if slots.iter().any(|s| s.listening) {
+        return None;
+    }
+    let mut best: Option<(usize, i64)> = None;
+    for (i, s) in slots.iter().enumerate() {
+        if !s.held || s.idle_ms < COEXIST_RECLAIM_IDLE_MS {
+            continue;
+        }
+        match best {
+            Some((_, idle)) if idle >= s.idle_ms => {}
+            _ => best = Some((i, s.idle_ms)),
+        }
+    }
+    best.map(|(i, _)| i)
+}
+
 /// True when a kept session has been idle long enough to accept again.
 pub fn coexist_keepalive_idle(now_ms: i64, last_http_ms: i64, idle_ms: i64) -> bool {
     idle_ms > 0 && now_ms.saturating_sub(last_http_ms) >= idle_ms

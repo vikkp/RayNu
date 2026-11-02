@@ -11,6 +11,7 @@ pub mod handoff;
 pub mod mem;
 pub mod ovmf_esp;
 pub mod pe_assets;
+pub mod post_ebs_heap;
 pub mod raynu_f_flag;
 pub mod serial;
 pub mod usb_soak_flag;

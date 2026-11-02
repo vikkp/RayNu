@@ -176,7 +176,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 2026-08 ████████  R640 boot (E2) + E3b HTTP-OK
 2026-09 ████████  E5 + Phase B — **Mount Everest CLOSED** (`f72b4276`)  ← months_to_everest = 0.0
 2026-10 ████████  M8.8 lived on c3a70e62: Ubuntu login, then library ISO cleared; scores held
-2026-11 ░░░░░░░░  wave 5: E6 lived; E4 save wrote cert=790; read-back lived on 0beeb871; first browser handshake reset the chassis (bump exhausted); key kept across reset(); scores held
+2026-11 ░░░░░░░░  wave 5: E6 lived; E4 cert presented on 6dc1f554 (no reset); one listen slot then wedged; six slots and a freeing heap; scores held
 ```
 
 **Pull-forward rule:** E2 closed 2026-08-15; E3 bring-up closed 2026-08-16; **E3b closed 2026-08-20**; **P0-14 closed 2026-08-21**; **E5 install-to-disk closed on iron 2026-09-10** (`59ac070`); **F7 relaunch + installed-disk GRUB reached on iron 2026-09-10** (`975f8fc`, exit-cap ended it); **E5 reboot-to-disk closed on iron 2026-09-10** (`56a3ffd`: `DISK-BOOT-OK`, second Linux `root=UUID=`, `login:`) → months 0.5→0.25; **Phase B closed on iron 2026-09-11** (`f72b4276` / `34552377351`: coexist HTTP-OK → SPA Start of RayNu-F ISO → install → disk reboot) → months 0.25→0.0. Document why in [Changelog](#hda-changelog).
@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-5-e4-handshake |
-| Summary | **ADR-021 E4 still in flight.** Iron `0beeb871` read the saved certificate (`boot: E4 cert rd lba=6190268891 operator`) and the guest reached `raynusrv2 login:`. The first browser connection reset the chassis with no panic line: `reset()` re-parsed the RSA key (~100 KiB, measured) on every accept and re-listen and the 512 KiB leaky bump ran out. `reset()` keeps the parsed key; bump 4 MiB; the panic path prints the heap high-water and flushes COM2 before the reset. Not lived. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-5-e4-slots |
+| Summary | **ADR-021 E4 still in flight.** Iron `6dc1f554` presented the saved certificate (Firefox certificate warning, no reset) and then the one listen slot wedged on the sign-in accept, so later connections were refused. Six listen sockets, a 2 s force on a close whose TX never drains, and a post-EBS heap that returns handshake temporaries on `dealloc`. Not lived. TLS stays 1.2. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | ADR-021 E4 `planned → in flight` on `cursor/wave-5-e4-cert-50bb`. E6 stays lived. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-02 | wave-5-e4-slots | 0.0 | 99 | **E4 still in flight.** Iron `6dc1f554`: operator certificate presented (Firefox warning, chassis stayed up), then the one TCP slot never returned to listen after the sign-in accept. Six slots, close force 2 s, freeing post-EBS heap. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-02 | wave-5-e4-handshake | 0.0 | 99 | **E4 still in flight.** Iron `0beeb871`: cert read lived (`rd lba=6190268891 operator`), then the first browser connection reset the chassis, COM2 cut at `boot: HOST-NIC TC`. Cause measured on the host: `reset()` re-parsed the key (~100 KiB) per accept/re-listen on a 512 KiB leaky bump. Key kept across `reset()`, bump 4 MiB, panic dump flushed. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-02 | wave-5-e4-cert-read | 0.0 | 99 | **E4 still in flight.** Iron `12ffaff69fb9` save lived (`cert=790`). Next F11: red screen, VMXOFF #UD at `+02478F`, COM2 stopped after `E6 operator rd … set`. Bump allocator moves before the spare read. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-31 | wave-5-e4-cert | 0.0 | 99 | **E4 in flight.** Save certificate writes the spare. The next handshake uses it. TLS stays 1.2. Not lived. Scores held. months 0.0 held; overall 99 held |
