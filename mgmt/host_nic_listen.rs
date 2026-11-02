@@ -143,14 +143,20 @@ const _: () = assert!(SCRATCH_N + 16 <= crate::mgmt::mgmt_arena::MGMT_ARENA_BYTE
 
 /// Complete HTTP request → codec → TLS wrap. Not iron TLS-OK by itself.
 ///
-/// `Some(true)` means hand the slot back to `listen`. `Some(false)` is
-/// the ISO library upload, which keeps the TLS session for the next
-/// chunk. `None` means the reply was not fully queued; the buffer stays
-/// so the next tick can retry.
+/// `Some(true)` means the client sent `Connection: close` and this slot
+/// should FIN. `Some(false)` keeps the TLS session for the next request.
+/// `None` means the reply was not fully queued; the buffer stays so the
+/// next tick can retry. The ISO library upload returns `Some(false)`
+/// before that header is consulted, so a chunked upload stays open.
 ///
-/// A normal SPA `fetch()` does not send `Connection: close`. Keeping
-/// that socket filled all six slots on iron `643f13de`, and the reload
-/// was refused. The library path is the one that stays open.
+/// A normal SPA `fetch()` does not send `Connection: close`. Iron
+/// `1e7d44c9` closed every reply anyway. Overview polls five URLs every
+/// 2 s, each poll was a new handshake, COM2 filled with accept and
+/// re-listen, and a poll that found all six slots busy painted the Host
+/// card down. Keeping the session is the SPA path again. `643f13de`
+/// filled all six slots that way and the reload was refused; when none
+/// are listening, the oldest finished session is the one that ends with
+/// FIN, not RST. A slot still in its first handshake is left alone.
 fn wrap_session_try_exchange(
     session: &mut Tls12Listen,
     sock: &mut tcp::Socket,
@@ -225,11 +231,9 @@ fn wrap_session_try_exchange(
         return None;
     }
     // clear_http drops this request only. reset() would mint a ClientHello.
-    // `wants_close` is the client's header. Either way this slot goes
-    // back to listen; the library upload returned Some(false) above.
+    // `wants_close` is the client's header. A SPA fetch keeps the session.
     session.clear_http();
-    let _ = wants_close;
-    Some(true)
+    Some(wants_close)
 }
 
 fn tls_session() -> &'static mut Tls12Listen {
@@ -824,6 +828,8 @@ pub fn tick_bcm5720_coexist() {
             let mut views = [CoexistSlotIdle {
                 listening: false,
                 held: false,
+                kept: false,
+                closing: false,
                 idle_ms: 0,
             }; COEXIST_TCP_SLOTS];
             for i in 0..COEXIST_TCP_SLOTS {
@@ -839,15 +845,21 @@ pub fn tick_bcm5720_coexist() {
                 views[i] = CoexistSlotIdle {
                     listening: sock.is_listening(),
                     held: sock.is_active(),
+                    kept: rt.kept,
+                    closing: rt.pending_close,
                     idle_ms: idle,
                 };
             }
             if let Some(i) = coexist_reclaim_slot(&views) {
-                slot_relisten(
-                    sockets,
-                    i,
-                    "boot: HOST-NIC TCP re-listen after HTTP (idle reclaim)",
-                );
+                // FIN, not RST. abort() would drop a reply the browser
+                // already accepted. One finished session is enough; a
+                // slot already closing keeps the rest of the pool.
+                let mut rt = SLOT_RT[i];
+                rt.pending_close = true;
+                rt.close_armed_at_ms = millis;
+                rt.drain_empty_at_ms = 0;
+                rt.kept = false;
+                SLOT_RT[i] = rt;
             }
         }
         let library_exchange = crate::mgmt::iso_library::take_exchange_quiet();

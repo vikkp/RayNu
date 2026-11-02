@@ -107,9 +107,12 @@ pub const COEXIST_TCP_SLOTS: usize = 6;
 /// A close whose TX queue never drains still gives the slot back.
 pub const COEXIST_CLOSE_FORCE_MS: i64 = 2_000;
 
-/// When no slot is listening, a held connection idle this long is
-/// aborted so the next SYN has a socket. An open page polls faster
-/// than this, so the slot it is using is not the one reclaimed.
+/// Idle-abort budget for a connection that never finished a reply.
+///
+/// A full pool does not wait this long. When every socket is busy, the
+/// oldest session that has already finished a reply is closed at once
+/// so one socket can accept. [`COEXIST_KEEPALIVE_IDLE_MS`] is still the
+/// quiet-page timeout.
 pub const COEXIST_RECLAIM_IDLE_MS: i64 = 15_000;
 
 /// One coexist TCP slot, as the reclaim policy sees it.
@@ -117,19 +120,26 @@ pub const COEXIST_RECLAIM_IDLE_MS: i64 = 15_000;
 pub struct CoexistSlotIdle {
     pub listening: bool,
     pub held: bool,
+    /// Finished at least one HTTP reply and is still on that TLS session.
+    pub kept: bool,
+    /// FIN already armed. One slot on its way back to listen is enough.
+    pub closing: bool,
     pub idle_ms: i64,
 }
 
-/// Slot to abort so a new connection can land. `None` while any slot
-/// is still listening, or while every held slot is younger than
-/// [`COEXIST_RECLAIM_IDLE_MS`].
+/// Slot to FIN so a new connection can land.
+///
+/// `None` while any slot is listening, while one is already closing, or
+/// while every busy slot is still in its first handshake (`held` and not
+/// `kept`). Otherwise the kept slot with the greatest `idle_ms`, including
+/// a session that just answered.
 pub fn coexist_reclaim_slot(slots: &[CoexistSlotIdle]) -> Option<usize> {
-    if slots.iter().any(|s| s.listening) {
+    if slots.iter().any(|s| s.listening || s.closing) {
         return None;
     }
     let mut best: Option<(usize, i64)> = None;
     for (i, s) in slots.iter().enumerate() {
-        if !s.held || s.idle_ms < COEXIST_RECLAIM_IDLE_MS {
+        if !s.kept {
             continue;
         }
         match best {

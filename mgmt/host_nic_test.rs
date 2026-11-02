@@ -110,8 +110,10 @@ fn coexist_millis_from_tsc_wraps() {
 }
 
 #[test]
-fn a_listening_slot_blocks_reclaim_and_the_oldest_idle_held_slot_is_the_one() {
+fn a_listening_slot_blocks_reclaim_and_the_oldest_kept_slot_is_the_one() {
     assert_eq!(COEXIST_TCP_SLOTS, 6);
+    assert_eq!(COEXIST_RECLAIM_IDLE_MS, 15_000);
+    assert!(COEXIST_KEEPALIVE_IDLE_MS > COEXIST_RECLAIM_IDLE_MS);
     let listen = include_str!("host_nic_listen.rs");
     assert!(listen.contains("COEXIST_TCP_SLOTS"));
     assert!(listen.contains("COEXIST_CLOSE_FORCE_MS"));
@@ -121,25 +123,50 @@ fn a_listening_slot_blocks_reclaim_and_the_oldest_idle_held_slot_is_the_one() {
     let young = CoexistSlotIdle {
         listening: false,
         held: true,
-        idle_ms: COEXIST_RECLAIM_IDLE_MS - 1,
+        kept: true,
+        closing: false,
+        idle_ms: 0,
     };
     let old = CoexistSlotIdle {
         listening: false,
         held: true,
-        idle_ms: COEXIST_RECLAIM_IDLE_MS + 50,
+        kept: true,
+        closing: false,
+        idle_ms: 50,
     };
     let older = CoexistSlotIdle {
         listening: false,
         held: true,
-        idle_ms: COEXIST_RECLAIM_IDLE_MS + 500,
+        kept: true,
+        closing: false,
+        idle_ms: 500,
     };
     let open = CoexistSlotIdle {
         listening: true,
         held: false,
+        kept: false,
+        closing: false,
         idle_ms: 0,
     };
-    assert_eq!(coexist_reclaim_slot(&[young]), None);
+    let handshake = CoexistSlotIdle {
+        listening: false,
+        held: true,
+        kept: false,
+        closing: false,
+        idle_ms: COEXIST_RECLAIM_IDLE_MS + 1,
+    };
+    let closing = CoexistSlotIdle {
+        listening: false,
+        held: true,
+        kept: false,
+        closing: true,
+        idle_ms: 0,
+    };
+    assert_eq!(coexist_reclaim_slot(&[young]), Some(0));
     assert_eq!(coexist_reclaim_slot(&[young, old]), Some(1));
     assert_eq!(coexist_reclaim_slot(&[older, old, open]), None);
     assert_eq!(coexist_reclaim_slot(&[old, older, young]), Some(1));
+    assert_eq!(coexist_reclaim_slot(&[handshake]), None);
+    assert_eq!(coexist_reclaim_slot(&[handshake, young]), Some(1));
+    assert_eq!(coexist_reclaim_slot(&[old, closing]), None);
 }
