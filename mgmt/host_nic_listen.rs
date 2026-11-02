@@ -30,7 +30,7 @@ use crate::mgmt::console::{maybe_print_iron_console_ok, take_spa_keys_injected};
 use crate::mgmt::e1000::E1000Device;
 use crate::mgmt::host_nic::{
     coexist_keepalive_idle, coexist_millis_from_tsc, host_nic_lab_armed,
-    http_accept_idle_limit_for, http_accept_should_idle_abort, COEXIST_CLOSE_FORCE_MS,
+    http_accept_idle_limit_ms, http_accept_should_idle_abort, COEXIST_CLOSE_FORCE_MS,
     COEXIST_KEEPALIVE_IDLE_MS,
     COEXIST_TCP_SLOTS, HOST_NIC_DHCP_MS,
     HOST_NIC_LISTEN_MS, HOST_NIC_MAX_EXCHANGES, M7_HOST_NIC_QEMU_MARKER, PRE_RAYNUF_HTTPS_MS,
@@ -809,9 +809,9 @@ pub fn tick_bcm5720_coexist() {
                                     rt.announced,
                                     headers_done,
                                     millis.saturating_sub(rt.accept_at_ms),
-                                    http_accept_idle_limit_for(
-                                        session.handshake_waiting_client_hello(),
-                                        session.rx_pending(),
+                                    http_accept_idle_limit_ms(
+                                        session.handshake_waiting_client_hello()
+                                            && !session.rx_pending(),
                                     ),
                                 )
                             {
@@ -1368,9 +1368,8 @@ fn listen_loop<D: Device>(
                 headers_done,
                 millis.saturating_sub(accept_at),
                 // HOST_NIC_HTTP_IDLE_MS unless TLS ST_CH → HOST_NIC_HTTP_HS_IDLE_MS
-                http_accept_idle_limit_for(
-                    session.handshake_waiting_client_hello(),
-                    session.rx_pending(),
+                http_accept_idle_limit_ms(
+                    session.handshake_waiting_client_hello() && !session.rx_pending(),
                 ),
             ) {
                 sock.abort();
