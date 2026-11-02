@@ -1,6 +1,6 @@
 ---
 hda_version: 1
-last_updated: 2026-10-31
+last_updated: 2026-11-02
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
@@ -176,7 +176,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 2026-08 ████████  R640 boot (E2) + E3b HTTP-OK
 2026-09 ████████  E5 + Phase B — **Mount Everest CLOSED** (`f72b4276`)  ← months_to_everest = 0.0
 2026-10 ████████  M8.8 lived on c3a70e62: Ubuntu login, then library ISO cleared; scores held
-2026-11 ░░░░░░░░  operator picks boot or reinstall in the SPA; mailbox probe LBA 0 stays unwritten; `skip PERC` stays
+2026-11 ░░░░░░░░  wave 5: E6 lived; E4 save wrote cert=790; the read-back F11 red-screened (VMXOFF #UD); scores held
 ```
 
 **Pull-forward rule:** E2 closed 2026-08-15; E3 bring-up closed 2026-08-16; **E3b closed 2026-08-20**; **P0-14 closed 2026-08-21**; **E5 install-to-disk closed on iron 2026-09-10** (`59ac070`); **F7 relaunch + installed-disk GRUB reached on iron 2026-09-10** (`975f8fc`, exit-cap ended it); **E5 reboot-to-disk closed on iron 2026-09-10** (`56a3ffd`: `DISK-BOOT-OK`, second Linux `root=UUID=`, `login:`) → months 0.5→0.25; **Phase B closed on iron 2026-09-11** (`f72b4276` / `34552377351`: coexist HTTP-OK → SPA Start of RayNu-F ISO → install → disk reboot) → months 0.25→0.0. Document why in [Changelog](#hda-changelog).
@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-5-e4-cert |
-| Summary | **ADR-021 E4 in flight.** Overview can save a certificate for the next handshake. The lab millicert stays until that save. The listener is still TLS 1.2. Not lived. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-5-e4-cert-read |
+| Summary | **ADR-021 E4 still in flight.** Iron `12ffaff69fb9` saved the certificate (`wr lba=6190268891 match`, `cert=790`). The next F11 stopped in the read: the BIOS red screen was VMXOFF #UD after the RSA parse allocated on the dead UEFI pool. The bump is selected before that read. Not lived. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | ADR-021 E4 `planned → in flight` on `cursor/wave-5-e4-cert-50bb`. E6 stays lived. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-02 | wave-5-e4-cert-read | 0.0 | 99 | **E4 still in flight.** Iron `12ffaff69fb9` save lived (`cert=790`). Next F11: red screen, VMXOFF #UD at `+02478F`, COM2 stopped after `E6 operator rd … set`. Bump allocator moves before the spare read. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-31 | wave-5-e4-cert | 0.0 | 99 | **E4 in flight.** Save certificate writes the spare. The next handshake uses it. TLS stays 1.2. Not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-31 | wave-5-e6-lived | 0.0 | 99 | **Iron `f2828d95`: E6 lived.** `rd lba=6190268907 set`. Lab-token GET `AuthDenied method_tag=1`. Sign in opened the page. Wave 5 stays open. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-31 | wave-5-e6-operator | 0.0 | 99 | **E6 in flight.** Operator account on the spare. Lab latch stays until Save. Not lived. Wave 4 stays closed. Scores held. months 0.0 held; overall 99 held |

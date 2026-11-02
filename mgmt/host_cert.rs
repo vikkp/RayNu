@@ -497,6 +497,21 @@ pub fn prop_host_cert() -> bool {
         && html.contains("id=\"btn-cert\"")
         && html.contains("/host/cert")
         && html.contains("function saveCert")
+        && bump_before_spare_read()
+}
+
+/// The certificate read parses an RSA key. That allocates. The UEFI pool
+/// returns null after ExitBootServices, so the bump has to be selected
+/// before `perc_fusion_post_low`.
+fn bump_before_spare_read() -> bool {
+    let handoff = include_str!("../boot/handoff.rs");
+    match (
+        handoff.find("uefi_alloc::mark_post_ebs()"),
+        handoff.find("perc_fusion_post_low"),
+    ) {
+        (Some(bump), Some(perc)) => bump < perc,
+        _ => false,
+    }
 }
 
 #[cfg(test)]

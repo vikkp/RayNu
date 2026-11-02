@@ -54,19 +54,30 @@ pub fn format_panic_line(reason: &str, buf: &mut [u8]) -> usize {
 /// Returns only when `VMXOFF` fails. A successful reset does not return.
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 pub fn reboot_after_dump(reason: &str) -> bool {
-    use crate::boot::serial;
     let mut line = [0u8; 180];
     let n = format_panic_line(reason, &mut line);
     if let Ok(text) = core::str::from_utf8(&line[..n]) {
-        serial::write_line_nowait(text);
+        com2_line(text);
     } else {
-        serial::write_line_nowait(PANIC_PREFIX);
+        com2_line(PANIC_PREFIX);
     }
-    serial::write_line_nowait(REBOOT_LINE);
-    // SAFETY: a panic or an authenticated SPA click. VMXOFF in VMX root
-    // leaves VMX operation. ResetSystem with VMX still on can hang the
-    // R640, so a failed VMXOFF does not reset.
+    com2_line(REBOOT_LINE);
+    // SAFETY: a panic or an authenticated SPA click. Read CR4 only.
+    // VMXOFF is #UD when CR4.VMXE is clear (SDM): the CPU is not in VMX
+    // operation. Iron `12ffaff69fb9` hit that instruction while the
+    // certificate read was still inside ExitBootServices' aftermath, and
+    // the BIOS red screen was the result. A cold reset is safe in that
+    // window. Once VMXE is set, a failed VMXOFF still does not reset:
+    // ResetSystem with VMX on can hang the R640.
     // KANI-TARGET: host tests cover the line, not this reset.
+    let vmxe = unsafe { crate::arch::cpu::read_cr4() } & crate::arch::cpu::CR4_VMXE != 0;
+    if !vmxe {
+        uefi::runtime::reset(
+            uefi::runtime::ResetType::COLD,
+            uefi::Status::ABORTED,
+            None,
+        );
+    }
     match unsafe { crate::vmx::hardware::vmxoff() } {
         Ok(()) => {
             uefi::runtime::reset(
@@ -76,9 +87,21 @@ pub fn reboot_after_dump(reason: &str) -> bool {
             );
         }
         Err(_) => {
-            serial::write_line_nowait(VMXOFF_FAIL);
+            com2_line(VMXOFF_FAIL);
             false
         }
+    }
+}
+
+/// COM2 while the guest is not up uses the diagnostic UART. During Linux
+/// earlycon, `write_line` is hushed, so the dump takes the nowait path.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn com2_line(s: &str) {
+    use crate::boot::serial;
+    if serial::linux_earlycon_share() {
+        serial::write_line_nowait(s);
+    } else {
+        serial::write_line(s);
     }
 }
 
@@ -136,6 +159,7 @@ pub fn prop_host_panic() -> bool {
         && html.contains("/host/panic")
         && main.contains("firmware_panic")
         && main.contains("fn raynu_panic")
+        && include_str!("host_panic.rs").contains("CR4_VMXE")
 }
 
 #[cfg(test)]

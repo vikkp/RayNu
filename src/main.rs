@@ -102,6 +102,8 @@ fn main() -> Status {
     // SNP parked across EBS; do not poll the NIC here (iron hung on immediate
     // post-EBS SNP receive). Guest path continues; after VMXOFF idle is WARN-only.
     let handoff = unsafe { boot::handoff::leave_firmware() };
+    // Idempotent. `leave_firmware` already switched the allocator, before
+    // the spare reads. This call stays so the bump is obvious at the handoff.
     boot::uefi_alloc::mark_post_ebs();
     let mut bump = handoff.frames;
 
