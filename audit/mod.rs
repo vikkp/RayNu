@@ -5,6 +5,7 @@
 //! VERIFICATION: L0 for integrity
 
 pub mod integrity;
+pub mod persist;
 pub mod m5_audit_gate;
 pub mod m5_report_gate;
 pub mod m6_pdf_gate;

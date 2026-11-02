@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-3-c8-lived |
-| Summary | **Iron `4ac1a629`: ADR-021 C8 lived for the NIC catalog.** A second F11 of the same stick loaded `n=1` and the vNIC page was already filled. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-3-g4-lived |
+| Summary | **Iron `33488fb7`: ADR-021 G4 lived.** Second F11 `audit chain rd lba=6190268910 n=9`. Wave 3 stays open on C7. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. |
-| Gates touched | ADR-021 C8 lived. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-9-lan`. |
+| Gates touched | ADR-021 G4 lived. C7 stays planned. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-9-lan`. |
 
 ---
 
@@ -219,6 +219,9 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-10-29 | wave-3-g4-lived | 94 | 72 | **Iron `33488fb7`: G4 lived.** Second F11 `audit chain rd lba=6190268910 n=9`. Wave 3 stays open on C7. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
+| 2026-10-29 | wave-3-g4-spa-wait-flush | 94 | 72 | **G4 still in flight.** Iron `0421c2fd` never printed `audit chain wr` from the SPA wait. That wait now flushes the image. Not lived. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
+| 2026-10-29 | wave-3-g4-audit-chain | 94 | 72 | **G4 in flight on `cursor/wave-3-g4-audit-50bb`.** Audit image continues the hash chain across a boot. Not lived. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-29 | wave-3-c8-lived | 94 | 72 | **Iron `4ac1a629`: C8 lived for the NIC catalog.** `wr lba=6190268926 match`, second F11 `rd n=1`, vNIC already filled. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-29 | wave-3-c8-poll-write | 94 | 72 | **Iron `94d0d369`: catalog write `mismatch` at lba 6190268926.** Frame was not polled. Fix is the probe write's poll bits. Still in flight. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-29 | wave-3-c8-nic-catalog | 94 | 72 | **C8 in flight on `cursor/wave-3-c8-config-50bb`.** NIC catalog sector written while the CPU is free, read on the next boot. Not lived. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
@@ -417,7 +420,7 @@ LOI:           NOT OPEN. Tracker born 2026-09-14.
 Bar A:         94% · 0.25 months · dedicated-box non-prod
 Bar B:         72% · 1.25 months · Ubuntu login on a 10 GiB spare tail (c3a70e62) with a LAN address from the SPA (0d865c7f); whole VD still hidden
 Overall:       80% · confidence medium
-NOW:           SKU card is what a signature holds today. One dedicated box. Ubuntu on a 10 GiB tail. M8.9 closed on 0d865c7f: the guest took the SPA-saved address by itself and SSH from the LAN reached raynusrv2. Pinned as v0.1.0-m8-9-lan (not Latest). Wave 2 is current (D5 iron thread). Save the vNIC before Start after any F11. Do not format UBUNTU0. The 2.9 TB VD is not this disk. A5 parked. Bar A 94. Bar B 72. Overall 80. perc 86. unmodified 45. SKU 94. months A 0.25. months B 1.25. docs/adr/ADR-019.md
+NOW:           SKU card is what a signature holds today. One dedicated box. Ubuntu on a 10 GiB tail. M8.9 closed on 0d865c7f: the guest took the SPA-saved address by itself and SSH from the LAN reached raynusrv2. Pinned as v0.1.0-m8-9-lan (not Latest). Wave 3 is current. C8 and G4 lived. C7 (virtio-blk FLUSH) is still planned. Do not format UBUNTU0. The 2.9 TB VD is not this disk. A5 parked. Bar A 94. Bar B 72. Overall 80. perc 86. unmodified 45. SKU 94. months A 0.25. months B 1.25. docs/adr/ADR-019.md
 Open:          link state on the SPA (D5) · iron AUTH-OK (parked) · unmodified ISO without the serial amendment · the whole spare VD · cluster
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
 Rollback:      v0.1.0-m8-9-lan → M8.9 close (COM2 sha=0d865c7fcb0a, CI 40603110937, SHA256 df6fc3465cecf1eaf058d5c8e675501827c16eb55e7b2c9758bc5e68326ad91b). v0.1.0-m8-8-ubuntu → older M8.8 close (c3a70e623aec, CI 38454398693). v0.1.0-m8-perc-spa → older SPA choice (8ad2ac89125e, CI 36362775808). v0.1.0-m8-a4s → older standing SPA (1f33eeda72f9, CI 36137732145). v0.1.0-m8-a6 → keyboard + power-off (fd2ca12e, CI 36166108942), not Latest. Everest Latest stays v0.1.0-everest-closed (f72b4276).

@@ -369,7 +369,8 @@ fn fwstate_load_is_one_harpoon_and_does_not_bus_master() {
     .is_none());
     let free = super::IRON_LD1_BYTES
         - super::PERC_IMAGE_BYTES
-        - super::SPARE_HIGH_RESERVE;
+        - super::SPARE_HIGH_RESERVE
+        - super::AUDIT_PERSIST_BYTES;
     assert!(
         super::place_in_free_tail(super::IRON_LD1_BYTES, super::PERC_IMAGE_BYTES, true, free)
             .is_some()
