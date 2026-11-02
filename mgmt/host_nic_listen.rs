@@ -77,6 +77,8 @@ struct SlotRt {
     pending_close: bool,
     drain_empty_at_ms: i64,
     close_armed_at_ms: i64,
+    /// `close()` has been called. The slot listens again once the FIN finishes.
+    fin_sent: bool,
     session_ready: bool,
 }
 
@@ -89,6 +91,7 @@ impl SlotRt {
         pending_close: false,
         drain_empty_at_ms: 0,
         close_armed_at_ms: 0,
+        fin_sent: false,
         session_ready: false,
     };
 }
@@ -671,16 +674,29 @@ pub fn tick_bcm5720_coexist() {
                     if rt.pending_close {
                         let queued = sock.send_queue();
                         let armed_for = millis.saturating_sub(rt.close_armed_at_ms);
-                        if queued == 0 {
+                        if rt.fin_sent {
+                            // FIN is in flight. Listen again when the socket
+                            // finishes, or abort if the peer never does.
+                            if !sock.is_open() || armed_for >= COEXIST_CLOSE_FORCE_MS {
+                                relisten = Some("boot: HOST-NIC TCP re-listen after HTTP");
+                            }
+                        } else if queued == 0 {
                             if rt.drain_empty_at_ms == 0 {
                                 rt.drain_empty_at_ms = millis;
                             }
                             // drain TX before reclaim, then abort() — not close().
+                            // That comment is the failure path below. A finished
+                            // reply uses FIN, not RST. abort() after the drain
+                            // made Firefox drop the page (iron d3faa4d7:
+                            // re-listen after HTTP, browser "Unable to connect").
                             // 8 ms of later ticks, not a spin inside this vmexit.
                             // A queue that never hits 0 used to hold the only
                             // slot forever (iron 6dc1f554). Force gives it back.
                             if millis.saturating_sub(rt.drain_empty_at_ms) >= 8 {
-                                relisten = Some("boot: HOST-NIC TCP re-listen after HTTP");
+                                sock.close();
+                                rt.fin_sent = true;
+                                rt.close_armed_at_ms = millis;
+                                session.reset();
                             }
                         } else if armed_for >= COEXIST_CLOSE_FORCE_MS {
                             relisten = Some(
@@ -789,7 +805,7 @@ pub fn tick_bcm5720_coexist() {
                                 && !crate::mgmt::host_power::spa_poweroff_latched()
                                 && !crate::mgmt::host_panic::requested()
                             {
-                                // Drain, then abort. abort() without drain
+                                // Drain, then FIN. abort() without drain
                                 // RSTs Firefox on the last TLS record.
                                 rt.pending_close = true;
                                 rt.close_armed_at_ms = millis;

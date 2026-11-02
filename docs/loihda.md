@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-5-e4-slot-return |
-| Summary | **ADR-021 E4 still in flight.** Iron `643f13de` served the page on six slots. Reload was refused because keep-alive held them. SPA exchanges now return the slot. TLS stays 1.2. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-5-e4-fin |
+| Summary | **ADR-021 E4 still in flight.** Iron `d3faa4d7` finished the HTTP exchanges and Firefox still could not connect. The reply was reset. A drained reply now ends with FIN. TLS stays 1.2. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. |
 | Gates touched | ADR-021 E4 in flight. Not lived. No doorbell. No format of UBUNTU0. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-02 | wave-5-e4-fin | 94 | 72 | **E4 still in flight.** Iron `d3faa4d7` `re-listen after HTTP` on all six slots, browser "Unable to connect". Drained reply now FINs. Not lived. TLS 80. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-02 | wave-5-e4-slot-return | 94 | 72 | **E4 still in flight.** Iron `643f13de` six accepts and sign-in. Reload refused: keep-alive held every slot. SPA exchanges return the slot. Not lived. TLS 80. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-02 | wave-5-e4-slots | 94 | 72 | **E4 still in flight.** Iron `6dc1f554` operator handshake lived (Firefox warning, no reset). One TCP slot then refused every later connection. Six slots, 2 s close force, freeing heap. Not lived. TLS 80. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-02 | wave-5-e4-handshake | 94 | 72 | **E4 still in flight.** Iron `0beeb871` cert read lived; first browser handshake reset the chassis (bump exhausted by per-`reset()` key parses). Key kept, bump 4 MiB, dump flushed. Not lived. TLS 80. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |

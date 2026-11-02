@@ -117,6 +117,7 @@ fn a_listening_slot_blocks_reclaim_and_the_oldest_idle_held_slot_is_the_one() {
     assert!(listen.contains("COEXIST_CLOSE_FORCE_MS"));
     assert!(listen.contains("coexist_reclaim_slot"));
     assert!(listen.contains("filled all six slots"));
+    assert!(listen.contains("FIN, not RST"));
     let young = CoexistSlotIdle {
         listening: false,
         held: true,
