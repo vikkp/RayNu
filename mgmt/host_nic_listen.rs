@@ -288,7 +288,9 @@ fn drain_tls(session: &mut Tls12Listen, sock: &mut tcp::Socket, wrap: &mut [u8])
 }
 
 fn print_tls_wrap_plaintext_note() {
-    serial::write_line("boot: HOST-NIC TLS wrap=tls12 (ECDHE-RSA-AES128-GCM; not iron TLS-OK)");
+    serial::write_line(
+        "boot: HOST-NIC TLS wrap=tls13 (TLS_AES_128_GCM_SHA256; TLS 1.2 remains; not iron TLS-OK)",
+    );
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

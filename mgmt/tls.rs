@@ -4,7 +4,8 @@
 //! Proven Core: **outside** (ADR-002 / ADR-018). Do not touch VMX/EPT.
 //! VERIFICATION: L1 host tests (rustls TLS 1.2 client ↔ freestanding server).
 //!
-//! Firmware coexist `:8443` speaks **TLS 1.2** (`Tls12Listen`, ECDHE-RSA-AES128-GCM).
+//! Firmware coexist `:8443` speaks **TLS 1.3** when the client offers it,
+//! and TLS 1.2 (`Tls12Listen`, ECDHE-RSA-AES128-GCM) otherwise.
 //! rustls/ring stay a **dev-dependency** (ADR-003) — they cannot join `uefi-bin`.
 //! Plaintext remains a lab fallback. Iron close is still `curl --cacert` on the
 //! R640 native HTTPS window **before RayNu-F** ([`M8_TLS_OK_MARKER`]). Host/CI
@@ -25,7 +26,7 @@ pub const TLS_HOST_RESIDUAL_NOTE: &str =
 
 /// Firmware listen: TLS 1.2 in-tree. Iron HTTPS closed on COM2 (`928d6224`).
 pub const TLS_FIRMWARE_PLAINTEXT_NOTE: &str =
-    "firmware coexist :8443 is TLS 1.2 ECDHE-RSA-AES128-GCM (plaintext HTTP remains a lab fallback; iron HTTPS closed on COM2 928d6224)";
+    "firmware coexist :8443 is TLS 1.2 ECDHE-RSA-AES128-GCM and TLS 1.3 AES-128-GCM when offered (plaintext HTTP remains a lab fallback; iron HTTPS closed on COM2 928d6224)";
 
 /// How the mgmt listen is encrypted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

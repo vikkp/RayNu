@@ -149,29 +149,75 @@ fn server_ignores_tls13_dummy_ccs_after_client_hello() {
 }
 
 #[test]
-fn rustls_default_client_negotiates_tls12_spa() {
-    // Browser default is TLS 1.3 + 1.2, not curl --tlsv1.2. Safari Can't Connect
-    // when the millicert dies on that ClientHello (dummy CCS / cipher list).
+fn rustls_default_client_negotiates_tls13_spa() {
+    // A browser offers TLS 1.3 first, with an X25519 key share. The server
+    // asks for secp256r1 (HelloRetryRequest) and the page comes back on
+    // TLS_AES_128_GCM_SHA256. curl --tlsv1.2 still takes the 1.2 path.
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
     let server = thread::spawn(move || serve_one(listener));
     let mut roots = RootCertStore::empty();
-    roots.add(lab_ca()).expect("tls12 trust");
+    roots.add(lab_ca()).expect("tls13 trust");
     let cfg = ClientConfig::builder()
         .with_root_certificates(roots)
         .with_no_client_auth();
-    let mut sock = TcpStream::connect(("127.0.0.1", port)).expect("tls12 connect");
-    let name = ServerName::try_from("localhost").expect("tls12 name");
-    let mut conn = ClientConnection::new(Arc::new(cfg), name).expect("tls12 client");
-    let mut tls = rustls::Stream::new(&mut conn, &mut sock);
-    tls.write_all(b"GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
-        .expect("default client write");
-    let _ = tls.flush();
-    let mut resp = Vec::new();
-    let _ = tls.read_to_end(&mut resp);
-    let body = String::from_utf8_lossy(&resp);
+    let mut sock = TcpStream::connect(("127.0.0.1", port)).expect("tls13 connect");
+    let name = ServerName::try_from("localhost").expect("tls13 name");
+    let mut conn = ClientConnection::new(Arc::new(cfg), name).expect("tls13 client");
+    let body = {
+        let mut tls = rustls::Stream::new(&mut conn, &mut sock);
+        tls.write_all(b"GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+            .expect("default client write");
+        let _ = tls.flush();
+        let mut resp = Vec::new();
+        let _ = tls.read_to_end(&mut resp);
+        String::from_utf8_lossy(&resp).into_owned()
+    };
+    assert_eq!(
+        conn.protocol_version(),
+        Some(rustls::ProtocolVersion::TLSv1_3),
+        "default client must finish on TLS 1.3"
+    );
     assert!(body.contains("HTTP/1.1 200"), "{body}");
     assert!(body.contains("data-go=\"overview\""), "{body}");
+    assert!(server.join().is_ok());
+    assert_ne!(super::tls13::E4_TLS13_HOST_OK, M8_TLS_OK_MARKER);
+    println!("{}", super::tls13::E4_TLS13_HOST_OK);
+}
+
+#[test]
+fn rustls_p256_client_negotiates_tls13_without_retry() {
+    // The share is already secp256r1, so the server flight is the first
+    // reply. Browsers take the HelloRetryRequest path instead.
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let server = thread::spawn(move || serve_one(listener));
+    let mut roots = RootCertStore::empty();
+    roots.add(lab_ca()).expect("p256 trust");
+    let mut provider = rustls::crypto::ring::default_provider();
+    provider.kx_groups = vec![rustls::crypto::ring::kx_group::SECP256R1];
+    let cfg = ClientConfig::builder_with_provider(provider.into())
+        .with_protocol_versions(&[&rustls::version::TLS13])
+        .expect("tls13 versions")
+        .with_root_certificates(roots)
+        .with_no_client_auth();
+    let mut sock = TcpStream::connect(("127.0.0.1", port)).expect("p256 connect");
+    let name = ServerName::try_from("localhost").expect("p256 name");
+    let mut conn = ClientConnection::new(Arc::new(cfg), name).expect("p256 client");
+    let body = {
+        let mut tls = rustls::Stream::new(&mut conn, &mut sock);
+        tls.write_all(b"GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+            .expect("p256 write");
+        let _ = tls.flush();
+        let mut resp = Vec::new();
+        let _ = tls.read_to_end(&mut resp);
+        String::from_utf8_lossy(&resp).into_owned()
+    };
+    assert_eq!(
+        conn.protocol_version(),
+        Some(rustls::ProtocolVersion::TLSv1_3)
+    );
+    assert!(body.contains("HTTP/1.1 200"), "{body}");
     assert!(server.join().is_ok());
 }
 

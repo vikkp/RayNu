@@ -32,7 +32,7 @@ pub const HTTP_GAP_NOTE: &str = "GAP(CLOSED M7.1): Network HTTPS/HTTP mgmt";
 
 /// Lab note: firmware coexist is TLS 1.2 in-tree; iron HTTPS is not claimed.
 pub const HTTP_LAB_NOTE: &str =
-    "lab MVP: firmware TLS 1.2 on coexist (M8.1; plaintext HTTP remains a lab fallback; iron HTTPS closed on COM2 928d6224; ADR-003 size)";
+    "lab MVP: firmware TLS 1.2 on coexist (M8.1; TLS 1.3 when the client offers it; plaintext HTTP remains a lab fallback; iron HTTPS closed on COM2 928d6224; ADR-003 size)";
 
 /// Plaintext management reply, including the SPA and its headers.
 ///
@@ -556,7 +556,7 @@ pub fn handle_http_request(
         }
     }
     // ADR-021 E4. A saved certificate is presented on the next handshake.
-    // The listener stays TLS 1.2. The lab millicert remains until Save.
+    // Browsers negotiate TLS 1.3. The lab millicert remains until Save.
     match crate::mgmt::host_cert::host_cert_rest(
         parsed.method,
         parsed.path,

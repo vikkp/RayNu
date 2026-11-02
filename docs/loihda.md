@@ -136,9 +136,9 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 ### 4. TLS — 80%
 
-**What it is.** Firmware coexist feeds `Tls12Listen` (TLS 1.2 ECDHE-RSA-AES128-GCM + EMS). rustls/ring cannot join `uefi-bin`. Post-EBS native HTTPS window is **before RayNu-F**. **Iron CLOSE:** COM2 `928d6224` `RAYNU-V-M8-TLS-OK` after Mac `curl --cacert` SPA on `10.99.99.140:8443`. PRE-EBS SNP remains `http://`.
+**What it is.** Firmware coexist feeds `Tls12Listen`. Iron close is TLS 1.2 ECDHE-RSA-AES128-GCM. Host tests now also finish TLS 1.3 (`TLS_AES_128_GCM_SHA256`). rustls/ring cannot join `uefi-bin`. Post-EBS native HTTPS window is **before RayNu-F**. **Iron CLOSE:** COM2 `928d6224` `RAYNU-V-M8-TLS-OK` after Mac `curl --cacert` SPA on `10.99.99.140:8443`. PRE-EBS SNP remains `http://`.
 
-**Product effect.** A CISO who asks “is management encrypted on the wire I can reach after EBS?” now hears **yes, with a lab millicert**. Residual: not production PKI, not TLS 1.3, SPA `GET /` still unauthenticated. The standing page after login is A4s, lived on `1f33eeda`. The certificate is still the lab millicert.
+**Product effect.** A CISO who asks “is management encrypted on the wire I can reach after EBS?” now hears **yes, with a lab millicert**. Residual: not production PKI. TLS 1.3 is host-tested and not on COM2. SPA `GET /` still unauthenticated until the operator account. The standing page after login is A4s, lived on `1f33eeda`. The certificate on the booted iron file is the operator certificate from `bac1f0ec5139` (TLS 1.2).
 
 ### 5. Auth — 38%
 
@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-5-e4-reloads |
-| Summary | **ADR-021 E4 still in flight.** Iron `bac1f0ec5139` loaded the SPA and both reloads. Three accepts, no re-listen. TLS stays 1.2. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-5-e4-tls13 |
+| Summary | **ADR-021 E4 still in flight.** Host rustls finishes TLS 1.3. Iron has not. TLS piece stays 80. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. |
 | Gates touched | ADR-021 E4 in flight. Not lived. No doorbell. No format of UBUNTU0. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-02 | wave-5-e4-tls13 | 94 | 72 | **E4 still in flight.** Host rustls finishes TLS 1.3. Iron has not. Not lived. TLS 80 held. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-02 | wave-5-e4-reloads | 94 | 72 | **E4 still in flight.** Iron `bac1f0ec5139` SPA and both reloads. Host green. Accepts on slots 5–7 only. Not lived. TLS 80. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-02 | wave-5-e4-listen-spare | 94 | 72 | **E4 still in flight.** Iron `87bee04b` page once, reload refused during a FIN of a live session. Eight sockets, two stay listening. Not lived. TLS 80. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-02 | wave-5-e4-keepalive | 94 | 72 | **E4 still in flight.** Iron `1e7d44c9` page and one reload, then the Host card flipped. Every SPA reply closed. A normal fetch keeps the session; the oldest finished session is FIN'd only when nothing is listening. Not lived. TLS 80. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
@@ -446,7 +447,7 @@ LOI:           NOT OPEN. Tracker born 2026-09-14.
 Bar A:         94% · 0.25 months · dedicated-box non-prod
 Bar B:         72% · 1.25 months · Ubuntu login on a 10 GiB spare tail (c3a70e62) with a LAN address from the SPA (0d865c7f); whole VD still hidden
 Overall:       80% · confidence medium
-NOW:           SKU card is what a signature holds today. One dedicated box. Ubuntu on a 10 GiB tail. M8.9 closed on 0d865c7f: the guest took the SPA-saved address by itself and SSH from the LAN reached raynusrv2. Pinned as v0.1.0-m8-9-lan (not Latest). Wave 4 closed on 11688cbf. Wave 5 E6 lived on f2828d95. E4 is in flight: a saved certificate replaces the millicert on the next handshake. TLS stays 1.2. Not lived. Do not format UBUNTU0. The 2.9 TB VD is not this disk. A5 parked. Bar A 94. Bar B 72. Overall 80. perc 86. unmodified 45. SKU 94. months A 0.25. months B 1.25. docs/adr/ADR-019.md
+NOW:           SKU card is what a signature holds today. One dedicated box. Ubuntu on a 10 GiB tail. M8.9 closed on 0d865c7f: the guest took the SPA-saved address by itself and SSH from the LAN reached raynusrv2. Pinned as v0.1.0-m8-9-lan (not Latest). Wave 4 closed on 11688cbf. Wave 5 E6 lived on f2828d95. E4 is in flight: host rustls finishes TLS 1.3. Iron bac1f0ec5139 is still TLS 1.2. Not lived. Do not format UBUNTU0. The 2.9 TB VD is not this disk. A5 parked. Bar A 94. Bar B 72. Overall 80. perc 86. unmodified 45. SKU 94. TLS 80. months A 0.25. months B 1.25. docs/adr/ADR-019.md
 Open:          link state on the SPA (D5) · iron AUTH-OK (parked) · unmodified ISO without the serial amendment · the whole spare VD · cluster
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
 Rollback:      v0.1.0-m8-9-lan → M8.9 close (COM2 sha=0d865c7fcb0a, CI 40603110937, SHA256 df6fc3465cecf1eaf058d5c8e675501827c16eb55e7b2c9758bc5e68326ad91b). v0.1.0-m8-8-ubuntu → older M8.8 close (c3a70e623aec, CI 38454398693). v0.1.0-m8-perc-spa → older SPA choice (8ad2ac89125e, CI 36362775808). v0.1.0-m8-a4s → older standing SPA (1f33eeda72f9, CI 36137732145). v0.1.0-m8-a6 → keyboard + power-off (fd2ca12e, CI 36166108942), not Latest. Everest Latest stays v0.1.0-everest-closed (f72b4276).

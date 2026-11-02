@@ -428,7 +428,8 @@ pub enum AuditEvent {
     /// SPA saved or cleared the standing certificate (ADR-021 E4).
     /// `source` 1 = operator certificate, 0 = back to the lab millicert.
     /// `cert_len` is the DER length when `source` is 1. The key is not here.
-    /// The listener is still TLS 1.2.
+    /// Browsers negotiate TLS 1.3. TLS 1.2 remains for a client that
+    /// does not offer it.
     HostCertSaved {
         source: u8,
         cert_len: u16,
