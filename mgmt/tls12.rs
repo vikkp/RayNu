@@ -232,12 +232,31 @@ pub struct Tls12Listen {
     cert: [u8; crate::mgmt::host_cert::CERT_MAX],
     cert_len: usize,
     operator_cert: bool,
+    /// `host_cert::identity_generation()` the parsed `key` belongs to.
+    identity_gen: u32,
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Host tests count PKCS#8 parses so `reset()` is proven not to
+    /// re-parse an unchanged identity.
+    static KEY_PARSES: core::cell::Cell<u32> = const { core::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+pub fn key_parses() -> u32 {
+    KEY_PARSES.with(|c| c.get())
+}
+
+fn note_key_parse() {
+    #[cfg(test)]
+    KEY_PARSES.with(|c| c.set(c.get() + 1));
 }
 
 impl Tls12Listen {
     pub fn new() -> Self {
         let mut s = Self {
-            key: RsaPrivateKey::from_pkcs8_der(LAB_KEY).ok(),
+            key: None,
             ecdhe: None,
             rx: [0; COEXIST_RX_ACC_N],
             rx_len: 0,
@@ -261,6 +280,7 @@ impl Tls12Listen {
             cert: [0; crate::mgmt::host_cert::CERT_MAX],
             cert_len: 0,
             operator_cert: false,
+            identity_gen: 0,
         };
         s.apply_identity();
         MixRng.fill_bytes(&mut s.server_random);
@@ -294,6 +314,7 @@ impl Tls12Listen {
             cert: [0; crate::mgmt::host_cert::CERT_MAX],
             cert_len: 0,
             operator_cert: false,
+            identity_gen: 0,
         }
     }
 
@@ -305,26 +326,44 @@ impl Tls12Listen {
     }
 
     /// Saved certificate replaces the millicert. TLS 1.2 either way.
+    ///
+    /// One PKCS#8 parse is ~100 KiB of `rsa` BigUint temporaries on the
+    /// leaky post-EBS bump (`boot/uefi_alloc.rs`). Iron `0beeb871` parsed
+    /// on every accept and every re-listen and the chassis reset on the
+    /// second browser connection. The parse happens here, and `reset()`
+    /// calls here only when the saved identity moved.
     fn apply_identity(&mut self) {
+        let gen = crate::mgmt::host_cert::identity_generation();
         let mut cert = [0u8; crate::mgmt::host_cert::CERT_MAX];
         if let Some(n) = crate::mgmt::host_cert::copy_cert(&mut cert) {
+            note_key_parse();
             if let Some(key) = crate::mgmt::host_cert::load_key() {
                 self.cert[..n].copy_from_slice(&cert[..n]);
                 self.cert_len = n;
                 self.key = Some(key);
                 self.operator_cert = true;
+                self.identity_gen = gen;
                 return;
             }
         }
         let n = LAB_CERT.len();
         self.cert[..n].copy_from_slice(LAB_CERT);
         self.cert_len = n;
+        note_key_parse();
         self.key = RsaPrivateKey::from_pkcs8_der(LAB_KEY).ok();
         self.operator_cert = false;
+        self.identity_gen = gen;
+    }
+
+    /// The parsed key stays unless the saved identity moved or no key
+    /// is held. `apply_identity()` is the only parse.
+    fn identity_current(&self) -> bool {
+        self.key.is_some()
+            && self.cert_len != 0
+            && self.identity_gen == crate::mgmt::host_cert::identity_generation()
     }
 
     pub fn reset(&mut self) {
-        self.key = None;
         self.ecdhe = None;
         self.rx_len = 0;
         self.tx_len = 0;
@@ -341,7 +380,9 @@ impl Tls12Listen {
         self.write_seq = 0;
         self.ems = false;
         self.state = ST_CH;
-        self.apply_identity();
+        if !self.identity_current() {
+            self.apply_identity();
+        }
         MixRng.fill_bytes(&mut self.server_random);
         crate::mgmt::host_clock::stamp_server_random(&mut self.server_random);
     }

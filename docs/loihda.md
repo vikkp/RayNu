@@ -184,7 +184,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 ```
 2026-09  ████████  Everest closed
 2026-10  ████████  M8.8 lived; M8.9.1 is the spare NIC record (host); whole VD still hidden; A5 parked
-2026-11  ░░░░░░░░  wave 5: E6 lived; E4 certificate is on the spare; the read-back boot red-screened; TLS stays 1.2; scores held
+2026-11  ░░░░░░░░  wave 5: E6 lived; E4 certificate read back on 0beeb871; first handshake reset the chassis (bump exhausted); key kept across reset(); TLS stays 1.2; scores held
 2026-12  ░░░░░░░░  Bar B: the guest disk is the spare VD, not an 8 GiB window
 ```
 
@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-5-e4-cert-read |
-| Summary | **ADR-021 E4 still in flight.** The saved certificate is on the spare. The read-back boot hit the red screen before `boot: E4 cert rd`. TLS stays 1.2. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-5-e4-handshake |
+| Summary | **ADR-021 E4 still in flight.** Iron `0beeb871` read the saved certificate back (`rd lba=6190268891 operator`). The first browser handshake reset the chassis: key re-parsed per `reset()` on a 512 KiB leaky bump. Parsed key kept, bump 4 MiB, panic dump flushed. TLS stays 1.2. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. |
 | Gates touched | ADR-021 E4 in flight. Not lived. No doorbell. No format of UBUNTU0. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-02 | wave-5-e4-handshake | 94 | 72 | **E4 still in flight.** Iron `0beeb871` cert read lived; first browser handshake reset the chassis (bump exhausted by per-`reset()` key parses). Key kept, bump 4 MiB, dump flushed. Not lived. TLS 80. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-02 | wave-5-e4-cert-read | 94 | 72 | **E4 still in flight.** Save on `12ffaff69fb9` wrote `cert=790`. The next F11 red-screened in the read (`VMXOFF` #UD). Not lived. TLS 80. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-31 | wave-5-e4-cert | 94 | 72 | **E4 in flight.** Save certificate writes the spare. Next handshake uses it. TLS stays 1.2. Not lived. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-31 | wave-5-e6-lived | 94 | 72 | **Iron `f2828d95`: E6 lived.** `rd lba=6190268907 set`. Lab-token GET `AuthDenied`. Sign in opened the page. Wave 5 stays open. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |

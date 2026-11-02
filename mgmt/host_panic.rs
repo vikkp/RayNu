@@ -17,6 +17,9 @@ pub const PANIC_PREFIX: &str = "boot: H2 panic ";
 pub const REBOOT_LINE: &str =
     "boot: H2 reboot (saved guests start on the next RayNu boot)";
 pub const VMXOFF_FAIL: &str = "boot: H2 reboot skipped (VMXOFF failed)";
+/// Second dump line: post-EBS heap high-water, so an exhausted bump
+/// (`memory allocation of N bytes failed`) is read next to its cause.
+pub const HEAP_PREFIX: &str = "boot: H2 heap ";
 
 static REQUESTED: AtomicBool = AtomicBool::new(false);
 
@@ -61,7 +64,14 @@ pub fn reboot_after_dump(reason: &str) -> bool {
     } else {
         com2_line(PANIC_PREFIX);
     }
+    heap_line();
     com2_line(REBOOT_LINE);
+    // During Linux earlycon share the three lines above are only queued in
+    // the guest TX ring, and a VM exit drains one 16-byte COM2 burst at a
+    // time. Iron `0beeb871` reset within that first burst: COM2 showed
+    // `boot: HOST-NIC TC` and no panic line. The guest is not resumed
+    // after this point, so the bounded flush is acceptable here.
+    crate::boot::serial::flush_guest_tx();
     // SAFETY: a panic or an authenticated SPA click. Read CR4 only.
     // VMXOFF is #UD when CR4.VMXE is clear (SDM): the CPU is not in VMX
     // operation. Iron `12ffaff69fb9` hit that instruction while the
@@ -90,6 +100,29 @@ pub fn reboot_after_dump(reason: &str) -> bool {
             com2_line(VMXOFF_FAIL);
             false
         }
+    }
+}
+
+/// `boot: H2 heap used=N of M (post-EBS bump)`. No allocation: the panic
+/// may be the bump itself returning null.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn heap_line() {
+    use core::fmt::Write;
+    let mut buf = [0u8; 96];
+    let mut w = LineBuf {
+        buf: &mut buf,
+        n: 0,
+    };
+    let _ = write!(
+        &mut w,
+        "{HEAP_PREFIX}used={} of {} (post-EBS bump {})",
+        crate::boot::uefi_alloc::bump_used(),
+        crate::boot::uefi_alloc::BUMP_N,
+        if crate::boot::uefi_alloc::post_ebs() { "active" } else { "not yet" },
+    );
+    let n = w.n;
+    if let Ok(text) = core::str::from_utf8(&buf[..n]) {
+        com2_line(text);
     }
 }
 
@@ -160,6 +193,25 @@ pub fn prop_host_panic() -> bool {
         && main.contains("firmware_panic")
         && main.contains("fn raynu_panic")
         && include_str!("host_panic.rs").contains("CR4_VMXE")
+        && dump_is_flushed_before_the_reset()
+}
+
+/// The three dump lines are queued nowait during Linux earlycon share.
+/// The flush must sit after the last line and before `vmxoff` / `reset`.
+fn dump_is_flushed_before_the_reset() -> bool {
+    let me = include_str!("host_panic.rs");
+    let body = match me.find("pub fn reboot_after_dump") {
+        Some(i) => &me[i..],
+        None => return false,
+    };
+    match (
+        body.find("com2_line(REBOOT_LINE)"),
+        body.find("serial::flush_guest_tx()"),
+        body.find("vmxoff()"),
+    ) {
+        (Some(line), Some(flush), Some(off)) => line < flush && flush < off,
+        _ => false,
+    }
 }
 
 #[cfg(test)]
@@ -172,6 +224,7 @@ mod host_panic_test {
         let n = format_panic_line("spa\nline", &mut buf);
         let text = core::str::from_utf8(&buf[..n]).unwrap();
         assert_eq!(text, "boot: H2 panic spa line");
+        assert!(HEAP_PREFIX.starts_with("boot: H2 heap "));
         assert!(prop_host_panic());
         note_request();
         assert!(requested());
