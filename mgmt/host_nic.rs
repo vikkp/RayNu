@@ -48,11 +48,13 @@ pub const HOST_NIC_MAX_EXCHANGES: u32 = 8;
 /// CCS + millicert RSA sign needs a longer reclaim (A4s standing SPA).
 pub const HOST_NIC_HTTP_IDLE_MS: i64 = 15_000;
 
-/// Half-open TCP (TLS still waiting ClientHello / `ST_CH`) reclaims the
-/// one coexist slot faster than a mid-handshake browser. Lived sixth
-/// `TCP accept` with no headers held the slot for 15 s while SPA Host
-/// went red. Dummy-CCS Safari is `ST_CKE`, so it still gets 15 s.
-pub const HOST_NIC_HTTP_HS_IDLE_MS: i64 = 2_000;
+/// Half-open TCP (TLS still waiting ClientHello / `ST_CH`).
+///
+/// Was 2 s when one slot was the whole listener. Iron `f189b9c9` has ten
+/// sockets, and that 2 s reclaim reset the sign-in POST (`idle abort`
+/// slot 3, Firefox "Account dropped") before the handshake finished.
+/// Same budget as a header wait.
+pub const HOST_NIC_HTTP_HS_IDLE_MS: i64 = 15_000;
 
 /// Fallback TSC rate when Stall calibration has not stored [`crate::boot::raynu_f_flag::tsc_hz`].
 pub const COEXIST_TSC_HZ_FALLBACK: u64 = 2_100_000_000;
@@ -116,13 +118,9 @@ pub fn coexist_keepalive_idle(now_ms: i64, last_http_ms: i64, idle_ms: i64) -> b
     idle_ms > 0 && now_ms.saturating_sub(last_http_ms) >= idle_ms
 }
 
-/// Idle-abort budget: 2 s while TLS waits for the first ClientHello byte,
-/// else 15 s.
-///
-/// A ClientHello that has already started (`bytes_pending`) keeps the
-/// 15 s budget. Iron `ab39021c` accepted eight sockets and the 2 s
-/// reclaim ran while the rest of a large hello was still arriving, so
-/// the refresh had no listener.
+/// Idle-abort budget. A connection with no HTTP headers is reclaimed
+/// after 15 s. A ClientHello that has already started is not a separate
+/// shorter timer.
 pub fn http_accept_idle_limit_ms(handshake_waiting: bool) -> i64 {
     http_accept_idle_limit_for(handshake_waiting, false)
 }

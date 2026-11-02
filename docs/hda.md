@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-02 | wave-5-e4-signin-idle | 0.0 | 99 | **E4 still in flight.** Iron page up, Host green. Sign-in POST never got a reply: COM2 `idle abort` slot 3, Firefox "Account dropped". The 2 s ClientHello reclaim is now 15 s. Not a wrong password. Not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-02 | wave-5-e4-tls13-gate | 0.0 | 99 | **E4 still in flight.** CI on `48e4b683` failed `m7_8_host_nic_scaffold_passes` because the listen file no longer named `http_accept_idle_limit_ms`. The call is back. Not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-02 | wave-5-e4-tls13-refresh | 0.0 | 99 | **E4 still in flight.** Iron `ab39021c8c72` / run `41524441195`: cert read `operator`, `wrap=tls13`, Firefox drew the page, then refresh accepted slots 0–7. The red Host card was 401 from the lab token. Ten sockets and a started hello is not the 2 s reclaim. Not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-02 | wave-5-e4-tls13 | 0.0 | 99 | **E4 still in flight.** Host rustls finishes TLS 1.3 (AES-128-GCM, HelloRetryRequest to secp256r1, RSASSA-PSS) and the TLS 1.2 client still gets the SPA. Iron `bac1f0ec5139` remains the booted file. Not lived. Scores held. months 0.0 held; overall 99 held |

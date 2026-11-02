@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-02 | wave-5-e4-signin-idle | 94 | 72 | **E4 still in flight.** Sign-in POST idle-aborted on slot 3. "Account dropped" is that reset, not a refused password. The empty-hello reclaim is 15 s. Not lived. TLS 80 held. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-02 | wave-5-e4-tls13-gate | 94 | 72 | **E4 still in flight.** CI on `48e4b683` failed the host-NIC scaffold gate. The idle-limit call is named again. Not lived. TLS 80 held. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-02 | wave-5-e4-tls13-refresh | 94 | 72 | **E4 still in flight.** Iron `ab39021c8c72` drew the page. Refresh accepted slots 0–7. Not lived. TLS 80 held. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-02 | wave-5-e4-tls13 | 94 | 72 | **E4 still in flight.** Host rustls finishes TLS 1.3. Iron has not. Not lived. TLS 80 held. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |

@@ -25,9 +25,10 @@ fn http_idle_abort_at_limit_only() {
 }
 
 #[test]
-fn handshake_idle_reclaim_is_faster_than_header_idle() {
-    assert_eq!(HOST_NIC_HTTP_HS_IDLE_MS, 2_000);
-    assert_eq!(http_accept_idle_limit_ms(true), HOST_NIC_HTTP_HS_IDLE_MS);
+fn handshake_idle_matches_the_header_budget() {
+    assert_eq!(HOST_NIC_HTTP_HS_IDLE_MS, 15_000);
+    assert_eq!(HOST_NIC_HTTP_HS_IDLE_MS, HOST_NIC_HTTP_IDLE_MS);
+    assert_eq!(http_accept_idle_limit_ms(true), HOST_NIC_HTTP_IDLE_MS);
     assert_eq!(http_accept_idle_limit_ms(false), HOST_NIC_HTTP_IDLE_MS);
     assert_eq!(
         super::http_accept_idle_limit_for(true, true),
