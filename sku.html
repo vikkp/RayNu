@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RayNu-V — SKU: Shipment 1 and the final product</title>
+    <meta
+      name="description"
+      content="Two shipments, one catalog. Shipment 1 is the dedicated-box letter: one PowerEdge R640, one Ubuntu guest, no RayNu-V engineer in the room. The final SKU is every row of the ADR-021 catalog: lived on iron, in flight, or planned. Nothing else."
+    />
+    <meta property="og:title" content="RayNu-V · SKU: Shipment 1 and the final product" />
+    <meta
+      property="og:description"
+      content="Every capability a professional operator expects from a PowerEdge hypervisor, with an honest status on each row: lived on the R640, in flight, or planned. Shipment 1 is the subset you can run without us in the room."
+    />
+    <meta property="og:type" content="website" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="assets/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="page-hda page-loi page-sku">
+    <nav class="site-nav site-nav--solid" aria-label="Site">
+      <a class="site-nav__brand" href="index.html">RayNu-V</a>
+      <div class="site-nav__links">
+        <a href="index.html#status" data-hide-sm>Status</a>
+        <a href="index.html#console" data-hide-sm>Console</a>
+        <a href="loi.html">LOI</a>
+        <a href="sku.html" aria-current="page">SKU</a>
+        <a href="stories.html">Stories</a>
+        <a href="hda.html">Everest</a>
+        <a href="paper.html">Paper</a>
+        <a href="ciospeak.html">CIO View</a>
+        <a href="https://github.com/vikkp/RayNu" data-hide-sm>GitHub</a>
+      </div>
+    </nav>
+
+    <header class="hda-mast">
+      <div class="hda-mast__inner">
+        <p class="hda-mast__nav">
+          <a href="index.html">RayNu-V</a>
+          <span aria-hidden="true">·</span>
+          <a href="loi.html">LOI</a>
+          <span aria-hidden="true">·</span>
+          <span>SKU</span>
+        </p>
+        <p class="brand reveal">RayNu-V</p>
+        <p class="hda-mast__kicker reveal">Two shipments · one catalog</p>
+        <h1 class="hda-mast__title reveal reveal--delay-1">
+          What ships first, and what the whole product is
+        </h1>
+        <p class="hda-mast__lede reveal reveal--delay-2">
+          This page is generated from
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-021.md">ADR-021</a>,
+          the list of everything a professional operator expects from a
+          hypervisor on a Dell PowerEdge. Every row carries one of three words:
+          <strong>lived</strong> (printed on the R640, with a commit),
+          <strong>in flight</strong> (code under iron test), or
+          <strong>planned</strong> (named, not built).
+          <strong>Shipment 1</strong> is the subset you can run on one R640
+          without a RayNu-V engineer in the room. The <strong>final SKU</strong>
+          is every row. Nothing on this page is a percentage toward GA.
+        </p>
+        <p class="sku-mast__meta reveal reveal--delay-2">
+          <span>Catalog date <span id="sku-date">—</span></span>
+          <span aria-hidden="true">·</span>
+          <span><span id="sku-total">—</span> capabilities</span>
+          <span aria-hidden="true">·</span>
+          <span>Source <code>docs/adr/ADR-021.md</code></span>
+        </p>
+      </div>
+    </header>
+
+    <main>
+      <section class="section" id="shipments">
+        <div class="section__inner">
+          <p class="milestone-kicker" data-reveal>The two lists</p>
+          <h2 data-reveal>Shipment 1 and the final SKU</h2>
+          <div class="loi-cards sku-ship-cards" data-reveal>
+            <article class="loi-card sku-ship" id="ship-s1">
+              <p class="loi-card__kicker">Shipment 1 · the dedicated-box letter</p>
+              <h3>One R640, one Ubuntu guest, nobody from us in the room</h3>
+              <p id="sku-s1-lede">—</p>
+              <dl class="sku-ship__counts" id="sku-s1-counts"></dl>
+              <div class="hda-bar sku-ship__bar">
+                <div class="hda-bar__track sku-stack" id="sku-s1-stack"></div>
+              </div>
+              <p class="loi-card__effect">
+                <a class="sku-link" href="#catalog" data-view="S1">Show only Shipment 1 →</a>
+              </p>
+            </article>
+            <article class="loi-card sku-ship sku-ship--final" id="ship-final">
+              <p class="loi-card__kicker">Final SKU · the whole product</p>
+              <h3>Every row in the catalog. Nothing else.</h3>
+              <p id="sku-final-lede">—</p>
+              <dl class="sku-ship__counts" id="sku-final-counts"></dl>
+              <div class="hda-bar sku-ship__bar">
+                <div class="hda-bar__track sku-stack" id="sku-final-stack"></div>
+              </div>
+              <p class="loi-card__effect">
+                <a class="sku-link" href="#catalog" data-view="Final">Show the full catalog →</a>
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="today">
+        <div class="section__inner">
+          <p class="milestone-kicker" data-reveal>Before either shipment</p>
+          <h2 data-reveal>What the lab box holds today</h2>
+          <p data-reveal>
+            If you signed a non-production <strong>dedicated-box</strong>
+            letter today, this is what you would hold, stated the way
+            diligence would state it. The catalog's <em>lived</em> rows are
+            this list with commit SHAs.
+          </p>
+          <ul class="loi-locks" data-reveal>
+            <li>
+              One <code>r640-hypervisor.efi</code> on one PowerEdge R640.
+              Ubuntu 26.04 has reached <code>vikkp@raynusrv2</code> on a
+              10 GiB tail of the PERC spare (<code>c3a70e62</code>).
+            </li>
+            <li>
+              The disk that comes back after a chassis power-off is an
+              <strong>8 GiB</strong> USB window (<code>928d6224</code>), not
+              the array.
+            </li>
+            <li>
+              The page is TLS 1.2 with a lab millicert
+              (<code>RAYNU-V-M8-TLS-OK</code>). The first minutes of boot are
+              still <strong>plaintext HTTP</strong>.
+            </li>
+            <li>
+              The door is a <strong>lab latch</strong>
+              (<code>raynu-v-bringup</code>) until <code>auth.token</code> is
+              on the stick. There is no operator account.
+            </li>
+            <li>
+              The guest NIC carries traffic on LOM port 4 (<code>02e0acba</code>:
+              411 MB in, <code>fcs=0</code>, SSH from another machine). The
+              SPA-saved address reaches the guest by itself
+              (<code>0d865c7f</code>: an SMBIOS Type 11 systemd credential;
+              nothing typed in the guest). Static for both NIC modes; no DHCP
+              client runs in the guest. The egress port is the other function
+              of the SPA's BCM5720, found at boot (<code>aeb2d79b</code>, D4);
+              a pulled cable is <code>NO-CARRIER</code> in the guest
+              (<code>8df4407d</code>, D6) and a <code>HostLinkChanged</code>
+              audit line on the page (D5).
+            </li>
+            <li>
+              <strong>not PERC</strong> fleet: the rest of the 2.9 TB virtual
+              disk stays hidden; UBUNTU0 is never touched.
+              <strong>not cluster.</strong> <strong>not Windows.</strong> Not
+              a remote desktop; iDRAC is still the console.
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="section" id="shipment-1">
+        <div class="section__inner">
+          <p class="milestone-kicker" data-reveal>Shipment 1 in one paragraph</p>
+          <h2 data-reveal>What you would be able to do</h2>
+          <p data-reveal>
+            One <code>r640-hypervisor.efi</code>, signed, booted from iDRAC
+            virtual media or USB on a PowerEdge R640. You reach an HTTPS page
+            with your own certificate and your own account, on a management
+            port with a static address you chose. You upload an Ubuntu ISO,
+            create a guest with the CPUs, RAM and disk you want on the PERC
+            array you already own, attach a NIC, and the page shows you that
+            the guest uplink has link before you press Start. The guest
+            installs, reboots to its disk, gets an address on your network,
+            and you SSH to it from your desk. You can type into it from the
+            browser when SSH is not an option. When the rack loses power the
+            guest comes back on its own. When a new RayNu-V ships you update
+            from the page and roll back from the page. Every one of those
+            actions is in an audit log you can export. Nothing in that
+            paragraph requires a serial console.
+          </p>
+          <p data-reveal>
+            Today's lab box already does part of that paragraph: the install
+            loop, Ubuntu to <code>login:</code>, the PERC array, persist across
+            power-off, HTTPS, a guest NIC on the LAN with SSH from another machine. The rows below say
+            which part, and what is still only a sentence here.
+          </p>
+          <div class="sku-cabling" data-reveal>
+            <p class="loi-card__kicker">Cabling an R640 for Shipment 1</p>
+            <table class="sku-cabling__table">
+              <thead>
+                <tr><th>Jack</th><th>Carries</th><th>Cable</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Dedicated iDRAC</td><td>Console, iDRAC UI, hypervisor boot media</td><td>Yes, or Shared LOM on port 3</td></tr>
+                <tr><td>LOM port 3 (<code>01:00.0</code>)</td><td>RayNu-V management page on <code>:8443</code></td><td>Yes, untagged</td></tr>
+                <tr><td>LOM port 4 (<code>01:00.1</code>)</td><td>All guest traffic</td><td>Yes once a guest has a NIC, untagged</td></tr>
+                <tr><td>10G ports 1–2</td><td>Nothing in Shipment 1</td><td>No</td></tr>
+              </tbody>
+            </table>
+            <p>
+              Management and guest traffic on separate ports is the ESXi
+              best practice too. A single-port mode (D13) and operator-chosen
+              port roles (D12) are in the final SKU.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section--sku-order" id="build-order">
+        <div class="section__inner">
+          <p class="milestone-kicker" data-reveal>Build order</p>
+          <h2 data-reveal>Waves, not letters</h2>
+          <p data-reveal>
+            The letters are for reading. Work moves in waves, each ending with
+            something visible on the management page, one iron thread per
+            wave on the one R640. The current wave is the lowest one with a
+            row that is not yet lived; it advances by itself when the last
+            row in it gets its evidence. Order and rules are in
+            <a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-021.md#build-order-the-rule-behind-decision-5">ADR-021 · Build order</a>.
+          </p>
+          <div class="sku-now" id="sku-now">
+            <p class="loi-card__kicker">Now building</p>
+            <h3 id="sku-now-title">—</h3>
+            <p id="sku-now-why" class="sku-now__why"></p>
+            <ol class="sku-now__list" id="sku-now-list"></ol>
+            <p class="sku-now__filler" id="sku-now-filler"></p>
+          </div>
+          <ol class="sku-waves" id="sku-waves"></ol>
+        </div>
+      </section>
+
+      <section class="section section--sku-catalog" id="catalog">
+        <div class="section__inner">
+          <p class="milestone-kicker" data-reveal>The catalog</p>
+          <h2 data-reveal>Every capability, with its word</h2>
+          <div class="sku-toolbar" role="group" aria-label="Catalog filters">
+            <div class="sku-toolbar__group">
+              <span class="sku-toolbar__label">View</span>
+              <button type="button" class="sku-chip is-on" data-view="Final">Final SKU</button>
+              <button type="button" class="sku-chip" data-view="S1">Shipment 1</button>
+            </div>
+            <div class="sku-toolbar__group">
+              <span class="sku-toolbar__label">Status</span>
+              <button type="button" class="sku-chip is-on" data-status="all">All</button>
+              <button type="button" class="sku-chip sku-chip--lived" data-status="lived">lived</button>
+              <button type="button" class="sku-chip sku-chip--flight" data-status="in flight">in flight</button>
+              <button type="button" class="sku-chip sku-chip--planned" data-status="planned">planned</button>
+            </div>
+            <label class="sku-toolbar__search">
+              <span class="sku-toolbar__label">Find</span>
+              <input type="search" id="sku-search" placeholder="VLAN, Secure Boot, snapshot…" autocomplete="off" />
+            </label>
+          </div>
+          <p class="sku-showing" id="sku-showing" aria-live="polite">—</p>
+          <nav class="sku-areas-nav" id="sku-areas-nav" aria-label="Catalog areas"></nav>
+          <div id="sku-catalog" class="sku-catalog">
+            <noscript>
+              <p>
+                The catalog needs JavaScript to render here. The same list is
+                <a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-021.md#catalog">in ADR-021</a>
+                and as <a href="sku.json">sku.json</a>.
+              </p>
+            </noscript>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="words">
+        <div class="section__inner">
+          <p class="milestone-kicker" data-reveal>How to read a row</p>
+          <h2 data-reveal>Three words, one rule</h2>
+          <ul class="loi-locks" data-reveal>
+            <li>
+              <strong>lived</strong> — printed on the PowerEdge R640 (or, for
+              a host artifact such as a proof or a size gate, closed in CI),
+              with a commit SHA or an iron marker in the note. A laptop or
+              QEMU does not make a row lived. The sync tool rejects a lived
+              row without evidence.
+            </li>
+            <li>
+              <strong>in flight</strong> — code exists on a branch or pull
+              request and is under iron test. The note names it.
+            </li>
+            <li>
+              <strong>planned</strong> — accepted in ADR-021, not built. No
+              evidence, no claim.
+            </li>
+            <li>
+              Rows move by editing the ADR with evidence, reviewed like code.
+              Demotions are allowed and are recorded in the HDA changelog.
+              Counts here are not a score; the distance tracker is
+              <a href="hda.html">Everest</a>, which stays at 99% until the M8
+              gaps shrink.
+            </li>
+          </ul>
+          <div class="cta" data-reveal>
+            <a class="cta__primary" href="loi.html">Path to LOI</a>
+            <a
+              class="cta__secondary"
+              href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-021.md"
+              >ADR-021 on GitHub</a
+            >
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>
+        <span class="brand brand--footer">RayNu-V</span>
+        · Shipment 1 and the final SKU, from ADR-021
+      </p>
+      <p class="footer__meta">
+        <a href="index.html">Home</a>
+        ·
+        <a href="loi.html">LOI</a>
+        ·
+        <a href="hda.html">Everest</a>
+        ·
+        <a href="https://github.com/vikkp/RayNu">GitHub</a>
+        ·
+        <a href="https://github.com/vikkp/RayNu/blob/main/docs/sku.md">docs/sku.md</a>
+        ·
+        <a href="sku.json">sku.json</a>
+      </p>
+    </footer>
+    <script src="main.js" defer></script>
+    <script src="sku.js" defer></script>
+  </body>
+</html>
