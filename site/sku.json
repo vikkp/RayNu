@@ -19,15 +19,15 @@
   },
   "counts": {
     "S1": {
-      "lived": 39,
+      "lived": 40,
       "in flight": 1,
-      "planned": 27,
+      "planned": 26,
       "total": 67
     },
     "Final": {
-      "lived": 39,
+      "lived": 40,
       "in flight": 1,
-      "planned": 89,
+      "planned": 88,
       "total": 129
     }
   },
@@ -601,10 +601,10 @@
         {
           "id": "D9",
           "capability": "Host management address: static IP, gateway, DNS, hostname set from the SPA and persisted",
-          "status": "planned",
+          "status": "lived",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "DHCP lease only today",
+          "note": "Iron `5d09631ec6d8` / run `41199806446`. Save on the DHCP boot: `boot: D9 host addr wr lba=6190268908 match` and `RAYNU-V-AUDIT: HostAddrSaved mode=1 prefix=24`. Next F11: `boot: D9 host addr rd lba=6190268908 static`, then `boot: D9 host addr static 10.99.99.146/24 gw=10.99.99.1 dns=0.0.0.0 name=` and `HOST-NIC coexist listening on 10.99.99.146:8443`. DNS and hostname were left blank. PRE-EBS SNP still DHCP. Evidence `docs/evidence/r640/2026-10-31-5d09631e-wave-4-d9-host-addr-ok.md`. Wave 4 stays open on D10",
           "wave": "4"
         },
         {
@@ -736,15 +736,15 @@
       ],
       "counts": {
         "S1": {
-          "lived": 8,
+          "lived": 9,
           "in flight": 0,
-          "planned": 3,
+          "planned": 2,
           "total": 11
         },
         "Final": {
-          "lived": 8,
+          "lived": 9,
           "in flight": 0,
-          "planned": 15,
+          "planned": 14,
           "total": 23
         }
       }
@@ -1545,9 +1545,9 @@
       "iron": "B5",
       "why": "The first \"walk away from the rack\" moment. Needs wave 3.",
       "counts": {
-        "lived": 2,
+        "lived": 3,
         "in flight": 0,
-        "planned": 3,
+        "planned": 2,
         "total": 5
       },
       "closed": false
@@ -1852,12 +1852,6 @@
   ],
   "current_wave": "4",
   "next_up": [
-    {
-      "id": "D9",
-      "capability": "Host management address: static IP, gateway, DNS, hostname set from the SPA and persisted",
-      "status": "planned",
-      "role": "host-first"
-    },
     {
       "id": "D10",
       "capability": "Host NTP client; host clock correct for TLS and audit timestamps",

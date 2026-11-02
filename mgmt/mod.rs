@@ -339,6 +339,7 @@ pub mod guest_nic_start;
 pub mod guest_power;
 pub mod guest_stop;
 pub mod ha;
+pub mod host_addr;
 pub mod host_link;
 pub mod host_nic;
 pub mod host_nic_coexist;

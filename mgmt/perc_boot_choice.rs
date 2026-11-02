@@ -599,6 +599,7 @@ fn firmware_wait() {
         // printed `audit chain wr`. No guest owns the CPU here.
         crate::mgmt::megaraid::flush_audit_chain();
         crate::mgmt::megaraid::flush_autostart();
+        crate::mgmt::megaraid::flush_host_addr();
         let now = crate::arch::cpu::rdtsc();
         let elapsed = (now.wrapping_sub(wait_start) / hz) as u32;
         try_autostart(elapsed);

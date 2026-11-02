@@ -413,6 +413,13 @@ pub enum AuditEvent {
         up: u8,
         mbps: u16,
     },
+    /// SPA saved or cleared the host management address (ADR-021 D9).
+    /// `mode` 1 = static for the next boot, 0 = DHCP. `prefix` is the
+    /// saved prefix when `mode` is 1. This boot's listener is unchanged.
+    HostAddrSaved {
+        mode: u8,
+        prefix: u8,
+    },
 }
 
 /// One sealed audit record in the hash chain.
@@ -657,6 +664,7 @@ pub(crate) fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::GuestNicSaved { .. } => 76,
         AuditEvent::GuestNicDetached { .. } => 77,
         AuditEvent::HostLinkChanged { .. } => 78,
+        AuditEvent::HostAddrSaved { .. } => 79,
     }
 }
 
@@ -1211,6 +1219,13 @@ fn mirror_audit_to_com1(event: AuditEvent) {
             write_u32_nowait(u32::from(func));
             serial::write_str_nowait(if up != 0 { " up=1 mbps=" } else { " up=0 mbps=" });
             write_u32_nowait(u32::from(mbps));
+            serial::write_byte_nowait(b'\n');
+        }
+        AuditEvent::HostAddrSaved { mode, prefix } => {
+            serial::write_str_nowait("RAYNU-V-AUDIT: HostAddrSaved mode=");
+            write_u32_nowait(u32::from(mode));
+            serial::write_str_nowait(" prefix=");
+            write_u32_nowait(u32::from(prefix));
             serial::write_byte_nowait(b'\n');
         }
         AuditEvent::FrameAllocated { .. } | AuditEvent::FrameFreed { .. } => {}
