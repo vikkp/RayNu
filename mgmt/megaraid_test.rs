@@ -288,7 +288,10 @@ fn fwstate_load_is_one_harpoon_and_does_not_bus_master() {
     let cat = last - 1;
     let cat_wr = super::pack_ld_write16_one_polled(1, cat, 0x1006000).unwrap();
     assert_eq!(cat_wr[2], super::MFI_CMD_STATUS_POLL);
-    assert_eq!(u64::from_be_bytes(cat_wr[0x22..0x2A].try_into().unwrap()), cat);
+    assert_eq!(
+        u64::from_be_bytes(cat_wr[0x22..0x2A].try_into().unwrap()),
+        cat
+    );
     assert!(super::pack_ld_write16_one_polled(1, 0, 0x1006000).is_none());
     let wflags = u16::from_le_bytes(wr[0x10..0x12].try_into().unwrap());
     assert_ne!(wflags & super::MFI_FRAME_DIR_WRITE, 0);
@@ -566,4 +569,31 @@ fn pack_ld_read16_chunk_is_a_read_of_one_4k_or_64k() {
     assert!(super::pack_ld_read16_chunk(1, 64, super::LIBRARY_WRITE_SECTORS, 0x2000000).is_none());
     assert!(super::pack_ld_read16_chunk(1, 0, 2, 0x1006000).is_none());
     assert!(super::pack_ld_read16_chunk(1, 0, 1, 0).is_none());
+}
+
+#[test]
+fn sync_cache10_is_not_a_write() {
+    let f = super::pack_ld_sync_cache10_polled(1, 0x1006000).unwrap();
+    assert_eq!(f[0], super::MFI_CMD_LD_SCSI_IO);
+    assert_eq!(f[2], super::MFI_CMD_STATUS_POLL);
+    assert_eq!(f[4], 1);
+    assert_eq!(f[6], 10);
+    assert_eq!(f[7], 0);
+    assert!(super::cdb_is_sync_cache10(&f[0x20..0x30]));
+    assert!(!super::frame_is_write(&f));
+    assert!(!super::frame_is_read(&f));
+    assert!(!super::cdb_is_single_write16(&f[0x20..0x30]));
+    let flags = u16::from_le_bytes(f[0x10..0x12].try_into().unwrap());
+    assert_eq!(flags & super::MFI_FRAME_DIR_WRITE, 0);
+    assert_eq!(flags & super::MFI_FRAME_DIR_READ, 0);
+    assert_ne!(flags & super::MFI_FRAME_DONT_POST_IN_REPLY_QUEUE, 0);
+    assert_eq!(u32::from_le_bytes(f[0x14..0x18].try_into().unwrap()), 0);
+    assert_eq!(
+        u64::from_le_bytes(f[0x18..0x20].try_into().unwrap()),
+        0x1006000
+    );
+    assert!(super::classify_ld_bytes(super::IRON_LD1_BYTES) == super::LdClass::Spare);
+    assert!(super::classify_ld_bytes(super::IRON_LD0_BYTES) == super::LdClass::Ubuntu);
+    assert!(super::pack_ld_sync_cache10_polled(1, 0).is_none());
+    assert!(!super::perc_image_flush());
 }

@@ -201,6 +201,19 @@ pub fn perc_image_write(off: u64, buf: &[u8]) -> bool {
     }
 }
 
+/// Flush the latched spare LD's cache. Host and QEMU return false.
+/// The virtio status byte is written only after this returns.
+pub fn perc_image_flush() -> bool {
+    #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+    {
+        perc_image_flush_uefi()
+    }
+    #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+    {
+        false
+    }
+}
+
 /// Iron boot marker. Prints only when the image latch is set, and only from
 /// the disk-boot path. Host and QEMU do not print it.
 pub fn perc_note_disk_boot() {
@@ -1079,6 +1092,43 @@ pub fn pack_ld_write16_last_polled(
     Some(f)
 }
 
+/// Polled SYNCHRONIZE CACHE (10) for one LD. No data SGL. Sense is 32 bytes
+/// at `sense_phys`. IMMED is clear, so the command status stays poll until
+/// that LD's cache is on media. Not a WRITE. Not a read. LBA 0 here is the
+/// start of the range, not a write of LBA 0.
+pub fn pack_ld_sync_cache10_polled(
+    target_id: u8,
+    sense_phys: u64,
+) -> Option<[u8; MFI_FRAME_BYTES]> {
+    if sense_phys == 0
+        || sense_phys >= 0x1_0000_0000
+        || sense_phys & 0x1FF != 0
+        || sense_phys.saturating_add(32) > 0x1_0000_0000
+    {
+        return None;
+    }
+    let mut f = [0u8; MFI_FRAME_BYTES];
+    f[0] = MFI_CMD_LD_SCSI_IO;
+    f[1] = 32;
+    f[2] = MFI_CMD_STATUS_POLL;
+    f[4] = target_id;
+    f[6] = 10;
+    f[7] = 0;
+    put_u16(&mut f, 0x10, MFI_FRAME_DONT_POST_IN_REPLY_QUEUE);
+    put_u16(&mut f, 0x12, 30);
+    put_u64(&mut f, 0x18, sense_phys);
+    let mut cdb = [0u8; 16];
+    cdb[0] = SCSI_SYNCHRONIZE_CACHE_10;
+    f[0x20..0x30].copy_from_slice(&cdb);
+    if frame_is_write(&f) || frame_is_read(&f) || f[0] != MFI_CMD_LD_SCSI_IO {
+        return None;
+    }
+    if !cdb_is_sync_cache10(&f[0x20..0x30]) {
+        return None;
+    }
+    Some(f)
+}
+
 /// Polled one-block WRITE(16) of `lba`. Same poll, sense, and reply-queue
 /// bits as the spare-probe write. LBA 0 is refused. The catalog LBA uses
 /// this; the probe write keeps [`pack_ld_write16_last_polled`].
@@ -1379,6 +1429,16 @@ pub fn cdb_is_single_write16(cdb: &[u8]) -> bool {
         && cdb[0] == SCSI_WRITE_16
         && u64::from_be_bytes(cdb[2..10].try_into().unwrap()) != 0
         && u32::from_be_bytes(cdb[10..14].try_into().unwrap()) == 1
+}
+
+/// SYNCHRONIZE CACHE (10), IMMED clear, LBA 0, block count 0.
+/// Block count 0 means from the LBA through the end of that LD.
+pub fn cdb_is_sync_cache10(cdb: &[u8]) -> bool {
+    cdb.len() >= 10
+        && cdb[0] == SCSI_SYNCHRONIZE_CACHE_10
+        && cdb[1] & 0x02 == 0
+        && u32::from_be_bytes(cdb[2..6].try_into().unwrap()) == 0
+        && u16::from_be_bytes(cdb[7..9].try_into().unwrap()) == 0
 }
 
 pub fn frame_is_write(frame: &[u8]) -> bool {
@@ -3140,6 +3200,70 @@ fn perc_image_read_aligned(
         done += n;
     }
     true
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+static VIRTIO_FLUSH_SYNC_PRINTED: core::sync::atomic::AtomicBool =
+    core::sync::atomic::AtomicBool::new(false);
+
+/// SYNCHRONIZE CACHE (10) on the latched spare. UBUNTU0 sizes are not posted.
+/// IMMED is clear. The poll returns when firmware leaves the status byte.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn perc_image_flush_uefi() -> bool {
+    use crate::boot::serial;
+    if !PERC_IMAGE_BOOT.load(core::sync::atomic::Ordering::Acquire) {
+        return false;
+    }
+    let bar = PERC_SPARE_BAR.load(core::sync::atomic::Ordering::Acquire);
+    let data = PERC_SPARE_DATA.load(core::sync::atomic::Ordering::Acquire);
+    let frame = PERC_SPARE_FRAME.load(core::sync::atomic::Ordering::Acquire);
+    let target = PERC_SPARE_TARGET.load(core::sync::atomic::Ordering::Acquire);
+    let spare = PERC_SPARE_BYTES.load(core::sync::atomic::Ordering::Acquire);
+    if classify_ld_bytes(spare) != LdClass::Spare || bar == 0 || data == 0 || frame == 0 {
+        return false;
+    }
+    let Some(packed) = pack_ld_sync_cache10_polled(target, data) else {
+        return false;
+    };
+    let Some(desc) = pack_mfa_descriptor(frame) else {
+        return false;
+    };
+    // SAFETY: frame and sense are the spare DMA pages stored at boot.
+    // The CDB is SYNCHRONIZE CACHE (10) for this LD, IMMED clear, no data
+    // SGL. No doorbell. UBUNTU0 was refused above. LBA 0 is not a write.
+    // KANI-TARGET: host tests cover the packed CDB, not this store.
+    unsafe {
+        let dst = frame as *mut u8;
+        core::ptr::write_bytes(dst, 0, 4096);
+        core::ptr::copy_nonoverlapping(packed.as_ptr(), dst, packed.len());
+        core::ptr::write_bytes(data as *mut u8, 0, 32);
+    }
+    core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+    // SAFETY: one 64-bit store to the low inbound queue port. Not doorbell 0x00.
+    unsafe {
+        core::ptr::write_volatile(
+            (bar + u64::from(MFI_INBOUND_LOW_QUEUE_PORT)) as *mut u64,
+            desc,
+        );
+    }
+    let (st, timed_out) = poll_mfi_status(frame as *mut u8);
+    if !timed_out && st == MFI_STAT_OK {
+        if !VIRTIO_FLUSH_SYNC_PRINTED.swap(true, core::sync::atomic::Ordering::AcqRel) {
+            serial::write_line_nowait("boot: C7 virtio flush sync status=0x00");
+        }
+        true
+    } else {
+        let mut line = [0u8; 44];
+        let prefix = b"boot: C7 virtio flush sync fail status=0x";
+        line[..prefix.len()].copy_from_slice(prefix);
+        const HEX: &[u8; 16] = b"0123456789abcdef";
+        line[prefix.len()] = HEX[(st >> 4) as usize];
+        line[prefix.len() + 1] = HEX[(st & 0x0f) as usize];
+        let n = prefix.len() + 2;
+        let text = core::str::from_utf8(&line[..n]).unwrap_or("boot: C7 virtio flush sync fail");
+        serial::write_line_nowait(text);
+        false
+    }
 }
 
 /// Install-disk write of the latched image.
