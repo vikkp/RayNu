@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-2-b20-lived |
-| Summary | **Iron `ddbaf11cd11c`: ADR-021 B20 lived. Wave 2 closed.** The Guest tile followed the tail guest up and down, and Stop printed `Stopped from the Guests page.` with `reason=0x34` and a rip. The `Exit cap reached` line while it ran was the OVMF handoff. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-3-c8-lived |
+| Summary | **Iron `4ac1a629`: ADR-021 C8 lived for the NIC catalog.** A second F11 of the same stick loaded `n=1` and the vNIC page was already filled. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. |
-| Gates touched | ADR-021 B20 lived. Wave 2 closed. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-9-lan`. |
+| Gates touched | ADR-021 C8 lived. No doorbell. No format of UBUNTU0. Rollback `v0.1.0-m8-9-lan`. |
 
 ---
 
@@ -219,6 +219,9 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-10-29 | wave-3-c8-lived | 94 | 72 | **Iron `4ac1a629`: C8 lived for the NIC catalog.** `wr lba=6190268926 match`, second F11 `rd n=1`, vNIC already filled. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
+| 2026-10-29 | wave-3-c8-poll-write | 94 | 72 | **Iron `94d0d369`: catalog write `mismatch` at lba 6190268926.** Frame was not polled. Fix is the probe write's poll bits. Still in flight. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
+| 2026-10-29 | wave-3-c8-nic-catalog | 94 | 72 | **C8 in flight on `cursor/wave-3-c8-config-50bb`.** NIC catalog sector written while the CPU is free, read on the next boot. Not lived. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-29 | wave-2-b20-lived | 94 | 72 | **Iron `ddbaf11cd11c`: B20 lived. Wave 2 closed.** Tile followed the guest up and down. Stop: `Stopped from the Guests page. reason=0x34`. The exit-cap line while it ran was the OVMF handoff. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-29 | wave-2-b20-stop-reason | 94 | 72 | **B20 in flight on `cursor/wave-2-b20-a3-50bb`.** Last stop on the page; a running tail guest is `running`. Not lived until the next F11 and a Stop. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-10-29 | wave-2-a3-lived | 94 | 72 | **Iron `bc50d59aa77a`: A3 lived** — Overview `build bc50d59aa77a · CI 40876033671` matches COM2. B20 still planned. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |

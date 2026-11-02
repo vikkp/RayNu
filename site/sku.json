@@ -19,15 +19,15 @@
   },
   "counts": {
     "S1": {
-      "lived": 34,
+      "lived": 35,
       "in flight": 1,
-      "planned": 32,
+      "planned": 31,
       "total": 67
     },
     "Final": {
-      "lived": 34,
+      "lived": 35,
       "in flight": 1,
-      "planned": 94,
+      "planned": 93,
       "total": 129
     }
   },
@@ -418,10 +418,10 @@
         {
           "id": "C8",
           "capability": "Config store on disk: guests, NICs, settings survive host reboot",
-          "status": "planned",
+          "status": "lived",
           "ships": "S1",
           "ref": "M8.5",
-          "note": "vNIC is RAM-only today; re-saved every boot",
+          "note": "`4ac1a629` (PR #420): Save wrote `boot: perc nic catalog wr lba=6190268926 match` (`GuestNicSaved off=19327352832 mode=2`, MAC `02:52:4e:38:0b:0d`, `10.99.99.200/24`). A second F11 of the same stick, no reflash, printed `boot: perc nic catalog rd lba=6190268926 n=1` before the guest, and vNIC opened already filled. The sector is the one before the probe LBA `6190268927`. `94d0d369` had printed `mismatch` (write frame was not polled). Other settings are still RAM. docs/evidence/r640/2026-10-29-4ac1a629-wave-3-c8-nic-catalog-reboot-ok.md",
           "wave": "3"
         },
         {
@@ -508,15 +508,15 @@
       ],
       "counts": {
         "S1": {
-          "lived": 5,
+          "lived": 6,
           "in flight": 0,
-          "planned": 4,
+          "planned": 3,
           "total": 9
         },
         "Final": {
-          "lived": 5,
+          "lived": 6,
           "in flight": 0,
-          "planned": 12,
+          "planned": 11,
           "total": 17
         }
       }
@@ -1525,9 +1525,9 @@
       "iron": "C8",
       "why": "M8.5 in ADR-018 terms. Everything after depends on it.",
       "counts": {
-        "lived": 0,
+        "lived": 1,
         "in flight": 0,
-        "planned": 3,
+        "planned": 2,
         "total": 3
       },
       "closed": false
@@ -1852,12 +1852,6 @@
   ],
   "current_wave": "3",
   "next_up": [
-    {
-      "id": "C8",
-      "capability": "Config store on disk: guests, NICs, settings survive host reboot",
-      "status": "planned",
-      "role": "iron thread"
-    },
     {
       "id": "G4",
       "capability": "Audit survives host reboot (persisted, chained across boots)",
