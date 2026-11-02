@@ -144,9 +144,14 @@ pub const CONFIG_TABLE_MAX_ENTRIES: usize = 16;
 /// Start carries a saved NIC; left zero otherwise.
 pub const IMAGE_SMBIOS_OFF: usize = 0x3000;
 pub const IMAGE_SMBIOS_BYTES: usize = 0x1000;
-/// Total bytes the image needs (four 4 KiB pages: tables + 16 file protos +
-/// the configuration table array + SMBIOS).
-pub const IMAGE_BYTES: usize = 0x4000;
+/// B4: RSDP and the power-button DSDT. One page after SMBIOS. No MADT.
+pub const IMAGE_ACPI_OFF: usize = 0x4000;
+pub const IMAGE_ACPI_BYTES: usize = 0x1000;
+/// Total bytes the image needs (tables + file protos + configuration table
+/// + SMBIOS + the ACPI page).
+pub const IMAGE_BYTES: usize = 0x5000;
+const _: () = assert!(IMAGE_SMBIOS_OFF + IMAGE_SMBIOS_BYTES == IMAGE_ACPI_OFF);
+const _: () = assert!(IMAGE_ACPI_OFF + IMAGE_ACPI_BYTES == IMAGE_BYTES);
 const _: () = assert!(IMAGE_SMBIOS_OFF + IMAGE_SMBIOS_BYTES <= IMAGE_BYTES);
 const _: () = assert!(
     IMAGE_CONFIG_TABLE_OFF + CONFIG_TABLE_MAX_ENTRIES * CONFIG_TABLE_ENTRY_BYTES <= IMAGE_SMBIOS_OFF
@@ -194,6 +199,8 @@ pub struct FirmwareImageLayout {
     pub config_table: u64,
     /// GPA of the SMBIOS 3.0 entry point page (zero bytes until published).
     pub smbios: u64,
+    /// GPA of the ACPI page (RSDP at offset 0). Published by [`publish_acpi`].
+    pub acpi: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -317,6 +324,7 @@ pub fn build_firmware_image(base: u64, buf: &mut [u8]) -> Result<FirmwareImageLa
         file_proto_base: base + IMAGE_FILE_PROTO_OFF as u64,
         config_table: base + IMAGE_CONFIG_TABLE_OFF as u64,
         smbios: base + IMAGE_SMBIOS_OFF as u64,
+        acpi: base + IMAGE_ACPI_OFF as u64,
     };
 
     // Trampoline page: one stub per service slot.
@@ -554,4 +562,38 @@ pub fn publish_smbios(
         SYSTEM_TABLE_SIZE,
     );
     Ok(img.table_len)
+}
+
+/// Append the ACPI 1.0 and 2.0 configuration-table entries for the power
+/// button. Call after [`publish_smbios`] when that ran, so the SMBIOS entry
+/// stays first. Returns the RSDP guest-physical address.
+pub fn publish_acpi(buf: &mut [u8], layout: &FirmwareImageLayout) -> Result<u64, BuildError> {
+    use super::acpi_publish::{write_acpi_page, ACPI10_GUID, ACPI20_GUID, ACPI_PAGE};
+    if buf.len() < IMAGE_BYTES {
+        return Err(BuildError::BufferTooSmall);
+    }
+    let page = &mut buf[IMAGE_ACPI_OFF..IMAGE_ACPI_OFF + ACPI_PAGE];
+    if !write_acpi_page(page, layout.acpi) {
+        return Err(BuildError::BufferTooSmall);
+    }
+    let st = IMAGE_SYSTEM_TABLE_OFF;
+    let n = get_u64(buf, st + SYSTEM_TABLE_NUM_TABLE_ENTRIES_OFF) as usize;
+    if n + 2 > CONFIG_TABLE_MAX_ENTRIES {
+        return Err(BuildError::BufferTooSmall);
+    }
+    let gpa = layout.acpi;
+    for (i, guid) in [ACPI10_GUID, ACPI20_GUID].into_iter().enumerate() {
+        let e = IMAGE_CONFIG_TABLE_OFF + (n + i) * CONFIG_TABLE_ENTRY_BYTES;
+        buf[e..e + 16].copy_from_slice(&guid);
+        put_u64(buf, e + 16, gpa);
+    }
+    put_u64(buf, st + SYSTEM_TABLE_NUM_TABLE_ENTRIES_OFF, (n + 2) as u64);
+    write_header(
+        buf,
+        st,
+        EFI_SYSTEM_TABLE_SIGNATURE,
+        EFI_2_10_SYSTEM_TABLE_REVISION,
+        SYSTEM_TABLE_SIZE,
+    );
+    Ok(gpa)
 }

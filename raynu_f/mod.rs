@@ -19,6 +19,7 @@
 //! a guest calls it. Not yet: a PE loader or a launch, so no guest has called
 //! it. It is **not** `RAYNU-V-M7-ISO-INSTALL-OK`.
 
+pub mod acpi_publish;
 pub mod blockio;
 pub mod cd_serial;
 pub mod events;
@@ -103,7 +104,7 @@ pub const RAYNU_F_EBS_OK_MARKER: &str = "RAYNU-V-RAYNU-F-EBS-OK";
 /// clock, and the v2 test app round-trips. Host only.
 pub const RAYNU_F_SERVICES_OK_MARKER: &str = "RAYNU-V-RAYNU-F-SERVICES-OK";
 pub use tables::{
-    build_firmware_image, crc32, header_crc_valid, publish_smbios, BuildError,
+    build_firmware_image, crc32, header_crc_valid, publish_acpi, publish_smbios, BuildError,
     FirmwareImageLayout, IMAGE_BYTES,
 };
 pub use gpt::{

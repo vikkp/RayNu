@@ -803,6 +803,13 @@ impl PagePool {
         push(
             EFI_RUNTIME_SERVICES_CODE,
             F2_TABLES_BASE,
+            F2_TABLES_BASE + super::tables::IMAGE_ACPI_OFF as u64,
+        );
+        // The ACPI page is reclaimable after the kernel copies it. It is not
+        // runtime code: Linux must not execute the DSDT.
+        push(
+            EFI_ACPI_RECLAIM_MEMORY,
+            F2_TABLES_BASE + super::tables::IMAGE_ACPI_OFF as u64,
             F2_TABLES_BASE + IMAGE_BYTES as u64,
         );
         push(

@@ -647,8 +647,9 @@ fn pm1_block_off(port: u16, pmba: u32) -> Option<u16> {
 }
 
 fn pm1_read(p: &Platform, off: u16, size: u8) -> u64 {
+    let sts = crate::mgmt::guest_power::apply_status(p.pm1_sts);
     let mut blk = [0u8; 8];
-    blk[0..2].copy_from_slice(&p.pm1_sts.to_le_bytes());
+    blk[0..2].copy_from_slice(&sts.to_le_bytes());
     blk[2..4].copy_from_slice(&p.pm1_en.to_le_bytes());
     blk[4..6].copy_from_slice(&p.pm1_cnt.to_le_bytes());
     let o = off as usize;
@@ -670,11 +671,18 @@ fn pm1_write(p: &mut Platform, off: u16, size: u8, val: u64) {
     let o = off as usize;
     let n = usize::from(size).min(8);
     let mut touched_cnt = false;
+    let mut cleared = 0u16;
     for i in 0..n {
         let b = ((val >> (8 * i)) & 0xff) as u8;
         match o + i {
-            0 => p.pm1_sts &= !u16::from(b),
-            1 => p.pm1_sts &= !(u16::from(b) << 8),
+            0 => {
+                cleared |= u16::from(b);
+                p.pm1_sts &= !u16::from(b);
+            }
+            1 => {
+                cleared |= u16::from(b) << 8;
+                p.pm1_sts &= !(u16::from(b) << 8);
+            }
             2 => p.pm1_en = (p.pm1_en & 0xFF00) | u16::from(b),
             3 => p.pm1_en = (p.pm1_en & 0x00FF) | (u16::from(b) << 8),
             4 => {
@@ -688,10 +696,23 @@ fn pm1_write(p: &mut Platform, off: u16, size: u8, val: u64) {
             _ => {}
         }
     }
+    if cleared != 0 {
+        crate::mgmt::guest_power::note_cleared(cleared);
+    }
     if touched_cnt {
+        let written = p.pm1_cnt;
         p.pm1_cnt &= !PM1_CNT_SLP_EN;
+        if written & PM1_CNT_SLP_EN != 0 {
+            let typ = (written >> 10) & 7;
+            crate::mgmt::guest_power::note_s5(typ);
+        }
         note_pm1_sci(p.pm1_cnt);
     }
+}
+
+/// PM1 enable word. Bit 8 is the power button.
+pub fn pm1_enable() -> u16 {
+    with_plat(|p| p.pm1_en)
 }
 
 fn note_pm1_sci(cnt: u16) {
@@ -1207,6 +1228,7 @@ pub fn reset() {
     HOST_ENUM.store(false, Ordering::Release);
     ACPI_PM.store(0, Ordering::Release);
     LAST_CMOS.store(0, Ordering::Release);
+    crate::mgmt::guest_power::clear();
     crate::devices::guest_irq::reset();
     crate::devices::guest_uart::reset();
 }
@@ -1768,6 +1790,8 @@ pub enum ResetSrc {
     Cf9,
     Kbc,
     Tf,
+    /// Guest finished `_S5` after a reboot ask. The relaunch is ours.
+    Acpi,
 }
 
 impl ResetSrc {
@@ -1776,6 +1800,7 @@ impl ResetSrc {
             ResetSrc::Cf9 => "cf9",
             ResetSrc::Kbc => "kbc",
             ResetSrc::Tf => "tf",
+            ResetSrc::Acpi => "acpi",
         }
     }
 }

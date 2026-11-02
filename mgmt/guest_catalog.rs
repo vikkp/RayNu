@@ -285,6 +285,9 @@ pub fn guest_catalog_rest(method: RestMethod, path: &str, authed: bool) -> Guest
     if let Some(next) = parse_boot_next(path) {
         return boot_next_rest(method, next, authed);
     }
+    if let Some(ask) = parse_power(path) {
+        return power_rest(method, ask, authed);
+    }
     let action = match parse_guest_route(path) {
         None => return GuestCatalogHttp::NotMine,
         Some(GuestRoute::List) => {
@@ -559,6 +562,62 @@ fn nic_rest(method: RestMethod, route: NicRoute, authed: bool) -> GuestCatalogHt
             }
         }
     }
+}
+
+enum PowerRoute {
+    Shutdown,
+    Reboot,
+    Status,
+}
+
+fn parse_power(path: &str) -> Option<PowerRoute> {
+    match path {
+        "/perc/guests/power/shutdown" => Some(PowerRoute::Shutdown),
+        "/perc/guests/power/reboot" => Some(PowerRoute::Reboot),
+        "/perc/guests/power" => Some(PowerRoute::Status),
+        _ => None,
+    }
+}
+
+fn power_rest(method: RestMethod, ask: PowerRoute, authed: bool) -> GuestCatalogHttp {
+    use crate::mgmt::guest_power::{acked, pending, request, PowerAsk};
+    if !authed {
+        return GuestCatalogHttp::Unauthorized;
+    }
+    match ask {
+        PowerRoute::Status => {
+            if !matches!(method, RestMethod::Get) {
+                return GuestCatalogHttp::BadMethod;
+            }
+        }
+        PowerRoute::Shutdown => {
+            if !matches!(method, RestMethod::Post) {
+                return GuestCatalogHttp::BadMethod;
+            }
+            request(PowerAsk::Shutdown);
+        }
+        PowerRoute::Reboot => {
+            if !matches!(method, RestMethod::Post) {
+                return GuestCatalogHttp::BadMethod;
+            }
+            request(PowerAsk::Reboot);
+        }
+    }
+    let name = match pending() {
+        Some(PowerAsk::Shutdown) => "shutdown",
+        Some(PowerAsk::Reboot) => "reboot",
+        None => "none",
+    };
+    let ack = if acked() { "true" } else { "false" };
+    let mut body = [0u8; 64];
+    let mut w = JsonBuf::new(&mut body);
+    w.s("{\"ok\":true,\"ask\":\"");
+    w.s(name);
+    w.s("\",\"acked\":");
+    w.s(ack);
+    w.s("}");
+    let n = if w.fit { w.n } else { 0 };
+    ready(200, &body[..n], None)
 }
 
 enum BootNext {
@@ -1502,6 +1561,11 @@ pub fn prop_guest_catalog() -> bool {
         && html.contains(GUEST_START_PATH)
         && html.contains("/perc/guests/2/start")
         && html.contains("/perc/guests/stop")
+        && html.contains("\"/perc/guests/power/\"+kind")
+        && html.contains("guestPower(\"shutdown\")")
+        && html.contains("guestPower(\"reboot\")")
+        && html.contains("Shut down")
+        && html.contains("textContent=\"Reboot\"")
         && html.contains("/perc/guests/1/linux/")
         && html.contains("/perc/guests/1/windows/")
         && !html.contains("btn-perc-boot")
@@ -2110,6 +2174,32 @@ mod guest_catalog_test {
         );
         assert_eq!(st, 409, "{body}");
         assert!(body.contains("idle"), "{body}");
+        crate::mgmt::guest_power::reset_for_test();
+        let _power = crate::mgmt::guest_power::test_lock();
+        let (st, body) = exchange(
+            "POST /perc/guests/power/shutdown HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
+        );
+        assert_eq!(st, 200, "{body}");
+        assert!(body.contains("\"ask\":\"shutdown\""), "{body}");
+        assert!(body.contains("\"acked\":false"), "{body}");
+        assert_eq!(
+            crate::devices::guest_platform::io(0xB000, true, 2, 0) as u16,
+            crate::mgmt::guest_power::PM1_STS_PWRBTN
+        );
+        let _ = crate::devices::guest_platform::io(
+            0xB000,
+            false,
+            2,
+            u64::from(crate::mgmt::guest_power::PM1_STS_PWRBTN),
+        );
+        let (st, body) = exchange(
+            "GET /perc/guests/power HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
+        );
+        assert_eq!(st, 200, "{body}");
+        assert!(body.contains("\"ask\":\"shutdown\""), "{body}");
+        assert!(body.contains("\"acked\":true"), "{body}");
+        drop(_power);
+        crate::mgmt::guest_power::reset_for_test();
         let (st, body) = exchange(
             "POST /perc/guests/1/linux/10240 HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
         );
