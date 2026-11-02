@@ -58,6 +58,10 @@ struct State {
     dirty: [u8; IMAGE],
     dirty_on: bool,
     dirty_gen: u32,
+    /// Moves on every restore, save, or clear. `Tls12Listen::reset`
+    /// re-parses the key only when this moved; one PKCS#8 parse is
+    /// ~100 KiB on the leaky post-EBS bump.
+    identity_gen: u32,
 }
 
 impl State {
@@ -71,6 +75,7 @@ impl State {
             dirty: [0; IMAGE],
             dirty_on: false,
             dirty_gen: 0,
+            identity_gen: 0,
         }
     }
 }
@@ -114,6 +119,13 @@ pub fn operator_active() -> bool {
     with_state(|s| s.on)
 }
 
+/// Changes whenever the identity the listener should present changes
+/// (restore at boot, Save, Use lab certificate). A session that already
+/// holds a parsed key for this value keeps it across `reset()`.
+pub fn identity_generation() -> u32 {
+    with_state(|s| s.identity_gen)
+}
+
 /// Copy the saved certificate. `None` means the lab millicert.
 pub fn copy_cert(out: &mut [u8]) -> Option<usize> {
     with_state(|s| {
@@ -154,12 +166,14 @@ pub fn restore(buf: &[u8]) -> bool {
             s.key[..key.len()].copy_from_slice(key);
             s.key_len = key.len();
             s.on = true;
+            s.identity_gen = s.identity_gen.wrapping_add(1);
             true
         }),
         None => with_state(|s| {
             s.on = false;
             s.cert_len = 0;
             s.key_len = 0;
+            s.identity_gen = s.identity_gen.wrapping_add(1);
             false
         }),
     }
@@ -237,6 +251,7 @@ fn stage(cert: &[u8], key: &[u8]) -> bool {
         s.key[..key.len()].copy_from_slice(key);
         s.key_len = key.len();
         s.on = true;
+        s.identity_gen = s.identity_gen.wrapping_add(1);
         s.dirty = image;
         s.dirty_gen = s.dirty_gen.wrapping_add(1);
         s.dirty_on = true;
@@ -295,6 +310,7 @@ pub fn host_cert_rest(method: RestMethod, path: &str, authed: bool, body: &str) 
             s.on = false;
             s.cert_len = 0;
             s.key_len = 0;
+            s.identity_gen = s.identity_gen.wrapping_add(1);
             s.dirty = [0; IMAGE];
             s.dirty_gen = s.dirty_gen.wrapping_add(1);
             s.dirty_on = true;
@@ -497,11 +513,30 @@ pub fn prop_host_cert() -> bool {
         && html.contains("id=\"btn-cert\"")
         && html.contains("/host/cert")
         && html.contains("function saveCert")
+        && bump_before_spare_read()
+}
+
+/// The certificate read parses an RSA key. That allocates. The UEFI pool
+/// returns null after ExitBootServices, so the bump has to be selected
+/// before `perc_fusion_post_low`.
+fn bump_before_spare_read() -> bool {
+    let handoff = include_str!("../boot/handoff.rs");
+    match (
+        handoff.find("uefi_alloc::mark_post_ebs()"),
+        handoff.find("perc_fusion_post_low"),
+    ) {
+        (Some(bump), Some(perc)) => bump < perc,
+        _ => false,
+    }
 }
 
 #[cfg(test)]
 pub fn reset_for_test() {
-    with_state(|s| *s = State::empty());
+    with_state(|s| {
+        let gen = s.identity_gen.wrapping_add(1);
+        *s = State::empty();
+        s.identity_gen = gen;
+    });
 }
 
 #[cfg(test)]
@@ -644,6 +679,70 @@ mod tests {
         let mut again = crate::mgmt::tls12::Tls12Listen::new();
         assert_eq!(again.feed_tcp(&ch), ch.len());
         let wn = again.drain_tcp(&mut out);
+        assert!(wn > 50);
+        assert!(out[..wn].windows(cert.len()).any(|w| w == cert));
+        reset_for_test();
+    }
+
+    /// Iron `0beeb871`: every accept and every re-listen parsed the key
+    /// (~100 KiB each on the leaky bump) and the chassis reset on the
+    /// second browser connection. `reset()` keeps the parsed key until
+    /// the saved identity moves.
+    #[test]
+    fn reset_keeps_the_parsed_key_until_the_identity_moves() {
+        use crate::mgmt::tls12::{key_parses, Tls12Listen};
+        let _g = lock();
+        reset_for_test();
+        let (cert, key) = lab();
+        let ch = [
+            0x16, 0x03, 0x03, 0x00, 0x33, 0x01, 0x00, 0x00, 0x2f, 0x03, 0x03, 0x00, 0x01, 0x02,
+            0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10,
+            0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e,
+            0x1f, 0x00, 0x00, 0x02, 0xc0, 0x2f, 0x01, 0x00, 0x00, 0x04, 0x00, 0x17, 0x00, 0x00,
+        ];
+        let mut out = [0u8; 4096];
+        let before = key_parses();
+        let mut listen = Tls12Listen::empty();
+        listen.load_lab_material();
+        assert_eq!(key_parses(), before + 1, "one parse for the millicert");
+        for _ in 0..8 {
+            listen.reset();
+            assert!(listen.key_ready());
+        }
+        assert_eq!(key_parses(), before + 1, "accept/re-listen must not re-parse");
+        assert_eq!(listen.feed_tcp(&ch), ch.len());
+        let wn = listen.drain_tcp(&mut out);
+        assert!(wn > 50, "flight after resets {}", listen.debug_state());
+        assert!(out[..wn].windows(cert.len()).any(|w| w == cert));
+
+        let mut flipped = [0u8; 1536];
+        flipped[..cert.len()].copy_from_slice(cert);
+        flipped[40] ^= 0x5a;
+        let mut image = [0u8; IMAGE];
+        assert!(encode(&flipped[..cert.len()], key, &mut image));
+        let gen = identity_generation();
+        assert!(restore(&image));
+        assert_ne!(identity_generation(), gen, "restore moves the identity");
+        listen.reset();
+        assert_eq!(key_parses(), before + 2, "a moved identity parses once");
+        listen.reset();
+        listen.reset();
+        assert_eq!(key_parses(), before + 2);
+        assert_eq!(listen.feed_tcp(&ch), ch.len());
+        let wn = listen.drain_tcp(&mut out);
+        assert!(wn > 50);
+        assert!(out[..wn]
+            .windows(cert.len())
+            .any(|w| w == &flipped[..cert.len()]));
+
+        assert!(matches!(
+            host_cert_rest(RestMethod::Post, "/host/cert/clear", true, ""),
+            HostCertHttp::Json { status: 200, .. }
+        ));
+        listen.reset();
+        assert_eq!(key_parses(), before + 3, "clear moves back to the millicert");
+        assert_eq!(listen.feed_tcp(&ch), ch.len());
+        let wn = listen.drain_tcp(&mut out);
         assert!(wn > 50);
         assert!(out[..wn].windows(cert.len()).any(|w| w == cert));
         reset_for_test();

@@ -1,8 +1,9 @@
 use super::{
     coexist_keepalive_idle, coexist_millis_from_tsc, http_accept_idle_limit_ms,
     http_accept_should_idle_abort, prop_http_accept_idle_abort, COEXIST_KEEPALIVE_IDLE_MS,
-    COEXIST_TSC_HZ_FALLBACK, HOST_NIC_DHCP_MS, HOST_NIC_HTTP_HS_IDLE_MS, HOST_NIC_HTTP_IDLE_MS,
-    HOST_NIC_LISTEN_MS, PRE_RAYNUF_HTTPS_MS,
+    COEXIST_TCP_SLOTS, COEXIST_TSC_HZ_FALLBACK,
+    HOST_NIC_DHCP_MS, HOST_NIC_HTTP_HS_IDLE_MS, HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS,
+    PRE_RAYNUF_HTTPS_MS,
 };
 
 #[test]
@@ -106,4 +107,18 @@ fn pre_raynuf_https_window_is_longer_than_qemu_listen() {
 fn coexist_millis_from_tsc_wraps() {
     let start = u64::MAX - 2_099_999;
     assert_eq!(coexist_millis_from_tsc(start, 0, 2_100_000_000), 1);
+}
+
+#[test]
+fn eight_slots_leave_two_listening_beside_a_browser_pool() {
+    assert_eq!(COEXIST_TCP_SLOTS, 8);
+    assert!(COEXIST_TCP_SLOTS > 6);
+    assert_eq!(COEXIST_KEEPALIVE_IDLE_MS, 600_000);
+    let listen = include_str!("host_nic_listen.rs");
+    assert!(listen.contains("COEXIST_TCP_SLOTS"));
+    assert!(listen.contains("COEXIST_CLOSE_FORCE_MS"));
+    assert!(listen.contains("stay in LISTEN"));
+    assert!(listen.contains("filled all six slots"));
+    assert!(listen.contains("FIN, not RST"));
+    assert!(!listen.contains("coexist_reclaim_slot"));
 }

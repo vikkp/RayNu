@@ -1,6 +1,6 @@
 ---
 hda_version: 1
-last_updated: 2026-10-31
+last_updated: 2026-11-02
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
@@ -176,7 +176,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 2026-08 ████████  R640 boot (E2) + E3b HTTP-OK
 2026-09 ████████  E5 + Phase B — **Mount Everest CLOSED** (`f72b4276`)  ← months_to_everest = 0.0
 2026-10 ████████  M8.8 lived on c3a70e62: Ubuntu login, then library ISO cleared; scores held
-2026-11 ░░░░░░░░  operator picks boot or reinstall in the SPA; mailbox probe LBA 0 stays unwritten; `skip PERC` stays
+2026-11 ░░░░░░░░  wave 5: E6 lived; E4 cert presented; bac1f0ec5139 SPA and both reloads, Host stayed green, three accepts; TLS 1.2 still open; scores held
 ```
 
 **Pull-forward rule:** E2 closed 2026-08-15; E3 bring-up closed 2026-08-16; **E3b closed 2026-08-20**; **P0-14 closed 2026-08-21**; **E5 install-to-disk closed on iron 2026-09-10** (`59ac070`); **F7 relaunch + installed-disk GRUB reached on iron 2026-09-10** (`975f8fc`, exit-cap ended it); **E5 reboot-to-disk closed on iron 2026-09-10** (`56a3ffd`: `DISK-BOOT-OK`, second Linux `root=UUID=`, `login:`) → months 0.5→0.25; **Phase B closed on iron 2026-09-11** (`f72b4276` / `34552377351`: coexist HTTP-OK → SPA Start of RayNu-F ISO → install → disk reboot) → months 0.25→0.0. Document why in [Changelog](#hda-changelog).
@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-5-e4-cert |
-| Summary | **ADR-021 E4 in flight.** Overview can save a certificate for the next handshake. The lab millicert stays until that save. The listener is still TLS 1.2. Not lived. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-5-e4-reloads |
+| Summary | **ADR-021 E4 still in flight.** Iron `bac1f0ec5139` loaded the SPA and both reloads. Host stayed green. COM2 showed three accepts (slots 5–7) and no re-listen. TLS stays 1.2. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | ADR-021 E4 `planned → in flight` on `cursor/wave-5-e4-cert-50bb`. E6 stays lived. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -380,6 +380,14 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-02 | wave-5-e4-reloads | 0.0 | 99 | **E4 still in flight.** Iron `bac1f0ec5139` / run `41516590111`: SPA loaded, both reloads worked, Host stayed green, certificate 790 bytes, Guest 3 running. COM2 after login: accepts on slots 5, 6, and 7, no re-listen. TLS 1.2. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-02 | wave-5-e4-listen-spare | 0.0 | 99 | **E4 still in flight.** Iron `87bee04b` loaded the page once, then the reload was refused (accept slot 4, re-listen slot 0, accept slot 0, re-listen slot 1). Closing a live session to free a listener is what a TLS server does not do. Eight sockets: a browser holds 6, two stay listening. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-02 | wave-5-e4-keepalive | 0.0 | 99 | **E4 still in flight.** Iron `1e7d44c9`: page and one reload loaded (certificate 790 bytes, Guest 3 running), second reload failed, Host card flipped red. Every SPA reply closed, so the 2 s polls each handshook. A normal fetch keeps the session; the oldest finished session is FIN'd only when nothing is listening. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-02 | wave-5-e4-fin | 0.0 | 99 | **E4 still in flight.** Iron `d3faa4d7`: six accepts, `re-listen after HTTP`, browser "Unable to connect", `nc` succeeded once the idle abort freed the slots. A drained reply now ends with FIN instead of a reset. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-02 | wave-5-e4-slot-return | 0.0 | 99 | **E4 still in flight.** Iron `643f13de`: six accepts, sign-in showed `Operator: vikkp`, reload refused because keep-alive held every slot. SPA exchanges now return the slot. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-02 | wave-5-e4-slots | 0.0 | 99 | **E4 still in flight.** Iron `6dc1f554`: operator certificate presented (Firefox warning, chassis stayed up), then the one TCP slot never returned to listen after the sign-in accept. Six slots, close force 2 s, freeing post-EBS heap. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-02 | wave-5-e4-handshake | 0.0 | 99 | **E4 still in flight.** Iron `0beeb871`: cert read lived (`rd lba=6190268891 operator`), then the first browser connection reset the chassis, COM2 cut at `boot: HOST-NIC TC`. Cause measured on the host: `reset()` re-parsed the key (~100 KiB) per accept/re-listen on a 512 KiB leaky bump. Key kept across `reset()`, bump 4 MiB, panic dump flushed. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-02 | wave-5-e4-cert-read | 0.0 | 99 | **E4 still in flight.** Iron `12ffaff69fb9` save lived (`cert=790`). Next F11: red screen, VMXOFF #UD at `+02478F`, COM2 stopped after `E6 operator rd … set`. Bump allocator moves before the spare read. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-31 | wave-5-e4-cert | 0.0 | 99 | **E4 in flight.** Save certificate writes the spare. The next handshake uses it. TLS stays 1.2. Not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-31 | wave-5-e6-lived | 0.0 | 99 | **Iron `f2828d95`: E6 lived.** `rd lba=6190268907 set`. Lab-token GET `AuthDenied method_tag=1`. Sign in opened the page. Wave 5 stays open. Scores held. months 0.0 held; overall 99 held |
 | 2026-10-31 | wave-5-e6-operator | 0.0 | 99 | **E6 in flight.** Operator account on the spare. Lab latch stays until Save. Not lived. Wave 4 stays closed. Scores held. months 0.0 held; overall 99 held |
@@ -1165,7 +1173,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     Wave 5 is current. E6 lived on f2828d95. E4 is in flight on cursor/wave-5-e4-cert-50bb: Save certificate stores an RSA-2048 certificate on the spare and the next handshake sends it. The lab millicert stays until that save. TLS 1.3 is still open. Not lived. Rollback for the booted stick is f2828d95. Rollback for a wave 2 flash is v0.1.0-m8-9-lan. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/m8_plan.md.
+Next move:     Wave 5 is current. E6 lived on f2828d95. E4 is in flight on cursor/wave-5-e4-cert-read-50bb. Iron bac1f0ec5139 / run 41516590111 loaded the SPA and both reloads (Host green, certificate 790 bytes, three accepts on slots 5–7, no re-listen). Leave that EFI booted. TLS 1.3 is still open. Not lived. Rollback for a wave 2 flash is v0.1.0-m8-9-lan. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/m8_plan.md.
 Rollback:      M8.9 close: v0.1.0-m8-9-lan → CI 40603110937 / COM2 sha=0d865c7fcb0a / EFI SHA256 df6fc3465cecf1eaf058d5c8e675501827c16eb55e7b2c9758bc5e68326ad91b
 Older M8.8:    v0.1.0-m8-8-ubuntu → CI 38454398693 / COM2 sha=c3a70e623aec / EFI SHA256 08ef31ba87136577102ac378d8e0a512327994e8794c41c64444f5be5f8812c4
 Older SPA:     v0.1.0-m8-perc-spa → CI 36362775808 / COM2 sha=8ad2ac89125e / EFI SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849

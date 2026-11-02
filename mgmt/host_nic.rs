@@ -98,6 +98,19 @@ pub fn http_accept_should_idle_abort(
 /// a standing page, not a second ClientHello.
 pub const COEXIST_KEEPALIVE_IDLE_MS: i64 = 600_000;
 
+/// Listen sockets armed together.
+///
+/// smoltcp's listening socket becomes the connection. A browser keeps 6
+/// persistent connections to one host (Firefox and Chrome). Two sockets
+/// stay in `LISTEN` so the next SYN, including a reload, has a place to
+/// land. Iron `6dc1f554` had one socket. Iron `87bee04b` had six and
+/// closed a live session whenever none were listening; the reload was
+/// refused while that FIN was in flight.
+pub const COEXIST_TCP_SLOTS: usize = 8;
+
+/// A close whose TX queue never drains still gives the slot back.
+pub const COEXIST_CLOSE_FORCE_MS: i64 = 2_000;
+
 /// True when a kept session has been idle long enough to accept again.
 pub fn coexist_keepalive_idle(now_ms: i64, last_http_ms: i64, idle_ms: i64) -> bool {
     idle_ms > 0 && now_ms.saturating_sub(last_http_ms) >= idle_ms

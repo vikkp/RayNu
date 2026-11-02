@@ -89,7 +89,8 @@ pub struct Handoff {
 ///
 /// # Safety
 /// Caller must ensure no live UEFI protocol / pool references remain.
-/// After return, do not use `uefi::println!`, boot services, or the global alloc.
+/// After return, do not use `uefi::println!` or boot services. The global
+/// allocator is the post-EBS bump, selected before the spare reads.
 #[cfg(target_os = "uefi")]
 pub unsafe fn leave_firmware() -> Handoff {
     serial::write_line("boot: ExitBootServices — taking memory map ownership");
@@ -100,6 +101,12 @@ pub unsafe fn leave_firmware() -> Handoff {
     // Firmware page tables remain active (UEFI identity map). We do not rebuild
     // them in M1.0; documenting that choice keeps the gate focused on EBS+serial.
     serial::write_line("boot: ExitBootServices returned; scanning conventional memory");
+    // Boot services are gone. `uefi`'s pool allocator returns null, and a
+    // null allocation panics. Iron `12ffaff69fb9` read the saved certificate
+    // in the spare walk below; `rsa` allocated; the panic handler's VMXOFF
+    // was #UD (CR4.VMXE clear) and the BIOS drew the red screen. The bump
+    // is the allocator before that read.
+    crate::boot::uefi_alloc::mark_post_ebs();
     // NVMe then USB: firmware has disconnected its drivers. PRE-EBS Identify
     // is wiped by OVMF NVMe ExitBootServices (HCRST). Not ISO-INSTALL-OK.
     crate::mgmt::init_durable_lun_io();
