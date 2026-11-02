@@ -175,8 +175,8 @@ pub fn decide_with_layout(
                     disk_bytes: place.disk_bytes,
                 };
             }
-            let limit = crate::mgmt::iso_library::library_floor(spare_bytes, library_bytes)
-                .unwrap_or(0);
+            let limit =
+                crate::mgmt::iso_library::library_floor(spare_bytes, library_bytes).unwrap_or(0);
             let placeable = limit.saturating_sub(occupied_end);
             if spare_bytes > 0 && installed {
                 CatalogDecision::Refuse(CatalogRefuse::LargerThanTail {
@@ -281,6 +281,9 @@ pub enum GuestCatalogHttp {
 pub fn guest_catalog_rest(method: RestMethod, path: &str, authed: bool) -> GuestCatalogHttp {
     if let Some(nic) = parse_nic_route(path) {
         return nic_rest(method, nic, authed);
+    }
+    if let Some(next) = parse_boot_next(path) {
+        return boot_next_rest(method, next, authed);
     }
     let action = match parse_guest_route(path) {
         None => return GuestCatalogHttp::NotMine,
@@ -558,6 +561,95 @@ fn nic_rest(method: RestMethod, route: NicRoute, authed: bool) -> GuestCatalogHt
     }
 }
 
+enum BootNext {
+    ClearAll,
+    Window { delay: u16 },
+    Disk { spare_off: u64, delay: u16 },
+    Forget { spare_off: u64, kind: u8 },
+    Bad,
+}
+
+fn parse_boot_next(path: &str) -> Option<BootNext> {
+    if path == "/perc/guests/boot-next/clear" {
+        return Some(BootNext::ClearAll);
+    }
+    if let Some(rest) = path.strip_prefix("/perc/guests/1/boot-next/") {
+        if rest == "clear" {
+            return Some(BootNext::Forget {
+                spare_off: 0,
+                kind: crate::mgmt::perc_boot_choice::CHOICE_BOOT,
+            });
+        }
+        let delay = parse_u64_token(rest)?;
+        if delay > u64::from(u16::MAX) {
+            return Some(BootNext::Bad);
+        }
+        return Some(BootNext::Window {
+            delay: delay as u16,
+        });
+    }
+    let rest = path.strip_prefix("/perc/guests/disk/")?;
+    let (off, tail) = rest.split_once("/boot-next/")?;
+    let spare_off = parse_u64_token(off)?;
+    if tail == "clear" {
+        return Some(BootNext::Forget {
+            spare_off,
+            kind: crate::mgmt::perc_boot_choice::CHOICE_TAIL_BOOT,
+        });
+    }
+    let delay = parse_u64_token(tail)?;
+    if delay > u64::from(u16::MAX) {
+        return Some(BootNext::Bad);
+    }
+    Some(BootNext::Disk {
+        spare_off,
+        delay: delay as u16,
+    })
+}
+
+fn boot_next_rest(method: RestMethod, next: BootNext, authed: bool) -> GuestCatalogHttp {
+    use crate::mgmt::guest_autostart::{clear, forget, remember, AutoEntry};
+    use crate::mgmt::perc_boot_choice::{CHOICE_BOOT, CHOICE_TAIL_BOOT};
+    if !authed {
+        return GuestCatalogHttp::Unauthorized;
+    }
+    if !matches!(method, RestMethod::Post) {
+        return GuestCatalogHttp::BadMethod;
+    }
+    let ok = match next {
+        BootNext::Bad => return GuestCatalogHttp::BadMethod,
+        BootNext::ClearAll => clear(),
+        BootNext::Forget { spare_off, kind } => forget(spare_off, kind),
+        BootNext::Window { delay } => remember(
+            AutoEntry {
+                spare_off: 0,
+                disk_bytes: crate::mgmt::megaraid::PERC_IMAGE_BYTES,
+                kind: CHOICE_BOOT,
+            },
+            delay,
+        ),
+        BootNext::Disk { spare_off, delay } => {
+            let (tails, n) = discovered_tails();
+            let Some(disk) = tails[..n].iter().find(|d| d.spare_off == spare_off) else {
+                return ready(409, b"{\"ok\":false,\"reason\":\"nodisk\"}", None);
+            };
+            remember(
+                AutoEntry {
+                    spare_off: disk.spare_off,
+                    disk_bytes: disk.disk_bytes,
+                    kind: CHOICE_TAIL_BOOT,
+                },
+                delay,
+            )
+        }
+    };
+    if !ok {
+        return ready(400, b"{\"ok\":false,\"reason\":\"list\"}", None);
+    }
+    crate::mgmt::megaraid::flush_autostart();
+    ready(200, b"{\"ok\":true,\"boot_next\":true}", None)
+}
+
 fn parse_disk_off(path: &str) -> Option<u64> {
     let rest = path.strip_prefix("/perc/guests/disk/")?;
     let off = rest.strip_suffix("/start")?;
@@ -622,7 +714,9 @@ fn apply_action(action: CatalogAction) -> GuestCatalogHttp {
 }
 
 fn start_tail() -> GuestCatalogHttp {
-    use super::perc_boot_choice::{apply_tail_boot_choice, PercChoiceApply, VmcsGuest, CHOICE_TAIL_BOOT};
+    use super::perc_boot_choice::{
+        apply_tail_boot_choice, PercChoiceApply, VmcsGuest, CHOICE_TAIL_BOOT,
+    };
     let off = crate::mgmt::megaraid::PERC_IMAGE_BYTES;
     if let Some(body) = held_by_other(VmcsGuest::Tail(off)) {
         return ready(200, body, None);
@@ -663,8 +757,7 @@ fn start_disk_at(spare_off: u64) -> GuestCatalogHttp {
     let Some(disk) = tails[..n].iter().find(|d| d.spare_off == spare_off) else {
         return ready(409, b"{\"ok\":false,\"reason\":\"nodisk\"}", None);
     };
-    if let Some(body) = held_by_other(crate::mgmt::perc_boot_choice::VmcsGuest::Tail(spare_off))
-    {
+    if let Some(body) = held_by_other(crate::mgmt::perc_boot_choice::VmcsGuest::Tail(spare_off)) {
         return ready(200, body, None);
     }
     let restarted = crate::mgmt::perc_boot_choice::rearm_guest_after_stop();
@@ -932,11 +1025,8 @@ fn cached_tails() -> ([FoundDisk; GUEST_DISK_MAX], usize) {
         let spare = crate::mgmt::megaraid::perc_spare_bytes();
         let installed = crate::mgmt::megaraid::perc_image_boot_latched();
         let limit = if installed {
-            crate::mgmt::iso_library::library_floor(
-                spare,
-                crate::mgmt::iso_library::held_bytes(),
-            )
-            .unwrap_or(spare)
+            crate::mgmt::iso_library::library_floor(spare, crate::mgmt::iso_library::held_bytes())
+                .unwrap_or(spare)
         } else {
             0
         };
@@ -992,7 +1082,10 @@ fn write_list_json(
     } else {
         0
     };
-    let free = numbers.spare_bytes.saturating_sub(used).saturating_sub(reserve);
+    let free = numbers
+        .spare_bytes
+        .saturating_sub(used)
+        .saturating_sub(reserve);
     let placeable = if numbers.spare_bytes > 0 && installed {
         free
     } else {
@@ -1117,6 +1210,7 @@ fn write_list_json(
     crate::mgmt::host_link::write_json(&mut w);
     write_build_identity(&mut w);
     write_last_stop(&mut w);
+    write_autostart(&mut w);
     w.s("}");
     if w.fit {
         w.n
@@ -1128,6 +1222,22 @@ fn write_list_json(
 /// ADR-021 A3: this binary's SHA and CI run on the body Overview already
 /// polls. A run id that is not digits is omitted, so the page has nothing
 /// to turn into a link.
+fn write_autostart(w: &mut JsonBuf<'_>) {
+    let p = crate::mgmt::guest_autostart::shown();
+    w.s(",\"autostart\":{\"n\":");
+    w.u(u64::from(p.count));
+    w.s(",\"delay\":");
+    w.u(u64::from(p.delay_secs));
+    w.s(",\"offs\":[");
+    for i in 0..p.count as usize {
+        if i > 0 {
+            w.s(",");
+        }
+        w.u(p.entries[i].map(|e| e.spare_off).unwrap_or(0));
+    }
+    w.s("]}");
+}
+
 fn write_build_identity(w: &mut JsonBuf<'_>) {
     w.s(",\"build_sha\":\"");
     if !crate::BUILD_SHA.is_empty() && crate::BUILD_SHA.bytes().all(|b| b.is_ascii_alphanumeric()) {
@@ -1260,9 +1370,7 @@ fn catalog_note(waiting: bool, choice: PercSpaChoice, stopped: bool) -> &'static
         "Start boots one installed guest. A larger Linux disk uses the free tail. 8192 MiB reinstalls the window."
     } else {
         match choice {
-            PercSpaChoice::BootInstalled => {
-                "Booting the 8 GiB guest. setup-disk stays withheld."
-            }
+            PercSpaChoice::BootInstalled => "Booting the 8 GiB guest. setup-disk stays withheld.",
             PercSpaChoice::CleanReinstall => "Installing linux_iso on the 8 GiB window.",
             PercSpaChoice::Tail { .. } => {
                 "Installing linux_iso on a new free-tail disk. The 8 GiB window stays."
@@ -1344,11 +1452,7 @@ struct JsonBuf<'a> {
 
 impl<'a> JsonBuf<'a> {
     fn new(b: &'a mut [u8]) -> Self {
-        Self {
-            b,
-            n: 0,
-            fit: true,
-        }
+        Self { b, n: 0, fit: true }
     }
 
     fn s(&mut self, t: &str) {
@@ -1394,6 +1498,7 @@ pub fn prop_guest_catalog() -> bool {
     let html = include_str!("../assets/webui.html");
     let http = include_str!("http.rs");
     html.contains("spare-list")
+        && html.contains("boot-next")
         && html.contains(GUEST_START_PATH)
         && html.contains("/perc/guests/2/start")
         && html.contains("/perc/guests/stop")
@@ -1467,9 +1572,8 @@ mod guest_catalog_test {
     #[test]
     fn a3_build_identity_rides_the_guest_list() {
         crate::mgmt::guest_nic::clear_panel_for_test();
-        let (st, body) = exchange(
-            "GET /perc/guests HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
-        );
+        let (st, body) =
+            exchange("GET /perc/guests HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n");
         assert_eq!(st, 200, "{body}");
         let sha = format!("\"build_sha\":\"{}\"", crate::BUILD_SHA);
         assert!(body.contains(&sha), "{body}");
@@ -1569,7 +1673,11 @@ mod guest_catalog_test {
         );
         // A flip counts and the body still fits with a vNIC row and two
         // guests on the spare (the fullest list the SPA can ask for).
-        let lit = LinkSample { up: true, driven: true, ..spa };
+        let lit = LinkSample {
+            up: true,
+            driven: true,
+            ..spa
+        };
         assert!(observe(1, [0; 6], lit).is_some());
         let save = "POST /perc/nic/0/m/10.99.99.145/24/10.99.99.1/1.1.1.1 HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n";
         let (st, _) = nic_exchange(save);
@@ -1598,7 +1706,10 @@ mod guest_catalog_test {
         assert!(n > 0 && n + 128 < CATALOG_BODY_CAP, "{n} {full}");
         assert!(full.contains("\"nic\":["), "{full}");
         assert!(full.contains("\"changes\":1}]"), "{full}");
-        assert!(full.contains("\"mbps\":1000,\"duplex\":\"full\",\"changes\":1"), "{full}");
+        assert!(
+            full.contains("\"mbps\":1000,\"duplex\":\"full\",\"changes\":1"),
+            "{full}"
+        );
         let html = include_str!("../assets/webui.html");
         assert!(html.contains("id=\"ports\""), "Overview lists both ports");
         assert!(html.contains("function paintPorts"));
@@ -1615,7 +1726,13 @@ mod guest_catalog_test {
         let (st, body) = nic_exchange(save);
         assert_eq!(st, 200, "{body}");
         assert!(body.contains("\"ok\":true"), "{body}");
-        let mac = body.split("\"mac\":\"").nth(1).unwrap_or("").split('"').next().unwrap_or("");
+        let mac = body
+            .split("\"mac\":\"")
+            .nth(1)
+            .unwrap_or("")
+            .split('"')
+            .next()
+            .unwrap_or("");
         assert_eq!(mac.len(), 17, "{body}");
         let list = "GET /perc/guests HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n";
         let (st, body) = nic_exchange(list);
@@ -1632,15 +1749,15 @@ mod guest_catalog_test {
         let (st, body) = nic_exchange(list);
         assert!(body.contains("\"ip\":\"10.99.99.41\""), "{body}");
         assert!(body.contains("\"m\":\"d\""), "{body}");
-        let detach = "POST /perc/nic/0/detach HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n";
+        let detach =
+            "POST /perc/nic/0/detach HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n";
         let (st, body) = nic_exchange(detach);
         assert_eq!(st, 200, "{body}");
         let (st, body) = nic_exchange(list);
         assert_eq!(st, 200, "{body}");
         assert!(!body.contains("\"nic\""), "{body}");
-        let (st, _) = nic_exchange(
-            "POST /perc/nic/0/m/10.99.99.40/24/10.99.99.1/1.1.1.1 HTTP/1.1\r\n\r\n",
-        );
+        let (st, _) =
+            nic_exchange("POST /perc/nic/0/m/10.99.99.40/24/10.99.99.1/1.1.1.1 HTTP/1.1\r\n\r\n");
         assert_eq!(st, 401);
         crate::mgmt::guest_nic::clear_panel_for_test();
     }
@@ -1661,7 +1778,12 @@ mod guest_catalog_test {
         )
         .unwrap_or(0);
         let s = core::str::from_utf8(&out[..n]).unwrap_or("").to_string();
-        let status = s.split_whitespace().nth(1).unwrap_or("0").parse().unwrap_or(0);
+        let status = s
+            .split_whitespace()
+            .nth(1)
+            .unwrap_or("0")
+            .parse()
+            .unwrap_or(0);
         (status, s)
     }
 
@@ -1746,14 +1868,9 @@ mod guest_catalog_test {
         sector[..8].copy_from_slice(b"EFI PART");
         let backup = (ten / 512) - 1;
         sector[32..40].copy_from_slice(&backup.to_le_bytes());
-        assert_eq!(
-            tail_bytes_from_gpt(&sector, IRON_LD1_BYTES),
-            Some(ten)
-        );
+        assert_eq!(tail_bytes_from_gpt(&sector, IRON_LD1_BYTES), Some(ten));
         assert!(tail_bytes_from_gpt(&sector, SLICE1_WINDOW_BYTES).is_none());
-        assert!(
-            crate::mgmt::webui::webui_len() + 256 <= crate::mgmt::http::HTTP_RESPONSE_CAP
-        );
+        assert!(crate::mgmt::webui::webui_len() + 256 <= crate::mgmt::http::HTTP_RESPONSE_CAP);
     }
 
     #[test]
@@ -1770,13 +1887,27 @@ mod guest_catalog_test {
             disk_bytes: ten,
         }];
         let mut buf = [0u8; CATALOG_BODY_CAP];
-        let n = write_list_json(&mut buf, numbers, true, PercSpaChoice::Pending, true, &disks);
+        let n = write_list_json(
+            &mut buf,
+            numbers,
+            true,
+            PercSpaChoice::Pending,
+            true,
+            &disks,
+        );
         let early = core::str::from_utf8(&buf[..n]).unwrap_or("");
         assert!(!early.contains("\"id\":3"), "{early}");
         assert!(crate::mgmt::iso_library::accept_upload(512, 1024, &sector).is_ok());
         assert!(crate::mgmt::iso_library::library_complete());
         assert!(!crate::mgmt::iso_library::present_as_cd());
-        let n = write_list_json(&mut buf, numbers, true, PercSpaChoice::Pending, true, &disks);
+        let n = write_list_json(
+            &mut buf,
+            numbers,
+            true,
+            PercSpaChoice::Pending,
+            true,
+            &disks,
+        );
         assert!(n > 0, "catalog caption did not fit");
         let body = core::str::from_utf8(&buf[..n]).unwrap_or("");
         assert!(body.contains("\"id\":1"), "{body}");
@@ -1786,10 +1917,19 @@ mod guest_catalog_test {
         assert!(body.contains("\"image_type\":\"ubuntu\""), "{body}");
         assert!(body.contains("\"start\":true"), "{body}");
         assert!(crate::mgmt::iso_library::choose_held_library());
-        let n = write_list_json(&mut buf, numbers, true, PercSpaChoice::Pending, true, &disks);
+        let n = write_list_json(
+            &mut buf,
+            numbers,
+            true,
+            PercSpaChoice::Pending,
+            true,
+            &disks,
+        );
         let chosen = core::str::from_utf8(&buf[..n]).unwrap_or("");
         assert!(
-            chosen.contains("\"state\":\"loading\",\"disk_mib\":0,\"image_type\":\"ubuntu\",\"start\":false"),
+            chosen.contains(
+                "\"state\":\"loading\",\"disk_mib\":0,\"image_type\":\"ubuntu\",\"start\":false"
+            ),
             "{chosen}"
         );
         crate::mgmt::iso_library::clear_library_for_test();
@@ -1920,6 +2060,8 @@ mod guest_catalog_test {
 
     #[test]
     fn http_lists_an_empty_catalog_and_refuses_the_form_default() {
+        let _guard = crate::mgmt::guest_autostart::test_lock();
+        let _ = crate::mgmt::guest_autostart::clear();
         let (st, body) = exchange("GET /perc/guests HTTP/1.1\r\n\r\n");
         assert_eq!(st, 401, "{body}");
         let (st, body) =
@@ -1932,7 +2074,22 @@ mod guest_catalog_test {
             body.contains("\"cap\":\"Spare 0 MiB. Used 0. Free 0. Placeable 8192.\""),
             "{body}"
         );
-        assert!(body.contains("\"note\":\"No latched spare image."), "{body}");
+        assert!(
+            body.contains("\"note\":\"No latched spare image."),
+            "{body}"
+        );
+        assert!(body.contains("\"autostart\":{\"n\":0"), "{body}");
+        let (st, body) = exchange(
+            "POST /perc/guests/1/boot-next/15 HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
+        );
+        assert_eq!(st, 200, "{body}");
+        assert_eq!(crate::mgmt::guest_autostart::shown().count, 1);
+        assert_eq!(crate::mgmt::guest_autostart::shown().delay_secs, 15);
+        let (st, body) = exchange(
+            "POST /perc/guests/boot-next/clear HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
+        );
+        assert_eq!(st, 200, "{body}");
+        assert_eq!(crate::mgmt::guest_autostart::shown().count, 0);
         let (st, body) = exchange(
             "POST /perc/guests/1/start HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
         );

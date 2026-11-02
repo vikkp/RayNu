@@ -214,13 +214,16 @@ row.innerHTML='<span class="id">'+vm.id+'</span><span><div class="meta">'+(vm.im
 const acts=row.querySelector(".acts");
 const a=document.createElement("button");a.className="pri";a.textContent=vm.act||"Start";a.disabled=!vm.start;a.onclick=function(){if(!a.disabled)guestStart(vm)};acts.appendChild(a);
 const c=document.createElement("button");c.className="ghost";c.textContent="Stop";c.disabled=!vm.stop;c.onclick=function(){if(!c.disabled)guestStop()};acts.appendChild(c);
-if(vm.act!=="ISO"){const v=document.createElement("button");v.className="ghost";v.textContent="vNIC";v.onclick=function(){openVnic(vm)};acts.appendChild(v)}
+if(vm.act!=="ISO"){const v=document.createElement("button");v.className="ghost";v.textContent="vNIC";v.onclick=function(){openVnic(vm)};acts.appendChild(v);const off=rowOff(vm);const armed=((b.autostart&&b.autostart.offs)||[]).indexOf(off)>=0;const bn=document.createElement("button");bn.className="ghost";bn.textContent=armed?"Clear boot-next":"Boot next";bn.onclick=function(){bootNext(vm,!armed)};acts.appendChild(bn)}
 box.appendChild(row);
 });
 if(b.last_stop){const line=document.createElement("div");line.className="meta";line.textContent=(b.last_stop.text||"")+" reason="+(b.last_stop.reason||"")+" rip="+(b.last_stop.rip||"");box.appendChild(line)}
 }
 async function guestStart(vm){if(up)return;const id=vm.id;const path=vm.boot?vm.boot:(id==3||vm.act==="ISO"?"/perc/guests/1/linux/"+num("f-disk",10240):(id===2?"/perc/guests/2/start":"/perc/guests/1/start"));setS("Starting "+id+"…");const res=await api("POST",path);let t="";try{t=await res.text()}catch(e){}setS(!res.ok?("Start refused ("+res.status+")"):t.indexOf("busy")>=0?"Guest stays off":("Booting guest "+id));loadSpare()}
 async function guestStop(){if(up)return;setS("Stopping guest…");const res=await api("POST","/perc/guests/stop");setS(res.ok?"Guest stopped":"Stop refused ("+res.status+")");loadSpare()}
+function rowOff(vm){const m=String(vm.boot||"").match(/\/disk\/(\d+)\//);if(m)return Number(m[1]);return vm.id===1?0:-1}
+function bootNextPath(vm,on){const boot=String(vm.boot||"");if(boot.indexOf("/disk/")>=0){return boot.replace(/\/start$/,"/boot-next/"+(on?"0":"clear"))}return "/perc/guests/1/boot-next/"+(on?"0":"clear")}
+async function bootNext(vm,on){if(up)return;setS(on?"Saving boot-next…":"Clearing boot-next…");const res=await api("POST",bootNextPath(vm,on));setS(res.ok?(on?"Starts after the next power-on":"Boot-next cleared"):("Boot-next refused ("+res.status+")"));loadSpare()}
 async function loadSpare(){
 if(up)return;let r;try{r=await api("GET","/perc/guests")}catch(e){return}
 hostOk=r.ok||hostOk;if(!r.ok)return;
