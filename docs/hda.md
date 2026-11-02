@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-5-e4-slots |
-| Summary | **ADR-021 E4 still in flight.** Iron `6dc1f554` presented the saved certificate (Firefox certificate warning, no reset) and then the one listen slot wedged on the sign-in accept, so later connections were refused. Six listen sockets, a 2 s force on a close whose TX never drains, and a post-EBS heap that returns handshake temporaries on `dealloc`. Not lived. TLS stays 1.2. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-5-e4-slot-return |
+| Summary | **ADR-021 E4 still in flight.** Iron `643f13de` served the page on six slots and sign-in showed `Operator: vikkp`. A reload was refused: the SPA's keep-alive held every slot. A finished SPA exchange now returns its slot to listen. The library upload still keeps its connection. Not lived. TLS stays 1.2. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | ADR-021 E4 `planned → in flight` on `cursor/wave-5-e4-cert-50bb`. E6 stays lived. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-02 | wave-5-e4-slot-return | 0.0 | 99 | **E4 still in flight.** Iron `643f13de`: six accepts, sign-in showed `Operator: vikkp`, reload refused because keep-alive held every slot. SPA exchanges now return the slot. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-02 | wave-5-e4-slots | 0.0 | 99 | **E4 still in flight.** Iron `6dc1f554`: operator certificate presented (Firefox warning, chassis stayed up), then the one TCP slot never returned to listen after the sign-in accept. Six slots, close force 2 s, freeing post-EBS heap. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-02 | wave-5-e4-handshake | 0.0 | 99 | **E4 still in flight.** Iron `0beeb871`: cert read lived (`rd lba=6190268891 operator`), then the first browser connection reset the chassis, COM2 cut at `boot: HOST-NIC TC`. Cause measured on the host: `reset()` re-parsed the key (~100 KiB) per accept/re-listen on a 512 KiB leaky bump. Key kept across `reset()`, bump 4 MiB, panic dump flushed. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-02 | wave-5-e4-cert-read | 0.0 | 99 | **E4 still in flight.** Iron `12ffaff69fb9` save lived (`cert=790`). Next F11: red screen, VMXOFF #UD at `+02478F`, COM2 stopped after `E6 operator rd … set`. Bump allocator moves before the spare read. Scores held. months 0.0 held; overall 99 held |

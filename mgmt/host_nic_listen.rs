@@ -140,10 +140,14 @@ const _: () = assert!(SCRATCH_N + 16 <= crate::mgmt::mgmt_arena::MGMT_ARENA_BYTE
 
 /// Complete HTTP request → codec → TLS wrap. Not iron TLS-OK by itself.
 ///
-/// `Some(true)` means the request asked to close. `Some(false)` means the
-/// TLS keys stay and the next request is another HTTP message on this
-/// session. `None` means the reply was not fully queued; the buffer stays
+/// `Some(true)` means hand the slot back to `listen`. `Some(false)` is
+/// the ISO library upload, which keeps the TLS session for the next
+/// chunk. `None` means the reply was not fully queued; the buffer stays
 /// so the next tick can retry.
+///
+/// A normal SPA `fetch()` does not send `Connection: close`. Keeping
+/// that socket filled all six slots on iron `643f13de`, and the reload
+/// was refused. The library path is the one that stays open.
 fn wrap_session_try_exchange(
     session: &mut Tls12Listen,
     sock: &mut tcp::Socket,
@@ -218,8 +222,11 @@ fn wrap_session_try_exchange(
         return None;
     }
     // clear_http drops this request only. reset() would mint a ClientHello.
+    // `wants_close` is the client's header. Either way this slot goes
+    // back to listen; the library upload returned Some(false) above.
     session.clear_http();
-    Some(wants_close)
+    let _ = wants_close;
+    Some(true)
 }
 
 fn tls_session() -> &'static mut Tls12Listen {
