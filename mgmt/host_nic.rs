@@ -106,7 +106,7 @@ pub const COEXIST_KEEPALIVE_IDLE_MS: i64 = 600_000;
 /// land. Iron `6dc1f554` had one socket. Iron `87bee04b` had six and
 /// closed a live session whenever none were listening; the reload was
 /// refused while that FIN was in flight.
-pub const COEXIST_TCP_SLOTS: usize = 8;
+pub const COEXIST_TCP_SLOTS: usize = 10;
 
 /// A close whose TX queue never drains still gives the slot back.
 pub const COEXIST_CLOSE_FORCE_MS: i64 = 2_000;
@@ -116,9 +116,19 @@ pub fn coexist_keepalive_idle(now_ms: i64, last_http_ms: i64, idle_ms: i64) -> b
     idle_ms > 0 && now_ms.saturating_sub(last_http_ms) >= idle_ms
 }
 
-/// Idle-abort budget: 2 s while TLS waits for ClientHello, else 15 s.
+/// Idle-abort budget: 2 s while TLS waits for the first ClientHello byte,
+/// else 15 s.
+///
+/// A ClientHello that has already started (`bytes_pending`) keeps the
+/// 15 s budget. Iron `ab39021c` accepted eight sockets and the 2 s
+/// reclaim ran while the rest of a large hello was still arriving, so
+/// the refresh had no listener.
 pub fn http_accept_idle_limit_ms(handshake_waiting: bool) -> i64 {
-    if handshake_waiting {
+    http_accept_idle_limit_for(handshake_waiting, false)
+}
+
+pub fn http_accept_idle_limit_for(handshake_waiting: bool, bytes_pending: bool) -> i64 {
+    if handshake_waiting && !bytes_pending {
         HOST_NIC_HTTP_HS_IDLE_MS
     } else {
         HOST_NIC_HTTP_IDLE_MS

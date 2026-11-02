@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-5-e4-tls13 |
-| Summary | **ADR-021 E4 still in flight.** Host rustls finishes TLS 1.3. Iron has not. TLS piece stays 80. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-5-e4-tls13-refresh |
+| Summary | **ADR-021 E4 still in flight.** Iron `ab39021c8c72` drew the page, then refresh filled every listen socket. TLS piece stays 80. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. |
 | Gates touched | ADR-021 E4 in flight. Not lived. No doorbell. No format of UBUNTU0. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-02 | wave-5-e4-tls13-refresh | 94 | 72 | **E4 still in flight.** Iron `ab39021c8c72` drew the page. Refresh accepted slots 0–7. Not lived. TLS 80 held. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-02 | wave-5-e4-tls13 | 94 | 72 | **E4 still in flight.** Host rustls finishes TLS 1.3. Iron has not. Not lived. TLS 80 held. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-02 | wave-5-e4-reloads | 94 | 72 | **E4 still in flight.** Iron `bac1f0ec5139` SPA and both reloads. Host green. Accepts on slots 5–7 only. Not lived. TLS 80. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-02 | wave-5-e4-listen-spare | 94 | 72 | **E4 still in flight.** Iron `87bee04b` page once, reload refused during a FIN of a live session. Eight sockets, two stay listening. Not lived. TLS 80. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |

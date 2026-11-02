@@ -105,7 +105,7 @@ input.token{min-width:12rem}
 <button class="pri" id="btn-cert" type="button">Save certificate</button>
 <button class="ghost" id="btn-cert-lab" type="button">Use lab certificate</button>
 </div>
-<p class="note" id="cert-note">Used on the next connection. TLS 1.2. This page stays on the certificate it already has.</p>
+<p class="note" id="cert-note">Used on the next connection. TLS 1.3. This page stays on the certificate it already has.</p>
 <div id="ports" class="empty">Ports: no link sample yet.</div>
 </section>
 <section class="pg" data-pg="guests">
@@ -209,7 +209,8 @@ listBusy=1;
 if(!hold)setS("Listing…");
 try{
 let res;try{res=await api("GET",A)}catch(e){hostOk=false;if(!hold)setS("List failed");paint();return}
-hostOk=res.ok;
+hostOk=true;
+if(res.status===401){if(!hold)setS("Sign in");paint();return}
 if(!res.ok){if(!hold)setS("List failed ("+res.status+")");paint();return}
 const out=[];
 for(let i=0;i<known.length;i++){

@@ -528,6 +528,28 @@ impl Tls12Listen {
         self.state == ST_CH
     }
 
+    /// Bytes of a TLS record are buffered and the record is not whole yet.
+    pub fn rx_pending(&self) -> bool {
+        self.rx_len > 0
+    }
+
+    /// Put unsent ciphertext back at the front of the TX buffer.
+    ///
+    /// `drain_tcp` already removed it. A short `send_slice` must not drop
+    /// the tail or the browser waits forever on a truncated record.
+    pub fn prefix_tx(&mut self, data: &[u8]) -> bool {
+        if data.is_empty() {
+            return true;
+        }
+        if self.tx_len + data.len() > self.tx.len() {
+            return false;
+        }
+        self.tx.copy_within(0..self.tx_len, data.len());
+        self.tx[..data.len()].copy_from_slice(data);
+        self.tx_len += data.len();
+        true
+    }
+
     pub fn key_ready(&self) -> bool {
         self.key.is_some()
     }

@@ -29,8 +29,9 @@ use crate::mgmt::bcm5720::Bcm5720Device;
 use crate::mgmt::console::{maybe_print_iron_console_ok, take_spa_keys_injected};
 use crate::mgmt::e1000::E1000Device;
 use crate::mgmt::host_nic::{
-    coexist_keepalive_idle, coexist_millis_from_tsc, host_nic_lab_armed, http_accept_idle_limit_ms,
-    http_accept_should_idle_abort, COEXIST_CLOSE_FORCE_MS, COEXIST_KEEPALIVE_IDLE_MS,
+    coexist_keepalive_idle, coexist_millis_from_tsc, host_nic_lab_armed,
+    http_accept_idle_limit_for, http_accept_should_idle_abort, COEXIST_CLOSE_FORCE_MS,
+    COEXIST_KEEPALIVE_IDLE_MS,
     COEXIST_TCP_SLOTS, HOST_NIC_DHCP_MS,
     HOST_NIC_LISTEN_MS, HOST_NIC_MAX_EXCHANGES, M7_HOST_NIC_QEMU_MARKER, PRE_RAYNUF_HTTPS_MS,
     QEMU_USERNET_GW, QEMU_USERNET_IPV4, QEMU_USERNET_PREFIX,
@@ -282,8 +283,35 @@ fn drain_tls(session: &mut Tls12Listen, sock: &mut tcp::Socket, wrap: &mut [u8])
         return;
     }
     let n = session.drain_tcp(wrap);
-    if n > 0 {
-        let _ = sock.send_slice(&wrap[..n]);
+    if n == 0 {
+        return;
+    }
+    match sock.send_slice(&wrap[..n]) {
+        Ok(sent) if sent < n => {
+            let _ = session.prefix_tx(&wrap[sent..n]);
+        }
+        Err(_) => {
+            let _ = session.prefix_tx(&wrap[..n]);
+        }
+        Ok(_) => {}
+    }
+}
+
+/// Read every byte the socket already has. One 2048-byte pull left a
+/// Firefox ClientHello split across ticks; the 2 s idle abort then
+/// reset the connection before the second pull.
+fn recv_tls(session: &mut Tls12Listen, sock: &mut tcp::Socket) {
+    let mut chunk = [0u8; 8192];
+    for _ in 0..8 {
+        if !sock.can_recv() {
+            break;
+        }
+        match sock.recv_slice(&mut chunk) {
+            Ok(0) | Err(_) => break,
+            Ok(n) => {
+                let _ = session.feed_tcp(&chunk[..n]);
+            }
+        }
     }
 }
 
@@ -739,14 +767,9 @@ pub fn tick_bcm5720_coexist() {
                             }
                         }
                         if relisten.is_none() && sock.can_recv() {
-                            let mut chunk = [0u8; 2048];
                             // Ok(0) is an empty read. Peer FIN is CloseWait
                             // (!may_recv && may_send), not Ok(0). smoltcp 0.13.
-                            if let Ok(n) = sock.recv_slice(&mut chunk) {
-                                if n > 0 {
-                                    let _ = session.feed_tcp(&chunk[..n]);
-                                }
-                            }
+                            recv_tls(session, sock);
                         }
                         if relisten.is_none() {
                             drain_tls(session, sock, wrap);
@@ -786,8 +809,9 @@ pub fn tick_bcm5720_coexist() {
                                     rt.announced,
                                     headers_done,
                                     millis.saturating_sub(rt.accept_at_ms),
-                                    http_accept_idle_limit_ms(
+                                    http_accept_idle_limit_for(
                                         session.handshake_waiting_client_hello(),
+                                        session.rx_pending(),
                                     ),
                                 )
                             {
@@ -829,7 +853,9 @@ pub fn tick_bcm5720_coexist() {
                 }
             }
             // A live keep-alive is not closed to manufacture a listener.
-            // Two of [`COEXIST_TCP_SLOTS`] stay in LISTEN. Iron `87bee04b`
+            // Two of [`COEXIST_TCP_SLOTS`] stay in LISTEN after a browser's
+            // six. Iron `ab39021c` accepted every slot (0–7) on refresh.
+            // Ten sockets leave listeners after that burst. Iron `87bee04b`
             // FINed the oldest finished session when the table was full,
             // and the reload was refused during that FIN.
         }
@@ -1320,12 +1346,7 @@ fn listen_loop<D: Device>(
                 session.reset();
             }
             if sock.can_recv() {
-                let mut chunk = [0u8; 2048];
-                if let Ok(n) = sock.recv_slice(&mut chunk) {
-                    if n > 0 {
-                        let _ = session.feed_tcp(&chunk[..n]);
-                    }
-                }
+                recv_tls(session, sock);
             }
             drain_tls(session, sock, wrap);
             let headers_done = session.take_http().is_some();
@@ -1347,7 +1368,10 @@ fn listen_loop<D: Device>(
                 headers_done,
                 millis.saturating_sub(accept_at),
                 // HOST_NIC_HTTP_IDLE_MS unless TLS ST_CH → HOST_NIC_HTTP_HS_IDLE_MS
-                http_accept_idle_limit_ms(session.handshake_waiting_client_hello()),
+                http_accept_idle_limit_for(
+                    session.handshake_waiting_client_hello(),
+                    session.rx_pending(),
+                ),
             ) {
                 sock.abort();
                 session.reset();

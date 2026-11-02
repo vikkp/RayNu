@@ -29,6 +29,10 @@ fn handshake_idle_reclaim_is_faster_than_header_idle() {
     assert_eq!(HOST_NIC_HTTP_HS_IDLE_MS, 2_000);
     assert_eq!(http_accept_idle_limit_ms(true), HOST_NIC_HTTP_HS_IDLE_MS);
     assert_eq!(http_accept_idle_limit_ms(false), HOST_NIC_HTTP_IDLE_MS);
+    assert_eq!(
+        super::http_accept_idle_limit_for(true, true),
+        HOST_NIC_HTTP_IDLE_MS
+    );
     assert!(http_accept_should_idle_abort(
         true,
         false,
@@ -110,9 +114,9 @@ fn coexist_millis_from_tsc_wraps() {
 }
 
 #[test]
-fn eight_slots_leave_two_listening_beside_a_browser_pool() {
-    assert_eq!(COEXIST_TCP_SLOTS, 8);
-    assert!(COEXIST_TCP_SLOTS > 6);
+fn ten_slots_leave_listeners_after_an_eight_accept_burst() {
+    assert_eq!(COEXIST_TCP_SLOTS, 10);
+    assert!(COEXIST_TCP_SLOTS > 8);
     assert_eq!(COEXIST_KEEPALIVE_IDLE_MS, 600_000);
     let listen = include_str!("host_nic_listen.rs");
     assert!(listen.contains("COEXIST_TCP_SLOTS"));

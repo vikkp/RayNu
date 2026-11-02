@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-5-e4-tls13 |
-| Summary | **ADR-021 E4 still in flight.** Host rustls finishes TLS 1.3 (`TLS_AES_128_GCM_SHA256`) against the freestanding server, including HelloRetryRequest to secp256r1. TLS 1.2 remains for a client that does not offer 1.3. Iron has not completed that handshake. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-5-e4-tls13-refresh |
+| Summary | **ADR-021 E4 still in flight.** Iron `ab39021c8c72` / run `41524441195` printed `boot: E4 cert rd lba=6190268891 operator` and `boot: HOST-NIC TLS wrap=tls13`, and Firefox drew the page. Refresh then accepted slots 0–7 and the next connection had no listener. The red Host card on that page was HTTP 401 from the lab token. Ten listen sockets, a started ClientHello keeps the 15 s budget, a short TCP send is put back. Not lived. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | ADR-021 E4 stays `in flight` on `cursor/wave-5-e4-tls13-41d4`. E6 stays lived. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-02 | wave-5-e4-tls13-refresh | 0.0 | 99 | **E4 still in flight.** Iron `ab39021c8c72` / run `41524441195`: cert read `operator`, `wrap=tls13`, Firefox drew the page, then refresh accepted slots 0–7. The red Host card was 401 from the lab token. Ten sockets and a started hello is not the 2 s reclaim. Not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-02 | wave-5-e4-tls13 | 0.0 | 99 | **E4 still in flight.** Host rustls finishes TLS 1.3 (AES-128-GCM, HelloRetryRequest to secp256r1, RSASSA-PSS) and the TLS 1.2 client still gets the SPA. Iron `bac1f0ec5139` remains the booted file. Not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-02 | wave-5-e4-reloads | 0.0 | 99 | **E4 still in flight.** Iron `bac1f0ec5139` / run `41516590111`: SPA loaded, both reloads worked, Host stayed green, certificate 790 bytes, Guest 3 running. COM2 after login: accepts on slots 5, 6, and 7, no re-listen. TLS 1.2. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-02 | wave-5-e4-listen-spare | 0.0 | 99 | **E4 still in flight.** Iron `87bee04b` loaded the page once, then the reload was refused (accept slot 4, re-listen slot 0, accept slot 0, re-listen slot 1). Closing a live session to free a listener is what a TLS server does not do. Eight sockets: a browser holds 6, two stay listening. Scores held. months 0.0 held; overall 99 held |
