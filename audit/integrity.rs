@@ -698,6 +698,7 @@ fn with_boot_ring<R>(f: impl FnOnce(&mut AuditRing) -> R) -> R {
 pub fn record_event(event: AuditEvent) {
     let _ = with_boot_ring(|ring| ring.append(event).map(|_| ()));
     crate::audit::persist::stage_boot_ring();
+    crate::mgmt::host_clock::audit_stamp_once();
     #[cfg(target_os = "uefi")]
     mirror_audit_to_com1(event);
 }

@@ -531,6 +531,32 @@ pub fn handle_http_request(
             return format_http_response(status, "application/json", &body[..len], out);
         }
     }
+    if parsed.path == "/host/clock" {
+        if !matches!(parsed.method, RestMethod::Get) {
+            return format_http_response(400, "text/plain; charset=utf-8", b"bad request", out);
+        }
+        if !auth_allows(parsed.auth_token) {
+            return format_http_response(401, "text/plain; charset=utf-8", b"unauthorized", out);
+        }
+        let mut body = [0u8; 64];
+        let n = crate::mgmt::host_clock::status_json(&mut body);
+        return format_http_response(200, "application/json", &body[..n], out);
+    }
+    if parsed.path == "/host/panic" {
+        if !matches!(parsed.method, RestMethod::Post) {
+            return format_http_response(400, "text/plain; charset=utf-8", b"bad request", out);
+        }
+        if !auth_allows(parsed.auth_token) {
+            return format_http_response(401, "text/plain; charset=utf-8", b"unauthorized", out);
+        }
+        crate::mgmt::host_panic::note_request();
+        return format_http_response(
+            200,
+            "application/json",
+            b"{\"ok\":true,\"panic\":\"dump\"}",
+            out,
+        );
+    }
     // ADR-021 D9. Overview saves the management address for the next boot.
     // This listener stays on the address it already bound.
     match crate::mgmt::host_addr::host_addr_rest(
