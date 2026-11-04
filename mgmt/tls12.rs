@@ -533,6 +533,21 @@ impl Tls12Listen {
         self.rx_len > 0
     }
 
+    /// Ciphertext is sealed and not yet accepted by the TCP buffer.
+    ///
+    /// A short `send_slice` puts that tail back. The next tick drains it.
+    /// Sealing the HTTP reply again would mint a new nonce under the bytes
+    /// the browser already has.
+    pub fn tx_pending(&self) -> bool {
+        self.tx_len > 0
+    }
+
+    /// Drop a reply that cannot be queued. The listen path then re-listens.
+    pub fn abandon_reply(&mut self) {
+        self.tx_len = 0;
+        self.state = ST_FAIL;
+    }
+
     /// Put unsent ciphertext back at the front of the TX buffer.
     ///
     /// `drain_tcp` already removed it. A short `send_slice` must not drop
@@ -584,7 +599,9 @@ impl Tls12Listen {
     }
 
     fn handle_record(&mut self, typ: u8, body: &[u8]) -> bool {
-        if self.proto == PROTO13 && (self.state == ST_13FIN || self.state == ST_APP) && typ == CT_APP
+        if self.proto == PROTO13
+            && (self.state == ST_13FIN || self.state == ST_APP)
+            && typ == CT_APP
         {
             return self.tls13_encrypted(body);
         }

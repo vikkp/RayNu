@@ -29,12 +29,12 @@ use crate::mgmt::bcm5720::Bcm5720Device;
 use crate::mgmt::console::{maybe_print_iron_console_ok, take_spa_keys_injected};
 use crate::mgmt::e1000::E1000Device;
 use crate::mgmt::host_nic::{
-    coexist_keepalive_idle, coexist_millis_from_tsc, host_nic_lab_armed,
-    http_accept_idle_limit_ms, http_accept_should_idle_abort, COEXIST_CLOSE_FORCE_MS,
-    COEXIST_KEEPALIVE_IDLE_MS,
-    COEXIST_TCP_SLOTS, HOST_NIC_DHCP_MS,
-    HOST_NIC_LISTEN_MS, HOST_NIC_MAX_EXCHANGES, M7_HOST_NIC_QEMU_MARKER, PRE_RAYNUF_HTTPS_MS,
-    QEMU_USERNET_GW, QEMU_USERNET_IPV4, QEMU_USERNET_PREFIX,
+    coexist_keepalive_idle, coexist_millis_from_tsc, host_nic_lab_armed, http_accept_idle_limit_ms,
+    http_accept_should_idle_abort, http_reply_should_give_up, listen_reclaim_slot, ListenSlot,
+    COEXIST_CLOSE_FORCE_MS, COEXIST_KEEPALIVE_IDLE_MS, COEXIST_LISTEN_RESERVE, COEXIST_TCP_SLOTS,
+    HOST_NIC_DHCP_MS, HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS, HOST_NIC_MAX_EXCHANGES,
+    M7_HOST_NIC_QEMU_MARKER, PRE_RAYNUF_HTTPS_MS, QEMU_USERNET_GW, QEMU_USERNET_IPV4,
+    QEMU_USERNET_PREFIX,
 };
 use crate::mgmt::host_nic_poll::{bounded_poll, HOST_NIC_POLL_BUDGET};
 use crate::mgmt::http::handle_http_request;
@@ -101,11 +101,9 @@ static mut SLOT_HANDLE: [MaybeUninit<SocketHandle>; COEXIST_TCP_SLOTS] =
     [MaybeUninit::uninit(); COEXIST_TCP_SLOTS];
 static mut SLOT_TCP_RX: [[u8; COEXIST_TCP_RX_N]; COEXIST_TCP_SLOTS] =
     [[0; COEXIST_TCP_RX_N]; COEXIST_TCP_SLOTS];
-static mut SLOT_TCP_TX: [[u8; TCP_TX_N]; COEXIST_TCP_SLOTS] =
-    [[0; TCP_TX_N]; COEXIST_TCP_SLOTS];
-static mut SLOT_SESSION: [MaybeUninit<Tls12Listen>; COEXIST_TCP_SLOTS] = unsafe {
-    MaybeUninit::<[MaybeUninit<Tls12Listen>; COEXIST_TCP_SLOTS]>::uninit().assume_init()
-};
+static mut SLOT_TCP_TX: [[u8; TCP_TX_N]; COEXIST_TCP_SLOTS] = [[0; TCP_TX_N]; COEXIST_TCP_SLOTS];
+static mut SLOT_SESSION: [MaybeUninit<Tls12Listen>; COEXIST_TCP_SLOTS] =
+    unsafe { MaybeUninit::<[MaybeUninit<Tls12Listen>; COEXIST_TCP_SLOTS]>::uninit().assume_init() };
 static mut SLOT_RT: [SlotRt; COEXIST_TCP_SLOTS] = [SlotRt::EMPTY; COEXIST_TCP_SLOTS];
 /// Blocking PRE-EBS / QEMU window. The standing SPA uses [`SLOT_SESSION`].
 static mut COEXIST_LISTEN: Tls12Listen = Tls12Listen::empty();
@@ -159,40 +157,69 @@ const _: () = assert!(SCRATCH_N + 16 <= crate::mgmt::mgmt_arena::MGMT_ARENA_BYTE
 /// arrived during that FIN and was refused. Two sockets stay in LISTEN.
 /// A finished reply still ends with FIN, not RST, when the client asked
 /// to close.
+/// Queue `plain` once. A short enqueue stays sealed and is drained later.
+///
+/// `true` when the TCP buffer holds the whole ciphertext. The caller then
+/// drops the HTTP request. Sealing again would change the nonce under the
+/// record the browser already accepted, and the slot would sit established
+/// with `headers_done` until the next boot (`curl: (7)` Connection refused).
+fn seal_and_queue(
+    session: &mut Tls12Listen,
+    sock: &mut tcp::Socket,
+    plain: &[u8],
+    wrap: &mut [u8],
+) -> bool {
+    if session.tx_pending() {
+        drain_tls(session, sock, wrap);
+        return !session.tx_pending();
+    }
+    if plain.is_empty() || !sock.can_send() {
+        return false;
+    }
+    let n = session.wrap_http(plain, wrap);
+    if n == 0 {
+        if session.tx_pending() {
+            session.abandon_reply();
+        }
+        return false;
+    }
+    let mut off = 0;
+    while off < n && sock.can_send() {
+        match sock.send_slice(&wrap[off..n]) {
+            Ok(0) => break,
+            Ok(k) => off += k,
+            Err(_) => break,
+        }
+    }
+    if off != n && !session.prefix_tx(&wrap[off..n]) {
+        session.abandon_reply();
+        return false;
+    }
+    !session.tx_pending()
+}
+
 fn wrap_session_try_exchange(
     session: &mut Tls12Listen,
     sock: &mut tcp::Socket,
     out: &mut [u8],
     wrap: &mut [u8],
 ) -> Option<bool> {
-    let wants_close = {
-        let raw_bytes = session.take_http()?;
-        if !sock.can_send() {
+    let raw_bytes = session.take_http()?;
+    let wants_close = http_request_wants_close(raw_bytes);
+    // A previous tick sealed this reply and the TCP buffer took only a prefix.
+    if session.tx_pending() {
+        drain_tls(session, sock, wrap);
+        if session.tx_pending() {
             return None;
         }
-        http_request_wants_close(raw_bytes)
-    };
-    let raw_bytes = session.take_http()?;
+        session.clear_http();
+        return Some(wants_close);
+    }
     if !sock.can_send() {
         return None;
     }
     if let Some(n) = crate::mgmt::iso_library::library_http_response(raw_bytes, out) {
-        if n == 0 {
-            return None;
-        }
-        let nwrap = session.wrap_http(&out[..n], wrap);
-        if nwrap == 0 {
-            return None;
-        }
-        let mut off = 0;
-        while off < nwrap && sock.can_send() {
-            match sock.send_slice(&wrap[off..nwrap]) {
-                Ok(0) => break,
-                Ok(k) => off += k,
-                Err(_) => break,
-            }
-        }
-        if off != nwrap {
+        if n == 0 || !seal_and_queue(session, sock, &out[..n], wrap) {
             return None;
         }
         session.clear_http();
@@ -214,22 +241,7 @@ fn wrap_session_try_exchange(
         })
     }
     .unwrap_or(0);
-    if wn == 0 {
-        return None;
-    }
-    let n = session.wrap_http(&out[..wn], wrap);
-    if n == 0 {
-        return None;
-    }
-    let mut off = 0;
-    while off < n && sock.can_send() {
-        match sock.send_slice(&wrap[off..n]) {
-            Ok(0) => break,
-            Ok(k) => off += k,
-            Err(_) => break,
-        }
-    }
-    if off != n {
+    if wn == 0 || !seal_and_queue(session, sock, &out[..wn], wrap) {
         return None;
     }
     // clear_http drops this request only. reset() would mint a ClientHello.
@@ -594,6 +606,45 @@ unsafe fn tcp_send_queued(sockets: &SocketSet) -> usize {
     n
 }
 
+/// Put one slot back in LISTEN before `poll` when the reserve is gone.
+///
+/// # Safety
+/// [`SLOT_HANDLE`] filled by [`arm_bcm5720_coexist`]. BSP-only.
+unsafe fn reclaim_one_listener(sockets: &mut SocketSet, millis: i64) {
+    let mut view = [ListenSlot {
+        listening: false,
+        active: false,
+        kept: false,
+        age_ms: 0,
+    }; COEXIST_TCP_SLOTS];
+    for i in 0..COEXIST_TCP_SLOTS {
+        let handle = SLOT_HANDLE[i].assume_init();
+        let sock = sockets.get::<tcp::Socket>(handle);
+        let rt = SLOT_RT[i];
+        let age = if rt.kept {
+            millis.saturating_sub(rt.last_http_ms)
+        } else if rt.announced {
+            millis.saturating_sub(rt.accept_at_ms)
+        } else {
+            0
+        };
+        view[i] = ListenSlot {
+            listening: sock.is_listening(),
+            active: sock.is_active(),
+            kept: rt.kept,
+            age_ms: age,
+        };
+    }
+    let Some(i) = listen_reclaim_slot(&view, COEXIST_LISTEN_RESERVE) else {
+        return;
+    };
+    slot_relisten(
+        sockets,
+        i,
+        "boot: HOST-NIC TCP re-listen to keep a listener",
+    );
+}
+
 /// Abort, drop the TLS session back to the saved key, and listen again.
 ///
 /// # Safety
@@ -630,6 +681,9 @@ pub fn tick_bcm5720_coexist() {
         );
         let millis = COEXIST_MILLIS;
         let ts = Instant::from_millis(millis);
+        // Before poll. A SYN that arrives with zero listeners is a RST
+        // (`curl: (7)` in 19 ms). Arm a listener first.
+        reclaim_one_listener(sockets, millis);
         // ADR-021 D5: both LOM links, twice a second, idle or under a guest.
         crate::mgmt::bcm5720_mmio::host_link_tick();
         let _ = bounded_poll(HOST_NIC_POLL_BUDGET, || {
@@ -734,9 +788,7 @@ pub fn tick_bcm5720_coexist() {
                                 session.reset();
                             }
                         } else if armed_for >= COEXIST_CLOSE_FORCE_MS {
-                            relisten = Some(
-                                "boot: HOST-NIC TCP re-listen after HTTP (tx forced)",
-                            );
+                            relisten = Some("boot: HOST-NIC TCP re-listen after HTTP (tx forced)");
                         } else {
                             rt.drain_empty_at_ms = 0;
                         }
@@ -755,10 +807,7 @@ pub fn tick_bcm5720_coexist() {
                             let _ = sock.listen(COEXIST_PORT);
                         }
                         if relisten.is_none() && sock.is_active() && !rt.announced {
-                            note_slot(
-                                "boot: HOST-NIC TCP accept — client connected",
-                                i,
-                            );
+                            note_slot("boot: HOST-NIC TCP accept — client connected", i);
                             rt.announced = true;
                             rt.accept_at_ms = millis;
                             // A kept session must not reset here. First accept only.
@@ -815,8 +864,23 @@ pub fn tick_bcm5720_coexist() {
                                     ),
                                 )
                             {
+                                relisten = Some("boot: WARN — HOST-NIC TCP idle abort; re-listen");
+                            }
+                            if relisten.is_none()
+                                && http_reply_should_give_up(
+                                    rt.kept || keepalive_this,
+                                    rt.announced,
+                                    headers_done,
+                                    millis.saturating_sub(rt.accept_at_ms),
+                                    HOST_NIC_HTTP_IDLE_MS,
+                                )
+                            {
+                                // Headers arrived and the reply never became a
+                                // kept session. idle abort does not cover that.
+                                // Iron `1da151be`: every slot stayed established
+                                // and the next SYN was reset.
                                 relisten =
-                                    Some("boot: WARN — HOST-NIC TCP idle abort; re-listen");
+                                    Some("boot: WARN — HOST-NIC TCP reply stalled; re-listen");
                             }
                             if rt.kept
                                 && !rt.pending_close
@@ -852,12 +916,10 @@ pub fn tick_bcm5720_coexist() {
                     SLOT_RT[i] = rt;
                 }
             }
-            // A live keep-alive is not closed to manufacture a listener.
-            // Two of [`COEXIST_TCP_SLOTS`] stay in LISTEN after a browser's
-            // six. Iron `ab39021c` accepted every slot (0–7) on refresh.
-            // Ten sockets leave listeners after that burst. Iron `87bee04b`
-            // FINed the oldest finished session when the table was full,
-            // and the reload was refused during that FIN.
+            // A live keep-alive is not closed while a listener remains.
+            // [`reclaim_one_listener`] runs before `poll` when none remain,
+            // so the SYN is not reset. Iron `87bee04b` FINed a live session
+            // during the reload and the SYN landed in that FIN.
         }
         let library_exchange = crate::mgmt::iso_library::take_exchange_quiet();
         // Linux owns COM2 for the installer. SPA polls stay on the socket.
@@ -1040,10 +1102,7 @@ fn bcm_mgmt_lease(device: &mut Bcm5720Device) -> Option<mgmt_lease::ParkedMgmtLe
 fn say_d9_static(addr: &crate::mgmt::host_addr::StaticAddr) {
     serial::write_str("boot: D9 host addr static ");
     write_ipv4(Ipv4Address::new(
-        addr.ip[0],
-        addr.ip[1],
-        addr.ip[2],
-        addr.ip[3],
+        addr.ip[0], addr.ip[1], addr.ip[2], addr.ip[3],
     ));
     serial::write_byte(b'/');
     write_u16_dec(u16::from(addr.prefix));
@@ -1055,7 +1114,12 @@ fn say_d9_static(addr: &crate::mgmt::host_addr::StaticAddr) {
         addr.gateway[3],
     ));
     serial::write_str(" dns=");
-    write_ipv4(Ipv4Address::new(addr.dns[0], addr.dns[1], addr.dns[2], addr.dns[3]));
+    write_ipv4(Ipv4Address::new(
+        addr.dns[0],
+        addr.dns[1],
+        addr.dns[2],
+        addr.dns[3],
+    ));
     serial::write_str(" name=");
     serial::write_str(addr.name_str());
     serial::write_line("");

@@ -1,6 +1,6 @@
 ---
 loihda_version: 1
-last_updated: 2026-11-02
+last_updated: 2026-11-04
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-5-e4-tls13-refresh |
-| Summary | **ADR-021 E4 still in flight.** Iron `ab39021c8c72` drew the page, then refresh filled every listen socket. TLS piece stays 80. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-5-e4-listen-reclaim |
+| Summary | **ADR-021 E4 still in flight.** Iron `1da151be06e0`: curl from `10.6.0.6` to `:8443` was Connection refused in 19 ms. The listener had no socket left in LISTEN. TLS piece stays 80. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. |
 | Gates touched | ADR-021 E4 in flight. Not lived. No doorbell. No format of UBUNTU0. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-04 | wave-5-e4-listen-reclaim | 94 | 72 | **E4 still in flight.** Iron `1da151be06e0`: `curl: (7)` Connection refused to `10.99.99.146:8443` in 19 ms from `10.6.0.6`. No listen socket remained. Not lived. TLS 80 held. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-02 | wave-5-e4-signin-idle | 94 | 72 | **E4 still in flight.** Sign-in POST idle-aborted on slot 3. "Account dropped" is that reset, not a refused password. The empty-hello reclaim is 15 s. Not lived. TLS 80 held. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-02 | wave-5-e4-tls13-gate | 94 | 72 | **E4 still in flight.** CI on `48e4b683` failed the host-NIC scaffold gate. The idle-limit call is named again. Not lived. TLS 80 held. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-02 | wave-5-e4-tls13-refresh | 94 | 72 | **E4 still in flight.** Iron `ab39021c8c72` drew the page. Refresh accepted slots 0–7. Not lived. TLS 80 held. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |

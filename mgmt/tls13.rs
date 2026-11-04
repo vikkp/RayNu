@@ -293,11 +293,9 @@ impl Tls12Listen {
         buf[..plain.len()].copy_from_slice(plain);
         buf[plain.len()] = inner;
         let cipher = Aes128Gcm::new(Key::<Aes128Gcm>::from_slice(&self.server_key));
-        let Ok(tag) = cipher.encrypt_in_place_detached(
-            Nonce::from_slice(&nonce),
-            &aad,
-            &mut buf[..inner_n],
-        ) else {
+        let Ok(tag) =
+            cipher.encrypt_in_place_detached(Nonce::from_slice(&nonce), &aad, &mut buf[..inner_n])
+        else {
             nonce.fill(0);
             return false;
         };
@@ -325,7 +323,12 @@ impl Tls12Listen {
         tag.copy_from_slice(&rec[ct_n..]);
         let cipher = Aes128Gcm::new(Key::<Aes128Gcm>::from_slice(&self.client_key));
         if cipher
-            .decrypt_in_place_detached(Nonce::from_slice(&nonce), &aad, &mut out[..ct_n], (&tag).into())
+            .decrypt_in_place_detached(
+                Nonce::from_slice(&nonce),
+                &aad,
+                &mut out[..ct_n],
+                (&tag).into(),
+            )
             .is_err()
         {
             nonce.fill(0);
@@ -358,7 +361,12 @@ impl Tls12Listen {
         h.update(&synth);
         self.th = Some(h);
         let mut hrr = [0u8; 128];
-        let n = build_sh(&mut hrr, &HRR_RANDOM, &self.sid[..self.sid_len as usize], None)?;
+        let n = build_sh(
+            &mut hrr,
+            &HRR_RANDOM,
+            &self.sid[..self.sid_len as usize],
+            None,
+        )?;
         if !th_update(&mut self.th, &hrr[..n]) {
             return Some(false);
         }
@@ -374,7 +382,8 @@ impl Tls12Listen {
             return Some(false);
         }
         // TLS 1.3 forbids the downgrade sentinel and the HRR random.
-        if self.server_random[24..] == HRR_RANDOM[24..] || self.server_random[24..] == *b"DOWNGRD\x01"
+        if self.server_random[24..] == HRR_RANDOM[24..]
+            || self.server_random[24..] == *b"DOWNGRD\x01"
         {
             self.server_random[31] ^= 0x01;
         }
@@ -692,7 +701,12 @@ fn walk_hello(body: &[u8]) -> Option<HelloView> {
 }
 
 /// `share` is `Some` for a real ServerHello and `None` for HelloRetryRequest.
-fn build_sh(out: &mut [u8], random: &[u8; 32], sid: &[u8], share: Option<&[u8; 65]>) -> Option<usize> {
+fn build_sh(
+    out: &mut [u8],
+    random: &[u8; 32],
+    sid: &[u8],
+    share: Option<&[u8; 65]>,
+) -> Option<usize> {
     // supported_versions is 6 bytes. key_share is 73 with a point
     // (type, length, group, point length, 65-byte point) and 6 for
     // HelloRetryRequest (type, length, selected group).
@@ -809,7 +823,10 @@ fn push_fin(out: &mut [u8], verify: &[u8; 32]) -> Option<usize> {
     Some(36)
 }
 
-fn app_traffic(hs_secret: &[u8; 32], done: &[u8]) -> Option<([u8; 16], [u8; 12], [u8; 16], [u8; 12])> {
+fn app_traffic(
+    hs_secret: &[u8; 32],
+    done: &[u8],
+) -> Option<([u8; 16], [u8; 12], [u8; 16], [u8; 12])> {
     let empty = sha256(b"");
     let derived = derive_secret(hs_secret, b"derived", &empty)?;
     let zero = [0u8; 32];

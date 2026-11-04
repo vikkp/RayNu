@@ -110,6 +110,75 @@ pub const COEXIST_KEEPALIVE_IDLE_MS: i64 = 600_000;
 /// refused while that FIN was in flight.
 pub const COEXIST_TCP_SLOTS: usize = 10;
 
+/// Listen sockets kept free for the next SYN.
+///
+/// Iron `6dc1f554`: one held connection, then Mac `curl: (7)` Connection
+/// refused while ping still answered. Iron `1da151be`: the same refusal
+/// from `10.6.0.6` in 19 ms, and Back/Forward still showed the page Firefox
+/// already had. smoltcp resets a SYN when every slot is established.
+pub const COEXIST_LISTEN_RESERVE: usize = 2;
+
+/// One coexist slot, as [`listen_reclaim_slot`] sees it.
+#[derive(Clone, Copy, Debug)]
+pub struct ListenSlot {
+    pub listening: bool,
+    pub active: bool,
+    pub kept: bool,
+    /// Age since accept, or since the last finished reply when `kept`.
+    pub age_ms: i64,
+}
+
+/// Slot to abort so a later SYN is not reset.
+///
+/// A session that accepted and never became a kept reply is taken first.
+/// A kept session is taken only when nothing is listening. While one
+/// listener remains, a page that is still polling is left alone.
+pub fn listen_reclaim_slot(slots: &[ListenSlot], reserve: usize) -> Option<usize> {
+    let listening = slots.iter().filter(|s| s.listening).count();
+    if listening >= reserve {
+        return None;
+    }
+    let mut stuck: Option<(usize, i64)> = None;
+    let mut kept_oldest: Option<(usize, i64)> = None;
+    for (i, slot) in slots.iter().enumerate() {
+        if slot.listening || !slot.active {
+            continue;
+        }
+        if !slot.kept {
+            if stuck.map(|(_, age)| slot.age_ms >= age).unwrap_or(true) {
+                stuck = Some((i, slot.age_ms));
+            }
+        } else if kept_oldest
+            .map(|(_, age)| slot.age_ms >= age)
+            .unwrap_or(true)
+        {
+            kept_oldest = Some((i, slot.age_ms));
+        }
+    }
+    if let Some((i, _)) = stuck {
+        return Some(i);
+    }
+    if listening == 0 {
+        return kept_oldest.map(|(i, _)| i);
+    }
+    None
+}
+
+/// The request is complete and the slot never became a kept session.
+///
+/// `http_accept_should_idle_abort` stays false once headers are in, because
+/// a reply in flight owns the socket. A reply that never queues used to
+/// hold that socket until the next hypervisor boot (`curl: (7)`).
+pub fn http_reply_should_give_up(
+    kept: bool,
+    announced: bool,
+    headers_done: bool,
+    elapsed_ms: i64,
+    limit_ms: i64,
+) -> bool {
+    !kept && announced && headers_done && limit_ms > 0 && elapsed_ms >= limit_ms
+}
+
 /// A close whose TX queue never drains still gives the slot back.
 pub const COEXIST_CLOSE_FORCE_MS: i64 = 2_000;
 

@@ -1,9 +1,9 @@
 use super::{
     coexist_keepalive_idle, coexist_millis_from_tsc, http_accept_idle_limit_ms,
-    http_accept_should_idle_abort, prop_http_accept_idle_abort, COEXIST_KEEPALIVE_IDLE_MS,
-    COEXIST_TCP_SLOTS, COEXIST_TSC_HZ_FALLBACK,
-    HOST_NIC_DHCP_MS, HOST_NIC_HTTP_HS_IDLE_MS, HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS,
-    PRE_RAYNUF_HTTPS_MS,
+    http_accept_should_idle_abort, http_reply_should_give_up, listen_reclaim_slot,
+    prop_http_accept_idle_abort, ListenSlot, COEXIST_KEEPALIVE_IDLE_MS, COEXIST_LISTEN_RESERVE,
+    COEXIST_TCP_SLOTS, COEXIST_TSC_HZ_FALLBACK, HOST_NIC_DHCP_MS, HOST_NIC_HTTP_HS_IDLE_MS,
+    HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS, PRE_RAYNUF_HTTPS_MS,
 };
 
 #[test]
@@ -19,6 +19,93 @@ fn http_idle_abort_at_limit_only() {
     assert!(http_accept_should_idle_abort(
         true,
         false,
+        HOST_NIC_HTTP_IDLE_MS,
+        HOST_NIC_HTTP_IDLE_MS
+    ));
+}
+
+#[test]
+fn a_closed_port_reclaims_one_slot() {
+    let fresh = ListenSlot {
+        listening: false,
+        active: true,
+        kept: true,
+        age_ms: 100,
+    };
+    let stuck = ListenSlot {
+        listening: false,
+        active: true,
+        kept: false,
+        age_ms: 50,
+    };
+    let spare = ListenSlot {
+        listening: true,
+        active: false,
+        kept: false,
+        age_ms: 0,
+    };
+    assert_eq!(COEXIST_LISTEN_RESERVE, 2);
+    let mut full = [fresh; 10];
+    full[3].age_ms = 5_000;
+    assert_eq!(listen_reclaim_slot(&full, COEXIST_LISTEN_RESERVE), Some(3));
+    let mut with_stuck = [fresh; 10];
+    with_stuck[7] = stuck;
+    assert_eq!(
+        listen_reclaim_slot(&with_stuck, COEXIST_LISTEN_RESERVE),
+        Some(7)
+    );
+    let mut one_listen = [fresh; 10];
+    one_listen[0] = spare;
+    assert_eq!(
+        listen_reclaim_slot(&one_listen, COEXIST_LISTEN_RESERVE),
+        None
+    );
+    let mut one_and_stuck = [fresh; 10];
+    one_and_stuck[0] = spare;
+    one_and_stuck[4] = stuck;
+    assert_eq!(
+        listen_reclaim_slot(&one_and_stuck, COEXIST_LISTEN_RESERVE),
+        Some(4)
+    );
+    let mut two = [fresh; 10];
+    two[0] = spare;
+    two[1] = spare;
+    assert_eq!(listen_reclaim_slot(&two, COEXIST_LISTEN_RESERVE), None);
+}
+
+#[test]
+fn a_reply_that_never_queues_gives_the_slot_back() {
+    assert!(!http_reply_should_give_up(
+        false,
+        true,
+        true,
+        HOST_NIC_HTTP_IDLE_MS - 1,
+        HOST_NIC_HTTP_IDLE_MS
+    ));
+    assert!(http_reply_should_give_up(
+        false,
+        true,
+        true,
+        HOST_NIC_HTTP_IDLE_MS,
+        HOST_NIC_HTTP_IDLE_MS
+    ));
+    assert!(!http_reply_should_give_up(
+        true,
+        true,
+        true,
+        HOST_NIC_HTTP_IDLE_MS,
+        HOST_NIC_HTTP_IDLE_MS
+    ));
+    assert!(!http_reply_should_give_up(
+        false,
+        true,
+        false,
+        HOST_NIC_HTTP_IDLE_MS,
+        HOST_NIC_HTTP_IDLE_MS
+    ));
+    assert!(!http_accept_should_idle_abort(
+        true,
+        true,
         HOST_NIC_HTTP_IDLE_MS,
         HOST_NIC_HTTP_IDLE_MS
     ));
