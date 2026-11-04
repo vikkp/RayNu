@@ -93,43 +93,12 @@ pub fn http_accept_should_idle_abort(
     announced && !headers_done && limit_ms > 0 && elapsed_since_accept_ms >= limit_ms
 }
 
-/// Quiet time on a kept TLS session before the slot FINs.
+/// Quiet time on a kept TLS session before the slot is reclaimed.
 ///
-/// Was ten minutes. `3e9ce45e` re-handshook at 30 s and the chassis
-/// turned off (`SYS1003` then `SYS1001`, no `RAC1195`), and the long
-/// idle kept a second ClientHello off the wire. Since then the key is
-/// parsed once (`6dc1f554`) and the heap returns a handshake's
-/// temporaries (`643f13de`); iron `1cf82795` completed six accepts for
-/// one page and more for a reload and stayed up. A page that is open
-/// polls every 2 s, so a connection quiet for a minute is one the
-/// browser has stopped using. Giving it back early keeps listeners in
-/// the table without aborting a live session.
-pub const COEXIST_KEEPALIVE_IDLE_MS: i64 = 60_000;
-
-/// Kept TLS sessions. Two cover the Overview poll. A third reply says
-/// `Connection: close` so Firefox's spare connections do not fill the
-/// table. Iron `c3cdc6c1`: the page loaded, `GET /auth/operator` painted
-/// `Operator: vikkp`, and `POST /auth/login` then had no answer
-/// ("Account dropped"). The reload had no listen socket.
-pub const COEXIST_KEEP_MAX: usize = 2;
-
-/// A TLS session that finished the handshake and was never given a
-/// request. Firefox opens about six connections and uses two. The spare
-/// ones used to sit until the 15 s abort, holding the slots the login
-/// POST and the reload need.
-pub const COEXIST_SPARE_MS: i64 = 3_000;
-
-/// Whether the reply being sealed should say `Connection: close`.
-///
-/// `free` is the number of listening sockets plus slots already draining
-/// a FIN this tick. Below the reserve, the reply closes its own
-/// connection after the drain. A session that is not already kept also
-/// closes when `kept` is already [`COEXIST_KEEP_MAX`]: the poll keeps two
-/// connections and the rest return to LISTEN. A reset to a live session
-/// is not this path.
-pub fn reply_should_close(free: usize, kept: usize, already_kept: bool) -> bool {
-    free < COEXIST_LISTEN_RESERVE || (!already_kept && kept >= COEXIST_KEEP_MAX)
-}
+/// SPA polls are 30 s. `3e9ce45e` re-handshook at 30 s and the chassis
+/// turned off (`SYS1003` then `SYS1001`, no `RAC1195`). Ten minutes is
+/// a standing page, not a second ClientHello.
+pub const COEXIST_KEEPALIVE_IDLE_MS: i64 = 600_000;
 
 /// Listen sockets armed together.
 ///

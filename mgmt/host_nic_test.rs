@@ -1,10 +1,9 @@
 use super::{
     coexist_keepalive_idle, coexist_millis_from_tsc, http_accept_idle_limit_ms,
     http_accept_should_idle_abort, http_reply_should_give_up, listen_reclaim_slot,
-    prop_http_accept_idle_abort, reply_should_close, ListenSlot, COEXIST_KEEPALIVE_IDLE_MS,
-    COEXIST_KEEP_MAX, COEXIST_LISTEN_BURST, COEXIST_LISTEN_RESERVE, COEXIST_SPARE_MS,
-    COEXIST_TCP_SLOTS, COEXIST_TSC_HZ_FALLBACK, HOST_NIC_DHCP_MS, HOST_NIC_HTTP_HS_IDLE_MS,
-    HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS, PRE_RAYNUF_HTTPS_MS,
+    prop_http_accept_idle_abort, ListenSlot, COEXIST_KEEPALIVE_IDLE_MS, COEXIST_LISTEN_BURST,
+    COEXIST_LISTEN_RESERVE, COEXIST_TCP_SLOTS, COEXIST_TSC_HZ_FALLBACK, HOST_NIC_DHCP_MS,
+    HOST_NIC_HTTP_HS_IDLE_MS, HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS, PRE_RAYNUF_HTTPS_MS,
 };
 
 #[test]
@@ -189,62 +188,34 @@ fn coexist_millis_from_tsc_hz_zero_uses_fallback() {
 }
 
 #[test]
-fn coexist_keepalive_idle_is_one_minute() {
-    assert_eq!(COEXIST_KEEPALIVE_IDLE_MS, 60_000);
-    // The Overview poll is 2 s and the guest list 30 s; an open page
-    // never reaches this idle.
-    assert!(COEXIST_KEEPALIVE_IDLE_MS > 30_000);
+fn coexist_keepalive_idle_is_ten_minutes() {
+    assert_eq!(COEXIST_KEEPALIVE_IDLE_MS, 600_000);
     assert!(!coexist_keepalive_idle(
         30_000,
         0,
         COEXIST_KEEPALIVE_IDLE_MS
     ));
     assert!(!coexist_keepalive_idle(
-        59_999,
+        599_999,
         0,
         COEXIST_KEEPALIVE_IDLE_MS
     ));
-    assert!(coexist_keepalive_idle(60_000, 0, COEXIST_KEEPALIVE_IDLE_MS));
+    assert!(coexist_keepalive_idle(
+        600_000,
+        0,
+        COEXIST_KEEPALIVE_IDLE_MS
+    ));
     assert!(!coexist_keepalive_idle(
-        60_000,
+        600_000,
         1,
         COEXIST_KEEPALIVE_IDLE_MS
     ));
-    assert!(coexist_keepalive_idle(60_001, 1, COEXIST_KEEPALIVE_IDLE_MS));
-    assert!(!coexist_keepalive_idle(60_000, 0, 0));
-}
-
-#[test]
-fn a_third_session_and_a_short_reserve_ask_the_browser_to_close() {
-    assert_eq!(COEXIST_KEEP_MAX, 2);
-    assert_eq!(COEXIST_SPARE_MS, 3_000);
-    // Two kept, and this reply is one of them: stay open.
-    assert!(!reply_should_close(
-        COEXIST_LISTEN_RESERVE,
-        COEXIST_KEEP_MAX,
-        true
+    assert!(coexist_keepalive_idle(
+        600_001,
+        1,
+        COEXIST_KEEPALIVE_IDLE_MS
     ));
-    // Two kept already, and this is a new session: close after the reply.
-    assert!(reply_should_close(
-        COEXIST_LISTEN_RESERVE,
-        COEXIST_KEEP_MAX,
-        false
-    ));
-    assert!(!reply_should_close(
-        COEXIST_LISTEN_RESERVE,
-        COEXIST_KEEP_MAX - 1,
-        false
-    ));
-    // One listener left: close even a session we were keeping.
-    assert!(reply_should_close(COEXIST_LISTEN_RESERVE - 1, 0, true));
-    assert!(reply_should_close(0, 0, false));
-    let listen = include_str!("host_nic_listen.rs");
-    assert!(listen.contains("reply_should_close(free, kept_n, rt.kept)"));
-    assert!(listen.contains("set_reply_connection_close(close_hint)"));
-    assert!(listen.contains("set_reply_connection_close(false)"));
-    assert!(listen.contains("HTTP reply says close"));
-    assert!(listen.contains("session.app_idle()"));
-    assert!(listen.contains("TCP spare closed"));
+    assert!(!coexist_keepalive_idle(600_000, 0, 0));
 }
 
 #[test]
@@ -270,7 +241,7 @@ fn coexist_millis_from_tsc_wraps() {
 fn ten_slots_leave_listeners_after_an_eight_accept_burst() {
     assert_eq!(COEXIST_TCP_SLOTS, 10);
     assert!(COEXIST_TCP_SLOTS > 8);
-    assert_eq!(COEXIST_KEEPALIVE_IDLE_MS, 60_000);
+    assert_eq!(COEXIST_KEEPALIVE_IDLE_MS, 600_000);
     let listen = include_str!("host_nic_listen.rs");
     assert!(listen.contains("COEXIST_TCP_SLOTS"));
     assert!(listen.contains("COEXIST_CLOSE_FORCE_MS"));

@@ -30,12 +30,11 @@ use crate::mgmt::console::{maybe_print_iron_console_ok, take_spa_keys_injected};
 use crate::mgmt::e1000::E1000Device;
 use crate::mgmt::host_nic::{
     coexist_keepalive_idle, coexist_millis_from_tsc, host_nic_lab_armed, http_accept_idle_limit_ms,
-    http_accept_should_idle_abort, http_reply_should_give_up, listen_reclaim_slot,
-    reply_should_close, ListenSlot, COEXIST_CLOSE_FORCE_MS, COEXIST_KEEPALIVE_IDLE_MS,
-    COEXIST_LISTEN_BURST, COEXIST_LISTEN_RESERVE, COEXIST_SPARE_MS, COEXIST_TCP_SLOTS,
-    HOST_NIC_DHCP_MS, HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS, HOST_NIC_MAX_EXCHANGES,
-    M7_HOST_NIC_QEMU_MARKER, PRE_RAYNUF_HTTPS_MS, QEMU_USERNET_GW, QEMU_USERNET_IPV4,
-    QEMU_USERNET_PREFIX,
+    http_accept_should_idle_abort, http_reply_should_give_up, listen_reclaim_slot, ListenSlot,
+    COEXIST_CLOSE_FORCE_MS, COEXIST_KEEPALIVE_IDLE_MS, COEXIST_LISTEN_BURST,
+    COEXIST_LISTEN_RESERVE, COEXIST_TCP_SLOTS, HOST_NIC_DHCP_MS, HOST_NIC_HTTP_IDLE_MS,
+    HOST_NIC_LISTEN_MS, HOST_NIC_MAX_EXCHANGES, M7_HOST_NIC_QEMU_MARKER, PRE_RAYNUF_HTTPS_MS,
+    QEMU_USERNET_GW, QEMU_USERNET_IPV4, QEMU_USERNET_PREFIX,
 };
 use crate::mgmt::host_nic_poll::{bounded_poll, HOST_NIC_POLL_BUDGET};
 use crate::mgmt::http::handle_http_request;
@@ -82,9 +81,6 @@ struct SlotRt {
     /// `close()` has been called. The slot listens again once the FIN finishes.
     fin_sent: bool,
     session_ready: bool,
-    /// The reply being drained was sealed with `Connection: close` because
-    /// the listen reserve was short. FIN once it is on the wire.
-    close_latched: bool,
 }
 
 impl SlotRt {
@@ -98,7 +94,6 @@ impl SlotRt {
         close_armed_at_ms: 0,
         fin_sent: false,
         session_ready: false,
-        close_latched: false,
     };
 }
 static mut COEXIST_SOCKETS: MaybeUninit<SocketSet<'static>> = MaybeUninit::uninit();
@@ -203,17 +198,11 @@ fn seal_and_queue(
     !session.tx_pending()
 }
 
-/// `close_hint` is true when the listen reserve is short this tick: the
-/// reply is then sealed with `Connection: close` and `close_latched`
-/// remembers that across a partial drain. The ISO library reply ignores
-/// the hint; a chunked upload stays open.
 fn wrap_session_try_exchange(
     session: &mut Tls12Listen,
     sock: &mut tcp::Socket,
     out: &mut [u8],
     wrap: &mut [u8],
-    close_hint: bool,
-    close_latched: &mut bool,
 ) -> Option<bool> {
     let raw_bytes = session.take_http()?;
     let wants_close = http_request_wants_close(raw_bytes);
@@ -224,9 +213,7 @@ fn wrap_session_try_exchange(
             return None;
         }
         session.clear_http();
-        let close = wants_close || *close_latched;
-        *close_latched = false;
-        return Some(close);
+        return Some(wants_close);
     }
     if !sock.can_send() {
         return None;
@@ -239,7 +226,6 @@ fn wrap_session_try_exchange(
         return Some(false);
     }
     let raw = core::str::from_utf8(raw_bytes).unwrap_or("");
-    crate::mgmt::http::set_reply_connection_close(close_hint);
     // SAFETY: BSP-only coexist; PRE-EBS tables leaked for the HTTP codec.
     // KANI-TARGET: host HTTP tests cover the codec; this wrap is firmware-only.
     let wn = unsafe {
@@ -255,21 +241,13 @@ fn wrap_session_try_exchange(
         })
     }
     .unwrap_or(0);
-    crate::mgmt::http::set_reply_connection_close(false);
-    if wn == 0 {
-        return None;
-    }
-    if !seal_and_queue(session, sock, &out[..wn], wrap) {
-        // Sealed with the header already chosen; the drain finishes later.
-        *close_latched = close_hint && session.tx_pending();
+    if wn == 0 || !seal_and_queue(session, sock, &out[..wn], wrap) {
         return None;
     }
     // clear_http drops this request only. reset() would mint a ClientHello.
-    // `wants_close` is the client's header. A SPA fetch keeps the session
-    // unless this reply told the browser to close.
+    // `wants_close` is the client's header. A SPA fetch keeps the session.
     session.clear_http();
-    *close_latched = false;
-    Some(wants_close || close_hint)
+    Some(wants_close)
 }
 
 fn tls_session() -> &'static mut Tls12Listen {
@@ -791,25 +769,10 @@ pub fn tick_bcm5720_coexist() {
         let mut did_exchange = false;
         let mut did_keepalive = false;
         if !skip_accept {
-            // Listeners plus slots already draining a FIN. Below the reserve,
-            // or once two sessions are already kept, the next reply tells
-            // the browser to close its connection.
-            let mut free = 0usize;
-            let mut kept_n = 0usize;
-            for i in 0..COEXIST_TCP_SLOTS {
-                let handle = SLOT_HANDLE[i].assume_init();
-                if sockets.get::<tcp::Socket>(handle).is_listening() || SLOT_RT[i].pending_close {
-                    free += 1;
-                }
-                if SLOT_RT[i].kept {
-                    kept_n += 1;
-                }
-            }
             for i in 0..COEXIST_TCP_SLOTS {
                 let handle = SLOT_HANDLE[i].assume_init();
                 let mut rt = SLOT_RT[i];
                 let mut relisten: Option<&'static str> = None;
-                let close_hint = reply_should_close(free, kept_n, rt.kept);
                 {
                     let session = SLOT_SESSION[i].assume_init_mut();
                     let sock = sockets.get_mut::<tcp::Socket>(handle);
@@ -883,23 +846,10 @@ pub fn tick_bcm5720_coexist() {
                             let mut close_this = false;
                             let mut keepalive_this = false;
                             if headers_done && sock.can_send() {
-                                let mut latched = rt.close_latched;
-                                let outcome = wrap_session_try_exchange(
-                                    session,
-                                    sock,
-                                    out,
-                                    wrap,
-                                    close_hint,
-                                    &mut latched,
-                                );
-                                rt.close_latched = latched;
-                                match outcome {
+                                match wrap_session_try_exchange(session, sock, out, wrap) {
                                     Some(true) => {
                                         did_exchange = true;
                                         close_this = true;
-                                        if close_hint {
-                                            note_slot("boot: HOST-NIC HTTP reply says close", i);
-                                        }
                                     }
                                     Some(false) => {
                                         did_exchange = true;
@@ -910,20 +860,10 @@ pub fn tick_bcm5720_coexist() {
                                             did_keepalive = true;
                                             rt.kept = true;
                                             rt.last_http_ms = millis;
-                                            kept_n += 1;
                                         }
                                     }
                                     None => {}
                                 }
-                            } else if !rt.kept
-                                && !headers_done
-                                && session.app_idle()
-                                && millis.saturating_sub(rt.accept_at_ms) >= COEXIST_SPARE_MS
-                            {
-                                // Handshake done, no request. FIN the spare
-                                // so the login POST and the reload have a slot.
-                                close_this = true;
-                                note_slot("boot: HOST-NIC TCP spare closed", i);
                             } else if peer_fin {
                                 relisten = Some("boot: HOST-NIC TCP re-listen after HTTP");
                             } else if session.handshake_failed() {
@@ -982,16 +922,11 @@ pub fn tick_bcm5720_coexist() {
                                 rt.close_armed_at_ms = millis;
                                 rt.drain_empty_at_ms = 0;
                                 rt.kept = false;
-                                free += 1;
                             }
                         }
                     }
                 }
                 if let Some(msg) = relisten {
-                    // A draining slot was already counted as free.
-                    if !SLOT_RT[i].pending_close {
-                        free += 1;
-                    }
                     slot_relisten(sockets, i, msg);
                 } else {
                     SLOT_RT[i] = rt;
@@ -1498,10 +1433,7 @@ fn listen_loop<D: Device>(
             if headers_done && sock.can_send() {
                 // Blocking PRE-EBS / QEMU window still closes after one
                 // exchange. The standing SPA is the coexist tick above.
-                let mut latched = false;
-                if wrap_session_try_exchange(session, sock, out, wrap, false, &mut latched)
-                    .is_some()
-                {
+                if wrap_session_try_exchange(session, sock, out, wrap).is_some() {
                     did_exchange = true;
                     do_close = true;
                 }

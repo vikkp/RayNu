@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-5-e4-login-dropped |
-| Summary | **ADR-021 E4 still in flight.** Iron `c3cdc6c1d7fe`: first load painted, sign-in Account dropped, reload did not load. Two kept sessions stay; a spare handshake with no request FINs after 3 s. TLS piece stays 80. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-5-e4-login-revert |
+| Summary | **ADR-021 E4 still in flight.** Account dropped on `c3cdc6c1` (`ce77b697`) and `d57ff3b9`; it worked on `1cf82795` (`2330f33b`). The connection-shrinking added after `2330f33b` (`Connection: close` on a non-kept reply, the 3 s spare FIN, the two-session cap) forces a fresh login connection that the guest-starved coexist tick cannot give a LISTEN slot, so the SYN is reset. Reverted those to `3a7e1183`; one-poll Overview and burst re-listen stay, 10-minute keep-alive back. Host Firefox signed in (`/auth/login -> 200`) and loaded two reloads. TLS piece stays 80. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. |
 | Gates touched | ADR-021 E4 in flight. Not lived. No doorbell. No format of UBUNTU0. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-04 | wave-5-e4-login-revert | 94 | 72 | **E4 still in flight.** Account dropped on `c3cdc6c1` (`ce77b697`) and `d57ff3b9`; worked on `1cf82795` (`2330f33b`). Reverted the `Connection: close` / 3 s spare FIN / two-session cap to `3a7e1183` (one-poll Overview and burst re-listen stay; 10-min keep-alive back) so the login does not need a fresh connection the guest-starved tick cannot serve. Host Firefox signed in (`/auth/login -> 200`), two reloads loaded. Not lived. TLS 80 held. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-04 | wave-5-e4-login-dropped | 94 | 72 | **E4 still in flight.** Iron `c3cdc6c1d7fe`: first load painted, sign-in Account dropped, reload did not load. Not lived. TLS 80 held. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-04 | wave-5-e4-one-poll | 94 | 72 | **E4 still in flight.** No iron. Overview polls one route (`/host/overview`); short listen reserve says `Connection: close`; kept idle 60 s. Host Chrome: 5 connections, 342 requests, two reloads on a kept connection. Not lived. TLS 80 held. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-04 | wave-5-e4-reload-burst | 94 | 72 | **E4 still in flight.** Iron `1cf827952140`: first load signed in, Guest 3 running, certificate 790 bytes. Reload was "Unable to connect". Not lived. TLS 80 held. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |

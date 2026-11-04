@@ -533,14 +533,6 @@ impl Tls12Listen {
         self.rx_len > 0
     }
 
-    /// Handshake finished, and no HTTP bytes and no partial record are held.
-    ///
-    /// Firefox's spare connections look like this. The listen path FINs
-    /// them after [`crate::mgmt::host_nic::COEXIST_SPARE_MS`].
-    pub fn app_idle(&self) -> bool {
-        self.state == ST_APP && self.http_len == 0 && self.rx_len == 0 && self.tx_len == 0
-    }
-
     /// Ciphertext is sealed and not yet accepted by the TCP buffer.
     ///
     /// A short `send_slice` puts that tail back. The next tick drains it.
