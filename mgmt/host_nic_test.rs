@@ -1,9 +1,9 @@
 use super::{
     coexist_keepalive_idle, coexist_millis_from_tsc, http_accept_idle_limit_ms,
     http_accept_should_idle_abort, http_reply_should_give_up, listen_reclaim_slot,
-    prop_http_accept_idle_abort, ListenSlot, COEXIST_KEEPALIVE_IDLE_MS, COEXIST_LISTEN_RESERVE,
-    COEXIST_TCP_SLOTS, COEXIST_TSC_HZ_FALLBACK, HOST_NIC_DHCP_MS, HOST_NIC_HTTP_HS_IDLE_MS,
-    HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS, PRE_RAYNUF_HTTPS_MS,
+    prop_http_accept_idle_abort, ListenSlot, COEXIST_KEEPALIVE_IDLE_MS, COEXIST_LISTEN_BURST,
+    COEXIST_LISTEN_RESERVE, COEXIST_TCP_SLOTS, COEXIST_TSC_HZ_FALLBACK, HOST_NIC_DHCP_MS,
+    HOST_NIC_HTTP_HS_IDLE_MS, HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS, PRE_RAYNUF_HTTPS_MS,
 };
 
 #[test]
@@ -32,11 +32,17 @@ fn a_closed_port_reclaims_one_slot() {
         kept: true,
         age_ms: 100,
     };
-    let stuck = ListenSlot {
+    let young = ListenSlot {
         listening: false,
         active: true,
         kept: false,
         age_ms: 50,
+    };
+    let ancient = ListenSlot {
+        listening: false,
+        active: true,
+        kept: false,
+        age_ms: HOST_NIC_HTTP_IDLE_MS,
     };
     let spare = ListenSlot {
         listening: true,
@@ -45,32 +51,62 @@ fn a_closed_port_reclaims_one_slot() {
         age_ms: 0,
     };
     assert_eq!(COEXIST_LISTEN_RESERVE, 2);
+    assert_eq!(COEXIST_LISTEN_BURST, 6);
     let mut full = [fresh; 10];
     full[3].age_ms = 5_000;
-    assert_eq!(listen_reclaim_slot(&full, COEXIST_LISTEN_RESERVE), Some(3));
-    let mut with_stuck = [fresh; 10];
-    with_stuck[7] = stuck;
     assert_eq!(
-        listen_reclaim_slot(&with_stuck, COEXIST_LISTEN_RESERVE),
-        Some(7)
+        listen_reclaim_slot(&full, COEXIST_LISTEN_BURST, HOST_NIC_HTTP_IDLE_MS),
+        Some(3)
+    );
+    let mut with_young = [fresh; 10];
+    with_young[1].age_ms = 9_000;
+    with_young[7] = young;
+    assert_eq!(
+        listen_reclaim_slot(&with_young, COEXIST_LISTEN_BURST, HOST_NIC_HTTP_IDLE_MS),
+        Some(1)
     );
     let mut one_listen = [fresh; 10];
     one_listen[0] = spare;
+    one_listen[4] = young;
     assert_eq!(
-        listen_reclaim_slot(&one_listen, COEXIST_LISTEN_RESERVE),
+        listen_reclaim_slot(&one_listen, COEXIST_LISTEN_RESERVE, HOST_NIC_HTTP_IDLE_MS),
         None
     );
-    let mut one_and_stuck = [fresh; 10];
-    one_and_stuck[0] = spare;
-    one_and_stuck[4] = stuck;
+    let mut one_and_ancient = [fresh; 10];
+    one_and_ancient[0] = spare;
+    one_and_ancient[4] = ancient;
     assert_eq!(
-        listen_reclaim_slot(&one_and_stuck, COEXIST_LISTEN_RESERVE),
+        listen_reclaim_slot(
+            &one_and_ancient,
+            COEXIST_LISTEN_RESERVE,
+            HOST_NIC_HTTP_IDLE_MS
+        ),
         Some(4)
     );
     let mut two = [fresh; 10];
     two[0] = spare;
     two[1] = spare;
-    assert_eq!(listen_reclaim_slot(&two, COEXIST_LISTEN_RESERVE), None);
+    assert_eq!(
+        listen_reclaim_slot(&two, COEXIST_LISTEN_RESERVE, HOST_NIC_HTTP_IDLE_MS),
+        None
+    );
+    // A reload with nothing listening frees kept sessions up to the burst
+    // and does not take the handshake that was just accepted.
+    let mut reload = [fresh; 10];
+    reload[9] = young;
+    let mut listening = 0usize;
+    for _ in 0..COEXIST_TCP_SLOTS {
+        let Some(i) = listen_reclaim_slot(&reload, COEXIST_LISTEN_BURST, HOST_NIC_HTTP_IDLE_MS)
+        else {
+            break;
+        };
+        assert_ne!(i, 9);
+        reload[i] = spare;
+        listening += 1;
+    }
+    assert_eq!(listening, COEXIST_LISTEN_BURST);
+    assert!(!reload[9].listening);
+    assert!(!reload[9].kept);
 }
 
 #[test]

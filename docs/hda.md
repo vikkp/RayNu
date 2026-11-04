@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-5-e4-listen-reclaim |
-| Summary | **ADR-021 E4 still in flight.** Mac `10.6.0.6` curl to `10.99.99.146:8443` on iron `1da151be06e0` / run `41539812411` was `curl: (7)` Connection refused in 19 ms. The address answered with a reset: no slot was in LISTEN. Back then Forward showed the page Firefox already had. A stuck reply is given back after 15 s, a short send stays sealed, and a listener is armed before poll when none remain. Not lived. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-5-e4-reload-burst |
+| Summary | **ADR-021 E4 still in flight.** Iron `1cf827952140` / run `41862713550` drew the SPA on the first load and signed in: Guest 3 running, certificate operator 790 bytes, static `10.99.99.146/24`, both ports up. Reload then Firefox "Unable to connect". The reclaim aborted the handshake it had just accepted. A young handshake is left alone, and a closed port arms six listeners before poll. Not lived. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | ADR-021 E4 stays `in flight` on `cursor/wave-5-e4-tls13-41d4`. E6 stays lived. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-04 | wave-5-e4-reload-burst | 0.0 | 99 | **E4 still in flight.** Iron `1cf827952140` / run `41862713550`: first load signed in, Guest 3 running, certificate 790 bytes, static `.146`, ports 3 and 4 up. Reload was Firefox "Unable to connect". The new accept was aborted on the next tick. Not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-04 | wave-5-e4-listen-reclaim | 0.0 | 99 | **E4 still in flight.** Iron `1da151be06e0` / run `41539812411`: Mac curl from `10.6.0.6` to `10.99.99.146:8443` was Connection refused in 19 ms. The address answered; no slot was in LISTEN. Back/Forward is the page already painted. Not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-02 | wave-5-e4-signin-idle | 0.0 | 99 | **E4 still in flight.** Iron page up, Host green. Sign-in POST never got a reply: COM2 `idle abort` slot 3, Firefox "Account dropped". The 2 s ClientHello reclaim is now 15 s. Not a wrong password. Not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-02 | wave-5-e4-tls13-gate | 0.0 | 99 | **E4 still in flight.** CI on `48e4b683` failed `m7_8_host_nic_scaffold_passes` because the listen file no longer named `http_accept_idle_limit_ms`. The call is back. Not lived. Scores held. months 0.0 held; overall 99 held |

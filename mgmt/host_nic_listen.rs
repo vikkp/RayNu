@@ -31,10 +31,10 @@ use crate::mgmt::e1000::E1000Device;
 use crate::mgmt::host_nic::{
     coexist_keepalive_idle, coexist_millis_from_tsc, host_nic_lab_armed, http_accept_idle_limit_ms,
     http_accept_should_idle_abort, http_reply_should_give_up, listen_reclaim_slot, ListenSlot,
-    COEXIST_CLOSE_FORCE_MS, COEXIST_KEEPALIVE_IDLE_MS, COEXIST_LISTEN_RESERVE, COEXIST_TCP_SLOTS,
-    HOST_NIC_DHCP_MS, HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS, HOST_NIC_MAX_EXCHANGES,
-    M7_HOST_NIC_QEMU_MARKER, PRE_RAYNUF_HTTPS_MS, QEMU_USERNET_GW, QEMU_USERNET_IPV4,
-    QEMU_USERNET_PREFIX,
+    COEXIST_CLOSE_FORCE_MS, COEXIST_KEEPALIVE_IDLE_MS, COEXIST_LISTEN_BURST,
+    COEXIST_LISTEN_RESERVE, COEXIST_TCP_SLOTS, HOST_NIC_DHCP_MS, HOST_NIC_HTTP_IDLE_MS,
+    HOST_NIC_LISTEN_MS, HOST_NIC_MAX_EXCHANGES, M7_HOST_NIC_QEMU_MARKER, PRE_RAYNUF_HTTPS_MS,
+    QEMU_USERNET_GW, QEMU_USERNET_IPV4, QEMU_USERNET_PREFIX,
 };
 use crate::mgmt::host_nic_poll::{bounded_poll, HOST_NIC_POLL_BUDGET};
 use crate::mgmt::http::handle_http_request;
@@ -635,14 +635,30 @@ unsafe fn reclaim_one_listener(sockets: &mut SocketSet, millis: i64) {
             age_ms: age,
         };
     }
-    let Some(i) = listen_reclaim_slot(&view, COEXIST_LISTEN_RESERVE) else {
-        return;
+    let listening = view.iter().filter(|s| s.listening).count();
+    // Zero listeners: arm a Firefox-sized burst before poll. One listener
+    // already up: only the reserve, so a handshake accepted last tick stays.
+    let target = if listening == 0 {
+        COEXIST_LISTEN_BURST
+    } else {
+        COEXIST_LISTEN_RESERVE
     };
-    slot_relisten(
-        sockets,
-        i,
-        "boot: HOST-NIC TCP re-listen to keep a listener",
-    );
+    for _ in 0..COEXIST_TCP_SLOTS {
+        let Some(i) = listen_reclaim_slot(&view, target, HOST_NIC_HTTP_IDLE_MS) else {
+            break;
+        };
+        slot_relisten(
+            sockets,
+            i,
+            "boot: HOST-NIC TCP re-listen to keep a listener",
+        );
+        view[i] = ListenSlot {
+            listening: true,
+            active: false,
+            kept: false,
+            age_ms: 0,
+        };
+    }
 }
 
 /// Abort, drop the TLS session back to the saved key, and listen again.

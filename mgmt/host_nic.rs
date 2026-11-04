@@ -118,6 +118,14 @@ pub const COEXIST_TCP_SLOTS: usize = 10;
 /// already had. smoltcp resets a SYN when every slot is established.
 pub const COEXIST_LISTEN_RESERVE: usize = 2;
 
+/// Listeners to arm before `poll` when the table has none.
+///
+/// Firefox opens about six connections for one reload. Iron `1cf82795`
+/// freed one slot, accepted the reload, then on the next tick aborted that
+/// new session because it was not kept yet. The browser showed "Unable to
+/// connect". A handshake younger than the reply budget is left alone.
+pub const COEXIST_LISTEN_BURST: usize = 6;
+
 /// One coexist slot, as [`listen_reclaim_slot`] sees it.
 #[derive(Clone, Copy, Debug)]
 pub struct ListenSlot {
@@ -130,12 +138,18 @@ pub struct ListenSlot {
 
 /// Slot to abort so a later SYN is not reset.
 ///
-/// A session that accepted and never became a kept reply is taken first.
-/// A kept session is taken only when nothing is listening. While one
-/// listener remains, a page that is still polling is left alone.
-pub fn listen_reclaim_slot(slots: &[ListenSlot], reserve: usize) -> Option<usize> {
+/// A session that has been accepted and still is not kept is eligible only
+/// after `stuck_min_age_ms`. A younger one is the handshake this tick just
+/// accepted. Kept sessions are released only while `listening` is still
+/// below `target`, oldest first. The caller sets `target` to the burst
+/// size when nothing is listening, and to the reserve otherwise.
+pub fn listen_reclaim_slot(
+    slots: &[ListenSlot],
+    target: usize,
+    stuck_min_age_ms: i64,
+) -> Option<usize> {
     let listening = slots.iter().filter(|s| s.listening).count();
-    if listening >= reserve {
+    if listening >= target {
         return None;
     }
     let mut stuck: Option<(usize, i64)> = None;
@@ -145,7 +159,9 @@ pub fn listen_reclaim_slot(slots: &[ListenSlot], reserve: usize) -> Option<usize
             continue;
         }
         if !slot.kept {
-            if stuck.map(|(_, age)| slot.age_ms >= age).unwrap_or(true) {
+            if slot.age_ms >= stuck_min_age_ms
+                && stuck.map(|(_, age)| slot.age_ms >= age).unwrap_or(true)
+            {
                 stuck = Some((i, slot.age_ms));
             }
         } else if kept_oldest
@@ -155,10 +171,18 @@ pub fn listen_reclaim_slot(slots: &[ListenSlot], reserve: usize) -> Option<usize
             kept_oldest = Some((i, slot.age_ms));
         }
     }
-    if let Some((i, _)) = stuck {
-        return Some(i);
+    if listening < target {
+        if let Some((i, _)) = stuck {
+            return Some(i);
+        }
     }
     if listening == 0 {
+        return kept_oldest.map(|(i, _)| i);
+    }
+    // Below the burst target but a listener remains: keep releasing the
+    // oldest kept session so a reload's six SYNs each have a slot. A young
+    // handshake was already excluded above.
+    if target > COEXIST_LISTEN_RESERVE {
         return kept_oldest.map(|(i, _)| i);
     }
     None
