@@ -353,33 +353,31 @@ pub fn host_cert_rest(method: RestMethod, path: &str, authed: bool, body: &str) 
 }
 
 fn status_json(status: u16) -> HostCertHttp {
-    let (on, cert_len) = with_state(|s| (s.on, s.cert_len));
     let mut body = [0u8; 128];
-    let text = if on {
-        // cert_len fits the fixed sentence below; the digits are written by hand.
-        None
-    } else {
-        Some("{\"ok\":true,\"source\":\"millicert\",\"tls\":\"1.3\"}")
-    };
-    let n = if let Some(text) = text {
-        let b = text.as_bytes();
-        body[..b.len()].copy_from_slice(b);
-        b.len()
-    } else {
-        let mut w = JsonBuf::new(&mut body);
-        w.s("{\"ok\":true,\"source\":\"operator\",\"tls\":\"1.3\",\"cert\":");
-        w.u(cert_len as u64);
-        w.s("}");
-        if w.fit {
-            w.n
-        } else {
-            0
-        }
-    };
+    let n = status_body(&mut body);
     HostCertHttp::Json {
         status,
         len: n,
         body,
+    }
+}
+
+/// The `GET /host/cert` object. Zero when `buf` is too small. The
+/// Overview poll embeds it (`/host/overview`).
+pub fn status_body(buf: &mut [u8]) -> usize {
+    let (on, cert_len) = with_state(|s| (s.on, s.cert_len));
+    let mut w = JsonBuf::new(buf);
+    if on {
+        w.s("{\"ok\":true,\"source\":\"operator\",\"tls\":\"1.3\",\"cert\":");
+        w.u(cert_len as u64);
+        w.s("}");
+    } else {
+        w.s("{\"ok\":true,\"source\":\"millicert\",\"tls\":\"1.3\"}");
+    }
+    if w.fit {
+        w.n
+    } else {
+        0
     }
 }
 

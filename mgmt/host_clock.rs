@@ -168,7 +168,8 @@ pub fn prop_host_clock() -> bool {
         && listen.contains("d10_ntp_tick")
         && tls.contains("stamp_server_random")
         && html.contains("id=\"host-clock\"")
-        && html.contains("/host/clock")
+        && html.contains("function paintClock")
+        && html.contains("/host/overview")
         && http.contains("/host/clock")
 }
 

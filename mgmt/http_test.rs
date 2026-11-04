@@ -589,6 +589,71 @@ fn spa_poweroff_post_latches_and_stays_off_reset() {
 }
 
 #[test]
+fn overview_is_one_bearer_get_for_the_whole_page() {
+    let mut table = VmTable::new();
+    let mut images = ImageTable::new();
+    let mut iso_plan = IsoDeployPlan::empty();
+    let mut iso_install = InstallToDiskPlan::empty();
+    let mut out = [0u8; HTTP_RESPONSE_CAP];
+    let open = "GET /host/overview HTTP/1.1\r\nHost: x\r\n\r\n";
+    let n = handle_http_request(
+        &mut table,
+        &mut images,
+        &mut iso_plan,
+        &mut iso_install,
+        open,
+        &mut out,
+    )
+    .unwrap();
+    let s = core::str::from_utf8(&out[..n]).unwrap();
+    assert!(s.starts_with("HTTP/1.1 401"), "{s}");
+    let post = "POST /host/overview HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n";
+    let n = handle_http_request(
+        &mut table,
+        &mut images,
+        &mut iso_plan,
+        &mut iso_install,
+        post,
+        &mut out,
+    )
+    .unwrap();
+    let s = core::str::from_utf8(&out[..n]).unwrap();
+    assert!(s.starts_with("HTTP/1.1 400"), "{s}");
+    let get = "GET /host/overview HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n";
+    let n = handle_http_request(
+        &mut table,
+        &mut images,
+        &mut iso_plan,
+        &mut iso_install,
+        get,
+        &mut out,
+    )
+    .unwrap();
+    let s = core::str::from_utf8(&out[..n]).unwrap();
+    assert!(s.starts_with("HTTP/1.1 200"), "{s}");
+    assert!(s.contains("Content-Type: application/json"), "{s}");
+    assert!(s.contains("Connection: keep-alive"), "{s}");
+    let body = s.split("\r\n\r\n").nth(1).unwrap();
+    assert!(body.starts_with("{\"ok\":true,\"guests\":{"), "{body}");
+    for key in [
+        "\"addr\":{\"ok\":true",
+        "\"clock\":{\"ok\":true",
+        "\"operator\":{\"ok\":true",
+        "\"cert\":{\"ok\":true",
+    ] {
+        assert!(body.contains(key), "{key} missing in {body}");
+    }
+    assert!(!body.contains("\"token\""), "{body}");
+    let len: usize = s
+        .lines()
+        .find_map(|l| l.strip_prefix("Content-Length: "))
+        .unwrap()
+        .parse()
+        .unwrap();
+    assert_eq!(len, body.len());
+}
+
+#[test]
 fn http_mgmt_package() {
     assert_eq!(M7_HTTP_OK_MARKER, "RAYNU-V-M7-HTTP-OK");
     assert!(HTTP_GAP_NOTE.contains("CLOSED M7.1"));

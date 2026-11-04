@@ -585,6 +585,23 @@ pub fn handle_http_request(
         let n = crate::mgmt::host_clock::status_json(&mut body);
         return format_http_response(200, "application/json", &body[..n], out);
     }
+    // One poll for the Overview page: guests, address, clock, operator,
+    // certificate. The page used to fetch five routes every 2 s and the
+    // browser used six connections for them.
+    if parsed.path == crate::mgmt::host_overview::HOST_OVERVIEW_PATH {
+        if !matches!(parsed.method, RestMethod::Get) {
+            return format_http_response(400, "text/plain; charset=utf-8", b"bad request", out);
+        }
+        if !auth_allows(parsed.auth_token) {
+            return format_http_response(401, "text/plain; charset=utf-8", b"unauthorized", out);
+        }
+        let mut body = [0u8; crate::mgmt::host_overview::OVERVIEW_BODY_CAP];
+        let n = crate::mgmt::host_overview::overview_json(&mut body);
+        if n == 0 {
+            return format_http_response(500, "text/plain; charset=utf-8", b"overview", out);
+        }
+        return format_http_response(200, "application/json", &body[..n], out);
+    }
     if parsed.path == "/host/panic" {
         if !matches!(parsed.method, RestMethod::Post) {
             return format_http_response(400, "text/plain; charset=utf-8", b"bad request", out);

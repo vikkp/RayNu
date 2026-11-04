@@ -929,6 +929,12 @@ pub fn occupied_guest_end() -> u64 {
     end
 }
 
+/// The `GET /perc/guests` object. Zero when `buf` is too small. The
+/// Overview poll embeds it (`/host/overview`).
+pub fn list_json(buf: &mut [u8]) -> usize {
+    fill_list_json(buf)
+}
+
 fn fill_list_json(buf: &mut [u8]) -> usize {
     let installed = crate::mgmt::megaraid::perc_image_boot_latched();
     let spare = crate::mgmt::megaraid::perc_spare_bytes();

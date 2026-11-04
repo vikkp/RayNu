@@ -348,6 +348,7 @@ pub mod host_nic_coexist;
 #[cfg(feature = "uefi-bin")]
 pub mod host_nic_listen;
 pub mod host_nic_poll;
+pub mod host_overview;
 pub mod host_panic;
 pub mod host_power;
 pub mod http;

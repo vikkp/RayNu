@@ -517,14 +517,24 @@ fn parse_ipv4(s: &str) -> Option<[u8; 4]> {
 
 fn status_json(status: u16) -> HostAddrHttp {
     let mut body = [0u8; 512];
-    let mut w = JsonBuf::new(&mut body);
+    let len = status_body(&mut body);
+    HostAddrHttp::Json { status, len, body }
+}
+
+/// The `GET /host/addr` object. Zero when `buf` is too small. The
+/// Overview poll embeds it (`/host/overview`).
+pub fn status_body(buf: &mut [u8]) -> usize {
+    let mut w = JsonBuf::new(buf);
     w.s("{\"ok\":true,\"saved\":");
     write_saved(&mut w, shown());
     w.s(",\"using\":");
     write_using(&mut w, using_now());
     w.s(",\"next\":\"reboot\"}");
-    let len = if w.fit { w.n } else { 0 };
-    HostAddrHttp::Json { status, len, body }
+    if w.fit {
+        w.n
+    } else {
+        0
+    }
 }
 
 fn write_saved(w: &mut JsonBuf<'_>, saved: SavedAddr) {
