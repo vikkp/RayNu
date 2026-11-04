@@ -106,15 +106,29 @@ pub fn http_accept_should_idle_abort(
 /// the table without aborting a live session.
 pub const COEXIST_KEEPALIVE_IDLE_MS: i64 = 60_000;
 
+/// Kept TLS sessions. Two cover the Overview poll. A third reply says
+/// `Connection: close` so Firefox's spare connections do not fill the
+/// table. Iron `c3cdc6c1`: the page loaded, `GET /auth/operator` painted
+/// `Operator: vikkp`, and `POST /auth/login` then had no answer
+/// ("Account dropped"). The reload had no listen socket.
+pub const COEXIST_KEEP_MAX: usize = 2;
+
+/// A TLS session that finished the handshake and was never given a
+/// request. Firefox opens about six connections and uses two. The spare
+/// ones used to sit until the 15 s abort, holding the slots the login
+/// POST and the reload need.
+pub const COEXIST_SPARE_MS: i64 = 3_000;
+
 /// Whether the reply being sealed should say `Connection: close`.
 ///
 /// `free` is the number of listening sockets plus slots already draining
 /// a FIN this tick. Below the reserve, the reply closes its own
-/// connection after the drain. The browser reads the header and retires
-/// that connection, then multiplexes on the ones it still has. That is
-/// how a server shrinks a browser pool; a reset to a live session is not.
-pub fn reply_should_close(free: usize) -> bool {
-    free < COEXIST_LISTEN_RESERVE
+/// connection after the drain. A session that is not already kept also
+/// closes when `kept` is already [`COEXIST_KEEP_MAX`]: the poll keeps two
+/// connections and the rest return to LISTEN. A reset to a live session
+/// is not this path.
+pub fn reply_should_close(free: usize, kept: usize, already_kept: bool) -> bool {
+    free < COEXIST_LISTEN_RESERVE || (!already_kept && kept >= COEXIST_KEEP_MAX)
 }
 
 /// Listen sockets armed together.

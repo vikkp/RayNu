@@ -296,8 +296,9 @@ paintSpareBody(b);
 function paintSpareBody(b){spareBody=b;capNote(b);paintSpare(b);paintPorts(b);paintBuild(b);paintStop(b);paint()}
 async function loadOverview(){
 if(up)return;let r;try{r=await api("GET","/host/overview")}catch(e){hostOk=false;paint();return}
-if(r.status===401){loadOp();return}
-hostOk=r.ok||hostOk;if(!r.ok){paint();return}
+hostOk=true;paint();
+if(r.status===401){if(!hold)setS("Sign in");loadOp();return}
+if(!r.ok)return
 let j=null;try{j=await r.json()}catch(e){return}
 if(!j)return;
 if(j.guests)paintSpareBody(j.guests);

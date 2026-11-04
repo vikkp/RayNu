@@ -93,6 +93,7 @@ pub fn prop_host_overview() -> bool {
         && html.contains(HOST_OVERVIEW_PATH)
         && html.contains("function loadOverview")
         && html.contains("setInterval(loadOverview,2000)")
+        && html.contains("if(r.status===401){if(!hold)setS(\"Sign in\");loadOp();return}")
         && !html.contains("setInterval(loadSpare")
         && !html.contains("setInterval(loadHostAddr")
         && !html.contains("setInterval(loadClock")

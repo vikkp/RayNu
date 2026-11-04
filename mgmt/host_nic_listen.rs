@@ -32,9 +32,10 @@ use crate::mgmt::host_nic::{
     coexist_keepalive_idle, coexist_millis_from_tsc, host_nic_lab_armed, http_accept_idle_limit_ms,
     http_accept_should_idle_abort, http_reply_should_give_up, listen_reclaim_slot,
     reply_should_close, ListenSlot, COEXIST_CLOSE_FORCE_MS, COEXIST_KEEPALIVE_IDLE_MS,
-    COEXIST_LISTEN_BURST, COEXIST_LISTEN_RESERVE, COEXIST_TCP_SLOTS, HOST_NIC_DHCP_MS,
-    HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS, HOST_NIC_MAX_EXCHANGES, M7_HOST_NIC_QEMU_MARKER,
-    PRE_RAYNUF_HTTPS_MS, QEMU_USERNET_GW, QEMU_USERNET_IPV4, QEMU_USERNET_PREFIX,
+    COEXIST_LISTEN_BURST, COEXIST_LISTEN_RESERVE, COEXIST_SPARE_MS, COEXIST_TCP_SLOTS,
+    HOST_NIC_DHCP_MS, HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS, HOST_NIC_MAX_EXCHANGES,
+    M7_HOST_NIC_QEMU_MARKER, PRE_RAYNUF_HTTPS_MS, QEMU_USERNET_GW, QEMU_USERNET_IPV4,
+    QEMU_USERNET_PREFIX,
 };
 use crate::mgmt::host_nic_poll::{bounded_poll, HOST_NIC_POLL_BUDGET};
 use crate::mgmt::http::handle_http_request;
@@ -791,19 +792,24 @@ pub fn tick_bcm5720_coexist() {
         let mut did_keepalive = false;
         if !skip_accept {
             // Listeners plus slots already draining a FIN. Below the reserve,
-            // the next reply tells the browser to close its connection.
+            // or once two sessions are already kept, the next reply tells
+            // the browser to close its connection.
             let mut free = 0usize;
+            let mut kept_n = 0usize;
             for i in 0..COEXIST_TCP_SLOTS {
                 let handle = SLOT_HANDLE[i].assume_init();
                 if sockets.get::<tcp::Socket>(handle).is_listening() || SLOT_RT[i].pending_close {
                     free += 1;
+                }
+                if SLOT_RT[i].kept {
+                    kept_n += 1;
                 }
             }
             for i in 0..COEXIST_TCP_SLOTS {
                 let handle = SLOT_HANDLE[i].assume_init();
                 let mut rt = SLOT_RT[i];
                 let mut relisten: Option<&'static str> = None;
-                let close_hint = reply_should_close(free);
+                let close_hint = reply_should_close(free, kept_n, rt.kept);
                 {
                     let session = SLOT_SESSION[i].assume_init_mut();
                     let sock = sockets.get_mut::<tcp::Socket>(handle);
@@ -892,10 +898,7 @@ pub fn tick_bcm5720_coexist() {
                                         did_exchange = true;
                                         close_this = true;
                                         if close_hint {
-                                            note_slot(
-                                                "boot: HOST-NIC HTTP reply says close (listen reserve short)",
-                                                i,
-                                            );
+                                            note_slot("boot: HOST-NIC HTTP reply says close", i);
                                         }
                                     }
                                     Some(false) => {
@@ -907,10 +910,20 @@ pub fn tick_bcm5720_coexist() {
                                             did_keepalive = true;
                                             rt.kept = true;
                                             rt.last_http_ms = millis;
+                                            kept_n += 1;
                                         }
                                     }
                                     None => {}
                                 }
+                            } else if !rt.kept
+                                && !headers_done
+                                && session.app_idle()
+                                && millis.saturating_sub(rt.accept_at_ms) >= COEXIST_SPARE_MS
+                            {
+                                // Handshake done, no request. FIN the spare
+                                // so the login POST and the reload have a slot.
+                                close_this = true;
+                                note_slot("boot: HOST-NIC TCP spare closed", i);
                             } else if peer_fin {
                                 relisten = Some("boot: HOST-NIC TCP re-listen after HTTP");
                             } else if session.handshake_failed() {

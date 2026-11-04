@@ -2,9 +2,9 @@ use super::{
     coexist_keepalive_idle, coexist_millis_from_tsc, http_accept_idle_limit_ms,
     http_accept_should_idle_abort, http_reply_should_give_up, listen_reclaim_slot,
     prop_http_accept_idle_abort, reply_should_close, ListenSlot, COEXIST_KEEPALIVE_IDLE_MS,
-    COEXIST_LISTEN_BURST, COEXIST_LISTEN_RESERVE, COEXIST_TCP_SLOTS, COEXIST_TSC_HZ_FALLBACK,
-    HOST_NIC_DHCP_MS, HOST_NIC_HTTP_HS_IDLE_MS, HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS,
-    PRE_RAYNUF_HTTPS_MS,
+    COEXIST_KEEP_MAX, COEXIST_LISTEN_BURST, COEXIST_LISTEN_RESERVE, COEXIST_SPARE_MS,
+    COEXIST_TCP_SLOTS, COEXIST_TSC_HZ_FALLBACK, HOST_NIC_DHCP_MS, HOST_NIC_HTTP_HS_IDLE_MS,
+    HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS, PRE_RAYNUF_HTTPS_MS,
 };
 
 #[test]
@@ -215,18 +215,36 @@ fn coexist_keepalive_idle_is_one_minute() {
 }
 
 #[test]
-fn a_short_listen_reserve_asks_the_browser_to_close() {
-    // Ten slots, eight established, two listening: nothing is asked.
-    assert!(!reply_should_close(COEXIST_LISTEN_RESERVE));
-    assert!(!reply_should_close(COEXIST_LISTEN_RESERVE + 1));
-    // One listener left: the next reply carries `Connection: close`.
-    assert!(reply_should_close(COEXIST_LISTEN_RESERVE - 1));
-    assert!(reply_should_close(0));
+fn a_third_session_and_a_short_reserve_ask_the_browser_to_close() {
+    assert_eq!(COEXIST_KEEP_MAX, 2);
+    assert_eq!(COEXIST_SPARE_MS, 3_000);
+    // Two kept, and this reply is one of them: stay open.
+    assert!(!reply_should_close(
+        COEXIST_LISTEN_RESERVE,
+        COEXIST_KEEP_MAX,
+        true
+    ));
+    // Two kept already, and this is a new session: close after the reply.
+    assert!(reply_should_close(
+        COEXIST_LISTEN_RESERVE,
+        COEXIST_KEEP_MAX,
+        false
+    ));
+    assert!(!reply_should_close(
+        COEXIST_LISTEN_RESERVE,
+        COEXIST_KEEP_MAX - 1,
+        false
+    ));
+    // One listener left: close even a session we were keeping.
+    assert!(reply_should_close(COEXIST_LISTEN_RESERVE - 1, 0, true));
+    assert!(reply_should_close(0, 0, false));
     let listen = include_str!("host_nic_listen.rs");
-    assert!(listen.contains("reply_should_close(free)"));
+    assert!(listen.contains("reply_should_close(free, kept_n, rt.kept)"));
     assert!(listen.contains("set_reply_connection_close(close_hint)"));
     assert!(listen.contains("set_reply_connection_close(false)"));
-    assert!(listen.contains("HTTP reply says close (listen reserve short)"));
+    assert!(listen.contains("HTTP reply says close"));
+    assert!(listen.contains("session.app_idle()"));
+    assert!(listen.contains("TCP spare closed"));
 }
 
 #[test]
