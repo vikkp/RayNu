@@ -1216,6 +1216,50 @@ pub fn bcm5720_poll_diag() -> Option<Bcm5720PollDiag> {
     None
 }
 
+/// Function 0 MAC frame counters plus ring indices, for [`crate::mgmt::listener_health`].
+///
+/// Kicks function 0's own HOSTCC so the status block is fresh (the same kick
+/// the drop sampler uses). Does not write the PHY, phylock, GRC, or function 1.
+pub fn spa_listener_sample() -> Option<crate::mgmt::listener_health::ListenerSample> {
+    #[cfg(feature = "uefi-bin")]
+    {
+        return spa_listener_sample_uefi();
+    }
+    #[cfg(not(feature = "uefi-bin"))]
+    {
+        None
+    }
+}
+
+#[cfg(feature = "uefi-bin")]
+fn spa_listener_sample_uefi() -> Option<crate::mgmt::listener_health::ListenerSample> {
+    with_nic(|n, dma| {
+        // SAFETY: lock held; status block and MAC stat registers are function 0.
+        unsafe {
+            kick_hostcc(n.mmio);
+            let rx_prod =
+                core::ptr::read_volatile(core::ptr::addr_of!(dma.status.idx[0].rx_producer));
+            let tx_cons =
+                core::ptr::read_volatile(core::ptr::addr_of!(dma.status.idx[0].tx_consumer));
+            let mac_rx = mmio_read(n.mmio, MAC_RX_STATS_UCAST)
+                .wrapping_add(mmio_read(n.mmio, MAC_RX_STATS_MCAST))
+                .wrapping_add(mmio_read(n.mmio, MAC_RX_STATS_BCAST));
+            let mac_tx = mmio_read(n.mmio, MAC_TX_STATS_UCAST)
+                .wrapping_add(mmio_read(n.mmio, MAC_TX_STATS_MCAST))
+                .wrapping_add(mmio_read(n.mmio, MAC_TX_STATS_BCAST));
+            crate::mgmt::listener_health::ListenerSample {
+                mac_rx,
+                mac_tx,
+                rx_prod: ring_idx(rx_prod),
+                rx_cons: ring_idx(n.rx_rcb_ptr),
+                tx_prod: ring_idx(n.tx_prod),
+                tx_cons: ring_idx(tx_cons),
+                rx_ok: RX_OK.load(Ordering::Relaxed),
+            }
+        }
+    })
+}
+
 /// Reset + ring init. Identity-mapped BAR (UEFI page tables).
 /// Tries each BCM5720 function until copper `LSTATUS` (func 0 / NCSI first).
 /// Second call reuses a Device already armed immediately after EBS.
@@ -1449,9 +1493,7 @@ unsafe fn egress_send_uefi(frame: &[u8]) -> EgressSend {
     }
     let Some(n) = EGRESS_NIC.as_mut() else {
         if !EGRESS_HELD_LOGGED.swap(true, Ordering::AcqRel) {
-            egress_say(
-                "boot: M8.9 egress tx held (phylock stays with iDRAC; SPA port stays)\n",
-            );
+            egress_say("boot: M8.9 egress tx held (phylock stays with iDRAC; SPA port stays)\n");
         }
         return EgressSend::Held;
     };
@@ -1650,7 +1692,11 @@ unsafe fn egress_adjust_mac(mmio: u64, phy: u32) {
     mmio_write(mmio, MAC_RX_MODE, RX_MODE_ENABLE | RX_MODE_PROMISC);
     egress_say("boot: M8.9 egress :39 link=up speed=");
     egress_dec_u16(speed);
-    egress_say(if full { " duplex=full\n" } else { " duplex=half\n" });
+    egress_say(if full {
+        " duplex=full\n"
+    } else {
+        " duplex=half\n"
+    });
 }
 
 /// COM2 for the guest egress path. The arm runs inside a Linux VM exit,
@@ -1734,7 +1780,11 @@ unsafe fn egress_link_tick(mmio: u64) {
 /// the latched link-down bit), then `LPA` + `1000BASE-T status` for the
 /// speed when up. `None` when MDIO timed out (the port is not ours yet).
 #[cfg(feature = "uefi-bin")]
-unsafe fn sample_phy(mmio: u64, phy: u32, driven: bool) -> Option<crate::mgmt::host_link::LinkSample> {
+unsafe fn sample_phy(
+    mmio: u64,
+    phy: u32,
+    driven: bool,
+) -> Option<crate::mgmt::host_link::LinkSample> {
     let _ = phy_read(mmio, phy, MII_BMSR)?;
     let bmsr = phy_read(mmio, phy, MII_BMSR)?;
     let up = bmsr_link_up(bmsr);
@@ -1775,7 +1825,9 @@ fn report_link(change: Option<crate::mgmt::host_link::LinkChange>) {
         crate::devices::guest_virtio_net::note_carrier_change();
     }
     egress_say("boot: D5 link lom=");
-    egress_dec_u16(u16::from(crate::mgmt::host_link::LOM_OF_FUNC0.saturating_add(c.func)));
+    egress_dec_u16(u16::from(
+        crate::mgmt::host_link::LOM_OF_FUNC0.saturating_add(c.func),
+    ));
     egress_say(" func=");
     egress_dec_u16(u16::from(c.func));
     if c.up {
@@ -2905,6 +2957,77 @@ unsafe fn peek_phy_bmsr(mmio: u64, func: u8) -> u16 {
     phy_read(mmio, phy_addr, MII_BMSR).unwrap_or(0)
 }
 
+/// True once function 1's rings are installed. No MMIO.
+pub fn egress_armed() -> bool {
+    #[cfg(feature = "uefi-bin")]
+    {
+        // SAFETY: BSP tick. Presence only; the egress send path runs on this CPU too.
+        unsafe { EGRESS_NIC.is_some() }
+    }
+    #[cfg(not(feature = "uefi-bin"))]
+    {
+        false
+    }
+}
+
+/// Rebuild function 0's rings and DMA engines. Leaves the PHY, the phylock,
+/// the core clock, and function 1 alone.
+///
+/// INVARIANTS:
+/// - Writes only the SPA port's BAR and its PCI config window
+/// - Does not call `chip_reset` or touch MDIO
+/// - Software ring indices match the mailboxes posted here
+pub fn rebuild_spa_rings() -> bool {
+    #[cfg(feature = "uefi-bin")]
+    {
+        return unsafe { rebuild_spa_rings_uefi() };
+    }
+    #[cfg(not(feature = "uefi-bin"))]
+    {
+        false
+    }
+}
+
+#[cfg(feature = "uefi-bin")]
+unsafe fn rebuild_spa_rings_uefi() -> bool {
+    let Some((bus, dev, func)) = spa_pci() else {
+        return false;
+    };
+    with_nic(|n, dma| {
+        let rx_mode = mmio_read(n.mmio, MAC_RX_MODE);
+        let tx_mode = mmio_read(n.mmio, MAC_TX_MODE);
+        halt_mac_dma(n.mmio);
+        mmio_write(n.mmio, WDMAC_MODE, 0);
+        mmio_write(n.mmio, RDMAC_MODE, 0);
+        tsc_spin_ms(1);
+        init_rings(dma);
+        program_rings(n.mmio, bus, dev, func, dma);
+        mmio_write(
+            n.mmio,
+            MAC_RX_MODE,
+            rx_mode | RX_MODE_ENABLE | RX_MODE_PROMISC,
+        );
+        mmio_write(n.mmio, MAC_TX_MODE, tx_mode | TX_MODE_ENABLE);
+        enable_dma_engines(n.mmio);
+        enable_hostcc(n.mmio);
+        enable_completion_blocks(n.mmio);
+        mailbox_write(
+            n.mmio,
+            MAILBOX_RCV_STD_PROD_IDX,
+            (RING as u32).saturating_sub(1),
+        );
+        mailbox_write(n.mmio, MAILBOX_RCVRET_CON_IDX_0, 0);
+        mailbox_write(n.mmio, MAILBOX_SNDHOST_PROD_IDX_0, 0);
+        n.rx_rcb_ptr = 0;
+        n.rx_std_prod = (RING as u16).saturating_sub(1);
+        n.tx_prod = 0;
+        n.tx_cons = 0;
+        kick_hostcc(n.mmio);
+        true
+    })
+    .unwrap_or(false)
+}
+
 /// Stop UNDI TX/RX/coalescing before we steal the rings (inherit path).
 #[cfg(feature = "uefi-bin")]
 unsafe fn halt_mac_dma(mmio: u64) {
@@ -3318,7 +3441,11 @@ unsafe fn ape_send_event_at(ape: ApeCtx, event: u32) -> bool {
     if !locked {
         return false;
     }
-    ape_write_at(ape, TG3_APE_EVENT_STATUS, event | APE_EVENT_STATUS_EVENT_PENDING);
+    ape_write_at(
+        ape,
+        TG3_APE_EVENT_STATUS,
+        event | APE_EVENT_STATUS_EVENT_PENDING,
+    );
     ape_write_at(ape, gnt, bit);
     ape_write_at(ape, TG3_APE_EVENT, APE_EVENT_1);
     true

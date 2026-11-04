@@ -357,6 +357,7 @@ pub mod iso;
 pub mod iso_install;
 pub mod iso_library;
 pub mod iso_upload;
+pub mod listener_health;
 pub mod m5_api_gate;
 pub mod m5_life_gate;
 pub mod m5_webui_gate;

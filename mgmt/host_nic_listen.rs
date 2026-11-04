@@ -114,6 +114,12 @@ static mut COEXIST_MILLIS: i64 = 0;
 static mut COEXIST_TSC0: u64 = 0;
 static mut COEXIST_LAST_DIAG: i64 = 0;
 static mut COEXIST_LAST_RX_DROP: u32 = 0;
+/// Function-0 health while function 1 is armed. See `listener_health`.
+static mut LISTENER_HEALTH: crate::mgmt::listener_health::ListenerTracker =
+    crate::mgmt::listener_health::ListenerTracker::new();
+static mut LISTENER_HEALTH_AT: i64 = 0;
+static mut LISTENER_HOLDOFF_UNTIL: i64 = 0;
+static mut LISTENER_RECOVERS: u8 = 0;
 static mut COEXIST_PORT: u16 = MGMT_HTTP_DEFAULT_PORT;
 /// SPA `POST /host/poweroff` accepted. Drain the 200, then VMXOFF + shutdown.
 static mut COEXIST_PENDING_POWEROFF: bool = false;
@@ -478,6 +484,10 @@ pub fn arm_bcm5720_coexist() -> bool {
         tls_session().reset();
         COEXIST_LAST_DIAG = 0;
         COEXIST_LAST_RX_DROP = 0;
+        LISTENER_HEALTH.reset();
+        LISTENER_HEALTH_AT = 0;
+        LISTENER_HOLDOFF_UNTIL = 0;
+        LISTENER_RECOVERS = 0;
         COEXIST_PORT = port;
         COEXIST_ARMED = true;
     }
@@ -978,6 +988,82 @@ pub fn tick_bcm5720_coexist() {
                 COEXIST_LAST_RX_DROP = d.rx_drop;
             }
         }
+        listener_health_tick(sockets, millis);
+    }
+}
+
+/// Sample function 0 once a second. On [`ListenerHealth::Stalled`], rebuild
+/// its rings and put every slot back in LISTEN. Function 1 is not written.
+///
+/// # Safety
+/// [`COEXIST_ARMED`] and [`SLOT_HANDLE`] filled. BSP-only.
+unsafe fn listener_health_tick(sockets: &mut SocketSet, millis: i64) {
+    use crate::mgmt::listener_health::{
+        ListenerHealth, LISTENER_RECOVER_CAP, LISTENER_RECOVER_HOLDOFF_MS, LISTENER_SAMPLE_MS,
+    };
+    if millis < LISTENER_HOLDOFF_UNTIL {
+        return;
+    }
+    if LISTENER_HEALTH_AT != 0 && millis.saturating_sub(LISTENER_HEALTH_AT) < LISTENER_SAMPLE_MS {
+        return;
+    }
+    LISTENER_HEALTH_AT = millis;
+    let Some(sample) = crate::mgmt::bcm5720_mmio::spa_listener_sample() else {
+        return;
+    };
+    let health = LISTENER_HEALTH.observe(sample, crate::mgmt::bcm5720_mmio::egress_armed());
+    if health != ListenerHealth::Stalled || LISTENER_RECOVERS >= LISTENER_RECOVER_CAP {
+        return;
+    }
+    if COEXIST_PENDING_POWEROFF || COEXIST_PENDING_PANIC {
+        return;
+    }
+    LISTENER_RECOVERS = LISTENER_RECOVERS.saturating_add(1);
+    let rebuilt = crate::mgmt::bcm5720_mmio::rebuild_spa_rings();
+    if rebuilt {
+        for i in 0..COEXIST_TCP_SLOTS {
+            slot_relisten(sockets, i, "boot: HOST-NIC TCP re-listen after :38 recover");
+        }
+    }
+    LISTENER_HEALTH.reset();
+    LISTENER_HOLDOFF_UNTIL = millis.saturating_add(LISTENER_RECOVER_HOLDOFF_MS);
+    crate::audit_log!(crate::audit::AuditEvent::MgmtRestarted {
+        generation: u32::from(LISTENER_RECOVERS),
+        kind: 4,
+    });
+    serial::write_str_nowait("boot: HOST-NIC :38 recover n=");
+    write_u32_nowait(u32::from(LISTENER_RECOVERS));
+    serial::write_str_nowait(if rebuilt { " ok rx=" } else { " fail rx=" });
+    write_u32_nowait(sample.mac_rx);
+    serial::write_str_nowait(" rxp=");
+    write_u32_nowait(u32::from(sample.rx_prod));
+    serial::write_str_nowait(" rxc=");
+    write_u32_nowait(u32::from(sample.rx_cons));
+    serial::write_str_nowait(" tx=");
+    write_u32_nowait(sample.mac_tx);
+    serial::write_str_nowait(" txp=");
+    write_u32_nowait(u32::from(sample.tx_prod));
+    serial::write_str_nowait(" txc=");
+    write_u32_nowait(u32::from(sample.tx_cons));
+    serial::write_str_nowait(" frames=");
+    write_u32_nowait(sample.rx_ok);
+    serial::write_byte_nowait(b'\n');
+}
+
+fn write_u32_nowait(mut n: u32) {
+    let mut buf = [0u8; 10];
+    let mut i = 10;
+    if n == 0 {
+        serial::write_byte_nowait(b'0');
+        return;
+    }
+    while n > 0 {
+        i -= 1;
+        buf[i] = b'0' + (n % 10) as u8;
+        n /= 10;
+    }
+    for &b in &buf[i..] {
+        serial::write_byte_nowait(b);
     }
 }
 

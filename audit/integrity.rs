@@ -141,8 +141,9 @@ pub enum AuditEvent {
     EvidenceModeActivated {
         source: u8,
     },
-    /// Management-plane listen restarted after `MgmtFatal` (ADR-013 Phase E).
-    /// `kind`: 0=Device, 1=Bind, 2=ArenaExhausted, 3=Induced.
+    /// Management-plane listen restarted after `MgmtFatal` (ADR-013 Phase E),
+    /// or function 0's rings rebuilt while function 1 is up.
+    /// `kind`: 0=Device, 1=Bind, 2=ArenaExhausted, 3=Induced, 4=function-0 rings.
     MgmtRestarted {
         generation: u32,
         kind: u8,
