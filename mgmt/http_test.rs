@@ -654,6 +654,21 @@ fn overview_is_one_bearer_get_for_the_whole_page() {
 }
 
 #[test]
+fn a_reply_can_say_connection_close_for_one_call() {
+    let mut out = [0u8; 512];
+    super::set_reply_connection_close(true);
+    assert!(super::reply_connection_close());
+    let n = format_http_response(200, "application/json", b"{}", &mut out).unwrap();
+    super::set_reply_connection_close(false);
+    let s = core::str::from_utf8(&out[..n]).unwrap();
+    assert!(s.contains("\r\nConnection: close\r\n\r\n"), "{s}");
+    assert!(!s.contains("keep-alive"), "{s}");
+    let n = format_http_response(200, "application/json", b"{}", &mut out).unwrap();
+    let s = core::str::from_utf8(&out[..n]).unwrap();
+    assert!(s.contains("\r\nConnection: keep-alive\r\n\r\n"), "{s}");
+}
+
+#[test]
 fn http_mgmt_package() {
     assert_eq!(M7_HTTP_OK_MARKER, "RAYNU-V-M7-HTTP-OK");
     assert!(HTTP_GAP_NOTE.contains("CLOSED M7.1"));

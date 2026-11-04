@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-5-e4-reload-burst |
-| Summary | **ADR-021 E4 still in flight.** Iron `1cf827952140` / run `41862713550` drew the SPA on the first load and signed in: Guest 3 running, certificate operator 790 bytes, static `10.99.99.146/24`, both ports up. Reload then Firefox "Unable to connect". The reclaim aborted the handshake it had just accepted. A young handshake is left alone, and a closed port arms six listeners before poll. Not lived. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-5-e4-one-poll |
+| Summary | **ADR-021 E4 still in flight.** No iron in this commit. The Overview page polled five routes every 2 s and Firefox used its whole six-connection pool for them; the ten-socket listener ran out on a reload. The page now polls one `GET /host/overview` (guests, address, clock, operator, certificate under one root). On a host serve in Chrome for 12 minutes with two reloads: 5 TCP connections total, 342 requests, only `/host/overview` and `/vms`, both reloads on an existing connection. A reply sealed while fewer than two sockets listen says `Connection: close` and FINs after the drain, so the browser retires that connection instead of a live session being reset. A kept session quiet for 60 s (was 10 min) FINs. The zero-listener abort stays as the last resort. Not lived. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | ADR-021 E4 stays `in flight` on `cursor/wave-5-e4-tls13-41d4`. E6 stays lived. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-04 | wave-5-e4-one-poll | 0.0 | 99 | **E4 still in flight.** No iron. Overview polls one `GET /host/overview` instead of five routes; host Chrome serve 12 min, two reloads, 5 connections, 342 requests, both reloads on a kept connection. Short listen reserve answers `Connection: close` and FINs; kept idle 10 min → 60 s. Not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-04 | wave-5-e4-reload-burst | 0.0 | 99 | **E4 still in flight.** Iron `1cf827952140` / run `41862713550`: first load signed in, Guest 3 running, certificate 790 bytes, static `.146`, ports 3 and 4 up. Reload was Firefox "Unable to connect". The new accept was aborted on the next tick. Not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-04 | wave-5-e4-listen-reclaim | 0.0 | 99 | **E4 still in flight.** Iron `1da151be06e0` / run `41539812411`: Mac curl from `10.6.0.6` to `10.99.99.146:8443` was Connection refused in 19 ms. The address answered; no slot was in LISTEN. Back/Forward is the page already painted. Not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-02 | wave-5-e4-signin-idle | 0.0 | 99 | **E4 still in flight.** Iron page up, Host green. Sign-in POST never got a reply: COM2 `idle abort` slot 3, Firefox "Account dropped". The 2 s ClientHello reclaim is now 15 s. Not a wrong password. Not lived. Scores held. months 0.0 held; overall 99 held |

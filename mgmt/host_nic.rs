@@ -93,12 +93,29 @@ pub fn http_accept_should_idle_abort(
     announced && !headers_done && limit_ms > 0 && elapsed_since_accept_ms >= limit_ms
 }
 
-/// Quiet time on a kept TLS session before the slot is reclaimed.
+/// Quiet time on a kept TLS session before the slot FINs.
 ///
-/// SPA polls are 30 s. `3e9ce45e` re-handshook at 30 s and the chassis
-/// turned off (`SYS1003` then `SYS1001`, no `RAC1195`). Ten minutes is
-/// a standing page, not a second ClientHello.
-pub const COEXIST_KEEPALIVE_IDLE_MS: i64 = 600_000;
+/// Was ten minutes. `3e9ce45e` re-handshook at 30 s and the chassis
+/// turned off (`SYS1003` then `SYS1001`, no `RAC1195`), and the long
+/// idle kept a second ClientHello off the wire. Since then the key is
+/// parsed once (`6dc1f554`) and the heap returns a handshake's
+/// temporaries (`643f13de`); iron `1cf82795` completed six accepts for
+/// one page and more for a reload and stayed up. A page that is open
+/// polls every 2 s, so a connection quiet for a minute is one the
+/// browser has stopped using. Giving it back early keeps listeners in
+/// the table without aborting a live session.
+pub const COEXIST_KEEPALIVE_IDLE_MS: i64 = 60_000;
+
+/// Whether the reply being sealed should say `Connection: close`.
+///
+/// `free` is the number of listening sockets plus slots already draining
+/// a FIN this tick. Below the reserve, the reply closes its own
+/// connection after the drain. The browser reads the header and retires
+/// that connection, then multiplexes on the ones it still has. That is
+/// how a server shrinks a browser pool; a reset to a live session is not.
+pub fn reply_should_close(free: usize) -> bool {
+    free < COEXIST_LISTEN_RESERVE
+}
 
 /// Listen sockets armed together.
 ///

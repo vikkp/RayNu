@@ -119,7 +119,7 @@ The product session is in this EFI, still one smoltcp socket on the shared BCM57
 
 - One TCP accept and one TLS handshake per browser session.
 - HTTP/1.1 `Connection: keep-alive`. The next `/vms` poll is another request on that session. `clear_http` drops that request and leaves the TLS keys. COM2: `HTTP exchange ok` then `HTTP keep-alive`. A later poll prints `HTTP keep-alive` again and does not print a new `TCP accept`.
-- A new handshake only after the browser closes (`CloseWait`), the request says `Connection: close`, or 10 minutes with no HTTP (`COEXIST_KEEPALIVE_IDLE_MS`). Those print `TCP re-listen after HTTP`. The 15 s idle abort does not run while the session is kept. Draining a close stays on later ticks. No NIC spin inside the vmexit.
+- A new handshake only after the browser closes (`CloseWait`), the request says `Connection: close`, the reply said `Connection: close` because fewer than two sockets were listening, or 60 s with no HTTP (`COEXIST_KEEPALIVE_IDLE_MS`; was 10 minutes until wave 5). Those print `TCP re-listen after HTTP`. The 15 s idle abort does not run while the session is kept. Draining a close stays on later ticks. No NIC spin inside the vmexit.
 - The SPA does not open a second connection while that session is live. Overview lists sequentially. The Activity log poll waits its turn on the same socket.
 - Shared LOM stays as lived: keep the APE PHY, no phylock, no BMCR reset.
 - Lines the operator must see after `login:` use `write_line_nowait`. Linux hushes `write_line`.

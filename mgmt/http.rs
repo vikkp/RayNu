@@ -23,6 +23,7 @@ use super::iso::{
 use super::iso_install::{dispatch_iso_install_rest, InstallToDiskPlan};
 use super::webui::{load_webui, webui_raw_bytes};
 use super::VmTable;
+use core::sync::atomic::{AtomicBool, Ordering};
 
 /// Host / CI marker when the M7.1 HTTP mgmt gate passes.
 pub const M7_HTTP_OK_MARKER: &str = "RAYNU-V-M7-HTTP-OK";
@@ -57,6 +58,26 @@ static mut HTTP_REPLY: [u8; HTTP_RESPONSE_CAP] = [0; HTTP_RESPONSE_CAP];
 /// KANI-TARGET: management reply scratch (outside Proven Core).
 pub fn http_reply_buf() -> &'static mut [u8] {
     unsafe { &mut *core::ptr::addr_of_mut!(HTTP_REPLY) }
+}
+
+/// The next reply says `Connection: close` instead of `keep-alive`.
+///
+/// The coexist listener sets this around one codec call when its listen
+/// reserve is short, then clears it. The browser reads the header and
+/// retires that connection itself, so the pool shrinks without a reset
+/// to a live session. A lone flag, not a parameter, because every route
+/// formats through [`format_http_response`].
+///
+/// JUSTIFICATION: BSP-only coexist tick; set and cleared around one
+/// `handle_http_request`. Host tests run single-threaded.
+static REPLY_CLOSE: AtomicBool = AtomicBool::new(false);
+
+pub fn set_reply_connection_close(close: bool) {
+    REPLY_CLOSE.store(close, Ordering::Release);
+}
+
+pub fn reply_connection_close() -> bool {
+    REPLY_CLOSE.load(Ordering::Acquire)
 }
 
 /// Default lab bind (host tests / QEMU user-net docs).
@@ -377,7 +398,11 @@ impl HeaderBuf {
         h.push_str(content_type);
         h.push_str("\r\nContent-Length: ");
         h.push_usize(body_len);
-        h.push_str("\r\nConnection: keep-alive\r\n\r\n");
+        h.push_str(if reply_connection_close() {
+            "\r\nConnection: close\r\n\r\n"
+        } else {
+            "\r\nConnection: keep-alive\r\n\r\n"
+        });
         h
     }
     fn push_str(&mut self, s: &str) {
