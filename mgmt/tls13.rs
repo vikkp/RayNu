@@ -9,8 +9,10 @@
 //! HelloRetryRequest and the client sends P-256 on the second hello.
 //! CertificateVerify is RSASSA-PSS (`rsa_pss_rsae_sha256`). rustls and
 //! ring stay out of `uefi-bin`. A host rustls client is the proof.
-//! Iron E4 stays in flight until a boot prints `boot: E4 cert rd`
-//! `operator` and a client completes this handshake.
+//! Iron E4 lived on `9c3e660259de` / run `41924788987`: COM2 printed
+//! `boot: E4 cert rd` `operator` and `HOST-NIC TLS wrap=tls13`, and
+//! Firefox signed in and reloaded twice. Evidence
+//! `docs/evidence/r640/2026-11-04-9c3e6602-e4-tls13-ok.md`.
 //!
 //! RFC 8446: §4.1.2 ClientHello, §4.1.3 HelloRetryRequest, §4.4
 //! Certificate / CertificateVerify / Finished, §5.2 record protection,

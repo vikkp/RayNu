@@ -9,7 +9,7 @@
 //! Extended Master Secret otherwise. rustls/ring stay **out** of
 //! `uefi-bin`. Lab millicert is `assets/tls/lab.crt.der`. Iron close is
 //! still `curl --cacert` on the R640 (`RAYNU-V-M8-TLS-OK`). Host/CI never
-//! print that marker. E4 stays in flight until iron completes TLS 1.3.
+//! print that marker. E4 lived on iron `9c3e660259de`: the client completed TLS 1.3.
 
 #![cfg(any(test, feature = "uefi-bin"))]
 

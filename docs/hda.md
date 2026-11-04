@@ -176,7 +176,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 2026-08 ████████  R640 boot (E2) + E3b HTTP-OK
 2026-09 ████████  E5 + Phase B — **Mount Everest CLOSED** (`f72b4276`)  ← months_to_everest = 0.0
 2026-10 ████████  M8.8 lived on c3a70e62: Ubuntu login, then library ISO cleared; scores held
-2026-11 ░░░░░░░░  wave 5: E6 lived; E4 cert presented on bac1f0ec5139; host rustls now finishes TLS 1.3; iron handshake still open; scores held
+2026-11 ░░░░░░░░  wave 5: E6 lived; E4 lived on 9c3e6602 (TLS 1.3, sign-in, two reloads); E5, G3, E12 open; scores held
 ```
 
 **Pull-forward rule:** E2 closed 2026-08-15; E3 bring-up closed 2026-08-16; **E3b closed 2026-08-20**; **P0-14 closed 2026-08-21**; **E5 install-to-disk closed on iron 2026-09-10** (`59ac070`); **F7 relaunch + installed-disk GRUB reached on iron 2026-09-10** (`975f8fc`, exit-cap ended it); **E5 reboot-to-disk closed on iron 2026-09-10** (`56a3ffd`: `DISK-BOOT-OK`, second Linux `root=UUID=`, `login:`) → months 0.5→0.25; **Phase B closed on iron 2026-09-11** (`f72b4276` / `34552377351`: coexist HTTP-OK → SPA Start of RayNu-F ISO → install → disk reboot) → months 0.25→0.0. Document why in [Changelog](#hda-changelog).
@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-5-e4-listener-health |
-| Summary | **ADR-021 E4 still in flight.** The coexist tick now samples function 0 once a second (`mgmt/listener_health.rs`). Three consecutive misses while function 1 is armed — the MAC counted frames the return ring did not take, or a transmit descriptor sat uncompleted — are Stalled. The tick then rebuilds function 0 only: halt its MAC DMA, reprogram its rings, re-enable its DMA engines, and put the ten sockets back in LISTEN. No PHY write, no phylock, no core-clock reset, no function-1 write. One COM2 line, `HOST-NIC :38 recover`, carries the counters. A quiet port stays Idle, so a recover does not fire with nobody talking. Four rebuilds cap a boot. Host tests cover the decision. Not lived until one iron boot signs in and survives two reloads. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-5-e4-lived |
+| Summary | **ADR-021 E4 lived.** Iron `9c3e660259de` / push run `41924788987`. COM2 `boot: E4 cert rd lba=6190268891 operator` and `HOST-NIC TLS wrap=tls13`. Firefox loaded `https://raynu-v.lab:8443` on the first try, both reloads loaded, and `vikkp` signed in. Overview: Host answering, Guest 3 running, certificate operator 790 bytes, TLS 1.3, port 3 up at 100 full. Accepts on slot 0 and slot 1. No `:38 recover`. Wave 5 stays open on E5, G3, and E12. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
-| Gates touched | ADR-021 E4 stays `in flight` on `cursor/wave-5-e4-tls13-41d4`. E6 stays lived. No doorbell. No format of UBUNTU0. |
+| Gates touched | ADR-021 E4 **lived** on `9c3e660259de`. Wave 5 stays open (E5, G3, E12). E6 stays lived. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
 
 ## Blockers & risks (Everest-relevant)
@@ -380,7 +380,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
-| 2026-11-04 | wave-5-e4-listener-health | 0.0 | 99 | **E4 still in flight.** Function-0 listener health on the coexist tick: three misses while `:39` is armed rebuild function 0's rings and re-listen. No PHY, phylock, core reset, or function-1 write. COM2 `HOST-NIC :38 recover` on the transition. Host tests cover the decision. Not lived until iron sign-in and two reloads. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-04 | wave-5-e4-lived | 0.0 | 99 | **E4 lived.** Iron `9c3e660259de` / run `41924788987`. Cert read `operator`, TLS 1.3 wrap, Firefox first load, `vikkp` signed in, both reloads loaded. Host answering, Guest 3 running, certificate 790 bytes, port 3 up 100 full. No `:38 recover`. Wave 5 stays open (E5, G3, E12). Scores held. months 0.0 held; overall 99 held |
+| 2026-11-04 | wave-5-e4-listener-health | 0.0 | 99 | **E4 was in flight.** Function-0 listener health on the coexist tick. Closed by the `9c3e6602` boot (wave-5-e4-lived) without a recover line. months 0.0 held; overall 99 held |
 | 2026-11-04 | wave-5-e4-login-nic-coexist | 0.0 | 99 | **E4 still in flight — root cause is the NIC.** Webui retry build `ab7a4d66` (push run `41912339727`) still failed: one launch had zero TCP accepts, a later launch loaded then wedged. Decode only; the rebuild landed in wave-5-e4-listener-health. Not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-04 | wave-5-e4-login-retry | 0.0 | 99 | **E4 still in flight.** Reverted `6076a652` (push run `41902218392`) still said Account dropped. Added a `webui.html` login back-off retry; superseded — the next boot (`ab7a4d66`) showed the drop is `:38`/`:39` NIC coexistence, not fixable from the client (see wave-5-e4-login-nic-coexist). Not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-04 | wave-5-e4-login-revert | 0.0 | 99 | **E4 still in flight.** Account dropped on `c3cdc6c1` (`ce77b697`) and `d57ff3b9` (run `41886943984`); worked on `1cf82795` (`2330f33b`). Reverted the connection-shrinking to `3a7e1183`; later superseded — the reverted stack still dropped sign-in, see wave-5-e4-login-retry. Not lived. months 0.0 held; overall 99 held |

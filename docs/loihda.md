@@ -20,7 +20,7 @@ bar_b_pct: 72
 piece_everest_pct: 100
 piece_persist_pct: 93
 piece_sku_pct: 94
-piece_tls_pct: 80
+piece_tls_pct: 88
 piece_auth_pct: 38
 piece_console_pct: 82
 piece_perc_pct: 86
@@ -136,9 +136,9 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 ### 4. TLS — 80%
 
-**What it is.** Firmware coexist feeds `Tls12Listen`. Iron close is TLS 1.2 ECDHE-RSA-AES128-GCM. Host tests now also finish TLS 1.3 (`TLS_AES_128_GCM_SHA256`). rustls/ring cannot join `uefi-bin`. Post-EBS native HTTPS window is **before RayNu-F**. **Iron CLOSE:** COM2 `928d6224` `RAYNU-V-M8-TLS-OK` after Mac `curl --cacert` SPA on `10.99.99.140:8443`. PRE-EBS SNP remains `http://`.
+**What it is.** Firmware coexist feeds `Tls12Listen`, which also negotiates TLS 1.3 (`TLS_AES_128_GCM_SHA256`) when the client offers it. rustls/ring cannot join `uefi-bin`. **Iron:** `928d6224` printed `RAYNU-V-M8-TLS-OK` for TLS 1.2. `9c3e660259de` / run `41924788987` printed `boot: E4 cert rd` `operator` and `HOST-NIC TLS wrap=tls13`. Firefox signed in as `vikkp` and both reloads loaded. The Overview said TLS 1.3 and certificate operator 790 bytes. PRE-EBS SNP remains `http://`.
 
-**Product effect.** A CISO who asks “is management encrypted on the wire I can reach after EBS?” now hears **yes, with a lab millicert**. Residual: not production PKI. TLS 1.3 is host-tested and not on COM2. SPA `GET /` still unauthenticated until the operator account. The standing page after login is A4s, lived on `1f33eeda`. The certificate on the booted iron file is the operator certificate from `bac1f0ec5139` (TLS 1.2).
+**Product effect.** A CISO who asks “is management encrypted on the wire I can reach after EBS?” now hears **yes, TLS 1.3, with the operator certificate stored on the spare**. Residual: not production PKI, no ACME, and the PRE-EBS minute is still plaintext. That remainder is why this piece is 88, not 100. The standing page after login is A4s, lived on `1f33eeda`.
 
 ### 5. Auth — 38%
 
@@ -184,7 +184,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 ```
 2026-09  ████████  Everest closed
 2026-10  ████████  M8.8 lived; M8.9.1 is the spare NIC record (host); whole VD still hidden; A5 parked
-2026-11  ░░░░░░░░  wave 5: E6 lived; E4 certificate presented; bac1f0ec5139 SPA and both reloads; TLS stays 1.2; scores held
+2026-11  ░░░░░░░░  wave 5: E6 lived; E4 lived on 9c3e6602 (TLS 1.3 sign-in and two reloads); TLS piece 88; E5 still plaintext PRE-EBS
 2026-12  ░░░░░░░░  Bar B: the guest disk is the spare VD, not an 8 GiB window
 ```
 
@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-5-e4-listener-health |
-| Summary | **ADR-021 E4 still in flight.** The coexist tick samples function 0 once a second. Three misses while function 1 is armed rebuild function 0's rings and DMA and put the sockets back in LISTEN. No PHY, phylock, core-clock reset, or function-1 write. COM2 prints `HOST-NIC :38 recover` with the counters. A quiet port stays Idle. Host tests cover the decision. Not iron-proven. TLS piece stays 80. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-5-e4-lived |
+| Summary | **ADR-021 E4 lived.** Iron `9c3e660259de` / run `41924788987`. Cert read `operator`, TLS 1.3 wrap, Firefox first load, `vikkp` signed in, both reloads loaded. Host answering, certificate 790 bytes, port 3 up 100 full. No `:38 recover`. TLS piece 80→88. PRE-EBS stays plaintext, so the piece is not 100. Bars held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. |
 | Gates touched | ADR-021 E4 in flight. Not lived. No doorbell. No format of UBUNTU0. |
@@ -219,7 +219,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
-| 2026-11-04 | wave-5-e4-listener-health | 94 | 72 | **E4 still in flight.** Function-0 health on the coexist tick. Three misses while `:39` is armed rebuild `:38` rings only and re-listen. No PHY, phylock, core reset, or function-1 write. `HOST-NIC :38 recover` on COM2. Host-tested. Not iron-proven. TLS 80 held. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
+| 2026-11-04 | wave-5-e4-lived | 94 | 72 | **E4 lived.** Iron `9c3e660259de` / run `41924788987`. TLS 1.3, sign-in, two reloads. TLS piece 80→88. PRE-EBS still plaintext. Wave 5 stays open. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
+| 2026-11-04 | wave-5-e4-listener-health | 94 | 72 | **E4 was in flight.** Function-0 health on the coexist tick. Closed by `9c3e6602` without a recover line. TLS 80 held then. Bar A 94. Bar B 72. Overall 80. |
 | 2026-11-04 | wave-5-e4-login-nic-coexist | 94 | 72 | **E4 still in flight.** `ab7a4d66` still failed on iron; the drop is `:38`/`:39` coexistence. Decode only. The rebuild is wave-5-e4-listener-health. Not lived. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | 2026-11-04 | wave-5-e4-login-retry | 94 | 72 | **E4 still in flight.** Reverted `6076a652` still said Account dropped; added a `webui.html` login back-off retry. Superseded — next boot showed the drop is `:38`/`:39` NIC coexistence (see wave-5-e4-login-nic-coexist). Not lived. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | 2026-11-04 | wave-5-e4-login-revert | 94 | 72 | **E4 still in flight.** Account dropped on `c3cdc6c1` (`ce77b697`) and `d57ff3b9`; worked on `1cf82795` (`2330f33b`). Reverted the connection-shrinking to `3a7e1183`; superseded — the reverted stack still dropped sign-in (see wave-5-e4-login-retry). Not lived. Scores held. Bar A 94. Bar B 72. Overall 80. |
