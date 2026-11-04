@@ -438,6 +438,7 @@ pub mod mgmt_lease;
 #[cfg(feature = "uefi-bin")]
 pub mod net_probe_uefi;
 pub mod nvme;
+pub mod openapi;
 pub mod operator;
 pub mod pci_census;
 pub mod perc_boot_choice;

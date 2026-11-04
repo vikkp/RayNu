@@ -165,6 +165,8 @@ input.token{min-width:12rem}
 <p class="empty">Host serial log</p>
 <div class="toolbar"><input id="g-keys" autocomplete="off"/><button class="pri" id="btn-keys" data-action="keys">Send</button><button class="ghost" id="btn-logs" data-action="logs">Refresh log</button></div>
 <pre id="serial-log" class="empty">GET /logs/guest</pre>
+<h2>Audit</h2>
+<div class="toolbar"><button class="ghost" id="btn-audit-json" type="button">Audit JSON</button><button class="ghost" id="btn-audit-csv" type="button">Audit CSV</button></div>
 </section>
 <div id="iso-bar"><div id="iso-fill"></div></div>
 <p id="status"></p>
@@ -385,6 +387,8 @@ document.getElementById("btn-iso-install").onclick=installIso;
 document.getElementById("btn-iso-attach").onclick=attachCdrom;
 document.getElementById("btn-iso-firmware").onclick=armFirmwareCd;
 document.getElementById("btn-logs").onclick=refreshLogs;
+document.getElementById("btn-audit-json").onclick=function(){saveAudit("/audit/export.json","raynu-audit.json")};
+document.getElementById("btn-audit-csv").onclick=function(){saveAudit("/audit/export.csv","raynu-audit.csv")};
 document.getElementById("btn-keys").onclick=sendKeys;
 document.getElementById("btn-poweroff").onclick=powerOff;
 document.getElementById("btn-panic").onclick=panicDump;
@@ -400,6 +404,7 @@ document.getElementById("btn-det").onclick=detachNic;
 document.getElementById("btn-dhcp").onclick=async function(){if(up||!vnicVm)return;const off=String(nicOff(vnicVm));setS("DHCP…");const res=await api("POST","/perc/nic/"+off+"/dhcp");let j=null;try{j=await res.json()}catch(e){}if(j&&j.ip){document.getElementById("n-ip").value=j.ip;document.getElementById("n-px").value=j.px;document.getElementById("n-gw").value=j.gw||"";document.getElementById("n-dns").value=j.dns||"";document.getElementById("n-mode").value="d";if(j.mac)document.getElementById("n-mac").textContent=j.mac;setS("Offer filled")}else setS("No offer")};
 document.getElementById("g-keys").onkeydown=function(e){if(e.key==="Enter"){e.preventDefault();sendKeys()}};
 window.raynuWebUi={listVms:listVms,startVm:startVm,stopVm:stopVm,createVm:createVm,listImages:listImages,refreshLogs:refreshLogs,sendKeys:sendKeys,powerOff:powerOff,loadSpare:loadSpare};
+async function saveAudit(path,name){setS("Audit…");let res;try{res=await api("GET",path)}catch(e){setS("Audit dropped");return}if(!res.ok){setS("Audit refused ("+res.status+")");return}const blob=await res.blob();const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();setS("Audit saved")}
 async function loadOp(){let r;try{r=await fetch("/auth/operator")}catch(e){return}if(!r.ok)return;let j=null;try{j=await r.json()}catch(e){return}paintOp(j)}
 function paintOp(j){const line=document.getElementById("op-line");if(!line||!j)return;if(j.set){line.textContent="Operator: "+j.name;if((T.value||"")===def()){T.value="";saveT("")}}else line.textContent="Operator: none yet"}
 async function postOp(path){const name=document.getElementById("op-name").value;const pass=document.getElementById("op-pass").value;if(!name||!pass){setS("Name and password");return}const headers={"Content-Type":"text/plain"};if(path==="/auth/operator")headers.Authorization=auth();const body=name+"\n"+pass;const waits=[300,600,1000,1500,2200];let res=null;for(let attempt=0;attempt<=waits.length;attempt++){try{res=await fetch(path,{method:"POST",headers:headers,body:body});break}catch(e){if(attempt===waits.length){setS("Account dropped");return}setS("Signing in…");await new Promise(function(r){setTimeout(r,waits[attempt])})}}let j=null;try{j=await res.json()}catch(e){}if(res.ok&&j&&j.token){T.value=j.token;saveT(j.token);document.getElementById("op-pass").value="";setS(path==="/auth/login"?"Signed in":"Account saved")}else setS(res.status===401?"Sign-in refused":"Account refused ("+res.status+")");loadOp()}

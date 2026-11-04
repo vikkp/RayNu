@@ -19,6 +19,8 @@ jobs:
         run: ./tools/sync-hda-site.sh --check
       - name: site/sku.json matches docs/adr/ADR-021.md
         run: ./tools/sync-sku-site.sh --check
+      - name: OpenAPI v1 matches the route list
+        run: ./tools/check-openapi.sh
 
   site-chrome:
     name: site chrome (CIO / Status / Stories / HDA)

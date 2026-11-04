@@ -698,7 +698,7 @@ unsafe impl Sync for BootRing {}
 static BOOT_RING: BootRing = BootRing(UnsafeCell::new(AuditRing::new()));
 static BOOT_RING_LOCK: AtomicBool = AtomicBool::new(false);
 
-fn with_boot_ring<R>(f: impl FnOnce(&mut AuditRing) -> R) -> R {
+pub(crate) fn with_boot_ring<R>(f: impl FnOnce(&mut AuditRing) -> R) -> R {
     while BOOT_RING_LOCK.swap(true, Ordering::Acquire) {
         core::hint::spin_loop();
     }

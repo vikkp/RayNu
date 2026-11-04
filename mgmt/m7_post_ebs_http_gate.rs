@@ -34,7 +34,7 @@ pub fn post_ebs_http_surface_present() -> bool {
         && snp.contains("POST-EBS SNP idle")
         && snp.contains("tsc_delay_ms")
         && snp.contains("firmware SNP dead after EBS")
-        && snp.contains("PRE-EBS SNP window")
+        && snp.contains("E5 plaintext PRE-EBS closed")
         && launch.contains("run_post_ebs_http_idle")
         && launch.contains("try_arm_native_coexist")
         && launch.contains("run_post_ebs_http_snp_warn_only")

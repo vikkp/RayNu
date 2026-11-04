@@ -89,7 +89,7 @@ All must be true:
 | A1 | **Everest loop** | Iron `ISO-INSTALL-OK` → `DISK-BOOT-OK` → `login:` | Without this there is no product to intent toward. **DONE** (`f72b4276`). |
 | A2 | **Persist across HV reboot** | Force Off → peek `keep=1` → `DISK-BOOTX64` → `root=UUID=` → `login:` (**repeated** on `36d3b559`, UUID `a0ad99ac-…`; earlier closes `4af78b43`, `928d6224`) | Guest disk is the 8 GiB Toshiba USB slice, not leftover DRAM. Nested-OK ≠ this. Residual: unclean Force Off (ext4 journal, vfat dirty bit) / whole-LUN virtio / USB ≠ PERC. |
 | A3 | **SKU card** | One page: what ships, what does not, dedicated-box vs fleet | **DONE** ([`docs/sku.md`](sku.md) / [`site/sku.html`](../site/sku.html)). Stops us promising PERC, Windows, or cluster in a Bar A conversation. |
-| A4 | **TLS** | Browser/`curl --cacert` on native `CURL NOW → https://` **before RayNu-F** | **DONE** (`928d6224` COM2 `RAYNU-V-M8-TLS-OK`; Mac SPA HTML). Lab millicert. PRE-EBS SNP stays `http://`. |
+| A4 | **TLS** | Browser/`curl --cacert` on native `CURL NOW → https://` **before RayNu-F** | **DONE** (`928d6224` COM2 `RAYNU-V-M8-TLS-OK`; Mac SPA HTML). `9c3e660259de` completed TLS 1.3. This tree does not open plaintext HTTP before ExitBootServices. |
 | A4s | **Standing SPA** | Browser HTTPS **after** RayNu-F / Alpine `login:`; SPA stays; guest COM1 in the page | **LIVED** (`1f33eeda72f9`, lease `10.99.99.154`). One `TCP accept`, then `HTTP exchange ok` / `HTTP keep-alive` through Overview (30 s) and Activity (~2 s). Host stayed green. Activity showed Alpine `localhost login:`. Chassis stayed up. `RAYNU-V-M8-TLS-OK` did not print on this persist boot. |
 | A5 | **Auth beyond bring-up** | Product default is not `raynu-v-bringup` | A shared lab latch is not an operator credential. HostReady (`RAYNU-V-M8-AUTH-HOST-OK`) is not this close. |
 | A6 | **Operator keyboard** | Type in the guest from the SPA (not only iDRAC SOL) | **LIVED once** on this tip. Activity showed `abc`, then `-sh: abc: not found`, then `localhost:~#`, and `RAYNU-V-M8-CONSOLE-OK`, with Host green. The same box still copies `HTTP keep-alive`. Soft for the first LOI. **not VNC**. |
@@ -138,7 +138,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 **What it is.** Firmware coexist feeds `Tls12Listen`, which also negotiates TLS 1.3 (`TLS_AES_128_GCM_SHA256`) when the client offers it. rustls/ring cannot join `uefi-bin`. **Iron:** `928d6224` printed `RAYNU-V-M8-TLS-OK` for TLS 1.2. `9c3e660259de` / run `41924788987` printed `boot: E4 cert rd` `operator` and `HOST-NIC TLS wrap=tls13`. Firefox signed in as `vikkp` and both reloads loaded. The Overview said TLS 1.3 and certificate operator 790 bytes. PRE-EBS SNP remains `http://`.
 
-**Product effect.** A CISO who asks “is management encrypted on the wire I can reach after EBS?” now hears **yes, TLS 1.3, with the operator certificate stored on the spare**. Residual: not production PKI, no ACME, and the PRE-EBS minute is still plaintext. That remainder is why this piece is 88, not 100. The standing page after login is A4s, lived on `1f33eeda`.
+**Product effect.** A CISO who asks “is management encrypted on the wire I can reach after EBS?” now hears **yes, TLS 1.3, with the operator certificate stored on the spare**. This tree does not open plaintext HTTP before ExitBootServices. Residual: not production PKI, and no ACME. That remainder is why this piece is 88, not 100. The standing page after login is A4s, lived on `1f33eeda`.
 
 ### 5. Auth — 38%
 
@@ -184,7 +184,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 ```
 2026-09  ████████  Everest closed
 2026-10  ████████  M8.8 lived; M8.9.1 is the spare NIC record (host); whole VD still hidden; A5 parked
-2026-11  ░░░░░░░░  wave 5: E6 lived; E4 lived on 9c3e6602 (TLS 1.3 sign-in and two reloads); TLS piece 88; E5 still plaintext PRE-EBS
+2026-11  ░░░░░░░░  wave 5 closed on 9c3e6602 TLS 1.3 plus E5/G3/E12 in tree; TLS piece 88
 2026-12  ░░░░░░░░  Bar B: the guest disk is the spare VD, not an 8 GiB window
 ```
 
@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-5-e4-lived |
-| Summary | **ADR-021 E4 lived.** Iron `9c3e660259de` / run `41924788987`. Cert read `operator`, TLS 1.3 wrap, Firefox first load, `vikkp` signed in, both reloads loaded. Host answering, certificate 790 bytes, port 3 up 100 full. No `:38 recover`. TLS piece 80→88. PRE-EBS stays plaintext, so the piece is not 100. Bars held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-5-closed |
+| Summary | **ADR-021 wave 5 closed.** E5 stops the plaintext PRE-EBS HTTP listen. G3 exports the audit ring as JSON and CSV. E12 publishes OpenAPI v1 and CI checks the routes. E4 stayed lived. TLS piece stays 88 (no ACME, lab certificate). Bars held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. |
 | Gates touched | ADR-021 E4 in flight. Not lived. No doorbell. No format of UBUNTU0. |
@@ -219,7 +219,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
-| 2026-11-04 | wave-5-e4-lived | 94 | 72 | **E4 lived.** Iron `9c3e660259de` / run `41924788987`. TLS 1.3, sign-in, two reloads. TLS piece 80→88. PRE-EBS still plaintext. Wave 5 stays open. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
+| 2026-11-04 | wave-5-closed | 94 | 72 | **Wave 5 closed.** E5 no plaintext PRE-EBS listen. G3 audit JSON/CSV. E12 OpenAPI v1. E4 stayed lived. TLS 88 held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
+| 2026-11-04 | wave-5-e4-lived | 94 | 72 | **E4 lived.** Iron `9c3e660259de`. TLS piece 80→88. Wave 5 then closed. Bar A 94. Bar B 72. Overall 80. |
 | 2026-11-04 | wave-5-e4-listener-health | 94 | 72 | **E4 was in flight.** Function-0 health on the coexist tick. Closed by `9c3e6602` without a recover line. TLS 80 held then. Bar A 94. Bar B 72. Overall 80. |
 | 2026-11-04 | wave-5-e4-login-nic-coexist | 94 | 72 | **E4 still in flight.** `ab7a4d66` still failed on iron; the drop is `:38`/`:39` coexistence. Decode only. The rebuild is wave-5-e4-listener-health. Not lived. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | 2026-11-04 | wave-5-e4-login-retry | 94 | 72 | **E4 still in flight.** Reverted `6076a652` still said Account dropped; added a `webui.html` login back-off retry. Superseded — next boot showed the drop is `:38`/`:39` NIC coexistence (see wave-5-e4-login-nic-coexist). Not lived. Scores held. Bar A 94. Bar B 72. Overall 80. |

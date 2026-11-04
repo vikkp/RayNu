@@ -1,0 +1,107 @@
+openapi: 3.0.3
+info:
+  title: RayNu-V management API
+  version: "1"
+  description: >
+    Stable SKU surface of the standing listener. Version 1.
+    The /fw stage probes are not part of this contract.
+servers:
+  - url: https://raynu-v.lab:8443
+paths:
+  /auth/login:
+    post:
+      summary: Sign in with the operator name and password
+  /auth/operator:
+    get:
+      summary: Read whether an operator account is set
+    post:
+      summary: Save the operator account
+  /host/overview:
+    get:
+      summary: One-poll Overview body
+  /host/clock:
+    get:
+      summary: Host clock
+  /host/addr:
+    post:
+      summary: Save the management address for the next boot
+  /host/addr/clear:
+    post:
+      summary: Use DHCP on the next boot
+  /host/cert:
+    get:
+      summary: Which certificate the listener is using
+    post:
+      summary: Save an operator certificate and key
+  /host/cert/clear:
+    post:
+      summary: Return to the lab certificate on the next connection
+  /host/poweroff:
+    post:
+      summary: Power off the chassis
+  /host/panic:
+    post:
+      summary: Dump to COM2 and reboot
+  /logs/serial:
+    get:
+      summary: Host serial log
+  /logs/guest:
+    get:
+      summary: Guest console log
+  /console/keys:
+    post:
+      summary: Send keys to the guest console
+  /vms:
+    get:
+      summary: List guests
+  /images:
+    get:
+      summary: List images
+  /perc/guests:
+    get:
+      summary: Spare boot policy and link rows
+  /perc/guests/1/start:
+    post:
+      summary: Start the installed guest
+  /perc/guests/2/start:
+    post:
+      summary: Start a tail install
+  /perc/guests/stop:
+    post:
+      summary: Stop the guest
+  /perc/boot:
+    get:
+      summary: Latched spare boot choice
+  /perc/boot/installed:
+    post:
+      summary: Boot the installed image
+  /perc/boot/reinstall:
+    post:
+      summary: Reinstall into the window
+  /perc/library/:
+    post:
+      summary: Upload a library ISO by offset
+  /perc/library/clear:
+    post:
+      summary: Clear the library ISO signature
+  /perc/nic/:
+    post:
+      summary: Save or clear a guest NIC
+  /iso/install:
+    post:
+      summary: Start an install
+  /iso/deploy:
+    post:
+      summary: Lab extract-boot
+  /iso/attach:
+    post:
+      summary: Attach a CD
+  /iso/firmware:
+    post:
+      summary: Arm a firmware CD
+  /audit/export.json:
+    get:
+      summary: Audit ring as JSON
+  /audit/export.csv:
+    get:
+      summary: Audit ring as CSV

@@ -458,6 +458,40 @@ pub fn handle_http_request(
         let n = crate::boot::serial::serial_log_snapshot(&mut log);
         return format_http_response(200, "text/plain; charset=utf-8", &log[..n], out);
     }
+    // ADR-021 G3: the audit ring as JSON or CSV. Bearer required.
+    if parsed.path == "/audit/export.json" || parsed.path == "/audit/export.csv" {
+        if !matches!(parsed.method, RestMethod::Get) {
+            return format_http_response(400, "text/plain; charset=utf-8", b"bad request", out);
+        }
+        if !auth_allows(parsed.auth_token) {
+            return format_http_response(401, "text/plain; charset=utf-8", b"unauthorized", out);
+        }
+        let snap = crate::audit::report::boot_snapshot();
+        if !snap.chain_ok {
+            return format_http_response(409, "text/plain; charset=utf-8", b"audit chain", out);
+        }
+        let json = parsed.path.ends_with(".json");
+        let mut body = [0u8; 512];
+        let rendered = crate::audit::report::render_report(
+            crate::audit::report::ReportKind::IsoEventInventory,
+            if json {
+                crate::audit::report::ReportFormat::Json
+            } else {
+                crate::audit::report::ReportFormat::Csv
+            },
+            &snap,
+            &mut body,
+        );
+        let Ok(n) = rendered else {
+            return format_http_response(500, "text/plain; charset=utf-8", b"audit report", out);
+        };
+        let ctype = if json {
+            "application/json"
+        } else {
+            "text/csv; charset=utf-8"
+        };
+        return format_http_response(200, ctype, &body[..n], out);
+    }
     // Standing SPA: guest COM1 TX copy (survives SOL drain). Not iDRAC COM2.
     if parsed.path == "/logs/guest" {
         if !matches!(parsed.method, RestMethod::Get) {

@@ -554,7 +554,9 @@ fn spa_poweroff_post_latches_and_stays_off_reset() {
     let s = core::str::from_utf8(&out[..n]).unwrap();
     assert!(s.contains("HTTP/1.1 401"), "{s}");
     assert!(!host_power::spa_poweroff_latched());
-    let get = format!("GET {HOST_POWEROFF_PATH} HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n");
+    let get = format!(
+        "GET {HOST_POWEROFF_PATH} HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n"
+    );
     let n = handle_http_request(
         &mut table,
         &mut images,
@@ -651,6 +653,50 @@ fn overview_is_one_bearer_get_for_the_whole_page() {
         .parse()
         .unwrap();
     assert_eq!(len, body.len());
+}
+
+fn exchange(raw: &str) -> String {
+    let mut table = VmTable::new();
+    let mut images = ImageTable::new();
+    let mut iso_plan = IsoDeployPlan::empty();
+    let mut iso_install = InstallToDiskPlan::empty();
+    let mut out = [0u8; HTTP_RESPONSE_CAP];
+    let n = handle_http_request(
+        &mut table,
+        &mut images,
+        &mut iso_plan,
+        &mut iso_install,
+        raw,
+        &mut out,
+    )
+    .unwrap_or(0);
+    String::from_utf8_lossy(&out[..n]).into_owned()
+}
+
+#[test]
+fn audit_export_json_and_csv() {
+    let _ = crate::mgmt::operator::restore(&[]);
+    crate::audit::integrity::boot_ring_reset_for_test();
+    crate::audit_log!(crate::audit::AuditEvent::BootStarted {
+        milestone: crate::audit::Milestone::M0,
+    });
+    let json = exchange(
+        "GET /audit/export.json HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
+    );
+    assert!(json.contains("HTTP/1.1 200"), "{json}");
+    assert!(json.contains("application/json"), "{json}");
+    assert!(json.contains("iso_event_inventory"), "{json}");
+    let csv =
+        exchange("GET /audit/export.csv HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n");
+    assert!(csv.contains("HTTP/1.1 200"), "{csv}");
+    assert!(csv.contains("text/csv"), "{csv}");
+    assert!(csv.contains("iso_event_inventory"), "{csv}");
+    let denied = exchange("GET /audit/export.json HTTP/1.1\r\n\r\n");
+    assert!(denied.contains("HTTP/1.1 401"), "{denied}");
+    let spa = include_str!("../assets/webui.html");
+    assert!(spa.contains("/audit/export.json"));
+    assert!(spa.contains("/audit/export.csv"));
+    println!("RAYNU-V-G3-AUDIT-EXPORT-OK");
 }
 
 #[test]

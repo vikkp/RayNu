@@ -32,8 +32,9 @@ pub fn uefi_http_surface_present() -> bool {
         && tcp4.contains("create_tcp4_child")
         && tcp4.contains("65530bc7")
         && snp.contains("uefi_snp_listen")
-        && snp.contains("PRE-EBS SNP window")
-        && snp.contains("CURL NOW")
+        && snp.contains("E5 plaintext PRE-EBS closed")
+        && !snp.contains("CURL NOW → http://")
+        && !uefi_snp_listen_binds_tcp(snp)
         && snp.contains("peek_bcm5720_bmsr_pre_ebs")
         && listen.contains("SNP_POST_BIND_LISTEN_MS")
         && probe.contains("connect_network_stack_bindings")
@@ -57,6 +58,16 @@ pub fn uefi_http_scripts_present() -> bool {
         && runbook.contains("hostfwd")
         && runbook.contains("R640 Tcp4 absent")
         && runbook.contains("2026-08-16-uefi-tcp4-absent-root-cause.md")
+}
+
+/// `uefi_snp_listen` parks a DHCP lease and does not bind a TCP listener.
+fn uefi_snp_listen_binds_tcp(snp: &str) -> bool {
+    let Some(start) = snp.find("pub fn uefi_snp_listen") else {
+        return true;
+    };
+    let rest = &snp[start..];
+    let end = rest.find("\n/// Leaked").unwrap_or(rest.len());
+    rest[..end].contains("sock.listen")
 }
 
 /// Full M7.6 scaffold package prop.
