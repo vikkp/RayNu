@@ -111,9 +111,8 @@ M8.9  Admin-attached guest NIC (ADR-013 Appendix C)
 → M8.10+ = ADR-021 waves 2–9 (the box tells the truth · state survives ·
    survives a power cut · a customer can be let in · installable · more than
    one guest · see the hardware · 72 h soak). `./tools/sync-sku-site.sh --next`
-   names the current wave and the one iron thread. Wave 5 is closed on main
-   `9516e470`. Wave 6 A5 (signed EFI) is in flight on that baseline; not lived.
-   A7 is not opened.
+   names the current wave and the one iron thread. Wave 6 A5 lived on
+   `097f3c612c06` / run `42062748313`. A7 is the iron thread and is not opened.
 → M9 sketch: vMotion-like · DRS-like · hot-add
 ```
 

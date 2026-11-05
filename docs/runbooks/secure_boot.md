@@ -1,10 +1,6 @@
 # Secure Boot enrollment (ADR-021 A5)
 
-**Status: in flight. Not lived.** The lab R640 keeps Secure Boot **off**.
-`RAYNU-V-A5-SIGN-HOST-OK` is a host check that `sbsign` / `sbverify` agree
-on a throwaway key. It is not an iron boot. A5 becomes lived when a signed
-`r640-hypervisor.efi` boots on the R640 **with Secure Boot enabled** and
-COM2 shows the usual `build: sha=` line.
+**Status: lived 2026-11-05.** Signed EFI SHA256 `b78b0fa6…`, COM2 `build: sha=097f3c612c06 run=42062748313`, Secure Boot Enabled, `raynusrv2 login:`. Evidence [`docs/evidence/r640/2026-11-05-097f3c612c06-wave-6-a5-secure-boot-ok.md`](../evidence/r640/2026-11-05-097f3c612c06-wave-6-a5-secure-boot-ok.md). The guest line `secureboot: Secure boot disabled` is RayNu-F. It does not publish the host SecureBoot variable.
 
 This is the ADR-021 catalog row A5 (signed EFI). It is not the parked
 `auth.token` bring-up latch.
@@ -56,7 +52,7 @@ The signature is a few kilobytes at the end of the PE. Re-run
 `./tools/check-size.sh` against a tree copy if a signed file is what you
 will flash; the ADR-003 hard limit stays 20 MB.
 
-## Enroll on an R640 (not lived)
+## Enroll on an R640 (lived 2026-11-05)
 
 14th-gen System Setup. This path is the Dell BIOS screen. It has not been
 walked on the lab box for a RayNu-V certificate.
@@ -81,8 +77,8 @@ enable Secure Boot to try an unsigned CI artifact.
 ## What this does not do
 
 - It does not put the private key in the binary, the image, or CI logs.
-- It does not change the lab flash. Secure Boot stays off until a signed kit
-  is flashed on purpose.
+- The 2026-11-05 lab flash is the signed kit with Secure Boot Enabled. An
+  unsigned CI artifact still must not be F11'd while Secure Boot is on.
 - It does not open A7 (in-place update). That row is wave 6's iron thread
   and waits while wave 5's iron thread (E4) is open.
 - It does not print `RAYNU-V-M7-ISO-INSTALL-OK` or any other iron marker.
