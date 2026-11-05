@@ -3510,7 +3510,10 @@ unsafe fn tx_one(n: &mut NicState, dma: &mut DmaArena, frame: &[u8]) -> bool {
     let i = prod as usize;
     core::ptr::copy_nonoverlapping(frame.as_ptr(), dma.tx_buf[i].as_mut_ptr(), len);
     #[cfg(feature = "uefi-bin")]
-    dump_first_tx(&frame[..len], n.mac);
+    {
+        dump_first_tx(&frame[..len], n.mac);
+        note_spa_tcp_reset(&frame[..len]);
+    }
     let addr = dma.tx_buf[i].as_ptr() as u64;
     core::ptr::write_volatile(
         core::ptr::addr_of_mut!(dma.tx[i].addr_hi),
@@ -3688,6 +3691,48 @@ fn dump_first_rx(frame: &[u8], hw_len: u16, station: [u8; 6]) {
         }
     }
     crate::boot::serial::write_byte(b'\n');
+}
+
+/// A TCP reset for the standing port. Four lines, then stop.
+#[cfg(feature = "uefi-bin")]
+fn note_spa_tcp_reset(frame: &[u8]) {
+    use core::sync::atomic::{AtomicU8, Ordering};
+    let Some((sport, dport)) = crate::mgmt::host_nic::tcp_reset_ports(frame) else {
+        return;
+    };
+    if sport != crate::mgmt::http::MGMT_HTTP_DEFAULT_PORT
+        && dport != crate::mgmt::http::MGMT_HTTP_DEFAULT_PORT
+    {
+        return;
+    }
+    static LEFT: AtomicU8 = AtomicU8::new(4);
+    if LEFT.load(Ordering::Relaxed) == 0 {
+        return;
+    }
+    LEFT.fetch_sub(1, Ordering::Relaxed);
+    crate::boot::serial::write_str_nowait("boot: HOST-NIC TCP rst sport=");
+    write_u16_dec_nowait(sport);
+    crate::boot::serial::write_str_nowait(" dport=");
+    write_u16_dec_nowait(dport);
+    crate::boot::serial::write_byte_nowait(b'\n');
+}
+
+#[cfg(feature = "uefi-bin")]
+fn write_u16_dec_nowait(mut n: u16) {
+    let mut buf = [0u8; 5];
+    let mut i = 5;
+    if n == 0 {
+        crate::boot::serial::write_byte_nowait(b'0');
+        return;
+    }
+    while n > 0 {
+        i -= 1;
+        buf[i] = b'0' + (n % 10) as u8;
+        n /= 10;
+    }
+    for b in &buf[i..] {
+        crate::boot::serial::write_byte_nowait(*b);
+    }
 }
 
 /// First few TX frames so COM2 shows ARP replies / SYN-ACK after listen.

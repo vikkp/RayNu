@@ -93,6 +93,68 @@ pub fn http_accept_should_idle_abort(
     announced && !headers_done && limit_ms > 0 && elapsed_since_accept_ms >= limit_ms
 }
 
+/// TCP sockets in the standing listener.
+///
+/// One socket is the wave 4 session: the page and the later polls stay on
+/// it. A second stays in LISTEN. A SYN with nothing in LISTEN is a reset
+/// in the same millisecond (`curl: (7)` on iron `6dc1f554`, and the
+/// Firefox refuse on `7e936b12`). The kept session is not aborted to make
+/// the listener.
+pub const COEXIST_TCP_SOCKETS: usize = 2;
+
+/// One socket, as [`idle_listen_slot`] sees it.
+#[derive(Clone, Copy, Debug)]
+pub struct SockView {
+    pub listening: bool,
+    pub active: bool,
+    pub kept: bool,
+    pub announced: bool,
+}
+
+/// An idle socket to put in LISTEN when none is listening.
+///
+/// INVARIANTS:
+/// - `None` while any socket is already listening
+/// - Never returns an active, kept, or announced socket
+/// - Never panics
+pub fn idle_listen_slot(socks: &[SockView]) -> Option<usize> {
+    if socks.iter().any(|s| s.listening) {
+        return None;
+    }
+    socks
+        .iter()
+        .position(|s| !s.active && !s.kept && !s.announced)
+}
+
+/// `(src_port, dst_port)` when `frame` is an IPv4 TCP segment with RST set.
+///
+/// INVARIANTS:
+/// - `None` for a short frame, a non-IPv4 frame, or a non-TCP segment
+/// - `None` when the RST flag is clear
+/// - Never panics
+pub fn tcp_reset_ports(frame: &[u8]) -> Option<(u16, u16)> {
+    if frame.len() < 14 + 20 + 20 {
+        return None;
+    }
+    if frame[12] != 0x08 || frame[13] != 0x00 {
+        return None;
+    }
+    let ihl = usize::from(frame[14] & 0x0f) * 4;
+    if ihl < 20 || frame.len() < 14 + ihl + 20 {
+        return None;
+    }
+    if frame[14 + 9] != 6 {
+        return None;
+    }
+    let tcp = 14 + ihl;
+    if frame[tcp + 13] & 0x04 == 0 {
+        return None;
+    }
+    let sport = u16::from_be_bytes([frame[tcp], frame[tcp + 1]]);
+    let dport = u16::from_be_bytes([frame[tcp + 2], frame[tcp + 3]]);
+    Some((sport, dport))
+}
+
 /// Quiet time on a kept TLS session before the slot is reclaimed.
 ///
 /// SPA polls are 30 s. `3e9ce45e` re-handshook at 30 s and the chassis

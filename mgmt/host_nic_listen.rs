@@ -30,10 +30,10 @@ use crate::mgmt::console::{maybe_print_iron_console_ok, take_spa_keys_injected};
 use crate::mgmt::e1000::E1000Device;
 use crate::mgmt::host_nic::{
     coexist_keepalive_idle, coexist_millis_from_tsc, host_nic_lab_armed, http_accept_idle_limit_ms,
-    http_accept_should_idle_abort, http_reply_should_give_up, COEXIST_CLOSE_FORCE_MS,
-    COEXIST_KEEPALIVE_IDLE_MS, HOST_NIC_DHCP_MS, HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS,
-    HOST_NIC_MAX_EXCHANGES, M7_HOST_NIC_QEMU_MARKER, PRE_RAYNUF_HTTPS_MS, QEMU_USERNET_GW,
-    QEMU_USERNET_IPV4, QEMU_USERNET_PREFIX,
+    http_accept_should_idle_abort, http_reply_should_give_up, idle_listen_slot, SockView,
+    COEXIST_CLOSE_FORCE_MS, COEXIST_KEEPALIVE_IDLE_MS, COEXIST_TCP_SOCKETS, HOST_NIC_DHCP_MS,
+    HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS, HOST_NIC_MAX_EXCHANGES, M7_HOST_NIC_QEMU_MARKER,
+    PRE_RAYNUF_HTTPS_MS, QEMU_USERNET_GW, QEMU_USERNET_IPV4, QEMU_USERNET_PREFIX,
 };
 use crate::mgmt::host_nic_poll::{bounded_poll, HOST_NIC_POLL_BUDGET};
 use crate::mgmt::http::handle_http_request;
@@ -59,8 +59,8 @@ static mut MGMT_ARENA: MgmtArena = MgmtArena::new();
 static mut COEXIST_ARMED: bool = false;
 static mut COEXIST_DEVICE: MaybeUninit<Bcm5720Device> = MaybeUninit::uninit();
 static mut COEXIST_IFACE: MaybeUninit<Interface> = MaybeUninit::uninit();
-/// One TCP socket and the D10 NTP socket. Wave 4 close (`11688cbf`).
-static mut COEXIST_SOCK_STORAGE: [SocketStorage<'static>; 2] = [SocketStorage::EMPTY; 2];
+/// Two TCP sockets and the D10 NTP socket.
+static mut COEXIST_SOCK_STORAGE: [SocketStorage<'static>; 3] = [SocketStorage::EMPTY; 3];
 static mut COEXIST_UDP_RX_META: [udp::PacketMetadata; 2] = [udp::PacketMetadata::EMPTY; 2];
 static mut COEXIST_UDP_RX_BUF: [u8; 128] = [0; 128];
 static mut COEXIST_UDP_TX_META: [udp::PacketMetadata; 2] = [udp::PacketMetadata::EMPTY; 2];
@@ -96,12 +96,16 @@ impl SlotRt {
     };
 }
 static mut COEXIST_SOCKETS: MaybeUninit<SocketSet<'static>> = MaybeUninit::uninit();
-static mut COEXIST_TCP_HANDLE: MaybeUninit<SocketHandle> = MaybeUninit::uninit();
-static mut COEXIST_TCP_RX: [u8; COEXIST_TCP_RX_N] = [0; COEXIST_TCP_RX_N];
-static mut COEXIST_TCP_TX: [u8; TCP_TX_N] = [0; TCP_TX_N];
-static mut COEXIST_RT: SlotRt = SlotRt::EMPTY;
-/// One TLS session. The standing SPA and the QEMU listen window share it;
-/// they do not run together.
+static mut TCP_HANDLE: [MaybeUninit<SocketHandle>; COEXIST_TCP_SOCKETS] =
+    [MaybeUninit::uninit(); COEXIST_TCP_SOCKETS];
+static mut TCP_RX: [[u8; COEXIST_TCP_RX_N]; COEXIST_TCP_SOCKETS] =
+    [[0; COEXIST_TCP_RX_N]; COEXIST_TCP_SOCKETS];
+static mut TCP_TX: [[u8; TCP_TX_N]; COEXIST_TCP_SOCKETS] = [[0; TCP_TX_N]; COEXIST_TCP_SOCKETS];
+static mut TCP_RT: [SlotRt; COEXIST_TCP_SOCKETS] = [SlotRt::EMPTY; COEXIST_TCP_SOCKETS];
+static mut TCP_TLS: [MaybeUninit<Tls12Listen>; COEXIST_TCP_SOCKETS] = unsafe {
+    MaybeUninit::<[MaybeUninit<Tls12Listen>; COEXIST_TCP_SOCKETS]>::uninit().assume_init()
+};
+/// QEMU / blocking listen window. The standing SPA uses [`TCP_TLS`].
 static mut COEXIST_LISTEN: Tls12Listen = Tls12Listen::empty();
 static mut COEXIST_LISTEN_READY: bool = false;
 static mut COEXIST_HTTP_OUT: [u8; HTTP_OUT_N] = [0; HTTP_OUT_N];
@@ -430,23 +434,24 @@ pub fn arm_bcm5720_coexist() -> bool {
         let sockets =
             SocketSet::new((&mut *core::ptr::addr_of_mut!(COEXIST_SOCK_STORAGE)).as_mut_slice());
         let mut sockets = sockets;
-        let tcp_rx =
-            tcp::SocketBuffer::new((&mut *core::ptr::addr_of_mut!(COEXIST_TCP_RX)).as_mut_slice());
-        let tcp_tx =
-            tcp::SocketBuffer::new((&mut *core::ptr::addr_of_mut!(COEXIST_TCP_TX)).as_mut_slice());
-        let tcp_handle = sockets.add(tcp::Socket::new(tcp_rx, tcp_tx));
-        if sockets
-            .get_mut::<tcp::Socket>(tcp_handle)
-            .listen(port)
-            .is_err()
-        {
-            serial::write_line("boot: WARN — HOST-NIC coexist skip (tcp bind)");
-            return false;
+        for i in 0..COEXIST_TCP_SOCKETS {
+            let tcp_rx = tcp::SocketBuffer::new(TCP_RX[i].as_mut_slice());
+            let tcp_tx = tcp::SocketBuffer::new(TCP_TX[i].as_mut_slice());
+            let tcp_handle = sockets.add(tcp::Socket::new(tcp_rx, tcp_tx));
+            if sockets
+                .get_mut::<tcp::Socket>(tcp_handle)
+                .listen(port)
+                .is_err()
+            {
+                serial::write_line("boot: WARN — HOST-NIC coexist skip (tcp bind)");
+                return false;
+            }
+            TCP_HANDLE[i].write(tcp_handle);
+            TCP_RT[i] = SlotRt::EMPTY;
+            TCP_RT[i].session_ready = true;
+            TCP_TLS[i].write(Tls12Listen::empty());
+            TCP_TLS[i].assume_init_mut().load_lab_material();
         }
-        COEXIST_TCP_HANDLE.write(tcp_handle);
-        COEXIST_RT = SlotRt::EMPTY;
-        COEXIST_RT.session_ready = true;
-        tls_session().load_lab_material();
         let udp_sock = udp::Socket::new(
             udp::PacketBuffer::new(
                 (&mut *core::ptr::addr_of_mut!(COEXIST_UDP_RX_META)).as_mut_slice(),
@@ -493,7 +498,7 @@ pub fn arm_bcm5720_coexist() -> bool {
     write_ipv4(ip);
     serial::write_byte(b':');
     write_u16_dec(port);
-    serial::write_line(" (VMX on; ADR-013 Phase F; listen=1)");
+    serial::write_line(" (VMX on; ADR-013 Phase F; listen=2)");
     serial::write_str("boot: CURL NOW → https://");
     write_ipv4(ip);
     serial::write_byte(b':');
@@ -595,11 +600,13 @@ fn d10_ntp_tick(sockets: &mut SocketSet, millis: i64) {
 /// [`COEXIST_TCP_HANDLE`] filled. BSP-only.
 unsafe fn rearm_function0_after_egress(sockets: &mut SocketSet, millis: i64) {
     use crate::mgmt::listener_health::{spa_rearm_after_egress, LISTENER_RECOVER_HOLDOFF_MS};
-    let handle = COEXIST_TCP_HANDLE.assume_init();
-    let session_active = {
+    let mut session_active = false;
+    for i in 0..COEXIST_TCP_SOCKETS {
+        let handle = TCP_HANDLE[i].assume_init();
         let sock = sockets.get::<tcp::Socket>(handle);
-        sock.is_active() || COEXIST_RT.announced || COEXIST_RT.kept
-    };
+        let rt = TCP_RT[i];
+        session_active |= sock.is_active() || rt.announced || rt.kept;
+    }
     if !spa_rearm_after_egress(
         crate::mgmt::bcm5720_mmio::egress_armed(),
         EGRESS_REARM_DONE,
@@ -609,9 +616,12 @@ unsafe fn rearm_function0_after_egress(sockets: &mut SocketSet, millis: i64) {
     }
     EGRESS_REARM_DONE = true;
     let ok = crate::mgmt::bcm5720_mmio::rebuild_spa_rings();
-    let sock = sockets.get_mut::<tcp::Socket>(handle);
-    if !sock.is_active() && !sock.is_listening() {
-        let _ = sock.listen(COEXIST_PORT);
+    for i in 0..COEXIST_TCP_SOCKETS {
+        let handle = TCP_HANDLE[i].assume_init();
+        let sock = sockets.get_mut::<tcp::Socket>(handle);
+        if !sock.is_active() && !sock.is_listening() {
+            let _ = sock.listen(COEXIST_PORT);
+        }
     }
     LISTENER_HEALTH.reset();
     LISTENER_HOLDOFF_UNTIL = millis.saturating_add(LISTENER_RECOVER_HOLDOFF_MS);
@@ -632,23 +642,69 @@ fn note_session(msg: &str) {
 /// # Safety
 /// [`COEXIST_TCP_HANDLE`] filled by [`arm_bcm5720_coexist`]. BSP-only.
 unsafe fn tcp_send_queued(sockets: &SocketSet) -> usize {
-    let handle = COEXIST_TCP_HANDLE.assume_init();
-    sockets.get::<tcp::Socket>(handle).send_queue()
+    let mut n = 0usize;
+    for i in 0..COEXIST_TCP_SOCKETS {
+        let handle = TCP_HANDLE[i].assume_init();
+        n = n.saturating_add(sockets.get::<tcp::Socket>(handle).send_queue());
+    }
+    n
+}
+
+/// If nothing is in LISTEN, listen on an idle socket. Does not abort a session.
+///
+/// A SYN with no listener is a reset in the same millisecond. This runs
+/// before `poll`.
+///
+/// # Safety
+/// [`TCP_HANDLE`] filled. BSP-only.
+unsafe fn ensure_listener(sockets: &mut SocketSet) {
+    let mut view = [SockView {
+        listening: false,
+        active: false,
+        kept: false,
+        announced: false,
+    }; COEXIST_TCP_SOCKETS];
+    for i in 0..COEXIST_TCP_SOCKETS {
+        let handle = TCP_HANDLE[i].assume_init();
+        let sock = sockets.get::<tcp::Socket>(handle);
+        let rt = TCP_RT[i];
+        view[i] = SockView {
+            listening: sock.is_listening(),
+            active: sock.is_active(),
+            kept: rt.kept,
+            announced: rt.announced,
+        };
+    }
+    let Some(i) = idle_listen_slot(&view) else {
+        return;
+    };
+    let handle = TCP_HANDLE[i].assume_init();
+    let sock = sockets.get_mut::<tcp::Socket>(handle);
+    if sock.listen(COEXIST_PORT).is_ok() {
+        note_slot("boot: HOST-NIC listen up", i);
+    }
 }
 
 /// Abort, drop the TLS session back to the saved key, and listen again.
 ///
 /// # Safety
 /// [`COEXIST_TCP_HANDLE`] was armed. BSP-only.
-unsafe fn session_relisten(sockets: &mut SocketSet, msg: &str) {
-    let handle = COEXIST_TCP_HANDLE.assume_init();
+unsafe fn session_relisten(sockets: &mut SocketSet, i: usize, msg: &str) {
+    let handle = TCP_HANDLE[i].assume_init();
     let sock = sockets.get_mut::<tcp::Socket>(handle);
     sock.abort();
     let _ = sock.listen(COEXIST_PORT);
-    tls_session().reset();
-    COEXIST_RT = SlotRt::EMPTY;
-    COEXIST_RT.session_ready = true;
-    note_session(msg);
+    TCP_TLS[i].assume_init_mut().reset();
+    TCP_RT[i] = SlotRt::EMPTY;
+    TCP_RT[i].session_ready = true;
+    note_slot(msg, i);
+}
+
+fn note_slot(msg: &str, slot: usize) {
+    serial::write_str_nowait(msg);
+    serial::write_str_nowait(" slot=");
+    serial::write_byte_nowait(b'0' + slot.min(9) as u8);
+    serial::write_byte_nowait(b'\n');
 }
 
 /// One scheduler-quantum NIC/HTTP step. No-op if not armed. Does not spin.
@@ -672,6 +728,7 @@ pub fn tick_bcm5720_coexist() {
         );
         let millis = COEXIST_MILLIS;
         let ts = Instant::from_millis(millis);
+        ensure_listener(sockets);
         rearm_function0_after_egress(sockets, millis);
         // ADR-021 D5: both LOM links, twice a second, idle or under a guest.
         crate::mgmt::bcm5720_mmio::host_link_tick();
@@ -742,12 +799,12 @@ pub fn tick_bcm5720_coexist() {
         let mut did_exchange = false;
         let mut did_keepalive = false;
         if !skip_accept {
-            {
-                let handle = COEXIST_TCP_HANDLE.assume_init();
-                let mut rt = COEXIST_RT;
+            for i in 0..COEXIST_TCP_SOCKETS {
+                let handle = TCP_HANDLE[i].assume_init();
+                let mut rt = TCP_RT[i];
                 let mut relisten: Option<&'static str> = None;
                 {
-                    let session = tls_session();
+                    let session = TCP_TLS[i].assume_init_mut();
                     let sock = sockets.get_mut::<tcp::Socket>(handle);
                     if rt.pending_close {
                         let queued = sock.send_queue();
@@ -796,7 +853,7 @@ pub fn tick_bcm5720_coexist() {
                             let _ = sock.listen(COEXIST_PORT);
                         }
                         if relisten.is_none() && sock.is_active() && !rt.announced {
-                            note_session("boot: HOST-NIC TCP accept — client connected");
+                            note_slot("boot: HOST-NIC TCP accept — client connected", i);
                             rt.announced = true;
                             rt.accept_at_ms = millis;
                             // A kept session must not reset here. First accept only.
@@ -900,14 +957,14 @@ pub fn tick_bcm5720_coexist() {
                     }
                 }
                 if let Some(msg) = relisten {
-                    session_relisten(sockets, msg);
+                    session_relisten(sockets, i, msg);
                 } else {
-                    COEXIST_RT = rt;
+                    TCP_RT[i] = rt;
                 }
             }
-            // The wave 4 session stays up. A second SYN is reset until
-            // this socket is listening again. Iron `87bee04b` FINed a live
-            // session to free a listener and the reload landed in that FIN.
+            // A kept session stays up. [`ensure_listener`] runs before poll
+            // so a SYN still has a socket in LISTEN. Iron `87bee04b` FINed
+            // a live session to free a listener and the reload landed in that FIN.
         }
         let library_exchange = crate::mgmt::iso_library::take_exchange_quiet();
         // Linux owns COM2 for the installer. SPA polls stay on the socket.
@@ -983,7 +1040,9 @@ unsafe fn listener_health_tick(sockets: &mut SocketSet, millis: i64) {
     LISTENER_RECOVERS = LISTENER_RECOVERS.saturating_add(1);
     let rebuilt = crate::mgmt::bcm5720_mmio::rebuild_spa_rings();
     if rebuilt {
-        session_relisten(sockets, "boot: HOST-NIC TCP re-listen after :38 recover");
+        for i in 0..COEXIST_TCP_SOCKETS {
+            session_relisten(sockets, i, "boot: HOST-NIC TCP re-listen after :38 recover");
+        }
     }
     LISTENER_HEALTH.reset();
     LISTENER_HOLDOFF_UNTIL = millis.saturating_add(LISTENER_RECOVER_HOLDOFF_MS);

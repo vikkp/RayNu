@@ -1,7 +1,8 @@
 use super::{
     coexist_keepalive_idle, coexist_millis_from_tsc, http_accept_idle_limit_ms,
-    http_accept_should_idle_abort, http_reply_should_give_up, prop_http_accept_idle_abort,
-    COEXIST_KEEPALIVE_IDLE_MS, COEXIST_TSC_HZ_FALLBACK, HOST_NIC_DHCP_MS, HOST_NIC_HTTP_HS_IDLE_MS,
+    http_accept_should_idle_abort, http_reply_should_give_up, idle_listen_slot,
+    prop_http_accept_idle_abort, tcp_reset_ports, SockView, COEXIST_KEEPALIVE_IDLE_MS,
+    COEXIST_TCP_SOCKETS, COEXIST_TSC_HZ_FALLBACK, HOST_NIC_DHCP_MS, HOST_NIC_HTTP_HS_IDLE_MS,
     HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS, PRE_RAYNUF_HTTPS_MS,
 };
 
@@ -152,21 +153,48 @@ fn coexist_millis_from_tsc_wraps() {
 }
 
 #[test]
-fn wave4_session_is_one_tcp_socket() {
+fn two_sockets_keep_a_listener_without_aborting_the_session() {
+    assert_eq!(COEXIST_TCP_SOCKETS, 2);
     assert_eq!(COEXIST_KEEPALIVE_IDLE_MS, 600_000);
     let listen = include_str!("host_nic_listen.rs");
     let nic = include_str!("host_nic.rs");
-    assert!(listen.contains("SocketStorage<'static>; 2"));
-    assert!(listen.contains("COEXIST_TCP_HANDLE"));
-    assert!(listen.contains("COEXIST_TCP_RX"));
-    assert!(listen.contains("listen=1"));
+    assert!(listen.contains("SocketStorage<'static>; 3"));
+    assert!(listen.contains("listen=2"));
+    assert!(listen.contains("fn ensure_listener"));
     assert!(listen.contains("FIN, not RST"));
-    assert!(!listen.contains("COEXIST_TCP_SLOTS"));
-    assert!(!listen.contains("SPA_SLOT"));
-    assert!(!listen.contains("fn arm_spare_listener"));
-    assert!(!listen.contains("spare_listen_slot"));
-    assert!(!listen.contains("listen_reclaim_slot"));
+    assert!(!listen.contains("fn listen_reclaim_slot"));
+    assert!(!listen.contains("COEXIST_LISTEN_BURST"));
     assert!(!nic.contains("fn listen_reclaim_slot"));
-    assert!(!nic.contains("fn spare_listen_slot"));
     assert!(!nic.contains("COEXIST_LISTEN_BURST"));
+    let idle = SockView {
+        listening: false,
+        active: false,
+        kept: false,
+        announced: false,
+    };
+    let listening = SockView {
+        listening: true,
+        active: false,
+        kept: false,
+        announced: false,
+    };
+    let kept = SockView {
+        listening: false,
+        active: true,
+        kept: true,
+        announced: true,
+    };
+    assert_eq!(idle_listen_slot(&[listening, idle]), None);
+    assert_eq!(idle_listen_slot(&[kept, idle]), Some(1));
+    assert_eq!(idle_listen_slot(&[kept, kept]), None);
+    let mut rst = [0u8; 54];
+    rst[12] = 0x08;
+    rst[23] = 6;
+    rst[14] = 0x45;
+    rst[36] = 0x20;
+    rst[37] = 0xfb;
+    rst[47] = 0x04;
+    assert_eq!(tcp_reset_ports(&rst), Some((0, 8443)));
+    rst[47] = 0x02;
+    assert_eq!(tcp_reset_ports(&rst), None);
 }
