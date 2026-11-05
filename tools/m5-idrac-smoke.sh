@@ -67,13 +67,13 @@ fi
 echo "==> cargo test m5_6_idrac_gate_passes (artifact gate)"
 out="$(cargo test --lib m5_6_idrac_gate_passes -- --nocapture 2>&1)"
 echo "$out"
-echo "$out" | grep -q 'm5_6_idrac_gate_passes ... ok'
-echo "$out" | grep -q "$MARKER"
+grep -q 'm5_6_idrac_gate_passes ... ok' <<<"$out"
+grep -q "$MARKER" <<<"$out"
 
 echo "==> cargo test tier1_health_and_topology"
 out2="$(cargo test --lib tier1_health_and_topology -- --nocapture 2>&1)"
 echo "$out2"
-echo "$out2" | grep -q 'tier1_health_and_topology ... ok'
+grep -q 'tier1_health_and_topology ... ok' <<<"$out2"
 
 echo "$MARKER"
 echo "==> M5.6 idrac smoke PASSED"

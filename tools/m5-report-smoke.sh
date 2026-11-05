@@ -43,13 +43,13 @@ fi
 echo "==> cargo test m5_4_report_gate_passes (artifact gate)"
 out="$(cargo test --lib m5_4_report_gate_passes -- --nocapture 2>&1)"
 echo "$out"
-echo "$out" | grep -q 'm5_4_report_gate_passes ... ok'
-echo "$out" | grep -q "$MARKER"
+grep -q 'm5_4_report_gate_passes ... ok' <<<"$out"
+grep -q "$MARKER" <<<"$out"
 
 echo "==> cargo test reports_deterministic"
 out2="$(cargo test --lib reports_deterministic -- --nocapture 2>&1)"
 echo "$out2"
-echo "$out2" | grep -q 'reports_deterministic ... ok'
+grep -q 'reports_deterministic ... ok' <<<"$out2"
 
 echo "$MARKER"
 echo "==> M5.4 report smoke PASSED"

@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | function-0-rearm-after-egress |
-| Summary | **Function 0 rings are reprogrammed once after function 1's core reset.** `7e936b12` listened and never printed `TCP accept`; the reset is in that COM2 and `:38 recover` is not. A quiet port stays idle. This rearm is tied to the reset, and it does not run over a live session. E4 stays lived on `9c3e660259de`. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | m5-smoke-pipefail |
+| Summary | **M5 smoke scripts no longer fail a passing test.** PR run `41948554730` printed `RAYNU-V-M5-IDRAC-OK` and `m5_6_idrac_gate_passes ... ok`, then `grep -q` under `pipefail` exited 1. The marker check now reads the captured output directly. Push run `41948548809` for `c1120097` was already green. Scores held. months 0.0 held; overall 99 held. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | No new lived row. Wave 5 stays closed. E4 stays lived on `9c3e6602`. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-04 | m5-smoke-pipefail | 0.0 | 99 | **M5 smoke grep no longer fails a passing test.** PR run `41948554730` printed `RAYNU-V-M5-IDRAC-OK` then exited 1. Push run `41948548809` was green. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-04 | function-0-rearm-after-egress | 0.0 | 99 | **Rearm function 0 after the egress reset.** `7e936b12` had `listen=1` and no `TCP accept`. The reset is in that COM2. One socket stays. E4 stays lived on `9c3e6602`. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-04 | wave-4-socket-structure | 0.0 | 99 | **One socket in the data.** `22275eb7` only indexed slot 0 of the ten-slot table and left the abort-to-free-a-listener helpers in the tree. Those are gone. Storage is 2. E4 stays lived on `9c3e6602`. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-04 | wave-4-one-socket | 0.0 | 99 | **Listener is the wave 4 socket.** One TCP session. `dff4c70f` still opened the other slots; Firefox was refused in 0 ms with no `TCP accept`. E4 stays lived on `9c3e6602`. Scores held. months 0.0 held; overall 99 held |
