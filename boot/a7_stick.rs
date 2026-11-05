@@ -4,9 +4,9 @@
 //! Proven Core: **outside** (ADR-002)
 //!
 //! The spare is read through the firmware Block I/O protocol. The only
-//! write is on the volume this image was loaded from: `BOOTX64.OLD` keeps
-//! the previous file, then `BOOTX64.EFI` is replaced. The Toshiba durable
-//! LUN is not this path. LBA 0 is not written.
+//! write is on the volume this image was loaded from. An armed slot saves
+//! `BOOTX64.OLD` and replaces `BOOTX64.EFI`. A revert copies `BOOTX64.OLD`
+//! back. The Toshiba durable LUN is not this path. LBA 0 is not written.
 
 /// Run before ExitBootServices. Host builds do nothing.
 pub fn apply_before_ebs() {
@@ -66,6 +66,10 @@ fn apply_uefi() {
         let Some(rec) = fw_update::decode(&header.0) else {
             continue;
         };
+        if rec.revert {
+            restore_old();
+            return;
+        }
         let Some((slot, len, sha)) = fw_update::stick_plan(&rec) else {
             continue;
         };
@@ -116,24 +120,7 @@ fn apply_uefi() {
             serial::write_line("boot: A7 stick skip (OLD)");
             return;
         }
-        if fs.write(next_path.as_ref(), image).is_err() {
-            serial::write_line("boot: A7 stick skip (A7)");
-            return;
-        }
-        let Ok(back) = fs.read(next_path.as_ref()) else {
-            serial::write_line("boot: A7 stick skip (readback)");
-            return;
-        };
-        if back.as_slice() != image {
-            serial::write_line("boot: A7 stick mismatch");
-            return;
-        }
-        if fs.remove_file(boot_path.as_ref()).is_err() {
-            serial::write_line("boot: A7 stick skip (remove)");
-            return;
-        }
-        if fs.rename(next_path.as_ref(), boot_path.as_ref()).is_err() {
-            serial::write_line("boot: A7 stick BOOTX64.OLD remains; BOOTX64.EFI missing");
+        if !replace_bootx64(&mut fs, &boot_path, &next_path, image) {
             return;
         }
         fw_update::note_stick_written();
@@ -142,6 +129,78 @@ fn apply_uefi() {
         serial::write_line("");
         return;
     }
+}
+
+#[cfg(target_os = "uefi")]
+fn restore_old() {
+    use crate::boot::serial;
+    use crate::mgmt::fw_update;
+    use uefi::boot;
+    use uefi::fs::FileSystem;
+    use uefi::CString16;
+
+    serial::write_line("boot: A7 stick restore");
+    let image_handle = boot::image_handle();
+    let Ok(sfs) = boot::get_image_file_system(image_handle) else {
+        serial::write_line("boot: A7 stick skip (no boot volume)");
+        return;
+    };
+    let mut fs = FileSystem::new(sfs);
+    let Ok(boot_path) = CString16::try_from("\\EFI\\BOOT\\BOOTX64.EFI") else {
+        return;
+    };
+    let Ok(old_path) = CString16::try_from("\\EFI\\BOOT\\BOOTX64.OLD") else {
+        return;
+    };
+    let Ok(next_path) = CString16::try_from("\\EFI\\BOOT\\BOOTX64.A7") else {
+        return;
+    };
+    let Ok(old) = fs.read(old_path.as_ref()) else {
+        serial::write_line("boot: A7 stick skip (no OLD)");
+        return;
+    };
+    if !fw_update::is_pe(&old) {
+        serial::write_line("boot: A7 stick skip (OLD is not PE)");
+        return;
+    }
+    if !replace_bootx64(&mut fs, &boot_path, &next_path, &old) {
+        return;
+    }
+    fw_update::note_stick_restored();
+    serial::write_str("boot: A7 stick restored bytes=");
+    write_dec(old.len() as u64);
+    serial::write_line("");
+}
+
+#[cfg(target_os = "uefi")]
+fn replace_bootx64(
+    fs: &mut uefi::fs::FileSystem,
+    boot_path: &uefi::CString16,
+    next_path: &uefi::CString16,
+    image: &[u8],
+) -> bool {
+    use crate::boot::serial;
+    if fs.write(next_path.as_ref(), image).is_err() {
+        serial::write_line("boot: A7 stick skip (A7)");
+        return false;
+    }
+    let Ok(back) = fs.read(next_path.as_ref()) else {
+        serial::write_line("boot: A7 stick skip (readback)");
+        return false;
+    };
+    if back.as_slice() != image {
+        serial::write_line("boot: A7 stick mismatch");
+        return false;
+    }
+    if fs.remove_file(boot_path.as_ref()).is_err() {
+        serial::write_line("boot: A7 stick skip (remove)");
+        return false;
+    }
+    if fs.rename(next_path.as_ref(), boot_path.as_ref()).is_err() {
+        serial::write_line("boot: A7 stick BOOTX64.OLD remains; BOOTX64.EFI missing");
+        return false;
+    }
+    true
 }
 
 #[cfg(target_os = "uefi")]

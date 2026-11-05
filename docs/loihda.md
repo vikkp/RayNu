@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-6-a7-stick |
-| Summary | **A7 Keep arms the stick copy.** Next boot writes BOOTX64.EFI and saves BOOTX64.OLD. Not lived. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-6-a7-old |
+| Summary | **A7 Roll back restores BOOTX64.OLD** on the next boot. Not lived. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. TLS 88 held. |
 | Gates touched | ADR-021 A7 in flight on `cursor/wave-6-a7-update-0591`. A5 stays lived. Auth.token A5 stays parked. No doorbell. No format of UBUNTU0. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-05 | wave-6-a7-old | 94 | 72 | **A7 Roll back restores BOOTX64.OLD.** Not lived. No F11 yet. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-05 | wave-6-a7-stick | 94 | 72 | **A7 Keep arms the stick copy.** `c81107eae9fb` / run `42083852791` page check: `boot: A7 none`, Overview active 0. Not lived. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-05 | wave-6-a7-update | 94 | 72 | **ADR-021 A7 in flight.** Two spare slots. Rollback and confirm on the page. The USB copy is still open. A5 stays lived. Auth.token A5 stays parked. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-05 | wave-6-a5-lived | 94 | 72 | **ADR-021 A5 lived.** Signed EFI under Dell Secure Boot. `build: sha=097f3c612c06 run=42062748313`, `raynusrv2 login:`. Guest `secureboot: Secure boot disabled` is RayNu-F. Auth.token A5 stays parked. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |

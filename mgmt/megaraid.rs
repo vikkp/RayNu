@@ -2600,6 +2600,9 @@ fn perc_load_fw_update(bar: u64, target: u8, bytes: u64, frame_phys: u64, data_p
         if crate::mgmt::fw_update::ack_stick_write() {
             serial::write_line("boot: A7 stick clear");
         }
+        if crate::mgmt::fw_update::ack_stick_restore() {
+            serial::write_line("boot: A7 stick restore clear");
+        }
     } else {
         serial::write_line("boot: A7 none");
     }

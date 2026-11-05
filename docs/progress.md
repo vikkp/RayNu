@@ -191,7 +191,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next (numbered)
 
-**ADR-021 A7 is in flight** on `cursor/wave-6-a7-update-0591`. The page stages a second image on the spare. Keep arms the next boot to copy it over `EFI/BOOT/BOOTX64.EFI` and save `BOOTX64.OLD`. Page check `c81107eae9fb` / run `42083852791` printed `boot: A7 none`. Not lived until the F11 after that copy.
+**ADR-021 A7 is in flight** on `cursor/wave-6-a7-update-0591`. The page stages a second image on the spare. Keep arms the next boot to copy it over `EFI/BOOT/BOOTX64.EFI` and save `BOOTX64.OLD`. Roll back arms the boot after that to put `BOOTX64.OLD` back. Page check `c81107eae9fb` / run `42083852791` printed `boot: A7 none`. Not lived until the F11 after that copy.
 
 **ADR-021 A5 lived on iron 2026-11-05.** Signed EFI SHA256 `b78b0fa68276a6407bcda7802976e2498466e15e3ca636f52af41b848a424470`, COM2 `build: sha=097f3c612c06 run=42062748313`, Dell `db` entry RayNu-V Secure Boot, Secure Boot Enabled, `raynusrv2 login:`. Guest `secureboot: Secure boot disabled` is RayNu-F. Evidence `docs/evidence/r640/2026-11-05-097f3c612c06-wave-6-a5-secure-boot-ok.md`. Wave 6 stays open on A7.
 

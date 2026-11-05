@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-6-a7-stick |
-| Summary | **A7 Keep arms a pre-EBS copy onto BOOTX64.EFI.** The previous file is saved as BOOTX64.OLD. The Toshiba path is not used. Not lived until a later F11 runs the copied image. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-6-a7-old |
+| Summary | **A7 Roll back restores BOOTX64.OLD.** The next boot copies that file over BOOTX64.EFI. Not lived. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | ADR-021 A7 `planned → in flight` on `cursor/wave-6-a7-update-0591`. A5 stays lived. Wave 6 stays open. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-05 | wave-6-a7-old | 0.0 | 99 | **A7 Roll back restores BOOTX64.OLD** on the next pre-EBS boot. Keep still arms the copy. Not lived. No F11 of this commit yet. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-05 | wave-6-a7-stick | 0.0 | 99 | **A7 Keep arms the stick copy.** Next boot writes `BOOTX64.EFI` from the spare slot and saves `BOOTX64.OLD`. Page check on `c81107eae9fb` / run `42083852791` showed `boot: A7 none` and Overview active 0. Not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-05 | wave-6-a7-sign-contract | 0.0 | 99 | **A5 host smoke accepts the lived runbook.** `prop_a5_sign_contract` and `a5-sign-smoke.sh` look for `Status: lived`. The host marker still does not close a row. A7 stays in flight. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-05 | wave-6-a7-update | 0.0 | 99 | **ADR-021 A7 in flight.** Two spare slots, rollback and confirm on the page. The stick rewrite is still the iron step. A5 stays lived. Scores held. months 0.0 held; overall 99 held |

@@ -43,6 +43,10 @@ pub struct FwRecord {
     pub pending: Option<u8>,
     /// Slot to copy onto the boot stick on the next pre-EBS pass.
     pub apply: Option<u8>,
+    /// The stick file was replaced. Roll back restores `BOOTX64.OLD`.
+    pub swapped: bool,
+    /// Next pre-EBS pass copies `BOOTX64.OLD` over `BOOTX64.EFI`.
+    pub revert: bool,
     pub len: [u32; 2],
     pub sha: [[u8; 32]; 2],
     pub durable: bool,
@@ -54,6 +58,8 @@ impl FwRecord {
             active: 0,
             pending: None,
             apply: None,
+            swapped: false,
+            revert: false,
             len: [0, 0],
             sha: [[0; 32], [0; 32]],
             durable: false,
@@ -111,6 +117,8 @@ pub fn encode(rec: &FwRecord, buf: &mut [u8; 512]) -> bool {
     buf[10] = rec.pending.unwrap_or(PENDING_NONE);
     buf[11] = u8::from(rec.durable);
     buf[12] = rec.apply.unwrap_or(PENDING_NONE);
+    buf[13] = u8::from(rec.swapped);
+    buf[14] = u8::from(rec.revert);
     for i in 0..2 {
         let at = 16 + i * 36;
         buf[at..at + 4].copy_from_slice(&rec.len[i].to_le_bytes());
@@ -143,6 +151,8 @@ pub fn decode(buf: &[u8]) -> Option<FwRecord> {
         p if p <= 1 => Some(p),
         _ => return None,
     };
+    let swapped = buf[13] != 0;
+    let revert = buf[14] != 0;
     let mut len = [0u32; 2];
     let mut sha = [[0u8; 32]; 2];
     for i in 0..2 {
@@ -157,6 +167,8 @@ pub fn decode(buf: &[u8]) -> Option<FwRecord> {
         active,
         pending,
         apply,
+        swapped,
+        revert,
         len,
         sha,
         durable: buf[11] != 0,
@@ -264,19 +276,27 @@ pub fn accept_chunk(off: usize, total: usize, body: &[u8]) -> Result<(), &'stati
     Ok(())
 }
 
-/// Drop a pending slot. The active slot stays.
+/// Drop a pending slot, or arm restoring `BOOTX64.OLD`.
+///
+/// A pending upload or an armed copy is cancelled. Once the stick file has
+/// been replaced, roll back asks the next boot to put `BOOTX64.OLD` back.
 pub fn rollback() -> bool {
     let st = state();
-    if st.rec.pending.is_none() && st.rec.apply.is_none() {
-        return false;
+    if st.rec.pending.is_some() || st.rec.apply.is_some() {
+        st.rec.pending = None;
+        st.rec.apply = None;
+        st.rec.durable = false;
+        st.staging = false;
+        st.dirty = true;
+        st.filled = 0;
+        return true;
     }
-    st.rec.pending = None;
-    st.rec.apply = None;
-    st.rec.durable = false;
-    st.staging = false;
-    st.dirty = true;
-    st.filled = 0;
-    true
+    if st.rec.swapped && !st.rec.revert {
+        st.rec.revert = true;
+        st.dirty = true;
+        return true;
+    }
+    false
 }
 
 /// The pending slot becomes the one to keep.
@@ -298,7 +318,7 @@ pub fn confirm() -> bool {
 /// The slot a pre-EBS boot should copy onto `BOOTX64.EFI`.
 pub fn stick_plan(rec: &FwRecord) -> Option<(u8, u32, [u8; 32])> {
     let slot = rec.apply?;
-    if !rec.durable || slot > 1 {
+    if rec.revert || !rec.durable || slot > 1 {
         return None;
     }
     let len = rec.len[slot as usize];
@@ -365,6 +385,29 @@ pub fn ack_stick_write() -> bool {
         return false;
     }
     st.rec.apply = None;
+    st.rec.swapped = true;
+    st.dirty = true;
+    true
+}
+
+static STICK_RESTORED: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+
+/// The pre-EBS restore of `BOOTX64.OLD` finished.
+pub fn note_stick_restored() {
+    STICK_RESTORED.store(true, core::sync::atomic::Ordering::Release);
+}
+
+/// Drop the restore request after `BOOTX64.OLD` is back on the stick.
+pub fn ack_stick_restore() -> bool {
+    if !STICK_RESTORED.swap(false, core::sync::atomic::Ordering::AcqRel) {
+        return false;
+    }
+    let st = state();
+    if !st.rec.revert {
+        return false;
+    }
+    st.rec.revert = false;
+    st.rec.swapped = false;
     st.dirty = true;
     true
 }
@@ -384,7 +427,16 @@ pub fn status_body(buf: &mut [u8]) -> usize {
         Some(p) => p as i32,
         None => -1,
     };
-    let body = format_record(rec.active, pend, rec.len[0], rec.len[1], rec.durable, apply);
+    let body = format_record(
+        rec.active,
+        pend,
+        rec.len[0],
+        rec.len[1],
+        rec.durable,
+        apply,
+        rec.revert,
+        rec.swapped,
+    );
     if body.n > buf.len() {
         return 0;
     }
@@ -491,7 +543,16 @@ pub fn host_update_rest(method: RestMethod, path: &str, authed: bool) -> UpdateH
                 Some(p) => p as i32,
                 None => -1,
             };
-            let body = format_record(rec.active, -1, rec.len[0], rec.len[1], rec.durable, apply);
+            let body = format_record(
+                rec.active,
+                -1,
+                rec.len[0],
+                rec.len[1],
+                rec.durable,
+                apply,
+                rec.revert,
+                rec.swapped,
+            );
             json_status(200, &body.buf[..body.n])
         } else {
             json_status(409, b"{\"ok\":false,\"reason\":\"none\"}")
@@ -507,7 +568,16 @@ pub fn host_update_rest(method: RestMethod, path: &str, authed: bool) -> UpdateH
             Some(p) => p as i32,
             None => -1,
         };
-        let body = format_record(rec.active, pend, rec.len[0], rec.len[1], rec.durable, apply);
+        let body = format_record(
+            rec.active,
+            pend,
+            rec.len[0],
+            rec.len[1],
+            rec.durable,
+            apply,
+            rec.revert,
+            rec.swapped,
+        );
         json_status(200, &body.buf[..body.n])
     } else {
         json_status(409, b"{\"ok\":false,\"reason\":\"none\"}")
@@ -565,6 +635,8 @@ fn format_record(
     len1: u32,
     durable: bool,
     apply: i32,
+    revert: bool,
+    swapped: bool,
 ) -> RecordJson {
     let mut s = RecordJson {
         buf: [0; 160],
@@ -589,11 +661,20 @@ fn format_record(
     });
     s.push(b",\"apply\":");
     if apply < 0 {
-        s.push(b"null}");
+        s.push(b"null");
     } else {
         s.push_dec(apply as u32);
-        s.push(b"}");
     }
+    s.push(if revert {
+        b",\"revert\":true"
+    } else {
+        b",\"revert\":false"
+    });
+    s.push(if swapped {
+        b",\"swapped\":true}"
+    } else {
+        b",\"swapped\":false}"
+    });
     s
 }
 
@@ -817,6 +898,13 @@ mod tests {
         note_stick_written();
         assert!(ack_stick_write());
         assert!(record().apply.is_none());
+        assert!(record().swapped);
+        assert!(rollback());
+        assert!(record().revert);
+        note_stick_restored();
+        assert!(ack_stick_restore());
+        assert!(!record().revert);
+        assert!(!record().swapped);
     }
 
     #[test]
