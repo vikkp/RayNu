@@ -100,13 +100,11 @@ pub fn http_accept_should_idle_abort(
 /// a standing page, not a second ClientHello.
 pub const COEXIST_KEEPALIVE_IDLE_MS: i64 = 600_000;
 
-/// TCP sockets in the coexist table.
+/// Buffer slots reserved beside the one standing session.
 ///
-/// Wave 4 (`11688cbf`) listened on one of them. The page, the sign-in,
-/// and the later polls were more HTTP on that keep-alive. The table is
-/// larger so a reload can take an idle socket after the page is up.
-/// [`spare_listen_slot`] is what the tick uses. It does not abort a
-/// session to free a listener.
+/// The coexist tick uses one of them (`SPA_SLOT` in the listen path).
+/// Wave 4 (`11688cbf`) closed on that session: one handshake, then more
+/// HTTP on the same keys. The extras are not listened.
 pub const COEXIST_TCP_SLOTS: usize = 10;
 
 /// Listen sockets kept free for the next SYN.
@@ -191,18 +189,17 @@ pub fn listen_reclaim_slot(
     None
 }
 
-/// An idle socket to arm after the page is already being served.
+/// An idle socket. The coexist tick does not call this.
+///
+/// Wave 4 did not arm a second listener. The standing session is one
+/// socket in `host_nic_listen`. This helper stays for the host test of
+/// "do not pick an active socket."
 ///
 /// INVARIANTS:
-/// - `None` while no session is kept (the first handshake stays the only listener)
+/// - `None` while no session is kept
 /// - `None` while any socket is already listening
 /// - Never returns a socket that is active
 /// - Never panics
-///
-/// Wave 4 served `/vms`, overview, and sign-in on the session that
-/// accepted the page. Iron `ad738602` accepted slot 0 and slot 1 together
-/// at the login prompt; the shell painted and the follow-ups did not
-/// finish. One listener until `kept`, then one spare, is that session again.
 pub fn spare_listen_slot(slots: &[ListenSlot]) -> Option<usize> {
     if !slots.iter().any(|s| s.kept) {
         return None;

@@ -278,16 +278,17 @@ fn coexist_millis_from_tsc_wraps() {
 }
 
 #[test]
-fn one_listener_until_the_page_session_is_kept() {
+fn wave4_session_is_one_tcp_socket() {
     assert_eq!(COEXIST_TCP_SLOTS, 10);
     assert_eq!(COEXIST_KEEPALIVE_IDLE_MS, 600_000);
     let listen = include_str!("host_nic_listen.rs");
-    assert!(listen.contains("COEXIST_TCP_SLOTS"));
-    assert!(listen.contains("COEXIST_CLOSE_FORCE_MS"));
+    assert!(listen.contains("const SPA_SLOT: usize = 0"));
+    assert!(listen.contains("for i in [SPA_SLOT]"));
     assert!(listen.contains("listen=1"));
-    assert!(listen.contains("fn arm_spare_listener"));
-    assert!(listen.contains("spare_listen_slot"));
+    assert!(listen.contains("COEXIST_CLOSE_FORCE_MS"));
     assert!(listen.contains("FIN, not RST"));
+    assert!(!listen.contains("fn arm_spare_listener"));
+    assert!(!listen.contains("spare_listen_slot"));
     assert!(!listen.contains("listen_reclaim_slot"));
     assert!(!listen.contains("coexist_reclaim_slot"));
 }
