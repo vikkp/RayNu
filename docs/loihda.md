@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | spa-addr-201 |
-| Summary | **Standing SPA moves to `10.99.99.201`.** `.146` is owned on the LAN by Intel `64:bc:58:97:0b:c6`. The saved static record is rewritten. Guest stays `.200`. E4 stays lived. TLS piece stays 88. Bars held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | no-egress-rearm |
+| Summary | **Function 0 stays up when the guest arms egress.** Iron `30422198` reached NTP on `10.99.99.201`, then the rearm line, then the Mac gateway reported host unreachable. TLS piece stays 88. Bars held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. |
 | Gates touched | No new lived row. No doorbell. No format of UBUNTU0. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-05 | no-egress-rearm | 94 | 72 | **Function 0 is not rebuilt on egress arm.** Iron `30422198` NTP on `.201` then `:38 rearm after egress ok`. Mac gateway host-unreachable for `.201`. TLS 88. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-05 | spa-addr-201 | 94 | 72 | **Standing SPA moves to `10.99.99.201`.** Guest ARP for `.146` returned Intel `64:bc:58:97:0b:c6` and connection refused. Saved static record rewritten. Guest stays `.200`. TLS 88. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-04 | ten-listen-sockets | 94 | 72 | **Ten listen sockets restored.** Two stay in LISTEN. Kept session is not aborted. TLS 88. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-04 | listen-before-poll | 94 | 72 | **Two sockets listen before poll.** Kept session stays. TLS 88. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |

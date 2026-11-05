@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | spa-addr-201 |
-| Summary | **Standing SPA moves off `10.99.99.146`.** The guest resolved that address to Intel `64:bc:58:97:0b:c6` and got connection refused. The hypervisor MAC is `b0:26:28:5c:5a:38`. A saved static `.146` now binds `10.99.99.201/24` and the sector is staged. The guest stays `10.99.99.200`. E4 stays lived on `9c3e660259de`. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | no-egress-rearm |
+| Summary | **Do not rebuild function 0 when the guest arms egress.** Iron `30422198` bound `10.99.99.201` and completed NTP, then printed `:38 rearm after egress ok`. The Mac gateway `10.6.0.1` then returned Destination Host Unreachable for `.201`. `.146` was the Intel host `64:bc:58:97:0b:c6`. E4 stays lived on `9c3e6602`. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | No new lived row. Wave 5 stays closed. E4 stays lived on `9c3e6602`. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-05 | no-egress-rearm | 0.0 | 99 | **Function 0 is not rebuilt when egress arms.** Iron `30422198` listened on `10.99.99.201:8443`, NTP completed, then `:38 rearm after egress ok`. Mac `10.6.0.1` returned Destination Host Unreachable for `.201`. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-05 | spa-addr-201 | 0.0 | 99 | **Standing SPA moves to `10.99.99.201`.** Guest ARP for `.146` returned Intel `64:bc:58:97:0b:c6` and connection refused. Hypervisor MAC stays `b0:26:28:5c:5a:38`. Saved `.146` is rewritten and staged. Guest stays `.200`. E4 stays lived on `9c3e6602`. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-04 | ten-listen-sockets | 0.0 | 99 | **Ten listen sockets restored.** Two stay in LISTEN. A kept session is not aborted. `6dc1f554` and `87bee04b` are the reason. `9c3e6602` signed in on this table. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-04 | listen-before-poll | 0.0 | 99 | **A listener stays in LISTEN before poll.** One socket on `7e936b12` refused the page in 0 ms. Two sockets, no abort of the kept session. Scores held. months 0.0 held; overall 99 held |
