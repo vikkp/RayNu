@@ -24,6 +24,7 @@ fn overview_is_the_five_objects_under_one_root() {
         body.contains(",\"cert\":{\"ok\":true,\"source\":"),
         "{body}"
     );
+    assert!(body.contains(",\"update\":{\"active\":"), "{body}");
     assert!(body.ends_with("}}"), "{body}");
     assert!(!body.contains("\"token\""), "{body}");
     assert_eq!(body.matches('{').count(), body.matches('}').count());

@@ -224,6 +224,13 @@ fn wrap_session_try_exchange(
     if !sock.can_send() {
         return None;
     }
+    if let Some(n) = crate::mgmt::fw_update::update_http_response(raw_bytes, out) {
+        if n == 0 || !seal_and_queue(session, sock, &out[..n], wrap) {
+            return None;
+        }
+        session.clear_http();
+        return Some(false);
+    }
     if let Some(n) = crate::mgmt::iso_library::library_http_response(raw_bytes, out) {
         if n == 0 || !seal_and_queue(session, sock, &out[..n], wrap) {
             return None;

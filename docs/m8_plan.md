@@ -112,7 +112,8 @@ M8.9  Admin-attached guest NIC (ADR-013 Appendix C)
    survives a power cut · a customer can be let in · installable · more than
    one guest · see the hardware · 72 h soak). `./tools/sync-sku-site.sh --next`
    names the current wave and the one iron thread. Wave 6 A5 lived on
-   `097f3c612c06` / run `42062748313`. A7 is the iron thread and is not opened.
+   `097f3c612c06` / run `42062748313`. A7 is in flight on
+   `cursor/wave-6-a7-update-0591`. The USB copy is still the iron step.
 → M9 sketch: vMotion-like · DRS-like · hot-add
 ```
 
