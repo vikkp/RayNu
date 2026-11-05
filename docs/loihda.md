@@ -1,6 +1,6 @@
 ---
 loihda_version: 1
-last_updated: 2026-11-04
+last_updated: 2026-11-05
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | ten-listen-sockets |
-| Summary | **Ten sockets listen. Two stay in LISTEN. A kept session is not aborted.** Wave 5 iron is why the table is ten. E4 stays lived. TLS piece stays 88. Bars held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | spa-addr-201 |
+| Summary | **Standing SPA moves to `10.99.99.201`.** `.146` is owned on the LAN by Intel `64:bc:58:97:0b:c6`. The saved static record is rewritten. Guest stays `.200`. E4 stays lived. TLS piece stays 88. Bars held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. |
 | Gates touched | No new lived row. No doorbell. No format of UBUNTU0. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-05 | spa-addr-201 | 94 | 72 | **Standing SPA moves to `10.99.99.201`.** Guest ARP for `.146` returned Intel `64:bc:58:97:0b:c6` and connection refused. Saved static record rewritten. Guest stays `.200`. TLS 88. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-04 | ten-listen-sockets | 94 | 72 | **Ten listen sockets restored.** Two stay in LISTEN. Kept session is not aborted. TLS 88. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-04 | listen-before-poll | 94 | 72 | **Two sockets listen before poll.** Kept session stays. TLS 88. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-04 | function-0-rearm-after-egress | 94 | 72 | **Rearm function 0 after the egress reset.** One session stays. TLS 88. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |

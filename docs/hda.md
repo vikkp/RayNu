@@ -1,6 +1,6 @@
 ---
 hda_version: 1
-last_updated: 2026-11-04
+last_updated: 2026-11-05
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | ten-listen-sockets |
-| Summary | **Ten sockets listen before poll. Two stay in LISTEN. A kept session is not aborted.** Wave 5 iron: one socket reset every later SYN (`6dc1f554`); six refused the reload during a close (`87bee04b`). `9c3e6602` signed in on ten. `badcc912` had gone to two. COM2 prints `listen=10`. E4 stays lived on `9c3e660259de`. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | spa-addr-201 |
+| Summary | **Standing SPA moves off `10.99.99.146`.** The guest resolved that address to Intel `64:bc:58:97:0b:c6` and got connection refused. The hypervisor MAC is `b0:26:28:5c:5a:38`. A saved static `.146` now binds `10.99.99.201/24` and the sector is staged. The guest stays `10.99.99.200`. E4 stays lived on `9c3e660259de`. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | No new lived row. Wave 5 stays closed. E4 stays lived on `9c3e6602`. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-05 | spa-addr-201 | 0.0 | 99 | **Standing SPA moves to `10.99.99.201`.** Guest ARP for `.146` returned Intel `64:bc:58:97:0b:c6` and connection refused. Hypervisor MAC stays `b0:26:28:5c:5a:38`. Saved `.146` is rewritten and staged. Guest stays `.200`. E4 stays lived on `9c3e6602`. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-04 | ten-listen-sockets | 0.0 | 99 | **Ten listen sockets restored.** Two stay in LISTEN. A kept session is not aborted. `6dc1f554` and `87bee04b` are the reason. `9c3e6602` signed in on this table. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-04 | listen-before-poll | 0.0 | 99 | **A listener stays in LISTEN before poll.** One socket on `7e936b12` refused the page in 0 ms. Two sockets, no abort of the kept session. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-04 | m5-smoke-pipefail | 0.0 | 99 | **M5 smoke grep no longer fails a passing test.** PR run `41948554730` printed `RAYNU-V-M5-IDRAC-OK` then exited 1. Push run `41948548809` was green. Scores held. months 0.0 held; overall 99 held |
