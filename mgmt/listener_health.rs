@@ -23,6 +23,19 @@ pub const LISTENER_RECOVER_HOLDOFF_MS: i64 = 8_000;
 /// Rebuilds in one boot. A predicate that never clears stops here.
 pub const LISTENER_RECOVER_CAP: u8 = 4;
 
+/// Function 1's arm is a core reset of the shared BCM5720. Function 0's
+/// rings were programmed before that reset. A quiet port is not a stall,
+/// so the sampler does not rebuild. Rearm once, and not over a live session.
+///
+/// INVARIANTS:
+/// - False once `already` is set
+/// - False while a TCP session is active
+/// - False until function 1 is armed
+/// - Never panics
+pub fn spa_rearm_after_egress(egress_armed: bool, already: bool, session_active: bool) -> bool {
+    egress_armed && !already && !session_active
+}
+
 /// One read of function 0. Counters are cumulative; ring indices wrap at 32.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ListenerSample {
@@ -158,6 +171,14 @@ mod tests {
             tx_cons: 0,
             rx_ok,
         }
+    }
+
+    #[test]
+    fn egress_reset_rearms_a_quiet_function_0_once() {
+        assert!(!spa_rearm_after_egress(false, false, false));
+        assert!(spa_rearm_after_egress(true, false, false));
+        assert!(!spa_rearm_after_egress(true, true, false));
+        assert!(!spa_rearm_after_egress(true, false, true));
     }
 
     #[test]

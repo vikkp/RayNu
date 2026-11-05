@@ -116,6 +116,8 @@ static mut LISTENER_HEALTH: crate::mgmt::listener_health::ListenerTracker =
 static mut LISTENER_HEALTH_AT: i64 = 0;
 static mut LISTENER_HOLDOFF_UNTIL: i64 = 0;
 static mut LISTENER_RECOVERS: u8 = 0;
+/// Function 0 rings rebuilt once after function 1's core reset.
+static mut EGRESS_REARM_DONE: bool = false;
 static mut COEXIST_PORT: u16 = MGMT_HTTP_DEFAULT_PORT;
 /// SPA `POST /host/poweroff` accepted. Drain the 200, then VMXOFF + shutdown.
 static mut COEXIST_PENDING_POWEROFF: bool = false;
@@ -481,6 +483,7 @@ pub fn arm_bcm5720_coexist() -> bool {
         LISTENER_HEALTH_AT = 0;
         LISTENER_HOLDOFF_UNTIL = 0;
         LISTENER_RECOVERS = 0;
+        EGRESS_REARM_DONE = false;
         COEXIST_PORT = port;
         COEXIST_ARMED = true;
     }
@@ -585,6 +588,40 @@ fn d10_ntp_tick(sockets: &mut SocketSet, millis: i64) {
     }
 }
 
+/// Function 1 has reset the shared chip. Reprogram function 0's rings
+/// before the next poll. A live TCP session is left alone.
+///
+/// # Safety
+/// [`COEXIST_TCP_HANDLE`] filled. BSP-only.
+unsafe fn rearm_function0_after_egress(sockets: &mut SocketSet, millis: i64) {
+    use crate::mgmt::listener_health::{spa_rearm_after_egress, LISTENER_RECOVER_HOLDOFF_MS};
+    let handle = COEXIST_TCP_HANDLE.assume_init();
+    let session_active = {
+        let sock = sockets.get::<tcp::Socket>(handle);
+        sock.is_active() || COEXIST_RT.announced || COEXIST_RT.kept
+    };
+    if !spa_rearm_after_egress(
+        crate::mgmt::bcm5720_mmio::egress_armed(),
+        EGRESS_REARM_DONE,
+        session_active,
+    ) {
+        return;
+    }
+    EGRESS_REARM_DONE = true;
+    let ok = crate::mgmt::bcm5720_mmio::rebuild_spa_rings();
+    let sock = sockets.get_mut::<tcp::Socket>(handle);
+    if !sock.is_active() && !sock.is_listening() {
+        let _ = sock.listen(COEXIST_PORT);
+    }
+    LISTENER_HEALTH.reset();
+    LISTENER_HOLDOFF_UNTIL = millis.saturating_add(LISTENER_RECOVER_HOLDOFF_MS);
+    note_session(if ok {
+        "boot: HOST-NIC :38 rearm after egress ok"
+    } else {
+        "boot: HOST-NIC :38 rearm after egress fail"
+    });
+}
+
 /// One line on the nowait path, so it still shows while Linux owns COM2.
 fn note_session(msg: &str) {
     serial::write_line_nowait(msg);
@@ -635,6 +672,7 @@ pub fn tick_bcm5720_coexist() {
         );
         let millis = COEXIST_MILLIS;
         let ts = Instant::from_millis(millis);
+        rearm_function0_after_egress(sockets, millis);
         // ADR-021 D5: both LOM links, twice a second, idle or under a guest.
         crate::mgmt::bcm5720_mmio::host_link_tick();
         let _ = bounded_poll(HOST_NIC_POLL_BUDGET, || {
