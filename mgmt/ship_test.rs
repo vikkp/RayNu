@@ -1,6 +1,7 @@
 use super::{
-    prop_package_script_complete, prop_release_kit_package, prop_size_gate_in_release_path,
-    prop_usb_idrac_runbook, prop_version_stamp_present, M7_SHIP_OK_MARKER, SHIP_GAP_NOTE,
+    prop_a5_sign_contract, prop_package_script_complete, prop_release_kit_package,
+    prop_size_gate_in_release_path, prop_usb_idrac_runbook, prop_version_stamp_present,
+    M7_SHIP_OK_MARKER, SHIP_GAP_NOTE,
 };
 
 #[test]
@@ -13,4 +14,9 @@ fn release_kit_package() {
     assert!(prop_usb_idrac_runbook());
     assert!(prop_release_kit_package());
     println!("RAYNU-V-M7-SHIP-OK");
+}
+
+#[test]
+fn a5_sign_contract() {
+    assert!(prop_a5_sign_contract());
 }

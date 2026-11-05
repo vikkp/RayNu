@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | no-egress-rearm |
-| Summary | **Function 0 stays up when the guest arms egress.** Iron `30422198` reached NTP on `10.99.99.201`, then the rearm line, then the Mac gateway reported host unreachable. TLS piece stays 88. Bars held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-6-a5-on-wave-5 |
+| Summary | **ADR-021 A5 in flight, rebased onto main `9516e470`.** Wave 5 stays closed. Host signer, RayNu-V `db` certificate, private key not in git. Not lived. Secure Boot stays off. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
-| LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. |
-| Gates touched | No new lived row. No doorbell. No format of UBUNTU0. |
+| LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. TLS 88 held. |
+| Gates touched | ADR-021 A5 in flight. Wave 5 stays closed. E4 stays lived. Auth.token A5 stays parked. No doorbell. No format of UBUNTU0. |
 
 ---
 
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-05 | wave-6-a5-on-wave-5 | 94 | 72 | **ADR-021 A5 (signed EFI) in flight, rebased onto main `9516e470`.** Wave 5 stays closed. Host `sbverify` of a throwaway key. Not lived. Secure Boot stays off. Auth.token A5 stays parked. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-05 | no-egress-rearm | 94 | 72 | **Function 0 is not rebuilt on egress arm.** Iron `30422198` NTP on `.201` then `:38 rearm after egress ok`. Mac gateway host-unreachable for `.201`. TLS 88. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-05 | spa-addr-201 | 94 | 72 | **Standing SPA moves to `10.99.99.201`.** Guest ARP for `.146` returned Intel `64:bc:58:97:0b:c6` and connection refused. Saved static record rewritten. Guest stays `.200`. TLS 88. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-04 | ten-listen-sockets | 94 | 72 | **Ten listen sockets restored.** Two stay in LISTEN. Kept session is not aborted. TLS 88. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
@@ -469,7 +470,7 @@ LOI:           NOT OPEN. Tracker born 2026-09-14.
 Bar A:         94% · 0.25 months · dedicated-box non-prod
 Bar B:         72% · 1.25 months · Ubuntu login on a 10 GiB spare tail (c3a70e62) with a LAN address from the SPA (0d865c7f); whole VD still hidden
 Overall:       80% · confidence medium
-NOW:           SKU card is what a signature holds today. One dedicated box. Ubuntu on a 10 GiB tail. M8.9 closed on 0d865c7f: the guest took the SPA-saved address by itself and SSH from the LAN reached raynusrv2. Pinned as v0.1.0-m8-9-lan (not Latest). Wave 4 closed on 11688cbf. Wave 5 E6 lived on f2828d95. E4 is in flight: host rustls finishes TLS 1.3. Iron bac1f0ec5139 is still TLS 1.2. Not lived. Do not format UBUNTU0. The 2.9 TB VD is not this disk. A5 parked. Bar A 94. Bar B 72. Overall 80. perc 86. unmodified 45. SKU 94. TLS 80. months A 0.25. months B 1.25. docs/adr/ADR-019.md
+NOW:           SKU card is what a signature holds today. One dedicated box. Ubuntu on a 10 GiB tail. M8.9 closed on 0d865c7f. Wave 4 closed on 11688cbf. Wave 5 is closed on main 9516e470: E4 lived on 9c3e6602 (TLS 1.3), E5/G3/E12 lived in ad738602. Current wave is 6. ADR-021 A5 (signed EFI) is in flight on that baseline; Secure Boot stays off. Auth.token A5 stays parked. Standing SPA is 10.99.99.201. Do not format UBUNTU0. The 2.9 TB VD is not this disk. Bar A 94. Bar B 72. Overall 80. perc 86. unmodified 45. SKU 94. TLS 88. months A 0.25. months B 1.25. docs/adr/ADR-019.md
 Open:          link state on the SPA (D5) · iron AUTH-OK (parked) · unmodified ISO without the serial amendment · the whole spare VD · cluster
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
 Rollback:      v0.1.0-m8-9-lan → M8.9 close (COM2 sha=0d865c7fcb0a, CI 40603110937, SHA256 df6fc3465cecf1eaf058d5c8e675501827c16eb55e7b2c9758bc5e68326ad91b). v0.1.0-m8-8-ubuntu → older M8.8 close (c3a70e623aec, CI 38454398693). v0.1.0-m8-perc-spa → older SPA choice (8ad2ac89125e, CI 36362775808). v0.1.0-m8-a4s → older standing SPA (1f33eeda72f9, CI 36137732145). v0.1.0-m8-a6 → keyboard + power-off (fd2ca12e, CI 36166108942), not Latest. Everest Latest stays v0.1.0-everest-closed (f72b4276).

@@ -20,14 +20,14 @@
   "counts": {
     "S1": {
       "lived": 47,
-      "in flight": 1,
-      "planned": 19,
+      "in flight": 2,
+      "planned": 18,
       "total": 67
     },
     "Final": {
       "lived": 47,
-      "in flight": 1,
-      "planned": 81,
+      "in flight": 2,
+      "planned": 80,
       "total": 129
     }
   },
@@ -79,10 +79,10 @@
         {
           "id": "A5",
           "capability": "Signed EFI for UEFI Secure Boot (customer enrolls RayNu-V key or shim)",
-          "status": "planned",
+          "status": "in flight",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Unsigned today; R640 Secure Boot must be off",
+          "note": "`cursor/wave-6-a5-sign-0591`. Key decision (2026-11-05): Shipment 1 signs with a RayNu-V certificate the customer enrolls in Secure Boot `db` (`RAYNU_SIGN_KEY` / `RAYNU_SIGN_CERT`; the private key is not in git). A Microsoft-signed shim is the alternative when the customer will not enroll a key, and it is not built. `./tools/sign-efi.sh --ephemeral` and `./tools/a5-sign-smoke.sh` prove `sbsign`/`sbverify` on a throwaway key that is deleted in the same step; that signature is not the release kit. `./tools/package-release.sh` stays unsigned unless both env vars are set, then the kit includes `raynu-v-db.crt`. Runbook `docs/runbooks/secure_boot.md`. Host marker `RAYNU-V-A5-SIGN-HOST-OK` is not an iron close. Not lived until an R640 with Secure Boot enabled boots the signed EFI. The lab keeps Secure Boot off. Rebased onto main `9516e470`, which contains the wave 5 close (`ad738602`: E5, G3, E12 lived; E4 lived on `9c3e6602`). Current wave is 6. A7 is the iron thread and is not opened by this host-first row",
           "wave": "6"
         },
         {
@@ -134,14 +134,14 @@
       "counts": {
         "S1": {
           "lived": 4,
-          "in flight": 0,
-          "planned": 4,
+          "in flight": 1,
+          "planned": 3,
           "total": 8
         },
         "Final": {
           "lived": 4,
-          "in flight": 0,
-          "planned": 6,
+          "in flight": 1,
+          "planned": 5,
           "total": 10
         }
       }
@@ -1585,11 +1585,11 @@
         "H8"
       ],
       "iron": "A7",
-      "why": "Needs C8 so an update keeps guests. Signing (A5) needs a key decision from the operator.",
+      "why": "Needs C8 (lived) so an update keeps guests. Wave 5 is closed on main. A5 key decision (2026-11-05): a RayNu-V certificate the customer enrolls in `db`; shim is not built. A7 is the iron thread and is not opened by the A5 host signer.",
       "counts": {
         "lived": 0,
-        "in flight": 0,
-        "planned": 7,
+        "in flight": 1,
+        "planned": 6,
         "total": 7
       },
       "closed": false
@@ -1861,7 +1861,7 @@
     {
       "id": "A5",
       "capability": "Signed EFI for UEFI Secure Boot (customer enrolls RayNu-V key or shim)",
-      "status": "planned",
+      "status": "in flight",
       "role": "host-first"
     },
     {

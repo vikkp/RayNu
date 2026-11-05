@@ -88,7 +88,7 @@ All must be true (no hand-waving):
 | PE assets kernel/initrd/webui | DONE | M3.22 / M5.2 |
 | CI build | DONE | `.github/workflows/ci.yml` |
 | Release tarball + SHA256 | DONE | `tools/package-release.sh` → `dist/` (M7.0 Latitude) |
-| Secure Boot signing | MISSING | optional; not required for M7.0 |
+| Secure Boot signing | IN PROGRESS | ADR-021 A5 host signer (`tools/sign-efi.sh`). Not lived. Lab Secure Boot stays off. Not required for M7.0 |
 | One-page USB/iDRAC runbook | DONE | `docs/runbooks/usb_idrac.md` (M7.0) |
 
 ### Summit B — Load on real R640
@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | no-egress-rearm |
-| Summary | **Do not rebuild function 0 when the guest arms egress.** Iron `30422198` bound `10.99.99.201` and completed NTP, then printed `:38 rearm after egress ok`. The Mac gateway `10.6.0.1` then returned Destination Host Unreachable for `.201`. `.146` was the Intel host `64:bc:58:97:0b:c6`. E4 stays lived on `9c3e6602`. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-6-a5-on-wave-5 |
+| Summary | **ADR-021 A5 in flight, rebased onto main `9516e470`.** That tip contains the wave 5 close (`ad738602`; E4 lived on `9c3e6602`). Host signer for a RayNu-V `db` certificate. Private key is not in git. CI proof is ephemeral and deleted. The kit stays unsigned. Not lived. Secure Boot stays off. Current wave is 6. A7 is not opened. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
-| Gates touched | No new lived row. Wave 5 stays closed. E4 stays lived on `9c3e6602`. No doorbell. No format of UBUNTU0. |
+| Gates touched | ADR-021 A5 `planned → in flight` on `cursor/wave-6-a5-sign-0591`. Wave 5 stays closed. E4 stays lived on `9c3e6602`. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
 
 ## Blockers & risks (Everest-relevant)
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-05 | wave-6-a5-on-wave-5 | 0.0 | 99 | **ADR-021 A5 in flight, rebased onto main `9516e470`.** Wave 5 stays closed (E4 lived `9c3e6602`, E5/G3/E12 lived in `ad738602`). RayNu-V `db` certificate; private key stays with the operator. `RAYNU-V-A5-SIGN-HOST-OK` is a host `sbverify`. Not lived. Secure Boot stays off. A7 not opened. Auth.token A5 stays parked. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-05 | no-egress-rearm | 0.0 | 99 | **Function 0 is not rebuilt when egress arms.** Iron `30422198` listened on `10.99.99.201:8443`, NTP completed, then `:38 rearm after egress ok`. Mac `10.6.0.1` returned Destination Host Unreachable for `.201`. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-05 | spa-addr-201 | 0.0 | 99 | **Standing SPA moves to `10.99.99.201`.** Guest ARP for `.146` returned Intel `64:bc:58:97:0b:c6` and connection refused. Hypervisor MAC stays `b0:26:28:5c:5a:38`. Saved `.146` is rewritten and staged. Guest stays `.200`. E4 stays lived on `9c3e6602`. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-04 | ten-listen-sockets | 0.0 | 99 | **Ten listen sockets restored.** Two stay in LISTEN. A kept session is not aborted. `6dc1f554` and `87bee04b` are the reason. `9c3e6602` signed in on this table. Scores held. months 0.0 held; overall 99 held |
@@ -1197,7 +1198,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     Wave 5 is current. E6 lived on f2828d95. E4 is in flight on cursor/wave-5-e4-tls13-41d4. Host rustls finishes TLS 1.3. Iron bac1f0ec5139 / run 41516590111 is the file to leave booted until this EFI is flashed. Not lived until that boot prints cert rd operator and a client completes TLS 1.3. Rollback for a wave 2 flash is v0.1.0-m8-9-lan. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/m8_plan.md.
+Next move:     Wave 5 is closed on main 9516e470 (E4 lived 9c3e6602; E5, G3, E12 lived in ad738602). Current wave is 6. A5 signed EFI is in flight on cursor/wave-6-a5-sign-0591, rebased onto that tip. RAYNU-V-A5-SIGN-HOST-OK is not an iron close. Secure Boot stays off. A7 is the iron thread and is not opened. Auth.token A5 stays parked. Standing SPA is 10.99.99.201. Rollback for a wave 2 flash is v0.1.0-m8-9-lan. Do not format UBUNTU0. No doorbell. See docs/m8_plan.md.
 Rollback:      M8.9 close: v0.1.0-m8-9-lan → CI 40603110937 / COM2 sha=0d865c7fcb0a / EFI SHA256 df6fc3465cecf1eaf058d5c8e675501827c16eb55e7b2c9758bc5e68326ad91b
 Older M8.8:    v0.1.0-m8-8-ubuntu → CI 38454398693 / COM2 sha=c3a70e623aec / EFI SHA256 08ef31ba87136577102ac378d8e0a512327994e8794c41c64444f5be5f8812c4
 Older SPA:     v0.1.0-m8-perc-spa → CI 36362775808 / COM2 sha=8ad2ac89125e / EFI SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849

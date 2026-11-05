@@ -60,6 +60,11 @@ jobs:
         run: ./tools/check-size.sh
       - name: package EFI release kit (M7.0)
         run: SKIP_BUILD=1 ./tools/package-release.sh
+      - name: A5 sign host gate (product EFI, ephemeral key)
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq sbsigntool
+          A5_EFI=target/x86_64-unknown-uefi/release/r640-hypervisor.efi ./tools/a5-sign-smoke.sh
       - name: upload efi artifact
         uses: actions/upload-artifact@v4
         with:
@@ -526,6 +531,19 @@ jobs:
           components: rust-src
       - name: M6.9 external audit smoke → RAYNU-V-M6-EXT-OK
         run: ./tools/m6-ext-smoke.sh
+
+  # ADR-021 A5: Authenticode sign + sbverify. Host artifact. Not lived.
+  a5-sign:
+    name: A5 EFI signature (SIGN-HOST-OK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: install sbsigntool
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq sbsigntool openssl
+      - name: A5 sign smoke → RAYNU-V-A5-SIGN-HOST-OK
+        run: ./tools/a5-sign-smoke.sh
 
   # M7.0: EFI release kit (scripts + runbook + host gate). Hard-fail.
   m7-ship:
