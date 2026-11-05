@@ -8,10 +8,11 @@
 //! rewritten. UBUNTU0 is refused. LBA 0 is refused.
 //!
 //! The SPA stages the inactive image in chunks. Rollback drops a pending
-//! slot that has not been kept. Confirm makes the pending slot the active
-//! one. This slice stores the bytes on the spare. It does not yet copy
-//! them onto `EFI/BOOT/BOOTX64.EFI`. The next F11 still loads the stick
-//! until that copy lands. Host tests do not print an iron marker.
+//! slot. Confirm keeps it and arms a stick copy. The next boot, while UEFI
+//! file protocols are still up, writes that image over `EFI/BOOT/BOOTX64.EFI`
+//! on the loaded volume and keeps the previous file as `BOOTX64.OLD`.
+//! The boot after that is the one that runs the new image. Host tests do
+//! not print an iron marker.
 
 use sha2::{Digest, Sha256};
 
@@ -40,6 +41,8 @@ pub struct FwMap {
 pub struct FwRecord {
     pub active: u8,
     pub pending: Option<u8>,
+    /// Slot to copy onto the boot stick on the next pre-EBS pass.
+    pub apply: Option<u8>,
     pub len: [u32; 2],
     pub sha: [[u8; 32]; 2],
     pub durable: bool,
@@ -50,6 +53,7 @@ impl FwRecord {
         Self {
             active: 0,
             pending: None,
+            apply: None,
             len: [0, 0],
             sha: [[0; 32], [0; 32]],
             durable: false,
@@ -106,6 +110,7 @@ pub fn encode(rec: &FwRecord, buf: &mut [u8; 512]) -> bool {
     buf[9] = rec.active;
     buf[10] = rec.pending.unwrap_or(PENDING_NONE);
     buf[11] = u8::from(rec.durable);
+    buf[12] = rec.apply.unwrap_or(PENDING_NONE);
     for i in 0..2 {
         let at = 16 + i * 36;
         buf[at..at + 4].copy_from_slice(&rec.len[i].to_le_bytes());
@@ -133,6 +138,11 @@ pub fn decode(buf: &[u8]) -> Option<FwRecord> {
         p if p <= 1 => Some(p),
         _ => return None,
     };
+    let apply = match buf[12] {
+        PENDING_NONE => None,
+        p if p <= 1 => Some(p),
+        _ => return None,
+    };
     let mut len = [0u32; 2];
     let mut sha = [[0u8; 32]; 2];
     for i in 0..2 {
@@ -146,6 +156,7 @@ pub fn decode(buf: &[u8]) -> Option<FwRecord> {
     Some(FwRecord {
         active,
         pending,
+        apply,
         len,
         sha,
         durable: buf[11] != 0,
@@ -256,10 +267,11 @@ pub fn accept_chunk(off: usize, total: usize, body: &[u8]) -> Result<(), &'stati
 /// Drop a pending slot. The active slot stays.
 pub fn rollback() -> bool {
     let st = state();
-    if st.rec.pending.is_none() {
+    if st.rec.pending.is_none() && st.rec.apply.is_none() {
         return false;
     }
     st.rec.pending = None;
+    st.rec.apply = None;
     st.rec.durable = false;
     st.staging = false;
     st.dirty = true;
@@ -278,6 +290,81 @@ pub fn confirm() -> bool {
     }
     st.rec.active = p;
     st.rec.pending = None;
+    st.rec.apply = Some(p);
+    st.dirty = true;
+    true
+}
+
+/// The slot a pre-EBS boot should copy onto `BOOTX64.EFI`.
+pub fn stick_plan(rec: &FwRecord) -> Option<(u8, u32, [u8; 32])> {
+    let slot = rec.apply?;
+    if !rec.durable || slot > 1 {
+        return None;
+    }
+    let len = rec.len[slot as usize];
+    if (len as usize) < 0x44 || len as usize > SLOT_BYTES {
+        return None;
+    }
+    Some((slot, len, rec.sha[slot as usize]))
+}
+
+/// Read `len` bytes of a slot image through `read_at` (byte offset, buffer).
+/// Keeps the image only when it is a PE and the SHA-256 matches.
+pub fn read_stick_image(
+    len: u32,
+    sha: [u8; 32],
+    mut read_at: impl FnMut(u64, &mut [u8]) -> bool,
+) -> bool {
+    let len = len as usize;
+    if len < 0x44 || len > SLOT_BYTES {
+        return false;
+    }
+    let st = state();
+    let mut off = 0usize;
+    while off < len {
+        let n = (len - off).min(512);
+        let mut sector = [0u8; 512];
+        if !read_at(off as u64, &mut sector[..n]) {
+            st.filled = 0;
+            return false;
+        }
+        st.image[off..off + n].copy_from_slice(&sector[..n]);
+        off += n;
+    }
+    st.filled = len;
+    if !is_pe(&st.image[..len]) || sha256(&st.image[..len]) != sha {
+        st.filled = 0;
+        return false;
+    }
+    true
+}
+
+/// Bytes accepted by [`read_stick_image`].
+pub fn stick_image() -> Option<&'static [u8]> {
+    let st = state();
+    if st.filled < 0x44 {
+        return None;
+    }
+    Some(&st.image[..st.filled])
+}
+
+static STICK_WRITTEN: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+
+/// The pre-EBS copy finished. The post-EBS header clear uses this.
+pub fn note_stick_written() {
+    STICK_WRITTEN.store(true, core::sync::atomic::Ordering::Release);
+}
+
+/// Drop the stick-apply slot after a successful copy. The image bytes stay.
+pub fn ack_stick_write() -> bool {
+    if !STICK_WRITTEN.swap(false, core::sync::atomic::Ordering::AcqRel) {
+        return false;
+    }
+    let st = state();
+    if st.rec.apply.is_none() {
+        return false;
+    }
+    st.rec.apply = None;
     st.dirty = true;
     true
 }
@@ -293,7 +380,11 @@ pub fn status_body(buf: &mut [u8]) -> usize {
         Some(p) => p as i32,
         None => -1,
     };
-    let body = format_record(rec.active, pend, rec.len[0], rec.len[1], rec.durable);
+    let apply = match rec.apply {
+        Some(p) => p as i32,
+        None => -1,
+    };
+    let body = format_record(rec.active, pend, rec.len[0], rec.len[1], rec.durable, apply);
     if body.n > buf.len() {
         return 0;
     }
@@ -396,7 +487,11 @@ pub fn host_update_rest(method: RestMethod, path: &str, authed: bool) -> UpdateH
     if path == "/host/update/rollback" {
         return if rollback() {
             let rec = record();
-            let body = format_record(rec.active, -1, rec.len[0], rec.len[1], rec.durable);
+            let apply = match rec.apply {
+                Some(p) => p as i32,
+                None => -1,
+            };
+            let body = format_record(rec.active, -1, rec.len[0], rec.len[1], rec.durable, apply);
             json_status(200, &body.buf[..body.n])
         } else {
             json_status(409, b"{\"ok\":false,\"reason\":\"none\"}")
@@ -408,7 +503,11 @@ pub fn host_update_rest(method: RestMethod, path: &str, authed: bool) -> UpdateH
             Some(p) => p as i32,
             None => -1,
         };
-        let body = format_record(rec.active, pend, rec.len[0], rec.len[1], rec.durable);
+        let apply = match rec.apply {
+            Some(p) => p as i32,
+            None => -1,
+        };
+        let body = format_record(rec.active, pend, rec.len[0], rec.len[1], rec.durable, apply);
         json_status(200, &body.buf[..body.n])
     } else {
         json_status(409, b"{\"ok\":false,\"reason\":\"none\"}")
@@ -459,7 +558,14 @@ fn parse_usize(s: &str) -> Option<usize> {
     s.parse().ok()
 }
 
-fn format_record(active: u8, pending: i32, len0: u32, len1: u32, durable: bool) -> RecordJson {
+fn format_record(
+    active: u8,
+    pending: i32,
+    len0: u32,
+    len1: u32,
+    durable: bool,
+    apply: i32,
+) -> RecordJson {
     let mut s = RecordJson {
         buf: [0; 160],
         n: 0,
@@ -477,10 +583,17 @@ fn format_record(active: u8, pending: i32, len0: u32, len1: u32, durable: bool) 
     s.push(b",\"len1\":");
     s.push_dec(len1);
     s.push(if durable {
-        b",\"durable\":true}"
+        b",\"durable\":true"
     } else {
-        b",\"durable\":false}"
+        b",\"durable\":false"
     });
+    s.push(b",\"apply\":");
+    if apply < 0 {
+        s.push(b"null}");
+    } else {
+        s.push_dec(apply as u32);
+        s.push(b"}");
+    }
     s
 }
 
@@ -664,11 +777,46 @@ mod tests {
         assert!(confirm());
         assert_eq!(record().active, 1);
         assert!(record().pending.is_none());
+        assert_eq!(record().apply, Some(1));
+        assert!(rollback());
+        assert!(record().apply.is_none());
         let second = pe(320);
         accept_chunk(0, second.len(), &second[..100]).unwrap();
         accept_chunk(100, second.len(), &second[100..]).unwrap();
         assert_eq!(record().pending, Some(0));
         assert_eq!(record().active, 1);
+    }
+
+    #[test]
+    fn stick_copy_keeps_only_a_matching_image() {
+        let _guard = hold();
+        let st = state();
+        reset(st);
+        let image = pe(128);
+        accept_chunk(0, image.len(), &image).unwrap();
+        while super::next_image_sector(LAB_SPARE_BYTES).is_some() {
+            super::ack_image_sector();
+        }
+        assert!(confirm());
+        let (slot, len, sha) = stick_plan(&record()).unwrap();
+        assert_eq!(slot, 1);
+        assert!(read_stick_image(len, sha, |off, buf| {
+            let start = off as usize;
+            buf.copy_from_slice(&image[start..start + buf.len()]);
+            true
+        }));
+        assert_eq!(stick_image().unwrap(), image.as_slice());
+        let mut bad = sha;
+        bad[0] ^= 1;
+        assert!(!read_stick_image(len, bad, |off, buf| {
+            let start = off as usize;
+            buf.copy_from_slice(&image[start..start + buf.len()]);
+            true
+        }));
+        assert!(stick_image().is_none());
+        note_stick_written();
+        assert!(ack_stick_write());
+        assert!(record().apply.is_none());
     }
 
     #[test]

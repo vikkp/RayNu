@@ -113,7 +113,8 @@ M8.9  Admin-attached guest NIC (ADR-013 Appendix C)
    one guest · see the hardware · 72 h soak). `./tools/sync-sku-site.sh --next`
    names the current wave and the one iron thread. Wave 6 A5 lived on
    `097f3c612c06` / run `42062748313`. A7 is in flight on
-   `cursor/wave-6-a7-update-0591`. The USB copy is still the iron step.
+   `cursor/wave-6-a7-update-0591`. Keep arms the next boot to copy
+   `BOOTX64.EFI`. The F11 after that copy is the iron close.
 → M9 sketch: vMotion-like · DRS-like · hot-add
 ```
 
