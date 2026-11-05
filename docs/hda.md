@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-6-a7-update |
-| Summary | **ADR-021 A7 in flight.** The SPA can stage a second hypervisor image on the spare, roll it back, or keep it. The USB stick is still the next F11. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-6-a7-sign-contract |
+| Summary | **A5 host smoke accepts the lived runbook.** `Status: lived` is the phrase the contract checks. The host marker still does not close a row. HDA months **0.0 held**. Overall **99 held**. A7 stays in flight. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | ADR-021 A7 `planned → in flight` on `cursor/wave-6-a7-update-0591`. A5 stays lived. Wave 6 stays open. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-05 | wave-6-a7-sign-contract | 0.0 | 99 | **A5 host smoke accepts the lived runbook.** `prop_a5_sign_contract` and `a5-sign-smoke.sh` look for `Status: lived`. The host marker still does not close a row. A7 stays in flight. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-05 | wave-6-a7-update | 0.0 | 99 | **ADR-021 A7 in flight.** Two spare slots, rollback and confirm on the page. The stick rewrite is still the iron step. A5 stays lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-05 | wave-6-a5-lived | 0.0 | 99 | **ADR-021 A5 lived.** Dell `db` lists RayNu-V Secure Boot. Secure Boot Enabled. F11 of the signed Lexar reached `build: sha=097f3c612c06 run=42062748313` and `raynusrv2 login:`. Guest `secureboot: Secure boot disabled` is RayNu-F, not the host switch. Wave 6 stays open on A7. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-05 | no-egress-rearm | 0.0 | 99 | **Function 0 is not rebuilt when egress arms.** Iron `30422198` listened on `10.99.99.201:8443`, NTP completed, then `:38 rearm after egress ok`. Mac `10.6.0.1` returned Destination Host Unreachable for `.201`. Scores held. months 0.0 held; overall 99 held |

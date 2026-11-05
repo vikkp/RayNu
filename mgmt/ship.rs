@@ -76,7 +76,7 @@ pub fn prop_a5_sign_contract() -> bool {
         && sign.contains("sbverify")
         && smoke.contains("RAYNU-V-A5-SIGN-HOST-OK")
         && smoke.contains("not lived")
-        && book.contains("not lived")
+        && book.contains("Status: lived")
         && book.contains("db")
         && book.contains("shim")
         && book.contains("Secure Boot")

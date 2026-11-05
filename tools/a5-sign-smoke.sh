@@ -23,7 +23,7 @@ then
 fi
 
 grep -q 'RAYNU_SIGN_KEY' tools/sign-efi.sh
-grep -q 'not lived' docs/runbooks/secure_boot.md
+grep -q 'Status: lived' docs/runbooks/secure_boot.md
 grep -q 'db' docs/runbooks/secure_boot.md
 grep -q 'shim' docs/runbooks/secure_boot.md
 
