@@ -30,11 +30,10 @@ use crate::mgmt::console::{maybe_print_iron_console_ok, take_spa_keys_injected};
 use crate::mgmt::e1000::E1000Device;
 use crate::mgmt::host_nic::{
     coexist_keepalive_idle, coexist_millis_from_tsc, host_nic_lab_armed, http_accept_idle_limit_ms,
-    http_accept_should_idle_abort, http_reply_should_give_up, listen_reclaim_slot, ListenSlot,
-    COEXIST_CLOSE_FORCE_MS, COEXIST_KEEPALIVE_IDLE_MS, COEXIST_LISTEN_BURST,
-    COEXIST_LISTEN_RESERVE, COEXIST_TCP_SLOTS, HOST_NIC_DHCP_MS, HOST_NIC_HTTP_IDLE_MS,
-    HOST_NIC_LISTEN_MS, HOST_NIC_MAX_EXCHANGES, M7_HOST_NIC_QEMU_MARKER, PRE_RAYNUF_HTTPS_MS,
-    QEMU_USERNET_GW, QEMU_USERNET_IPV4, QEMU_USERNET_PREFIX,
+    http_accept_should_idle_abort, http_reply_should_give_up, spare_listen_slot, ListenSlot,
+    COEXIST_CLOSE_FORCE_MS, COEXIST_KEEPALIVE_IDLE_MS, COEXIST_TCP_SLOTS, HOST_NIC_DHCP_MS,
+    HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS, HOST_NIC_MAX_EXCHANGES, M7_HOST_NIC_QEMU_MARKER,
+    PRE_RAYNUF_HTTPS_MS, QEMU_USERNET_GW, QEMU_USERNET_IPV4, QEMU_USERNET_PREFIX,
 };
 use crate::mgmt::host_nic_poll::{bounded_poll, HOST_NIC_POLL_BUDGET};
 use crate::mgmt::http::handle_http_request;
@@ -157,12 +156,10 @@ const _: () = assert!(SCRATCH_N + 16 <= crate::mgmt::mgmt_arena::MGMT_ARENA_BYTE
 /// A normal SPA `fetch()` does not send `Connection: close`. Iron
 /// `1e7d44c9` closed every reply anyway. Overview polls five URLs every
 /// 2 s, each poll was a new handshake, and a full table painted the Host
-/// card down. Keeping the session is the SPA path again. `643f13de`
-/// filled all six slots that way and the reload was refused. `87bee04b`
-/// then closed a live session to free a listener; the reload's SYN
-/// arrived during that FIN and was refused. Two sockets stay in LISTEN.
-/// A finished reply still ends with FIN, not RST, when the client asked
-/// to close.
+/// card down. Keeping the session is the SPA path again, the way wave 4
+/// served the page on one handshake. One socket listens until that
+/// session is kept. Then one idle socket listens for a reload. A finished
+/// reply still ends with FIN, not RST, when the client asked to close.
 /// Queue `plain` once. A short enqueue stays sealed and is drained later.
 ///
 /// `true` when the TCP buffer holds the whole ciphertext. The caller then
@@ -438,10 +435,15 @@ pub fn arm_bcm5720_coexist() -> bool {
             let tcp_rx = tcp::SocketBuffer::new(SLOT_TCP_RX[i].as_mut_slice());
             let tcp_tx = tcp::SocketBuffer::new(SLOT_TCP_TX[i].as_mut_slice());
             let tcp_handle = sockets.add(tcp::Socket::new(tcp_rx, tcp_tx));
-            if sockets
-                .get_mut::<tcp::Socket>(tcp_handle)
-                .listen(port)
-                .is_err()
+            // Wave 4 listened on one socket. The rest of the table stays
+            // closed until [`arm_spare_listener`] runs after the first
+            // kept session. Listening on all of them accepted two
+            // handshakes before either had served the page (`ad738602`).
+            if i == 0
+                && sockets
+                    .get_mut::<tcp::Socket>(tcp_handle)
+                    .listen(port)
+                    .is_err()
             {
                 serial::write_line("boot: WARN — HOST-NIC coexist skip (tcp bind)");
                 return false;
@@ -497,9 +499,7 @@ pub fn arm_bcm5720_coexist() -> bool {
     write_ipv4(ip);
     serial::write_byte(b':');
     write_u16_dec(port);
-    serial::write_str(" (VMX on; ADR-013 Phase F; slots=");
-    write_u16_dec(COEXIST_TCP_SLOTS as u16);
-    serial::write_line(")");
+    serial::write_line(" (VMX on; ADR-013 Phase F; listen=1)");
     serial::write_str("boot: CURL NOW → https://");
     write_ipv4(ip);
     serial::write_byte(b':');
@@ -616,11 +616,15 @@ unsafe fn tcp_send_queued(sockets: &SocketSet) -> usize {
     n
 }
 
-/// Put one slot back in LISTEN before `poll` when the reserve is gone.
+/// Listen on one idle socket after a session has served the page.
+///
+/// Does not abort. The first handshake is the only listener until it is
+/// kept. A reload then has one spare. Wave 4 served the follow-ups on
+/// the session that accepted the page.
 ///
 /// # Safety
 /// [`SLOT_HANDLE`] filled by [`arm_bcm5720_coexist`]. BSP-only.
-unsafe fn reclaim_one_listener(sockets: &mut SocketSet, millis: i64) {
+unsafe fn arm_spare_listener(sockets: &mut SocketSet) {
     let mut view = [ListenSlot {
         listening: false,
         active: false,
@@ -631,43 +635,20 @@ unsafe fn reclaim_one_listener(sockets: &mut SocketSet, millis: i64) {
         let handle = SLOT_HANDLE[i].assume_init();
         let sock = sockets.get::<tcp::Socket>(handle);
         let rt = SLOT_RT[i];
-        let age = if rt.kept {
-            millis.saturating_sub(rt.last_http_ms)
-        } else if rt.announced {
-            millis.saturating_sub(rt.accept_at_ms)
-        } else {
-            0
-        };
         view[i] = ListenSlot {
             listening: sock.is_listening(),
             active: sock.is_active(),
             kept: rt.kept,
-            age_ms: age,
-        };
-    }
-    let listening = view.iter().filter(|s| s.listening).count();
-    // Zero listeners: arm a Firefox-sized burst before poll. One listener
-    // already up: only the reserve, so a handshake accepted last tick stays.
-    let target = if listening == 0 {
-        COEXIST_LISTEN_BURST
-    } else {
-        COEXIST_LISTEN_RESERVE
-    };
-    for _ in 0..COEXIST_TCP_SLOTS {
-        let Some(i) = listen_reclaim_slot(&view, target, HOST_NIC_HTTP_IDLE_MS) else {
-            break;
-        };
-        slot_relisten(
-            sockets,
-            i,
-            "boot: HOST-NIC TCP re-listen to keep a listener",
-        );
-        view[i] = ListenSlot {
-            listening: true,
-            active: false,
-            kept: false,
             age_ms: 0,
         };
+    }
+    let Some(i) = spare_listen_slot(&view) else {
+        return;
+    };
+    let handle = SLOT_HANDLE[i].assume_init();
+    let sock = sockets.get_mut::<tcp::Socket>(handle);
+    if sock.listen(COEXIST_PORT).is_ok() {
+        note_slot("boot: HOST-NIC listen spare", i);
     }
 }
 
@@ -707,9 +688,9 @@ pub fn tick_bcm5720_coexist() {
         );
         let millis = COEXIST_MILLIS;
         let ts = Instant::from_millis(millis);
-        // Before poll. A SYN that arrives with zero listeners is a RST
-        // (`curl: (7)` in 19 ms). Arm a listener first.
-        reclaim_one_listener(sockets, millis);
+        // Before poll. One listener until a session is kept, then one spare.
+        // Do not abort a live session to make that spare.
+        arm_spare_listener(sockets);
         // ADR-021 D5: both LOM links, twice a second, idle or under a guest.
         crate::mgmt::bcm5720_mmio::host_link_tick();
         let _ = bounded_poll(HOST_NIC_POLL_BUDGET, || {
@@ -942,9 +923,9 @@ pub fn tick_bcm5720_coexist() {
                     SLOT_RT[i] = rt;
                 }
             }
-            // A live keep-alive is not closed while a listener remains.
-            // [`reclaim_one_listener`] runs before `poll` when none remain,
-            // so the SYN is not reset. Iron `87bee04b` FINed a live session
+            // A live keep-alive is not closed to free a listener.
+            // [`arm_spare_listener`] puts one idle socket in LISTEN after
+            // the page session is kept. Iron `87bee04b` FINed a live session
             // during the reload and the SYN landed in that FIN.
         }
         let library_exchange = crate::mgmt::iso_library::take_exchange_quiet();

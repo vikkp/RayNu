@@ -184,7 +184,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 ```
 2026-09  ████████  Everest closed
 2026-10  ████████  M8.8 lived; M8.9.1 is the spare NIC record (host); whole VD still hidden; A5 parked
-2026-11  ░░░░░░░░  wave 5 closed on 9c3e6602 TLS 1.3 plus E5/G3/E12 in tree; TLS piece 88
+2026-11  ░░░░░░░░  wave 5 closed; E5 line on ad738602; listener is one session until the page is kept; TLS piece 88
 2026-12  ░░░░░░░░  Bar B: the guest disk is the spare VD, not an 8 GiB window
 ```
 
@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-5-closed |
-| Summary | **ADR-021 wave 5 closed.** E5 stops the plaintext PRE-EBS HTTP listen. G3 exports the audit ring as JSON and CSV. E12 publishes OpenAPI v1 and CI checks the routes. E4 stayed lived. TLS piece stays 88 (no ACME, lab certificate). Bars held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-5-one-session |
+| Summary | **Standing listener is the wave 4 session again.** One listen until the page is kept, then one spare. Iron `ad738602` accepted two sockets and the follow-ups did not finish. E5's line did print. E4 stays lived. TLS piece stays 88. Bars held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. |
-| Gates touched | ADR-021 E4 in flight. Not lived. No doorbell. No format of UBUNTU0. |
+| Gates touched | No new lived row. No doorbell. No format of UBUNTU0. |
 
 ---
 
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-04 | wave-5-one-session | 94 | 72 | **Listener is one session until the page is kept.** Iron `ad738602` accepted two sockets; follow-ups did not finish. E5's line did print. E4 stays lived. TLS 88 held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-04 | wave-5-closed | 94 | 72 | **Wave 5 closed.** E5 no plaintext PRE-EBS listen. G3 audit JSON/CSV. E12 OpenAPI v1. E4 stayed lived. TLS 88 held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-04 | wave-5-e4-lived | 94 | 72 | **E4 lived.** Iron `9c3e660259de`. TLS piece 80→88. Wave 5 then closed. Bar A 94. Bar B 72. Overall 80. |
 | 2026-11-04 | wave-5-e4-listener-health | 94 | 72 | **E4 was in flight.** Function-0 health on the coexist tick. Closed by `9c3e6602` without a recover line. TLS 80 held then. Bar A 94. Bar B 72. Overall 80. |

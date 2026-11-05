@@ -1,9 +1,10 @@
 use super::{
     coexist_keepalive_idle, coexist_millis_from_tsc, http_accept_idle_limit_ms,
     http_accept_should_idle_abort, http_reply_should_give_up, listen_reclaim_slot,
-    prop_http_accept_idle_abort, ListenSlot, COEXIST_KEEPALIVE_IDLE_MS, COEXIST_LISTEN_BURST,
-    COEXIST_LISTEN_RESERVE, COEXIST_TCP_SLOTS, COEXIST_TSC_HZ_FALLBACK, HOST_NIC_DHCP_MS,
-    HOST_NIC_HTTP_HS_IDLE_MS, HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS, PRE_RAYNUF_HTTPS_MS,
+    prop_http_accept_idle_abort, spare_listen_slot, ListenSlot, COEXIST_KEEPALIVE_IDLE_MS,
+    COEXIST_LISTEN_BURST, COEXIST_LISTEN_RESERVE, COEXIST_TCP_SLOTS, COEXIST_TSC_HZ_FALLBACK,
+    HOST_NIC_DHCP_MS, HOST_NIC_HTTP_HS_IDLE_MS, HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS,
+    PRE_RAYNUF_HTTPS_MS,
 };
 
 #[test]
@@ -107,6 +108,45 @@ fn a_closed_port_reclaims_one_slot() {
     assert_eq!(listening, COEXIST_LISTEN_BURST);
     assert!(!reload[9].listening);
     assert!(!reload[9].kept);
+}
+
+#[test]
+fn spare_listener_waits_until_the_page_is_kept() {
+    let idle = ListenSlot {
+        listening: false,
+        active: false,
+        kept: false,
+        age_ms: 0,
+    };
+    let handshake = ListenSlot {
+        listening: false,
+        active: true,
+        kept: false,
+        age_ms: 100,
+    };
+    let kept = ListenSlot {
+        listening: false,
+        active: true,
+        kept: true,
+        age_ms: 100,
+    };
+    let listening = ListenSlot {
+        listening: true,
+        active: false,
+        kept: false,
+        age_ms: 0,
+    };
+    let mut first = [idle; 4];
+    first[0] = handshake;
+    assert_eq!(spare_listen_slot(&first), None);
+    let mut page = [idle; 4];
+    page[0] = kept;
+    assert_eq!(spare_listen_slot(&page), Some(1));
+    page[1] = listening;
+    assert_eq!(spare_listen_slot(&page), None);
+    let mut full = [handshake; 4];
+    full[0] = kept;
+    assert_eq!(spare_listen_slot(&full), None);
 }
 
 #[test]

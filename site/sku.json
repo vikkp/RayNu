@@ -796,7 +796,7 @@
           "status": "lived",
           "ships": "S1",
           "ref": "M8.1",
-          "note": "Host gate `./tools/m7-uefi-http-smoke.sh`: `uefi_snp_listen` parks the DHCP lease, TCP is not bound, COM2 line `boot: E5 plaintext PRE-EBS closed (no HTTP listen; HTTPS is post-EBS)`. `m7_6_uefi_http_scaffold_passes` and `m7_post_ebs_http_scaffold_passes`. The next iron boot should print that line and not `CURL NOW → http://`.",
+          "note": "Host gate `./tools/m7-uefi-http-smoke.sh`: `uefi_snp_listen` parks the DHCP lease, TCP is not bound, COM2 line `boot: E5 plaintext PRE-EBS closed (no HTTP listen; HTTPS is post-EBS)`. `m7_6_uefi_http_scaffold_passes` and `m7_post_ebs_http_scaffold_passes`. Iron `ad7386028249` / run `41929850745` printed that line and did not print `CURL NOW → http://`.",
           "wave": "5"
         },
         {

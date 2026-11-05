@@ -176,7 +176,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 2026-08 ████████  R640 boot (E2) + E3b HTTP-OK
 2026-09 ████████  E5 + Phase B — **Mount Everest CLOSED** (`f72b4276`)  ← months_to_everest = 0.0
 2026-10 ████████  M8.8 lived on c3a70e62: Ubuntu login, then library ISO cleared; scores held
-2026-11 ░░░░░░░░  wave 5 closed: E4 lived on 9c3e6602; E5 plaintext PRE-EBS closed in tree; G3 audit export; E12 OpenAPI v1; scores held
+2026-11 ░░░░░░░░  wave 5 closed: E4 lived on 9c3e6602; E5 line on ad738602; listener back to one session until the page is kept; scores held
 ```
 
 **Pull-forward rule:** E2 closed 2026-08-15; E3 bring-up closed 2026-08-16; **E3b closed 2026-08-20**; **P0-14 closed 2026-08-21**; **E5 install-to-disk closed on iron 2026-09-10** (`59ac070`); **F7 relaunch + installed-disk GRUB reached on iron 2026-09-10** (`975f8fc`, exit-cap ended it); **E5 reboot-to-disk closed on iron 2026-09-10** (`56a3ffd`: `DISK-BOOT-OK`, second Linux `root=UUID=`, `login:`) → months 0.5→0.25; **Phase B closed on iron 2026-09-11** (`f72b4276` / `34552377351`: coexist HTTP-OK → SPA Start of RayNu-F ISO → install → disk reboot) → months 0.25→0.0. Document why in [Changelog](#hda-changelog).
@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-5-closed |
-| Summary | **ADR-021 wave 5 closed.** E4 stayed lived on `9c3e660259de`. E5: `uefi_snp_listen` parks the DHCP lease and does not bind TCP (`boot: E5 plaintext PRE-EBS closed`). G3: `GET /audit/export.json` and `GET /audit/export.csv`, Activity buttons, host test `RAYNU-V-G3-AUDIT-EXPORT-OK`. E12: `docs/openapi/v1.yaml` version 1, CI `./tools/check-openapi.sh` prints `RAYNU-V-E12-OPENAPI-OK`. The public status lede names the TLS 1.3 sign-in. Current wave advances. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-5-one-session |
+| Summary | **Standing listener is the wave 4 session again.** One socket listens (`listen=1`) until that session has served the page. Then one idle socket listens for a reload. The tick does not abort a live session to make the spare. Iron `ad7386028249` / run `41929850745` accepted slot 0 and slot 1 together at the login prompt; the shell painted and the follow-ups did not finish. E5's line did print on that boot. E4 stays lived on `9c3e660259de`. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
-| Gates touched | ADR-021 wave 5 **closed** (E6, E4, E5, G3, E12 lived). No doorbell. No format of UBUNTU0. |
+| Gates touched | No new lived row. Wave 5 stays closed. E4 stays lived on `9c3e6602`. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
 
 ## Blockers & risks (Everest-relevant)
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-04 | wave-5-one-session | 0.0 | 99 | **Listener is one session until the page is kept.** Iron `ad738602` accepted two sockets and the follow-ups did not finish. E5's line did print. E4 stays lived on `9c3e6602`. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-04 | wave-5-closed | 0.0 | 99 | **Wave 5 closed.** E5 plaintext PRE-EBS listen removed (DHCP lease stays). G3 audit JSON/CSV on the Activity page and REST. E12 OpenAPI v1 with CI route check. E4 stayed lived on `9c3e6602`. Current wave advances. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-04 | wave-5-e4-lived | 0.0 | 99 | **E4 lived.** Iron `9c3e660259de` / run `41924788987`. TLS 1.3, sign-in, two reloads. Wave 5 then closed in wave-5-closed. months 0.0 held; overall 99 held |
 | 2026-11-04 | wave-5-e4-listener-health | 0.0 | 99 | **E4 was in flight.** Function-0 listener health on the coexist tick. Closed by the `9c3e6602` boot (wave-5-e4-lived) without a recover line. months 0.0 held; overall 99 held |

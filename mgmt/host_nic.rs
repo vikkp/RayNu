@@ -100,14 +100,13 @@ pub fn http_accept_should_idle_abort(
 /// a standing page, not a second ClientHello.
 pub const COEXIST_KEEPALIVE_IDLE_MS: i64 = 600_000;
 
-/// Listen sockets armed together.
+/// TCP sockets in the coexist table.
 ///
-/// smoltcp's listening socket becomes the connection. A browser keeps 6
-/// persistent connections to one host (Firefox and Chrome). Two sockets
-/// stay in `LISTEN` so the next SYN, including a reload, has a place to
-/// land. Iron `6dc1f554` had one socket. Iron `87bee04b` had six and
-/// closed a live session whenever none were listening; the reload was
-/// refused while that FIN was in flight.
+/// Wave 4 (`11688cbf`) listened on one of them. The page, the sign-in,
+/// and the later polls were more HTTP on that keep-alive. The table is
+/// larger so a reload can take an idle socket after the page is up.
+/// [`spare_listen_slot`] is what the tick uses. It does not abort a
+/// session to free a listener.
 pub const COEXIST_TCP_SLOTS: usize = 10;
 
 /// Listen sockets kept free for the next SYN.
@@ -137,6 +136,10 @@ pub struct ListenSlot {
 }
 
 /// Slot to abort so a later SYN is not reset.
+///
+/// The coexist tick does not call this. Aborting a live session to
+/// manufacture a listener is the path wave 4 did not take. The tick uses
+/// [`spare_listen_slot`].
 ///
 /// A session that has been accepted and still is not kept is eligible only
 /// after `stuck_min_age_ms`. A younger one is the handshake this tick just
@@ -186,6 +189,28 @@ pub fn listen_reclaim_slot(
         return kept_oldest.map(|(i, _)| i);
     }
     None
+}
+
+/// An idle socket to arm after the page is already being served.
+///
+/// INVARIANTS:
+/// - `None` while no session is kept (the first handshake stays the only listener)
+/// - `None` while any socket is already listening
+/// - Never returns a socket that is active
+/// - Never panics
+///
+/// Wave 4 served `/vms`, overview, and sign-in on the session that
+/// accepted the page. Iron `ad738602` accepted slot 0 and slot 1 together
+/// at the login prompt; the shell painted and the follow-ups did not
+/// finish. One listener until `kept`, then one spare, is that session again.
+pub fn spare_listen_slot(slots: &[ListenSlot]) -> Option<usize> {
+    if !slots.iter().any(|s| s.kept) {
+        return None;
+    }
+    if slots.iter().any(|s| s.listening) {
+        return None;
+    }
+    slots.iter().position(|s| !s.listening && !s.active)
 }
 
 /// The request is complete and the slot never became a kept session.
