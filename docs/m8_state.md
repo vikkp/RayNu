@@ -115,7 +115,7 @@ The standing page is the product (ADR-013 Stage 1, ADR-018 M8.3, LOI Bar A A4s).
 
 `3f80abd0` (no re-listen, Host stays red) is a probe already on this branch. It exists because `3e9ce45e` showed the first exchange leave the chassis up and the second handshake (Host green) precede seq 22543/22544. Do not flash `3f80abd0` for a demo or an LOI. Do not Power On to open Firefox on it.
 
-The product session is the wave 4 close (`11688cbf`): one TCP socket for the life of the boot. COM2 `listen=1` stays true. There is no second listener.
+The product session is the wave 4 close (`11688cbf`): one TCP handle, one RX/TX buffer, one TLS session, and a socket set of two (that TCP socket and the NTP socket). COM2 `listen=1` stays true. There is no slot table and no helper that aborts a session to free a listener.
 
 - One TCP accept for the page. Follow-up fetches are more HTTP on that keep-alive.
 - HTTP/1.1 `Connection: keep-alive`. The next `/vms` poll is another request on that session. `clear_http` drops that request and leaves the TLS keys. COM2: `HTTP exchange ok` then `HTTP keep-alive`. A later poll prints `HTTP keep-alive` again and does not print a new `TCP accept`.

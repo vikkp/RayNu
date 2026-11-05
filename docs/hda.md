@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-4-one-socket |
-| Summary | **Standing listener is the wave 4 socket.** One TCP session for the boot, the shape `11688cbf` closed on. `dff4c70f` printed `listen=1` and still listened on the other slots; Firefox got `NS_ERROR_CONNECTION_REFUSED` in 0 ms with no `TCP accept`. E4 stays lived on `9c3e660259de`. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-4-socket-structure |
+| Summary | **The standing listener is one socket in the data, not slot 0 of a ten-slot table.** Socket storage is 2. One TCP handle, one buffer, one TLS session. The reclaim and spare-listener helpers are gone. TLS 1.3 and the function-0 ring rebuild stay. E4 stays lived on `9c3e660259de`. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | No new lived row. Wave 5 stays closed. E4 stays lived on `9c3e6602`. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-04 | wave-4-socket-structure | 0.0 | 99 | **One socket in the data.** `22275eb7` only indexed slot 0 of the ten-slot table and left the abort-to-free-a-listener helpers in the tree. Those are gone. Storage is 2. E4 stays lived on `9c3e6602`. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-04 | wave-4-one-socket | 0.0 | 99 | **Listener is the wave 4 socket.** One TCP session. `dff4c70f` still opened the other slots; Firefox was refused in 0 ms with no `TCP accept`. E4 stays lived on `9c3e6602`. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-04 | wave-5-one-session-test | 0.0 | 99 | **Host test locks `listen=1`.** Push run `41938383251` failed `ten_slots_leave_listeners_after_an_eight_accept_burst` on the old “stay in LISTEN” string. The test now requires `listen=1` and `arm_spare_listener`. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-04 | wave-5-one-session | 0.0 | 99 | **Listener is one session until the page is kept.** Iron `ad738602` accepted two sockets and the follow-ups did not finish. E5's line did print. E4 stays lived on `9c3e6602`. Scores held. months 0.0 held; overall 99 held |

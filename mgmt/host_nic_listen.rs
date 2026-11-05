@@ -31,9 +31,9 @@ use crate::mgmt::e1000::E1000Device;
 use crate::mgmt::host_nic::{
     coexist_keepalive_idle, coexist_millis_from_tsc, host_nic_lab_armed, http_accept_idle_limit_ms,
     http_accept_should_idle_abort, http_reply_should_give_up, COEXIST_CLOSE_FORCE_MS,
-    COEXIST_KEEPALIVE_IDLE_MS, COEXIST_TCP_SLOTS, HOST_NIC_DHCP_MS, HOST_NIC_HTTP_IDLE_MS,
-    HOST_NIC_LISTEN_MS, HOST_NIC_MAX_EXCHANGES, M7_HOST_NIC_QEMU_MARKER, PRE_RAYNUF_HTTPS_MS,
-    QEMU_USERNET_GW, QEMU_USERNET_IPV4, QEMU_USERNET_PREFIX,
+    COEXIST_KEEPALIVE_IDLE_MS, HOST_NIC_DHCP_MS, HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS,
+    HOST_NIC_MAX_EXCHANGES, M7_HOST_NIC_QEMU_MARKER, PRE_RAYNUF_HTTPS_MS, QEMU_USERNET_GW,
+    QEMU_USERNET_IPV4, QEMU_USERNET_PREFIX,
 };
 use crate::mgmt::host_nic_poll::{bounded_poll, HOST_NIC_POLL_BUDGET};
 use crate::mgmt::http::handle_http_request;
@@ -59,15 +59,15 @@ static mut MGMT_ARENA: MgmtArena = MgmtArena::new();
 static mut COEXIST_ARMED: bool = false;
 static mut COEXIST_DEVICE: MaybeUninit<Bcm5720Device> = MaybeUninit::uninit();
 static mut COEXIST_IFACE: MaybeUninit<Interface> = MaybeUninit::uninit();
-static mut COEXIST_SOCK_STORAGE: [SocketStorage<'static>; COEXIST_TCP_SLOTS + 1] =
-    [SocketStorage::EMPTY; COEXIST_TCP_SLOTS + 1];
+/// One TCP socket and the D10 NTP socket. Wave 4 close (`11688cbf`).
+static mut COEXIST_SOCK_STORAGE: [SocketStorage<'static>; 2] = [SocketStorage::EMPTY; 2];
 static mut COEXIST_UDP_RX_META: [udp::PacketMetadata; 2] = [udp::PacketMetadata::EMPTY; 2];
 static mut COEXIST_UDP_RX_BUF: [u8; 128] = [0; 128];
 static mut COEXIST_UDP_TX_META: [udp::PacketMetadata; 2] = [udp::PacketMetadata::EMPTY; 2];
 static mut COEXIST_UDP_TX_BUF: [u8; 128] = [0; 128];
 static mut COEXIST_UDP_HANDLE: Option<SocketHandle> = None;
 
-/// Per-connection flags for one of [`COEXIST_TCP_SLOTS`] listen sockets.
+/// Flags for the one standing TCP session.
 #[derive(Clone, Copy)]
 struct SlotRt {
     announced: bool,
@@ -96,15 +96,12 @@ impl SlotRt {
     };
 }
 static mut COEXIST_SOCKETS: MaybeUninit<SocketSet<'static>> = MaybeUninit::uninit();
-static mut SLOT_HANDLE: [MaybeUninit<SocketHandle>; COEXIST_TCP_SLOTS] =
-    [MaybeUninit::uninit(); COEXIST_TCP_SLOTS];
-static mut SLOT_TCP_RX: [[u8; COEXIST_TCP_RX_N]; COEXIST_TCP_SLOTS] =
-    [[0; COEXIST_TCP_RX_N]; COEXIST_TCP_SLOTS];
-static mut SLOT_TCP_TX: [[u8; TCP_TX_N]; COEXIST_TCP_SLOTS] = [[0; TCP_TX_N]; COEXIST_TCP_SLOTS];
-static mut SLOT_SESSION: [MaybeUninit<Tls12Listen>; COEXIST_TCP_SLOTS] =
-    unsafe { MaybeUninit::<[MaybeUninit<Tls12Listen>; COEXIST_TCP_SLOTS]>::uninit().assume_init() };
-static mut SLOT_RT: [SlotRt; COEXIST_TCP_SLOTS] = [SlotRt::EMPTY; COEXIST_TCP_SLOTS];
-/// Blocking PRE-EBS / QEMU window. The standing SPA uses [`SLOT_SESSION`].
+static mut COEXIST_TCP_HANDLE: MaybeUninit<SocketHandle> = MaybeUninit::uninit();
+static mut COEXIST_TCP_RX: [u8; COEXIST_TCP_RX_N] = [0; COEXIST_TCP_RX_N];
+static mut COEXIST_TCP_TX: [u8; TCP_TX_N] = [0; TCP_TX_N];
+static mut COEXIST_RT: SlotRt = SlotRt::EMPTY;
+/// One TLS session. The standing SPA and the QEMU listen window share it;
+/// they do not run together.
 static mut COEXIST_LISTEN: Tls12Listen = Tls12Listen::empty();
 static mut COEXIST_LISTEN_READY: bool = false;
 static mut COEXIST_HTTP_OUT: [u8; HTTP_OUT_N] = [0; HTTP_OUT_N];
@@ -132,10 +129,6 @@ static mut COEXIST_PANIC_ARMED_AT_MS: i64 = 0;
 static mut COEXIST_PANIC_EMPTY_AT_MS: i64 = 0;
 /// Last TSC we polled the standing SPA (RayNu-F / USB waits).
 static mut LAST_SPA_TICK_TSC: u64 = 0;
-
-/// The standing page is this one TCP session. Wave 4 (`11688cbf`) closed
-/// on that shape: one handshake, then more HTTP on the same keys.
-const SPA_SLOT: usize = 0;
 
 const TCP_RX_N: usize = 8192;
 /// Standing SPA window. One 64 KiB library post fits here. The QEMU listen
@@ -435,27 +428,23 @@ pub fn arm_bcm5720_coexist() -> bool {
         let sockets =
             SocketSet::new((&mut *core::ptr::addr_of_mut!(COEXIST_SOCK_STORAGE)).as_mut_slice());
         let mut sockets = sockets;
-        // Wave 4 session (`11688cbf`): one TCP socket. The other slot
-        // buffers stay unused so a second handshake is not accepted.
+        let tcp_rx =
+            tcp::SocketBuffer::new((&mut *core::ptr::addr_of_mut!(COEXIST_TCP_RX)).as_mut_slice());
+        let tcp_tx =
+            tcp::SocketBuffer::new((&mut *core::ptr::addr_of_mut!(COEXIST_TCP_TX)).as_mut_slice());
+        let tcp_handle = sockets.add(tcp::Socket::new(tcp_rx, tcp_tx));
+        if sockets
+            .get_mut::<tcp::Socket>(tcp_handle)
+            .listen(port)
+            .is_err()
         {
-            let i = SPA_SLOT;
-            let tcp_rx = tcp::SocketBuffer::new(SLOT_TCP_RX[i].as_mut_slice());
-            let tcp_tx = tcp::SocketBuffer::new(SLOT_TCP_TX[i].as_mut_slice());
-            let tcp_handle = sockets.add(tcp::Socket::new(tcp_rx, tcp_tx));
-            if sockets
-                .get_mut::<tcp::Socket>(tcp_handle)
-                .listen(port)
-                .is_err()
-            {
-                serial::write_line("boot: WARN — HOST-NIC coexist skip (tcp bind)");
-                return false;
-            }
-            SLOT_HANDLE[i].write(tcp_handle);
-            SLOT_SESSION[i].write(Tls12Listen::empty());
-            SLOT_RT[i] = SlotRt::EMPTY;
-            SLOT_SESSION[i].assume_init_mut().load_lab_material();
-            SLOT_RT[i].session_ready = true;
+            serial::write_line("boot: WARN — HOST-NIC coexist skip (tcp bind)");
+            return false;
         }
+        COEXIST_TCP_HANDLE.write(tcp_handle);
+        COEXIST_RT = SlotRt::EMPTY;
+        COEXIST_RT.session_ready = true;
+        tls_session().load_lab_material();
         let udp_sock = udp::Socket::new(
             udp::PacketBuffer::new(
                 (&mut *core::ptr::addr_of_mut!(COEXIST_UDP_RX_META)).as_mut_slice(),
@@ -596,39 +585,33 @@ fn d10_ntp_tick(sockets: &mut SocketSet, millis: i64) {
     }
 }
 
-/// `msg` plus ` slot=N` on the nowait path, so it still shows while Linux
-/// owns COM2.
-fn note_slot(msg: &str, slot: usize) {
-    serial::write_str_nowait(msg);
-    serial::write_str_nowait(" slot=");
-    serial::write_byte_nowait(b'0' + slot.min(9) as u8);
-    serial::write_byte_nowait(b'\n');
+/// One line on the nowait path, so it still shows while Linux owns COM2.
+fn note_session(msg: &str) {
+    serial::write_line_nowait(msg);
 }
 
 /// Bytes still queued on every coexist TCP socket.
 ///
 /// # Safety
-/// [`SLOT_HANDLE`] filled by [`arm_bcm5720_coexist`]. BSP-only.
+/// [`COEXIST_TCP_HANDLE`] filled by [`arm_bcm5720_coexist`]. BSP-only.
 unsafe fn tcp_send_queued(sockets: &SocketSet) -> usize {
-    let mut n = 0usize;
-    let handle = SLOT_HANDLE[SPA_SLOT].assume_init();
-    n = n.saturating_add(sockets.get::<tcp::Socket>(handle).send_queue());
-    n
+    let handle = COEXIST_TCP_HANDLE.assume_init();
+    sockets.get::<tcp::Socket>(handle).send_queue()
 }
 
 /// Abort, drop the TLS session back to the saved key, and listen again.
 ///
 /// # Safety
-/// Slot `i` was armed. BSP-only.
-unsafe fn slot_relisten(sockets: &mut SocketSet, i: usize, msg: &str) {
-    let handle = SLOT_HANDLE[i].assume_init();
+/// [`COEXIST_TCP_HANDLE`] was armed. BSP-only.
+unsafe fn session_relisten(sockets: &mut SocketSet, msg: &str) {
+    let handle = COEXIST_TCP_HANDLE.assume_init();
     let sock = sockets.get_mut::<tcp::Socket>(handle);
     sock.abort();
     let _ = sock.listen(COEXIST_PORT);
-    SLOT_SESSION[i].assume_init_mut().reset();
-    SLOT_RT[i] = SlotRt::EMPTY;
-    SLOT_RT[i].session_ready = true;
-    note_slot(msg, i);
+    tls_session().reset();
+    COEXIST_RT = SlotRt::EMPTY;
+    COEXIST_RT.session_ready = true;
+    note_session(msg);
 }
 
 /// One scheduler-quantum NIC/HTTP step. No-op if not armed. Does not spin.
@@ -721,13 +704,12 @@ pub fn tick_bcm5720_coexist() {
         let mut did_exchange = false;
         let mut did_keepalive = false;
         if !skip_accept {
-            // One session. Slots other than [`SPA_SLOT`] are not in the set.
-            for i in [SPA_SLOT] {
-                let handle = SLOT_HANDLE[i].assume_init();
-                let mut rt = SLOT_RT[i];
+            {
+                let handle = COEXIST_TCP_HANDLE.assume_init();
+                let mut rt = COEXIST_RT;
                 let mut relisten: Option<&'static str> = None;
                 {
-                    let session = SLOT_SESSION[i].assume_init_mut();
+                    let session = tls_session();
                     let sock = sockets.get_mut::<tcp::Socket>(handle);
                     if rt.pending_close {
                         let queued = sock.send_queue();
@@ -776,7 +758,7 @@ pub fn tick_bcm5720_coexist() {
                             let _ = sock.listen(COEXIST_PORT);
                         }
                         if relisten.is_none() && sock.is_active() && !rt.announced {
-                            note_slot("boot: HOST-NIC TCP accept — client connected", i);
+                            note_session("boot: HOST-NIC TCP accept — client connected");
                             rt.announced = true;
                             rt.accept_at_ms = millis;
                             // A kept session must not reset here. First accept only.
@@ -880,9 +862,9 @@ pub fn tick_bcm5720_coexist() {
                     }
                 }
                 if let Some(msg) = relisten {
-                    slot_relisten(sockets, i, msg);
+                    session_relisten(sockets, msg);
                 } else {
-                    SLOT_RT[i] = rt;
+                    COEXIST_RT = rt;
                 }
             }
             // The wave 4 session stays up. A second SYN is reset until
@@ -935,10 +917,10 @@ pub fn tick_bcm5720_coexist() {
 }
 
 /// Sample function 0 once a second. On [`ListenerHealth::Stalled`], rebuild
-/// its rings and put every slot back in LISTEN. Function 1 is not written.
+/// its rings and put the one session back in LISTEN. Function 1 is not written.
 ///
 /// # Safety
-/// [`COEXIST_ARMED`] and [`SLOT_HANDLE`] filled. BSP-only.
+/// [`COEXIST_ARMED`] and [`COEXIST_TCP_HANDLE`] filled. BSP-only.
 unsafe fn listener_health_tick(sockets: &mut SocketSet, millis: i64) {
     use crate::mgmt::listener_health::{
         ListenerHealth, LISTENER_RECOVER_CAP, LISTENER_RECOVER_HOLDOFF_MS, LISTENER_SAMPLE_MS,
@@ -963,11 +945,7 @@ unsafe fn listener_health_tick(sockets: &mut SocketSet, millis: i64) {
     LISTENER_RECOVERS = LISTENER_RECOVERS.saturating_add(1);
     let rebuilt = crate::mgmt::bcm5720_mmio::rebuild_spa_rings();
     if rebuilt {
-        slot_relisten(
-            sockets,
-            SPA_SLOT,
-            "boot: HOST-NIC TCP re-listen after :38 recover",
-        );
+        session_relisten(sockets, "boot: HOST-NIC TCP re-listen after :38 recover");
     }
     LISTENER_HEALTH.reset();
     LISTENER_HOLDOFF_UNTIL = millis.saturating_add(LISTENER_RECOVER_HOLDOFF_MS);
