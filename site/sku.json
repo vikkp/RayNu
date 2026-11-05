@@ -19,15 +19,15 @@
   },
   "counts": {
     "S1": {
-      "lived": 47,
+      "lived": 48,
       "in flight": 1,
-      "planned": 19,
+      "planned": 18,
       "total": 67
     },
     "Final": {
-      "lived": 47,
+      "lived": 48,
       "in flight": 1,
-      "planned": 81,
+      "planned": 80,
       "total": 129
     }
   },
@@ -79,10 +79,10 @@
         {
           "id": "A5",
           "capability": "Signed EFI for UEFI Secure Boot (customer enrolls RayNu-V key or shim)",
-          "status": "planned",
+          "status": "lived",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Unsigned today; R640 Secure Boot must be off",
+          "note": "Iron F11 2026-11-05. Branch `40a746e4` (PR #431), COM2 `build: sha=097f3c612c06 run=42062748313`. Operator certificate `CN=RayNu-V Secure Boot` (private key not in git) signed the CI EFI. Unsigned SHA256 `67dbe9ff4a3f75849f1840282e1a84afef105ee45ea5866f0678935d2b3accb1`. Signed SHA256 `b78b0fa68276a6407bcda7802976e2498466e15e3ca636f52af41b848a424470`, `sbverify` OK. BIOS Secure Boot Policy Custom. `db` kept Microsoft UEFI CA 2011, Microsoft Windows Production PCA 2011, and VMware Secure Boot Signing, and gained RayNu-V Secure Boot. Secure Boot then Enabled. One-shot F11 of Lexar `RAYNUV` serial `A144053100000F82` reached `RAYNU-V-M0-BOOT-OK` and `raynusrv2 login:`. Guest Linux prints `secureboot: Secure boot disabled` because RayNu-F does not publish the host SecureBoot variable. Evidence `docs/evidence/r640/2026-11-05-097f3c612c06-wave-6-a5-secure-boot-ok.md`. A Microsoft-signed shim is not built. A7 is not opened",
           "wave": "6"
         },
         {
@@ -133,15 +133,15 @@
       ],
       "counts": {
         "S1": {
-          "lived": 4,
+          "lived": 5,
           "in flight": 0,
-          "planned": 4,
+          "planned": 3,
           "total": 8
         },
         "Final": {
-          "lived": 4,
+          "lived": 5,
           "in flight": 0,
-          "planned": 6,
+          "planned": 5,
           "total": 10
         }
       }
@@ -1585,11 +1585,11 @@
         "H8"
       ],
       "iron": "A7",
-      "why": "Needs C8 so an update keeps guests. Signing (A5) needs a key decision from the operator.",
+      "why": "Needs C8 (lived) so an update keeps guests. A5 lived 2026-11-05: RayNu-V `db` certificate, shim not built. A7 is the iron thread and is not opened yet.",
       "counts": {
-        "lived": 0,
+        "lived": 1,
         "in flight": 0,
-        "planned": 7,
+        "planned": 6,
         "total": 7
       },
       "closed": false
@@ -1857,12 +1857,6 @@
       "capability": "In-place hypervisor update from the SPA with A/B slots and rollback",
       "status": "planned",
       "role": "iron thread"
-    },
-    {
-      "id": "A5",
-      "capability": "Signed EFI for UEFI Secure Boot (customer enrolls RayNu-V key or shim)",
-      "status": "planned",
-      "role": "host-first"
     },
     {
       "id": "A4",
