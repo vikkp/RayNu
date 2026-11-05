@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-5-one-session |
-| Summary | **Standing listener is the wave 4 session again.** One listen until the page is kept, then one spare. Iron `ad738602` accepted two sockets and the follow-ups did not finish. E5's line did print. E4 stays lived. TLS piece stays 88. Bars held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-5-one-session-test |
+| Summary | **Host test locks `listen=1`.** Push run `41938383251` failed the old burst-listener assertion. The session shape is unchanged. E4 stays lived. TLS piece stays 88. Bars held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. |
 | Gates touched | No new lived row. No doorbell. No format of UBUNTU0. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-04 | wave-5-one-session-test | 94 | 72 | **Host test locks `listen=1`.** Push run `41938383251` failed the old burst-listener assertion. Scores held. TLS 88. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-04 | wave-5-one-session | 94 | 72 | **Listener is one session until the page is kept.** Iron `ad738602` accepted two sockets; follow-ups did not finish. E5's line did print. E4 stays lived. TLS 88 held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-04 | wave-5-closed | 94 | 72 | **Wave 5 closed.** E5 no plaintext PRE-EBS listen. G3 audit JSON/CSV. E12 OpenAPI v1. E4 stayed lived. TLS 88 held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-04 | wave-5-e4-lived | 94 | 72 | **E4 lived.** Iron `9c3e660259de`. TLS piece 80→88. Wave 5 then closed. Bar A 94. Bar B 72. Overall 80. |
