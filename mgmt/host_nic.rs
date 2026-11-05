@@ -95,12 +95,16 @@ pub fn http_accept_should_idle_abort(
 
 /// TCP sockets in the standing listener.
 ///
-/// One socket is the wave 4 session: the page and the later polls stay on
-/// it. A second stays in LISTEN. A SYN with nothing in LISTEN is a reset
-/// in the same millisecond (`curl: (7)` on iron `6dc1f554`, and the
-/// Firefox refuse on `7e936b12`). The kept session is not aborted to make
-/// the listener.
-pub const COEXIST_TCP_SOCKETS: usize = 2;
+/// Firefox keeps about six connections to one host. Iron `6dc1f554` had
+/// one: the sign-in held it and every later SYN was reset. Iron `87bee04b`
+/// had six: the page loaded once, and the reload arrived while a close
+/// was in flight, so nothing was in LISTEN. The table is ten. Two stay
+/// in LISTEN ([`COEXIST_LISTEN_RESERVE`]). A kept session is not aborted
+/// to make one. `9c3e6602` signed in and reloaded twice on this table.
+pub const COEXIST_TCP_SOCKETS: usize = 10;
+
+/// Sockets kept in LISTEN so a refresh still has a place to land.
+pub const COEXIST_LISTEN_RESERVE: usize = 2;
 
 /// One socket, as [`idle_listen_slot`] sees it.
 #[derive(Clone, Copy, Debug)]
@@ -111,19 +115,19 @@ pub struct SockView {
     pub announced: bool,
 }
 
-/// An idle socket to put in LISTEN when none is listening.
+/// An idle socket to put in LISTEN while fewer than `reserve` are listening.
 ///
 /// INVARIANTS:
-/// - `None` while any socket is already listening
+/// - `None` once `reserve` sockets are already listening
 /// - Never returns an active, kept, or announced socket
 /// - Never panics
-pub fn idle_listen_slot(socks: &[SockView]) -> Option<usize> {
-    if socks.iter().any(|s| s.listening) {
+pub fn idle_listen_slot(socks: &[SockView], reserve: usize) -> Option<usize> {
+    if socks.iter().filter(|s| s.listening).count() >= reserve {
         return None;
     }
     socks
         .iter()
-        .position(|s| !s.active && !s.kept && !s.announced)
+        .position(|s| !s.listening && !s.active && !s.kept && !s.announced)
 }
 
 /// `(src_port, dst_port)` when `frame` is an IPv4 TCP segment with RST set.

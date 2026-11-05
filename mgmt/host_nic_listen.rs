@@ -31,9 +31,10 @@ use crate::mgmt::e1000::E1000Device;
 use crate::mgmt::host_nic::{
     coexist_keepalive_idle, coexist_millis_from_tsc, host_nic_lab_armed, http_accept_idle_limit_ms,
     http_accept_should_idle_abort, http_reply_should_give_up, idle_listen_slot, SockView,
-    COEXIST_CLOSE_FORCE_MS, COEXIST_KEEPALIVE_IDLE_MS, COEXIST_TCP_SOCKETS, HOST_NIC_DHCP_MS,
-    HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS, HOST_NIC_MAX_EXCHANGES, M7_HOST_NIC_QEMU_MARKER,
-    PRE_RAYNUF_HTTPS_MS, QEMU_USERNET_GW, QEMU_USERNET_IPV4, QEMU_USERNET_PREFIX,
+    COEXIST_CLOSE_FORCE_MS, COEXIST_KEEPALIVE_IDLE_MS, COEXIST_LISTEN_RESERVE, COEXIST_TCP_SOCKETS,
+    HOST_NIC_DHCP_MS, HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS, HOST_NIC_MAX_EXCHANGES,
+    M7_HOST_NIC_QEMU_MARKER, PRE_RAYNUF_HTTPS_MS, QEMU_USERNET_GW, QEMU_USERNET_IPV4,
+    QEMU_USERNET_PREFIX,
 };
 use crate::mgmt::host_nic_poll::{bounded_poll, HOST_NIC_POLL_BUDGET};
 use crate::mgmt::http::handle_http_request;
@@ -59,8 +60,9 @@ static mut MGMT_ARENA: MgmtArena = MgmtArena::new();
 static mut COEXIST_ARMED: bool = false;
 static mut COEXIST_DEVICE: MaybeUninit<Bcm5720Device> = MaybeUninit::uninit();
 static mut COEXIST_IFACE: MaybeUninit<Interface> = MaybeUninit::uninit();
-/// Two TCP sockets and the D10 NTP socket.
-static mut COEXIST_SOCK_STORAGE: [SocketStorage<'static>; 3] = [SocketStorage::EMPTY; 3];
+/// Ten TCP sockets and the D10 NTP socket.
+static mut COEXIST_SOCK_STORAGE: [SocketStorage<'static>; COEXIST_TCP_SOCKETS + 1] =
+    [SocketStorage::EMPTY; COEXIST_TCP_SOCKETS + 1];
 static mut COEXIST_UDP_RX_META: [udp::PacketMetadata; 2] = [udp::PacketMetadata::EMPTY; 2];
 static mut COEXIST_UDP_RX_BUF: [u8; 128] = [0; 128];
 static mut COEXIST_UDP_TX_META: [udp::PacketMetadata; 2] = [udp::PacketMetadata::EMPTY; 2];
@@ -498,7 +500,7 @@ pub fn arm_bcm5720_coexist() -> bool {
     write_ipv4(ip);
     serial::write_byte(b':');
     write_u16_dec(port);
-    serial::write_line(" (VMX on; ADR-013 Phase F; listen=2)");
+    serial::write_line(" (VMX on; ADR-013 Phase F; listen=10)");
     serial::write_str("boot: CURL NOW → https://");
     write_ipv4(ip);
     serial::write_byte(b':');
@@ -675,12 +677,16 @@ unsafe fn ensure_listener(sockets: &mut SocketSet) {
             announced: rt.announced,
         };
     }
-    let Some(i) = idle_listen_slot(&view) else {
-        return;
-    };
-    let handle = TCP_HANDLE[i].assume_init();
-    let sock = sockets.get_mut::<tcp::Socket>(handle);
-    if sock.listen(COEXIST_PORT).is_ok() {
+    loop {
+        let Some(i) = idle_listen_slot(&view, COEXIST_LISTEN_RESERVE) else {
+            return;
+        };
+        let handle = TCP_HANDLE[i].assume_init();
+        let sock = sockets.get_mut::<tcp::Socket>(handle);
+        if sock.listen(COEXIST_PORT).is_err() {
+            return;
+        }
+        view[i].listening = true;
         note_slot("boot: HOST-NIC listen up", i);
     }
 }

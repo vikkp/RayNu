@@ -2,8 +2,8 @@ use super::{
     coexist_keepalive_idle, coexist_millis_from_tsc, http_accept_idle_limit_ms,
     http_accept_should_idle_abort, http_reply_should_give_up, idle_listen_slot,
     prop_http_accept_idle_abort, tcp_reset_ports, SockView, COEXIST_KEEPALIVE_IDLE_MS,
-    COEXIST_TCP_SOCKETS, COEXIST_TSC_HZ_FALLBACK, HOST_NIC_DHCP_MS, HOST_NIC_HTTP_HS_IDLE_MS,
-    HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS, PRE_RAYNUF_HTTPS_MS,
+    COEXIST_LISTEN_RESERVE, COEXIST_TCP_SOCKETS, COEXIST_TSC_HZ_FALLBACK, HOST_NIC_DHCP_MS,
+    HOST_NIC_HTTP_HS_IDLE_MS, HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS, PRE_RAYNUF_HTTPS_MS,
 };
 
 #[test]
@@ -153,13 +153,14 @@ fn coexist_millis_from_tsc_wraps() {
 }
 
 #[test]
-fn two_sockets_keep_a_listener_without_aborting_the_session() {
-    assert_eq!(COEXIST_TCP_SOCKETS, 2);
+fn ten_sockets_keep_two_listeners_without_aborting_the_session() {
+    assert_eq!(COEXIST_TCP_SOCKETS, 10);
+    assert_eq!(COEXIST_LISTEN_RESERVE, 2);
     assert_eq!(COEXIST_KEEPALIVE_IDLE_MS, 600_000);
     let listen = include_str!("host_nic_listen.rs");
     let nic = include_str!("host_nic.rs");
-    assert!(listen.contains("SocketStorage<'static>; 3"));
-    assert!(listen.contains("listen=2"));
+    assert!(listen.contains("COEXIST_TCP_SOCKETS + 1"));
+    assert!(listen.contains("listen=10"));
     assert!(listen.contains("fn ensure_listener"));
     assert!(listen.contains("FIN, not RST"));
     assert!(!listen.contains("fn listen_reclaim_slot"));
@@ -184,9 +185,10 @@ fn two_sockets_keep_a_listener_without_aborting_the_session() {
         kept: true,
         announced: true,
     };
-    assert_eq!(idle_listen_slot(&[listening, idle]), None);
-    assert_eq!(idle_listen_slot(&[kept, idle]), Some(1));
-    assert_eq!(idle_listen_slot(&[kept, kept]), None);
+    assert_eq!(idle_listen_slot(&[listening, listening, idle], 2), None);
+    assert_eq!(idle_listen_slot(&[listening, kept, idle], 2), Some(2));
+    assert_eq!(idle_listen_slot(&[kept, idle], 2), Some(1));
+    assert_eq!(idle_listen_slot(&[kept, kept], 2), None);
     let mut rst = [0u8; 54];
     rst[12] = 0x08;
     rst[23] = 6;

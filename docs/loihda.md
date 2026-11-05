@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | listen-before-poll |
-| Summary | **Two sockets listen before poll.** The kept session is not aborted. `7e936b12` refused the page in 0 ms. E4 stays lived. TLS piece stays 88. Bars held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | ten-listen-sockets |
+| Summary | **Ten sockets listen. Two stay in LISTEN. A kept session is not aborted.** Wave 5 iron is why the table is ten. E4 stays lived. TLS piece stays 88. Bars held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. |
 | Gates touched | No new lived row. No doorbell. No format of UBUNTU0. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-04 | ten-listen-sockets | 94 | 72 | **Ten listen sockets restored.** Two stay in LISTEN. Kept session is not aborted. TLS 88. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-04 | listen-before-poll | 94 | 72 | **Two sockets listen before poll.** Kept session stays. TLS 88. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-04 | function-0-rearm-after-egress | 94 | 72 | **Rearm function 0 after the egress reset.** One session stays. TLS 88. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-04 | wave-4-socket-structure | 94 | 72 | **One socket in the data.** The ten-slot table is gone. TLS 88. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
