@@ -10,8 +10,9 @@
 //! Until that image exists, the standing listener keeps the lab
 //! millicert. After Save, the next handshake presents the saved
 //! certificate. This connection stays on the certificate it already
-//! used. The listener is still TLS 1.2. TLS 1.3 is the open half of
-//! the row.
+//! used. Browsers negotiate TLS 1.3. A client that offers only TLS 1.2
+//! still completes. The row stays in flight until iron shows the read
+//! and a TLS 1.3 handshake.
 //!
 //! Host tests do not print an iron marker and do not mark the row lived.
 
@@ -352,33 +353,31 @@ pub fn host_cert_rest(method: RestMethod, path: &str, authed: bool, body: &str) 
 }
 
 fn status_json(status: u16) -> HostCertHttp {
-    let (on, cert_len) = with_state(|s| (s.on, s.cert_len));
     let mut body = [0u8; 128];
-    let text = if on {
-        // cert_len fits the fixed sentence below; the digits are written by hand.
-        None
-    } else {
-        Some("{\"ok\":true,\"source\":\"millicert\",\"tls\":\"1.2\"}")
-    };
-    let n = if let Some(text) = text {
-        let b = text.as_bytes();
-        body[..b.len()].copy_from_slice(b);
-        b.len()
-    } else {
-        let mut w = JsonBuf::new(&mut body);
-        w.s("{\"ok\":true,\"source\":\"operator\",\"tls\":\"1.2\",\"cert\":");
-        w.u(cert_len as u64);
-        w.s("}");
-        if w.fit {
-            w.n
-        } else {
-            0
-        }
-    };
+    let n = status_body(&mut body);
     HostCertHttp::Json {
         status,
         len: n,
         body,
+    }
+}
+
+/// The `GET /host/cert` object. Zero when `buf` is too small. The
+/// Overview poll embeds it (`/host/overview`).
+pub fn status_body(buf: &mut [u8]) -> usize {
+    let (on, cert_len) = with_state(|s| (s.on, s.cert_len));
+    let mut w = JsonBuf::new(buf);
+    if on {
+        w.s("{\"ok\":true,\"source\":\"operator\",\"tls\":\"1.3\",\"cert\":");
+        w.u(cert_len as u64);
+        w.s("}");
+    } else {
+        w.s("{\"ok\":true,\"source\":\"millicert\",\"tls\":\"1.3\"}");
+    }
+    if w.fit {
+        w.n
+    } else {
+        0
     }
 }
 
@@ -632,7 +631,7 @@ mod tests {
                 assert_eq!(status, 200);
                 let s = core::str::from_utf8(&body[..len]).unwrap();
                 assert!(s.contains("\"source\":\"operator\""));
-                assert!(s.contains("\"tls\":\"1.2\""));
+                assert!(s.contains("\"tls\":\"1.3\""));
             }
             _ => panic!("save"),
         }

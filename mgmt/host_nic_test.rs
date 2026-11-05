@@ -1,9 +1,9 @@
 use super::{
     coexist_keepalive_idle, coexist_millis_from_tsc, http_accept_idle_limit_ms,
-    http_accept_should_idle_abort, prop_http_accept_idle_abort, COEXIST_KEEPALIVE_IDLE_MS,
-    COEXIST_TCP_SLOTS, COEXIST_TSC_HZ_FALLBACK,
-    HOST_NIC_DHCP_MS, HOST_NIC_HTTP_HS_IDLE_MS, HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS,
-    PRE_RAYNUF_HTTPS_MS,
+    http_accept_should_idle_abort, http_reply_should_give_up, idle_listen_slot,
+    prop_http_accept_idle_abort, tcp_reset_ports, SockView, COEXIST_KEEPALIVE_IDLE_MS,
+    COEXIST_LISTEN_RESERVE, COEXIST_TCP_SOCKETS, COEXIST_TSC_HZ_FALLBACK, HOST_NIC_DHCP_MS,
+    HOST_NIC_HTTP_HS_IDLE_MS, HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS, PRE_RAYNUF_HTTPS_MS,
 };
 
 #[test]
@@ -25,10 +25,53 @@ fn http_idle_abort_at_limit_only() {
 }
 
 #[test]
-fn handshake_idle_reclaim_is_faster_than_header_idle() {
-    assert_eq!(HOST_NIC_HTTP_HS_IDLE_MS, 2_000);
-    assert_eq!(http_accept_idle_limit_ms(true), HOST_NIC_HTTP_HS_IDLE_MS);
+fn a_reply_that_never_queues_gives_the_slot_back() {
+    assert!(!http_reply_should_give_up(
+        false,
+        true,
+        true,
+        HOST_NIC_HTTP_IDLE_MS - 1,
+        HOST_NIC_HTTP_IDLE_MS
+    ));
+    assert!(http_reply_should_give_up(
+        false,
+        true,
+        true,
+        HOST_NIC_HTTP_IDLE_MS,
+        HOST_NIC_HTTP_IDLE_MS
+    ));
+    assert!(!http_reply_should_give_up(
+        true,
+        true,
+        true,
+        HOST_NIC_HTTP_IDLE_MS,
+        HOST_NIC_HTTP_IDLE_MS
+    ));
+    assert!(!http_reply_should_give_up(
+        false,
+        true,
+        false,
+        HOST_NIC_HTTP_IDLE_MS,
+        HOST_NIC_HTTP_IDLE_MS
+    ));
+    assert!(!http_accept_should_idle_abort(
+        true,
+        true,
+        HOST_NIC_HTTP_IDLE_MS,
+        HOST_NIC_HTTP_IDLE_MS
+    ));
+}
+
+#[test]
+fn handshake_idle_matches_the_header_budget() {
+    assert_eq!(HOST_NIC_HTTP_HS_IDLE_MS, 15_000);
+    assert_eq!(HOST_NIC_HTTP_HS_IDLE_MS, HOST_NIC_HTTP_IDLE_MS);
+    assert_eq!(http_accept_idle_limit_ms(true), HOST_NIC_HTTP_IDLE_MS);
     assert_eq!(http_accept_idle_limit_ms(false), HOST_NIC_HTTP_IDLE_MS);
+    assert_eq!(
+        super::http_accept_idle_limit_for(true, true),
+        HOST_NIC_HTTP_IDLE_MS
+    );
     assert!(http_accept_should_idle_abort(
         true,
         false,
@@ -110,15 +153,50 @@ fn coexist_millis_from_tsc_wraps() {
 }
 
 #[test]
-fn eight_slots_leave_two_listening_beside_a_browser_pool() {
-    assert_eq!(COEXIST_TCP_SLOTS, 8);
-    assert!(COEXIST_TCP_SLOTS > 6);
+fn ten_sockets_keep_two_listeners_without_aborting_the_session() {
+    assert_eq!(COEXIST_TCP_SOCKETS, 10);
+    assert_eq!(COEXIST_LISTEN_RESERVE, 2);
     assert_eq!(COEXIST_KEEPALIVE_IDLE_MS, 600_000);
     let listen = include_str!("host_nic_listen.rs");
-    assert!(listen.contains("COEXIST_TCP_SLOTS"));
-    assert!(listen.contains("COEXIST_CLOSE_FORCE_MS"));
-    assert!(listen.contains("stay in LISTEN"));
-    assert!(listen.contains("filled all six slots"));
+    let nic = include_str!("host_nic.rs");
+    assert!(listen.contains("COEXIST_TCP_SOCKETS + 1"));
+    assert!(listen.contains("listen=10"));
+    assert!(listen.contains("fn ensure_listener"));
     assert!(listen.contains("FIN, not RST"));
-    assert!(!listen.contains("coexist_reclaim_slot"));
+    assert!(!listen.contains("fn listen_reclaim_slot"));
+    assert!(!listen.contains("COEXIST_LISTEN_BURST"));
+    assert!(!nic.contains("fn listen_reclaim_slot"));
+    assert!(!nic.contains("COEXIST_LISTEN_BURST"));
+    let idle = SockView {
+        listening: false,
+        active: false,
+        kept: false,
+        announced: false,
+    };
+    let listening = SockView {
+        listening: true,
+        active: false,
+        kept: false,
+        announced: false,
+    };
+    let kept = SockView {
+        listening: false,
+        active: true,
+        kept: true,
+        announced: true,
+    };
+    assert_eq!(idle_listen_slot(&[listening, listening, idle], 2), None);
+    assert_eq!(idle_listen_slot(&[listening, kept, idle], 2), Some(2));
+    assert_eq!(idle_listen_slot(&[kept, idle], 2), Some(1));
+    assert_eq!(idle_listen_slot(&[kept, kept], 2), None);
+    let mut rst = [0u8; 54];
+    rst[12] = 0x08;
+    rst[23] = 6;
+    rst[14] = 0x45;
+    rst[36] = 0x20;
+    rst[37] = 0xfb;
+    rst[47] = 0x04;
+    assert_eq!(tcp_reset_ports(&rst), Some((0, 8443)));
+    rst[47] = 0x02;
+    assert_eq!(tcp_reset_ports(&rst), None);
 }

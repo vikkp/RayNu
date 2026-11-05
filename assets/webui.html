@@ -105,7 +105,7 @@ input.token{min-width:12rem}
 <button class="pri" id="btn-cert" type="button">Save certificate</button>
 <button class="ghost" id="btn-cert-lab" type="button">Use lab certificate</button>
 </div>
-<p class="note" id="cert-note">Used on the next connection. TLS 1.2. This page stays on the certificate it already has.</p>
+<p class="note" id="cert-note">Used on the next connection. TLS 1.3. This page stays on the certificate it already has.</p>
 <div id="ports" class="empty">Ports: no link sample yet.</div>
 </section>
 <section class="pg" data-pg="guests">
@@ -165,6 +165,8 @@ input.token{min-width:12rem}
 <p class="empty">Host serial log</p>
 <div class="toolbar"><input id="g-keys" autocomplete="off"/><button class="pri" id="btn-keys" data-action="keys">Send</button><button class="ghost" id="btn-logs" data-action="logs">Refresh log</button></div>
 <pre id="serial-log" class="empty">GET /logs/guest</pre>
+<h2>Audit</h2>
+<div class="toolbar"><button class="ghost" id="btn-audit-json" type="button">Audit JSON</button><button class="ghost" id="btn-audit-csv" type="button">Audit CSV</button></div>
 </section>
 <div id="iso-bar"><div id="iso-fill"></div></div>
 <p id="status"></p>
@@ -209,7 +211,8 @@ listBusy=1;
 if(!hold)setS("Listing…");
 try{
 let res;try{res=await api("GET",A)}catch(e){hostOk=false;if(!hold)setS("List failed");paint();return}
-hostOk=res.ok;
+hostOk=true;
+if(res.status===401){if(!hold)setS("Sign in");paint();return}
 if(!res.ok){if(!hold)setS("List failed ("+res.status+")");paint();return}
 const out=[];
 for(let i=0;i<known.length;i++){
@@ -233,7 +236,7 @@ async function refreshLogs(){if(up)return;setS("Fetching console…");let g="",h
 async function sendKeys(){const el=document.getElementById("g-keys");let k=el.value;if(!k)return;if(k.charCodeAt(k.length-1)!==13)k+="\r";const res=await fetch("/console/keys",{method:"POST",headers:{"Authorization":auth(),"Content-Type":"text/plain"},body:k});hostOk=res.ok||hostOk;setS(res.ok?"Sent keys":"Keys failed ("+res.status+")");if(res.ok)el.value=""}
 async function powerOff(){if(!confirm("Power off RayNu-V on this chassis?"))return;setS("Powering off…");const res=await fetch("/host/poweroff",{method:"POST",headers:{"Authorization":auth()}});hostOk=res.ok||hostOk;setS(res.ok?"Host powering off":"Power off failed ("+res.status+")")}
 async function panicDump(){if(!confirm("Dump to COM2 and reboot RayNu-V? Saved guests start on the next RayNu boot."))return;setS("Panic dump…");const res=await fetch("/host/panic",{method:"POST",headers:{"Authorization":auth()}});hostOk=res.ok||hostOk;setS(res.ok?"Dumping and rebooting":"Panic refused ("+res.status+")")}
-async function loadClock(){if(up)return;let r;try{r=await api("GET","/host/clock")}catch(e){return}if(!r.ok)return;let j=null;try{j=await r.json()}catch(e){return}const el=document.getElementById("host-clock");if(!el)return;el.textContent=j&&j.synced?("Clock: "+j.unix):"Clock: not synced"}
+function paintClock(j){const el=document.getElementById("host-clock");if(!el)return;el.textContent=j&&j.synced?("Clock: "+j.unix):"Clock: not synced"}
 function hostFocus(){const e=document.activeElement;return e&&String(e.id||"").indexOf("h-")===0}
 function paintHostAddr(j){
 const line=document.getElementById("host-addr-using");if(!line||!j)return;
@@ -290,7 +293,21 @@ async function loadSpare(){
 if(up)return;let r;try{r=await api("GET","/perc/guests")}catch(e){return}
 hostOk=r.ok||hostOk;if(!r.ok)return;
 let b={};try{b=await r.json()}catch(e){}
-spareBody=b;capNote(b);paintSpare(b);paintPorts(b);paintBuild(b);paintStop(b);paint();
+paintSpareBody(b);
+}
+function paintSpareBody(b){spareBody=b;capNote(b);paintSpare(b);paintPorts(b);paintBuild(b);paintStop(b);paint()}
+async function loadOverview(){
+if(up)return;let r;try{r=await api("GET","/host/overview")}catch(e){hostOk=false;paint();return}
+hostOk=true;paint();
+if(r.status===401){if(!hold)setS("Sign in");loadOp();return}
+if(!r.ok)return
+let j=null;try{j=await r.json()}catch(e){return}
+if(!j)return;
+if(j.guests)paintSpareBody(j.guests);
+if(j.addr)paintHostAddr(j.addr);
+if(j.clock)paintClock(j.clock);
+if(j.operator)paintOp(j.operator);
+if(j.cert)paintCert(j.cert);
 }
 function paintStop(b){
 const el=document.getElementById("guest-stop");if(!el)return;
@@ -370,6 +387,8 @@ document.getElementById("btn-iso-install").onclick=installIso;
 document.getElementById("btn-iso-attach").onclick=attachCdrom;
 document.getElementById("btn-iso-firmware").onclick=armFirmwareCd;
 document.getElementById("btn-logs").onclick=refreshLogs;
+document.getElementById("btn-audit-json").onclick=function(){saveAudit("/audit/export.json","raynu-audit.json")};
+document.getElementById("btn-audit-csv").onclick=function(){saveAudit("/audit/export.csv","raynu-audit.csv")};
 document.getElementById("btn-keys").onclick=sendKeys;
 document.getElementById("btn-poweroff").onclick=powerOff;
 document.getElementById("btn-panic").onclick=panicDump;
@@ -385,12 +404,15 @@ document.getElementById("btn-det").onclick=detachNic;
 document.getElementById("btn-dhcp").onclick=async function(){if(up||!vnicVm)return;const off=String(nicOff(vnicVm));setS("DHCP…");const res=await api("POST","/perc/nic/"+off+"/dhcp");let j=null;try{j=await res.json()}catch(e){}if(j&&j.ip){document.getElementById("n-ip").value=j.ip;document.getElementById("n-px").value=j.px;document.getElementById("n-gw").value=j.gw||"";document.getElementById("n-dns").value=j.dns||"";document.getElementById("n-mode").value="d";if(j.mac)document.getElementById("n-mac").textContent=j.mac;setS("Offer filled")}else setS("No offer")};
 document.getElementById("g-keys").onkeydown=function(e){if(e.key==="Enter"){e.preventDefault();sendKeys()}};
 window.raynuWebUi={listVms:listVms,startVm:startVm,stopVm:stopVm,createVm:createVm,listImages:listImages,refreshLogs:refreshLogs,sendKeys:sendKeys,powerOff:powerOff,loadSpare:loadSpare};
-async function loadOp(){let r;try{r=await fetch("/auth/operator")}catch(e){return}if(!r.ok)return;let j=null;try{j=await r.json()}catch(e){return}const line=document.getElementById("op-line");if(!line||!j)return;if(j.set){line.textContent="Operator: "+j.name;if((T.value||"")===def()){T.value="";saveT("")}}else line.textContent="Operator: none yet"}
-async function postOp(path){const name=document.getElementById("op-name").value;const pass=document.getElementById("op-pass").value;if(!name||!pass){setS("Name and password");return}const headers={};if(path==="/auth/operator")headers.Authorization=auth();let res;try{res=await fetch(path,{method:"POST",headers:headers,body:name+"\n"+pass})}catch(e){setS("Account dropped");return}let j=null;try{j=await res.json()}catch(e){}if(res.ok&&j&&j.token){T.value=j.token;saveT(j.token);document.getElementById("op-pass").value="";setS(path==="/auth/login"?"Signed in":"Account saved")}else setS(res.status===401?"Sign-in refused":"Account refused ("+res.status+")");loadOp()}
-async function loadCert(){let r;try{r=await api("GET","/host/cert")}catch(e){return}if(!r.ok)return;let j=null;try{j=await r.json()}catch(e){return}const line=document.getElementById("cert-line");if(!line||!j)return;line.textContent=j.source==="operator"?("Certificate: operator "+j.cert+" bytes"):"Certificate: lab"}
+async function saveAudit(path,name){setS("Audit…");let res;try{res=await api("GET",path)}catch(e){setS("Audit dropped");return}if(!res.ok){setS("Audit refused ("+res.status+")");return}const blob=await res.blob();const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();setS("Audit saved")}
+async function loadOp(){let r;try{r=await fetch("/auth/operator")}catch(e){return}if(!r.ok)return;let j=null;try{j=await r.json()}catch(e){return}paintOp(j)}
+function paintOp(j){const line=document.getElementById("op-line");if(!line||!j)return;if(j.set){line.textContent="Operator: "+j.name;if((T.value||"")===def()){T.value="";saveT("")}}else line.textContent="Operator: none yet"}
+async function postOp(path){const name=document.getElementById("op-name").value;const pass=document.getElementById("op-pass").value;if(!name||!pass){setS("Name and password");return}const headers={"Content-Type":"text/plain"};if(path==="/auth/operator")headers.Authorization=auth();const body=name+"\n"+pass;const waits=[300,600,1000,1500,2200];let res=null;for(let attempt=0;attempt<=waits.length;attempt++){try{res=await fetch(path,{method:"POST",headers:headers,body:body});break}catch(e){if(attempt===waits.length){setS("Account dropped");return}setS("Signing in…");await new Promise(function(r){setTimeout(r,waits[attempt])})}}let j=null;try{j=await res.json()}catch(e){}if(res.ok&&j&&j.token){T.value=j.token;saveT(j.token);document.getElementById("op-pass").value="";setS(path==="/auth/login"?"Signed in":"Account saved")}else setS(res.status===401?"Sign-in refused":"Account refused ("+res.status+")");loadOp()}
+async function loadCert(){let r;try{r=await api("GET","/host/cert")}catch(e){return}if(!r.ok)return;let j=null;try{j=await r.json()}catch(e){return}paintCert(j)}
+function paintCert(j){const line=document.getElementById("cert-line");if(!line||!j)return;line.textContent=j.source==="operator"?("Certificate: operator "+j.cert+" bytes"):"Certificate: lab"}
 async function saveCert(){const c=document.getElementById("cert-pem").value;const k=document.getElementById("key-pem").value;if(!c||!k){setS("Certificate and key");return}let res;try{res=await fetch("/host/cert",{method:"POST",headers:{Authorization:auth(),"Content-Type":"text/plain"},body:c+"\n"+k})}catch(e){setS("Certificate dropped");return}setS(res.ok?"Certificate saved":"Certificate refused ("+res.status+")");if(res.ok){document.getElementById("key-pem").value=""}loadCert()}
 async function clearCert(){let res;try{res=await api("POST","/host/cert/clear")}catch(e){setS("Certificate dropped");return}setS(res.ok?"Lab certificate":"Certificate refused ("+res.status+")");loadCert()}
-dot("hv","ok","Hypervisor is running");listVms();loadSpare();loadHostAddr();loadClock();loadOp();loadCert();setInterval(listVms,30000);setInterval(loadSpare,2000);setInterval(loadHostAddr,2000);setInterval(loadClock,2000);setInterval(loadOp,2000);setInterval(loadCert,2000);setInterval(function(){if(document.querySelector('.pg.on[data-pg="activity"]'))refreshLogs()},2000);
+dot("hv","ok","Hypervisor is running");listVms();loadOverview();setInterval(listVms,30000);setInterval(loadOverview,2000);setInterval(function(){if(document.querySelector('.pg.on[data-pg="activity"]'))refreshLogs()},2000);
 })();
 </script>
 </body>

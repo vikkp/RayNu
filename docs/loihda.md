@@ -1,6 +1,6 @@
 ---
 loihda_version: 1
-last_updated: 2026-11-02
+last_updated: 2026-11-05
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
@@ -20,7 +20,7 @@ bar_b_pct: 72
 piece_everest_pct: 100
 piece_persist_pct: 93
 piece_sku_pct: 94
-piece_tls_pct: 80
+piece_tls_pct: 88
 piece_auth_pct: 38
 piece_console_pct: 82
 piece_perc_pct: 86
@@ -89,7 +89,7 @@ All must be true:
 | A1 | **Everest loop** | Iron `ISO-INSTALL-OK` → `DISK-BOOT-OK` → `login:` | Without this there is no product to intent toward. **DONE** (`f72b4276`). |
 | A2 | **Persist across HV reboot** | Force Off → peek `keep=1` → `DISK-BOOTX64` → `root=UUID=` → `login:` (**repeated** on `36d3b559`, UUID `a0ad99ac-…`; earlier closes `4af78b43`, `928d6224`) | Guest disk is the 8 GiB Toshiba USB slice, not leftover DRAM. Nested-OK ≠ this. Residual: unclean Force Off (ext4 journal, vfat dirty bit) / whole-LUN virtio / USB ≠ PERC. |
 | A3 | **SKU card** | One page: what ships, what does not, dedicated-box vs fleet | **DONE** ([`docs/sku.md`](sku.md) / [`site/sku.html`](../site/sku.html)). Stops us promising PERC, Windows, or cluster in a Bar A conversation. |
-| A4 | **TLS** | Browser/`curl --cacert` on native `CURL NOW → https://` **before RayNu-F** | **DONE** (`928d6224` COM2 `RAYNU-V-M8-TLS-OK`; Mac SPA HTML). Lab millicert. PRE-EBS SNP stays `http://`. |
+| A4 | **TLS** | Browser/`curl --cacert` on native `CURL NOW → https://` **before RayNu-F** | **DONE** (`928d6224` COM2 `RAYNU-V-M8-TLS-OK`; Mac SPA HTML). `9c3e660259de` completed TLS 1.3. This tree does not open plaintext HTTP before ExitBootServices. |
 | A4s | **Standing SPA** | Browser HTTPS **after** RayNu-F / Alpine `login:`; SPA stays; guest COM1 in the page | **LIVED** (`1f33eeda72f9`, lease `10.99.99.154`). One `TCP accept`, then `HTTP exchange ok` / `HTTP keep-alive` through Overview (30 s) and Activity (~2 s). Host stayed green. Activity showed Alpine `localhost login:`. Chassis stayed up. `RAYNU-V-M8-TLS-OK` did not print on this persist boot. |
 | A5 | **Auth beyond bring-up** | Product default is not `raynu-v-bringup` | A shared lab latch is not an operator credential. HostReady (`RAYNU-V-M8-AUTH-HOST-OK`) is not this close. |
 | A6 | **Operator keyboard** | Type in the guest from the SPA (not only iDRAC SOL) | **LIVED once** on this tip. Activity showed `abc`, then `-sh: abc: not found`, then `localhost:~#`, and `RAYNU-V-M8-CONSOLE-OK`, with Host green. The same box still copies `HTTP keep-alive`. Soft for the first LOI. **not VNC**. |
@@ -136,9 +136,9 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 ### 4. TLS — 80%
 
-**What it is.** Firmware coexist feeds `Tls12Listen` (TLS 1.2 ECDHE-RSA-AES128-GCM + EMS). rustls/ring cannot join `uefi-bin`. Post-EBS native HTTPS window is **before RayNu-F**. **Iron CLOSE:** COM2 `928d6224` `RAYNU-V-M8-TLS-OK` after Mac `curl --cacert` SPA on `10.99.99.140:8443`. PRE-EBS SNP remains `http://`.
+**What it is.** Firmware coexist feeds `Tls12Listen`, which also negotiates TLS 1.3 (`TLS_AES_128_GCM_SHA256`) when the client offers it. rustls/ring cannot join `uefi-bin`. **Iron:** `928d6224` printed `RAYNU-V-M8-TLS-OK` for TLS 1.2. `9c3e660259de` / run `41924788987` printed `boot: E4 cert rd` `operator` and `HOST-NIC TLS wrap=tls13`. Firefox signed in as `vikkp` and both reloads loaded. The Overview said TLS 1.3 and certificate operator 790 bytes. PRE-EBS SNP remains `http://`.
 
-**Product effect.** A CISO who asks “is management encrypted on the wire I can reach after EBS?” now hears **yes, with a lab millicert**. Residual: not production PKI, not TLS 1.3, SPA `GET /` still unauthenticated. The standing page after login is A4s, lived on `1f33eeda`. The certificate is still the lab millicert.
+**Product effect.** A CISO who asks “is management encrypted on the wire I can reach after EBS?” now hears **yes, TLS 1.3, with the operator certificate stored on the spare**. This tree does not open plaintext HTTP before ExitBootServices. Residual: not production PKI, and no ACME. That remainder is why this piece is 88, not 100. The standing page after login is A4s, lived on `1f33eeda`.
 
 ### 5. Auth — 38%
 
@@ -184,7 +184,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 ```
 2026-09  ████████  Everest closed
 2026-10  ████████  M8.8 lived; M8.9.1 is the spare NIC record (host); whole VD still hidden; A5 parked
-2026-11  ░░░░░░░░  wave 5: E6 lived; E4 certificate presented; bac1f0ec5139 SPA and both reloads; TLS stays 1.2; scores held
+2026-11  ░░░░░░░░  wave 5 closed; E5 line on ad738602; listener is one session until the page is kept; TLS piece 88
 2026-12  ░░░░░░░░  Bar B: the guest disk is the spare VD, not an 8 GiB window
 ```
 
@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-5-e4-reloads |
-| Summary | **ADR-021 E4 still in flight.** Iron `bac1f0ec5139` loaded the SPA and both reloads. Three accepts, no re-listen. TLS stays 1.2. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | no-egress-rearm |
+| Summary | **Function 0 stays up when the guest arms egress.** Iron `30422198` reached NTP on `10.99.99.201`, then the rearm line, then the Mac gateway reported host unreachable. TLS piece stays 88. Bars held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. |
-| Gates touched | ADR-021 E4 in flight. Not lived. No doorbell. No format of UBUNTU0. |
+| Gates touched | No new lived row. No doorbell. No format of UBUNTU0. |
 
 ---
 
@@ -219,6 +219,29 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-05 | no-egress-rearm | 94 | 72 | **Function 0 is not rebuilt on egress arm.** Iron `30422198` NTP on `.201` then `:38 rearm after egress ok`. Mac gateway host-unreachable for `.201`. TLS 88. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
+| 2026-11-05 | spa-addr-201 | 94 | 72 | **Standing SPA moves to `10.99.99.201`.** Guest ARP for `.146` returned Intel `64:bc:58:97:0b:c6` and connection refused. Saved static record rewritten. Guest stays `.200`. TLS 88. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
+| 2026-11-04 | ten-listen-sockets | 94 | 72 | **Ten listen sockets restored.** Two stay in LISTEN. Kept session is not aborted. TLS 88. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
+| 2026-11-04 | listen-before-poll | 94 | 72 | **Two sockets listen before poll.** Kept session stays. TLS 88. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
+| 2026-11-04 | function-0-rearm-after-egress | 94 | 72 | **Rearm function 0 after the egress reset.** One session stays. TLS 88. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
+| 2026-11-04 | wave-4-socket-structure | 94 | 72 | **One socket in the data.** The ten-slot table is gone. TLS 88. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
+| 2026-11-04 | wave-4-one-socket | 94 | 72 | **Listener is the wave 4 socket.** One TCP session. `dff4c70f` refused the page in 0 ms. E4 stays lived. TLS 88. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
+| 2026-11-04 | wave-5-one-session-test | 94 | 72 | **Host test locks `listen=1`.** Push run `41938383251` failed the old burst-listener assertion. Scores held. TLS 88. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
+| 2026-11-04 | wave-5-one-session | 94 | 72 | **Listener is one session until the page is kept.** Iron `ad738602` accepted two sockets; follow-ups did not finish. E5's line did print. E4 stays lived. TLS 88 held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
+| 2026-11-04 | wave-5-closed | 94 | 72 | **Wave 5 closed.** E5 no plaintext PRE-EBS listen. G3 audit JSON/CSV. E12 OpenAPI v1. E4 stayed lived. TLS 88 held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
+| 2026-11-04 | wave-5-e4-lived | 94 | 72 | **E4 lived.** Iron `9c3e660259de`. TLS piece 80→88. Wave 5 then closed. Bar A 94. Bar B 72. Overall 80. |
+| 2026-11-04 | wave-5-e4-listener-health | 94 | 72 | **E4 was in flight.** Function-0 health on the coexist tick. Closed by `9c3e6602` without a recover line. TLS 80 held then. Bar A 94. Bar B 72. Overall 80. |
+| 2026-11-04 | wave-5-e4-login-nic-coexist | 94 | 72 | **E4 still in flight.** `ab7a4d66` still failed on iron; the drop is `:38`/`:39` coexistence. Decode only. The rebuild is wave-5-e4-listener-health. Not lived. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| 2026-11-04 | wave-5-e4-login-retry | 94 | 72 | **E4 still in flight.** Reverted `6076a652` still said Account dropped; added a `webui.html` login back-off retry. Superseded — next boot showed the drop is `:38`/`:39` NIC coexistence (see wave-5-e4-login-nic-coexist). Not lived. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| 2026-11-04 | wave-5-e4-login-revert | 94 | 72 | **E4 still in flight.** Account dropped on `c3cdc6c1` (`ce77b697`) and `d57ff3b9`; worked on `1cf82795` (`2330f33b`). Reverted the connection-shrinking to `3a7e1183`; superseded — the reverted stack still dropped sign-in (see wave-5-e4-login-retry). Not lived. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| 2026-11-04 | wave-5-e4-login-dropped | 94 | 72 | **E4 still in flight.** Iron `c3cdc6c1d7fe`: first load painted, sign-in Account dropped, reload did not load. Not lived. TLS 80 held. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
+| 2026-11-04 | wave-5-e4-one-poll | 94 | 72 | **E4 still in flight.** No iron. Overview polls one route (`/host/overview`); short listen reserve says `Connection: close`; kept idle 60 s. Host Chrome: 5 connections, 342 requests, two reloads on a kept connection. Not lived. TLS 80 held. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
+| 2026-11-04 | wave-5-e4-reload-burst | 94 | 72 | **E4 still in flight.** Iron `1cf827952140`: first load signed in, Guest 3 running, certificate 790 bytes. Reload was "Unable to connect". Not lived. TLS 80 held. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
+| 2026-11-04 | wave-5-e4-listen-reclaim | 94 | 72 | **E4 still in flight.** Iron `1da151be06e0`: `curl: (7)` Connection refused to `10.99.99.146:8443` in 19 ms from `10.6.0.6`. No listen socket remained. Not lived. TLS 80 held. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
+| 2026-11-02 | wave-5-e4-signin-idle | 94 | 72 | **E4 still in flight.** Sign-in POST idle-aborted on slot 3. "Account dropped" is that reset, not a refused password. The empty-hello reclaim is 15 s. Not lived. TLS 80 held. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
+| 2026-11-02 | wave-5-e4-tls13-gate | 94 | 72 | **E4 still in flight.** CI on `48e4b683` failed the host-NIC scaffold gate. The idle-limit call is named again. Not lived. TLS 80 held. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
+| 2026-11-02 | wave-5-e4-tls13-refresh | 94 | 72 | **E4 still in flight.** Iron `ab39021c8c72` drew the page. Refresh accepted slots 0–7. Not lived. TLS 80 held. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
+| 2026-11-02 | wave-5-e4-tls13 | 94 | 72 | **E4 still in flight.** Host rustls finishes TLS 1.3. Iron has not. Not lived. TLS 80 held. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-02 | wave-5-e4-reloads | 94 | 72 | **E4 still in flight.** Iron `bac1f0ec5139` SPA and both reloads. Host green. Accepts on slots 5–7 only. Not lived. TLS 80. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-02 | wave-5-e4-listen-spare | 94 | 72 | **E4 still in flight.** Iron `87bee04b` page once, reload refused during a FIN of a live session. Eight sockets, two stay listening. Not lived. TLS 80. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-02 | wave-5-e4-keepalive | 94 | 72 | **E4 still in flight.** Iron `1e7d44c9` page and one reload, then the Host card flipped. Every SPA reply closed. A normal fetch keeps the session; the oldest finished session is FIN'd only when nothing is listening. Not lived. TLS 80. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
@@ -446,7 +469,7 @@ LOI:           NOT OPEN. Tracker born 2026-09-14.
 Bar A:         94% · 0.25 months · dedicated-box non-prod
 Bar B:         72% · 1.25 months · Ubuntu login on a 10 GiB spare tail (c3a70e62) with a LAN address from the SPA (0d865c7f); whole VD still hidden
 Overall:       80% · confidence medium
-NOW:           SKU card is what a signature holds today. One dedicated box. Ubuntu on a 10 GiB tail. M8.9 closed on 0d865c7f: the guest took the SPA-saved address by itself and SSH from the LAN reached raynusrv2. Pinned as v0.1.0-m8-9-lan (not Latest). Wave 4 closed on 11688cbf. Wave 5 E6 lived on f2828d95. E4 is in flight: a saved certificate replaces the millicert on the next handshake. TLS stays 1.2. Not lived. Do not format UBUNTU0. The 2.9 TB VD is not this disk. A5 parked. Bar A 94. Bar B 72. Overall 80. perc 86. unmodified 45. SKU 94. months A 0.25. months B 1.25. docs/adr/ADR-019.md
+NOW:           SKU card is what a signature holds today. One dedicated box. Ubuntu on a 10 GiB tail. M8.9 closed on 0d865c7f: the guest took the SPA-saved address by itself and SSH from the LAN reached raynusrv2. Pinned as v0.1.0-m8-9-lan (not Latest). Wave 4 closed on 11688cbf. Wave 5 E6 lived on f2828d95. E4 is in flight: host rustls finishes TLS 1.3. Iron bac1f0ec5139 is still TLS 1.2. Not lived. Do not format UBUNTU0. The 2.9 TB VD is not this disk. A5 parked. Bar A 94. Bar B 72. Overall 80. perc 86. unmodified 45. SKU 94. TLS 80. months A 0.25. months B 1.25. docs/adr/ADR-019.md
 Open:          link state on the SPA (D5) · iron AUTH-OK (parked) · unmodified ISO without the serial amendment · the whole spare VD · cluster
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
 Rollback:      v0.1.0-m8-9-lan → M8.9 close (COM2 sha=0d865c7fcb0a, CI 40603110937, SHA256 df6fc3465cecf1eaf058d5c8e675501827c16eb55e7b2c9758bc5e68326ad91b). v0.1.0-m8-8-ubuntu → older M8.8 close (c3a70e623aec, CI 38454398693). v0.1.0-m8-perc-spa → older SPA choice (8ad2ac89125e, CI 36362775808). v0.1.0-m8-a4s → older standing SPA (1f33eeda72f9, CI 36137732145). v0.1.0-m8-a6 → keyboard + power-off (fd2ca12e, CI 36166108942), not Latest. Everest Latest stays v0.1.0-everest-closed (f72b4276).

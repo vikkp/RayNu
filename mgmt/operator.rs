@@ -415,9 +415,17 @@ fn split_body(body: &str) -> Option<(&str, &str)> {
 }
 
 fn status_json(status: u16, session: Option<[u8; SESSION_LEN]>) -> OperatorHttp {
-    let account = with_state(|s| s.account);
     let mut body = [0u8; 256];
-    let mut w = JsonBuf::new(&mut body);
+    let len = status_body(&mut body, session);
+    OperatorHttp::Json { status, len, body }
+}
+
+/// The `GET /auth/operator` object, plus `token` when `session` is given.
+/// Zero when `buf` is too small. The Overview poll embeds the tokenless
+/// form (`/host/overview`).
+pub fn status_body(buf: &mut [u8], session: Option<[u8; SESSION_LEN]>) -> usize {
+    let account = with_state(|s| s.account);
+    let mut w = JsonBuf::new(buf);
     w.s("{\"ok\":true,\"set\":");
     match account {
         None => w.s("false"),
@@ -433,8 +441,11 @@ fn status_json(status: u16, session: Option<[u8; SESSION_LEN]>) -> OperatorHttp 
         w.s("\"");
     }
     w.s("}");
-    let len = if w.fit { w.n } else { 0 };
-    OperatorHttp::Json { status, len, body }
+    if w.fit {
+        w.n
+    } else {
+        0
+    }
 }
 
 fn hex_decode_16(s: &str) -> Option<[u8; 16]> {

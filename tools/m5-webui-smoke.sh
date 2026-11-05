@@ -43,13 +43,13 @@ fi
 echo "==> cargo test m5_2_webui_gate_passes (artifact gate)"
 out="$(cargo test --lib m5_2_webui_gate_passes -- --nocapture 2>&1)"
 echo "$out"
-echo "$out" | grep -q 'm5_2_webui_gate_passes ... ok'
-echo "$out" | grep -q "$MARKER"
+grep -q 'm5_2_webui_gate_passes ... ok' <<<"$out"
+grep -q "$MARKER" <<<"$out"
 
 echo "==> cargo test webui_list_start_stop"
 out2="$(cargo test --lib webui_list_start_stop -- --nocapture 2>&1)"
 echo "$out2"
-echo "$out2" | grep -q 'webui_list_start_stop ... ok'
+grep -q 'webui_list_start_stop ... ok' <<<"$out2"
 
 echo "$MARKER"
 echo "==> M5.2 Web UI smoke PASSED"

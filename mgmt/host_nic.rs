@@ -48,11 +48,13 @@ pub const HOST_NIC_MAX_EXCHANGES: u32 = 8;
 /// CCS + millicert RSA sign needs a longer reclaim (A4s standing SPA).
 pub const HOST_NIC_HTTP_IDLE_MS: i64 = 15_000;
 
-/// Half-open TCP (TLS still waiting ClientHello / `ST_CH`) reclaims the
-/// one coexist slot faster than a mid-handshake browser. Lived sixth
-/// `TCP accept` with no headers held the slot for 15 s while SPA Host
-/// went red. Dummy-CCS Safari is `ST_CKE`, so it still gets 15 s.
-pub const HOST_NIC_HTTP_HS_IDLE_MS: i64 = 2_000;
+/// Half-open TCP (TLS still waiting ClientHello / `ST_CH`).
+///
+/// Was 2 s when one slot was the whole listener. Iron `f189b9c9` has ten
+/// sockets, and that 2 s reclaim reset the sign-in POST (`idle abort`
+/// slot 3, Firefox "Account dropped") before the handshake finished.
+/// Same budget as a header wait.
+pub const HOST_NIC_HTTP_HS_IDLE_MS: i64 = 15_000;
 
 /// Fallback TSC rate when Stall calibration has not stored [`crate::boot::raynu_f_flag::tsc_hz`].
 pub const COEXIST_TSC_HZ_FALLBACK: u64 = 2_100_000_000;
@@ -91,6 +93,72 @@ pub fn http_accept_should_idle_abort(
     announced && !headers_done && limit_ms > 0 && elapsed_since_accept_ms >= limit_ms
 }
 
+/// TCP sockets in the standing listener.
+///
+/// Firefox keeps about six connections to one host. Iron `6dc1f554` had
+/// one: the sign-in held it and every later SYN was reset. Iron `87bee04b`
+/// had six: the page loaded once, and the reload arrived while a close
+/// was in flight, so nothing was in LISTEN. The table is ten. Two stay
+/// in LISTEN ([`COEXIST_LISTEN_RESERVE`]). A kept session is not aborted
+/// to make one. `9c3e6602` signed in and reloaded twice on this table.
+pub const COEXIST_TCP_SOCKETS: usize = 10;
+
+/// Sockets kept in LISTEN so a refresh still has a place to land.
+pub const COEXIST_LISTEN_RESERVE: usize = 2;
+
+/// One socket, as [`idle_listen_slot`] sees it.
+#[derive(Clone, Copy, Debug)]
+pub struct SockView {
+    pub listening: bool,
+    pub active: bool,
+    pub kept: bool,
+    pub announced: bool,
+}
+
+/// An idle socket to put in LISTEN while fewer than `reserve` are listening.
+///
+/// INVARIANTS:
+/// - `None` once `reserve` sockets are already listening
+/// - Never returns an active, kept, or announced socket
+/// - Never panics
+pub fn idle_listen_slot(socks: &[SockView], reserve: usize) -> Option<usize> {
+    if socks.iter().filter(|s| s.listening).count() >= reserve {
+        return None;
+    }
+    socks
+        .iter()
+        .position(|s| !s.listening && !s.active && !s.kept && !s.announced)
+}
+
+/// `(src_port, dst_port)` when `frame` is an IPv4 TCP segment with RST set.
+///
+/// INVARIANTS:
+/// - `None` for a short frame, a non-IPv4 frame, or a non-TCP segment
+/// - `None` when the RST flag is clear
+/// - Never panics
+pub fn tcp_reset_ports(frame: &[u8]) -> Option<(u16, u16)> {
+    if frame.len() < 14 + 20 + 20 {
+        return None;
+    }
+    if frame[12] != 0x08 || frame[13] != 0x00 {
+        return None;
+    }
+    let ihl = usize::from(frame[14] & 0x0f) * 4;
+    if ihl < 20 || frame.len() < 14 + ihl + 20 {
+        return None;
+    }
+    if frame[14 + 9] != 6 {
+        return None;
+    }
+    let tcp = 14 + ihl;
+    if frame[tcp + 13] & 0x04 == 0 {
+        return None;
+    }
+    let sport = u16::from_be_bytes([frame[tcp], frame[tcp + 1]]);
+    let dport = u16::from_be_bytes([frame[tcp + 2], frame[tcp + 3]]);
+    Some((sport, dport))
+}
+
 /// Quiet time on a kept TLS session before the slot is reclaimed.
 ///
 /// SPA polls are 30 s. `3e9ce45e` re-handshook at 30 s and the chassis
@@ -98,15 +166,20 @@ pub fn http_accept_should_idle_abort(
 /// a standing page, not a second ClientHello.
 pub const COEXIST_KEEPALIVE_IDLE_MS: i64 = 600_000;
 
-/// Listen sockets armed together.
+/// The request is complete and the slot never became a kept session.
 ///
-/// smoltcp's listening socket becomes the connection. A browser keeps 6
-/// persistent connections to one host (Firefox and Chrome). Two sockets
-/// stay in `LISTEN` so the next SYN, including a reload, has a place to
-/// land. Iron `6dc1f554` had one socket. Iron `87bee04b` had six and
-/// closed a live session whenever none were listening; the reload was
-/// refused while that FIN was in flight.
-pub const COEXIST_TCP_SLOTS: usize = 8;
+/// `http_accept_should_idle_abort` stays false once headers are in, because
+/// a reply in flight owns the socket. A reply that never queues used to
+/// hold that socket until the next hypervisor boot (`curl: (7)`).
+pub fn http_reply_should_give_up(
+    kept: bool,
+    announced: bool,
+    headers_done: bool,
+    elapsed_ms: i64,
+    limit_ms: i64,
+) -> bool {
+    !kept && announced && headers_done && limit_ms > 0 && elapsed_ms >= limit_ms
+}
 
 /// A close whose TX queue never drains still gives the slot back.
 pub const COEXIST_CLOSE_FORCE_MS: i64 = 2_000;
@@ -116,9 +189,15 @@ pub fn coexist_keepalive_idle(now_ms: i64, last_http_ms: i64, idle_ms: i64) -> b
     idle_ms > 0 && now_ms.saturating_sub(last_http_ms) >= idle_ms
 }
 
-/// Idle-abort budget: 2 s while TLS waits for ClientHello, else 15 s.
+/// Idle-abort budget. A connection with no HTTP headers is reclaimed
+/// after 15 s. A ClientHello that has already started is not a separate
+/// shorter timer.
 pub fn http_accept_idle_limit_ms(handshake_waiting: bool) -> i64 {
-    if handshake_waiting {
+    http_accept_idle_limit_for(handshake_waiting, false)
+}
+
+pub fn http_accept_idle_limit_for(handshake_waiting: bool, bytes_pending: bool) -> i64 {
+    if handshake_waiting && !bytes_pending {
         HOST_NIC_HTTP_HS_IDLE_MS
     } else {
         HOST_NIC_HTTP_IDLE_MS

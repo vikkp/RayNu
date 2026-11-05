@@ -9,7 +9,7 @@
   "docs_url": "https://github.com/vikkp/RayNu/blob/main/docs/loihda.md",
   "last_commit": "PENDING",
   "last_commit_short": "PENDING",
-  "last_updated": "2026-11-02",
+  "last_updated": "2026-11-05",
   "loi_a_eta_month": "2026-10",
   "loi_b_eta_month": "2026-12",
   "loi_path": [
@@ -36,7 +36,7 @@
     "perc": 86,
     "persist": 93,
     "sku": 94,
-    "tls": 80,
+    "tls": 88,
     "unmodified": 45
   },
   "source": "docs/loihda.md",

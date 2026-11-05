@@ -32,7 +32,7 @@ pub const HTTP_GAP_NOTE: &str = "GAP(CLOSED M7.1): Network HTTPS/HTTP mgmt";
 
 /// Lab note: firmware coexist is TLS 1.2 in-tree; iron HTTPS is not claimed.
 pub const HTTP_LAB_NOTE: &str =
-    "lab MVP: firmware TLS 1.2 on coexist (M8.1; plaintext HTTP remains a lab fallback; iron HTTPS closed on COM2 928d6224; ADR-003 size)";
+    "lab MVP: firmware TLS 1.2 on coexist (M8.1; TLS 1.3 when the client offers it; plaintext HTTP remains a lab fallback; iron HTTPS closed on COM2 928d6224; ADR-003 size)";
 
 /// Plaintext management reply, including the SPA and its headers.
 ///
@@ -458,6 +458,40 @@ pub fn handle_http_request(
         let n = crate::boot::serial::serial_log_snapshot(&mut log);
         return format_http_response(200, "text/plain; charset=utf-8", &log[..n], out);
     }
+    // ADR-021 G3: the audit ring as JSON or CSV. Bearer required.
+    if parsed.path == "/audit/export.json" || parsed.path == "/audit/export.csv" {
+        if !matches!(parsed.method, RestMethod::Get) {
+            return format_http_response(400, "text/plain; charset=utf-8", b"bad request", out);
+        }
+        if !auth_allows(parsed.auth_token) {
+            return format_http_response(401, "text/plain; charset=utf-8", b"unauthorized", out);
+        }
+        let snap = crate::audit::report::boot_snapshot();
+        if !snap.chain_ok {
+            return format_http_response(409, "text/plain; charset=utf-8", b"audit chain", out);
+        }
+        let json = parsed.path.ends_with(".json");
+        let mut body = [0u8; 512];
+        let rendered = crate::audit::report::render_report(
+            crate::audit::report::ReportKind::IsoEventInventory,
+            if json {
+                crate::audit::report::ReportFormat::Json
+            } else {
+                crate::audit::report::ReportFormat::Csv
+            },
+            &snap,
+            &mut body,
+        );
+        let Ok(n) = rendered else {
+            return format_http_response(500, "text/plain; charset=utf-8", b"audit report", out);
+        };
+        let ctype = if json {
+            "application/json"
+        } else {
+            "text/csv; charset=utf-8"
+        };
+        return format_http_response(200, ctype, &body[..n], out);
+    }
     // Standing SPA: guest COM1 TX copy (survives SOL drain). Not iDRAC COM2.
     if parsed.path == "/logs/guest" {
         if !matches!(parsed.method, RestMethod::Get) {
@@ -556,7 +590,7 @@ pub fn handle_http_request(
         }
     }
     // ADR-021 E4. A saved certificate is presented on the next handshake.
-    // The listener stays TLS 1.2. The lab millicert remains until Save.
+    // Browsers negotiate TLS 1.3. The lab millicert remains until Save.
     match crate::mgmt::host_cert::host_cert_rest(
         parsed.method,
         parsed.path,
@@ -583,6 +617,23 @@ pub fn handle_http_request(
         }
         let mut body = [0u8; 64];
         let n = crate::mgmt::host_clock::status_json(&mut body);
+        return format_http_response(200, "application/json", &body[..n], out);
+    }
+    // One poll for the Overview page: guests, address, clock, operator,
+    // certificate. The page used to fetch five routes every 2 s and the
+    // browser used six connections for them.
+    if parsed.path == crate::mgmt::host_overview::HOST_OVERVIEW_PATH {
+        if !matches!(parsed.method, RestMethod::Get) {
+            return format_http_response(400, "text/plain; charset=utf-8", b"bad request", out);
+        }
+        if !auth_allows(parsed.auth_token) {
+            return format_http_response(401, "text/plain; charset=utf-8", b"unauthorized", out);
+        }
+        let mut body = [0u8; crate::mgmt::host_overview::OVERVIEW_BODY_CAP];
+        let n = crate::mgmt::host_overview::overview_json(&mut body);
+        if n == 0 {
+            return format_http_response(500, "text/plain; charset=utf-8", b"overview", out);
+        }
         return format_http_response(200, "application/json", &body[..n], out);
     }
     if parsed.path == "/host/panic" {

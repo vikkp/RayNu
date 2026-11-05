@@ -11,6 +11,11 @@
 //! Overview **Save address** stages the sector. **Use DHCP** stages a
 //! sector that means DHCP. The page says the address is used on the next
 //! boot.
+//!
+//! `10.99.99.146` is answered on this LAN by another host (Intel
+//! `64:bc:58:97:0b:c6`). A saved static record of that address is moved to
+//! `10.99.99.201` (the guest stays `10.99.99.200`) and the sector is staged
+//! so the move sticks. Gateway, prefix, DNS, and hostname stay.
 
 use crate::mgmt::api::RestMethod;
 use crate::mgmt::megaraid::{classify_ld_bytes, LdClass};
@@ -28,6 +33,11 @@ const OFF_NAME: usize = 24;
 const OFF_NLEN: usize = 56;
 const CHECK_OFF: usize = 508;
 pub const NAME_MAX: usize = 32;
+
+/// Lab address another host answers ARP for. The standing SPA does not bind it.
+const TAKEN_SPA_IP: [u8; 4] = [10, 99, 99, 146];
+/// Standing SPA address. One past the guest at `10.99.99.200`.
+const SPA_IP: [u8; 4] = [10, 99, 99, 201];
 
 /// A static management address. `name_len == 0` is no hostname.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -255,13 +265,39 @@ fn with_lock<T, R>(lock: &core::sync::atomic::AtomicBool, cell: &Cell<T>, f: imp
     out
 }
 
+/// `Some(moved)` when `addr` is the taken lab address. Other fields stay.
+fn relocate_taken_spa(addr: StaticAddr) -> Option<StaticAddr> {
+    if addr.ip != TAKEN_SPA_IP {
+        return None;
+    }
+    let mut moved = addr;
+    moved.ip = SPA_IP;
+    if static_ok(&moved) {
+        Some(moved)
+    } else {
+        None
+    }
+}
+
+fn note_spa_move() {
+    #[cfg(feature = "uefi-bin")]
+    crate::boot::serial::write_line("boot: D9 host addr move 10.99.99.146 -> 10.99.99.201");
+}
+
 /// Install a decoded sector. This boot's listener uses the static record.
-/// A bad image leaves DHCP. Edits from the page do not call this.
+/// A saved `10.99.99.146` is moved to `10.99.99.201` and staged for the
+/// spare. A bad image leaves DHCP. Edits from the page do not call this.
 pub fn restore(buf: &[u8]) -> bool {
     match decode(buf) {
         Some(SavedAddr::Static(addr)) => {
-            with_lock(&ACTIVE_LOCK, &ACTIVE, |s| *s = Some(addr));
-            with_lock(&SHOWN_LOCK, &SHOWN, |s| *s = SavedAddr::Static(addr));
+            let bound = relocate_taken_spa(addr).unwrap_or(addr);
+            let moved = bound.ip != addr.ip;
+            with_lock(&ACTIVE_LOCK, &ACTIVE, |s| *s = Some(bound));
+            with_lock(&SHOWN_LOCK, &SHOWN, |s| *s = SavedAddr::Static(bound));
+            if moved {
+                note_spa_move();
+                let _ = save(bound);
+            }
             true
         }
         Some(SavedAddr::Dhcp) | None => {
@@ -517,14 +553,24 @@ fn parse_ipv4(s: &str) -> Option<[u8; 4]> {
 
 fn status_json(status: u16) -> HostAddrHttp {
     let mut body = [0u8; 512];
-    let mut w = JsonBuf::new(&mut body);
+    let len = status_body(&mut body);
+    HostAddrHttp::Json { status, len, body }
+}
+
+/// The `GET /host/addr` object. Zero when `buf` is too small. The
+/// Overview poll embeds it (`/host/overview`).
+pub fn status_body(buf: &mut [u8]) -> usize {
+    let mut w = JsonBuf::new(buf);
     w.s("{\"ok\":true,\"saved\":");
     write_saved(&mut w, shown());
     w.s(",\"using\":");
     write_using(&mut w, using_now());
     w.s(",\"next\":\"reboot\"}");
-    let len = if w.fit { w.n } else { 0 };
-    HostAddrHttp::Json { status, len, body }
+    if w.fit {
+        w.n
+    } else {
+        0
+    }
 }
 
 fn write_saved(w: &mut JsonBuf<'_>, saved: SavedAddr) {
@@ -704,6 +750,35 @@ mod host_addr_test {
         assert!(decode(&buf).is_none());
         buf[20] ^= 0xff;
         assert_eq!(decode(&buf), Some(SavedAddr::Static(lab())));
+    }
+
+    #[test]
+    fn a_saved_146_binds_201_and_stages_the_sector() {
+        let _guard = super::test_lock();
+        super::reset_for_test();
+        let mut taken = lab();
+        taken.ip = [10, 99, 99, 146];
+        let mut buf = [0u8; 512];
+        assert!(encode(SavedAddr::Static(taken), &mut buf));
+        assert!(restore(&buf));
+        let active = active_static().unwrap();
+        assert_eq!(active.ip, [10, 99, 99, 201]);
+        assert_eq!(active.prefix, 24);
+        assert_eq!(active.gateway, [10, 99, 99, 1]);
+        assert_eq!(active.dns, [1, 1, 1, 1]);
+        assert_eq!(active.name_str(), "raynu");
+        let (_, sector) = copy_dirty().unwrap();
+        match decode(&sector) {
+            Some(SavedAddr::Static(addr)) => assert_eq!(addr.ip, [10, 99, 99, 201]),
+            other => panic!("expected staged 201, got {other:?}"),
+        }
+        match choose(parked().mac, 8443, Some(parked())) {
+            LeaseChoice::Static { lease, .. } => {
+                assert_eq!(lease.ip, [10, 99, 99, 201]);
+                assert_eq!(lease.mac, parked().mac);
+            }
+            other => panic!("expected static 201, got {other:?}"),
+        }
     }
 
     #[test]

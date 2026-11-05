@@ -127,6 +127,11 @@ pub fn schemas_present() -> bool {
         && SECTION_SCHEMAS == ".aschema"
 }
 
+/// Snapshot of the process boot ring for the SPA and REST export.
+pub fn boot_snapshot() -> RingSnapshot {
+    crate::audit::integrity::with_boot_ring(|ring| RingSnapshot::from_ring(ring))
+}
+
 /// Render a report into `out`; returns bytes written.
 pub fn render_report(
     kind: ReportKind,
@@ -295,7 +300,9 @@ fn render_iso_json(snap: &RingSnapshot, out: &mut [u8]) -> Result<usize, ReportE
 
 fn render_sox_csv(snap: &RingSnapshot, out: &mut [u8]) -> Result<usize, ReportError> {
     let mut w = Writer::new(out);
-    w.push_str("report,schema,tip_hash,event_count,vmcs_created,lifecycle_mutations,msr_blocks,chain_ok\n")?;
+    w.push_str(
+        "report,schema,tip_hash,event_count,vmcs_created,lifecycle_mutations,msr_blocks,chain_ok\n",
+    )?;
     w.push_str("sox_access_control,sox_access_control/v1,0x")?;
     w.push_hex_u64(snap.tip_hash)?;
     w.push_str(",")?;

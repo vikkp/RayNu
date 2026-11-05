@@ -65,7 +65,7 @@
           id="loi-path"
           aria-label="Path to LOI"
         >
-          Everest 100% → Persist 93% → SKU 94% → TLS 80% → Auth 38% → Console 82% → PERC 86% → Unmodified 45% → Bar A 94% → Bar B 72% → Overall 80%
+          Everest 100% → Persist 93% → SKU 94% → TLS 88% → Auth 38% → Console 82% → PERC 86% → Unmodified 45% → Bar A 94% → Bar B 72% → Overall 80%
         </p>
       </div>
     </header>
@@ -257,31 +257,29 @@
                 <span data-loi-pct="pieces.sku">94%</span>. The card is written
                 (<a href="sku.html">dedicated-box SKU</a>). Persist is
                 evidence-closed on the 8 GiB USB slice. Native coexist is
-                HTTPS with a lab millicert. PRE-EBS SNP remains
-                “plaintext HTTP”. Overstated copy
+                HTTPS with the operator certificate (TLS 1.3 on
+                <code>9c3e660259de</code>). This tree does not open
+                plaintext HTTP before ExitBootServices. Overstated copy
                 here does not survive a second diligence meeting.
               </p>
             </li>
             <li data-reveal>
               <header>
                 <span class="loi-pieces__name">TLS</span>
-                <span class="loi-pieces__pct" data-piece="tls">80%</span>
+                <span class="loi-pieces__pct" data-piece="tls">88%</span>
               </header>
               <div class="hda-bar__track" aria-hidden="true">
-                <span class="hda-bar__fill" data-piece-fill="tls" style="width: 80%"></span>
+                <span class="hda-bar__fill" data-piece-fill="tls" style="width: 88%"></span>
               </div>
               <p>
                 Everest closed on plaintext HTTP on a bring-up LAN. Native
-                coexist now speaks TLS 1.2. COM2
-                <code>928d6224</code> printed
-                <code>RAYNU-V-M8-TLS-OK</code> after
-                <code>curl --cacert</code> returned the SPA on
-                <code>10.99.99.140:8443</code> <strong>before RayNu-F</strong>.
-                Standing HTTPS while Alpine runs lived on
-                <code>1f33eeda</code> (one TLS session, Host stayed green).
+                coexist on iron speaks TLS 1.3 with the operator certificate.
+                Iron <code>9c3e660259de</code> signed in and reloaded twice.
+                COM2 <code>928d6224</code> printed
+                <code>RAYNU-V-M8-TLS-OK</code> for the earlier TLS 1.2 close.
                 rustls cannot join the EFI.
-                This piece is <span data-loi-pct="pieces.tls">80%</span>.
-                Residual: lab millicert, one cipher, PRE-EBS SNP still
+                This piece is <span data-loi-pct="pieces.tls">88%</span>.
+                Residual: lab certificate, no ACME, PRE-EBS SNP still
                 <code>http://</code>.
               </p>
             </li>
@@ -412,7 +410,7 @@ scores  unmodified <span data-loi-pct="pieces.unmodified">45%</span> · Bar A <s
           </p>
           <ul class="loi-locks">
             <li>A USB persist demonstration is the dedicated-box mechanism. RAID-fleet LOI waits on PERC virtual-disk persist.</li>
-            <li>TLS piece is <span data-loi-pct="pieces.tls">80%</span>. The iron marker <code>RAYNU-V-M8-TLS-OK</code> is closed; the remainder is the lab millicert. SKU piece is <span data-loi-pct="pieces.sku">94%</span>. Console, unmodified ISO, and cluster stay open.</li>
+            <li>TLS piece is <span data-loi-pct="pieces.tls">88%</span>. The standing listener completed TLS 1.3 on iron <code>9c3e660259de</code>. The remainder is the lab certificate and the plaintext PRE-EBS minute. SKU piece is <span data-loi-pct="pieces.sku">94%</span>. Console, unmodified ISO, and cluster stay open.</li>
             <li>Everest remains closed. A patched Alpine ISO is a named residual, not a reason to reopen the summit.</li>
             <li>Iron install and persist markers are printed on R640 COM2 only. Host and CI do not emit them.</li>
             <li>Latitude and nested QEMU are not PowerEdge R640 evidence.</li>

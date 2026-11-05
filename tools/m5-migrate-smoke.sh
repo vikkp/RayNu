@@ -52,13 +52,13 @@ fi
 echo "==> cargo test m5_5_migrate_gate_passes (artifact gate)"
 out="$(cargo test --lib m5_5_migrate_gate_passes -- --nocapture 2>&1)"
 echo "$out"
-echo "$out" | grep -q 'm5_5_migrate_gate_passes ... ok'
-echo "$out" | grep -q "$MARKER"
+grep -q 'm5_5_migrate_gate_passes ... ok' <<<"$out"
+grep -q "$MARKER" <<<"$out"
 
 echo "==> cargo test migrate_ten_plus_one_command"
 out2="$(cargo test --lib migrate_ten_plus_one_command -- --nocapture 2>&1)"
 echo "$out2"
-echo "$out2" | grep -q 'migrate_ten_plus_one_command ... ok'
+grep -q 'migrate_ten_plus_one_command ... ok' <<<"$out2"
 
 echo "$MARKER"
 echo "==> M5.5 migrate smoke PASSED"

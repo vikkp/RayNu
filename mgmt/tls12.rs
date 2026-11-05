@@ -1,13 +1,15 @@
-//! Freestanding TLS 1.2 server for coexist (outside Proven Core).
+//! Freestanding TLS server for coexist (outside Proven Core).
 //!
 //! Pillar: [Z] [A]
 //! Proven Core: **outside** (ADR-002 / ADR-018). Do not touch VMX/EPT.
-//! VERIFICATION: L1 host tests (rustls TLS 1.2 client ↔ this server).
+//! VERIFICATION: L1 host tests (rustls client ↔ this server).
 //!
-//! Cipher: `TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256` (0xC02F) + Extended
-//! Master Secret. rustls/ring stay **out** of `uefi-bin`. Lab millicert is
-//! `assets/tls/lab.crt.der`. Iron close is still `curl --cacert` on the R640
-//! (`RAYNU-V-M8-TLS-OK`). Host/CI never print that marker.
+//! TLS 1.3 (`TLS_AES_128_GCM_SHA256`) when the ClientHello offers it.
+//! TLS 1.2 cipher `TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256` (0xC02F) +
+//! Extended Master Secret otherwise. rustls/ring stay **out** of
+//! `uefi-bin`. Lab millicert is `assets/tls/lab.crt.der`. Iron close is
+//! still `curl --cacert` on the R640 (`RAYNU-V-M8-TLS-OK`). Host/CI never
+//! print that marker. E4 lived on iron `9c3e660259de`: the client completed TLS 1.3.
 
 #![cfg(any(test, feature = "uefi-bin"))]
 
@@ -64,6 +66,12 @@ const ST_CCS: u8 = 2;
 const ST_FIN: u8 = 3;
 const ST_APP: u8 = 4;
 const ST_FAIL: u8 = 5;
+/// TLS 1.3: HelloRetryRequest is out; waiting for the second ClientHello.
+pub(super) const ST_CH2: u8 = 6;
+/// TLS 1.3: server flight is out; waiting for the client Finished.
+pub(super) const ST_13FIN: u8 = 7;
+/// `proto` while the record layer is TLS 1.3.
+pub(super) const PROTO13: u8 = 13;
 
 struct MixRng;
 
@@ -221,14 +229,34 @@ pub struct Tls12Listen {
     master: [u8; 48],
     client_key: [u8; 16],
     server_key: [u8; 16],
-    client_iv: [u8; 4],
-    server_iv: [u8; 4],
+    client_iv: [u8; 12],
+    server_iv: [u8; 12],
     read_seq: u64,
     write_seq: u64,
     ems: bool,
     state: u8,
+    /// 0 = TLS 1.2 record layer. [`PROTO13`] after a TLS 1.3 ServerHello.
+    proto: u8,
+    /// Client offered `0x0304`. A TLS 1.2 ServerHello then carries the
+    /// downgrade sentinel (RFC 8446 D.1).
+    offered_tls13: bool,
+    /// Legacy session id echoed in the TLS 1.3 ServerHello.
+    sid: [u8; 32],
+    sid_len: u8,
+    /// Uncompressed secp256r1 share from the ClientHello we answered.
+    peer_point: [u8; 65],
+    peer_ok: bool,
+    /// Running handshake transcript (TLS 1.3 only).
+    th: Option<Sha256>,
+    /// Client application traffic key, installed after the client Finished.
+    app_client_key: [u8; 16],
+    app_client_iv: [u8; 12],
+    /// Expected client Finished verify_data.
+    expect_fin: [u8; 32],
+    /// Inner content type of the last TLS 1.3 record we opened.
+    inner_type: u8,
     /// Certificate the next ServerHello flight sends. Lab millicert unless
-    /// an operator certificate is saved (ADR-021 E4). Still TLS 1.2.
+    /// an operator certificate is saved (ADR-021 E4).
     cert: [u8; crate::mgmt::host_cert::CERT_MAX],
     cert_len: usize,
     operator_cert: bool,
@@ -271,12 +299,23 @@ impl Tls12Listen {
             master: [0; 48],
             client_key: [0; 16],
             server_key: [0; 16],
-            client_iv: [0; 4],
-            server_iv: [0; 4],
+            client_iv: [0; 12],
+            server_iv: [0; 12],
             read_seq: 0,
             write_seq: 0,
             ems: false,
             state: ST_CH,
+            proto: 0,
+            offered_tls13: false,
+            sid: [0; 32],
+            sid_len: 0,
+            peer_point: [0; 65],
+            peer_ok: false,
+            th: None,
+            app_client_key: [0; 16],
+            app_client_iv: [0; 12],
+            expect_fin: [0; 32],
+            inner_type: 0,
             cert: [0; crate::mgmt::host_cert::CERT_MAX],
             cert_len: 0,
             operator_cert: false,
@@ -305,12 +344,23 @@ impl Tls12Listen {
             master: [0; 48],
             client_key: [0; 16],
             server_key: [0; 16],
-            client_iv: [0; 4],
-            server_iv: [0; 4],
+            client_iv: [0; 12],
+            server_iv: [0; 12],
             read_seq: 0,
             write_seq: 0,
             ems: false,
             state: ST_CH,
+            proto: 0,
+            offered_tls13: false,
+            sid: [0; 32],
+            sid_len: 0,
+            peer_point: [0; 65],
+            peer_ok: false,
+            th: None,
+            app_client_key: [0; 16],
+            app_client_iv: [0; 12],
+            expect_fin: [0; 32],
+            inner_type: 0,
             cert: [0; crate::mgmt::host_cert::CERT_MAX],
             cert_len: 0,
             operator_cert: false,
@@ -374,12 +424,23 @@ impl Tls12Listen {
         self.master = [0; 48];
         self.client_key = [0; 16];
         self.server_key = [0; 16];
-        self.client_iv = [0; 4];
-        self.server_iv = [0; 4];
+        self.client_iv = [0; 12];
+        self.server_iv = [0; 12];
         self.read_seq = 0;
         self.write_seq = 0;
         self.ems = false;
         self.state = ST_CH;
+        self.proto = 0;
+        self.offered_tls13 = false;
+        self.sid = [0; 32];
+        self.sid_len = 0;
+        self.peer_point = [0; 65];
+        self.peer_ok = false;
+        self.th = None;
+        self.app_client_key = [0; 16];
+        self.app_client_iv = [0; 12];
+        self.expect_fin = [0; 32];
+        self.inner_type = 0;
         if !self.identity_current() {
             self.apply_identity();
         }
@@ -467,6 +528,43 @@ impl Tls12Listen {
         self.state == ST_CH
     }
 
+    /// Bytes of a TLS record are buffered and the record is not whole yet.
+    pub fn rx_pending(&self) -> bool {
+        self.rx_len > 0
+    }
+
+    /// Ciphertext is sealed and not yet accepted by the TCP buffer.
+    ///
+    /// A short `send_slice` puts that tail back. The next tick drains it.
+    /// Sealing the HTTP reply again would mint a new nonce under the bytes
+    /// the browser already has.
+    pub fn tx_pending(&self) -> bool {
+        self.tx_len > 0
+    }
+
+    /// Drop a reply that cannot be queued. The listen path then re-listens.
+    pub fn abandon_reply(&mut self) {
+        self.tx_len = 0;
+        self.state = ST_FAIL;
+    }
+
+    /// Put unsent ciphertext back at the front of the TX buffer.
+    ///
+    /// `drain_tcp` already removed it. A short `send_slice` must not drop
+    /// the tail or the browser waits forever on a truncated record.
+    pub fn prefix_tx(&mut self, data: &[u8]) -> bool {
+        if data.is_empty() {
+            return true;
+        }
+        if self.tx_len + data.len() > self.tx.len() {
+            return false;
+        }
+        self.tx.copy_within(0..self.tx_len, data.len());
+        self.tx[..data.len()].copy_from_slice(data);
+        self.tx_len += data.len();
+        true
+    }
+
     pub fn key_ready(&self) -> bool {
         self.key.is_some()
     }
@@ -501,6 +599,12 @@ impl Tls12Listen {
     }
 
     fn handle_record(&mut self, typ: u8, body: &[u8]) -> bool {
+        if self.proto == PROTO13
+            && (self.state == ST_13FIN || self.state == ST_APP)
+            && typ == CT_APP
+        {
+            return self.tls13_encrypted(body);
+        }
         match typ {
             CT_ALERT => false,
             CT_CCS => {
@@ -511,7 +615,11 @@ impl Tls12Listen {
                 // TLS 1.3 clients (Safari/Chrome) send a dummy CCS after
                 // ClientHello for middlebox compatibility (RFC 8446 D.4).
                 // curl --tlsv1.2 does not. Drop it until we expect the real
-                // TLS 1.2 CCS after ClientKeyExchange.
+                // TLS 1.2 CCS after ClientKeyExchange. Once `proto` is TLS 1.3
+                // the dummy CCS is the compatibility record, not a key change.
+                if self.proto == PROTO13 {
+                    return body == [1];
+                }
                 self.state == ST_CH || self.state == ST_CKE
             }
             CT_HS if self.state == ST_FIN || self.state == ST_APP => {
@@ -551,17 +659,29 @@ impl Tls12Listen {
             let body = &msg[4..4 + n];
             let whole = &msg[..4 + n];
             match (self.state, typ) {
-                (ST_CH, HS_CH) => {
-                    if !self.parse_ch(body) {
+                (ST_CH, HS_CH) => match self.classify_hello(body) {
+                    tls13::HelloClass::Bad => return false,
+                    tls13::HelloClass::Tls13(ch) => {
+                        if !self.start_tls13(body, whole, ch) {
+                            return false;
+                        }
+                    }
+                    tls13::HelloClass::Tls12 { offered_13 } => {
+                        self.offered_tls13 = offered_13;
+                        if !self.accept_tls12_hello(body, whole) {
+                            return false;
+                        }
+                    }
+                },
+                (ST_CH2, HS_CH) => {
+                    if !self.second_tls13_hello(body, whole) {
                         return false;
                     }
-                    if !self.append_trans(whole) {
+                }
+                (ST_13FIN, HS_FIN) => {
+                    if !self.finish_tls13(body) {
                         return false;
                     }
-                    if !self.send_server_flight() {
-                        return false;
-                    }
-                    self.state = ST_CKE;
                 }
                 (ST_CKE, HS_CKE) => {
                     if !self.parse_cke(body) {
@@ -595,6 +715,20 @@ impl Tls12Listen {
             msg = &msg[4 + n..];
         }
         msg.is_empty()
+    }
+
+    /// TLS 1.2 ClientHello. When the client also offered TLS 1.3, the
+    /// ServerHello random ends with the downgrade sentinel.
+    fn accept_tls12_hello(&mut self, body: &[u8], whole: &[u8]) -> bool {
+        if self.offered_tls13 {
+            self.server_random[24..].copy_from_slice(b"DOWNGRD\x01");
+        }
+        if !self.parse_ch(body) || !self.append_trans(whole) || !self.send_server_flight() {
+            return false;
+        }
+        self.proto = 0;
+        self.state = ST_CKE;
+        true
     }
 
     fn parse_ch(&mut self, body: &[u8]) -> bool {
@@ -762,8 +896,10 @@ impl Tls12Listen {
         }
         self.client_key.copy_from_slice(&block[0..16]);
         self.server_key.copy_from_slice(&block[16..32]);
-        self.client_iv.copy_from_slice(&block[32..36]);
-        self.server_iv.copy_from_slice(&block[36..40]);
+        self.client_iv = [0; 12];
+        self.server_iv = [0; 12];
+        self.client_iv[..4].copy_from_slice(&block[32..36]);
+        self.server_iv[..4].copy_from_slice(&block[36..40]);
         self.read_seq = 0;
         self.write_seq = 0;
         true
@@ -825,11 +961,14 @@ impl Tls12Listen {
     }
 
     fn seal(&mut self, typ: u8, plain: &[u8]) -> bool {
+        if self.proto == PROTO13 {
+            return self.seal13(typ, plain);
+        }
         if plain.len() > 16384 {
             return false;
         }
         let mut nonce = [0u8; 12];
-        nonce[..4].copy_from_slice(&self.server_iv);
+        nonce[..4].copy_from_slice(&self.server_iv[..4]);
         nonce[4..].copy_from_slice(&self.write_seq.to_be_bytes());
         let mut aad = [0u8; 13];
         aad[..8].copy_from_slice(&self.write_seq.to_be_bytes());
@@ -864,7 +1003,7 @@ impl Tls12Listen {
         let tag = &rec[rec.len() - 16..];
         let ct = &rec[8..rec.len() - 16];
         let mut nonce = [0u8; 12];
-        nonce[..4].copy_from_slice(&self.client_iv);
+        nonce[..4].copy_from_slice(&self.client_iv[..4]);
         nonce[4..].copy_from_slice(explicit);
         let mut aad = [0u8; 13];
         aad[..8].copy_from_slice(&self.read_seq.to_be_bytes());
@@ -991,3 +1130,6 @@ pub fn prop_tls12_package() -> bool {
 #[cfg(test)]
 #[path = "tls12_test.rs"]
 mod tls12_test;
+
+#[path = "tls13.rs"]
+mod tls13;

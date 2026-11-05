@@ -40,7 +40,7 @@ for needle in \
   'mgmt HTTP listening' \
   'PRE-EBS Tcp4 window' \
   'falling back to SNP residual' \
-  'PRE-EBS SNP window' \
+  'E5 plaintext PRE-EBS closed' \
   'RAYNU-V-R640-BOOT-OK'
 do
   if ! efi_has "$EFI" "$needle"; then
@@ -69,17 +69,9 @@ echo "  boot: uefi-net connect stack_ok=… all_ok=…           # SB + bounded 
 echo "  boot: uefi-net after-all … extra-after …             # Tcp4 still 0 → SNP residual"
 echo "  boot: falling back to SNP residual (ADR-012)         # if tcp4=0"
 echo "  boot: SNP DHCP discover…"
-echo "  boot: mgmt HTTP listening on a.b.c.d:8443 (PRE-EBS SNP window)"
 echo "  boot: SNP lease a.b.c.d/nn router=…"
-echo "  boot: CURL NOW → http://a.b.c.d:8443/"
-echo "  boot: PING NOW (same LAN as HOST NIC, not iDRAC) before curl"
-echo "  boot: SNP listen window_ms=45000"
-echo "During the SNP window (~45s after bind), from a laptop on the SAME subnet:"
-echo "  ping -c 2 HOST_NIC_IP"
-echo "  curl -sS --connect-timeout 2 http://HOST_NIC_IP:8443/"
-echo "  curl -sS -H 'Authorization: Bearer raynu-v-bringup' http://HOST_NIC_IP:8443/vms"
-echo "After a successful curl exchange:"
-echo "  RAYNU-V-M7-UEFI-HTTP-OK"
+echo "  boot: E5 plaintext PRE-EBS closed (no HTTP listen; HTTPS is post-EBS)"
+echo "There is no plaintext curl window. HTTPS is the post-EBS listener."
 echo "Soft-fail still ends with RAYNU-V-R640-BOOT-OK (E2)."
 echo "HOST NIC IP ≠ iDRAC IP (iron example: 10.99.99.127)."
 echo "If ping fails: Mac is not on the LOM/DHCP subnet — fix LAN path first."

@@ -1,6 +1,7 @@
 use super::{
-    post_ebs_http_scripts_present, post_ebs_http_surface_present, prop_post_ebs_http_scaffold_package,
-    run_m7_post_ebs_http_scaffold_gate, M7_POST_EBS_HTTP_GATE_MARKER,
+    post_ebs_http_scripts_present, post_ebs_http_surface_present,
+    prop_post_ebs_http_scaffold_package, run_m7_post_ebs_http_scaffold_gate,
+    M7_POST_EBS_HTTP_GATE_MARKER,
 };
 
 #[test]

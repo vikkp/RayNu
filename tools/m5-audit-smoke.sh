@@ -39,16 +39,16 @@ fi
 echo "==> cargo test m5_3_audit_gate_passes (artifact gate)"
 out="$(cargo test --lib m5_3_audit_gate_passes -- --nocapture 2>&1)"
 echo "$out"
-echo "$out" | grep -q 'm5_3_audit_gate_passes ... ok'
-echo "$out" | grep -q "$MARKER"
+grep -q 'm5_3_audit_gate_passes ... ok' <<<"$out"
+grep -q "$MARKER" <<<"$out"
 
 echo "==> cargo test prop_tamper_detected / mandatory chain"
 out2="$(cargo test --lib tamper_is_detected -- --nocapture 2>&1)"
 echo "$out2"
-echo "$out2" | grep -q 'tamper_is_detected ... ok'
+grep -q 'tamper_is_detected ... ok' <<<"$out2"
 out3="$(cargo test --lib mandatory_events_chain -- --nocapture 2>&1)"
 echo "$out3"
-echo "$out3" | grep -q 'mandatory_events_chain ... ok'
+grep -q 'mandatory_events_chain ... ok' <<<"$out3"
 
 echo "$MARKER"
 echo "==> M5.3 audit smoke PASSED"

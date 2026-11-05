@@ -1,6 +1,6 @@
 ---
 hda_version: 1
-last_updated: 2026-11-02
+last_updated: 2026-11-05
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
@@ -176,7 +176,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 2026-08 ████████  R640 boot (E2) + E3b HTTP-OK
 2026-09 ████████  E5 + Phase B — **Mount Everest CLOSED** (`f72b4276`)  ← months_to_everest = 0.0
 2026-10 ████████  M8.8 lived on c3a70e62: Ubuntu login, then library ISO cleared; scores held
-2026-11 ░░░░░░░░  wave 5: E6 lived; E4 cert presented; bac1f0ec5139 SPA and both reloads, Host stayed green, three accepts; TLS 1.2 still open; scores held
+2026-11 ░░░░░░░░  wave 5 closed: E4 lived on 9c3e6602; E5 line on ad738602; listener back to one session until the page is kept; scores held
 ```
 
 **Pull-forward rule:** E2 closed 2026-08-15; E3 bring-up closed 2026-08-16; **E3b closed 2026-08-20**; **P0-14 closed 2026-08-21**; **E5 install-to-disk closed on iron 2026-09-10** (`59ac070`); **F7 relaunch + installed-disk GRUB reached on iron 2026-09-10** (`975f8fc`, exit-cap ended it); **E5 reboot-to-disk closed on iron 2026-09-10** (`56a3ffd`: `DISK-BOOT-OK`, second Linux `root=UUID=`, `login:`) → months 0.5→0.25; **Phase B closed on iron 2026-09-11** (`f72b4276` / `34552377351`: coexist HTTP-OK → SPA Start of RayNu-F ISO → install → disk reboot) → months 0.25→0.0. Document why in [Changelog](#hda-changelog).
@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-5-e4-reloads |
-| Summary | **ADR-021 E4 still in flight.** Iron `bac1f0ec5139` loaded the SPA and both reloads. Host stayed green. COM2 showed three accepts (slots 5–7) and no re-listen. TLS stays 1.2. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | no-egress-rearm |
+| Summary | **Do not rebuild function 0 when the guest arms egress.** Iron `30422198` bound `10.99.99.201` and completed NTP, then printed `:38 rearm after egress ok`. The Mac gateway `10.6.0.1` then returned Destination Host Unreachable for `.201`. `.146` was the Intel host `64:bc:58:97:0b:c6`. E4 stays lived on `9c3e6602`. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
-| Gates touched | ADR-021 E4 `planned → in flight` on `cursor/wave-5-e4-cert-50bb`. E6 stays lived. No doorbell. No format of UBUNTU0. |
+| Gates touched | No new lived row. Wave 5 stays closed. E4 stays lived on `9c3e6602`. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
 
 ## Blockers & risks (Everest-relevant)
@@ -380,6 +380,30 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-05 | no-egress-rearm | 0.0 | 99 | **Function 0 is not rebuilt when egress arms.** Iron `30422198` listened on `10.99.99.201:8443`, NTP completed, then `:38 rearm after egress ok`. Mac `10.6.0.1` returned Destination Host Unreachable for `.201`. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-05 | spa-addr-201 | 0.0 | 99 | **Standing SPA moves to `10.99.99.201`.** Guest ARP for `.146` returned Intel `64:bc:58:97:0b:c6` and connection refused. Hypervisor MAC stays `b0:26:28:5c:5a:38`. Saved `.146` is rewritten and staged. Guest stays `.200`. E4 stays lived on `9c3e6602`. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-04 | ten-listen-sockets | 0.0 | 99 | **Ten listen sockets restored.** Two stay in LISTEN. A kept session is not aborted. `6dc1f554` and `87bee04b` are the reason. `9c3e6602` signed in on this table. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-04 | listen-before-poll | 0.0 | 99 | **A listener stays in LISTEN before poll.** One socket on `7e936b12` refused the page in 0 ms. Two sockets, no abort of the kept session. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-04 | m5-smoke-pipefail | 0.0 | 99 | **M5 smoke grep no longer fails a passing test.** PR run `41948554730` printed `RAYNU-V-M5-IDRAC-OK` then exited 1. Push run `41948548809` was green. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-04 | function-0-rearm-after-egress | 0.0 | 99 | **Rearm function 0 after the egress reset.** `7e936b12` had `listen=1` and no `TCP accept`. The reset is in that COM2. One socket stays. E4 stays lived on `9c3e6602`. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-04 | wave-4-socket-structure | 0.0 | 99 | **One socket in the data.** `22275eb7` only indexed slot 0 of the ten-slot table and left the abort-to-free-a-listener helpers in the tree. Those are gone. Storage is 2. E4 stays lived on `9c3e6602`. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-04 | wave-4-one-socket | 0.0 | 99 | **Listener is the wave 4 socket.** One TCP session. `dff4c70f` still opened the other slots; Firefox was refused in 0 ms with no `TCP accept`. E4 stays lived on `9c3e6602`. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-04 | wave-5-one-session-test | 0.0 | 99 | **Host test locks `listen=1`.** Push run `41938383251` failed `ten_slots_leave_listeners_after_an_eight_accept_burst` on the old “stay in LISTEN” string. The test now requires `listen=1` and `arm_spare_listener`. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-04 | wave-5-one-session | 0.0 | 99 | **Listener is one session until the page is kept.** Iron `ad738602` accepted two sockets and the follow-ups did not finish. E5's line did print. E4 stays lived on `9c3e6602`. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-04 | wave-5-closed | 0.0 | 99 | **Wave 5 closed.** E5 plaintext PRE-EBS listen removed (DHCP lease stays). G3 audit JSON/CSV on the Activity page and REST. E12 OpenAPI v1 with CI route check. E4 stayed lived on `9c3e6602`. Current wave advances. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-04 | wave-5-e4-lived | 0.0 | 99 | **E4 lived.** Iron `9c3e660259de` / run `41924788987`. TLS 1.3, sign-in, two reloads. Wave 5 then closed in wave-5-closed. months 0.0 held; overall 99 held |
+| 2026-11-04 | wave-5-e4-listener-health | 0.0 | 99 | **E4 was in flight.** Function-0 listener health on the coexist tick. Closed by the `9c3e6602` boot (wave-5-e4-lived) without a recover line. months 0.0 held; overall 99 held |
+| 2026-11-04 | wave-5-e4-login-nic-coexist | 0.0 | 99 | **E4 still in flight — root cause is the NIC.** Webui retry build `ab7a4d66` (push run `41912339727`) still failed: one launch had zero TCP accepts, a later launch loaded then wedged. Decode only; the rebuild landed in wave-5-e4-listener-health. Not lived. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-04 | wave-5-e4-login-retry | 0.0 | 99 | **E4 still in flight.** Reverted `6076a652` (push run `41902218392`) still said Account dropped. Added a `webui.html` login back-off retry; superseded — the next boot (`ab7a4d66`) showed the drop is `:38`/`:39` NIC coexistence, not fixable from the client (see wave-5-e4-login-nic-coexist). Not lived. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-04 | wave-5-e4-login-revert | 0.0 | 99 | **E4 still in flight.** Account dropped on `c3cdc6c1` (`ce77b697`) and `d57ff3b9` (run `41886943984`); worked on `1cf82795` (`2330f33b`). Reverted the connection-shrinking to `3a7e1183`; later superseded — the reverted stack still dropped sign-in, see wave-5-e4-login-retry. Not lived. months 0.0 held; overall 99 held |
+| 2026-11-04 | wave-5-e4-login-dropped | 0.0 | 99 | **E4 still in flight.** Iron `c3cdc6c1d7fe` / run `41878369788`: first load painted, `Operator: vikkp` from `GET /auth/operator`, sign-in Account dropped, reload did not load. Not lived. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-04 | wave-5-e4-one-poll | 0.0 | 99 | **E4 still in flight.** No iron. Overview polls one `GET /host/overview` instead of five routes; host Chrome serve 12 min, two reloads, 5 connections, 342 requests, both reloads on a kept connection. Short listen reserve answers `Connection: close` and FINs; kept idle 10 min → 60 s. Not lived. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-04 | wave-5-e4-reload-burst | 0.0 | 99 | **E4 still in flight.** Iron `1cf827952140` / run `41862713550`: first load signed in, Guest 3 running, certificate 790 bytes, static `.146`, ports 3 and 4 up. Reload was Firefox "Unable to connect". The new accept was aborted on the next tick. Not lived. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-04 | wave-5-e4-listen-reclaim | 0.0 | 99 | **E4 still in flight.** Iron `1da151be06e0` / run `41539812411`: Mac curl from `10.6.0.6` to `10.99.99.146:8443` was Connection refused in 19 ms. The address answered; no slot was in LISTEN. Back/Forward is the page already painted. Not lived. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-02 | wave-5-e4-signin-idle | 0.0 | 99 | **E4 still in flight.** Iron page up, Host green. Sign-in POST never got a reply: COM2 `idle abort` slot 3, Firefox "Account dropped". The 2 s ClientHello reclaim is now 15 s. Not a wrong password. Not lived. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-02 | wave-5-e4-tls13-gate | 0.0 | 99 | **E4 still in flight.** CI on `48e4b683` failed `m7_8_host_nic_scaffold_passes` because the listen file no longer named `http_accept_idle_limit_ms`. The call is back. Not lived. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-02 | wave-5-e4-tls13-refresh | 0.0 | 99 | **E4 still in flight.** Iron `ab39021c8c72` / run `41524441195`: cert read `operator`, `wrap=tls13`, Firefox drew the page, then refresh accepted slots 0–7. The red Host card was 401 from the lab token. Ten sockets and a started hello is not the 2 s reclaim. Not lived. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-02 | wave-5-e4-tls13 | 0.0 | 99 | **E4 still in flight.** Host rustls finishes TLS 1.3 (AES-128-GCM, HelloRetryRequest to secp256r1, RSASSA-PSS) and the TLS 1.2 client still gets the SPA. Iron `bac1f0ec5139` remains the booted file. Not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-02 | wave-5-e4-reloads | 0.0 | 99 | **E4 still in flight.** Iron `bac1f0ec5139` / run `41516590111`: SPA loaded, both reloads worked, Host stayed green, certificate 790 bytes, Guest 3 running. COM2 after login: accepts on slots 5, 6, and 7, no re-listen. TLS 1.2. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-02 | wave-5-e4-listen-spare | 0.0 | 99 | **E4 still in flight.** Iron `87bee04b` loaded the page once, then the reload was refused (accept slot 4, re-listen slot 0, accept slot 0, re-listen slot 1). Closing a live session to free a listener is what a TLS server does not do. Eight sockets: a browser holds 6, two stay listening. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-02 | wave-5-e4-keepalive | 0.0 | 99 | **E4 still in flight.** Iron `1e7d44c9`: page and one reload loaded (certificate 790 bytes, Guest 3 running), second reload failed, Host card flipped red. Every SPA reply closed, so the 2 s polls each handshook. A normal fetch keeps the session; the oldest finished session is FIN'd only when nothing is listening. Scores held. months 0.0 held; overall 99 held |
@@ -1173,7 +1197,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     Wave 5 is current. E6 lived on f2828d95. E4 is in flight on cursor/wave-5-e4-cert-read-50bb. Iron bac1f0ec5139 / run 41516590111 loaded the SPA and both reloads (Host green, certificate 790 bytes, three accepts on slots 5–7, no re-listen). Leave that EFI booted. TLS 1.3 is still open. Not lived. Rollback for a wave 2 flash is v0.1.0-m8-9-lan. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/m8_plan.md.
+Next move:     Wave 5 is current. E6 lived on f2828d95. E4 is in flight on cursor/wave-5-e4-tls13-41d4. Host rustls finishes TLS 1.3. Iron bac1f0ec5139 / run 41516590111 is the file to leave booted until this EFI is flashed. Not lived until that boot prints cert rd operator and a client completes TLS 1.3. Rollback for a wave 2 flash is v0.1.0-m8-9-lan. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/m8_plan.md.
 Rollback:      M8.9 close: v0.1.0-m8-9-lan → CI 40603110937 / COM2 sha=0d865c7fcb0a / EFI SHA256 df6fc3465cecf1eaf058d5c8e675501827c16eb55e7b2c9758bc5e68326ad91b
 Older M8.8:    v0.1.0-m8-8-ubuntu → CI 38454398693 / COM2 sha=c3a70e623aec / EFI SHA256 08ef31ba87136577102ac378d8e0a512327994e8794c41c64444f5be5f8812c4
 Older SPA:     v0.1.0-m8-perc-spa → CI 36362775808 / COM2 sha=8ad2ac89125e / EFI SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849

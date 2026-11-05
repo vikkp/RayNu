@@ -141,8 +141,9 @@ pub enum AuditEvent {
     EvidenceModeActivated {
         source: u8,
     },
-    /// Management-plane listen restarted after `MgmtFatal` (ADR-013 Phase E).
-    /// `kind`: 0=Device, 1=Bind, 2=ArenaExhausted, 3=Induced.
+    /// Management-plane listen restarted after `MgmtFatal` (ADR-013 Phase E),
+    /// or function 0's rings rebuilt while function 1 is up.
+    /// `kind`: 0=Device, 1=Bind, 2=ArenaExhausted, 3=Induced, 4=function-0 rings.
     MgmtRestarted {
         generation: u32,
         kind: u8,
@@ -428,7 +429,8 @@ pub enum AuditEvent {
     /// SPA saved or cleared the standing certificate (ADR-021 E4).
     /// `source` 1 = operator certificate, 0 = back to the lab millicert.
     /// `cert_len` is the DER length when `source` is 1. The key is not here.
-    /// The listener is still TLS 1.2.
+    /// Browsers negotiate TLS 1.3. TLS 1.2 remains for a client that
+    /// does not offer it.
     HostCertSaved {
         source: u8,
         cert_len: u16,
@@ -696,7 +698,7 @@ unsafe impl Sync for BootRing {}
 static BOOT_RING: BootRing = BootRing(UnsafeCell::new(AuditRing::new()));
 static BOOT_RING_LOCK: AtomicBool = AtomicBool::new(false);
 
-fn with_boot_ring<R>(f: impl FnOnce(&mut AuditRing) -> R) -> R {
+pub(crate) fn with_boot_ring<R>(f: impl FnOnce(&mut AuditRing) -> R) -> R {
     while BOOT_RING_LOCK.swap(true, Ordering::Acquire) {
         core::hint::spin_loop();
     }

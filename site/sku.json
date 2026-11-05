@@ -19,15 +19,15 @@
   },
   "counts": {
     "S1": {
-      "lived": 43,
-      "in flight": 2,
-      "planned": 22,
+      "lived": 47,
+      "in flight": 1,
+      "planned": 19,
       "total": 67
     },
     "Final": {
-      "lived": 43,
-      "in flight": 2,
-      "planned": 84,
+      "lived": 47,
+      "in flight": 1,
+      "planned": 81,
       "total": 129
     }
   },
@@ -784,19 +784,19 @@
         {
           "id": "E4",
           "capability": "Operator-supplied certificate and key (upload or ACME); TLS 1.3",
-          "status": "in flight",
+          "status": "lived",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "`cursor/wave-5-e4-cert-read-50bb`. Save on `12ffaff69fb9` wrote `lba=6190268891` (`cert=790`). The next F11 died in the read: RSA parse allocated after ExitBootServices, the UEFI pool returned null, and the panic path's VMXOFF was #UD (red BIOS screen, RIP `+02478F`). `0beeb871` then printed `boot: E4 cert rd lba=6190268891 operator` (the read lived) and the chassis reset on the second browser connection: `reset()` re-parsed the key (~100 KiB each) on every accept and re-listen and the 512 KiB leaky bump ran out before the panic line drained. `reset()` now keeps the parsed key, the bump is 4 MiB, and the panic path flushes COM2 (evidence). `6dc1f554` then presented that certificate (Firefox drew the warning, no reset) and the one listen slot wedged on the sign-in connection, so later SYNs were refused (evidence). The standing listener now arms six sockets, forces a close whose TX never drains, and the post-EBS heap returns handshake temporaries on `dealloc`. `643f13de` then served the page (`Operator: vikkp`) and a reload was refused because keep-alive held all six. Iron `d3faa4d7` returned every SPA slot with `abort()` after the drain, and Firefox reported it could not connect. `1e7d44c9` ended a drained reply with FIN: the page and one reload loaded (certificate 790 bytes, Guest 3 running), then the Host card flipped. Every SPA reply still closed, the 2 s polls each handshook, and a poll that found all six slots busy painted the server down (evidence). A normal SPA fetch keeps the TLS session again. `87bee04b` then closed the oldest finished session whenever none of the six was listening. The page loaded once. The reload's SYN arrived during that FIN and was refused (COM2: accept slot 4, re-listen slot 0, accept slot 0, re-listen slot 1). smoltcp's listen socket becomes the connection, so the table is now 8: a browser holds 6 and two stay in LISTEN. A live session is not closed to free a listener. Iron `bac1f0ec5139` / run `41516590111` then loaded the SPA and both reloads (Host green, certificate 790 bytes, Guest 3 running). COM2 after login showed three accepts, slots 5–7, and no re-listen (evidence). The ISO library upload still keeps its connection. The listener is still TLS 1.2. Not lived until a boot prints `boot: E4 cert rd` `operator` and a client completes TLS 1.3",
+          "note": "Iron `9c3e660259de` / push run `41924788987`. COM2 `boot: E4 cert rd lba=6190268891 operator` and `boot: HOST-NIC TLS wrap=tls13`. Firefox loaded `https://raynu-v.lab:8443` on the first try, both reloads loaded, and `vikkp` signed in. Overview: Host answering, Guest 3 running, certificate operator 790 bytes, TLS 1.3, port 3 `b0:26:28:5c:5a:38` up at 100 full. Accepts on slot 0 and slot 1. No `HOST-NIC :38 recover`. Evidence `docs/evidence/r640/2026-11-04-9c3e6602-e4-tls13-ok.md`. The operator certificate on the spare is the supply path. ACME remains the other supply path and is not this close.",
           "wave": "5"
         },
         {
           "id": "E5",
           "capability": "Plaintext PRE-EBS window closed (HTTPS or nothing from first packet)",
-          "status": "planned",
+          "status": "lived",
           "ships": "S1",
           "ref": "M8.1",
-          "note": "Boot minutes are HTTP today",
+          "note": "Host gate `./tools/m7-uefi-http-smoke.sh`: `uefi_snp_listen` parks the DHCP lease, TCP is not bound, COM2 line `boot: E5 plaintext PRE-EBS closed (no HTTP listen; HTTPS is post-EBS)`. `m7_6_uefi_http_scaffold_passes` and `m7_post_ebs_http_scaffold_passes`. Iron `ad7386028249` / run `41929850745` printed that line and did not print `CURL NOW → http://`.",
           "wave": "5"
         },
         {
@@ -856,10 +856,10 @@
         {
           "id": "E12",
           "capability": "REST API documented (OpenAPI), versioned, stable for the SKU",
-          "status": "planned",
+          "status": "lived",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Endpoints exist; no published contract",
+          "note": "`docs/openapi/v1.yaml` version 1. `mgmt/openapi.rs` `API_V1_PATHS` is the same list. CI `./tools/check-openapi.sh` and `v1_contract_matches_the_firmware_routes` print `RAYNU-V-E12-OPENAPI-OK`. The `/fw` stage probes are not this contract.",
           "wave": "5"
         },
         {
@@ -910,15 +910,15 @@
       ],
       "counts": {
         "S1": {
-          "lived": 4,
-          "in flight": 2,
-          "planned": 3,
+          "lived": 7,
+          "in flight": 1,
+          "planned": 1,
           "total": 9
         },
         "Final": {
-          "lived": 4,
-          "in flight": 2,
-          "planned": 11,
+          "lived": 7,
+          "in flight": 1,
+          "planned": 9,
           "total": 17
         }
       }
@@ -1064,10 +1064,10 @@
         {
           "id": "G3",
           "capability": "Audit export (JSON/CSV) from the SPA and REST",
-          "status": "planned",
+          "status": "lived",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Ring is in memory; export path missing",
+          "note": "`GET /audit/export.json` and `GET /audit/export.csv` require a bearer and render the ISO event inventory from the boot ring. Activity buttons download them. Host test `audit_export_json_and_csv` prints `RAYNU-V-G3-AUDIT-EXPORT-OK`.",
           "wave": "5"
         },
         {
@@ -1109,15 +1109,15 @@
       ],
       "counts": {
         "S1": {
-          "lived": 3,
+          "lived": 4,
           "in flight": 0,
-          "planned": 1,
+          "planned": 0,
           "total": 4
         },
         "Final": {
-          "lived": 3,
+          "lived": 4,
           "in flight": 0,
-          "planned": 4,
+          "planned": 3,
           "total": 7
         }
       }
@@ -1565,12 +1565,12 @@
       "iron": "E6",
       "why": "Security and audit together; what diligence asks for first. Host-heavy, overlaps wave 4 iron time.",
       "counts": {
-        "lived": 1,
-        "in flight": 1,
-        "planned": 3,
+        "lived": 5,
+        "in flight": 0,
+        "planned": 0,
         "total": 5
       },
-      "closed": false
+      "closed": true
     },
     {
       "id": "6",
@@ -1850,63 +1850,91 @@
       "closed": false
     }
   ],
-  "current_wave": "5",
+  "current_wave": "6",
   "next_up": [
     {
-      "id": "E4",
-      "capability": "Operator-supplied certificate and key (upload or ACME); TLS 1.3",
-      "status": "in flight",
-      "role": "host-first"
+      "id": "A7",
+      "capability": "In-place hypervisor update from the SPA with A/B slots and rollback",
+      "status": "planned",
+      "role": "iron thread"
     },
     {
-      "id": "E5",
-      "capability": "Plaintext PRE-EBS window closed (HTTPS or nothing from first packet)",
+      "id": "A5",
+      "capability": "Signed EFI for UEFI Secure Boot (customer enrolls RayNu-V key or shim)",
       "status": "planned",
       "role": "host-first"
     },
     {
-      "id": "G3",
-      "capability": "Audit export (JSON/CSV) from the SPA and REST",
+      "id": "A4",
+      "capability": "Headless operation: nothing the operator does requires COM2 or SOL",
       "status": "planned",
       "role": "host-first"
     },
     {
-      "id": "E12",
-      "capability": "REST API documented (OpenAPI), versioned, stable for the SKU",
+      "id": "H5",
+      "capability": "Install guide, cabling guide, operator runbook, support matrix as customer documents",
+      "status": "planned",
+      "role": "host-first"
+    },
+    {
+      "id": "F10",
+      "capability": "iDRAC NIC Selection matrix: Dedicated and Shared LOM both documented and tested",
+      "status": "planned",
+      "role": "host-first"
+    },
+    {
+      "id": "D11",
+      "capability": "Cabling and port roles documented: iDRAC dedicated or shared LOM, port 3 mgmt, port 4 guests",
+      "status": "planned",
+      "role": "host-first"
+    },
+    {
+      "id": "H8",
+      "capability": "Release cadence and support policy stated (what a customer gets for a year)",
       "status": "planned",
       "role": "host-first"
     }
   ],
   "filler": [
     {
-      "id": "A5",
-      "capability": "Signed EFI for UEFI Secure Boot (customer enrolls RayNu-V key or shim)",
-      "wave": "6"
+      "id": "B6",
+      "capability": "Multiple concurrent guests on one R640",
+      "wave": "7"
     },
     {
-      "id": "A4",
-      "capability": "Headless operation: nothing the operator does requires COM2 or SOL",
-      "wave": "6"
+      "id": "B7",
+      "capability": "Multi-vCPU (SMP) product guests",
+      "wave": "7"
     },
     {
-      "id": "H5",
-      "capability": "Install guide, cabling guide, operator runbook, support matrix as customer documents",
-      "wave": "6"
+      "id": "B9",
+      "capability": "Guest clock: TSC/kvmclock-style stable time source, no drift at idle",
+      "wave": "7"
     },
     {
-      "id": "F10",
-      "capability": "iDRAC NIC Selection matrix: Dedicated and Shared LOM both documented and tested",
-      "wave": "6"
+      "id": "C4",
+      "capability": "Datastore: carve, grow, delete guest disks across the whole VD from the SPA",
+      "wave": "7"
     },
     {
-      "id": "D11",
-      "capability": "Cabling and port roles documented: iDRAC dedicated or shared LOM, port 3 mgmt, port 4 guests",
-      "wave": "6"
+      "id": "C6",
+      "capability": "Upload progress, resume, checksum shown before use",
+      "wave": "7"
     },
     {
-      "id": "H8",
-      "capability": "Release cadence and support policy stated (what a customer gets for a year)",
-      "wave": "6"
+      "id": "E11",
+      "capability": "Guest console in the browser (serial and framebuffer), keyboard works",
+      "wave": "7"
+    },
+    {
+      "id": "E17",
+      "capability": "Guest log separated from host log on the page",
+      "wave": "7"
+    },
+    {
+      "id": "A8",
+      "capability": "Hardware support matrix published: R640 lived; R650/R660; BCM5720/57416; X710; PERC H740P/H750; NVMe",
+      "wave": "7"
     }
   ]
 }

@@ -30,10 +30,11 @@ use crate::mgmt::console::{maybe_print_iron_console_ok, take_spa_keys_injected};
 use crate::mgmt::e1000::E1000Device;
 use crate::mgmt::host_nic::{
     coexist_keepalive_idle, coexist_millis_from_tsc, host_nic_lab_armed, http_accept_idle_limit_ms,
-    http_accept_should_idle_abort, COEXIST_CLOSE_FORCE_MS, COEXIST_KEEPALIVE_IDLE_MS,
-    COEXIST_TCP_SLOTS, HOST_NIC_DHCP_MS,
-    HOST_NIC_LISTEN_MS, HOST_NIC_MAX_EXCHANGES, M7_HOST_NIC_QEMU_MARKER, PRE_RAYNUF_HTTPS_MS,
-    QEMU_USERNET_GW, QEMU_USERNET_IPV4, QEMU_USERNET_PREFIX,
+    http_accept_should_idle_abort, http_reply_should_give_up, idle_listen_slot, SockView,
+    COEXIST_CLOSE_FORCE_MS, COEXIST_KEEPALIVE_IDLE_MS, COEXIST_LISTEN_RESERVE, COEXIST_TCP_SOCKETS,
+    HOST_NIC_DHCP_MS, HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS, HOST_NIC_MAX_EXCHANGES,
+    M7_HOST_NIC_QEMU_MARKER, PRE_RAYNUF_HTTPS_MS, QEMU_USERNET_GW, QEMU_USERNET_IPV4,
+    QEMU_USERNET_PREFIX,
 };
 use crate::mgmt::host_nic_poll::{bounded_poll, HOST_NIC_POLL_BUDGET};
 use crate::mgmt::http::handle_http_request;
@@ -59,15 +60,16 @@ static mut MGMT_ARENA: MgmtArena = MgmtArena::new();
 static mut COEXIST_ARMED: bool = false;
 static mut COEXIST_DEVICE: MaybeUninit<Bcm5720Device> = MaybeUninit::uninit();
 static mut COEXIST_IFACE: MaybeUninit<Interface> = MaybeUninit::uninit();
-static mut COEXIST_SOCK_STORAGE: [SocketStorage<'static>; COEXIST_TCP_SLOTS + 1] =
-    [SocketStorage::EMPTY; COEXIST_TCP_SLOTS + 1];
+/// Ten TCP sockets and the D10 NTP socket.
+static mut COEXIST_SOCK_STORAGE: [SocketStorage<'static>; COEXIST_TCP_SOCKETS + 1] =
+    [SocketStorage::EMPTY; COEXIST_TCP_SOCKETS + 1];
 static mut COEXIST_UDP_RX_META: [udp::PacketMetadata; 2] = [udp::PacketMetadata::EMPTY; 2];
 static mut COEXIST_UDP_RX_BUF: [u8; 128] = [0; 128];
 static mut COEXIST_UDP_TX_META: [udp::PacketMetadata; 2] = [udp::PacketMetadata::EMPTY; 2];
 static mut COEXIST_UDP_TX_BUF: [u8; 128] = [0; 128];
 static mut COEXIST_UDP_HANDLE: Option<SocketHandle> = None;
 
-/// Per-connection flags for one of [`COEXIST_TCP_SLOTS`] listen sockets.
+/// Flags for the one standing TCP session.
 #[derive(Clone, Copy)]
 struct SlotRt {
     announced: bool,
@@ -96,17 +98,16 @@ impl SlotRt {
     };
 }
 static mut COEXIST_SOCKETS: MaybeUninit<SocketSet<'static>> = MaybeUninit::uninit();
-static mut SLOT_HANDLE: [MaybeUninit<SocketHandle>; COEXIST_TCP_SLOTS] =
-    [MaybeUninit::uninit(); COEXIST_TCP_SLOTS];
-static mut SLOT_TCP_RX: [[u8; COEXIST_TCP_RX_N]; COEXIST_TCP_SLOTS] =
-    [[0; COEXIST_TCP_RX_N]; COEXIST_TCP_SLOTS];
-static mut SLOT_TCP_TX: [[u8; TCP_TX_N]; COEXIST_TCP_SLOTS] =
-    [[0; TCP_TX_N]; COEXIST_TCP_SLOTS];
-static mut SLOT_SESSION: [MaybeUninit<Tls12Listen>; COEXIST_TCP_SLOTS] = unsafe {
-    MaybeUninit::<[MaybeUninit<Tls12Listen>; COEXIST_TCP_SLOTS]>::uninit().assume_init()
+static mut TCP_HANDLE: [MaybeUninit<SocketHandle>; COEXIST_TCP_SOCKETS] =
+    [MaybeUninit::uninit(); COEXIST_TCP_SOCKETS];
+static mut TCP_RX: [[u8; COEXIST_TCP_RX_N]; COEXIST_TCP_SOCKETS] =
+    [[0; COEXIST_TCP_RX_N]; COEXIST_TCP_SOCKETS];
+static mut TCP_TX: [[u8; TCP_TX_N]; COEXIST_TCP_SOCKETS] = [[0; TCP_TX_N]; COEXIST_TCP_SOCKETS];
+static mut TCP_RT: [SlotRt; COEXIST_TCP_SOCKETS] = [SlotRt::EMPTY; COEXIST_TCP_SOCKETS];
+static mut TCP_TLS: [MaybeUninit<Tls12Listen>; COEXIST_TCP_SOCKETS] = unsafe {
+    MaybeUninit::<[MaybeUninit<Tls12Listen>; COEXIST_TCP_SOCKETS]>::uninit().assume_init()
 };
-static mut SLOT_RT: [SlotRt; COEXIST_TCP_SLOTS] = [SlotRt::EMPTY; COEXIST_TCP_SLOTS];
-/// Blocking PRE-EBS / QEMU window. The standing SPA uses [`SLOT_SESSION`].
+/// QEMU / blocking listen window. The standing SPA uses [`TCP_TLS`].
 static mut COEXIST_LISTEN: Tls12Listen = Tls12Listen::empty();
 static mut COEXIST_LISTEN_READY: bool = false;
 static mut COEXIST_HTTP_OUT: [u8; HTTP_OUT_N] = [0; HTTP_OUT_N];
@@ -115,6 +116,12 @@ static mut COEXIST_MILLIS: i64 = 0;
 static mut COEXIST_TSC0: u64 = 0;
 static mut COEXIST_LAST_DIAG: i64 = 0;
 static mut COEXIST_LAST_RX_DROP: u32 = 0;
+/// Function-0 health while function 1 is armed. See `listener_health`.
+static mut LISTENER_HEALTH: crate::mgmt::listener_health::ListenerTracker =
+    crate::mgmt::listener_health::ListenerTracker::new();
+static mut LISTENER_HEALTH_AT: i64 = 0;
+static mut LISTENER_HOLDOFF_UNTIL: i64 = 0;
+static mut LISTENER_RECOVERS: u8 = 0;
 static mut COEXIST_PORT: u16 = MGMT_HTTP_DEFAULT_PORT;
 /// SPA `POST /host/poweroff` accepted. Drain the 200, then VMXOFF + shutdown.
 static mut COEXIST_PENDING_POWEROFF: bool = false;
@@ -149,49 +156,76 @@ const _: () = assert!(SCRATCH_N + 16 <= crate::mgmt::mgmt_arena::MGMT_ARENA_BYTE
 /// next tick can retry. The ISO library upload returns `Some(false)`
 /// before that header is consulted, so a chunked upload stays open.
 ///
-/// A normal SPA `fetch()` does not send `Connection: close`. Iron
-/// `1e7d44c9` closed every reply anyway. Overview polls five URLs every
-/// 2 s, each poll was a new handshake, and a full table painted the Host
-/// card down. Keeping the session is the SPA path again. `643f13de`
-/// filled all six slots that way and the reload was refused. `87bee04b`
-/// then closed a live session to free a listener; the reload's SYN
-/// arrived during that FIN and was refused. Two sockets stay in LISTEN.
-/// A finished reply still ends with FIN, not RST, when the client asked
-/// to close.
+/// A normal SPA `fetch()` does not send `Connection: close`. The wave 4
+/// close (`11688cbf`) kept one TLS session: the page, the sign-in, and the
+/// later polls are more HTTP on that socket. `clear_http` drops one
+/// request and leaves the keys. The socket returns to LISTEN when the
+/// handshake never finishes, the peer closes, or the session has been
+/// idle for [`COEXIST_KEEPALIVE_IDLE_MS`]. A finished reply still ends
+/// with FIN, not RST, when the client asked to close.
+/// Queue `plain` once. A short enqueue stays sealed and is drained later.
+///
+/// `true` when the TCP buffer holds the whole ciphertext. The caller then
+/// drops the HTTP request. Sealing again would change the nonce under the
+/// record the browser already accepted, and the slot would sit established
+/// with `headers_done` until the next boot (`curl: (7)` Connection refused).
+fn seal_and_queue(
+    session: &mut Tls12Listen,
+    sock: &mut tcp::Socket,
+    plain: &[u8],
+    wrap: &mut [u8],
+) -> bool {
+    if session.tx_pending() {
+        drain_tls(session, sock, wrap);
+        return !session.tx_pending();
+    }
+    if plain.is_empty() || !sock.can_send() {
+        return false;
+    }
+    let n = session.wrap_http(plain, wrap);
+    if n == 0 {
+        if session.tx_pending() {
+            session.abandon_reply();
+        }
+        return false;
+    }
+    let mut off = 0;
+    while off < n && sock.can_send() {
+        match sock.send_slice(&wrap[off..n]) {
+            Ok(0) => break,
+            Ok(k) => off += k,
+            Err(_) => break,
+        }
+    }
+    if off != n && !session.prefix_tx(&wrap[off..n]) {
+        session.abandon_reply();
+        return false;
+    }
+    !session.tx_pending()
+}
+
 fn wrap_session_try_exchange(
     session: &mut Tls12Listen,
     sock: &mut tcp::Socket,
     out: &mut [u8],
     wrap: &mut [u8],
 ) -> Option<bool> {
-    let wants_close = {
-        let raw_bytes = session.take_http()?;
-        if !sock.can_send() {
+    let raw_bytes = session.take_http()?;
+    let wants_close = http_request_wants_close(raw_bytes);
+    // A previous tick sealed this reply and the TCP buffer took only a prefix.
+    if session.tx_pending() {
+        drain_tls(session, sock, wrap);
+        if session.tx_pending() {
             return None;
         }
-        http_request_wants_close(raw_bytes)
-    };
-    let raw_bytes = session.take_http()?;
+        session.clear_http();
+        return Some(wants_close);
+    }
     if !sock.can_send() {
         return None;
     }
     if let Some(n) = crate::mgmt::iso_library::library_http_response(raw_bytes, out) {
-        if n == 0 {
-            return None;
-        }
-        let nwrap = session.wrap_http(&out[..n], wrap);
-        if nwrap == 0 {
-            return None;
-        }
-        let mut off = 0;
-        while off < nwrap && sock.can_send() {
-            match sock.send_slice(&wrap[off..nwrap]) {
-                Ok(0) => break,
-                Ok(k) => off += k,
-                Err(_) => break,
-            }
-        }
-        if off != nwrap {
+        if n == 0 || !seal_and_queue(session, sock, &out[..n], wrap) {
             return None;
         }
         session.clear_http();
@@ -213,22 +247,7 @@ fn wrap_session_try_exchange(
         })
     }
     .unwrap_or(0);
-    if wn == 0 {
-        return None;
-    }
-    let n = session.wrap_http(&out[..wn], wrap);
-    if n == 0 {
-        return None;
-    }
-    let mut off = 0;
-    while off < n && sock.can_send() {
-        match sock.send_slice(&wrap[off..n]) {
-            Ok(0) => break,
-            Ok(k) => off += k,
-            Err(_) => break,
-        }
-    }
-    if off != n {
+    if wn == 0 || !seal_and_queue(session, sock, &out[..wn], wrap) {
         return None;
     }
     // clear_http drops this request only. reset() would mint a ClientHello.
@@ -282,13 +301,42 @@ fn drain_tls(session: &mut Tls12Listen, sock: &mut tcp::Socket, wrap: &mut [u8])
         return;
     }
     let n = session.drain_tcp(wrap);
-    if n > 0 {
-        let _ = sock.send_slice(&wrap[..n]);
+    if n == 0 {
+        return;
+    }
+    match sock.send_slice(&wrap[..n]) {
+        Ok(sent) if sent < n => {
+            let _ = session.prefix_tx(&wrap[sent..n]);
+        }
+        Err(_) => {
+            let _ = session.prefix_tx(&wrap[..n]);
+        }
+        Ok(_) => {}
+    }
+}
+
+/// Read every byte the socket already has. One 2048-byte pull left a
+/// Firefox ClientHello split across ticks; the 2 s idle abort then
+/// reset the connection before the second pull.
+fn recv_tls(session: &mut Tls12Listen, sock: &mut tcp::Socket) {
+    let mut chunk = [0u8; 8192];
+    for _ in 0..8 {
+        if !sock.can_recv() {
+            break;
+        }
+        match sock.recv_slice(&mut chunk) {
+            Ok(0) | Err(_) => break,
+            Ok(n) => {
+                let _ = session.feed_tcp(&chunk[..n]);
+            }
+        }
     }
 }
 
 fn print_tls_wrap_plaintext_note() {
-    serial::write_line("boot: HOST-NIC TLS wrap=tls12 (ECDHE-RSA-AES128-GCM; not iron TLS-OK)");
+    serial::write_line(
+        "boot: HOST-NIC TLS wrap=tls13 (TLS_AES_128_GCM_SHA256; TLS 1.2 remains; not iron TLS-OK)",
+    );
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -386,9 +434,9 @@ pub fn arm_bcm5720_coexist() -> bool {
         let sockets =
             SocketSet::new((&mut *core::ptr::addr_of_mut!(COEXIST_SOCK_STORAGE)).as_mut_slice());
         let mut sockets = sockets;
-        for i in 0..COEXIST_TCP_SLOTS {
-            let tcp_rx = tcp::SocketBuffer::new(SLOT_TCP_RX[i].as_mut_slice());
-            let tcp_tx = tcp::SocketBuffer::new(SLOT_TCP_TX[i].as_mut_slice());
+        for i in 0..COEXIST_TCP_SOCKETS {
+            let tcp_rx = tcp::SocketBuffer::new(TCP_RX[i].as_mut_slice());
+            let tcp_tx = tcp::SocketBuffer::new(TCP_TX[i].as_mut_slice());
             let tcp_handle = sockets.add(tcp::Socket::new(tcp_rx, tcp_tx));
             if sockets
                 .get_mut::<tcp::Socket>(tcp_handle)
@@ -398,11 +446,11 @@ pub fn arm_bcm5720_coexist() -> bool {
                 serial::write_line("boot: WARN — HOST-NIC coexist skip (tcp bind)");
                 return false;
             }
-            SLOT_HANDLE[i].write(tcp_handle);
-            SLOT_SESSION[i].write(Tls12Listen::empty());
-            SLOT_RT[i] = SlotRt::EMPTY;
-            SLOT_SESSION[i].assume_init_mut().load_lab_material();
-            SLOT_RT[i].session_ready = true;
+            TCP_HANDLE[i].write(tcp_handle);
+            TCP_RT[i] = SlotRt::EMPTY;
+            TCP_RT[i].session_ready = true;
+            TCP_TLS[i].write(Tls12Listen::empty());
+            TCP_TLS[i].assume_init_mut().load_lab_material();
         }
         let udp_sock = udp::Socket::new(
             udp::PacketBuffer::new(
@@ -436,6 +484,10 @@ pub fn arm_bcm5720_coexist() -> bool {
         tls_session().reset();
         COEXIST_LAST_DIAG = 0;
         COEXIST_LAST_RX_DROP = 0;
+        LISTENER_HEALTH.reset();
+        LISTENER_HEALTH_AT = 0;
+        LISTENER_HOLDOFF_UNTIL = 0;
+        LISTENER_RECOVERS = 0;
         COEXIST_PORT = port;
         COEXIST_ARMED = true;
     }
@@ -445,9 +497,7 @@ pub fn arm_bcm5720_coexist() -> bool {
     write_ipv4(ip);
     serial::write_byte(b':');
     write_u16_dec(port);
-    serial::write_str(" (VMX on; ADR-013 Phase F; slots=");
-    write_u16_dec(COEXIST_TCP_SLOTS as u16);
-    serial::write_line(")");
+    serial::write_line(" (VMX on; ADR-013 Phase F; listen=10)");
     serial::write_str("boot: CURL NOW → https://");
     write_ipv4(ip);
     serial::write_byte(b':');
@@ -542,41 +592,78 @@ fn d10_ntp_tick(sockets: &mut SocketSet, millis: i64) {
     }
 }
 
-/// `msg` plus ` slot=N` on the nowait path, so it still shows while Linux
-/// owns COM2.
-fn note_slot(msg: &str, slot: usize) {
-    serial::write_str_nowait(msg);
-    serial::write_str_nowait(" slot=");
-    serial::write_byte_nowait(b'0' + slot.min(9) as u8);
-    serial::write_byte_nowait(b'\n');
-}
-
 /// Bytes still queued on every coexist TCP socket.
 ///
 /// # Safety
-/// [`SLOT_HANDLE`] filled by [`arm_bcm5720_coexist`]. BSP-only.
+/// [`COEXIST_TCP_HANDLE`] filled by [`arm_bcm5720_coexist`]. BSP-only.
 unsafe fn tcp_send_queued(sockets: &SocketSet) -> usize {
     let mut n = 0usize;
-    for i in 0..COEXIST_TCP_SLOTS {
-        let handle = SLOT_HANDLE[i].assume_init();
+    for i in 0..COEXIST_TCP_SOCKETS {
+        let handle = TCP_HANDLE[i].assume_init();
         n = n.saturating_add(sockets.get::<tcp::Socket>(handle).send_queue());
     }
     n
 }
 
+/// If nothing is in LISTEN, listen on an idle socket. Does not abort a session.
+///
+/// A SYN with no listener is a reset in the same millisecond. This runs
+/// before `poll`.
+///
+/// # Safety
+/// [`TCP_HANDLE`] filled. BSP-only.
+unsafe fn ensure_listener(sockets: &mut SocketSet) {
+    let mut view = [SockView {
+        listening: false,
+        active: false,
+        kept: false,
+        announced: false,
+    }; COEXIST_TCP_SOCKETS];
+    for i in 0..COEXIST_TCP_SOCKETS {
+        let handle = TCP_HANDLE[i].assume_init();
+        let sock = sockets.get::<tcp::Socket>(handle);
+        let rt = TCP_RT[i];
+        view[i] = SockView {
+            listening: sock.is_listening(),
+            active: sock.is_active(),
+            kept: rt.kept,
+            announced: rt.announced,
+        };
+    }
+    loop {
+        let Some(i) = idle_listen_slot(&view, COEXIST_LISTEN_RESERVE) else {
+            return;
+        };
+        let handle = TCP_HANDLE[i].assume_init();
+        let sock = sockets.get_mut::<tcp::Socket>(handle);
+        if sock.listen(COEXIST_PORT).is_err() {
+            return;
+        }
+        view[i].listening = true;
+        note_slot("boot: HOST-NIC listen up", i);
+    }
+}
+
 /// Abort, drop the TLS session back to the saved key, and listen again.
 ///
 /// # Safety
-/// Slot `i` was armed. BSP-only.
-unsafe fn slot_relisten(sockets: &mut SocketSet, i: usize, msg: &str) {
-    let handle = SLOT_HANDLE[i].assume_init();
+/// [`COEXIST_TCP_HANDLE`] was armed. BSP-only.
+unsafe fn session_relisten(sockets: &mut SocketSet, i: usize, msg: &str) {
+    let handle = TCP_HANDLE[i].assume_init();
     let sock = sockets.get_mut::<tcp::Socket>(handle);
     sock.abort();
     let _ = sock.listen(COEXIST_PORT);
-    SLOT_SESSION[i].assume_init_mut().reset();
-    SLOT_RT[i] = SlotRt::EMPTY;
-    SLOT_RT[i].session_ready = true;
+    TCP_TLS[i].assume_init_mut().reset();
+    TCP_RT[i] = SlotRt::EMPTY;
+    TCP_RT[i].session_ready = true;
     note_slot(msg, i);
+}
+
+fn note_slot(msg: &str, slot: usize) {
+    serial::write_str_nowait(msg);
+    serial::write_str_nowait(" slot=");
+    serial::write_byte_nowait(b'0' + slot.min(9) as u8);
+    serial::write_byte_nowait(b'\n');
 }
 
 /// One scheduler-quantum NIC/HTTP step. No-op if not armed. Does not spin.
@@ -600,6 +687,7 @@ pub fn tick_bcm5720_coexist() {
         );
         let millis = COEXIST_MILLIS;
         let ts = Instant::from_millis(millis);
+        ensure_listener(sockets);
         // ADR-021 D5: both LOM links, twice a second, idle or under a guest.
         crate::mgmt::bcm5720_mmio::host_link_tick();
         let _ = bounded_poll(HOST_NIC_POLL_BUDGET, || {
@@ -669,12 +757,12 @@ pub fn tick_bcm5720_coexist() {
         let mut did_exchange = false;
         let mut did_keepalive = false;
         if !skip_accept {
-            for i in 0..COEXIST_TCP_SLOTS {
-                let handle = SLOT_HANDLE[i].assume_init();
-                let mut rt = SLOT_RT[i];
+            for i in 0..COEXIST_TCP_SOCKETS {
+                let handle = TCP_HANDLE[i].assume_init();
+                let mut rt = TCP_RT[i];
                 let mut relisten: Option<&'static str> = None;
                 {
-                    let session = SLOT_SESSION[i].assume_init_mut();
+                    let session = TCP_TLS[i].assume_init_mut();
                     let sock = sockets.get_mut::<tcp::Socket>(handle);
                     if rt.pending_close {
                         let queued = sock.send_queue();
@@ -704,9 +792,7 @@ pub fn tick_bcm5720_coexist() {
                                 session.reset();
                             }
                         } else if armed_for >= COEXIST_CLOSE_FORCE_MS {
-                            relisten = Some(
-                                "boot: HOST-NIC TCP re-listen after HTTP (tx forced)",
-                            );
+                            relisten = Some("boot: HOST-NIC TCP re-listen after HTTP (tx forced)");
                         } else {
                             rt.drain_empty_at_ms = 0;
                         }
@@ -725,10 +811,7 @@ pub fn tick_bcm5720_coexist() {
                             let _ = sock.listen(COEXIST_PORT);
                         }
                         if relisten.is_none() && sock.is_active() && !rt.announced {
-                            note_slot(
-                                "boot: HOST-NIC TCP accept — client connected",
-                                i,
-                            );
+                            note_slot("boot: HOST-NIC TCP accept — client connected", i);
                             rt.announced = true;
                             rt.accept_at_ms = millis;
                             // A kept session must not reset here. First accept only.
@@ -737,14 +820,9 @@ pub fn tick_bcm5720_coexist() {
                             }
                         }
                         if relisten.is_none() && sock.can_recv() {
-                            let mut chunk = [0u8; 2048];
                             // Ok(0) is an empty read. Peer FIN is CloseWait
                             // (!may_recv && may_send), not Ok(0). smoltcp 0.13.
-                            if let Ok(n) = sock.recv_slice(&mut chunk) {
-                                if n > 0 {
-                                    let _ = session.feed_tcp(&chunk[..n]);
-                                }
-                            }
+                            recv_tls(session, sock);
                         }
                         if relisten.is_none() {
                             drain_tls(session, sock, wrap);
@@ -785,12 +863,28 @@ pub fn tick_bcm5720_coexist() {
                                     headers_done,
                                     millis.saturating_sub(rt.accept_at_ms),
                                     http_accept_idle_limit_ms(
-                                        session.handshake_waiting_client_hello(),
+                                        session.handshake_waiting_client_hello()
+                                            && !session.rx_pending(),
                                     ),
                                 )
                             {
+                                relisten = Some("boot: WARN — HOST-NIC TCP idle abort; re-listen");
+                            }
+                            if relisten.is_none()
+                                && http_reply_should_give_up(
+                                    rt.kept || keepalive_this,
+                                    rt.announced,
+                                    headers_done,
+                                    millis.saturating_sub(rt.accept_at_ms),
+                                    HOST_NIC_HTTP_IDLE_MS,
+                                )
+                            {
+                                // Headers arrived and the reply never became a
+                                // kept session. idle abort does not cover that.
+                                // Iron `1da151be`: every slot stayed established
+                                // and the next SYN was reset.
                                 relisten =
-                                    Some("boot: WARN — HOST-NIC TCP idle abort; re-listen");
+                                    Some("boot: WARN — HOST-NIC TCP reply stalled; re-listen");
                             }
                             if rt.kept
                                 && !rt.pending_close
@@ -821,15 +915,14 @@ pub fn tick_bcm5720_coexist() {
                     }
                 }
                 if let Some(msg) = relisten {
-                    slot_relisten(sockets, i, msg);
+                    session_relisten(sockets, i, msg);
                 } else {
-                    SLOT_RT[i] = rt;
+                    TCP_RT[i] = rt;
                 }
             }
-            // A live keep-alive is not closed to manufacture a listener.
-            // Two of [`COEXIST_TCP_SLOTS`] stay in LISTEN. Iron `87bee04b`
-            // FINed the oldest finished session when the table was full,
-            // and the reload was refused during that FIN.
+            // A kept session stays up. [`ensure_listener`] runs before poll
+            // so a SYN still has a socket in LISTEN. Iron `87bee04b` FINed
+            // a live session to free a listener and the reload landed in that FIN.
         }
         let library_exchange = crate::mgmt::iso_library::take_exchange_quiet();
         // Linux owns COM2 for the installer. SPA polls stay on the socket.
@@ -872,6 +965,82 @@ pub fn tick_bcm5720_coexist() {
                 COEXIST_LAST_RX_DROP = d.rx_drop;
             }
         }
+        listener_health_tick(sockets, millis);
+    }
+}
+
+/// Sample function 0 once a second. On [`ListenerHealth::Stalled`], rebuild
+/// its rings and put the one session back in LISTEN. Function 1 is not written.
+///
+/// # Safety
+/// [`COEXIST_ARMED`] and [`COEXIST_TCP_HANDLE`] filled. BSP-only.
+unsafe fn listener_health_tick(sockets: &mut SocketSet, millis: i64) {
+    use crate::mgmt::listener_health::{
+        ListenerHealth, LISTENER_RECOVER_CAP, LISTENER_RECOVER_HOLDOFF_MS, LISTENER_SAMPLE_MS,
+    };
+    if millis < LISTENER_HOLDOFF_UNTIL {
+        return;
+    }
+    if LISTENER_HEALTH_AT != 0 && millis.saturating_sub(LISTENER_HEALTH_AT) < LISTENER_SAMPLE_MS {
+        return;
+    }
+    LISTENER_HEALTH_AT = millis;
+    let Some(sample) = crate::mgmt::bcm5720_mmio::spa_listener_sample() else {
+        return;
+    };
+    let health = LISTENER_HEALTH.observe(sample, crate::mgmt::bcm5720_mmio::egress_armed());
+    if health != ListenerHealth::Stalled || LISTENER_RECOVERS >= LISTENER_RECOVER_CAP {
+        return;
+    }
+    if COEXIST_PENDING_POWEROFF || COEXIST_PENDING_PANIC {
+        return;
+    }
+    LISTENER_RECOVERS = LISTENER_RECOVERS.saturating_add(1);
+    let rebuilt = crate::mgmt::bcm5720_mmio::rebuild_spa_rings();
+    if rebuilt {
+        for i in 0..COEXIST_TCP_SOCKETS {
+            session_relisten(sockets, i, "boot: HOST-NIC TCP re-listen after :38 recover");
+        }
+    }
+    LISTENER_HEALTH.reset();
+    LISTENER_HOLDOFF_UNTIL = millis.saturating_add(LISTENER_RECOVER_HOLDOFF_MS);
+    crate::audit_log!(crate::audit::AuditEvent::MgmtRestarted {
+        generation: u32::from(LISTENER_RECOVERS),
+        kind: 4,
+    });
+    serial::write_str_nowait("boot: HOST-NIC :38 recover n=");
+    write_u32_nowait(u32::from(LISTENER_RECOVERS));
+    serial::write_str_nowait(if rebuilt { " ok rx=" } else { " fail rx=" });
+    write_u32_nowait(sample.mac_rx);
+    serial::write_str_nowait(" rxp=");
+    write_u32_nowait(u32::from(sample.rx_prod));
+    serial::write_str_nowait(" rxc=");
+    write_u32_nowait(u32::from(sample.rx_cons));
+    serial::write_str_nowait(" tx=");
+    write_u32_nowait(sample.mac_tx);
+    serial::write_str_nowait(" txp=");
+    write_u32_nowait(u32::from(sample.tx_prod));
+    serial::write_str_nowait(" txc=");
+    write_u32_nowait(u32::from(sample.tx_cons));
+    serial::write_str_nowait(" frames=");
+    write_u32_nowait(sample.rx_ok);
+    serial::write_byte_nowait(b'\n');
+}
+
+fn write_u32_nowait(mut n: u32) {
+    let mut buf = [0u8; 10];
+    let mut i = 10;
+    if n == 0 {
+        serial::write_byte_nowait(b'0');
+        return;
+    }
+    while n > 0 {
+        i -= 1;
+        buf[i] = b'0' + (n % 10) as u8;
+        n /= 10;
+    }
+    for &b in &buf[i..] {
+        serial::write_byte_nowait(b);
     }
 }
 
@@ -1012,10 +1181,7 @@ fn bcm_mgmt_lease(device: &mut Bcm5720Device) -> Option<mgmt_lease::ParkedMgmtLe
 fn say_d9_static(addr: &crate::mgmt::host_addr::StaticAddr) {
     serial::write_str("boot: D9 host addr static ");
     write_ipv4(Ipv4Address::new(
-        addr.ip[0],
-        addr.ip[1],
-        addr.ip[2],
-        addr.ip[3],
+        addr.ip[0], addr.ip[1], addr.ip[2], addr.ip[3],
     ));
     serial::write_byte(b'/');
     write_u16_dec(u16::from(addr.prefix));
@@ -1027,7 +1193,12 @@ fn say_d9_static(addr: &crate::mgmt::host_addr::StaticAddr) {
         addr.gateway[3],
     ));
     serial::write_str(" dns=");
-    write_ipv4(Ipv4Address::new(addr.dns[0], addr.dns[1], addr.dns[2], addr.dns[3]));
+    write_ipv4(Ipv4Address::new(
+        addr.dns[0],
+        addr.dns[1],
+        addr.dns[2],
+        addr.dns[3],
+    ));
     serial::write_str(" name=");
     serial::write_str(addr.name_str());
     serial::write_line("");
@@ -1318,12 +1489,7 @@ fn listen_loop<D: Device>(
                 session.reset();
             }
             if sock.can_recv() {
-                let mut chunk = [0u8; 2048];
-                if let Ok(n) = sock.recv_slice(&mut chunk) {
-                    if n > 0 {
-                        let _ = session.feed_tcp(&chunk[..n]);
-                    }
-                }
+                recv_tls(session, sock);
             }
             drain_tls(session, sock, wrap);
             let headers_done = session.take_http().is_some();
@@ -1345,7 +1511,9 @@ fn listen_loop<D: Device>(
                 headers_done,
                 millis.saturating_sub(accept_at),
                 // HOST_NIC_HTTP_IDLE_MS unless TLS ST_CH → HOST_NIC_HTTP_HS_IDLE_MS
-                http_accept_idle_limit_ms(session.handshake_waiting_client_hello()),
+                http_accept_idle_limit_ms(
+                    session.handshake_waiting_client_hello() && !session.rx_pending(),
+                ),
             ) {
                 sock.abort();
                 session.reset();
