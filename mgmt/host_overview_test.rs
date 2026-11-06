@@ -25,7 +25,10 @@ fn overview_is_the_five_objects_under_one_root() {
         "{body}"
     );
     assert!(body.contains(",\"update\":{\"active\":"), "{body}");
-    assert!(body.ends_with("}}"), "{body}");
+    assert!(
+        body.ends_with("\"saved\":true}}") || body.ends_with("\"saved\":false}}"),
+        "{body}"
+    );
     assert!(!body.contains("\"token\""), "{body}");
     assert_eq!(body.matches('{').count(), body.matches('}').count());
 }

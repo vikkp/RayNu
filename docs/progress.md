@@ -191,7 +191,9 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next (numbered)
 
-**Follow-up, not flashed.** `d0904bf8` writes the A7 spare while the guest stays up. The next commit prints `HTTP exchange ok` and `HTTP keep-alive` once per boot. The running image remains `fa3f4860c6a7`.
+**ADR-021 A4 in flight.** The update line says `saved` when the spare header is on disk and `saving` until that write finishes. Reboot from that word. A serial console is not required for the reboot decision. Staging no longer lets the guest-list poll replace the status line. Not lived. The running image stays `fa3f4860c6a7`.
+
+**Follow-up, not flashed.** `d0904bf8` writes the A7 spare while the guest stays up. `424d0aaa` prints `HTTP exchange ok` and `HTTP keep-alive` once per boot. The running image remains `fa3f4860c6a7`.
 
 **ADR-021 A7 lived on iron 2026-11-05.** From `fa3f4860c6a7` / run `42096983983`, Keep copied slot 1 (`boot: A7 stick wrote bytes=2599968`). The next boot was `build: sha=318c6617c99b run=42133864880` with Overview `old saved`. Roll back then `boot: A7 stick restored bytes=2599968`. The following F11 was `build: sha=fa3f4860c6a7 run=42096983983` with no second restore. SPA showed Guest 3 running and `active 1 · pending none · durable yes`. Evidence `docs/evidence/r640/2026-11-05-fa3f4860c6a7-wave-6-a7-rollback-ok.md`.
 
