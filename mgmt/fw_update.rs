@@ -440,6 +440,7 @@ pub fn status_body(buf: &mut [u8]) -> usize {
         apply,
         rec.revert,
         rec.swapped,
+        header_saved(),
     );
     if body.n > buf.len() {
         return 0;
@@ -480,6 +481,11 @@ pub fn copy_header() -> Option<[u8; 512]> {
 
 pub fn ack_header() {
     state().dirty = false;
+}
+
+/// True once the spare header matches RAM. The SPA prints `saved` from this.
+fn header_saved() -> bool {
+    !state().dirty
 }
 
 /// Next 512 bytes of the pending image that still need a spare write.
@@ -556,6 +562,7 @@ pub fn host_update_rest(method: RestMethod, path: &str, authed: bool) -> UpdateH
                 apply,
                 rec.revert,
                 rec.swapped,
+                header_saved(),
             );
             json_status(200, &body.buf[..body.n])
         } else {
@@ -581,6 +588,7 @@ pub fn host_update_rest(method: RestMethod, path: &str, authed: bool) -> UpdateH
             apply,
             rec.revert,
             rec.swapped,
+            header_saved(),
         );
         json_status(200, &body.buf[..body.n])
     } else {
@@ -641,6 +649,7 @@ fn format_record(
     apply: i32,
     revert: bool,
     swapped: bool,
+    saved: bool,
 ) -> RecordJson {
     let mut s = RecordJson {
         buf: [0; 160],
@@ -675,9 +684,14 @@ fn format_record(
         b",\"revert\":false"
     });
     s.push(if swapped {
-        b",\"swapped\":true}"
+        b",\"swapped\":true"
     } else {
-        b",\"swapped\":false}"
+        b",\"swapped\":false"
+    });
+    s.push(if saved {
+        b",\"saved\":true}"
+    } else {
+        b",\"saved\":false}"
     });
     s
 }
@@ -945,9 +959,19 @@ mod tests {
             _ => panic!("auth"),
         }
         match host_update_rest(RestMethod::Post, "/host/update/rollback", true) {
-            UpdateHttp::Json { status, .. } => assert_eq!(status, 200),
+            UpdateHttp::Json { status, len, body } => {
+                assert_eq!(status, 200);
+                let text = core::str::from_utf8(&body[..len]).unwrap();
+                assert!(text.contains("\"saved\":false"), "{text}");
+            }
             _ => panic!("rollback"),
         }
+        ack_header();
+        let mut saved = [0u8; 160];
+        let n = status_body(&mut saved);
+        let text = core::str::from_utf8(&saved[..n]).unwrap();
+        assert!(text.contains("\"saved\":true"), "{text}");
+        assert!(text.ends_with('}'));
         let raw = b"POST /host/update/chunk/0/128 HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n";
         let mut req = raw.to_vec();
         req.extend_from_slice(&image);
@@ -955,6 +979,14 @@ mod tests {
         let n = update_http_response(&req, &mut out).unwrap();
         let text = core::str::from_utf8(&out[..n]).unwrap();
         assert!(text.contains("200"));
-        assert!(include_str!("../assets/webui.html").contains("/host/update/chunk/"));
+        let page = include_str!("../assets/webui.html");
+        assert!(page.contains("/host/update/chunk/"));
+        assert!(page.contains("· saved"));
+        assert!(page.contains("A serial console is not required"));
+        let wide = format_record(255, 1, u32::MAX, u32::MAX, false, 1, true, true, false);
+        assert!(wide.n <= 160, "{}", wide.n);
+        assert_eq!(wide.buf[wide.n - 1], b'}');
+        let wide_text = core::str::from_utf8(&wide.buf[..wide.n]).unwrap();
+        assert!(wide_text.contains("\"saved\":false"));
     }
 }
