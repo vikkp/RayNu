@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-6-a7-old |
-| Summary | **A7 Roll back restores BOOTX64.OLD** on the next boot. Not lived. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-6-a7-lived |
+| Summary | **ADR-021 A7 lived.** `318c6617c99b` restored `BOOTX64.OLD`. Next F11 `fa3f4860c6a7`. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. TLS 88 held. |
-| Gates touched | ADR-021 A7 in flight on `cursor/wave-6-a7-update-0591`. A5 stays lived. Auth.token A5 stays parked. No doorbell. No format of UBUNTU0. |
+| Gates touched | ADR-021 A7 `in flight → lived`. A5 stays lived. Auth.token A5 stays parked. No doorbell. No format of UBUNTU0. |
 
 ---
 
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-05 | wave-6-a7-lived | 94 | 72 | **ADR-021 A7 lived.** `boot: A7 stick restored bytes=2599968` on `318c6617c99b`. Next F11 `fa3f4860c6a7` / run `42096983983`. SPA Guest 3 running. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-05 | wave-6-a7-old | 94 | 72 | **A7 Roll back restores BOOTX64.OLD.** Not lived. No F11 yet. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-05 | wave-6-a7-stick | 94 | 72 | **A7 Keep arms the stick copy.** `c81107eae9fb` / run `42083852791` page check: `boot: A7 none`, Overview active 0. Not lived. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-05 | wave-6-a7-update | 94 | 72 | **ADR-021 A7 in flight.** Two spare slots. Rollback and confirm on the page. The USB copy is still open. A5 stays lived. Auth.token A5 stays parked. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
@@ -473,7 +474,7 @@ LOI:           NOT OPEN. Tracker born 2026-09-14.
 Bar A:         94% · 0.25 months · dedicated-box non-prod
 Bar B:         72% · 1.25 months · Ubuntu login on a 10 GiB spare tail (c3a70e62) with a LAN address from the SPA (0d865c7f); whole VD still hidden
 Overall:       80% · confidence medium
-NOW:           SKU card is what a signature holds today. One dedicated box. Ubuntu on a 10 GiB tail. M8.9 closed on 0d865c7f. Wave 5 is closed. ADR-021 A5 lived 2026-11-05. A7 is in flight on cursor/wave-6-a7-update-0591. Keep arms the next boot to copy BOOTX64.EFI. Page check c81107eae9fb showed boot: A7 none. Auth.token A5 stays parked. Standing SPA is 10.99.99.201. Do not format UBUNTU0. The 2.9 TB VD is not this disk. Bar A 94. Bar B 72. Overall 80. perc 86. unmodified 45. SKU 94. TLS 88. months A 0.25. months B 1.25. docs/adr/ADR-019.md
+NOW:           SKU card is what a signature holds today. One dedicated box. Ubuntu on a 10 GiB tail. M8.9 closed on 0d865c7f. Wave 5 is closed. ADR-021 A5 lived 2026-11-05. A7 lived 2026-11-05: 318c6617c99b restored BOOTX64.OLD and the next F11 was fa3f4860c6a7 / run 42096983983. Auth.token A5 stays parked. Standing SPA is 10.99.99.201. Do not format UBUNTU0. The 2.9 TB VD is not this disk. Bar A 94. Bar B 72. Overall 80. perc 86. unmodified 45. SKU 94. TLS 88. months A 0.25. months B 1.25. docs/adr/ADR-019.md
 Open:          link state on the SPA (D5) · iron AUTH-OK (parked) · unmodified ISO without the serial amendment · the whole spare VD · cluster
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
 Rollback:      v0.1.0-m8-9-lan → M8.9 close (COM2 sha=0d865c7fcb0a, CI 40603110937, SHA256 df6fc3465cecf1eaf058d5c8e675501827c16eb55e7b2c9758bc5e68326ad91b). v0.1.0-m8-8-ubuntu → older M8.8 close (c3a70e623aec, CI 38454398693). v0.1.0-m8-perc-spa → older SPA choice (8ad2ac89125e, CI 36362775808). v0.1.0-m8-a4s → older standing SPA (1f33eeda72f9, CI 36137732145). v0.1.0-m8-a6 → keyboard + power-off (fd2ca12e, CI 36166108942), not Latest. Everest Latest stays v0.1.0-everest-closed (f72b4276).

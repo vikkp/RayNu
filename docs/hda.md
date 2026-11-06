@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-6-a7-old |
-| Summary | **A7 Roll back restores BOOTX64.OLD.** The next boot copies that file over BOOTX64.EFI. Not lived. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-6-a7-lived |
+| Summary | **ADR-021 A7 lived.** `318c6617c99b` restored `BOOTX64.OLD` (`bytes=2599968`). The next F11 was `fa3f4860c6a7` / run `42096983983` with no second restore. SPA Guest 3 running. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
-| Gates touched | ADR-021 A7 `planned → in flight` on `cursor/wave-6-a7-update-0591`. A5 stays lived. Wave 6 stays open. No doorbell. No format of UBUNTU0. |
+| Gates touched | ADR-021 A7 `in flight → lived`. A5 stays lived. Wave 6 stays open. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
 
 ## Blockers & risks (Everest-relevant)
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-05 | wave-6-a7-lived | 0.0 | 99 | **ADR-021 A7 lived.** `boot: A7 stick restored bytes=2599968` on `318c6617c99b` / run `42133864880`. Next F11 `build: sha=fa3f4860c6a7 run=42096983983` with no second restore. SPA Guest 3 running, `active 1 · pending none · durable yes`. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-05 | wave-6-a7-old | 0.0 | 99 | **A7 Roll back restores BOOTX64.OLD** on the next pre-EBS boot. Keep still arms the copy. Not lived. No F11 of this commit yet. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-05 | wave-6-a7-stick | 0.0 | 99 | **A7 Keep arms the stick copy.** Next boot writes `BOOTX64.EFI` from the spare slot and saves `BOOTX64.OLD`. Page check on `c81107eae9fb` / run `42083852791` showed `boot: A7 none` and Overview active 0. Not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-05 | wave-6-a7-sign-contract | 0.0 | 99 | **A5 host smoke accepts the lived runbook.** `prop_a5_sign_contract` and `a5-sign-smoke.sh` look for `Status: lived`. The host marker still does not close a row. A7 stays in flight. Scores held. months 0.0 held; overall 99 held |
@@ -1202,7 +1203,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     Wave 6 is current. A5 lived on 097f3c612c06 / run 42062748313. A7 is in flight on cursor/wave-6-a7-update-0591. Keep arms the next boot to copy the spare slot over BOOTX64.EFI. The F11 after that copy is the iron close. Page check c81107eae9fb / run 42083852791 printed boot: A7 none. Auth.token A5 stays parked. Standing SPA is 10.99.99.201. Rollback for a wave 2 flash is v0.1.0-m8-9-lan. Do not format UBUNTU0. No doorbell. See docs/m8_plan.md.
+Next move:     Wave 6 is current. A5 lived on 097f3c612c06 / run 42062748313. A7 lived 2026-11-05: 318c6617c99b restored BOOTX64.OLD and the next F11 was fa3f4860c6a7 / run 42096983983. SPA Guest 3 running. d0904bf8 writes the spare while the guest keeps running and was not this F11. Auth.token A5 stays parked. Standing SPA is 10.99.99.201. Rollback for a wave 2 flash is v0.1.0-m8-9-lan. Do not format UBUNTU0. No doorbell. See docs/m8_plan.md.
 Rollback:      M8.9 close: v0.1.0-m8-9-lan → CI 40603110937 / COM2 sha=0d865c7fcb0a / EFI SHA256 df6fc3465cecf1eaf058d5c8e675501827c16eb55e7b2c9758bc5e68326ad91b
 Older M8.8:    v0.1.0-m8-8-ubuntu → CI 38454398693 / COM2 sha=c3a70e623aec / EFI SHA256 08ef31ba87136577102ac378d8e0a512327994e8794c41c64444f5be5f8812c4
 Older SPA:     v0.1.0-m8-perc-spa → CI 36362775808 / COM2 sha=8ad2ac89125e / EFI SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849
