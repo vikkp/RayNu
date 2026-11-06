@@ -113,7 +113,7 @@ input.token{min-width:12rem}
 <button class="ghost" id="btn-fw-back" type="button">Roll back</button>
 <button class="ghost" id="btn-fw-keep" type="button">Keep this slot</button>
 </div>
-<p class="note" id="fw-note">Stages the other slot on the spare. Keep this slot arms the next boot to copy it over EFI/BOOT/BOOTX64.EFI and save the previous file as BOOTX64.OLD. The boot after that runs the new image. Roll back then restores BOOTX64.OLD on the following boot. The spare write waits until no guest owns the CPU.</p>
+<p class="note" id="fw-note">Stages the other slot on the spare. Keep this slot arms the next boot to copy it over EFI/BOOT/BOOTX64.EFI and save the previous file as BOOTX64.OLD. The boot after that runs the new image. Roll back then restores BOOTX64.OLD on the following boot. The spare write runs while the guest keeps running.</p>
 <div id="ports" class="empty">Ports: no link sample yet.</div>
 </section>
 <section class="pg" data-pg="guests">

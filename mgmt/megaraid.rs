@@ -2608,15 +2608,28 @@ fn perc_load_fw_update(bar: u64, target: u8, bytes: u64, frame_phys: u64, data_p
     }
 }
 
-/// Write one staged A7 sector while no product guest owns the CPU.
-/// Image sectors go out before the header. LBA 0 is not encoded.
+/// One A7 sector is on the PERC. A nested flush must not reuse the frame.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+static A7_FLUSH_BUSY: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+
+/// Write one staged A7 sector. The guest keeps running.
+///
+/// One WRITE(16) and its read-back finish before this returns, on the same
+/// PERC frame the guest disk uses between VM exits. Image sectors go out
+/// before the header. LBA 0 is not encoded. A nested call is skipped.
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn flush_fw_update_uefi() {
     use crate::boot::serial;
-    use crate::mgmt::perc_boot_choice::{vmcs_guest, VmcsGuest};
-    if !matches!(vmcs_guest(), VmcsGuest::None) {
+    if A7_FLUSH_BUSY.swap(true, core::sync::atomic::Ordering::AcqRel) {
         return;
     }
+    struct ClearBusy;
+    impl Drop for ClearBusy {
+        fn drop(&mut self) {
+            A7_FLUSH_BUSY.store(false, core::sync::atomic::Ordering::Release);
+        }
+    }
+    let _clear = ClearBusy;
     let bar = PERC_SPARE_BAR.load(core::sync::atomic::Ordering::Acquire);
     let target = PERC_SPARE_TARGET.load(core::sync::atomic::Ordering::Acquire);
     let frame = PERC_SPARE_FRAME.load(core::sync::atomic::Ordering::Acquire);
