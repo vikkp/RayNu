@@ -71,6 +71,7 @@ fn main() -> Status {
     boot_note("boot: probing PE/ESP assets (pre-EBS)");
     boot::esp_assets::probe_bzimage();
     boot::ovmf_esp::probe_ovmf_esp();
+    boot::a7_stick::apply_before_ebs();
     if boot::pe_assets::embedded_present() {
         boot_note("boot: PE assets embedded (.askern/.asinit) — prefer PE");
         boot::serial::write_line(boot::M3_ASSETS_OK_MARKER);

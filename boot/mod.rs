@@ -4,6 +4,7 @@
 //! Proven Core: **outside** (ADR-002)
 //! VERIFICATION: N/A (outside core) — unit tests only
 
+pub mod a7_stick;
 pub mod assets_gate;
 pub mod esp_assets;
 pub mod evidence_mode;

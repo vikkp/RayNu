@@ -88,7 +88,7 @@ All must be true (no hand-waving):
 | PE assets kernel/initrd/webui | DONE | M3.22 / M5.2 |
 | CI build | DONE | `.github/workflows/ci.yml` |
 | Release tarball + SHA256 | DONE | `tools/package-release.sh` → `dist/` (M7.0 Latitude) |
-| Secure Boot signing | MISSING | optional; not required for M7.0 |
+| Secure Boot signing | DONE on iron | ADR-021 A5. Signed EFI `b78b0fa6…` booted with Secure Boot Enabled (`097f3c612c06` / run `42062748313`). Guest Linux still prints `secureboot: Secure boot disabled` because RayNu-F does not publish that variable. Not required for M7.0 |
 | One-page USB/iDRAC runbook | DONE | `docs/runbooks/usb_idrac.md` (M7.0) |
 
 ### Summit B — Load on real R640
@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | no-egress-rearm |
-| Summary | **Do not rebuild function 0 when the guest arms egress.** Iron `30422198` bound `10.99.99.201` and completed NTP, then printed `:38 rearm after egress ok`. The Mac gateway `10.6.0.1` then returned Destination Host Unreachable for `.201`. `.146` was the Intel host `64:bc:58:97:0b:c6`. E4 stays lived on `9c3e6602`. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | spa-quiet-and-live-stage |
+| Summary | **SPA polls no longer fill COM2.** The first HTTP exchange and the first keep-alive still print. The A7 spare write from `d0904bf8` already runs while the guest stays up. Neither change is in the running `fa3f4860c6a7`. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
-| Gates touched | No new lived row. Wave 5 stays closed. E4 stays lived on `9c3e6602`. No doorbell. No format of UBUNTU0. |
+| Gates touched | A7 stays lived. A5 stays lived. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
 
 ## Blockers & risks (Everest-relevant)
@@ -380,6 +380,13 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-05 | spa-quiet-and-live-stage | 0.0 | 99 | **SPA polls print once.** First `HTTP exchange ok` and first `HTTP keep-alive` stay. Later Overview polls stay off COM2. A7 spare write from `d0904bf8` runs while the guest stays up. Not in the running `fa3f4860c6a7`. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-05 | wave-6-a7-lived | 0.0 | 99 | **ADR-021 A7 lived.** `boot: A7 stick restored bytes=2599968` on `318c6617c99b` / run `42133864880`. Next F11 `build: sha=fa3f4860c6a7 run=42096983983` with no second restore. SPA Guest 3 running, `active 1 · pending none · durable yes`. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-05 | wave-6-a7-old | 0.0 | 99 | **A7 Roll back restores BOOTX64.OLD** on the next pre-EBS boot. Keep still arms the copy. Not lived. No F11 of this commit yet. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-05 | wave-6-a7-stick | 0.0 | 99 | **A7 Keep arms the stick copy.** Next boot writes `BOOTX64.EFI` from the spare slot and saves `BOOTX64.OLD`. Page check on `c81107eae9fb` / run `42083852791` showed `boot: A7 none` and Overview active 0. Not lived. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-05 | wave-6-a7-sign-contract | 0.0 | 99 | **A5 host smoke accepts the lived runbook.** `prop_a5_sign_contract` and `a5-sign-smoke.sh` look for `Status: lived`. The host marker still does not close a row. A7 stays in flight. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-05 | wave-6-a7-update | 0.0 | 99 | **ADR-021 A7 in flight.** Two spare slots, rollback and confirm on the page. The stick rewrite is still the iron step. A5 stays lived. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-05 | wave-6-a5-lived | 0.0 | 99 | **ADR-021 A5 lived.** Dell `db` lists RayNu-V Secure Boot. Secure Boot Enabled. F11 of the signed Lexar reached `build: sha=097f3c612c06 run=42062748313` and `raynusrv2 login:`. Guest `secureboot: Secure boot disabled` is RayNu-F, not the host switch. Wave 6 stays open on A7. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-05 | no-egress-rearm | 0.0 | 99 | **Function 0 is not rebuilt when egress arms.** Iron `30422198` listened on `10.99.99.201:8443`, NTP completed, then `:38 rearm after egress ok`. Mac `10.6.0.1` returned Destination Host Unreachable for `.201`. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-05 | spa-addr-201 | 0.0 | 99 | **Standing SPA moves to `10.99.99.201`.** Guest ARP for `.146` returned Intel `64:bc:58:97:0b:c6` and connection refused. Hypervisor MAC stays `b0:26:28:5c:5a:38`. Saved `.146` is rewritten and staged. Guest stays `.200`. E4 stays lived on `9c3e6602`. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-04 | ten-listen-sockets | 0.0 | 99 | **Ten listen sockets restored.** Two stay in LISTEN. A kept session is not aborted. `6dc1f554` and `87bee04b` are the reason. `9c3e6602` signed in on this table. Scores held. months 0.0 held; overall 99 held |
@@ -1197,7 +1204,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     Wave 5 is current. E6 lived on f2828d95. E4 is in flight on cursor/wave-5-e4-tls13-41d4. Host rustls finishes TLS 1.3. Iron bac1f0ec5139 / run 41516590111 is the file to leave booted until this EFI is flashed. Not lived until that boot prints cert rd operator and a client completes TLS 1.3. Rollback for a wave 2 flash is v0.1.0-m8-9-lan. Do not format UBUNTU0. No doorbell. A5 is parked. See docs/m8_plan.md.
+Next move:     Wave 6 is current. A5 lived on 097f3c612c06 / run 42062748313. A7 lived 2026-11-05: 318c6617c99b restored BOOTX64.OLD and the next F11 was fa3f4860c6a7 / run 42096983983. SPA Guest 3 running. d0904bf8 writes the spare while the guest keeps running and was not this F11. Auth.token A5 stays parked. Standing SPA is 10.99.99.201. Rollback for a wave 2 flash is v0.1.0-m8-9-lan. Do not format UBUNTU0. No doorbell. See docs/m8_plan.md.
 Rollback:      M8.9 close: v0.1.0-m8-9-lan → CI 40603110937 / COM2 sha=0d865c7fcb0a / EFI SHA256 df6fc3465cecf1eaf058d5c8e675501827c16eb55e7b2c9758bc5e68326ad91b
 Older M8.8:    v0.1.0-m8-8-ubuntu → CI 38454398693 / COM2 sha=c3a70e623aec / EFI SHA256 08ef31ba87136577102ac378d8e0a512327994e8794c41c64444f5be5f8812c4
 Older SPA:     v0.1.0-m8-perc-spa → CI 36362775808 / COM2 sha=8ad2ac89125e / EFI SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849

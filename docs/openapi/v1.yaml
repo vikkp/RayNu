@@ -36,6 +36,18 @@ paths:
   /host/cert/clear:
     post:
       summary: Return to the lab certificate on the next connection
+  /host/update:
+    get:
+      summary: Which hypervisor slot is active and whether one is pending
+  /host/update/rollback:
+    post:
+      summary: Drop a pending hypervisor slot
+  /host/update/confirm:
+    post:
+      summary: Keep the pending hypervisor slot
+  /host/update/chunk/:
+    post:
+      summary: Upload one chunk of the inactive hypervisor image
   /host/poweroff:
     post:
       summary: Power off the chassis

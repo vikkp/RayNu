@@ -340,6 +340,7 @@ pub mod guest_power;
 pub mod guest_stop;
 pub mod ha;
 pub mod host_addr;
+pub mod fw_update;
 pub mod host_cert;
 pub mod host_clock;
 pub mod host_link;

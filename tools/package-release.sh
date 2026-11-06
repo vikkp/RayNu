@@ -63,6 +63,30 @@ mkdir -p "$OUT_DIR"
 
 cp "$EFI" "$OUT_DIR/r640-hypervisor.efi"
 
+# ADR-021 A5. Unsigned unless the operator supplied both files. The private
+# key is not in git. CI does not set these, so the published kit stays
+# unsigned and the lab can keep Secure Boot off. See docs/runbooks/secure_boot.md.
+SECURE_BOOT="unsigned"
+if [[ -n "${RAYNU_SIGN_KEY:-}" || -n "${RAYNU_SIGN_CERT:-}" ]]; then
+  if [[ -z "${RAYNU_SIGN_KEY:-}" || -z "${RAYNU_SIGN_CERT:-}" ]]; then
+    echo "error: set both RAYNU_SIGN_KEY and RAYNU_SIGN_CERT, or neither" >&2
+    exit 1
+  fi
+  echo "==> A5 sign EFI (enroll raynu-v-db.crt in Secure Boot db)"
+  "$ROOT/tools/sign-efi.sh" \
+    --key "$RAYNU_SIGN_KEY" --cert "$RAYNU_SIGN_CERT" \
+    --in "$OUT_DIR/r640-hypervisor.efi" --out "$OUT_DIR/r640-hypervisor.efi"
+  cp "$RAYNU_SIGN_CERT" "$OUT_DIR/raynu-v-db.crt"
+  SECURE_BOOT="signed"
+  signed_size="$(wc -c < "$OUT_DIR/r640-hypervisor.efi" | tr -d ' ')"
+  if (( signed_size > 20 * 1024 * 1024 )); then
+    echo "error: signed EFI exceeds the 20 MB hard limit (ADR-003)" >&2
+    exit 1
+  fi
+else
+  echo "==> A5 unsigned kit (Secure Boot off; docs/runbooks/secure_boot.md)"
+fi
+
 # Sidecar checksum for the EFI (sha256sum format: HASH  FILENAME).
 (
   cd "$OUT_DIR"
@@ -90,13 +114,21 @@ cp "$EFI" "$OUT_DIR/r640-hypervisor.efi"
   echo "  VERSION"
   echo "  SHA256SUMS"
   echo "  MANIFEST.txt"
+  echo "Secure Boot: ${SECURE_BOOT}"
+  if [[ "$SECURE_BOOT" == "signed" ]]; then
+    echo "  raynu-v-db.crt"
+  fi
   echo "Deploy: see docs/runbooks/usb_idrac.md"
+  echo "Secure Boot: see docs/runbooks/secure_boot.md"
 } >"$OUT_DIR/MANIFEST.txt"
 
 (
   cd "$OUT_DIR"
-  sha256sum r640-hypervisor.efi r640-hypervisor.efi.sha256 VERSION MANIFEST.txt \
-    | tee SHA256SUMS
+  sum_files=(r640-hypervisor.efi r640-hypervisor.efi.sha256 VERSION MANIFEST.txt)
+  if [[ -f raynu-v-db.crt ]]; then
+    sum_files+=(raynu-v-db.crt)
+  fi
+  sha256sum "${sum_files[@]}" | tee SHA256SUMS
 )
 
 echo "==> tarball"

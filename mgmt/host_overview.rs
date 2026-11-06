@@ -10,22 +10,23 @@
 //! listener has ten sockets and no accept queue (smoltcp), so iron
 //! `1da151be` reset the reload's SYN and `1cf82795` aborted a live
 //! session to make room. One request per tick keeps the browser on one
-//! or two connections. The five single routes stay for the action
+//! or two connections. The single routes stay for the action
 //! buttons; this one is only the poll.
 
-/// `GET` with a bearer. The five objects, verbatim, under one root.
+/// `GET` with a bearer. The overview objects, verbatim, under one root.
 pub const HOST_OVERVIEW_PATH: &str = "/host/overview";
 
 /// Guests list (2048) plus address (512), operator (256), certificate
-/// (128), clock (64), and the framing.
-pub const OVERVIEW_BODY_CAP: usize = 3_200;
+/// (128), clock (64), update (160), and the framing.
+pub const OVERVIEW_BODY_CAP: usize = 3_360;
 
-const KEYS: [&str; 5] = [
+const KEYS: [&str; 6] = [
     "{\"ok\":true,\"guests\":",
     ",\"addr\":",
     ",\"clock\":",
     ",\"operator\":",
     ",\"cert\":",
+    ",\"update\":",
 ];
 
 /// Write the Overview object. Zero when any part did not fit, so a
@@ -42,7 +43,8 @@ pub fn overview_json(buf: &mut [u8]) -> usize {
             1 => crate::mgmt::host_addr::status_body(&mut buf[n..]),
             2 => clock_part(&mut buf[n..]),
             3 => crate::mgmt::operator::status_body(&mut buf[n..], None),
-            _ => crate::mgmt::host_cert::status_body(&mut buf[n..]),
+            4 => crate::mgmt::host_cert::status_body(&mut buf[n..]),
+            _ => crate::mgmt::fw_update::status_body(&mut buf[n..]),
         };
         if part == 0 {
             return 0;
@@ -74,7 +76,7 @@ fn put(buf: &mut [u8], at: usize, bytes: &[u8]) -> Option<usize> {
     Some(end)
 }
 
-/// Host package: the route, the page's single poll, and the five parts
+/// Host package: the route, the page's single poll, and the parts
 /// under one root. Host tests do not mark the row lived.
 pub fn prop_host_overview() -> bool {
     let http = include_str!("http.rs");

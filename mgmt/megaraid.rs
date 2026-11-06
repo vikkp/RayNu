@@ -2245,6 +2245,7 @@ fn perc_fusion_post(bar: u64, bus: u8, dev: u8, func: u8, base: u64) {
     perc_load_nic_catalog(bar, target, bytes, dcmd_phys, data_phys);
     perc_load_audit_chain(bar, target, bytes, dcmd_phys, data_phys);
     perc_load_autostart(bar, target, bytes, dcmd_phys, data_phys);
+    perc_load_fw_update(bar, target, bytes, dcmd_phys, data_phys);
     perc_load_host_addr(bar, target, bytes, dcmd_phys, data_phys);
     perc_load_operator(bar, target, bytes, dcmd_phys, data_phys);
     perc_load_host_cert(bar, target, bytes, dcmd_phys, data_phys);
@@ -2560,12 +2561,134 @@ fn flush_nic_catalog_uefi() {
     }
 }
 
+/// Read the A7 header. A miss leaves slot 0 with nothing pending.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn perc_load_fw_update(bar: u64, target: u8, bytes: u64, frame_phys: u64, data_phys: u64) {
+    use crate::boot::serial;
+    let Some(map) = crate::mgmt::fw_update::fw_map(bytes) else {
+        serial::write_line("boot: A7 skip lba");
+        return;
+    };
+    let lba = map.header_lba;
+    let Some((st, timed_out)) = issue_ld_read16(bar, target, lba, frame_phys, data_phys) else {
+        serial::write_line("boot: A7 rd skip frame");
+        return;
+    };
+    if timed_out || st != MFI_STAT_OK {
+        serial::write_line("boot: A7 rd skip status");
+        return;
+    }
+    core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+    let mut sector = [0u8; 512];
+    // SAFETY: the READ(16) completed into the payload page.
+    // KANI-TARGET: host tests cover the header, not this load.
+    unsafe {
+        core::ptr::copy_nonoverlapping(data_phys as *const u8, sector.as_mut_ptr(), 512);
+    }
+    if crate::mgmt::fw_update::restore(&sector) {
+        let rec = crate::mgmt::fw_update::record();
+        serial::write_str("boot: A7 rd lba=");
+        write_dec64(lba);
+        serial::write_str(" slot=");
+        write_dec(u32::from(rec.active));
+        serial::write_str(" pending=");
+        match rec.pending {
+            None => serial::write_str("none"),
+            Some(p) => write_dec(u32::from(p)),
+        }
+        serial::write_line("");
+        if crate::mgmt::fw_update::ack_stick_write() {
+            serial::write_line("boot: A7 stick clear");
+        }
+        if crate::mgmt::fw_update::ack_stick_restore() {
+            serial::write_line("boot: A7 stick restore clear");
+        }
+    } else {
+        serial::write_line("boot: A7 none");
+    }
+}
+
+/// One A7 sector is on the PERC. A nested flush must not reuse the frame.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+static A7_FLUSH_BUSY: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+
+/// Write one staged A7 sector. The guest keeps running.
+///
+/// One WRITE(16) and its read-back finish before this returns, on the same
+/// PERC frame the guest disk uses between VM exits. Image sectors go out
+/// before the header. LBA 0 is not encoded. A nested call is skipped.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn flush_fw_update_uefi() {
+    use crate::boot::serial;
+    if A7_FLUSH_BUSY.swap(true, core::sync::atomic::Ordering::AcqRel) {
+        return;
+    }
+    struct ClearBusy;
+    impl Drop for ClearBusy {
+        fn drop(&mut self) {
+            A7_FLUSH_BUSY.store(false, core::sync::atomic::Ordering::Release);
+        }
+    }
+    let _clear = ClearBusy;
+    let bar = PERC_SPARE_BAR.load(core::sync::atomic::Ordering::Acquire);
+    let target = PERC_SPARE_TARGET.load(core::sync::atomic::Ordering::Acquire);
+    let frame = PERC_SPARE_FRAME.load(core::sync::atomic::Ordering::Acquire);
+    let data = PERC_SPARE_DATA.load(core::sync::atomic::Ordering::Acquire);
+    let bytes = PERC_SPARE_BYTES.load(core::sync::atomic::Ordering::Acquire);
+    if bar == 0 || frame == 0 || data == 0 {
+        return;
+    }
+    let sector = if let Some((lba, sector)) = crate::mgmt::fw_update::next_image_sector(bytes) {
+        (lba, sector, false)
+    } else if let Some(sector) = crate::mgmt::fw_update::copy_header() {
+        let Some(map) = crate::mgmt::fw_update::fw_map(bytes) else {
+            return;
+        };
+        (map.header_lba, sector, true)
+    } else {
+        return;
+    };
+    let (lba, sector, header) = sector;
+    let Some((st, timed_out)) = issue_ld_write16_sector(bar, target, lba, frame, data, &sector)
+    else {
+        return;
+    };
+    if timed_out || st != MFI_STAT_OK {
+        return;
+    }
+    let Some((rst, rto)) = issue_ld_read16(bar, target, lba, frame, data) else {
+        return;
+    };
+    if rto || rst != MFI_STAT_OK {
+        return;
+    }
+    core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+    let mut back = [0u8; 512];
+    // SAFETY: the READ(16) completed into the payload page.
+    // KANI-TARGET: host tests cover the sector bytes, not this load.
+    unsafe {
+        core::ptr::copy_nonoverlapping(data as *const u8, back.as_mut_ptr(), 512);
+    }
+    if back != sector {
+        return;
+    }
+    if header {
+        crate::mgmt::fw_update::ack_header();
+        serial::write_str("boot: A7 wr lba=");
+        write_dec64(lba);
+        serial::write_line(" match");
+    } else {
+        crate::mgmt::fw_update::ack_image_sector();
+    }
+}
+
 /// Write a staged autostart sector while no product guest owns the CPU.
 /// One WRITE(16), then a READ. The audit image and the NIC catalog are not
 /// this LBA. LBA 0 is not encoded. No doorbell.
 pub fn flush_autostart() {
     #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
     {
+        flush_fw_update_uefi();
         flush_autostart_uefi();
     }
 }

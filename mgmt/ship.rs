@@ -59,6 +59,32 @@ pub fn prop_usb_idrac_runbook() -> bool {
         && s.contains("sha256")
 }
 
+/// ADR-021 A5 host contract. The signer takes an operator key, the CI path
+/// is ephemeral, and the runbook says the row is not lived. No private key
+/// is embedded. A passing host test is not an R640 Secure Boot boot.
+pub fn prop_a5_sign_contract() -> bool {
+    let sign = include_str!("../tools/sign-efi.sh");
+    let smoke = include_str!("../tools/a5-sign-smoke.sh");
+    let book = include_str!("../docs/runbooks/secure_boot.md");
+    let pkg = include_str!("../tools/package-release.sh");
+    !sign.contains("BEGIN PRIVATE KEY")
+        && !sign.contains("BEGIN RSA PRIVATE KEY")
+        && sign.contains("RAYNU_SIGN_KEY")
+        && sign.contains("RAYNU_SIGN_CERT")
+        && sign.contains("--ephemeral")
+        && sign.contains("sbsign")
+        && sign.contains("sbverify")
+        && smoke.contains("RAYNU-V-A5-SIGN-HOST-OK")
+        && smoke.contains("not lived")
+        && book.contains("Status: lived")
+        && book.contains("db")
+        && book.contains("shim")
+        && book.contains("Secure Boot")
+        && pkg.contains("RAYNU_SIGN_KEY")
+        && pkg.contains("Secure Boot:")
+        && pkg.contains("secure_boot.md")
+}
+
 /// Full M7.0 host-testable release kit package.
 pub fn prop_release_kit_package() -> bool {
     let _ = (SHIP_GAP_NOTE, M7_SHIP_OK_MARKER);

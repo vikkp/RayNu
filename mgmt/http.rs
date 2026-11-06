@@ -608,6 +608,24 @@ pub fn handle_http_request(
             return format_http_response(status, "application/json", &body[..len], out);
         }
     }
+    // ADR-021 A7. Stage, roll back, or keep a spare slot. The chunk body
+    // is binary and is handled before this UTF-8 parser.
+    match crate::mgmt::fw_update::host_update_rest(
+        parsed.method,
+        parsed.path,
+        auth_allows(parsed.auth_token),
+    ) {
+        crate::mgmt::fw_update::UpdateHttp::NotMine => {}
+        crate::mgmt::fw_update::UpdateHttp::Unauthorized => {
+            return format_http_response(401, "text/plain; charset=utf-8", b"unauthorized", out);
+        }
+        crate::mgmt::fw_update::UpdateHttp::Bad => {
+            return format_http_response(400, "text/plain; charset=utf-8", b"bad request", out);
+        }
+        crate::mgmt::fw_update::UpdateHttp::Json { status, len, body } => {
+            return format_http_response(status, "application/json", &body[..len], out);
+        }
+    }
     if parsed.path == "/host/clock" {
         if !matches!(parsed.method, RestMethod::Get) {
             return format_http_response(400, "text/plain; charset=utf-8", b"bad request", out);
