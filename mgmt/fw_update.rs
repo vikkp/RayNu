@@ -376,6 +376,10 @@ pub fn note_stick_written() {
 }
 
 /// Drop the stick-apply slot after a successful copy. The image bytes stay.
+///
+/// Sets `swapped` so a later Roll back can arm `BOOTX64.OLD`. The copy has
+/// to be done by an image that has this flag. An older image only clears
+/// `apply`, and Roll back on the next boot then has nothing to arm.
 pub fn ack_stick_write() -> bool {
     if !STICK_WRITTEN.swap(false, core::sync::atomic::Ordering::AcqRel) {
         return false;
