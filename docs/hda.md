@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-6-a7-lived |
-| Summary | **ADR-021 A7 lived.** `318c6617c99b` restored `BOOTX64.OLD` (`bytes=2599968`). The next F11 was `fa3f4860c6a7` / run `42096983983` with no second restore. SPA Guest 3 running. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | spa-quiet-and-live-stage |
+| Summary | **SPA polls no longer fill COM2.** The first HTTP exchange and the first keep-alive still print. The A7 spare write from `d0904bf8` already runs while the guest stays up. Neither change is in the running `fa3f4860c6a7`. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
-| Gates touched | ADR-021 A7 `in flight → lived`. A5 stays lived. Wave 6 stays open. No doorbell. No format of UBUNTU0. |
+| Gates touched | A7 stays lived. A5 stays lived. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
 
 ## Blockers & risks (Everest-relevant)
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-05 | spa-quiet-and-live-stage | 0.0 | 99 | **SPA polls print once.** First `HTTP exchange ok` and first `HTTP keep-alive` stay. Later Overview polls stay off COM2. A7 spare write from `d0904bf8` runs while the guest stays up. Not in the running `fa3f4860c6a7`. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-05 | wave-6-a7-lived | 0.0 | 99 | **ADR-021 A7 lived.** `boot: A7 stick restored bytes=2599968` on `318c6617c99b` / run `42133864880`. Next F11 `build: sha=fa3f4860c6a7 run=42096983983` with no second restore. SPA Guest 3 running, `active 1 · pending none · durable yes`. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-05 | wave-6-a7-old | 0.0 | 99 | **A7 Roll back restores BOOTX64.OLD** on the next pre-EBS boot. Keep still arms the copy. Not lived. No F11 of this commit yet. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-05 | wave-6-a7-stick | 0.0 | 99 | **A7 Keep arms the stick copy.** Next boot writes `BOOTX64.EFI` from the spare slot and saves `BOOTX64.OLD`. Page check on `c81107eae9fb` / run `42083852791` showed `boot: A7 none` and Overview active 0. Not lived. Scores held. months 0.0 held; overall 99 held |

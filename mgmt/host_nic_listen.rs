@@ -116,6 +116,11 @@ static mut COEXIST_MILLIS: i64 = 0;
 static mut COEXIST_TSC0: u64 = 0;
 static mut COEXIST_LAST_DIAG: i64 = 0;
 static mut COEXIST_LAST_RX_DROP: u32 = 0;
+/// Standing SPA polls every two seconds. COM2 notes that once per boot.
+static COEXIST_HTTP_EXCHANGE_NOTED: core::sync::atomic::AtomicBool =
+    core::sync::atomic::AtomicBool::new(false);
+static COEXIST_HTTP_KEEPALIVE_NOTED: core::sync::atomic::AtomicBool =
+    core::sync::atomic::AtomicBool::new(false);
 /// Function-0 health while function 1 is armed. See `listener_health`.
 static mut LISTENER_HEALTH: crate::mgmt::listener_health::ListenerTracker =
     crate::mgmt::listener_health::ListenerTracker::new();
@@ -932,11 +937,16 @@ pub fn tick_bcm5720_coexist() {
             // a live session to free a listener and the reload landed in that FIN.
         }
         let library_exchange = crate::mgmt::iso_library::take_exchange_quiet();
-        // Linux owns COM2 for the installer. SPA polls stay on the socket.
+        // Linux owns COM2 for the installer. A kept SPA poll is not a COM2
+        // line. The first exchange and the first keep-alive still print.
         let guest_console = serial::linux_high_half();
+        let note_http = !library_exchange && !guest_console;
         if did_exchange {
-            if !library_exchange && !guest_console {
+            if note_http
+                && !COEXIST_HTTP_EXCHANGE_NOTED.swap(true, core::sync::atomic::Ordering::AcqRel)
+            {
                 serial::write_line_nowait("boot: HOST-NIC HTTP exchange ok");
+                pci_census::print_host_nic_exchange_ok_marker();
             }
             let _ = maybe_print_iron_tls_ok(true, true);
             if take_spa_keys_injected() {
@@ -955,11 +965,11 @@ pub fn tick_bcm5720_coexist() {
                 COEXIST_PANIC_EMPTY_AT_MS = 0;
             }
             let _ = iface.poll(Instant::from_millis(millis + 1), device, sockets);
-            if !library_exchange && !guest_console {
-                pci_census::print_host_nic_exchange_ok_marker();
-            }
         }
-        if did_keepalive && !library_exchange && !guest_console {
+        if did_keepalive
+            && note_http
+            && !COEXIST_HTTP_KEEPALIVE_NOTED.swap(true, core::sync::atomic::Ordering::AcqRel)
+        {
             serial::write_line_nowait("boot: HOST-NIC HTTP keep-alive");
         }
         if millis - COEXIST_LAST_DIAG >= 5000 {
