@@ -73,7 +73,7 @@
           "status": "in flight",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Branch `cursor/wave-6-a4-headless-0591`. `GET /host/update` adds `saved`. Overview appends `saved` when the spare header matches RAM and `saving` while that write is still queued. Reboot when the line says `saved`. Staging holds the status line so the guest-list poll does not replace it. Activity still shows the host UART after the page is up. Not lived: iron verification still reads COM2 markers. Do not flash this row until asked. The running image stays `fa3f4860c6a7`.",
+          "note": "Branch `cursor/wave-6-a4-headless-0591`. `GET /host/update` adds `saved`. Overview appends `saved` when the spare header matches RAM and `saving` while that write is still queued. Reboot when the line says `saved`. Staging holds the status line so the guest-list poll does not replace it. Activity still shows the host UART after the page is up. Iron `b75acccce337` / run `42144210729` opened the page with the line ending in `saved` and Guest 3 running. Staging then stayed `pending 0 · durable no · saving` because the spare write was not on the standing SPA tick. Not lived.",
           "wave": "6"
         },
         {

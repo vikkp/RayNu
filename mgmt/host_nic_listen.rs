@@ -557,6 +557,10 @@ pub fn maybe_tick_bcm5720_standing_spa() {
         LAST_SPA_TICK_TSC = now;
     }
     tick_bcm5720_coexist();
+    // One A7 spare sector per standing tick. The guest-off idle loop is
+    // not the only caller: iron b75acccc stayed on `saving` while Guest 3
+    // ran because this tick never reached the spare write.
+    crate::mgmt::megaraid::flush_autostart();
 }
 
 /// One SNTP query after the SPA is up. A reply sets the host clock.

@@ -191,7 +191,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next (numbered)
 
-**ADR-021 A4 in flight.** The update line says `saved` when the spare header is on disk and `saving` until that write finishes. Reboot from that word. A serial console is not required for the reboot decision. Staging no longer lets the guest-list poll replace the status line. Not lived. The running image stays `fa3f4860c6a7`.
+**ADR-021 A4 in flight.** Iron `b75acccce337` / run `42144210729` showed `saved` on boot with Guest 3 running. Staging then stayed `pending 0 · durable no · saving`: the spare write ran only from the guest-off loop. The standing SPA tick now writes one spare sector per tick. Not lived. The stick is still `b75acccce337`.
 
 **Follow-up, not flashed.** `d0904bf8` writes the A7 spare while the guest stays up. `424d0aaa` prints `HTTP exchange ok` and `HTTP keep-alive` once per boot. The running image remains `fa3f4860c6a7`.
 
