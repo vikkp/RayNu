@@ -20,14 +20,14 @@
   "counts": {
     "S1": {
       "lived": 54,
-      "in flight": 1,
-      "planned": 12,
+      "in flight": 2,
+      "planned": 11,
       "total": 67
     },
     "Final": {
       "lived": 54,
-      "in flight": 1,
-      "planned": 74,
+      "in flight": 2,
+      "planned": 73,
       "total": 129
     }
   },
@@ -217,10 +217,10 @@
         {
           "id": "B8",
           "capability": "Guest interrupt controller beyond 8259: IOAPIC/LAPIC, MSI/MSI-X for virtio",
-          "status": "planned",
+          "status": "in flight",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "PIC + IRQ 11 shared lived on `d7e2e24f`; SMP and performance need APIC",
+          "note": "Branch `cursor/wave-7-b8-apic-37d7`. Virtio MSI-X cap at config `0x84`, table in BAR0 at `0x800` (4 entries). A programmed queue vector is latched into the virtual local APIC and does not raise PIC IRQ 11. Unprogrammed queues stay on shared IRQ 11, lived on `d7e2e24f`. Host test `b8_msix_queue_reaches_the_lapic`. Firmware line `boot: B8 virtio msi-x vec=` on the first delivery. Not lived until that line is on the R640",
           "wave": "7"
         },
         {
@@ -335,14 +335,14 @@
       "counts": {
         "S1": {
           "lived": 6,
-          "in flight": 0,
-          "planned": 4,
+          "in flight": 1,
+          "planned": 3,
           "total": 10
         },
         "Final": {
           "lived": 6,
-          "in flight": 0,
-          "planned": 14,
+          "in flight": 1,
+          "planned": 13,
           "total": 20
         }
       }
@@ -1612,8 +1612,8 @@
       "why": "Performance and capacity. B8 before B7: SMP on an 8259 is misery.",
       "counts": {
         "lived": 0,
-        "in flight": 1,
-        "planned": 8,
+        "in flight": 2,
+        "planned": 7,
         "total": 9
       },
       "closed": false
@@ -1855,7 +1855,7 @@
     {
       "id": "B8",
       "capability": "Guest interrupt controller beyond 8259: IOAPIC/LAPIC, MSI/MSI-X for virtio",
-      "status": "planned",
+      "status": "in flight",
       "role": "iron thread"
     },
     {

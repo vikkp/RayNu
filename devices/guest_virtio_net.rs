@@ -80,6 +80,8 @@ struct Net {
     q: [Queue; 2],
     notify: bool,
     logged: bool,
+    /// ADR-021 B8. Off until the guest enables MSI-X.
+    msix: crate::devices::guest_msix::Msix,
 }
 
 static mut NET: Net = Net {
@@ -103,6 +105,7 @@ static mut NET: Net = Net {
     }; 2],
     notify: false,
     logged: false,
+    msix: crate::devices::guest_msix::Msix::empty(),
 };
 
 static LOGGED_TX: AtomicBool = AtomicBool::new(false);
@@ -136,10 +139,7 @@ pub fn net_counts() -> (u32, u32, u32, u32) {
 /// completion is still waiting for its raise on the next exit.
 /// M8.9 post-TX trace.
 pub fn irq_state() -> (u8, bool) {
-    (
-        with_net(|n| n.isr),
-        TX_IRQ_ARM.load(Ordering::Acquire) == 1,
-    )
+    (with_net(|n| n.isr), TX_IRQ_ARM.load(Ordering::Acquire) == 1)
 }
 
 fn with_net<R>(f: impl FnOnce(&mut Net) -> R) -> R {
@@ -191,6 +191,8 @@ pub fn pci_write_data(port: u16, size: u8, val: u32) {
                 let next = val & BAR_MASK;
                 n.bar = if next == 0 { GUEST_NET_BAR } else { next };
             }
+        } else {
+            let _ = n.msix.write_cfg(off, size, val);
         }
         let _ = size;
     });
@@ -228,7 +230,10 @@ fn cfg_dword(off: u8) -> u32 {
         0x68 => 0,
         0x6C => 0x100,
         0x70 => 4,
-        0x74 => 0x0410_0009,
+        0x74 => 0x0410_8409,
+        0x84 => n.msix.cfg_dword(0x84),
+        0x88 => n.msix.cfg_dword(0x88),
+        0x8C => n.msix.cfg_dword(0x8C),
         0x78 => 0,
         0x7C => u32::from(OFF_DEVICE),
         0x80 => 12,
@@ -267,6 +272,9 @@ pub fn mmio_read(gpa: u64, size: u8) -> u64 {
     if off < 0x38 {
         return common_read(off, size);
     }
+    if crate::devices::guest_msix::Msix::mmio_hit(off) {
+        return with_net(|n| n.msix.mmio_read(off, size));
+    }
     if off == 0x100 {
         return with_net(|n| {
             let v = u64::from(n.isr);
@@ -274,7 +282,8 @@ pub fn mmio_read(gpa: u64, size: u8) -> u64 {
             // Level INTx stays asserted until this ack. Leaving IRQ 11
             // pending made every inject take the PIC and starved the
             // LAPIC timer (iron `9cdf496c`, `sleep 1` then no `exit:`).
-            if v != 0 {
+            // MSI-X is an edge into the local APIC and does not own that pin.
+            if v != 0 && !n.msix.enabled() {
                 crate::devices::guest_irq::lower_virtio();
             }
             v
@@ -341,6 +350,8 @@ fn write_byte(off: u16, val: u8) {
     with_net(|n| {
         if off < 0x38 {
             write_common(n, off, val);
+        } else if crate::devices::guest_msix::Msix::mmio_hit(off) {
+            n.msix.mmio_write(off, 1, u64::from(val));
         } else if off == OFF_NOTIFY || off == OFF_NOTIFY + 1 {
             n.notify = true;
         }
@@ -357,12 +368,19 @@ fn write_common(n: &mut Net, off: u16, val: u8) {
             let bit = 8 * (off - 0x0C);
             n.drv_feat = (n.drv_feat & !(0xffu64 << bit)) | (u64::from(val) << bit);
         }
+        0x10 | 0x11 => {
+            let sh = 8 * (off - 0x10);
+            let cur = n.msix.config_vec();
+            n.msix
+                .set_config_vec((cur & !(0xffu16 << sh)) | (u16::from(val) << sh));
+        }
         0x14 => {
             n.status = val;
             if val == 0 {
                 n.isr = 0;
                 n.notify = false;
                 n.qsel = 0;
+                n.msix.virtio_reset();
                 n.q = [Queue {
                     enable: 0,
                     desc: 0,
@@ -377,6 +395,12 @@ fn write_common(n: &mut Net, off: u16, val: u8) {
             }
         }
         0x16 => n.qsel = u16::from(val),
+        0x1A | 0x1B => {
+            let sh = 8 * (off - 0x1A);
+            let cur = n.msix.queue_vec(n.qsel);
+            n.msix
+                .set_queue_vec(n.qsel, (cur & !(0xffu16 << sh)) | (u16::from(val) << sh));
+        }
         0x17 => n.qsel = (n.qsel & 0xff) | (u16::from(val) << 8),
         0x1C => n.q[q].enable = u16::from(val),
         0x1D => n.q[q].enable = (n.q[q].enable & 0xff) | (u16::from(val) << 8),
@@ -428,7 +452,7 @@ fn common_byte(off: u16) -> u8 {
             0x04..=0x07 => (feat >> (8 * (off - 0x04))) as u8,
             0x08..=0x0B => (n.drv_sel >> (8 * (off - 0x08))) as u8,
             0x0C..=0x0F => (n.drv_feat >> (8 * (off - 0x0C))) as u8,
-            0x10 | 0x11 => 0xFF,
+            0x10 | 0x11 => n.msix.config_byte(off - 0x10),
             0x12 => 2,
             0x13 => 0,
             0x14 => n.status,
@@ -437,7 +461,7 @@ fn common_byte(off: u16) -> u8 {
             0x17 => (n.qsel >> 8) as u8,
             0x18 => QSIZE as u8,
             0x19 => (QSIZE >> 8) as u8,
-            0x1A | 0x1B => 0xFF,
+            0x1A | 0x1B => n.msix.queue_byte(n.qsel, off - 0x1A),
             0x1C => n.q[q].enable as u8,
             0x1D => (n.q[q].enable >> 8) as u8,
             0x20..=0x27 => (n.q[q].desc >> (8 * (off - 0x20))) as u8,
@@ -598,7 +622,11 @@ fn drain_one(translate: &impl Fn(u64) -> Option<u64>) -> bool {
             };
             let take = len.min(frame.len().saturating_sub(flen));
             unsafe {
-                core::ptr::copy_nonoverlapping(hpa as *const u8, frame.as_mut_ptr().add(flen), take);
+                core::ptr::copy_nonoverlapping(
+                    hpa as *const u8,
+                    frame.as_mut_ptr().add(flen),
+                    take,
+                );
             }
             flen += take;
         }
@@ -652,9 +680,7 @@ fn drain_one(translate: &impl Fn(u64) -> Option<u64>) -> bool {
     {
         static DONE: AtomicBool = AtomicBool::new(false);
         if !DONE.swap(true, Ordering::AcqRel) {
-            crate::boot::serial::write_line(
-                "boot: M8.9 virtio-net tx done (not ISO-INSTALL-OK)",
-            );
+            crate::boot::serial::write_line("boot: M8.9 virtio-net tx done (not ISO-INSTALL-OK)");
         }
     }
     let result = crate::mgmt::bcm5720_mmio::egress_send(eth);
@@ -698,7 +724,22 @@ pub fn raise_deferred_tx_irq(now: u64) {
     let _ = now;
     let tx = TX_IRQ_ARM.swap(0, Ordering::AcqRel) == 1;
     let cfg = CFG_IRQ_ARM.swap(0, Ordering::AcqRel) == 1;
-    if tx || cfg {
+    if !tx && !cfg {
+        return;
+    }
+    let owned = with_net(|n| {
+        if !n.msix.enabled() {
+            return false;
+        }
+        if tx {
+            let _ = n.msix.deliver_queue(1);
+        }
+        if cfg {
+            let _ = n.msix.deliver_config();
+        }
+        true
+    });
+    if !owned {
         crate::devices::guest_irq::raise_virtio();
     }
 }
@@ -1053,7 +1094,9 @@ mod guest_virtio_net_test {
             .expect("raise")
             .0;
         assert!(!one.contains("raise_virtio()"));
-        assert!(include_str!("../vmx/guest_uefi.rs").contains("raise_deferred_tx_irq(cpu::rdtsc())"));
+        assert!(
+            include_str!("../vmx/guest_uefi.rs").contains("raise_deferred_tx_irq(cpu::rdtsc())")
+        );
         assert!(include_str!("../vmx/guest_uefi.rs").contains("poll_rx(guest_uefi_gpa_to_hpa)"));
         clear_panel_for_test();
         clear_start_for_test();
@@ -1067,10 +1110,16 @@ mod guest_virtio_net_test {
         // MAX_SKB_FRAGS` and wakes it at `>= 2 + MAX_SKB_FRAGS`; an 8-entry
         // ring can never satisfy the wake.
         const MAX_SKB_FRAGS: u16 = 17;
-        assert!(QSIZE >= 2 + MAX_SKB_FRAGS + 1, "queue can never wake below this");
+        assert!(
+            QSIZE >= 2 + MAX_SKB_FRAGS + 1,
+            "queue can never wake below this"
+        );
         assert!(QSIZE.is_power_of_two(), "virtio 1.0 split ring");
         assert_eq!(QSIZE, 256);
-        assert!(CHAIN_MAX >= usize::from(2 + MAX_SKB_FRAGS), "one skb per chain");
+        assert!(
+            CHAIN_MAX >= usize::from(2 + MAX_SKB_FRAGS),
+            "one skb per chain"
+        );
         let _guard = lock();
         clear_panel_for_test();
         clear_start_for_test();
@@ -1091,7 +1140,11 @@ mod guest_virtio_net_test {
         let bar = u64::from(GUEST_NET_BAR);
         for q in 0..2u64 {
             mmio_write(bar + 0x16, 2, q);
-            assert_eq!(mmio_read(bar + 0x18, 2), u64::from(QSIZE), "queue_size for queue {q}");
+            assert_eq!(
+                mmio_read(bar + 0x18, 2),
+                u64::from(QSIZE),
+                "queue_size for queue {q}"
+            );
         }
         clear_panel_for_test();
         clear_start_for_test();
@@ -1196,7 +1249,10 @@ mod guest_virtio_net_test {
         // Driven and dark: NO-CARRIER. A flip before DRIVER_OK bumps the
         // generation but raises nothing (the driver is not listening yet).
         mmio_write(bar + 0x14, 1, 0);
-        let dark_driven = LinkSample { driven: true, ..dark };
+        let dark_driven = LinkSample {
+            driven: true,
+            ..dark
+        };
         assert!(observe(1, [0; 6], dark_driven).is_some());
         note_carrier_change();
         assert_eq!(mmio_read(status, 2), 0);
