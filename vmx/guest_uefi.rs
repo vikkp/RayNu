@@ -1419,6 +1419,14 @@ pub fn guest_uefi_installer_console_quiet(handoff: bool, mmio_n: u32) -> bool {
     handoff && mmio_n >= 8192
 }
 
+/// Queue notify (`0x300`) and the ISR ack (`0x100`) are the virtio hot path.
+/// After the probe window they share COM2 with the guest login. Iron
+/// `8f69297c` was still printing `off=0x300 n=5828` at `raynusrv2 login:`.
+/// virtio MMIO notify quiet.
+pub fn guest_uefi_virtio_mmio_notify_quiet(handoff: bool, n: u32, off: u16) -> bool {
+    handoff && n >= 1024 && (off == 0x100 || off == 0x300)
+}
+
 /// After usbdelay, print every ISR ACK and queue notify so apk overlay
 /// I/O is not hidden in the 64-hit gap. Iron `34968f7` / `34224368343`
 /// last printed `n=1345` disk ISR after ISO notify `n=1281`; silent hits
@@ -14174,17 +14182,12 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
     );
     // After the installer is up, these lines share COM2 with urwid and
     // scroll the language screen off. The early probe lines stay.
-    let installer_quiet = guest_uefi_installer_console_quiet(
-        RAYNU_F_LINUX_HANDOFF.load(Ordering::Acquire),
-        n,
-    );
-    if !installer_quiet
-        && guest_uefi_virtio_mmio_heartbeat_kick(
-            n,
-            (gpa.wrapping_sub(bar)) as u16,
-            overlay,
-            kick_due,
-        )
+    let handoff = RAYNU_F_LINUX_HANDOFF.load(Ordering::Acquire);
+    let off16 = (gpa.wrapping_sub(bar)) as u16;
+    let installer_quiet = guest_uefi_installer_console_quiet(handoff, n);
+    if !guest_uefi_virtio_mmio_notify_quiet(handoff, n, off16)
+        && !installer_quiet
+        && guest_uefi_virtio_mmio_heartbeat_kick(n, off16, overlay, kick_due)
     {
         LAST_KICK_LINE_TSC.store(now, Ordering::Release);
         serial::write_str_nowait("boot: guest-UEFI virtio MMIO gpa=0x");

@@ -120,12 +120,12 @@ fn acpi_tables_cover_all_offsets() {
 
 #[test]
 fn dsdt_pci0_prt_virtio_gsi() {
-    let mut body = [0u8; 225];
-    for i in 0..225u16 {
+    let mut body = [0u8; 249];
+    for i in 0..249u16 {
         body[i as usize] = acpi_tables_byte(0x120 + i);
     }
     assert_eq!(&body[0..4], b"DSDT");
-    assert_eq!(u32::from_le_bytes(body[4..8].try_into().unwrap()), 225);
+    assert_eq!(u32::from_le_bytes(body[4..8].try_into().unwrap()), 249);
     assert!(body.windows(4).any(|w| w == b"PCI0"));
     assert!(body.windows(4).any(|w| w == b"_PRT"));
     assert!(body.windows(4).any(|w| w == b"_CRS"), "DSDT PCI0 _CRS");
@@ -141,6 +141,10 @@ fn dsdt_pci0_prt_virtio_gsi() {
     assert_eq!(body[s2 + 7], 17, "GSI 17");
     let s3 = body.windows(4).position(|w| w == [0xFF, 0xFF, 0x03, 0x00]).unwrap();
     assert_eq!(body[s3 + 7], 18, "GSI 18");
+    let s4 = body.windows(4).position(|w| w == [0xFF, 0xFF, 0x04, 0x00]).unwrap();
+    assert_eq!(body[s4 + 7], 11, "slot 4 spare disk GSI 11");
+    let s5 = body.windows(4).position(|w| w == [0xFF, 0xFF, 0x05, 0x00]).unwrap();
+    assert_eq!(body[s5 + 7], 11, "slot 5 virtio-net GSI 11");
     assert!(
         body.windows(4).any(|w| w == [0x00, 0x00, 0x00, 0xC0]),
         "PCI MMIO 0xC0000000"

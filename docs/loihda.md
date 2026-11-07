@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-7-b8-lived |
-| Summary | **ADR-021 B8 lived.** I/O APIC and virtio MSI-X on `8f69297c`. Guest reached login. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-7-b8-net-gsi |
+| Summary | **Guest NIC interrupt route.** Slots 4 and 5 are GSI 11. RX MSI-X is queue 0. COM2 notify lines stop after the probe. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. TLS 88 held. |
-| Gates touched | B8 in flight. Auth.token A5 stays parked. No doorbell. No format of UBUNTU0. |
+| Gates touched | B8 lived. Guest NIC GSI follow-up. B6 not started. No doorbell. No format of UBUNTU0. |
 
 ---
 
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-07 | wave-7-b8-net-gsi | 94 | 72 | **virtio-net GSI 11.** Slots 4 and 5 are in `_PRT`. RX signals MSI-X queue 0. Queue-notify COM2 lines stop after the probe. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-07 | wave-7-b8-lived | 94 | 72 | **ADR-021 B8 lived.** `8f69297c` / run `42398077199`. I/O APIC at `0xfec00000`. MSI-X `vec=21`. `raynusrv2 login:`. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-07 | wave-7-b8-sku-card | 94 | 72 | **`sku_card_package_passes` matches the Wave 6 card.** Dedicated-box, no plaintext HTTP, 2.9 TB is not the guest disk, not a cluster, not Windows. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-07 | wave-7-b8-madt | 94 | 72 | **ADR-021 B8 still in flight.** `09b23c5d` MSI-X `vec=20` and login, then no MADT and PIC routing. RayNu-F XSDT now has a MADT. Not lived. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
@@ -486,7 +487,7 @@ LOI:           NOT OPEN. Tracker born 2026-09-14.
 Bar A:         94% · 0.25 months · dedicated-box non-prod
 Bar B:         72% · 1.25 months · Ubuntu login on a 10 GiB spare tail (c3a70e62) with a LAN address from the SPA (0d865c7f); whole VD still hidden
 Overall:       80% · confidence medium
-NOW:           SKU card is what a signature holds today. One dedicated box. Ubuntu on a 10 GiB tail. M8.9 closed on 0d865c7f. Wave 6 is closed. ADR-021 B8 lived 2026-11-07 on `8f69297c` / run `42398077199`: Linux uses the I/O APIC and the disk completed on MSI-X `vec=21`. `raynusrv2 login:`. Wave 7 stays open. A5 lived 2026-11-05. A7 lived 2026-11-05. A4 lived 2026-11-07: 4e327820e039 / run 42384654720 reached durable yes · saved while Guest 3 stayed running. H5 lived 2026-11-07: docs/customer/. F10 lived 2026-11-07: iDRAC Dedicated and LOM3, SPA stayed up. D11 lived 2026-11-07: port 3 page, port 4 guests. H8 accepted 2026-11-07. Auth.token A5 stays parked. Standing SPA is 10.99.99.201. Do not format UBUNTU0. The 2.9 TB VD is not this disk. Bar A 94. Bar B 72. Overall 80. perc 86. unmodified 45. SKU 94. TLS 88. months A 0.25. months B 1.25. docs/adr/ADR-019.md
+NOW:           SKU card is what a signature holds today. One dedicated box. Ubuntu on a 10 GiB tail. M8.9 closed on 0d865c7f. Wave 6 is closed. ADR-021 B8 lived 2026-11-07 on `8f69297c` / run `42398077199`: Linux uses the I/O APIC and the disk completed on MSI-X `vec=21`. `raynusrv2 login:`. Follow-up: virtio-net `00:05.0` is GSI 11, and queue-notify COM2 lines stop after the probe. Wave 7 stays open. A5 lived 2026-11-05. A7 lived 2026-11-05. A4 lived 2026-11-07: 4e327820e039 / run 42384654720 reached durable yes · saved while Guest 3 stayed running. H5 lived 2026-11-07: docs/customer/. F10 lived 2026-11-07: iDRAC Dedicated and LOM3, SPA stayed up. D11 lived 2026-11-07: port 3 page, port 4 guests. H8 accepted 2026-11-07. Auth.token A5 stays parked. Standing SPA is 10.99.99.201. Do not format UBUNTU0. The 2.9 TB VD is not this disk. Bar A 94. Bar B 72. Overall 80. perc 86. unmodified 45. SKU 94. TLS 88. months A 0.25. months B 1.25. docs/adr/ADR-019.md
 Open:          link state on the SPA (D5) · iron AUTH-OK (parked) · unmodified ISO without the serial amendment · the whole spare VD · cluster
 Everest:       still closed (HDA 99% / 0.0 months) — different mountain
 Rollback:      GitHub Latest v0.1.6-wave6-closed. Lab stick 4e327820e039 / run 42384654720. Older v0.1.0-m8-9-lan → M8.9 close (COM2 sha=0d865c7fcb0a, CI 40603110937, SHA256 df6fc3465cecf1eaf058d5c8e675501827c16eb55e7b2c9758bc5e68326ad91b). v0.1.0-m8-8-ubuntu → older M8.8 close (c3a70e623aec, CI 38454398693). v0.1.0-everest-closed (f72b4276) is the M7 pin, not Latest.

@@ -115,6 +115,13 @@ static LOGGED_TX: AtomicBool = AtomicBool::new(false);
 /// The completion IRQ was armed only for a preemption-timer exit, and the
 /// guest was leaving on serial I/O, so the driver never reaped the packet.
 static TX_IRQ_ARM: AtomicU8 = AtomicU8::new(0);
+/// 1 when an RX used-ring update is waiting for the next VM exit.
+///
+/// Queue 0 is receive. Signaling queue 1 for an RX completion wakes the
+/// transmit poll and leaves the receive queue asleep, so a guest that is
+/// idle never sees an SSH SYN. Iron `8f69297c` printed `PCI INT A: no GSI`
+/// for `00:05.0` and `10.99.99.200` stopped answering.
+static RX_IRQ_ARM: AtomicU8 = AtomicU8::new(0);
 /// 1 when a config-change interrupt (carrier flip) waits for the next exit.
 static CFG_IRQ_ARM: AtomicU8 = AtomicU8::new(0);
 static LOGGED_KICK_IDLE: AtomicBool = AtomicBool::new(false);
@@ -139,7 +146,10 @@ pub fn net_counts() -> (u32, u32, u32, u32) {
 /// completion is still waiting for its raise on the next exit.
 /// M8.9 post-TX trace.
 pub fn irq_state() -> (u8, bool) {
-    (with_net(|n| n.isr), TX_IRQ_ARM.load(Ordering::Acquire) == 1)
+    (
+        with_net(|n| n.isr),
+        TX_IRQ_ARM.load(Ordering::Acquire) == 1 || RX_IRQ_ARM.load(Ordering::Acquire) == 1,
+    )
 }
 
 fn with_net<R>(f: impl FnOnce(&mut Net) -> R) -> R {
@@ -723,13 +733,17 @@ fn drain_one(translate: &impl Fn(u64) -> Option<u64>) -> bool {
 pub fn raise_deferred_tx_irq(now: u64) {
     let _ = now;
     let tx = TX_IRQ_ARM.swap(0, Ordering::AcqRel) == 1;
+    let rx = RX_IRQ_ARM.swap(0, Ordering::AcqRel) == 1;
     let cfg = CFG_IRQ_ARM.swap(0, Ordering::AcqRel) == 1;
-    if !tx && !cfg {
+    if !tx && !rx && !cfg {
         return;
     }
     let owned = with_net(|n| {
         if !n.msix.enabled() {
             return false;
+        }
+        if rx {
+            let _ = n.msix.deliver_queue(0);
         }
         if tx {
             let _ = n.msix.deliver_queue(1);
@@ -885,7 +899,7 @@ fn post_rx(eth: &[u8], translate: &impl Fn(u64) -> Option<u64>) -> bool {
             }
         }
     }
-    TX_IRQ_ARM.store(1, Ordering::Release);
+    RX_IRQ_ARM.store(1, Ordering::Release);
     RX_POSTED_N.fetch_add(1, Ordering::AcqRel);
     true
 }
@@ -1360,6 +1374,89 @@ mod guest_virtio_net_test {
         assert_eq!(len, 12 + 14);
         let isr = mmio_read(bar + 0x100, 1);
         assert_eq!(isr, 1);
+        RX_IRQ_ARM.store(0, Ordering::Release);
+        clear_panel_for_test();
+        clear_start_for_test();
+    }
+
+    #[test]
+    fn rx_completion_signals_queue_zero() {
+        let _guard = lock();
+        clear_panel_for_test();
+        clear_start_for_test();
+        RX_IRQ_ARM.store(0, Ordering::Release);
+        TX_IRQ_ARM.store(0, Ordering::Release);
+        CFG_IRQ_ARM.store(0, Ordering::Release);
+        crate::devices::lapic_virt::reset();
+        let off = 8u64 * 1024 * 1024 * 1024;
+        panel_save(
+            0,
+            NicDraft {
+                spare_off: off,
+                mode: NicMode::Manual,
+                prefix: 24,
+                ipv4: [10, 99, 99, 200],
+                gateway: [10, 99, 99, 1],
+                dns: [1, 1, 1, 1],
+            },
+        )
+        .unwrap();
+        on_accepted_start(off);
+        let bar = u64::from(GUEST_NET_BAR);
+        let addr = 0x8000_0000 | (u32::from(GUEST_NET_PCI_DEV) << 11) | 0x84;
+        crate::devices::ide_cdrom::pci_write_addr(addr);
+        pci_write_data(0xCFC, 4, 0x8003_0011);
+        mmio_write(bar + 0x800, 4, 0xFEE0_0000);
+        mmio_write(bar + 0x808, 4, 0x40);
+        mmio_write(bar + 0x80C, 4, 0);
+        mmio_write(bar + 0x810, 4, 0xFEE0_0000);
+        mmio_write(bar + 0x818, 4, 0x41);
+        mmio_write(bar + 0x81C, 4, 0);
+        mmio_write(bar + 0x16, 1, 0);
+        mmio_write(bar + 0x1A, 2, 0);
+        mmio_write(bar + 0x16, 1, 1);
+        mmio_write(bar + 0x1A, 2, 1);
+        mmio_write(bar + 0x16, 1, 0);
+        let mut desc = [0u8; 16];
+        let mut avail = [0u8; 8];
+        let used = [0u8; 16];
+        let mut buf = [0u8; 64];
+        let desc_gpa = 0x10_0000u64;
+        let avail_gpa = 0x20_0000u64;
+        let used_gpa = 0x30_0000u64;
+        let buf_gpa = 0x40_0000u64;
+        desc[0..8].copy_from_slice(&buf_gpa.to_le_bytes());
+        desc[8..12].copy_from_slice(&64u32.to_le_bytes());
+        desc[12] = 2;
+        avail[2] = 1;
+        mmio_write(bar + 0x20, 8, desc_gpa);
+        mmio_write(bar + 0x28, 8, avail_gpa);
+        mmio_write(bar + 0x30, 8, used_gpa);
+        mmio_write(bar + 0x1C, 2, 1);
+        let desc_ptr = desc.as_ptr() as u64;
+        let avail_ptr = avail.as_ptr() as u64;
+        let used_ptr = used.as_ptr() as u64;
+        let buf_ptr = buf.as_mut_ptr() as u64;
+        let translate = move |gpa: u64| -> Option<u64> {
+            if gpa == desc_gpa {
+                Some(desc_ptr)
+            } else if (avail_gpa..avail_gpa + 8).contains(&gpa) {
+                Some(avail_ptr + (gpa - avail_gpa))
+            } else if (used_gpa..used_gpa + 16).contains(&gpa) {
+                Some(used_ptr + (gpa - used_gpa))
+            } else if gpa == buf_gpa {
+                Some(buf_ptr)
+            } else {
+                None
+            }
+        };
+        assert!(post_rx(&[0x02, 0, 0, 0, 0, 0, 0xb0, 0, 0, 0, 0, 0, 0x08, 0x00], &translate));
+        assert!(irq_state().1, "RX completion waits for the next exit");
+        raise_deferred_tx_irq(0);
+        assert_eq!(crate::devices::guest_msix::last_vector(), 0x40);
+        assert!(crate::devices::lapic_virt::has_irr_vec(0x40));
+        assert!(!crate::devices::lapic_virt::has_irr_vec(0x41));
+        crate::devices::lapic_virt::reset();
         clear_panel_for_test();
         clear_start_for_test();
     }

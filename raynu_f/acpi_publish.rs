@@ -137,13 +137,14 @@ fn write_dsdt(buf: &mut [u8]) -> usize {
 }
 
 /// `Scope(\_SB){ Device(PCI0) }` from the fw_cfg DSDT, with slot 2 and
-/// slot 3 INTA on PIC IRQ 11 instead of GSI 17 and 18.
-fn pci_scope_irq11() -> Option<[u8; 189]> {
+/// slot 3 INTA on PIC IRQ 11 instead of GSI 17 and 18. Slots 4 and 5
+/// are already GSI 11 (spare disk and virtio-net `00:05.0`).
+fn pci_scope_irq11() -> Option<[u8; 213]> {
     let body = crate::devices::guest_acpi::dsdt_aml_body();
-    if body.len() != 189 {
+    if body.len() != 213 {
         return None;
     }
-    let mut scope = [0u8; 189];
+    let mut scope = [0u8; 213];
     scope.copy_from_slice(body);
     let slot2 = [0x0C, 0xFF, 0xFF, 0x02, 0x00, 0x00, 0x00, 0x0A, 0x11];
     let slot3 = [0x0C, 0xFF, 0xFF, 0x03, 0x00, 0x00, 0x00, 0x0A, 0x12];
@@ -257,6 +258,8 @@ mod acpi_publish_test {
         assert!(dsdt.windows(4).any(|w| w == [0x41, 0xD0, 0x0C, 0x0C]));
         assert!(dsdt.windows(4).any(|w| w == [0x41, 0xD0, 0x0A, 0x03]));
         assert!(dsdt.windows(9).any(|w| w == [0xFF, 0xFF, 0x02, 0x00, 0x00, 0x00, 0x0A, 0x0B, 0x12]));
+        assert!(dsdt.windows(8).any(|w| w == [0xFF, 0xFF, 0x05, 0x00, 0x00, 0x00, 0x0A, 0x0B]));
+        assert!(dsdt.windows(8).any(|w| w == [0xFF, 0xFF, 0x04, 0x00, 0x00, 0x00, 0x0A, 0x0B]));
         assert!(!dsdt.windows(2).any(|w| w == [0x0A, 0x11]));
         assert_eq!(sum(dsdt), 0);
         assert_eq!(sum(&page[FACP_OFF..FACP_OFF + FACP_LEN]), 0);
