@@ -59,6 +59,7 @@ pub fn prop_coexist_wired() -> bool {
         && listen.contains("fn arm_bcm5720_coexist(")
         && listen.contains("fn tick_bcm5720_coexist(")
         && listen.contains("fn maybe_tick_bcm5720_standing_spa(")
+        && listen.contains("crate::mgmt::megaraid::flush_autostart()")
         && listen.contains("HOST-NIC coexist listening")
         && listen.contains("VMX on; ADR-013 Phase F")
         && listen.contains("standing SPA armed")

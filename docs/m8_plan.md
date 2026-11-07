@@ -114,7 +114,9 @@ M8.9  Admin-attached guest NIC (ADR-013 Appendix C)
    names the current wave and the one iron thread. Wave 6 A5 lived on
    `097f3c612c06` / run `42062748313`. A7 lived 2026-11-05:
    `318c6617c99b` restored `BOOTX64.OLD` and the next F11 was
-   `fa3f4860c6a7` / run `42096983983`.
+   `fa3f4860c6a7` / run `42096983983`. A4 lived 2026-11-07:
+   `4e327820e039` / run `42384654720` reached `durable yes · saved`
+   while Guest 3 stayed running.
 → M9 sketch: vMotion-like · DRS-like · hot-add
 ```
 
