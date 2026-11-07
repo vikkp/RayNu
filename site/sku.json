@@ -19,14 +19,14 @@
   },
   "counts": {
     "S1": {
-      "lived": 51,
-      "in flight": 2,
+      "lived": 52,
+      "in flight": 1,
       "planned": 14,
       "total": 67
     },
     "Final": {
-      "lived": 51,
-      "in flight": 2,
+      "lived": 52,
+      "in flight": 1,
       "planned": 76,
       "total": 129
     }
@@ -1014,23 +1014,23 @@
         {
           "id": "F10",
           "capability": "iDRAC NIC Selection matrix: Dedicated and Shared LOM both documented and tested",
-          "status": "in flight",
+          "status": "lived",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Branch `cursor/wave-6-f10-nic-0591`. `docs/customer/idrac-nic.md`. CI `./tools/check-f10-docs.sh`. Both addresses are on `10.99.99.x`. No cable move. Dedicated is the booted setting: iDRAC on the dedicated jack, page on LOM port 3 at `10.99.99.201:8443`, Guest 3 on LOM port 4, image `4e327820e039`. Shared LOM is not tested. The running EFI already keeps the iDRAC PHY (`ape-nophylock=yes`). Not lived.",
+          "note": "Iron 2026-11-07. Image `4e327820e039` / run `42384654720`. No new EFI. No cable move. iDRAC `10.99.99.24`. Page `https://10.99.99.201:8443/`. Dedicated: Active NIC Interface Dedicated, 1000 Mbps full, Failover None, Guest 3 running. Shared LOM: NIC Selection `LOM3 - [NIC.Integrated.1-3-1]`, Active NIC Interface LOM3, 100 Mbps full, Failover None, same iDRAC address through port 3, SPA reloaded on the same build with Guest 3 running. Then Dedicated again, 1000 Mbps, SPA reloaded the same way. `docs/customer/idrac-nic.md`. CI `./tools/check-f10-docs.sh`. Evidence `docs/evidence/r640/2026-11-07-4e327820e039-wave-6-f10-idrac-nic-ok.md`. Shared with Failover was not used.",
           "wave": "6"
         }
       ],
       "counts": {
         "S1": {
-          "lived": 2,
-          "in flight": 1,
+          "lived": 3,
+          "in flight": 0,
           "planned": 3,
           "total": 6
         },
         "Final": {
-          "lived": 2,
-          "in flight": 1,
+          "lived": 3,
+          "in flight": 0,
           "planned": 7,
           "total": 10
         }
@@ -1585,10 +1585,10 @@
         "H8"
       ],
       "iron": "A7",
-      "why": "Needs C8 (lived) so an update keeps guests. A5 lived 2026-11-05: RayNu-V `db` certificate, shim not built. A7 lived 2026-11-05: `318c6617c99b` restored `BOOTX64.OLD` and the next F11 was `fa3f4860c6a7` / run `42096983983`. A4 lived 2026-11-07: `4e327820e039` / run `42384654720` reached `pending 0 · durable yes · saved` while Guest 3 stayed running. H5 lived 2026-11-07: `docs/customer/` install, cabling, operator runbook, and support matrix, checked by `./tools/check-h5-docs.sh`. F10 is in flight: Dedicated is the booted setting; Shared LOM is the open cell in `docs/customer/idrac-nic.md`. Wave 6 stays open on F10, D11, and H8.",
+      "why": "Needs C8 (lived) so an update keeps guests. A5 lived 2026-11-05: RayNu-V `db` certificate, shim not built. A7 lived 2026-11-05: `318c6617c99b` restored `BOOTX64.OLD` and the next F11 was `fa3f4860c6a7` / run `42096983983`. A4 lived 2026-11-07: `4e327820e039` / run `42384654720` reached `pending 0 · durable yes · saved` while Guest 3 stayed running. H5 lived 2026-11-07: `docs/customer/` install, cabling, operator runbook, and support matrix, checked by `./tools/check-h5-docs.sh`. F10 lived 2026-11-07: iDRAC `10.99.99.24` on Dedicated and on LOM3 `NIC.Integrated.1-3-1`, page `4e327820e039` with Guest 3 running both times, then Dedicated again. Wave 6 stays open on D11 and H8.",
       "counts": {
-        "lived": 4,
-        "in flight": 1,
+        "lived": 5,
+        "in flight": 0,
         "planned": 2,
         "total": 7
       },
@@ -1852,12 +1852,6 @@
   ],
   "current_wave": "6",
   "next_up": [
-    {
-      "id": "F10",
-      "capability": "iDRAC NIC Selection matrix: Dedicated and Shared LOM both documented and tested",
-      "status": "in flight",
-      "role": "host-first"
-    },
     {
       "id": "D11",
       "capability": "Cabling and port roles documented: iDRAC dedicated or shared LOM, port 3 mgmt, port 4 guests",

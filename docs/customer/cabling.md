@@ -15,6 +15,6 @@ The lab page address on port 3 is `10.99.99.201/24`. A new site sets its own add
 
 ## Not this guide
 
-iDRAC NIC Selection Shared LOM is not the install path here. Dedicated is the setting this shipment boots with. Both settings are in [iDRAC NIC Selection](idrac-nic.md). Shared LOM is not tested yet.
+iDRAC NIC Selection Shared LOM is not the install path here. Dedicated is the setting this shipment cables by default. Both settings were tested on 2026-11-07. The record is [iDRAC NIC Selection](idrac-nic.md).
 
 One cable for both the page and the guests is not Shipment 1. Neither is a VLAN, a bond, or a 10GbE uplink.
