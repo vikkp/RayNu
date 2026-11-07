@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-7-b8-sku-card |
-| Summary | **`sku_card_package_passes` matches the Wave 6 card.** Dedicated-box, no plaintext HTTP, 2.9 TB is not the guest disk, not a cluster, not Windows. The older lab-latch phrases are no longer the check. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-7-b8-lived |
+| Summary | **ADR-021 B8 lived.** `8f69297c` / run `42398077199`. Linux uses the I/O APIC. Virtio disk MSI-X vector `0x21`. Guest reached `raynusrv2 login:`. Wave 7 stays open. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B8 in flight. B7 not started. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-07 | wave-7-b8-lived | 0.0 | 99 | **ADR-021 B8 lived on `8f69297c` / run `42398077199`.** Linux found the MADT, `IOAPIC[0]` at `0xfec00000`, `Using IOAPIC for interrupt routing`. Disk MSI-X `vec=21`. `raynusrv2 login:`. Wave 7 stays open. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-07 | wave-7-b8-sku-card | 0.0 | 99 | **Host test `sku_card_package_passes`.** The Wave 6 card names dedicated-box, no plaintext HTTP, the 2.9 TB disk is not the guest disk, and not a cluster or Windows. The check was still looking for the older lab phrases. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-07 | wave-7-b8-madt | 0.0 | 99 | **ADR-021 B8 still in flight.** Iron `09b23c5d` printed `boot: B8 virtio msi-x vec=20` and `raynusrv2 login:`, then `ACPI MADT or MP tables are not detected`. The RayNu-F XSDT now publishes a MADT. Not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-07 | wave-7-b8-msix | 0.0 | 99 | **ADR-021 B8 in flight.** Virtio MSI-X table delivers a programmed vector to the virtual local APIC. Shared PIC IRQ 11 remains until the guest enables MSI-X. Not lived. Scores held. months 0.0 held; overall 99 held |
