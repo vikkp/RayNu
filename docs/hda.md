@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-7-b8-net-gsi |
-| Summary | **virtio-net GSI and COM2 notify quiet.** Slots 4 and 5 are in `_PRT` at GSI 11. An RX completion signals MSI-X queue 0. Queue-notify lines stop once Linux is past the probe. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-7-b8-ci-tests |
+| Summary | **Host tests match the longer DSDT and a reset device.** The FACS pad check follows the 249-byte table. The RX MSI-X test clears status before it posts. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B8 lived. Guest NIC GSI follow-up. B6 not started. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-07 | wave-7-b8-ci-tests | 0.0 | 99 | **Two host tests followed the longer DSDT.** The FACS pad is the byte after the 249-byte table. The RX test resets the device so a sibling test's leftover avail index does not fail `post_rx`. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-07 | wave-7-b8-net-gsi | 0.0 | 99 | **virtio-net had no GSI after the I/O APIC switch.** `_PRT` now names slots 4 and 5 at GSI 11. RX MSI-X uses queue 0. COM2 stops printing queue notify after the probe. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-07 | wave-7-b8-lived | 0.0 | 99 | **ADR-021 B8 lived on `8f69297c` / run `42398077199`.** Linux found the MADT, `IOAPIC[0]` at `0xfec00000`, `Using IOAPIC for interrupt routing`. Disk MSI-X `vec=21`. `raynusrv2 login:`. Wave 7 stays open. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-07 | wave-7-b8-sku-card | 0.0 | 99 | **Host test `sku_card_package_passes`.** The Wave 6 card names dedicated-box, no plaintext HTTP, the 2.9 TB disk is not the guest disk, and not a cluster or Windows. The check was still looking for the older lab phrases. Scores held. months 0.0 held; overall 99 held |

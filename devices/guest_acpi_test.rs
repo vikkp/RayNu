@@ -66,7 +66,13 @@ fn facp_points_at_dsdt_offset_until_linker() {
     assert_eq!(acpi_tables_byte(0x242), b'C');
     assert_eq!(acpi_tables_byte(0x243), b'S');
     assert_eq!(acpi_tables_byte(0x244), 64, "FACS length 64");
-    assert_eq!(acpi_tables_byte(0x201), 0, "pad before 64-byte FACS");
+    // DSDT is 249 bytes at 0x120, so it ends at 0x219. The old check at
+    // 0x201 was the first pad byte when the table was 225 bytes.
+    let dsdt_end = 0x120u16 + 249;
+    assert_eq!(dsdt_end, 0x219);
+    assert!(dsdt_end < 0x240, "DSDT must end before the FACS");
+    assert_eq!(acpi_tables_byte(dsdt_end), 0, "pad before 64-byte FACS");
+    assert_eq!(acpi_tables_byte(0x23F), 0, "pad before 64-byte FACS");
 }
 
 #[test]

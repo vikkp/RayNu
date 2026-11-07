@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-7-b8-net-gsi |
-| Summary | **Guest NIC interrupt route.** Slots 4 and 5 are GSI 11. RX MSI-X is queue 0. COM2 notify lines stop after the probe. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-7-b8-ci-tests |
+| Summary | **Host tests only.** FACS pad follows the 249-byte DSDT. The RX test resets the device first. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. TLS 88 held. |
 | Gates touched | B8 lived. Guest NIC GSI follow-up. B6 not started. No doorbell. No format of UBUNTU0. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-07 | wave-7-b8-ci-tests | 94 | 72 | **Host tests only.** FACS pad follows the 249-byte DSDT. The RX MSI-X test resets the device first. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-07 | wave-7-b8-net-gsi | 94 | 72 | **virtio-net GSI 11.** Slots 4 and 5 are in `_PRT`. RX signals MSI-X queue 0. Queue-notify COM2 lines stop after the probe. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-07 | wave-7-b8-lived | 94 | 72 | **ADR-021 B8 lived.** `8f69297c` / run `42398077199`. I/O APIC at `0xfec00000`. MSI-X `vec=21`. `raynusrv2 login:`. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-07 | wave-7-b8-sku-card | 94 | 72 | **`sku_card_package_passes` matches the Wave 6 card.** Dedicated-box, no plaintext HTTP, 2.9 TB is not the guest disk, not a cluster, not Windows. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |

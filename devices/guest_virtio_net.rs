@@ -1403,6 +1403,11 @@ mod guest_virtio_net_test {
         .unwrap();
         on_accepted_start(off);
         let bar = u64::from(GUEST_NET_BAR);
+        // A sibling test can leave queue 0's last_avail at 1. Status 0
+        // clears that. It also clears queue vectors, so those are programmed
+        // after this reset. CI runs the suite in parallel and failed
+        // `post_rx` when this test did not reset.
+        mmio_write(bar + 0x14, 1, 0);
         let addr = 0x8000_0000 | (u32::from(GUEST_NET_PCI_DEV) << 11) | 0x84;
         crate::devices::ide_cdrom::pci_write_addr(addr);
         pci_write_data(0xCFC, 4, 0x8003_0011);
