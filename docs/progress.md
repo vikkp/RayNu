@@ -191,7 +191,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next (numbered)
 
-**ADR-021 A4 in flight.** Iron `b75acccce337` / run `42144210729` showed `saved` on boot with Guest 3 running. Staging then stayed `pending 0 · durable no · saving`: the spare write ran only from the guest-off loop. The standing SPA tick now writes one spare sector per tick. Not lived. The stick is still `b75acccce337`.
+**ADR-021 A4 lived on iron 2026-11-07.** `4e327820e039` / run `42384654720`. The page was opened by reloading it. Staging then reached `active 1 · pending 0 · durable yes · saved` while Guest 3 stayed running. The serial console stayed closed. **Keep this slot** was not pressed. Evidence `docs/evidence/r640/2026-11-07-4e327820e039-wave-6-a4-saved-while-guest-up.md`. Wave 6 stays open. Next host-first row is H5.
 
 **Follow-up, not flashed.** `d0904bf8` writes the A7 spare while the guest stays up. `424d0aaa` prints `HTTP exchange ok` and `HTTP keep-alive` once per boot. The running image remains `fa3f4860c6a7`.
 

@@ -19,14 +19,14 @@
   },
   "counts": {
     "S1": {
-      "lived": 49,
-      "in flight": 2,
+      "lived": 50,
+      "in flight": 1,
       "planned": 16,
       "total": 67
     },
     "Final": {
-      "lived": 49,
-      "in flight": 2,
+      "lived": 50,
+      "in flight": 1,
       "planned": 78,
       "total": 129
     }
@@ -70,10 +70,10 @@
         {
           "id": "A4",
           "capability": "Headless operation: nothing the operator does requires COM2 or SOL",
-          "status": "in flight",
+          "status": "lived",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Branch `cursor/wave-6-a4-headless-0591`. `GET /host/update` adds `saved`. Overview appends `saved` when the spare header matches RAM and `saving` while that write is still queued. Reboot when the line says `saved`. Staging holds the status line so the guest-list poll does not replace it. Activity still shows the host UART after the page is up. Iron `b75acccce337` / run `42144210729` opened the page with the line ending in `saved` and Guest 3 running. Staging then stayed `pending 0 · durable no · saving` because the spare write was not on the standing SPA tick. Not lived.",
+          "note": "Iron 2026-11-07. `build 4e327820e039` / run `42384654720`. Signed SHA256 `1101880eb670530ee3e23a5499cc9b0a2ac5579954c755dbe455fa9aa2b1995a`. The operator reloaded `https://10.99.99.201:8443/` until the page answered. The serial console stayed closed. Staging the same signed file moved the update line from `pending 0 · durable no · saving` to `pending 0 · durable yes · saved` while the Guest 3 tile stayed running. Keep this slot was not pressed. The earlier image `b75acccce337` stayed on `saving` because the spare write was not on the standing SPA tick. Evidence `docs/evidence/r640/2026-11-07-4e327820e039-wave-6-a4-saved-while-guest-up.md`. The line stays on `saving` until the last sector.",
           "wave": "6"
         },
         {
@@ -133,14 +133,14 @@
       ],
       "counts": {
         "S1": {
-          "lived": 6,
-          "in flight": 1,
+          "lived": 7,
+          "in flight": 0,
           "planned": 1,
           "total": 8
         },
         "Final": {
-          "lived": 6,
-          "in flight": 1,
+          "lived": 7,
+          "in flight": 0,
           "planned": 3,
           "total": 10
         }
@@ -1585,10 +1585,10 @@
         "H8"
       ],
       "iron": "A7",
-      "why": "Needs C8 (lived) so an update keeps guests. A5 lived 2026-11-05: RayNu-V `db` certificate, shim not built. A7 lived 2026-11-05: `318c6617c99b` restored `BOOTX64.OLD` and the next F11 was `fa3f4860c6a7` / run `42096983983`. A4 is in flight: the SPA update line says `saved` when the spare header is on disk. Wave 6 stays open.",
+      "why": "Needs C8 (lived) so an update keeps guests. A5 lived 2026-11-05: RayNu-V `db` certificate, shim not built. A7 lived 2026-11-05: `318c6617c99b` restored `BOOTX64.OLD` and the next F11 was `fa3f4860c6a7` / run `42096983983`. A4 lived 2026-11-07: `4e327820e039` / run `42384654720` reached `pending 0 · durable yes · saved` while Guest 3 stayed running. Wave 6 stays open on H5, F10, D11, and H8.",
       "counts": {
-        "lived": 2,
-        "in flight": 1,
+        "lived": 3,
+        "in flight": 0,
         "planned": 4,
         "total": 7
       },
@@ -1852,12 +1852,6 @@
   ],
   "current_wave": "6",
   "next_up": [
-    {
-      "id": "A4",
-      "capability": "Headless operation: nothing the operator does requires COM2 or SOL",
-      "status": "in flight",
-      "role": "host-first"
-    },
     {
       "id": "H5",
       "capability": "Install guide, cabling guide, operator runbook, support matrix as customer documents",
