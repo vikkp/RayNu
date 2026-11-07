@@ -6,12 +6,12 @@
     <title>RayNu-V — Single-binary hypervisor, designed for proof</title>
     <meta
       name="description"
-      content="RayNu-V is a single-binary Type-1 hypervisor. Mount Everest closed on a real PowerEdge R640. An Ubuntu 26.04 ISO stored on the PERC spare installed and reached vikkp@raynusrv2. M8.9: that guest has a LAN on LOM port 4 and took an SSH login from another machine (0d865c7f). ADR-021 wave 4: unattended start, ACPI power, a saved SPA address, and a host clock at 2026-10-31 08:16 CT (11688cbf)."
+      content="RayNu-V is a single-binary Type-1 hypervisor. Wave 6 is closed on a PowerEdge R640: a signed EFI, a page at 10.99.99.201, and an update that leaves the guest running. GitHub Latest is v0.1.6-wave6-closed."
     />
-    <meta property="og:title" content="RayNu-V — Ubuntu logged in from the PERC spare" />
+    <meta property="og:title" content="RayNu-V — Wave 6 is closed" />
     <meta
       property="og:description"
-      content="Everest closed on a real R640. Ubuntu 26.04 from a library ISO on the PERC spare reached vikkp@raynusrv2. M8.9 closed on 0d865c7f. Wave 4: unattended start, ACPI shutdown and reboot, and a saved host address 10.99.99.146 on the next boot (5d09631e)."
+      content="A signed EFI on a PowerEdge R640. The page shows the build and the guest. An update can be staged while the guest keeps running. GitHub Latest is v0.1.6-wave6-closed."
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://raynuv.com/" />
@@ -29,11 +29,11 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta
       name="twitter:title"
-      content="RayNu-V — Ubuntu logged in from the PERC spare"
+      content="RayNu-V — Wave 6 is closed"
     />
     <meta
       name="twitter:description"
-      content="Everest closed. Ubuntu 26.04 on a 10 GiB PERC tail reached vikkp@raynusrv2. M8.9 closed (0d865c7f). Wave 4 so far: the guest starts with no click, ACPI Shut down and Reboot, and the SPA stays on a saved address (5d09631e). The 2.9 TB VD is not that disk."
+      content="Wave 6 is closed on a real R640. Signed EFI, page at 10.99.99.201, guest still running through a hypervisor update. Latest release v0.1.6-wave6-closed."
     />
     <meta name="twitter:image" content="https://raynuv.com/assets/hero.jpg" />
     <link rel="canonical" href="https://raynuv.com/" />
@@ -43,8 +43,8 @@
         "@type": "SoftwareApplication",
         "name": "RayNu-V",
         "applicationCategory": "SystemsApplication",
-        "operatingSystem": "UEFI bare-metal; Dell PowerEdge R640/R650/R660",
-        "description": "Single-binary Type-1 hypervisor designed for formal verification from day one. Boots on real PowerEdge R640, serves a network Web UI, and machine-checks EPT memory isolation with Verus and Kani.",
+        "operatingSystem": "UEFI bare-metal; Dell PowerEdge R640",
+        "description": "Single-binary Type-1 hypervisor. Wave 6 is closed on a PowerEdge R640: signed EFI, a page, and an update that leaves the guest running. GitHub Latest is v0.1.6-wave6-closed.",
         "url": "https://raynuv.com/",
         "codeRepository": "https://github.com/vikkp/RayNu",
         "license": "https://github.com/vikkp/RayNu/blob/main/LICENSE",
@@ -114,9 +114,9 @@
           Memory isolation isn’t tested. It’s proved.
         </h1>
         <p class="lede reveal reveal--delay-2">
-          Single-binary Type-1 hypervisor. Mount Everest is closed. On the
-          same PowerEdge, an Ubuntu ISO on the PERC spare installed and
-          logged in.
+          Single-binary Type-1 hypervisor. Wave 6 is closed on a
+          PowerEdge R640: one signed EFI, one page, and an update that
+          leaves the guest running.
         </p>
         <div class="cta reveal reveal--delay-3">
           <a class="cta__primary" href="https://github.com/vikkp/RayNu"
@@ -129,10 +129,10 @@
           >
         </div>
         <p class="hero__proof reveal reveal--delay-3">
-          Everest closed, then Ubuntu on the spare:
-          <code>c3a70e62</code> ·
-          <code>initrd.img-7.0.0-14-generic</code> ·
-          <code>vikkp@raynusrv2:~$</code>
+          Latest
+          <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.6-wave6-closed"><code>v0.1.6-wave6-closed</code></a>
+          · build <code>4e327820e039</code>
+          · Guest 3 running
         </p>
       </div>
     </header>
@@ -141,66 +141,35 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · November 2026</p>
-          <h2 class="section__title">Ubuntu logged in from the PERC spare.</h2>
+          <h2 class="section__title">The page runs the machine.</h2>
           <p class="section__lede">
-            Guests stored <code>ubuntu-26.04-live-server-amd64.iso</code> on
-            RAYNU-SPARE, the large RAID virtual disk of the lab H740P. Start
-            on the 10 GiB tail installed it. EFI <code>c3a70e62</code> then
-            booted that disk: RayNu-F copied
-            <code>initrd.img-7.0.0-14-generic</code> (34,338,680 bytes),
-            Linux 7.0.0-14-generic came up with root
-            <code>ubuntu--vg-ubuntu--lv</code>, and the serial console
-            reached <code>vikkp@raynusrv2:~$</code>.
-            <code>vda</code> is 10 GiB (<code>vda1</code> <code>vda2</code>
-            <code>vda3</code>). Clear ISO then printed
-            <code>boot: M8.8 library ISO cleared</code> — the signature
-            sector only. UBUNTU0 and the Ubuntu disk stayed.
-            Mount Everest, the Alpine install loop of 11 September, stays
-            closed on <code>f72b4276</code>.
-            On <code>02e0acba</code> (27 October) that guest got a virtio NIC
-            on LOM port 4 (<code>:39</code>): frames left and returned
-            (<code>sent=29983 held=0</code>, 411 MB in, <code>fcs=0</code>),
-            <code>apt-get update</code> ran, and
-            <code>ssh vikkp@10.99.99.200</code> from a Mac reached it.
-            On <code>0d865c7f</code> the SPA-saved address reached that guest
-            with nothing typed (M8.9.5, an SMBIOS Type 11 systemd
-            credential), and the Mac logged in to it. M8.9 is closed.
-            ADR-021 wave 2 then made the box tell the truth about that
-            port: on <code>8df4407d</code> a pulled port 4 cable showed as
-            <code>NO-CARRIER</code> inside the guest and came back by
-            itself; on <code>aeb2d79b</code> the egress port was found from
-            the SPA's own BCM5720 (no MAC constant) and the Mac logged in
-            over it, and a second pull put
-            <code>RAYNU-V-AUDIT: HostLinkChanged</code> on COM2 and on the
-            Activity page. ADR-021 wave 4 is the unattended box. On
-            <code>e6ed42a3</code> the Ubuntu guest started after a power-on
-            with no SPA click. On <code>62165436</code> Shut down left it
-            down and Reboot brought <code>raynusrv2 login:</code> back. On
-            <code>5d09631e</code> Overview saved
-            <code>10.99.99.146/24</code> and the next boot's standing SPA
-            listened there (<code>boot: D9 host addr static</code>). On
-            <code>11688cbf</code> the host clock read
-            <code>unix=1793452595</code> (2026-10-31 08:16 CT) from
-            <code>162.159.200.123</code>. On the same stick a panic dump
-            reset the chassis, and the next boot started the Ubuntu guest
-            with no click. Wave 4 is closed. On
-            <code>f2828d95</code> the next boot read
-            <code>boot: E6 operator rd lba=6190268907 set</code>, a lab-token
-            GET was <code>AuthDenied</code>, and Sign in opened the page.
-            On <code>9c3e660259de</code> the standing page is TLS 1.3
-            with the operator certificate: Firefox signed in as
-            <code>vikkp</code> and both reloads loaded
-            (<code>boot: E4 cert rd</code> <code>operator</code>,
-            <code>HOST-NIC TLS wrap=tls13</code>).
-            The 2.9 TB virtual disk is not this 10 GiB tail.
-            This tree does not open plaintext HTTP before
-            ExitBootServices. The Activity page exports the audit ring
-            as JSON and CSV. The management routes are
-            <a href="https://github.com/vikkp/RayNu/blob/main/docs/openapi/v1.yaml">OpenAPI v1</a>.
-            Summit rollback remains
-            <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed"
-              ><code>v0.1.0-everest-closed</code></a
-            >.
+            Wave 6 closed on 7 November 2026. One signed EFI boots a
+            PowerEdge R640 with Secure Boot on. The operator opens
+            <code>https://10.99.99.201:8443/</code> and reloads until the
+            page answers. A serial console is not required.
+          </p>
+          <p class="section__lede">
+            The page shows the build, the guest, and the update. Image
+            <code>4e327820e039</code> (CI
+            <a href="https://github.com/vikkp/RayNu/actions/runs/42384654720"><code>42384654720</code></a>)
+            staged a new hypervisor while Guest 3 kept running. The line
+            moved from <code>saving</code> to
+            <code>durable yes · saved</code>. The stick was already that
+            image, so Keep was not pressed.
+          </p>
+          <p class="section__lede">
+            iDRAC at <code>10.99.99.24</code> answered on its own jack, and
+            then on LOM port 3 beside the page, with no cable moved. Port 4
+            stayed the guest. The setting was put back to Dedicated.
+            Install, cabling, port roles, and a twelve-month support term
+            are written down. The release is
+            <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.6-wave6-closed"><code>v0.1.6-wave6-closed</code></a>,
+            GitHub Latest and the current rollback.
+          </p>
+          <p class="section__lede">
+            Ubuntu on the spare, the guest LAN, and the September install
+            loop are earlier chapters. They stay closed. The 2.9 TB virtual
+            disk is not the guest disk.
           </p>
           <figure class="milestone-shot" data-reveal>
             <picture>
@@ -227,28 +196,18 @@
               <a href="hda.html#com2">ISO-INSTALL-OK → DISK-BOOT-OK → login</a>.
             </figcaption>
           </figure>
-          <pre class="ship-code milestone-log" data-reveal><code>HOST-NIC coexist listening on 10.99.99.145:8443
-RAYNU-V-M7-HOST-NIC-HTTP-OK
-boot: E4 SPA start — RayNu-F product ISO
-RAYNU-V-M7-ISO-INSTALL-OK
-RAYNU-V-RAYNU-F-DISK-BOOT-OK
-root=UUID=814a97a0-d3be-4a64-8611-b3dbd9859201
-localhost login:</code></pre>
-          <pre class="ship-code milestone-log" data-reveal><code>build: sha=c3a70e623aec
-boot: RayNu-F initrd ext4 bytes=34338680 name=initrd.img-7.0.0-14-generic
-Linux version 7.0.0-14-generic
-virtio_blk virtio0: [vda] 20971520 512-byte logical blocks (10.0 GiB)
-Welcome to Ubuntu 26.04 LTS!
-vikkp@raynusrv2:~$
-boot: M8.8 library ISO cleared (signature sector only; disks unchanged)</code></pre>
+          <pre class="ship-code milestone-log" data-reveal><code>build 4e327820e039 · CI 42384654720
+Guest 3 is running
+Update: active 1 · pending 0 · durable yes · saved
+iDRAC 10.99.99.24 · Dedicated, after LOM3
+v0.1.6-wave6-closed</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
             Evidence:
-            <code>docs/evidence/r640/2026-09-11-f72b4276-phase-b-spa-iso-install-disk-boot-ok.md</code>
-            · <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.6-wave6-closed">GitHub Latest rollback <code>v0.1.6-wave6-closed</code></a>
-            · <a href="stories.html#r640-2026-09-11-everest">2026-09-11 summit</a>
-            · <a href="stories.html">Stories</a>
-            · <a href="hda.html">Mount Everest — closed</a>
-            · <a href="loi.html">what happened after the summit</a>.
+            <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-11-07-4e327820e039-wave-6-a4-saved-while-guest-up.md">update while the guest stayed up</a>
+            · <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-11-07-4e327820e039-wave-6-f10-idrac-nic-ok.md">iDRAC Dedicated and LOM3</a>
+            · <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.6-wave6-closed">GitHub Latest <code>v0.1.6-wave6-closed</code></a>
+            · <a href="https://github.com/vikkp/RayNu/blob/main/docs/customer/support-policy.md">the year of support</a>
+            · <a href="stories.html">earlier stories</a>.
           </p>
         </div>
       </section>
