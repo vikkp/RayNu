@@ -20,14 +20,14 @@
   "counts": {
     "S1": {
       "lived": 51,
-      "in flight": 1,
-      "planned": 15,
+      "in flight": 2,
+      "planned": 14,
       "total": 67
     },
     "Final": {
       "lived": 51,
-      "in flight": 1,
-      "planned": 77,
+      "in flight": 2,
+      "planned": 76,
       "total": 129
     }
   },
@@ -1014,24 +1014,24 @@
         {
           "id": "F10",
           "capability": "iDRAC NIC Selection matrix: Dedicated and Shared LOM both documented and tested",
-          "status": "planned",
+          "status": "in flight",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Lab runs one cable on port 3 (shared)",
+          "note": "Branch `cursor/wave-6-f10-nic-0591`. `docs/customer/idrac-nic.md`. CI `./tools/check-f10-docs.sh`. Both addresses are on `10.99.99.x`. No cable move. Dedicated is the booted setting: iDRAC on the dedicated jack, page on LOM port 3 at `10.99.99.201:8443`, Guest 3 on LOM port 4, image `4e327820e039`. Shared LOM is not tested. The running EFI already keeps the iDRAC PHY (`ape-nophylock=yes`). Not lived.",
           "wave": "6"
         }
       ],
       "counts": {
         "S1": {
           "lived": 2,
-          "in flight": 0,
-          "planned": 4,
+          "in flight": 1,
+          "planned": 3,
           "total": 6
         },
         "Final": {
           "lived": 2,
-          "in flight": 0,
-          "planned": 8,
+          "in flight": 1,
+          "planned": 7,
           "total": 10
         }
       }
@@ -1585,11 +1585,11 @@
         "H8"
       ],
       "iron": "A7",
-      "why": "Needs C8 (lived) so an update keeps guests. A5 lived 2026-11-05: RayNu-V `db` certificate, shim not built. A7 lived 2026-11-05: `318c6617c99b` restored `BOOTX64.OLD` and the next F11 was `fa3f4860c6a7` / run `42096983983`. A4 lived 2026-11-07: `4e327820e039` / run `42384654720` reached `pending 0 · durable yes · saved` while Guest 3 stayed running. H5 lived 2026-11-07: `docs/customer/` install, cabling, operator runbook, and support matrix, checked by `./tools/check-h5-docs.sh`. Wave 6 stays open on F10, D11, and H8.",
+      "why": "Needs C8 (lived) so an update keeps guests. A5 lived 2026-11-05: RayNu-V `db` certificate, shim not built. A7 lived 2026-11-05: `318c6617c99b` restored `BOOTX64.OLD` and the next F11 was `fa3f4860c6a7` / run `42096983983`. A4 lived 2026-11-07: `4e327820e039` / run `42384654720` reached `pending 0 · durable yes · saved` while Guest 3 stayed running. H5 lived 2026-11-07: `docs/customer/` install, cabling, operator runbook, and support matrix, checked by `./tools/check-h5-docs.sh`. F10 is in flight: Dedicated is the booted setting; Shared LOM is the open cell in `docs/customer/idrac-nic.md`. Wave 6 stays open on F10, D11, and H8.",
       "counts": {
         "lived": 4,
-        "in flight": 0,
-        "planned": 3,
+        "in flight": 1,
+        "planned": 2,
         "total": 7
       },
       "closed": false
@@ -1855,7 +1855,7 @@
     {
       "id": "F10",
       "capability": "iDRAC NIC Selection matrix: Dedicated and Shared LOM both documented and tested",
-      "status": "planned",
+      "status": "in flight",
       "role": "host-first"
     },
     {

@@ -31,6 +31,8 @@ jobs:
         run: ./tools/check-site-chrome.sh
       - name: H5 customer documents
         run: ./tools/check-h5-docs.sh
+      - name: F10 iDRAC NIC Selection matrix
+        run: ./tools/check-f10-docs.sh
 
   test-host:
     name: host tests

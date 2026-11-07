@@ -220,6 +220,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
 | 2026-11-05 | spa-quiet-and-live-stage | 94 | 72 | **SPA polls print once.** A7 spare write from `d0904bf8` runs while the guest stays up. Not in the running `fa3f4860c6a7`. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
+| 2026-11-07 | wave-6-f10-nic | 94 | 72 | **ADR-021 F10 in flight.** Dedicated booted. Shared LOM not tested. No new EFI. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-07 | wave-6-h5-lived | 94 | 72 | **ADR-021 H5 lived.** Customer documents in `docs/customer/`. CI `./tools/check-h5-docs.sh`. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-07 | wave-6-a4-lived | 94 | 72 | **ADR-021 A4 lived.** `4e327820e039` / run `42384654720`. Guest 3 stayed running through `durable yes · saved`. Serial console stayed closed. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-05 | wave-6-a7-lived | 94 | 72 | **ADR-021 A7 lived.** `boot: A7 stick restored bytes=2599968` on `318c6617c99b`. Next F11 `fa3f4860c6a7` / run `42096983983`. SPA Guest 3 running. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
