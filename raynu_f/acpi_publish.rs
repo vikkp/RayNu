@@ -7,9 +7,11 @@
 //! The installed Ubuntu guest looks for an RSDP in the EFI configuration
 //! table. This page is that RSDP plus an RSDT, an XSDT, a FADT, a FACS, and
 //! a DSDT with the power button (`PNP0C0C`), `_S5`, and `\_SB.PCI0`.
-//! `PCI0` `_PRT` sends slot 2 and slot 3 INTA to PIC IRQ 11, the line
-//! virtio already uses. There is no MADT: a MADT would move Linux onto
-//! the I/O APIC.
+//! `PCI0` `_PRT` sends slot 2 and slot 3 INTA to IRQ 11. The XSDT also
+//! carries a MADT (ADR-021 B8) so Linux programs the local APIC at
+//! `0xFEE00000` and the I/O APIC at `0xFEC00000` instead of staying in
+//! virtual wire. IRQ 0 overrides to GSI 2. IRQ 11 has no override, so it
+//! is I/O APIC pin 11, the pin virtio already raises.
 
 /// Page inside the firmware image (`tables::IMAGE_ACPI_OFF`).
 pub const ACPI_PAGE: usize = 0x1000;
@@ -20,9 +22,14 @@ pub const XSDT_OFF: usize = 0x080;
 pub const FACP_OFF: usize = 0x0C0;
 pub const DSDT_OFF: usize = 0x160;
 pub const FACS_OFF: usize = 0x300;
+/// After the FACS. Header, one local APIC, one I/O APIC, IRQ 0 → GSI 2.
+pub const MADT_OFF: usize = 0x340;
 
 pub const FACP_LEN: usize = 129;
 pub const FACS_LEN: usize = 64;
+pub const MADT_LEN: usize = 74;
+const RSDT_LEN: usize = 44;
+const XSDT_LEN: usize = 52;
 
 /// `EFI_ACPI_TABLE_GUID` (`eb9d2d30-2d88-11d3-9a16-0090273fc14d`).
 pub const ACPI10_GUID: [u8; 16] = [
@@ -48,6 +55,7 @@ pub fn write_acpi_page(page: &mut [u8], gpa: u64) -> bool {
     let facs = gpa + FACS_OFF as u64;
     let dsdt = gpa + DSDT_OFF as u64;
     let facp = gpa + FACP_OFF as u64;
+    let madt = gpa + MADT_OFF as u64;
     let rsdt = gpa + RSDT_OFF as u64;
     let xsdt = gpa + XSDT_OFF as u64;
 
@@ -56,9 +64,13 @@ pub fn write_acpi_page(page: &mut [u8], gpa: u64) -> bool {
     if dsdt_len == 0 || DSDT_OFF + dsdt_len > FACS_OFF {
         return false;
     }
+    if MADT_OFF + MADT_LEN > ACPI_PAGE {
+        return false;
+    }
     write_facp(&mut page[FACP_OFF..FACP_OFF + FACP_LEN], facs, dsdt);
-    write_rsdt(&mut page[RSDT_OFF..RSDT_OFF + 40], facp);
-    write_xsdt(&mut page[XSDT_OFF..XSDT_OFF + 44], facp);
+    write_madt(&mut page[MADT_OFF..MADT_OFF + MADT_LEN]);
+    write_rsdt(&mut page[RSDT_OFF..RSDT_OFF + RSDT_LEN], facp, madt);
+    write_xsdt(&mut page[XSDT_OFF..XSDT_OFF + XSDT_LEN], facp, madt);
     write_rsdp(&mut page[RSDP_OFF..RSDP_OFF + 36], rsdt, xsdt);
     true
 }
@@ -176,15 +188,34 @@ fn write_facp(buf: &mut [u8], facs: u64, dsdt: u64) {
     fix_checksum(buf, 9);
 }
 
-fn write_rsdt(buf: &mut [u8], facp: u64) {
-    sdt_header(buf, b"RSDT", 40, 1);
+fn write_rsdt(buf: &mut [u8], facp: u64, madt: u64) {
+    sdt_header(buf, b"RSDT", RSDT_LEN as u32, 1);
     put_u32(buf, 36, facp as u32);
+    put_u32(buf, 40, madt as u32);
     fix_checksum(buf, 9);
 }
 
-fn write_xsdt(buf: &mut [u8], facp: u64) {
-    sdt_header(buf, b"XSDT", 44, 1);
+fn write_xsdt(buf: &mut [u8], facp: u64, madt: u64) {
+    sdt_header(buf, b"XSDT", XSDT_LEN as u32, 1);
     put_u64(buf, 36, facp);
+    put_u64(buf, 44, madt);
+    fix_checksum(buf, 9);
+}
+
+/// ACPI MADT. One enabled local APIC, one I/O APIC at GSI 0, ISA IRQ 0 on GSI 2.
+fn write_madt(buf: &mut [u8]) {
+    sdt_header(buf, b"APIC", MADT_LEN as u32, 1);
+    put_u32(buf, 36, 0xFEE0_0000);
+    put_u32(buf, 40, 1);
+    buf[44] = 0;
+    buf[45] = 8;
+    buf[48] = 1;
+    buf[52] = 1;
+    buf[53] = 12;
+    put_u32(buf, 56, 0xFEC0_0000);
+    buf[64] = 2;
+    buf[65] = 10;
+    put_u32(buf, 68, 2);
     fix_checksum(buf, 9);
 }
 
@@ -206,7 +237,7 @@ mod acpi_publish_test {
     use super::*;
 
     #[test]
-    fn the_page_is_a_power_button_and_has_no_madt() {
+    fn the_page_has_a_power_button_and_a_madt() {
         let gpa = 0x804000u64;
         let mut page = [0u8; ACPI_PAGE];
         assert!(write_acpi_page(&mut page, gpa));
@@ -229,7 +260,24 @@ mod acpi_publish_test {
         assert!(!dsdt.windows(2).any(|w| w == [0x0A, 0x11]));
         assert_eq!(sum(dsdt), 0);
         assert_eq!(sum(&page[FACP_OFF..FACP_OFF + FACP_LEN]), 0);
-        assert_eq!(u32::from_le_bytes(page[XSDT_OFF + 4..XSDT_OFF + 8].try_into().unwrap()), 44);
+        assert_eq!(
+            u32::from_le_bytes(page[XSDT_OFF + 4..XSDT_OFF + 8].try_into().unwrap()),
+            XSDT_LEN as u32
+        );
+        assert_eq!(
+            u64::from_le_bytes(page[XSDT_OFF + 44..XSDT_OFF + 52].try_into().unwrap()),
+            gpa + MADT_OFF as u64
+        );
+        assert_eq!(&page[MADT_OFF..MADT_OFF + 4], b"APIC");
+        assert_eq!(sum(&page[MADT_OFF..MADT_OFF + MADT_LEN]), 0);
+        assert_eq!(
+            u32::from_le_bytes(page[MADT_OFF + 36..MADT_OFF + 40].try_into().unwrap()),
+            0xFEE0_0000
+        );
+        assert_eq!(
+            u32::from_le_bytes(page[MADT_OFF + 56..MADT_OFF + 60].try_into().unwrap()),
+            0xFEC0_0000
+        );
     }
 
     #[test]

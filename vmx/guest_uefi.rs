@@ -9431,15 +9431,14 @@ fn raynu_f_publish_guest_address(layout: &crate::raynu_f::FirmwareImageLayout, i
     }
 }
 
-/// B4: publish the power-button ACPI page on the EFI configuration table.
-/// No MADT, so Linux keeps the 8259 path the disk already uses.
+/// B4 power button plus the B8 MADT on the EFI configuration table.
 #[cfg(target_os = "uefi")]
 fn raynu_f_publish_acpi(layout: &crate::raynu_f::FirmwareImageLayout, img: &mut [u8]) {
     match crate::raynu_f::publish_acpi(img, layout) {
         Ok(gpa) => {
             serial::write_str("boot: B4 acpi rsdp gpa=0x");
             write_hex(gpa);
-            serial::write_line(" (power button and PCI0 IRQ 11; no MADT)");
+            serial::write_line(" (power button, PCI0 IRQ 11, MADT local APIC and I/O APIC)");
         }
         Err(_) => serial::write_line("boot: B4 WARN acpi publish failed"),
     }
