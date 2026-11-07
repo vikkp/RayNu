@@ -5,9 +5,9 @@ globs:
 alwaysApply: true
 ---
 
-# Iron rollback (five pins)
+# Iron rollback
 
-You are working in **RayNu-V** (`vikkp/RayNu`). Mount Everest (M7) **closed on iron**. Next numbered work is **M8 operator product hardening** ([ADR-018](docs/adr/ADR-018.md), [docs/m8_plan.md](docs/m8_plan.md)); M8.9 closed on `0d865c7f` and ADR-021 wave 2 is current. The current rollback for a wave 2 flash is `v0.1.0-m8-9-lan`. **`v0.1.0-m8-8-ubuntu`** remains the older M8.8 pin. **`v0.1.0-m8-perc-spa`** remains the older SPA-choice pin. **A4s** remains the older standing-SPA pin.
+You are working in **RayNu-V** (`vikkp/RayNu`). GitHub Latest and the current rollback is **`v0.1.6-wave6-closed`**. The next wave close is `v0.1.7-wave7-closed`. The lab stick that lived Wave 6 is `4e327820e039` / run `42384654720`. Older pins stay below. **`v0.1.0-m8-9-lan`** is the wave 2 pin. **`v0.1.0-m8-8-ubuntu`** is the older M8.8 pin. **`v0.1.0-m8-perc-spa`** is the older SPA-choice pin. **A4s** is the older standing-SPA pin. **`v0.1.0-everest-closed`** is the M7 install-loop pin, not Latest.
 
 ## Flash `v0.1.0-m8-9-lan` to return to the M8.9 close
 

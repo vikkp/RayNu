@@ -19,14 +19,14 @@
   },
   "counts": {
     "S1": {
-      "lived": 53,
-      "in flight": 2,
+      "lived": 54,
+      "in flight": 1,
       "planned": 12,
       "total": 67
     },
     "Final": {
-      "lived": 53,
-      "in flight": 2,
+      "lived": 54,
+      "in flight": 1,
       "planned": 74,
       "total": 129
     }
@@ -1178,7 +1178,7 @@
           "status": "lived",
           "ships": "S1",
           "ref": "ADR-018",
-          "note": "`v0.1.0-everest-closed` (`f72b4276`), `v0.1.0-m8-8-ubuntu` (`c3a70e62`), `v0.1.0-m8-9-lan` (`0d865c7f`)",
+          "note": "Current rollback `v0.1.6-wave6-closed` (GitHub Latest). Older: `v0.1.0-wave-5-closed` (`9516e470`), `v0.1.0-m8-9-lan` (`0d865c7f`), `v0.1.0-m8-8-ubuntu` (`c3a70e62`), `v0.1.0-everest-closed` (`f72b4276`)",
           "wave": "0"
         },
         {
@@ -1193,23 +1193,23 @@
         {
           "id": "H8",
           "capability": "Release cadence and support policy stated (what a customer gets for a year)",
-          "status": "in flight",
+          "status": "lived",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Branch `cursor/wave-6-h8-support-0591`. Proposal `docs/customer/support-policy.md`. CI `./tools/check-h8-docs.sh`. A supported release is a git tag (`v0.1.0-everest-closed`, `v0.1.0-m8-8-ubuntu`, `v0.1.0-m8-9-lan`). The year is twelve months from that tag. Fixes for lived Shipment 1 rows ship as the next tag. Mailbox `namaskaar@raynuv.com`. No reply clock. Not lived until the terms are accepted.",
+          "note": "Accepted 2026-11-07. `docs/customer/support-policy.md`. CI `./tools/check-h8-docs.sh`. A supported release is a git tag. GitHub Latest and the current rollback is `v0.1.6-wave6-closed`. The next wave close is `v0.1.7-wave7-closed`. The year is twelve months from the tag the customer installs. Mailbox `namaskaar@raynuv.com`. No reply clock. Older tags `v0.1.0-wave-5-closed`, `v0.1.0-m8-9-lan`, `v0.1.0-m8-8-ubuntu`, and `v0.1.0-everest-closed` stay available and are not Latest. The lab stick is still `4e327820e039` until that file is staged.",
           "wave": "6"
         }
       ],
       "counts": {
         "S1": {
-          "lived": 4,
-          "in flight": 1,
+          "lived": 5,
+          "in flight": 0,
           "planned": 1,
           "total": 6
         },
         "Final": {
-          "lived": 4,
-          "in flight": 1,
+          "lived": 5,
+          "in flight": 0,
           "planned": 3,
           "total": 8
         }
@@ -1585,14 +1585,14 @@
         "H8"
       ],
       "iron": "A7",
-      "why": "Needs C8 (lived) so an update keeps guests. A5 lived 2026-11-05: RayNu-V `db` certificate, shim not built. A7 lived 2026-11-05: `318c6617c99b` restored `BOOTX64.OLD` and the next F11 was `fa3f4860c6a7` / run `42096983983`. A4 lived 2026-11-07: `4e327820e039` / run `42384654720` reached `pending 0 · durable yes · saved` while Guest 3 stayed running. H5 lived 2026-11-07: `docs/customer/` install, cabling, operator runbook, and support matrix, checked by `./tools/check-h5-docs.sh`. F10 lived 2026-11-07: iDRAC `10.99.99.24` on Dedicated and on LOM3 `NIC.Integrated.1-3-1`, page `4e327820e039` with Guest 3 running both times, then Dedicated again. D11 lived 2026-11-07: `docs/customer/port-roles.md`, port 3 management, port 4 guests, iDRAC Dedicated or LOM3. H8 is in flight: `docs/customer/support-policy.md` is a proposal, twelve months from the tag, mailbox `namaskaar@raynuv.com`, no reply clock. Wave 6 stays open until those terms are accepted.",
+      "why": "Needs C8 (lived) so an update keeps guests. A5 lived 2026-11-05: RayNu-V `db` certificate, shim not built. A7 lived 2026-11-05: `318c6617c99b` restored `BOOTX64.OLD` and the next F11 was `fa3f4860c6a7` / run `42096983983`. A4 lived 2026-11-07: `4e327820e039` / run `42384654720` reached `pending 0 · durable yes · saved` while Guest 3 stayed running. H5 lived 2026-11-07: `docs/customer/` install, cabling, operator runbook, and support matrix, checked by `./tools/check-h5-docs.sh`. F10 lived 2026-11-07: iDRAC `10.99.99.24` on Dedicated and on LOM3 `NIC.Integrated.1-3-1`, page `4e327820e039` with Guest 3 running both times, then Dedicated again. D11 lived 2026-11-07: `docs/customer/port-roles.md`, port 3 management, port 4 guests, iDRAC Dedicated or LOM3. H8 lived 2026-11-07. Terms accepted. Current rollback is `v0.1.6-wave6-closed`, GitHub Latest. Wave 6 is closed.",
       "counts": {
-        "lived": 6,
-        "in flight": 1,
+        "lived": 7,
+        "in flight": 0,
         "planned": 0,
         "total": 7
       },
-      "closed": false
+      "closed": true
     },
     {
       "id": "7",
@@ -1850,55 +1850,73 @@
       "closed": false
     }
   ],
-  "current_wave": "6",
+  "current_wave": "7",
   "next_up": [
     {
-      "id": "H8",
-      "capability": "Release cadence and support policy stated (what a customer gets for a year)",
+      "id": "B8",
+      "capability": "Guest interrupt controller beyond 8259: IOAPIC/LAPIC, MSI/MSI-X for virtio",
+      "status": "planned",
+      "role": "iron thread"
+    },
+    {
+      "id": "B6",
+      "capability": "Multiple concurrent guests on one R640",
+      "status": "planned",
+      "role": "host-first"
+    },
+    {
+      "id": "B7",
+      "capability": "Multi-vCPU (SMP) product guests",
+      "status": "planned",
+      "role": "host-first"
+    },
+    {
+      "id": "B9",
+      "capability": "Guest clock: TSC/kvmclock-style stable time source, no drift at idle",
+      "status": "planned",
+      "role": "host-first"
+    },
+    {
+      "id": "C4",
+      "capability": "Datastore: carve, grow, delete guest disks across the whole VD from the SPA",
+      "status": "planned",
+      "role": "host-first"
+    },
+    {
+      "id": "C6",
+      "capability": "Upload progress, resume, checksum shown before use",
+      "status": "planned",
+      "role": "host-first"
+    },
+    {
+      "id": "E11",
+      "capability": "Guest console in the browser (serial and framebuffer), keyboard works",
       "status": "in flight",
+      "role": "host-first"
+    },
+    {
+      "id": "E17",
+      "capability": "Guest log separated from host log on the page",
+      "status": "planned",
+      "role": "host-first"
+    },
+    {
+      "id": "A8",
+      "capability": "Hardware support matrix published: R640 lived; R650/R660; BCM5720/57416; X710; PERC H740P/H750; NVMe",
+      "status": "planned",
       "role": "host-first"
     }
   ],
   "filler": [
     {
-      "id": "B6",
-      "capability": "Multiple concurrent guests on one R640",
-      "wave": "7"
+      "id": "F4",
+      "capability": "SMBIOS DIMM and NUMA topology on the page",
+      "wave": "8"
     },
     {
-      "id": "B7",
-      "capability": "Multi-vCPU (SMP) product guests",
-      "wave": "7"
-    },
-    {
-      "id": "B9",
-      "capability": "Guest clock: TSC/kvmclock-style stable time source, no drift at idle",
-      "wave": "7"
-    },
-    {
-      "id": "C4",
-      "capability": "Datastore: carve, grow, delete guest disks across the whole VD from the SPA",
-      "wave": "7"
-    },
-    {
-      "id": "C6",
-      "capability": "Upload progress, resume, checksum shown before use",
-      "wave": "7"
-    },
-    {
-      "id": "E11",
-      "capability": "Guest console in the browser (serial and framebuffer), keyboard works",
-      "wave": "7"
-    },
-    {
-      "id": "E17",
-      "capability": "Guest log separated from host log on the page",
-      "wave": "7"
-    },
-    {
-      "id": "A8",
-      "capability": "Hardware support matrix published: R640 lived; R650/R660; BCM5720/57416; X710; PERC H740P/H750; NVMe",
-      "wave": "7"
+      "id": "F5",
+      "capability": "Hardware events into the audit log (thermal, PSU, DIMM)",
+      "wave": "8"
     }
   ]
 }

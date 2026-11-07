@@ -191,7 +191,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next (numbered)
 
-**ADR-021 H8 in flight.** `docs/customer/support-policy.md` proposes a tag, twelve months from that tag, and `namaskaar@raynuv.com`. No reply clock. Not lived until the terms are accepted. Wave 6 stays open on this row.
+**Wave 6 closed 2026-11-07.** H8 terms accepted. GitHub Latest and the current rollback is `v0.1.6-wave6-closed`. The next wave close is `v0.1.7-wave7-closed`. The lab stick remains `4e327820e039` until that file is staged.
 
 **ADR-021 D11 lived 2026-11-07.** Port roles are fixed in `docs/customer/port-roles.md`: port 3 is the page, port 4 is the guests, iDRAC is Dedicated or LOM3. CI runs `./tools/check-d11-docs.sh`. No new EFI. Wave 6 stays open. Next host-first row is H8.
 

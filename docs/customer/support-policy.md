@@ -1,20 +1,23 @@
 # Releases and support
 
-This is what a Shipment 1 customer gets for a year. It is a proposal until the terms are accepted. It does not add a feature on the page.
+This is what a Shipment 1 customer gets for a year. The terms were accepted 2026-11-07. It does not add a feature on the page.
 
 ## A release
 
 A supported release is a git tag. The tag names one signed `r640-hypervisor.efi`, its SHA256, and the build line the page shows: `build <sha> · CI <run>`.
 
-The tags a customer can be handed back to today are:
+The current release, and the rollback a new flash returns to, is [`v0.1.6-wave6-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.6-wave6-closed). GitHub Latest is that tag. The next wave close is `v0.1.7-wave7-closed`. A wave number is the tag's minor number.
+
+The image that lived Wave 6 on the R640 is `4e327820e039`, CI run `42384654720`, signed SHA256 `1101880eb670530ee3e23a5499cc9b0a2ac5579954c755dbe455fa9aa2b1995a`. A rebuild of this tag stamps its own build line. The stick keeps `4e327820e039` until that file is staged.
+
+Older tags stay available. They are not Latest:
 
 | Tag | Build |
 |-----|--------|
-| `v0.1.0-everest-closed` | `f72b4276` |
-| `v0.1.0-m8-8-ubuntu` | `c3a70e62` |
+| `v0.1.0-wave-5-closed` | `9516e470` |
 | `v0.1.0-m8-9-lan` | `0d865c7f` |
-
-A CI build that has no tag is not a supported release. The lab box is running `4e327820e039`. That image is how the current rows were proved. It is not itself one of the tags above.
+| `v0.1.0-m8-8-ubuntu` | `c3a70e62` |
+| `v0.1.0-everest-closed` | `f72b4276` |
 
 You install a release from the page. **Keep this slot** arms the next boot to save the file you are running as `EFI/BOOT/BOOTX64.OLD` and to boot the new file after that. **Roll back** puts `BOOTX64.OLD` back on the boot after that. That pair is the rollback. There is no separate patch file.
 

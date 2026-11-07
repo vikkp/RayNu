@@ -21,13 +21,15 @@ need() {
 }
 
 need "twelve months"
+need "v0.1.6-wave6-closed"
+need "v0.1.7-wave7-closed"
 need "v0.1.0-everest-closed"
 need "v0.1.0-m8-8-ubuntu"
 need "v0.1.0-m8-9-lan"
 need "namaskaar@raynuv.com"
 need "BOOTX64.OLD"
 need "support matrix"
-need "proposal until the terms are accepted"
+need "terms were accepted"
 
 if grep -q -F -- "24/7" "$DOC"; then
   echo "error: support policy must not promise 24/7" >&2

@@ -27,7 +27,7 @@ summit_prod_pct: 100
 > **Living document.** Updated on every meaningful commit by Cursor (see `.cursor/rules/hda-update.mdc`).  
 > **North star product loop (“Mount Everest”):** **CLOSED on iron 2026-09-11.**  
 > Ship the EFI → boot on a **real PowerEdge R640** → **network-reachable** vSphere-like UI → **deploy a Linux ISO** (M7 / ADR-009). Production bar (M6.8–M6.9) is already closed on Latitude. **Next mountain: M8 operator hardening** ([ADR-018](adr/ADR-018.md)).  
-> **Iron rollback:** current wave 2 rollback [`v0.1.0-m8-9-lan`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-m8-9-lan) (`0d865c7fcb0a` / `40603110937` / EFI SHA256 `df6fc3465cecf1eaf058d5c8e675501827c16eb55e7b2c9758bc5e68326ad91b`). Older M8.8 pin [`v0.1.0-m8-8-ubuntu`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-m8-8-ubuntu) (`c3a70e623aec` / `38454398693`). Older PERC SPA pin [`v0.1.0-m8-perc-spa`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-m8-perc-spa) (`8ad2ac89125e` / `36362775808`). GitHub Latest stays [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) (`f72b4276` / `34552377351` / EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc`).
+> **Iron rollback:** GitHub Latest [`v0.1.6-wave6-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.6-wave6-closed), the Wave 6 close. The lab stick that lived the wave is `4e327820e039` / run `42384654720` / signed SHA256 `1101880eb670530ee3e23a5499cc9b0a2ac5579954c755dbe455fa9aa2b1995a`. Older wave 5 pin [`v0.1.0-wave-5-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-wave-5-closed) (`9516e470`). Older wave 2 pin [`v0.1.0-m8-9-lan`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-m8-9-lan). Everest pin [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed) is not Latest.
 
 Pillars: **[V]** verified core · **[Z]** single binary · **[D]** iDRAC-native · **[A]** audit-first.  
 Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m7_plan.md) (closed) · M8: [`m8_plan.md`](m8_plan.md) · ADR: [`adr/ADR-009.md`](adr/ADR-009.md) · close: [`adr/ADR-018.md`](adr/ADR-018.md) · constitution: [`CLAUDE.md`](../CLAUDE.md).
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-07 | wave-6-closed | 0.0 | 99 | **Wave 6 closed.** H8 terms accepted. GitHub Latest `v0.1.6-wave6-closed`. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-07 | wave-6-h8-proposal | 0.0 | 99 | **ADR-021 H8 in flight.** Support proposal: a tag, twelve months, `namaskaar@raynuv.com`, no reply clock. Not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-07 | wave-6-d11-lived | 0.0 | 99 | **ADR-021 D11 lived.** Port 3 page, port 4 guests, iDRAC Dedicated or LOM3. `docs/customer/port-roles.md`. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-07 | wave-6-f10-lived | 0.0 | 99 | **ADR-021 F10 lived.** iDRAC `10.99.99.24` Dedicated and LOM3. SPA `4e327820e039` Guest 3 running, then Dedicated again. No new EFI. Scores held. months 0.0 held; overall 99 held |
@@ -1210,12 +1211,12 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     Wave 6 is current. A5, A7, A4, H5, F10, and D11 lived. H8 is in flight as a proposal in docs/customer/support-policy.md. Not lived until the terms are accepted. Auth.token A5 stays parked. Standing SPA is 10.99.99.201. The running image is 4e327820e039. iDRAC is 10.99.99.24, NIC Selection Dedicated. Rollback for a wave 2 flash is v0.1.0-m8-9-lan. Do not format UBUNTU0. No doorbell. See docs/m8_plan.md.
-Rollback:      M8.9 close: v0.1.0-m8-9-lan → CI 40603110937 / COM2 sha=0d865c7fcb0a / EFI SHA256 df6fc3465cecf1eaf058d5c8e675501827c16eb55e7b2c9758bc5e68326ad91b
+Next move:     Wave 6 is closed. GitHub Latest is v0.1.6-wave6-closed. Wave 7 is next. Auth.token A5 stays parked. Standing SPA is 10.99.99.201. The running image is 4e327820e039. iDRAC is 10.99.99.24, NIC Selection Dedicated. Do not format UBUNTU0. No doorbell. See docs/m8_plan.md.
+Rollback:      GitHub Latest v0.1.6-wave6-closed. Lab stick 4e327820e039 / run 42384654720 / signed SHA256 1101880eb670530ee3e23a5499cc9b0a2ac5579954c755dbe455fa9aa2b1995a. Older M8.9 pin: v0.1.0-m8-9-lan → CI 40603110937 / COM2 sha=0d865c7fcb0a / EFI SHA256 df6fc3465cecf1eaf058d5c8e675501827c16eb55e7b2c9758bc5e68326ad91b
 Older M8.8:    v0.1.0-m8-8-ubuntu → CI 38454398693 / COM2 sha=c3a70e623aec / EFI SHA256 08ef31ba87136577102ac378d8e0a512327994e8794c41c64444f5be5f8812c4
 Older SPA:     v0.1.0-m8-perc-spa → CI 36362775808 / COM2 sha=8ad2ac89125e / EFI SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849
 Standing SPA:  v0.1.0-m8-a4s → CI 36137732145 / COM2 sha=1f33eeda72f9 / EFI SHA256 5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693
-Everest:       GitHub Latest v0.1.0-everest-closed → f72b4276 / 34552377351 / EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc / COM2 build: sha=f72b4276d198
+Everest:       v0.1.0-everest-closed → f72b4276 / 34552377351 / EFI SHA256 e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc / COM2 build: sha=f72b4276d198. Not Latest.
 Do not F11:    M8 prototypes `b5e290be` `17d120c5` `3b388279` `08202468` `d60431ee` `28cd4ff1` `15e3d665` `5c32bd06` `1fa231df` `e5cca2e0` `c4a41a17` (table in docs/m8_state.md); Phase B fails `34548550755` / `7f8dc0a9`
 Tcp4 residual: Floppy publishes PXE/HTTP, not Tcp4 SB (platform limit)
 SNP after EBS: dead — native BCM5720 is the durable mgmt path (E3b closed 2026-08-20)
