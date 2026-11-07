@@ -6,6 +6,7 @@ Shipment 1 documents for an operator. These are not the lab runbooks in `docs/ru
 |----------|----------------|
 | [Install](install.md) | Put a signed EFI on a PowerEdge R640 and open the page |
 | [Cabling](cabling.md) | Which jack carries iDRAC, the page, and the guests |
+| [Port roles](port-roles.md) | Port 3 is the page, port 4 is the guests, iDRAC is dedicated or LOM3 |
 | [Operator runbook](operator.md) | Day to day on the page: guests, update, power, audit |
 | [Support matrix](support-matrix.md) | What Shipment 1 runs on |
 

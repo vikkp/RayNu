@@ -11,7 +11,7 @@ Shipment 1 uses three jacks on a PowerEdge R640. The management page and the gue
 
 Plug iDRAC before you change the host. The page does not come up on the dedicated iDRAC jack.
 
-The lab page address on port 3 is `10.99.99.201/24`. A new site sets its own address on the page. That address is used on the next boot. The page you already have stays on the address it opened with.
+The lab page address on port 3 is `10.99.99.201/24`. A new site sets its own address on the page. That address is used on the next boot. The page you already have stays on the address it opened with. The role of each jack is [Port roles](port-roles.md).
 
 ## Not this guide
 

@@ -33,6 +33,8 @@ jobs:
         run: ./tools/check-h5-docs.sh
       - name: F10 iDRAC NIC Selection matrix
         run: ./tools/check-f10-docs.sh
+      - name: D11 port roles
+        run: ./tools/check-d11-docs.sh
 
   test-host:
     name: host tests
