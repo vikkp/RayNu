@@ -29,6 +29,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: updater look present
         run: ./tools/check-site-chrome.sh
+      - name: H5 customer documents
+        run: ./tools/check-h5-docs.sh
 
   test-host:
     name: host tests

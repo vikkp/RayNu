@@ -19,15 +19,15 @@
   },
   "counts": {
     "S1": {
-      "lived": 50,
+      "lived": 51,
       "in flight": 1,
-      "planned": 16,
+      "planned": 15,
       "total": 67
     },
     "Final": {
-      "lived": 50,
+      "lived": 51,
       "in flight": 1,
-      "planned": 78,
+      "planned": 77,
       "total": 129
     }
   },
@@ -1166,10 +1166,10 @@
         {
           "id": "H5",
           "capability": "Install guide, cabling guide, operator runbook, support matrix as customer documents",
-          "status": "planned",
+          "status": "lived",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Runbooks exist for the lab",
+          "note": "2026-11-07. `docs/customer/`: `install.md`, `cabling.md`, `operator.md`, `support-matrix.md`. CI `./tools/check-h5-docs.sh`. Lab runbooks under `docs/runbooks/` are not these files. Does not close F10 (Shared LOM not the install path), D11, or A8.",
           "wave": "6"
         },
         {
@@ -1202,15 +1202,15 @@
       ],
       "counts": {
         "S1": {
-          "lived": 3,
+          "lived": 4,
           "in flight": 0,
-          "planned": 3,
+          "planned": 2,
           "total": 6
         },
         "Final": {
-          "lived": 3,
+          "lived": 4,
           "in flight": 0,
-          "planned": 5,
+          "planned": 4,
           "total": 8
         }
       }
@@ -1585,11 +1585,11 @@
         "H8"
       ],
       "iron": "A7",
-      "why": "Needs C8 (lived) so an update keeps guests. A5 lived 2026-11-05: RayNu-V `db` certificate, shim not built. A7 lived 2026-11-05: `318c6617c99b` restored `BOOTX64.OLD` and the next F11 was `fa3f4860c6a7` / run `42096983983`. A4 lived 2026-11-07: `4e327820e039` / run `42384654720` reached `pending 0 · durable yes · saved` while Guest 3 stayed running. Wave 6 stays open on H5, F10, D11, and H8.",
+      "why": "Needs C8 (lived) so an update keeps guests. A5 lived 2026-11-05: RayNu-V `db` certificate, shim not built. A7 lived 2026-11-05: `318c6617c99b` restored `BOOTX64.OLD` and the next F11 was `fa3f4860c6a7` / run `42096983983`. A4 lived 2026-11-07: `4e327820e039` / run `42384654720` reached `pending 0 · durable yes · saved` while Guest 3 stayed running. H5 lived 2026-11-07: `docs/customer/` install, cabling, operator runbook, and support matrix, checked by `./tools/check-h5-docs.sh`. Wave 6 stays open on F10, D11, and H8.",
       "counts": {
-        "lived": 3,
+        "lived": 4,
         "in flight": 0,
-        "planned": 4,
+        "planned": 3,
         "total": 7
       },
       "closed": false
@@ -1852,12 +1852,6 @@
   ],
   "current_wave": "6",
   "next_up": [
-    {
-      "id": "H5",
-      "capability": "Install guide, cabling guide, operator runbook, support matrix as customer documents",
-      "status": "planned",
-      "role": "host-first"
-    },
     {
       "id": "F10",
       "capability": "iDRAC NIC Selection matrix: Dedicated and Shared LOM both documented and tested",
