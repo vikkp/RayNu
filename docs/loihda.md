@@ -220,6 +220,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
 | 2026-11-05 | spa-quiet-and-live-stage | 94 | 72 | **SPA polls print once.** A7 spare write from `d0904bf8` runs while the guest stays up. Not in the running `fa3f4860c6a7`. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
+| 2026-11-07 | wave-6-h8-proposal | 94 | 72 | **ADR-021 H8 in flight.** Twelve months from a tag. Mailbox namaskaar@raynuv.com. No reply clock. Not lived. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-07 | wave-6-d11-lived | 94 | 72 | **ADR-021 D11 lived.** Port 3 page, port 4 guests, iDRAC Dedicated or LOM3. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-07 | wave-6-f10-lived | 94 | 72 | **ADR-021 F10 lived.** Dedicated and LOM3 on iDRAC `10.99.99.24`. SPA stayed up. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-07 | wave-6-f10-nic | 94 | 72 | **ADR-021 F10 in flight.** Dedicated booted. Shared LOM not tested. No new EFI. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |

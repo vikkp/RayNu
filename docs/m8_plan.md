@@ -120,6 +120,7 @@ M8.9  Admin-attached guest NIC (ADR-013 Appendix C)
    `docs/customer/` install, cabling, operator runbook, and support matrix.
    F10 lived 2026-11-07: iDRAC Dedicated and LOM3, SPA stayed up.
    D11 lived 2026-11-07: port 3 page, port 4 guests.
+   H8 is in flight: a proposed year of support, not yet accepted.
 → M9 sketch: vMotion-like · DRS-like · hot-add
 ```
 

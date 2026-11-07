@@ -9,5 +9,6 @@ Shipment 1 documents for an operator. These are not the lab runbooks in `docs/ru
 | [Port roles](port-roles.md) | Port 3 is the page, port 4 is the guests, iDRAC is dedicated or LOM3 |
 | [Operator runbook](operator.md) | Day to day on the page: guests, update, power, audit |
 | [Support matrix](support-matrix.md) | What Shipment 1 runs on |
+| [Releases and support](support-policy.md) | What a tag is, and what a year includes |
 
 The lab box that closed these steps is one R640. Addresses and file hashes in the documents are that box, so a new site uses its own.
