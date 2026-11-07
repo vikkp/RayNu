@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-7-b8-madt |
-| Summary | **ADR-021 B8 still in flight.** `09b23c5d` printed MSI-X `vec=20` and Linux stayed on the PIC because the XSDT had no MADT. The page now publishes one. Not lived. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-7-b8-sku-card |
+| Summary | **SKU card check matches the Wave 6 page.** Dedicated-box, no plaintext HTTP, 2.9 TB is not the guest disk, not a cluster, not Windows. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. TLS 88 held. |
 | Gates touched | B8 in flight. Auth.token A5 stays parked. No doorbell. No format of UBUNTU0. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-07 | wave-7-b8-sku-card | 94 | 72 | **`sku_card_package_passes` matches the Wave 6 card.** Dedicated-box, no plaintext HTTP, 2.9 TB is not the guest disk, not a cluster, not Windows. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-07 | wave-7-b8-madt | 94 | 72 | **ADR-021 B8 still in flight.** `09b23c5d` MSI-X `vec=20` and login, then no MADT and PIC routing. RayNu-F XSDT now has a MADT. Not lived. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-07 | wave-7-b8-msix | 94 | 72 | **ADR-021 B8 in flight.** Virtio MSI-X into the virtual local APIC. PIC IRQ 11 stays until the guest enables it. Not lived. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-05 | spa-quiet-and-live-stage | 94 | 72 | **SPA polls print once.** A7 spare write from `d0904bf8` runs while the guest stays up. Not in the running `fa3f4860c6a7`. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
