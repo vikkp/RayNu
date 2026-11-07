@@ -8,25 +8,16 @@ Two shipments, one catalog. Every capability a professional operator expects fro
 
 ---
 
-## Today's box, before either shipment
+## Today's box, after Wave 6
 
-If you signed a non-production **dedicated-box** letter today, this is what you would hold, stated the way diligence would state it:
+Wave 6 closed on 7 November 2026. This is what a diligence reader would hold. GitHub Latest is `v0.1.6-wave6-closed`. The stick on the lab box is still `4e327820e039` / CI `42384654720` until a build of that tag is staged.
 
-- One `r640-hypervisor.efi` on one PowerEdge R640. Ubuntu 26.04 has reached `vikkp@raynusrv2` on a 10 GiB tail of RAYNU-SPARE (`c3a70e62`).
-- The disk that comes back after a chassis power-off is an **8 GiB** USB window (`928d6224`), not the array.
-- The page is TLS 1.2 with a lab millicert (`RAYNU-V-M8-TLS-OK`). The first minutes of boot are still **plaintext HTTP**.
-- The door is a **lab latch** (`raynu-v-bringup`) until ESP `EFI/RayNu/auth.token` exists. There is no operator account.
-- The guest NIC transmits; its uplink (LOM port 4, `:39`) had no link on the lab box. **No packet has yet returned to the guest.**
-- **not PERC** fleet: the rest of the 2.9 TB VD stays hidden; leave UBUNTU0 alone. **not cluster.** **not Windows.** Not a remote desktop; iDRAC is the console.
-
-| Row | State | Why it is on the card |
-|-----|-------|------------------------|
-| A1 Everest | DONE | The install loop you could point at (`f72b4276`). |
-| A2 Persist | DONE on evidence | Force Off, then the **8 GiB** USB window comes back (`928d6224`). |
-| A3 This SKU card | **DONE** | This page, now the Shipment 1 / final SKU card over ADR-021. |
-| A4 TLS | **DONE** on COM2 `928d6224` | Lab millicert. PRE-EBS SNP stays **plaintext HTTP**. |
-| A5 Auth | Host-ready, not iron | **lab latch** until ESP `auth.token`. |
-| A6 Console | Typed once, not a desktop | The page reached Alpine once. Ubuntu login is COM2. |
+- One signed `r640-hypervisor.efi` on one PowerEdge R640. Secure Boot is on. The page is `https://10.99.99.201:8443/`. Guest 3 is running.
+- The page is TLS 1.3 with the operator certificate. The operator signs in. This tree does not open plaintext HTTP before ExitBootServices.
+- A new hypervisor can be staged from the page while the guest keeps running. The line ends in `durable yes · saved`. Roll back restores the previous stick file on a later boot.
+- Port 3 carries the page. Port 4 carries the guest. iDRAC at `10.99.99.24` answered on the dedicated jack and on LOM3, then was set back to Dedicated.
+- The guest address on port 4 was reached from another machine. A pulled port 4 cable shows in the guest and on the page. A saved guest starts again after power-on.
+- The rest of the 2.9 TB virtual disk is not the guest disk. **Not a cluster. Not Windows.** The page is the operator's console. iDRAC stays the out-of-band controller.
 
 ---
 
@@ -34,7 +25,7 @@ If you signed a non-production **dedicated-box** letter today, this is what you 
 
 One `r640-hypervisor.efi`, signed, booted from iDRAC virtual media or USB on a PowerEdge R640. The operator reaches an HTTPS page with their own certificate and their own account, on a management port with a static address they chose. They upload an Ubuntu ISO, create a guest with the CPUs, RAM and disk they want on the PERC array they already own, attach a NIC, and the page shows them that the guest uplink has link before they press Start. The guest installs, reboots to its disk, gets an address on the customer's network, and they SSH to it from their desk. They can type into it from the browser when SSH is not an option. When the rack loses power the guest comes back on its own. When a new RayNu-V ships they update from the page and roll back from the page. Every one of those actions is in an audit log they can export. Nothing in that paragraph requires COM2.
 
-What the lab box already does of that paragraph (all **lived**, SHAs in the catalog): one EFI on a real R640; install loop to `login:`; Ubuntu 26.04 on a PERC virtual disk; persist across chassis power-off; HTTPS on `:8443`; audit ring with hash chain; a guest virtio NIC that transmits without a watchdog. What is **in flight**: guest frames leaving and returning on LOM port 4 (PR #409), guest address, SSH from another machine, browser console. ADR-021 A5 (signed EFI) is **lived**. ADR-021 A7 (in-place update) is **lived** 2026-11-05: `318c6617c99b` restored `BOOTX64.OLD` and the next F11 was `fa3f4860c6a7` / run `42096983983`. ADR-021 A4 (headless operation) is **lived** 2026-11-07: `4e327820e039` / run `42384654720` reached `durable yes · saved` while Guest 3 stayed running. ADR-021 H5 (customer documents) is **lived** 2026-11-07: [install](customer/install.md), [cabling](customer/cabling.md), [operator runbook](customer/operator.md), and the [support matrix](customer/support-matrix.md). What is **planned** for S1: operator account and certificate, plaintext boot window closed, uplink discovery and link state on the page, clean shutdown, autostart, host static address and NTP, config store on disk, datastore across the whole VD, FLUSH semantics, Redfish Tier 1 on the page, audit export and persistence, 72-hour iron soak.
+Wave 6 closed the signed boot, the page, the update while the guest stays up, the port roles, and the support term. The catalog below is what is still only a sentence. The 72-hour soak is one of those sentences.
 
 ### Cabling an R640 for Shipment 1
 
