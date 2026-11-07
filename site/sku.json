@@ -19,15 +19,15 @@
   },
   "counts": {
     "S1": {
-      "lived": 52,
+      "lived": 53,
       "in flight": 1,
-      "planned": 14,
+      "planned": 13,
       "total": 67
     },
     "Final": {
-      "lived": 52,
+      "lived": 53,
       "in flight": 1,
-      "planned": 76,
+      "planned": 75,
       "total": 129
     }
   },
@@ -619,10 +619,10 @@
         {
           "id": "D11",
           "capability": "Cabling and port roles documented: iDRAC dedicated or shared LOM, port 3 mgmt, port 4 guests",
-          "status": "planned",
+          "status": "lived",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Install guide row (H6)",
+          "note": "2026-11-07. `docs/customer/port-roles.md`. CI `./tools/check-d11-docs.sh`. Roles are fixed: port 3 is the page (`01:00.0`, `b0:26:28:5c:5a:38`, `10.99.99.201:8443`), port 4 is the guests (`01:00.1`, `b0:26:28:5c:5a:39`). iDRAC Dedicated or LOM3 `NIC.Integrated.1-3-1` on `10.99.99.24`, image `4e327820e039`, Guest 3 running. Evidence `docs/evidence/r640/2026-11-07-4e327820e039-wave-6-f10-idrac-nic-ok.md`. Does not close D12 or D13.",
           "wave": "6"
         },
         {
@@ -736,15 +736,15 @@
       ],
       "counts": {
         "S1": {
-          "lived": 10,
+          "lived": 11,
           "in flight": 0,
-          "planned": 1,
+          "planned": 0,
           "total": 11
         },
         "Final": {
-          "lived": 10,
+          "lived": 11,
           "in flight": 0,
-          "planned": 13,
+          "planned": 12,
           "total": 23
         }
       }
@@ -1585,11 +1585,11 @@
         "H8"
       ],
       "iron": "A7",
-      "why": "Needs C8 (lived) so an update keeps guests. A5 lived 2026-11-05: RayNu-V `db` certificate, shim not built. A7 lived 2026-11-05: `318c6617c99b` restored `BOOTX64.OLD` and the next F11 was `fa3f4860c6a7` / run `42096983983`. A4 lived 2026-11-07: `4e327820e039` / run `42384654720` reached `pending 0 · durable yes · saved` while Guest 3 stayed running. H5 lived 2026-11-07: `docs/customer/` install, cabling, operator runbook, and support matrix, checked by `./tools/check-h5-docs.sh`. F10 lived 2026-11-07: iDRAC `10.99.99.24` on Dedicated and on LOM3 `NIC.Integrated.1-3-1`, page `4e327820e039` with Guest 3 running both times, then Dedicated again. Wave 6 stays open on D11 and H8.",
+      "why": "Needs C8 (lived) so an update keeps guests. A5 lived 2026-11-05: RayNu-V `db` certificate, shim not built. A7 lived 2026-11-05: `318c6617c99b` restored `BOOTX64.OLD` and the next F11 was `fa3f4860c6a7` / run `42096983983`. A4 lived 2026-11-07: `4e327820e039` / run `42384654720` reached `pending 0 · durable yes · saved` while Guest 3 stayed running. H5 lived 2026-11-07: `docs/customer/` install, cabling, operator runbook, and support matrix, checked by `./tools/check-h5-docs.sh`. F10 lived 2026-11-07: iDRAC `10.99.99.24` on Dedicated and on LOM3 `NIC.Integrated.1-3-1`, page `4e327820e039` with Guest 3 running both times, then Dedicated again. D11 lived 2026-11-07: `docs/customer/port-roles.md`, port 3 management, port 4 guests, iDRAC Dedicated or LOM3. Wave 6 stays open on H8.",
       "counts": {
-        "lived": 5,
+        "lived": 6,
         "in flight": 0,
-        "planned": 2,
+        "planned": 1,
         "total": 7
       },
       "closed": false
@@ -1852,12 +1852,6 @@
   ],
   "current_wave": "6",
   "next_up": [
-    {
-      "id": "D11",
-      "capability": "Cabling and port roles documented: iDRAC dedicated or shared LOM, port 3 mgmt, port 4 guests",
-      "status": "planned",
-      "role": "host-first"
-    },
     {
       "id": "H8",
       "capability": "Release cadence and support policy stated (what a customer gets for a year)",
