@@ -191,7 +191,9 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next (numbered)
 
-**ADR-021 H5 lived 2026-11-07.** Customer documents are `docs/customer/`: install, cabling, operator runbook, and the Shipment 1 support matrix. CI runs `./tools/check-h5-docs.sh`. Lab runbooks stay under `docs/runbooks/`. Wave 6 stays open. Next host-first row is F10.
+**ADR-021 F10 lived on iron 2026-11-07.** iDRAC `10.99.99.24` on Dedicated and on LOM3 `NIC.Integrated.1-3-1`. The page stayed `4e327820e039` with Guest 3 running, including after the return to Dedicated. No cable move. No new EFI. Evidence `docs/evidence/r640/2026-11-07-4e327820e039-wave-6-f10-idrac-nic-ok.md`. Wave 6 stays open. Next host-first row is D11.
+
+**ADR-021 H5 lived 2026-11-07.** Customer documents are `docs/customer/`: install, cabling, operator runbook, and the Shipment 1 support matrix. CI runs `./tools/check-h5-docs.sh`. Lab runbooks stay under `docs/runbooks/`. Wave 6 stays open.
 
 **ADR-021 A4 lived on iron 2026-11-07.** `4e327820e039` / run `42384654720`. The page was opened by reloading it. Staging then reached `active 1 · pending 0 · durable yes · saved` while Guest 3 stayed running. The serial console stayed closed. **Keep this slot** was not pressed. Evidence `docs/evidence/r640/2026-11-07-4e327820e039-wave-6-a4-saved-while-guest-up.md`. The running image is `4e327820e039`. It includes the spare write while a guest runs and the once-per-boot SPA lines.
 

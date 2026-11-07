@@ -23,7 +23,7 @@ The running lab image on 2026-11-07 is `4e327820e039`, CI run `42384654720`.
 | PowerEdge R650, R660 | Not booted |
 | Broadcom BCM57416, Intel X710 | Not booted |
 | PERC H750, H840, NVMe as the guest disk | Not the Shipment 1 disk |
-| iDRAC NIC Selection Shared LOM | Dedicated is the setting this shipment uses |
+| iDRAC Shared with Failover | Not used. Dedicated and LOM3 were both tested on 2026-11-07. The record is [iDRAC NIC Selection](idrac-nic.md) |
 | 10GbE, VLAN, bond, one cable for page and guests | Not the cabling in [Cabling](cabling.md) |
 | Windows guests | Not booted |
 | More than one guest as a supported count | The lab runs one guest |

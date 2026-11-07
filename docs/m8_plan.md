@@ -118,6 +118,7 @@ M8.9  Admin-attached guest NIC (ADR-013 Appendix C)
    `4e327820e039` / run `42384654720` reached `durable yes · saved`
    while Guest 3 stayed running. H5 lived 2026-11-07:
    `docs/customer/` install, cabling, operator runbook, and support matrix.
+   F10 lived 2026-11-07: iDRAC Dedicated and LOM3, SPA stayed up.
 → M9 sketch: vMotion-like · DRS-like · hot-add
 ```
 
