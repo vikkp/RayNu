@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-07 | wave-6-h8-proposal | 0.0 | 99 | **ADR-021 H8 in flight.** Support proposal: a tag, twelve months, `namaskaar@raynuv.com`, no reply clock. Not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-07 | wave-6-d11-lived | 0.0 | 99 | **ADR-021 D11 lived.** Port 3 page, port 4 guests, iDRAC Dedicated or LOM3. `docs/customer/port-roles.md`. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-07 | wave-6-f10-lived | 0.0 | 99 | **ADR-021 F10 lived.** iDRAC `10.99.99.24` Dedicated and LOM3. SPA `4e327820e039` Guest 3 running, then Dedicated again. No new EFI. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-07 | wave-6-f10-nic | 0.0 | 99 | **ADR-021 F10 in flight.** NIC Selection matrix. Dedicated is the booted setting. Shared LOM is not tested. No new EFI. Scores held. months 0.0 held; overall 99 held |
@@ -1209,7 +1210,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     Wave 6 is current. A5, A7, A4, H5, F10, and D11 lived. Next host-first row is H8, the support policy. Auth.token A5 stays parked. Standing SPA is 10.99.99.201. The running image is 4e327820e039. iDRAC is 10.99.99.24, NIC Selection Dedicated. Rollback for a wave 2 flash is v0.1.0-m8-9-lan. Do not format UBUNTU0. No doorbell. See docs/m8_plan.md.
+Next move:     Wave 6 is current. A5, A7, A4, H5, F10, and D11 lived. H8 is in flight as a proposal in docs/customer/support-policy.md. Not lived until the terms are accepted. Auth.token A5 stays parked. Standing SPA is 10.99.99.201. The running image is 4e327820e039. iDRAC is 10.99.99.24, NIC Selection Dedicated. Rollback for a wave 2 flash is v0.1.0-m8-9-lan. Do not format UBUNTU0. No doorbell. See docs/m8_plan.md.
 Rollback:      M8.9 close: v0.1.0-m8-9-lan → CI 40603110937 / COM2 sha=0d865c7fcb0a / EFI SHA256 df6fc3465cecf1eaf058d5c8e675501827c16eb55e7b2c9758bc5e68326ad91b
 Older M8.8:    v0.1.0-m8-8-ubuntu → CI 38454398693 / COM2 sha=c3a70e623aec / EFI SHA256 08ef31ba87136577102ac378d8e0a512327994e8794c41c64444f5be5f8812c4
 Older SPA:     v0.1.0-m8-perc-spa → CI 36362775808 / COM2 sha=8ad2ac89125e / EFI SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849

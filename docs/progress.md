@@ -191,6 +191,8 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next (numbered)
 
+**ADR-021 H8 in flight.** `docs/customer/support-policy.md` proposes a tag, twelve months from that tag, and `namaskaar@raynuv.com`. No reply clock. Not lived until the terms are accepted. Wave 6 stays open on this row.
+
 **ADR-021 D11 lived 2026-11-07.** Port roles are fixed in `docs/customer/port-roles.md`: port 3 is the page, port 4 is the guests, iDRAC is Dedicated or LOM3. CI runs `./tools/check-d11-docs.sh`. No new EFI. Wave 6 stays open. Next host-first row is H8.
 
 **ADR-021 F10 lived on iron 2026-11-07.** iDRAC `10.99.99.24` on Dedicated and on LOM3 `NIC.Integrated.1-3-1`. The page stayed `4e327820e039` with Guest 3 running, including after the return to Dedicated. No cable move. No new EFI. Evidence `docs/evidence/r640/2026-11-07-4e327820e039-wave-6-f10-idrac-nic-ok.md`.
