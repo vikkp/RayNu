@@ -116,7 +116,8 @@ M8.9  Admin-attached guest NIC (ADR-013 Appendix C)
    `318c6617c99b` restored `BOOTX64.OLD` and the next F11 was
    `fa3f4860c6a7` / run `42096983983`. A4 lived 2026-11-07:
    `4e327820e039` / run `42384654720` reached `durable yes · saved`
-   while Guest 3 stayed running.
+   while Guest 3 stayed running. H5 lived 2026-11-07:
+   `docs/customer/` install, cabling, operator runbook, and support matrix.
 → M9 sketch: vMotion-like · DRS-like · hot-add
 ```
 

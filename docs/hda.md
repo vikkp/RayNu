@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-07 | wave-6-h5-lived | 0.0 | 99 | **ADR-021 H5 lived.** `docs/customer/` install, cabling, operator runbook, support matrix. CI `./tools/check-h5-docs.sh`. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-07 | wave-6-a4-lived | 0.0 | 99 | **ADR-021 A4 lived.** `4e327820e039` / run `42384654720`. SPA Guest 3 running and `active 1 · pending 0 · durable yes · saved` after a stage. Serial console stayed closed. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-05 | spa-quiet-and-live-stage | 0.0 | 99 | **SPA polls print once.** First `HTTP exchange ok` and first `HTTP keep-alive` stay. Later Overview polls stay off COM2. A7 spare write from `d0904bf8` runs while the guest stays up. Not in the running `fa3f4860c6a7`. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-05 | wave-6-a7-lived | 0.0 | 99 | **ADR-021 A7 lived.** `boot: A7 stick restored bytes=2599968` on `318c6617c99b` / run `42133864880`. Next F11 `build: sha=fa3f4860c6a7 run=42096983983` with no second restore. SPA Guest 3 running, `active 1 · pending none · durable yes`. Scores held. months 0.0 held; overall 99 held |
@@ -1205,7 +1206,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     Wave 6 is current. A5 lived on 097f3c612c06 / run 42062748313. A7 lived 2026-11-05. A4 lived 2026-11-07: 4e327820e039 / run 42384654720 reached durable yes · saved while Guest 3 stayed running. Next host-first row is H5. Auth.token A5 stays parked. Standing SPA is 10.99.99.201. Rollback for a wave 2 flash is v0.1.0-m8-9-lan. Do not format UBUNTU0. No doorbell. See docs/m8_plan.md.
+Next move:     Wave 6 is current. A5, A7, A4, and H5 lived. Next host-first row is F10 (iDRAC Dedicated is the install path; Shared LOM is not tested). Auth.token A5 stays parked. Standing SPA is 10.99.99.201. The running image is 4e327820e039. Rollback for a wave 2 flash is v0.1.0-m8-9-lan. Do not format UBUNTU0. No doorbell. See docs/m8_plan.md.
 Rollback:      M8.9 close: v0.1.0-m8-9-lan → CI 40603110937 / COM2 sha=0d865c7fcb0a / EFI SHA256 df6fc3465cecf1eaf058d5c8e675501827c16eb55e7b2c9758bc5e68326ad91b
 Older M8.8:    v0.1.0-m8-8-ubuntu → CI 38454398693 / COM2 sha=c3a70e623aec / EFI SHA256 08ef31ba87136577102ac378d8e0a512327994e8794c41c64444f5be5f8812c4
 Older SPA:     v0.1.0-m8-perc-spa → CI 36362775808 / COM2 sha=8ad2ac89125e / EFI SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849
