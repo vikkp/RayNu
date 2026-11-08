@@ -6842,9 +6842,42 @@ unsafe fn finish_product_companion_probe() -> ! {
     let basic = ops::vmread(EXIT_REASON).unwrap_or(0xFFFF) as u32 & 0xFFFF;
     let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
     if basic == EXIT_REASON_HLT
-        && rip == crate::mgmt::product_companion::CODE_GPA + crate::mgmt::product_companion::DISK_HLT_OFF
+        && rip
+            == crate::mgmt::product_companion::CODE_GPA
+                + crate::mgmt::product_companion::SEAT_HLT_OFF
     {
         crate::mgmt::product_companion::note_probe_hlt();
+        let off = crate::mgmt::product_companion::take_disk_plant();
+        let ram = crate::mgmt::product_companion::take_seat_ram();
+        match (ram, off) {
+            (Some(hpa), Some(off)) => {
+                serial::write_str("boot: B6 seated guest ran in its own memory hpa=0x");
+                write_hex(hpa);
+                serial::write_str(" off=");
+                write_dec(off);
+                serial::write_line("; the guest OS is still waiting");
+            }
+            (Some(hpa), None) => {
+                serial::write_str("boot: B6 seated guest ran in its own memory hpa=0x");
+                write_hex(hpa);
+                serial::write_line("; the guest OS is still waiting");
+            }
+            (None, Some(off)) => {
+                serial::write_str("boot: B6 seated disk byte ran on the second VMCS off=");
+                write_dec(off);
+                serial::write_line("; the guest OS is still waiting");
+            }
+            (None, None) => serial::write_line(
+                "boot: B6 second VMCS ran HLT and returned; the seated guest is still waiting",
+            ),
+        }
+    } else if basic == EXIT_REASON_HLT
+        && rip
+            == crate::mgmt::product_companion::CODE_GPA
+                + crate::mgmt::product_companion::DISK_HLT_OFF
+    {
+        crate::mgmt::product_companion::note_probe_hlt();
+        let _ = crate::mgmt::product_companion::take_seat_ram();
         if let Some(off) = crate::mgmt::product_companion::take_disk_plant() {
             serial::write_str("boot: B6 seated disk byte ran on the second VMCS off=");
             write_dec(off);
@@ -6855,16 +6888,25 @@ unsafe fn finish_product_companion_probe() -> ! {
             );
         }
     } else if basic == EXIT_REASON_HLT {
+        let ram = crate::mgmt::product_companion::take_seat_ram();
         let _ = crate::mgmt::product_companion::take_disk_plant();
         crate::mgmt::product_companion::note_probe_hlt();
-        serial::write_line(
-            "boot: B6 second VMCS ran HLT and returned; the seated guest is still waiting",
-        );
+        if let Some(hpa) = ram {
+            serial::write_str("boot: B6 seated guest ran in its own memory hpa=0x");
+            write_hex(hpa);
+            serial::write_line("; the guest OS is still waiting");
+        } else {
+            serial::write_line(
+                "boot: B6 second VMCS ran HLT and returned; the seated guest is still waiting",
+            );
+        }
     } else if crate::mgmt::product_companion::probe_exit_is_retry(basic) {
         crate::mgmt::product_companion::note_probe_retry();
         let _ = crate::mgmt::product_companion::take_disk_plant();
+        let _ = crate::mgmt::product_companion::take_seat_ram();
     } else {
         let _ = crate::mgmt::product_companion::take_disk_plant();
+        let _ = crate::mgmt::product_companion::take_seat_ram();
         crate::mgmt::product_companion::note_probe_failed();
         serial::write_str("boot: B6 second VMCS left on reason=0x");
         write_hex_u32(basic);
@@ -6875,6 +6917,50 @@ unsafe fn finish_product_companion_probe() -> ! {
         guest_uefi_resume_failed();
     }
     guest_uefi_vmresume();
+}
+
+/// One private slab for the seated guest. Reused across retries.
+#[cfg(target_os = "uefi")]
+static SEAT_RAM_HELD: AtomicU64 = AtomicU64::new(0);
+
+/// Allocate [`SEAT_RAM_BYTES`] once. Returns the host address, or none when
+/// the pool cannot spare it or the range would cover the running guest.
+#[cfg(target_os = "uefi")]
+unsafe fn seat_ram_hpa() -> Option<u64> {
+    let held = SEAT_RAM_HELD.load(Ordering::Acquire);
+    if held != 0 {
+        return Some(held);
+    }
+    let alloc = core::ptr::read(core::ptr::addr_of!(E4_ALLOC));
+    if alloc.is_null() {
+        return None;
+    }
+    let pages = crate::mgmt::product_companion::SEAT_RAM_BYTES / 4096;
+    let frame = (*alloc).allocate_contiguous(pages)?;
+    let hpa = frame.to_phys();
+    let ubuntu = RAM_HPA.load(Ordering::Acquire);
+    let companion = core::ptr::addr_of!(COMPANION_PAGES) as u64;
+    let companion_len =
+        core::mem::size_of::<crate::mgmt::product_companion::CompanionPages>() as u64;
+    let overlaps = crate::mgmt::product_companion::ranges_overlap(
+        hpa,
+        crate::mgmt::product_companion::SEAT_RAM_BYTES,
+        ubuntu,
+        GUEST_UEFI_LOW_RAM_BYTES,
+    ) || crate::mgmt::product_companion::ranges_overlap(
+        hpa,
+        crate::mgmt::product_companion::SEAT_RAM_BYTES,
+        companion,
+        companion_len,
+    );
+    if overlaps {
+        for i in 0..pages {
+            let _ = (*alloc).free_frame(PhysFrame(frame.0 + i));
+        }
+        return None;
+    }
+    SEAT_RAM_HELD.store(hpa, Ordering::Release);
+    Some(hpa)
 }
 
 /// After this Ubuntu exit is handled, enter the HLT VMCS once. VMLAUNCH does
@@ -6916,9 +7002,39 @@ unsafe fn maybe_enter_product_companion() {
                 parked_disk.spare_base,
                 parked_disk.disk_bytes,
             ) {
-                crate::mgmt::product_companion::plant_disk_byte(&mut pages.code, byte);
+                pages.sector[0] = byte;
+                crate::mgmt::product_companion::plant_seat_program(
+                    &mut pages.code,
+                    crate::mgmt::product_companion::SECTOR_GPA as u32,
+                    byte,
+                );
                 crate::mgmt::product_companion::note_disk_plant(parked_disk.spare_base);
             }
+        }
+    }
+    if let Some(hpa) = seat_ram_hpa() {
+        let ram = core::slice::from_raw_parts_mut(
+            hpa as *mut u8,
+            crate::mgmt::product_companion::SEAT_RAM_BYTES as usize,
+        );
+        let ubuntu = RAM_HPA.load(Ordering::Acquire);
+        let companion = core::ptr::addr_of!(COMPANION_PAGES) as u64;
+        let companion_len = core::mem::size_of::<crate::mgmt::product_companion::CompanionPages>() as u64;
+        let overlaps = crate::mgmt::product_companion::ranges_overlap(
+            hpa,
+            crate::mgmt::product_companion::SEAT_RAM_BYTES,
+            ubuntu,
+            GUEST_UEFI_LOW_RAM_BYTES,
+        ) || crate::mgmt::product_companion::ranges_overlap(
+            hpa,
+            crate::mgmt::product_companion::SEAT_RAM_BYTES,
+            companion,
+            companion_len,
+        );
+        if !overlaps
+            && crate::mgmt::product_companion::install_seat_ram(pages, hpa, ram)
+        {
+            crate::mgmt::product_companion::note_seat_ram(hpa);
         }
     }
     let mut vals = [0u64; 128];
@@ -6940,6 +7056,7 @@ unsafe fn maybe_enter_product_companion() {
     if !prepared {
         let _ = ops::vmptrld(ubuntu);
         let _ = crate::mgmt::product_companion::take_disk_plant();
+        let _ = crate::mgmt::product_companion::take_seat_ram();
         crate::mgmt::product_companion::note_probe_failed();
         serial::write_line("boot: B6 second VMCS entry failed; the running guest keeps the CPU");
         return;
@@ -6967,6 +7084,7 @@ unsafe fn maybe_enter_product_companion() {
         let ierr = ops::vmread(VM_INSTRUCTION_ERROR).unwrap_or(0xFFFF);
         let _ = ops::vmptrld(ubuntu);
         let _ = crate::mgmt::product_companion::take_disk_plant();
+        let _ = crate::mgmt::product_companion::take_seat_ram();
         crate::mgmt::product_companion::note_probe_failed();
         serial::write_str("boot: B6 second VMCS entry failed insn_error=");
         write_dec(ierr);

@@ -23,9 +23,15 @@ pub const PDPT_GPA: u64 = 0x3000;
 pub const PD_GPA: u64 = 0x4000;
 pub const PT_GPA: u64 = 0x5000;
 pub const STACK_GPA: u64 = 0x6000;
+/// First byte of the seated disk's sector, in the guest's own RAM.
+pub const SECTOR_GPA: u64 = 0x7000;
+/// Private RAM for the seated guest. Not the running guest's slab.
+pub const SEAT_RAM_BYTES: u64 = 0x8000;
 pub const HLT_OPCODE: u8 = 0xF4;
 /// `mov al, imm8; cmp al, imm8; hlt`. The halt is this far into the page.
 pub const DISK_HLT_OFF: u64 = 4;
+/// `mov eax, sector; movzx eax, [rax]; cmp al, imm8; hlt`.
+pub const SEAT_HLT_OFF: u64 = 10;
 
 /// Present, writable, accessed. Supervisor. No NX.
 const GUEST_LINK: u64 = 0x23;
@@ -44,12 +50,14 @@ static PROBE: AtomicU8 = AtomicU8::new(IDLE);
 static TRIES: AtomicU8 = AtomicU8::new(0);
 static PLANTED: AtomicBool = AtomicBool::new(false);
 static PLANT_OFF: AtomicU64 = AtomicU64::new(0);
+static SEAT_HPA: AtomicU64 = AtomicU64::new(0);
 
 pub fn clear_for_test() {
     PROBE.store(IDLE, Ordering::Release);
     TRIES.store(0, Ordering::Release);
     PLANTED.store(false, Ordering::Release);
     PLANT_OFF.store(0, Ordering::Release);
+    SEAT_HPA.store(0, Ordering::Release);
 }
 
 pub fn probe_in_flight() -> bool {
@@ -144,6 +152,39 @@ pub fn take_disk_plant() -> Option<u64> {
     }
 }
 
+/// Load the seated sector from the guest's own RAM, then halt.
+pub fn plant_seat_program(code: &mut [u8; 4096], sector_gpa: u32, byte: u8) {
+    code[..16].fill(0);
+    code[0] = 0xB8;
+    code[1..5].copy_from_slice(&sector_gpa.to_le_bytes());
+    code[5] = 0x0F;
+    code[6] = 0xB6;
+    code[7] = 0x00;
+    code[8] = 0x3C;
+    code[9] = byte;
+    code[10] = HLT_OPCODE;
+}
+
+pub fn note_seat_ram(hpa: u64) {
+    SEAT_HPA.store(hpa, Ordering::Release);
+}
+
+pub fn take_seat_ram() -> Option<u64> {
+    let hpa = SEAT_HPA.swap(0, Ordering::AcqRel);
+    if hpa == 0 { None } else { Some(hpa) }
+}
+
+/// True when the two ranges share a byte. A zero length or a zero base on
+/// `b` (unknown running-guest RAM) is not an overlap.
+pub fn ranges_overlap(a: u64, a_len: u64, b: u64, b_len: u64) -> bool {
+    if a_len == 0 || b_len == 0 || b == 0 {
+        return false;
+    }
+    let a_end = a.saturating_add(a_len);
+    let b_end = b.saturating_add(b_len);
+    a < b_end && b < a_end
+}
+
 pub fn primary_controls(cloned: u32) -> u32 {
     const HLT_EXITING: u32 = 1 << 7;
     const INTERRUPT_WINDOW: u32 = 1 << 2;
@@ -165,6 +206,7 @@ pub struct CompanionPages {
     pub guest_pt: [u8; 4096],
     pub code: [u8; 4096],
     pub stack: [u8; 4096],
+    pub sector: [u8; 4096],
 }
 
 impl CompanionPages {
@@ -180,6 +222,7 @@ impl CompanionPages {
         guest_pt: [0; 4096],
         code: [0; 4096],
         stack: [0; 4096],
+        sector: [0; 4096],
     };
 }
 
@@ -266,6 +309,7 @@ pub fn program_tables(pages: &mut CompanionPages) -> CompanionPlan {
     pages.guest_pt.fill(0);
     pages.code.fill(0);
     pages.stack.fill(0);
+    pages.sector.fill(0);
     pages.code[0] = HLT_OPCODE;
 
     let ept_pml4 = page_addr(&pages.ept_pml4);
@@ -278,6 +322,7 @@ pub fn program_tables(pages: &mut CompanionPages) -> CompanionPlan {
     let guest_pt = page_addr(&pages.guest_pt);
     let code = page_addr(&pages.code);
     let stack = page_addr(&pages.stack);
+    let sector = page_addr(&pages.sector);
     let vmcs = page_addr(&pages.vmcs);
 
     write_pte(&mut pages.ept_pml4, 0, ept_link(ept_pdpt));
@@ -290,6 +335,7 @@ pub fn program_tables(pages: &mut CompanionPages) -> CompanionPlan {
         (PD_GPA, guest_pd),
         (PT_GPA, guest_pt),
         (STACK_GPA, stack),
+        (SECTOR_GPA, sector),
     ];
     for (gpa, hpa) in ept_map {
         let idx = ((gpa >> 12) & 511) as usize;
@@ -309,6 +355,11 @@ pub fn program_tables(pages: &mut CompanionPages) -> CompanionPlan {
         (STACK_GPA >> 12) as usize,
         STACK_GPA | GUEST_LEAF,
     );
+    write_pte(
+        &mut pages.guest_pt,
+        (SECTOR_GPA >> 12) as usize,
+        SECTOR_GPA | GUEST_LEAF,
+    );
 
     CompanionPlan {
         vmcs,
@@ -321,6 +372,44 @@ pub fn program_tables(pages: &mut CompanionPages) -> CompanionPlan {
 
 fn guest_link(gpa: u64) -> u64 {
     gpa | GUEST_LINK
+}
+
+const SEAT_GPAS: [u64; 7] = [
+    CODE_GPA, PML4_GPA, PDPT_GPA, PD_GPA, PT_GPA, STACK_GPA, SECTOR_GPA,
+];
+
+fn guest_page<'a>(pages: &'a CompanionPages, gpa: u64) -> Option<&'a [u8; 4096]> {
+    match gpa {
+        CODE_GPA => Some(&pages.code),
+        PML4_GPA => Some(&pages.guest_pml4),
+        PDPT_GPA => Some(&pages.guest_pdpt),
+        PD_GPA => Some(&pages.guest_pd),
+        PT_GPA => Some(&pages.guest_pt),
+        STACK_GPA => Some(&pages.stack),
+        SECTOR_GPA => Some(&pages.sector),
+        _ => None,
+    }
+}
+
+/// Copy the guest pages into `ram` and point EPT at that RAM.
+/// `ram_hpa` is the host address of `ram[0]`.
+pub fn install_seat_ram(pages: &mut CompanionPages, ram_hpa: u64, ram: &mut [u8]) -> bool {
+    if ram_hpa & 0xfff != 0 || (ram.len() as u64) < SEAT_RAM_BYTES {
+        return false;
+    }
+    ram[..SEAT_RAM_BYTES as usize].fill(0);
+    for gpa in SEAT_GPAS {
+        let Some(src) = guest_page(pages, gpa) else {
+            return false;
+        };
+        let off = gpa as usize;
+        ram[off..off + 4096].copy_from_slice(src);
+    }
+    for gpa in SEAT_GPAS {
+        let idx = ((gpa >> 12) & 511) as usize;
+        write_pte(&mut pages.ept_pt, idx, ept_leaf(ram_hpa + gpa));
+    }
+    true
 }
 
 /// Host-physical address of `gpa` through the EPT just programmed.
@@ -382,7 +471,31 @@ mod tests {
         assert_eq!(ept_hpa(&pages, STACK_GPA), Some(page_addr(&pages.stack) & !0xfff));
         assert_eq!(guest_leaf_gpa(&pages, CODE_GPA), Some(CODE_GPA));
         assert_eq!(guest_leaf_gpa(&pages, STACK_GPA), Some(STACK_GPA));
+        assert_eq!(guest_leaf_gpa(&pages, SECTOR_GPA), Some(SECTOR_GPA));
         assert!(guest_leaf_gpa(&pages, 0).is_none());
+    }
+
+    #[test]
+    fn seat_ram_is_where_the_guest_executes() {
+        let mut pages = Box::new(CompanionPages::ZERO);
+        program_tables(&mut pages);
+        pages.sector[0] = 0x55;
+        plant_seat_program(&mut pages.code, SECTOR_GPA as u32, 0x55);
+        #[repr(C, align(4096))]
+        struct Ram([u8; SEAT_RAM_BYTES as usize]);
+        let mut ram = Box::new(Ram([0; SEAT_RAM_BYTES as usize]));
+        let hpa = ram.0.as_ptr() as u64;
+        assert_eq!(hpa & 0xfff, 0);
+        assert!(install_seat_ram(&mut pages, hpa, &mut ram.0));
+        assert_eq!(ept_hpa(&pages, CODE_GPA), Some(hpa + CODE_GPA));
+        assert_eq!(ept_hpa(&pages, SECTOR_GPA), Some(hpa + SECTOR_GPA));
+        assert_eq!(ram.0[CODE_GPA as usize], 0xB8);
+        assert_eq!(ram.0[CODE_GPA as usize + SEAT_HLT_OFF as usize], HLT_OPCODE);
+        assert_eq!(ram.0[SECTOR_GPA as usize], 0x55);
+        assert_eq!(guest_leaf_gpa(&pages, CODE_GPA), Some(CODE_GPA));
+        assert!(ranges_overlap(hpa, SEAT_RAM_BYTES, hpa + 0x1000, 0x1000));
+        assert!(!ranges_overlap(hpa, SEAT_RAM_BYTES, hpa + SEAT_RAM_BYTES, 0x1000));
+        assert!(!ranges_overlap(hpa, SEAT_RAM_BYTES, 0, 0x8000));
     }
 
     #[test]

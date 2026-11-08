@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-7-b6-disk |
-| Summary | **B6 second VMCS can execute one byte from the seated disk.** The running guest's disk target stays. The guest operating system is still waiting. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-7-b6-ram |
+| Summary | **B6 seated guest executes from its own 32 KiB.** That RAM is not the running guest's slab. The guest operating system is still waiting. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B8 lived. B6 in flight. B7 in flight. Not lived. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-08 | wave-7-b6-ram | 0.0 | 99 | **B6 seated guest executes from its own 32 KiB.** That RAM is not the running guest's slab. The guest operating system is still waiting. Not lived. Not an F11. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-08 | wave-7-b6-disk | 0.0 | 99 | **B6 second VMCS can execute one byte from the seated disk.** The running guest's disk target stays. The guest operating system is still waiting. Not lived. Not an F11. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-08 | wave-7-b6-vmcs | 0.0 | 99 | **B6 second VMCS runs HLT and returns.** The seated guest is still waiting. A failed entry leaves the running guest on the CPU. Not lived. Not an F11. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-08 | wave-7-b6-slice | 0.0 | 99 | **B6 slice clock and B7 startup-IPI record.** Companion progress stays zero until a second VMCS returns. MADT still has one CPU. Not lived. Not an F11. Scores held. months 0.0 held; overall 99 held |
