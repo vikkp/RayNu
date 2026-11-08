@@ -7530,8 +7530,9 @@ unsafe fn seat_private_mmio(gpa: u64, _qual: u64) -> bool {
         mmio_gpr_out(op, got);
     }
     if notify {
-        seat_complete_disk_read();
+        seat_service_disk();
     }
+    seat_try_inject();
     skip_insn()
 }
 
@@ -7552,44 +7553,197 @@ fn seat_disk_off(gpa: u64) -> Option<u16> {
 }
 
 #[cfg(target_os = "uefi")]
-unsafe fn seat_complete_disk_read() {
-    let (desc, driver, _device, last) = crate::devices::seat_dev::disk_queue();
-    let hpa = crate::mgmt::product_companion::seat_firmware_hpa();
-    let slab = crate::mgmt::product_companion::SEAT_FW_BYTES;
-    let mut read = |gpa: u64, buf: &mut [u8]| -> bool {
-        let Some(end) = gpa.checked_add(buf.len() as u64) else {
+unsafe fn seat_guest_copy(gpa: u64, buf: &mut [u8], write: bool) -> bool {
+    const TWO_MIB: u64 = 2 * 1024 * 1024;
+    let pages = &*core::ptr::addr_of!(COMPANION_PAGES);
+    let mut done = 0usize;
+    while done < buf.len() {
+        let g = gpa + done as u64;
+        let Some(h) = crate::mgmt::product_companion::ept_2m_hpa(pages, g) else {
             return false;
         };
-        if hpa == 0 || end > slab {
+        let room = (TWO_MIB - (g & (TWO_MIB - 1))) as usize;
+        let n = room.min(buf.len() - done);
+        if write {
+            core::ptr::copy_nonoverlapping(buf[done..].as_ptr(), h as *mut u8, n);
+        } else {
+            core::ptr::copy_nonoverlapping(h as *const u8, buf[done..].as_mut_ptr(), n);
+        }
+        done += n;
+    }
+    true
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn seat_guest_read(gpa: u64, buf: &mut [u8]) -> bool {
+    seat_guest_copy(gpa, buf, false)
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn seat_guest_write(gpa: u64, buf: &[u8]) -> bool {
+    let mut tmp = [0u8; 4096];
+    let mut done = 0usize;
+    while done < buf.len() {
+        let n = (buf.len() - done).min(tmp.len());
+        tmp[..n].copy_from_slice(&buf[done..done + n]);
+        if !seat_guest_copy(gpa + done as u64, &mut tmp[..n], true) {
             return false;
         }
-        core::ptr::copy_nonoverlapping((hpa + gpa) as *const u8, buf.as_mut_ptr(), buf.len());
-        true
-    };
-    let Some(req) = crate::devices::seat_dev::pull_in_request(&mut read, desc, driver, last) else {
-        return;
-    };
-    if req.data_len == 0 || req.data_len > 4096 {
-        return;
+        done += n;
     }
-    let Some((base, bytes)) = crate::mgmt::product_companion::seat_disk_bound() else {
-        return;
+    true
+}
+
+/// Finish up to 16 seated virtio requests. Reads use the seated disk.
+/// Writes are completed with an I/O error and do not touch either disk.
+#[cfg(target_os = "uefi")]
+unsafe fn seat_service_disk() {
+    use crate::devices::guest_virtio_blk::{
+        VIRTIO_BLK_S_IOERR, VIRTIO_BLK_S_OK, VIRTIO_BLK_T_FLUSH, VIRTIO_BLK_T_GET_ID,
+        VIRTIO_BLK_T_IN,
     };
-    let n = req.data_len as usize;
+    use crate::devices::seat_dev::{disk_advance, disk_queue, pull_request, used_bytes, used_slot};
+    let mut done = 0u32;
+    while done < 16 {
+        let (desc, driver, device, last, used, qsize) = disk_queue();
+        let mut read = |gpa: u64, buf: &mut [u8]| seat_guest_read(gpa, buf);
+        let Some(req) = pull_request(&mut read, desc, driver, last, qsize) else {
+            break;
+        };
+        let mut status = VIRTIO_BLK_S_OK;
+        let mut in_len = 0u32;
+        if req.ty == VIRTIO_BLK_T_IN {
+            match crate::mgmt::product_companion::seat_disk_bound() {
+                Some((base, bytes)) => {
+                    let mut byte_off = 0u64;
+                    for seg in &req.segs[..req.nseg] {
+                        if !seg.to_guest || status != VIRTIO_BLK_S_OK {
+                            status = VIRTIO_BLK_S_IOERR;
+                            break;
+                        }
+                        if !seat_fill_read(base, bytes, req.sector, byte_off, seg.gpa, seg.len) {
+                            status = VIRTIO_BLK_S_IOERR;
+                            break;
+                        }
+                        byte_off = byte_off.saturating_add(u64::from(seg.len));
+                        in_len = in_len.saturating_add(seg.len);
+                    }
+                }
+                None => status = VIRTIO_BLK_S_IOERR,
+            }
+        } else if req.ty == VIRTIO_BLK_T_GET_ID {
+            for seg in &req.segs[..req.nseg] {
+                if !seg.to_guest {
+                    continue;
+                }
+                let mut off = 0u32;
+                while off < seg.len {
+                    let n = (seg.len - off).min(64);
+                    let z = [0u8; 64];
+                    if !seat_guest_write(seg.gpa + u64::from(off), &z[..n as usize]) {
+                        status = VIRTIO_BLK_S_IOERR;
+                        break;
+                    }
+                    off = off.saturating_add(n);
+                    in_len = in_len.saturating_add(n);
+                }
+            }
+        } else if req.ty != VIRTIO_BLK_T_FLUSH {
+            status = VIRTIO_BLK_S_IOERR;
+        }
+        if req.status_gpa != 0 {
+            if !seat_guest_write(req.status_gpa, &[status]) {
+                break;
+            }
+            in_len = in_len.saturating_add(1);
+        }
+        let Some((elem_gpa, idx_gpa)) = used_slot(device, qsize, used) else {
+            break;
+        };
+        if !seat_guest_write(elem_gpa, &used_bytes(req.head, in_len)) {
+            break;
+        }
+        let next = used.wrapping_add(1);
+        if !seat_guest_write(idx_gpa, &next.to_le_bytes()) {
+            break;
+        }
+        disk_advance(last.wrapping_add(1), next);
+        done = done.saturating_add(1);
+    }
+    if done > 0 {
+        crate::devices::seat_dev::arm_disk_irq();
+        static SAID: AtomicBool = AtomicBool::new(false);
+        if !SAID.swap(true, Ordering::AcqRel) {
+            serial::write_str("boot: B6 seated disk completed ");
+            write_dec(u64::from(done));
+            serial::write_line(
+                " request(s) on its own queue; writes are not stored; the guest OS is still waiting",
+            );
+        }
+    }
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn seat_fill_read(
+    base: u64,
+    bytes: u64,
+    sector: u64,
+    byte_off: u64,
+    gpa: u64,
+    len: u32,
+) -> bool {
+    let mut done = 0u32;
     let mut tmp = [0u8; 4096];
-    let off = req.sector.saturating_mul(512);
-    if !crate::mgmt::megaraid::perc_seat_read(base, bytes, off, &mut tmp[..n]) {
+    while done < len {
+        let n = (len - done).min(4096) as usize;
+        let off = sector.saturating_mul(512).saturating_add(byte_off).saturating_add(u64::from(done));
+        if !crate::mgmt::megaraid::perc_seat_read(base, bytes, off, &mut tmp[..n]) {
+            return false;
+        }
+        if !seat_guest_write(gpa + u64::from(done), &tmp[..n]) {
+            return false;
+        }
+        done = done.saturating_add(n as u32);
+    }
+    true
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn seat_try_inject() {
+    if !crate::devices::seat_dev::disk_irq_pending() {
         return;
     }
-    let Some(data_end) = req.data_gpa.checked_add(req.data_len as u64) else {
+    let Some(vec) = crate::devices::seat_dev::gsi_vector(crate::devices::seat_dev::SEAT_DISK_GSI)
+    else {
         return;
     };
-    if data_end > slab || req.status_gpa >= slab {
+    let rflags = ops::vmread(GUEST_RFLAGS).unwrap_or(0);
+    if rflags & (1 << 9) == 0 {
         return;
     }
-    core::ptr::copy_nonoverlapping(tmp.as_ptr(), (hpa + req.data_gpa) as *mut u8, n);
-    core::ptr::write_volatile((hpa + req.status_gpa) as *mut u8, 0);
-    crate::devices::seat_dev::disk_set_last_avail(last.wrapping_add(1));
+    let block = ops::vmread(GUEST_INTERRUPTIBILITY_STATE).unwrap_or(0);
+    if block & 3 != 0 {
+        return;
+    }
+    let already = ops::vmread(VM_ENTRY_INTERRUPTION_INFO).unwrap_or(0);
+    if already & (1 << 31) != 0 {
+        return;
+    }
+    let Ok(info) = crate::sched::interrupt::prepare_external_inject(u32::from(vec)) else {
+        return;
+    };
+    if ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, u64::from(info)).is_err() {
+        return;
+    }
+    let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
+    let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
+    crate::devices::seat_dev::clear_disk_irq();
+    static SAID: AtomicBool = AtomicBool::new(false);
+    if !SAID.swap(true, Ordering::AcqRel) {
+        serial::write_str("boot: B6 seated disk interrupt vec=0x");
+        write_hex(u64::from(vec));
+        serial::write_line("; the running guest is not interrupted; the guest OS is still waiting");
+    }
 }
 
 /// CR0/CR3/CR4 for the seated guest only. Does not walk the running guest's
@@ -7660,6 +7814,7 @@ unsafe fn seat_map_extra_ram(gpa_base: u64) -> bool {
 
 #[cfg(target_os = "uefi")]
 unsafe fn finish_seat_firmware() -> ! {
+    seat_try_inject();
     let basic = ops::vmread(EXIT_REASON).unwrap_or(0xFFFF) as u32 & 0xFFFF;
     let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
     let hpa = crate::mgmt::product_companion::seat_firmware_hpa();
@@ -7687,6 +7842,8 @@ unsafe fn finish_seat_firmware() -> ! {
         pause_seat_for_guest();
     }
     if basic == EXIT_REASON_HLT && crate::mgmt::product_companion::seat_loader_loaded() {
+        seat_service_disk();
+        seat_try_inject();
         let len = match ops::vmread(VM_EXIT_INSTRUCTION_LEN) {
             Ok(l) if (1..=15).contains(&l) => l,
             _ => 1,

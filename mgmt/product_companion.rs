@@ -709,6 +709,21 @@ pub fn ept_pd(pages: &CompanionPages, index: usize) -> u64 {
     read_pte(&pages.ept_pd, index)
 }
 
+/// Host address of `gpa` when the EPT page directory has a 2 MiB leaf.
+pub fn ept_2m_hpa(pages: &CompanionPages, gpa: u64) -> Option<u64> {
+    const TWO_MIB: u64 = 2 * 1024 * 1024;
+    let idx = (gpa >> 21) as usize;
+    if idx >= 512 {
+        return None;
+    }
+    let leaf = read_pte(&pages.ept_pd, idx);
+    if leaf & (1 << 7) == 0 || leaf & 0b111 != 0b111 {
+        return None;
+    }
+    let base = leaf & 0x000f_ffff_ffe0_0000;
+    Some(base + (gpa & (TWO_MIB - 1)))
+}
+
 /// 2 MiB base of a GPA just past the seated firmware slab, up to 64 MiB.
 /// Device MMIO above that is not RAM.
 pub fn seat_ram_extend_base(gpa: u64) -> Option<u64> {
@@ -859,6 +874,8 @@ mod tests {
         let mut pages = Box::new(CompanionPages::ZERO);
         assert!(set_ept_2m_leaf(&mut pages, 16, 0x200_0000));
         assert_eq!(ept_pd(&pages, 16) & !0xfff, 0x200_0000);
+        assert_eq!(ept_2m_hpa(&pages, 0x200_1000), Some(0x200_1000));
+        assert!(ept_2m_hpa(&pages, 0x1000).is_none());
         assert!(!set_ept_2m_leaf(&mut pages, 16, 0x1000));
         assert!(begin_probe());
         pause_seat();

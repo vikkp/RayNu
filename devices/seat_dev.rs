@@ -11,14 +11,17 @@
 use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 const OFF_NOTIFY: u16 = 0x300;
+const OFF_ISR: u16 = 0x100;
 const OFF_DEVICE: u16 = 0x200;
 const QUEUE_MAX: u16 = 128;
 
 struct Disk {
     regs: [u8; 0x400],
     last_avail: u16,
+    used_idx: u16,
     capacity: u64,
     notifies: u32,
+    pending: bool,
 }
 
 struct Apic {
@@ -33,8 +36,10 @@ struct Ioapic {
 static mut DISK: Disk = Disk {
     regs: [0; 0x400],
     last_avail: 0,
+    used_idx: 0,
     capacity: 0,
     notifies: 0,
+    pending: false,
 };
 static mut APIC: Apic = Apic { regs: [0; 0x400] };
 static mut IOAPIC: Ioapic = Ioapic {
@@ -49,8 +54,10 @@ pub fn reset_for_test() {
         DISK = Disk {
             regs: [0; 0x400],
             last_avail: 0,
+            used_idx: 0,
             capacity: 0,
             notifies: 0,
+            pending: false,
         };
         APIC = Apic { regs: [0; 0x400] };
         IOAPIC = Ioapic {
@@ -115,13 +122,22 @@ fn write_reg(regs: &mut [u8], off: u16, size: u8, val: u64) {
 pub fn disk_access(off: u16, is_write: bool, size: u8, val: u64) -> (u64, bool) {
     let d = disk();
     if !is_write {
-        let v = if off == OFF_DEVICE || off == OFF_DEVICE + 4 {
+        let v = if off == 0x04 {
+            let sel = u32::from_le_bytes(d.regs[0..4].try_into().unwrap_or([0; 4]));
+            let feat = crate::devices::guest_virtio_blk::VIRTIO_BLK_DEVICE_FEATURES;
+            if sel == 0 { feat & 0xffff_ffff } else { feat >> 32 }
+        } else if off == OFF_ISR {
+            let isr = u64::from(d.regs[OFF_ISR as usize]);
+            d.regs[OFF_ISR as usize] = 0;
+            isr
+        } else if off == OFF_DEVICE || off == OFF_DEVICE + 4 {
             let shift = if off == OFF_DEVICE { 0 } else { 32 };
             (d.capacity >> shift) & if size >= 8 { u64::MAX } else { 0xffff_ffff }
         } else if off == 0x12 {
             1
         } else if off == 0x18 {
-            u64::from(QUEUE_MAX)
+            let n = u16::from_le_bytes([d.regs[0x18], d.regs[0x19]]);
+            u64::from(if n == 0 || n > QUEUE_MAX { QUEUE_MAX } else { n })
         } else {
             read_reg(&d.regs, off, size)
         };
@@ -136,30 +152,63 @@ pub fn disk_access(off: u16, is_write: bool, size: u8, val: u64) -> (u64, bool) 
     (0, false)
 }
 
-pub fn disk_queue() -> (u64, u64, u64, u16) {
+pub fn disk_queue() -> (u64, u64, u64, u16, u16, u16) {
     let d = disk();
+    let n = u16::from_le_bytes([d.regs[0x18], d.regs[0x19]]);
     (
         read_reg(&d.regs, 0x20, 8),
         read_reg(&d.regs, 0x28, 8),
         read_reg(&d.regs, 0x30, 8),
         d.last_avail,
+        d.used_idx,
+        if n == 0 || n > QUEUE_MAX { QUEUE_MAX } else { n },
     )
 }
 
-pub fn disk_set_last_avail(v: u16) {
-    disk().last_avail = v;
+pub fn disk_advance(last_avail: u16, used_idx: u16) {
+    let d = disk();
+    d.last_avail = last_avail;
+    d.used_idx = used_idx;
+}
+
+/// The queue interrupt bit. Reading the ISR register clears it.
+pub fn arm_disk_irq() {
+    let d = disk();
+    d.regs[OFF_ISR as usize] |= 1;
+    d.pending = true;
+}
+
+pub fn disk_irq_pending() -> bool {
+    disk().pending
+}
+
+pub fn clear_disk_irq() {
+    disk().pending = false;
 }
 
 pub fn notifies() -> u32 {
     NOTIFY.load(Ordering::Acquire)
 }
 
-/// One IN request: sector, data GPA, data length, status GPA, descriptor head.
+pub const DATA_SEGS: usize = 16;
+/// Install-disk INTx. Slot 2 is GSI 17 in the product DSDT.
+pub const SEAT_DISK_GSI: u8 = 17;
+
+/// One data descriptor. `to_guest` is the virtio WRITE flag.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct InReq {
+pub struct Seg {
+    pub gpa: u64,
+    pub len: u32,
+    pub to_guest: bool,
+}
+
+/// One virtio-blk request pulled from the avail ring.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BlkReq {
+    pub ty: u32,
     pub sector: u64,
-    pub data_gpa: u64,
-    pub data_len: u32,
+    pub segs: [Seg; DATA_SEGS],
+    pub nseg: usize,
     pub status_gpa: u64,
     pub head: u16,
 }
@@ -187,46 +236,114 @@ fn read_desc(
     Some((addr, len, flags, next))
 }
 
-/// Pull one virtio-blk IN (type 0) chain. `last` is the last consumed avail index.
-pub fn pull_in_request(
+/// Pull one virtio-blk chain. `last` is the last consumed avail index.
+pub fn pull_request(
     read: &mut impl FnMut(u64, &mut [u8]) -> bool,
     desc: u64,
     driver: u64,
     last: u16,
-) -> Option<InReq> {
+    qsize: u16,
+) -> Option<BlkReq> {
+    if qsize == 0 {
+        return None;
+    }
     let idx = read_u16(read, driver.wrapping_add(2))?;
     if idx == last {
         return None;
     }
-    let ring = driver.wrapping_add(4).wrapping_add(u64::from(last % QUEUE_MAX) * 2);
+    let ring = driver
+        .wrapping_add(4)
+        .wrapping_add(u64::from(last % qsize) * 2);
     let head = read_u16(read, ring)?;
-    let (hdr_gpa, hdr_len, flags, next) = read_desc(read, desc.wrapping_add(u64::from(head) * 16))?;
-    if hdr_len < 16 || flags & 1 == 0 {
+    let mut cur = head;
+    let mut segs = [Seg {
+        gpa: 0,
+        len: 0,
+        to_guest: false,
+    }; DATA_SEGS];
+    let mut nseg = 0usize;
+    let mut status_gpa = 0u64;
+    let mut ty = 0u32;
+    let mut sector = 0u64;
+    let mut got_hdr = false;
+    let mut chain = 0u16;
+    loop {
+        if chain > qsize {
+            return None;
+        }
+        let (addr, len, flags, next) = read_desc(read, desc.wrapping_add(u64::from(cur) * 16))?;
+        let more = flags & 1 != 0;
+        let to_guest = flags & 2 != 0;
+        if !got_hdr && len >= 16 && !to_guest {
+            let mut hdr = [0u8; 16];
+            if !read(addr, &mut hdr) {
+                return None;
+            }
+            ty = u32::from_le_bytes(hdr[0..4].try_into().ok()?);
+            sector = u64::from_le_bytes(hdr[8..16].try_into().ok()?);
+            got_hdr = true;
+        } else if to_guest && len == 1 && status_gpa == 0 {
+            status_gpa = addr;
+        } else if len > 0 && nseg < DATA_SEGS {
+            segs[nseg] = Seg {
+                gpa: addr,
+                len,
+                to_guest,
+            };
+            nseg += 1;
+        }
+        if !more {
+            break;
+        }
+        cur = next;
+        chain += 1;
+    }
+    if !got_hdr {
         return None;
     }
-    let mut hdr = [0u8; 16];
-    if !read(hdr_gpa, &mut hdr) || u32::from_le_bytes(hdr[0..4].try_into().ok()?) != 0 {
-        return None;
-    }
-    let sector = u64::from_le_bytes(hdr[8..16].try_into().ok()?);
-    let (data_gpa, data_len, data_flags, data_next) =
-        read_desc(read, desc.wrapping_add(u64::from(next) * 16))?;
-    if data_flags & 2 == 0 || data_len == 0 {
-        return None;
-    }
-    let (status_gpa, status_len, status_flags, _) =
-        read_desc(read, desc.wrapping_add(u64::from(data_next) * 16))?;
-    if status_flags & 2 == 0 || status_len < 1 {
-        return None;
-    }
-    let _ = flags;
-    Some(InReq {
+    Some(BlkReq {
+        ty,
         sector,
-        data_gpa,
-        data_len,
+        segs,
+        nseg,
         status_gpa,
         head,
     })
+}
+
+/// Used-ring element GPA and the used-index GPA for this completion.
+pub fn used_slot(device: u64, qsize: u16, used_idx: u16) -> Option<(u64, u64)> {
+    if qsize == 0 {
+        return None;
+    }
+    let slot = u64::from(used_idx % qsize);
+    Some((device.wrapping_add(4 + slot * 8), device.wrapping_add(2)))
+}
+
+pub fn used_bytes(head: u16, in_len: u32) -> [u8; 8] {
+    let mut elem = [0u8; 8];
+    elem[0..4].copy_from_slice(&u32::from(head).to_le_bytes());
+    elem[4..8].copy_from_slice(&in_len.to_le_bytes());
+    elem
+}
+
+/// Vector for `gsi` when that redirection entry is unmasked.
+pub fn gsi_vector(gsi: u8) -> Option<u8> {
+    let io = unsafe { &*core::ptr::addr_of!(IOAPIC) };
+    let idx = 0x10usize + (gsi as usize) * 2;
+    if idx >= io.regs.len() {
+        return None;
+    }
+    let low = io.regs[idx];
+    if low & (1 << 16) != 0 {
+        return None;
+    }
+    let vec = (low & 0xff) as u8;
+    if vec < 32 {
+        None
+    } else {
+        Some(vec)
+    }
 }
 
 pub fn apic_access(off: u16, is_write: bool, size: u8, val: u64) -> u64 {
@@ -318,12 +435,47 @@ mod tests {
             buf.copy_from_slice(&mem[o..o + buf.len()]);
             true
         };
-        let req = pull_in_request(&mut read, 0, 0x400, 0).expect("req");
+        let req = pull_request(&mut read, 0, 0x400, 0, 128).expect("req");
+        assert_eq!(req.ty, 0);
         assert_eq!(req.sector, 7);
-        assert_eq!(req.data_gpa, 0x200);
-        assert_eq!(req.data_len, 512);
+        assert_eq!(req.nseg, 1);
+        assert_eq!(req.segs[0].gpa, 0x200);
+        assert_eq!(req.segs[0].len, 512);
+        assert!(req.segs[0].to_guest);
         assert_eq!(req.status_gpa, 0x300);
         assert_eq!(req.head, 0);
+        let (elem_gpa, idx_gpa) = used_slot(0x800, 128, 0).expect("slot");
+        assert_eq!(elem_gpa, 0x804);
+        assert_eq!(idx_gpa, 0x802);
+        assert_eq!(used_bytes(0, 513), {
+            let mut e = [0u8; 8];
+            e[4] = 1;
+            e[5] = 2;
+            e
+        });
+        reset_for_test();
+    }
+
+    #[test]
+    fn features_isr_and_gsi_stay_on_this_device() {
+        reset_for_test();
+        let (lo, _) = disk_access(0x04, false, 4, 0);
+        assert_eq!(lo, 1 << 9);
+        let _ = disk_access(0x00, true, 4, 1);
+        let (hi, _) = disk_access(0x04, false, 4, 0);
+        assert_eq!(hi, 1);
+        arm_disk_irq();
+        assert!(disk_irq_pending());
+        let (isr, _) = disk_access(0x100, false, 1, 0);
+        assert_eq!(isr, 1);
+        let (isr, _) = disk_access(0x100, false, 1, 0);
+        assert_eq!(isr, 0);
+        assert!(gsi_vector(SEAT_DISK_GSI).is_none());
+        let _ = ioapic_access(0x00, true, 4, u64::from(0x10 + SEAT_DISK_GSI * 2));
+        let _ = ioapic_access(0x10, true, 4, 0x31);
+        assert_eq!(gsi_vector(SEAT_DISK_GSI), Some(0x31));
+        let _ = ioapic_access(0x10, true, 4, 0x31 | (1 << 16));
+        assert!(gsi_vector(SEAT_DISK_GSI).is_none());
         reset_for_test();
     }
 }

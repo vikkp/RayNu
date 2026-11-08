@@ -176,8 +176,9 @@
             A second product guest can be seated. Stop hands that guest the
             CPU. One guest is on the CPU at a time. While that second guest
             is seated, one extra VMCS runs a halt and comes back. When
-            memory is free and the disks differ, the seated kernel gets
-            its own disk and interrupt registers. The guest already
+            memory is free and the disks differ, the seated kernel
+            finishes disk requests on its own queue. Reads come from
+            the seated disk. Writes are not stored. The guest already
             running keeps its devices. The guest operating system is
             still waiting.
             A second CPU is not published yet, so
