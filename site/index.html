@@ -175,8 +175,10 @@
             <code>ssh</code> to <code>10.99.99.200</code> reaches a shell.
             A second product guest can be seated. Stop hands that guest the
             CPU. One guest is on the CPU at a time. While that second guest
-            is seated, one extra VMCS runs a halt and comes back. The seated
-            guest is still waiting. A second CPU is not published yet, so
+            is seated, one extra VMCS runs a halt and comes back. When that
+            guest's disk is a different image, the halt carries one byte
+            from that disk. The guest operating system is still waiting.
+            A second CPU is not published yet, so
             Ubuntu still boots with one. The rollback stays
             <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.6-wave6-closed"><code>v0.1.6-wave6-closed</code></a>.
           </p>

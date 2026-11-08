@@ -11,7 +11,10 @@
 //! Proven Core: **outside** (ADR-002 / ADR-021).
 //! VERIFICATION: L1 (host tests). The VM-entry instruction is uefi-only.
 
-use core::sync::atomic::{AtomicU8, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
+
+use crate::mgmt::megaraid::PERC_IMAGE_BYTES;
+use crate::mgmt::product_seats::Seat;
 
 /// Guest-physical page that holds `HLT`.
 pub const CODE_GPA: u64 = 0x1000;
@@ -21,6 +24,8 @@ pub const PD_GPA: u64 = 0x4000;
 pub const PT_GPA: u64 = 0x5000;
 pub const STACK_GPA: u64 = 0x6000;
 pub const HLT_OPCODE: u8 = 0xF4;
+/// `mov al, imm8; cmp al, imm8; hlt`. The halt is this far into the page.
+pub const DISK_HLT_OFF: u64 = 4;
 
 /// Present, writable, accessed. Supervisor. No NX.
 const GUEST_LINK: u64 = 0x23;
@@ -37,10 +42,14 @@ pub const MAX_TRIES: u8 = 4;
 
 static PROBE: AtomicU8 = AtomicU8::new(IDLE);
 static TRIES: AtomicU8 = AtomicU8::new(0);
+static PLANTED: AtomicBool = AtomicBool::new(false);
+static PLANT_OFF: AtomicU64 = AtomicU64::new(0);
 
 pub fn clear_for_test() {
     PROBE.store(IDLE, Ordering::Release);
     TRIES.store(0, Ordering::Release);
+    PLANTED.store(false, Ordering::Release);
+    PLANT_OFF.store(0, Ordering::Release);
 }
 
 pub fn probe_in_flight() -> bool {
@@ -88,6 +97,53 @@ pub fn probe_exit_is_retry(basic: u32) -> bool {
 }
 
 /// HLT must exit. An interrupt-window or NMI-window exit would steal the instruction.
+/// One seated disk. `spare_base == 0` is the 8 GiB window.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SeatDisk {
+    pub spare_base: u64,
+    pub disk_bytes: u64,
+}
+
+pub fn seat_disk(seat: Seat) -> SeatDisk {
+    match seat {
+        Seat::Window => SeatDisk {
+            spare_base: 0,
+            disk_bytes: PERC_IMAGE_BYTES,
+        },
+        Seat::Tail { off, bytes } => SeatDisk {
+            spare_base: off,
+            disk_bytes: bytes,
+        },
+    }
+}
+
+pub fn disks_differ(running: SeatDisk, parked: SeatDisk) -> bool {
+    running.spare_base != parked.spare_base
+}
+
+/// `mov al, imm8; cmp al, imm8; hlt` so the halt exit only happens after
+/// the seated disk's byte was the immediate.
+pub fn plant_disk_byte(code: &mut [u8; 4096], byte: u8) {
+    code[0] = 0xB0;
+    code[1] = byte;
+    code[2] = 0x3C;
+    code[3] = byte;
+    code[4] = HLT_OPCODE;
+}
+
+pub fn note_disk_plant(spare_base: u64) {
+    PLANT_OFF.store(spare_base, Ordering::Release);
+    PLANTED.store(true, Ordering::Release);
+}
+
+pub fn take_disk_plant() -> Option<u64> {
+    if PLANTED.swap(false, Ordering::AcqRel) {
+        Some(PLANT_OFF.load(Ordering::Acquire))
+    } else {
+        None
+    }
+}
+
 pub fn primary_controls(cloned: u32) -> u32 {
     const HLT_EXITING: u32 = 1 << 7;
     const INTERRUPT_WINDOW: u32 = 1 << 2;
@@ -351,6 +407,26 @@ mod tests {
         assert!(!begin_probe());
         assert_eq!(primary_controls(0), 1 << 7);
         assert_eq!(primary_controls((1 << 2) | (1 << 22) | 0x100), (1 << 7) | 0x100);
+        clear_for_test();
+    }
+
+    #[test]
+    fn a_different_disk_plants_its_byte_before_the_halt() {
+        let _guard = lock();
+        clear_for_test();
+        let window = seat_disk(Seat::Window);
+        let tail = seat_disk(Seat::Tail {
+            off: PERC_IMAGE_BYTES,
+            bytes: 512,
+        });
+        assert!(disks_differ(window, tail));
+        assert!(!disks_differ(window, window));
+        let mut code = [0u8; 4096];
+        plant_disk_byte(&mut code, 0x55);
+        assert_eq!(&code[..5], &[0xB0, 0x55, 0x3C, 0x55, HLT_OPCODE]);
+        note_disk_plant(tail.spare_base);
+        assert_eq!(take_disk_plant(), Some(PERC_IMAGE_BYTES));
+        assert!(take_disk_plant().is_none());
         clear_for_test();
     }
 

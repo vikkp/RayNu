@@ -176,6 +176,11 @@ pub fn parked() -> Option<Seat> {
     (0..CAP).find_map(|i| read(i).filter(|p| !p.on_cpu).map(|p| p.seat))
 }
 
+/// The guest that owns the VMCS, if one does.
+pub fn running() -> Option<Seat> {
+    (0..CAP).find_map(|i| read(i).filter(|p| p.on_cpu).map(|p| p.seat))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -195,6 +200,11 @@ mod tests {
             .any(|p| p.seat == Seat::Tail { off: 100, bytes: 50 } && p.on_cpu));
         assert!(seats.iter().flatten().any(|p| p.seat == Seat::Window && !p.on_cpu));
         assert!(has_parked());
+        assert_eq!(
+            running(),
+            Some(Seat::Tail { off: 100, bytes: 50 })
+        );
+        assert_eq!(parked(), Some(Seat::Window));
         assert_eq!(
             seat_beside(Seat::Tail { off: 100, bytes: 50 }, Seat::Window),
             Admit::Seated,

@@ -6840,14 +6840,31 @@ unsafe fn finish_product_companion_probe() -> ! {
     core::ptr::write(core::ptr::addr_of_mut!(SAVED_XMM), SavedXmm(xmm));
     cpu::write_cr2(cr2);
     let basic = ops::vmread(EXIT_REASON).unwrap_or(0xFFFF) as u32 & 0xFFFF;
-    if basic == EXIT_REASON_HLT {
+    let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+    if basic == EXIT_REASON_HLT
+        && rip == crate::mgmt::product_companion::CODE_GPA + crate::mgmt::product_companion::DISK_HLT_OFF
+    {
+        crate::mgmt::product_companion::note_probe_hlt();
+        if let Some(off) = crate::mgmt::product_companion::take_disk_plant() {
+            serial::write_str("boot: B6 seated disk byte ran on the second VMCS off=");
+            write_dec(off);
+            serial::write_line("; the guest OS is still waiting");
+        } else {
+            serial::write_line(
+                "boot: B6 second VMCS ran HLT and returned; the seated guest is still waiting",
+            );
+        }
+    } else if basic == EXIT_REASON_HLT {
+        let _ = crate::mgmt::product_companion::take_disk_plant();
         crate::mgmt::product_companion::note_probe_hlt();
         serial::write_line(
             "boot: B6 second VMCS ran HLT and returned; the seated guest is still waiting",
         );
     } else if crate::mgmt::product_companion::probe_exit_is_retry(basic) {
         crate::mgmt::product_companion::note_probe_retry();
+        let _ = crate::mgmt::product_companion::take_disk_plant();
     } else {
+        let _ = crate::mgmt::product_companion::take_disk_plant();
         crate::mgmt::product_companion::note_probe_failed();
         serial::write_str("boot: B6 second VMCS left on reason=0x");
         write_hex_u32(basic);
@@ -6888,6 +6905,22 @@ unsafe fn maybe_enter_product_companion() {
     crate::mgmt::product_companion::hold_guest(gpr, xmm.0, ubuntu, cpu::read_cr2());
     let pages = &mut *core::ptr::addr_of_mut!(COMPANION_PAGES);
     let plan = crate::mgmt::product_companion::program_tables(pages);
+    if let (Some(parked), Some(running)) = (
+        crate::mgmt::product_seats::parked(),
+        crate::mgmt::product_seats::running(),
+    ) {
+        let parked_disk = crate::mgmt::product_companion::seat_disk(parked);
+        let running_disk = crate::mgmt::product_companion::seat_disk(running);
+        if crate::mgmt::product_companion::disks_differ(running_disk, parked_disk) {
+            if let Some(byte) = crate::mgmt::megaraid::perc_seat_byte(
+                parked_disk.spare_base,
+                parked_disk.disk_bytes,
+            ) {
+                crate::mgmt::product_companion::plant_disk_byte(&mut pages.code, byte);
+                crate::mgmt::product_companion::note_disk_plant(parked_disk.spare_base);
+            }
+        }
+    }
     let mut vals = [0u64; 128];
     let mut present = [false; 128];
     let n = VMCS_CLONE_FIELDS.len();
@@ -6906,6 +6939,7 @@ unsafe fn maybe_enter_product_companion() {
         && ops::vmptrld(plan.vmcs).is_ok();
     if !prepared {
         let _ = ops::vmptrld(ubuntu);
+        let _ = crate::mgmt::product_companion::take_disk_plant();
         crate::mgmt::product_companion::note_probe_failed();
         serial::write_line("boot: B6 second VMCS entry failed; the running guest keeps the CPU");
         return;
@@ -6932,6 +6966,7 @@ unsafe fn maybe_enter_product_companion() {
     if ops::vmlaunch().is_err() {
         let ierr = ops::vmread(VM_INSTRUCTION_ERROR).unwrap_or(0xFFFF);
         let _ = ops::vmptrld(ubuntu);
+        let _ = crate::mgmt::product_companion::take_disk_plant();
         crate::mgmt::product_companion::note_probe_failed();
         serial::write_str("boot: B6 second VMCS entry failed insn_error=");
         write_dec(ierr);
