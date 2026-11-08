@@ -100,6 +100,7 @@ use super::{
     guest_uefi_linux_pit_jiffies_now, LINUX_PIT_RESUME_MIN_TSC,
     guest_uefi_virtio_mmio_heartbeat,
     guest_uefi_installer_console_quiet,
+    guest_uefi_virtio_mmio_notify_quiet,
     guest_uefi_linux_io_raises_pit, guest_uefi_linux_preempt_deadloop_noskip,
     guest_uefi_linux_pic_before_lapic, guest_uefi_linux_pic_before_leftover_gsi2,
     guest_uefi_pic_before_lapic,
@@ -1725,6 +1726,11 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_installer_console_quiet(false, 9000));
     assert!(!guest_uefi_installer_console_quiet(true, 8191));
     assert!(guest_uefi_installer_console_quiet(true, 8192));
+    assert!(!guest_uefi_virtio_mmio_notify_quiet(true, 1023, 0x300));
+    assert!(guest_uefi_virtio_mmio_notify_quiet(true, 1024, 0x300));
+    assert!(guest_uefi_virtio_mmio_notify_quiet(true, 5828, 0x100));
+    assert!(!guest_uefi_virtio_mmio_notify_quiet(true, 5828, 0x14));
+    assert!(!guest_uefi_virtio_mmio_notify_quiet(false, 5828, 0x300));
     assert!(guest_uefi_virtio_mmio_heartbeat(0));
     assert!(guest_uefi_virtio_mmio_heartbeat(31));
     assert!(guest_uefi_virtio_mmio_heartbeat(64));
