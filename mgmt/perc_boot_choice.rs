@@ -394,6 +394,7 @@ pub fn take_guest_stop() -> bool {
         return false;
     }
     GUEST_STOPPED.store(true, Ordering::Release);
+    crate::mgmt::product_seats::clear_running();
     true
 }
 

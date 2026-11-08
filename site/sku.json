@@ -20,14 +20,14 @@
   "counts": {
     "S1": {
       "lived": 54,
-      "in flight": 1,
-      "planned": 12,
+      "in flight": 2,
+      "planned": 11,
       "total": 67
     },
     "Final": {
       "lived": 54,
-      "in flight": 1,
-      "planned": 74,
+      "in flight": 2,
+      "planned": 73,
       "total": 129
     }
   },
@@ -199,10 +199,10 @@
         {
           "id": "B6",
           "capability": "Multiple concurrent guests on one R640",
-          "status": "planned",
+          "status": "in flight",
           "ships": "S1",
           "ref": "M4",
-          "note": "`RAYNU-V-M4-2VM-OK` on iron for lab guests; product guests one at a time",
+          "note": "Branch `cursor/wave-7-b6-seats-37d7`. Lab iron already printed `RAYNU-V-M4-2VM-OK` for the small G0/G1 guests. A product Start while another product guest owns the VMCS used to answer `busy`. It now seats the second guest (`{\"ok\":true,\"seated\":true,\"running\":false}`) and does not retarget the running guest's disk or NIC. The VMCS still runs one product guest. Not lived until two product guests both make progress on the R640",
           "wave": "7"
         },
         {
@@ -335,14 +335,14 @@
       "counts": {
         "S1": {
           "lived": 6,
-          "in flight": 0,
-          "planned": 4,
+          "in flight": 1,
+          "planned": 3,
           "total": 10
         },
         "Final": {
           "lived": 6,
-          "in flight": 0,
-          "planned": 14,
+          "in flight": 1,
+          "planned": 13,
           "total": 20
         }
       }
@@ -1612,8 +1612,8 @@
       "why": "Performance and capacity. B8 before B7: SMP on an 8259 is misery.",
       "counts": {
         "lived": 0,
-        "in flight": 1,
-        "planned": 8,
+        "in flight": 2,
+        "planned": 7,
         "total": 9
       },
       "closed": false
@@ -1861,7 +1861,7 @@
     {
       "id": "B6",
       "capability": "Multiple concurrent guests on one R640",
-      "status": "planned",
+      "status": "in flight",
       "role": "host-first"
     },
     {

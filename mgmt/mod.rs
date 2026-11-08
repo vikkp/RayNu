@@ -443,6 +443,7 @@ pub mod openapi;
 pub mod operator;
 pub mod pci_census;
 pub mod perc_boot_choice;
+pub mod product_seats;
 pub mod pre_ebs_mgmt;
 pub mod ship;
 pub mod sku_card;

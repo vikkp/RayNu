@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | spa-quiet-and-live-stage |
-| Summary | **SPA polls print once.** A7 spare write from `d0904bf8` runs while the guest stays up. Not in the running image. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-7-b6-seats |
+| Summary | **ADR-021 B6 in flight.** A second product guest is seated and is not on the CPU. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. TLS 88 held. |
-| Gates touched | A7 stays lived. A5 stays lived. Auth.token A5 stays parked. No doorbell. No format of UBUNTU0. |
+| Gates touched | B6 in flight. Not lived. No doorbell. No format of UBUNTU0. |
 
 ---
 
@@ -220,6 +220,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
 | 2026-11-05 | spa-quiet-and-live-stage | 94 | 72 | **SPA polls print once.** A7 spare write from `d0904bf8` runs while the guest stays up. Not in the running `fa3f4860c6a7`. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
+| 2026-11-08 | wave-7-b6-seats | 94 | 72 | **ADR-021 B6 in flight.** A second product guest is seated and is not on the CPU. Not lived. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-07 | wave-6-closed | 94 | 72 | **Wave 6 closed.** H8 accepted. GitHub Latest `v0.1.6-wave6-closed`. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-07 | wave-6-h8-proposal | 94 | 72 | **ADR-021 H8 in flight.** Twelve months from a tag. Mailbox namaskaar@raynuv.com. No reply clock. Not lived. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-07 | wave-6-d11-lived | 94 | 72 | **ADR-021 D11 lived.** Port 3 page, port 4 guests, iDRAC Dedicated or LOM3. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
