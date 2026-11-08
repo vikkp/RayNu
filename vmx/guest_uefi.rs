@@ -7274,6 +7274,112 @@ fn page_addr_companion_vmcs() -> u64 {
 }
 
 #[cfg(target_os = "uefi")]
+static mut SEAT_SAVED_GPRS: [u64; 15] = [0; 15];
+#[cfg(target_os = "uefi")]
+static mut SEAT_SAVED_XMM: [u8; 256] = [0; 256];
+#[cfg(target_os = "uefi")]
+static SEAT_SAVED_CR2: AtomicU64 = AtomicU64::new(0);
+
+#[cfg(target_os = "uefi")]
+unsafe fn save_seat_gprs() {
+    SEAT_SAVED_GPRS = [
+        SAVED_RAX, SAVED_RBX, SAVED_RCX, SAVED_RDX, SAVED_RSI, SAVED_RDI, SAVED_RBP, SAVED_R8,
+        SAVED_R9, SAVED_R10, SAVED_R11, SAVED_R12, SAVED_R13, SAVED_R14, SAVED_R15,
+    ];
+    let xmm = core::ptr::read(core::ptr::addr_of!(SAVED_XMM));
+    SEAT_SAVED_XMM = xmm.0;
+    SEAT_SAVED_CR2.store(cpu::read_cr2(), Ordering::Release);
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn load_seat_gprs() {
+    let gpr = SEAT_SAVED_GPRS;
+    SAVED_RAX = gpr[0];
+    SAVED_RBX = gpr[1];
+    SAVED_RCX = gpr[2];
+    SAVED_RDX = gpr[3];
+    SAVED_RSI = gpr[4];
+    SAVED_RDI = gpr[5];
+    SAVED_RBP = gpr[6];
+    SAVED_R8 = gpr[7];
+    SAVED_R9 = gpr[8];
+    SAVED_R10 = gpr[9];
+    SAVED_R11 = gpr[10];
+    SAVED_R12 = gpr[11];
+    SAVED_R13 = gpr[12];
+    SAVED_R14 = gpr[13];
+    SAVED_R15 = gpr[14];
+    core::ptr::write(core::ptr::addr_of_mut!(SAVED_XMM), SavedXmm(SEAT_SAVED_XMM));
+    cpu::write_cr2(SEAT_SAVED_CR2.load(Ordering::Acquire));
+}
+
+/// Leave the bootloader VMCS current-but-not-running and resume Ubuntu.
+#[cfg(target_os = "uefi")]
+unsafe fn pause_seat_for_guest() -> ! {
+    save_seat_gprs();
+    crate::mgmt::product_companion::pause_seat();
+    if crate::mgmt::product_companion::seat_slices() == 0 {
+        serial::write_line(
+            "boot: B6 seated bootloader continues after this turn; the guest OS is still waiting",
+        );
+    }
+    let (gpr, xmm, ubuntu, cr2) = crate::mgmt::product_companion::held_guest();
+    SAVED_RAX = gpr[0];
+    SAVED_RBX = gpr[1];
+    SAVED_RCX = gpr[2];
+    SAVED_RDX = gpr[3];
+    SAVED_RSI = gpr[4];
+    SAVED_RDI = gpr[5];
+    SAVED_RBP = gpr[6];
+    SAVED_R8 = gpr[7];
+    SAVED_R9 = gpr[8];
+    SAVED_R10 = gpr[9];
+    SAVED_R11 = gpr[10];
+    SAVED_R12 = gpr[11];
+    SAVED_R13 = gpr[12];
+    SAVED_R14 = gpr[13];
+    SAVED_R15 = gpr[14];
+    core::ptr::write(core::ptr::addr_of_mut!(SAVED_XMM), SavedXmm(xmm));
+    cpu::write_cr2(cr2);
+    if ubuntu == 0 || ops::vmptrld(ubuntu).is_err() {
+        serial::write_line("boot: B6 could not reload the running guest VMCS");
+        guest_uefi_resume_failed();
+    }
+    guest_uefi_vmresume();
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn resume_paused_seat() -> ! {
+    let ubuntu = match ops::vmptrst() {
+        Ok(p) if p != u64::MAX && p & 0xfff == 0 => p,
+        _ => {
+            crate::mgmt::product_companion::finish_paused_seat();
+            serial::write_line(
+                "boot: B6 seated bootloader left paused; the guest OS is still waiting",
+            );
+            guest_uefi_vmresume();
+        }
+    };
+    let gpr = [
+        SAVED_RAX, SAVED_RBX, SAVED_RCX, SAVED_RDX, SAVED_RSI, SAVED_RDI, SAVED_RBP, SAVED_R8,
+        SAVED_R9, SAVED_R10, SAVED_R11, SAVED_R12, SAVED_R13, SAVED_R14, SAVED_R15,
+    ];
+    let xmm = core::ptr::read(core::ptr::addr_of!(SAVED_XMM));
+    crate::mgmt::product_companion::hold_guest(gpr, xmm.0, ubuntu, cpu::read_cr2());
+    let vmcs = page_addr_companion_vmcs();
+    if ops::vmptrld(vmcs).is_err() {
+        let _ = ops::vmptrld(ubuntu);
+        crate::mgmt::product_companion::finish_paused_seat();
+        serial::write_line(
+            "boot: B6 seated bootloader left paused; the guest OS is still waiting",
+        );
+        guest_uefi_vmresume();
+    }
+    load_seat_gprs();
+    guest_uefi_vmresume();
+}
+
+#[cfg(target_os = "uefi")]
 unsafe fn hand_seat_firmware_back() -> ! {
     crate::mgmt::product_companion::clear_seat_firmware();
     crate::mgmt::product_companion::clear_seat_disk();
@@ -7376,6 +7482,14 @@ unsafe fn seat_firmware_service() -> bool {
     );
     RAM_HPA.store(prev, Ordering::Release);
     SAVED_RAX = d.status;
+    if id == crate::raynu_f::ServiceId::ExitBootServices
+        && d.status == 0
+        && crate::mgmt::product_companion::note_seat_kernel()
+    {
+        serial::write_line(
+            "boot: B6 seated firmware ExitBootServices; the kernel is starting; the guest OS is still waiting",
+        );
+    }
     ops::vmwrite(GUEST_RIP, rip.wrapping_add(len)).is_ok()
 }
 
@@ -7384,15 +7498,7 @@ unsafe fn finish_seat_firmware() -> ! {
     let basic = ops::vmread(EXIT_REASON).unwrap_or(0xFFFF) as u32 & 0xFFFF;
     let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
     let hpa = crate::mgmt::product_companion::seat_firmware_hpa();
-    if basic == EXIT_REASON_HLT {
-        if crate::mgmt::product_companion::seat_loader_loaded() {
-            serial::write_str("boot: B6 seated bootloader halted rip=0x");
-            write_hex(rip);
-            serial::write_str(" hpa=0x");
-            write_hex(hpa);
-            serial::write_line("; the guest OS is still waiting");
-            hand_seat_firmware_back();
-        }
+    if basic == EXIT_REASON_HLT && !crate::mgmt::product_companion::seat_loader_loaded() {
         let reads = unsafe { (*core::ptr::addr_of!(SEAT_FW_STATE)).block_reads };
         if reads > 0 {
             let off = crate::mgmt::product_companion::seat_disk_bound()
@@ -7413,10 +7519,49 @@ unsafe fn finish_seat_firmware() -> ! {
         hand_seat_firmware_back();
     }
     if crate::mgmt::product_companion::seat_firmware_exit_capped() {
-        serial::write_line(
-            "boot: B6 seated firmware paused; the guest OS is still waiting",
-        );
-        hand_seat_firmware_back();
+        pause_seat_for_guest();
+    }
+    if basic == EXIT_REASON_HLT && crate::mgmt::product_companion::seat_loader_loaded() {
+        let len = match ops::vmread(VM_EXIT_INSTRUCTION_LEN) {
+            Ok(l) if (1..=15).contains(&l) => l,
+            _ => 1,
+        };
+        if ops::vmwrite(GUEST_RIP, rip.wrapping_add(len)).is_ok() {
+            guest_uefi_vmresume();
+        }
+    }
+    if basic == EXIT_REASON_MSR_READ {
+        let v = guest_uefi_rdmsr(SAVED_RCX as u32);
+        SAVED_RAX = v as u32 as u64;
+        SAVED_RDX = (v >> 32) as u32 as u64;
+        let len = match ops::vmread(VM_EXIT_INSTRUCTION_LEN) {
+            Ok(l) if (1..=15).contains(&l) => l,
+            _ => 2,
+        };
+        if ops::vmwrite(GUEST_RIP, rip.wrapping_add(len)).is_ok() {
+            guest_uefi_vmresume();
+        }
+    }
+    if basic == EXIT_REASON_MSR_WRITE {
+        let v = (SAVED_RAX & 0xffff_ffff) | ((SAVED_RDX & 0xffff_ffff) << 32);
+        let msr = SAVED_RCX as u32;
+        let _ = match msr {
+            0xC000_0080 => ops::vmwrite(GUEST_IA32_EFER, v),
+            0x277 => ops::vmwrite(GUEST_IA32_PAT, v),
+            0x174 => ops::vmwrite(GUEST_IA32_SYSENTER_CS, v),
+            0x175 => ops::vmwrite(GUEST_IA32_SYSENTER_ESP, v),
+            0x176 => ops::vmwrite(GUEST_IA32_SYSENTER_EIP, v),
+            0xC000_0100 => ops::vmwrite(GUEST_FS_BASE, v),
+            0xC000_0101 => ops::vmwrite(GUEST_GS_BASE, v),
+            _ => Ok(()),
+        };
+        let len = match ops::vmread(VM_EXIT_INSTRUCTION_LEN) {
+            Ok(l) if (1..=15).contains(&l) => l,
+            _ => 2,
+        };
+        if ops::vmwrite(GUEST_RIP, rip.wrapping_add(len)).is_ok() {
+            guest_uefi_vmresume();
+        }
     }
     if basic == EXIT_REASON_CPUID {
         let leaf = SAVED_RAX as u32;
@@ -7455,6 +7600,17 @@ unsafe fn finish_seat_firmware() -> ! {
 /// not return on success. A failed instruction reloads the Ubuntu VMCS.
 #[cfg(target_os = "uefi")]
 unsafe fn maybe_enter_product_companion() {
+    if crate::mgmt::product_companion::seat_paused() {
+        if !crate::mgmt::product_companion::resume_seat() {
+            crate::mgmt::product_companion::finish_paused_seat();
+            crate::mgmt::product_companion::clear_seat_disk();
+            serial::write_line(
+                "boot: B6 seated bootloader left paused; the guest OS is still waiting",
+            );
+            return;
+        }
+        resume_paused_seat();
+    }
     if !crate::mgmt::product_seats::has_parked() {
         return;
     }

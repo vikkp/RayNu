@@ -13,7 +13,7 @@
 //! Proven Core: **outside** (ADR-002 / ADR-021).
 //! VERIFICATION: L1 (host tests). The VM-entry instruction is uefi-only.
 
-use core::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, Ordering};
 
 use crate::mgmt::megaraid::PERC_IMAGE_BYTES;
 use crate::mgmt::product_seats::Seat;
@@ -31,8 +31,10 @@ pub const SECTOR_GPA: u64 = 0x7000;
 pub const SEAT_RAM_BYTES: u64 = 0x8000;
 /// RayNu-F slab for a seated firmware entry. Same size as the product guest.
 pub const SEAT_FW_BYTES: u64 = crate::memory::ept_hw::GUEST_UEFI_LOW_RAM_BYTES;
-/// Service exits handled before the running guest is resumed.
-pub const SEAT_FW_EXIT_CAP: u8 = 24;
+/// Firmware exits in one turn before the running guest is resumed.
+pub const SEAT_FW_EXIT_CAP: u32 = 2048;
+/// Turns the seated bootloader is resumed before it is left paused.
+pub const SEAT_SLICE_CAP: u8 = 48;
 /// Guest code that calls `ReadBlocks` for LBA 0, then halts.
 pub const SEAT_DISK_STUB_GPA: u64 = 0x00B0_0000;
 /// Buffer that call fills. One sector.
@@ -56,6 +58,7 @@ const IDLE: u8 = 0;
 const IN_FLIGHT: u8 = 1;
 const RETURNED: u8 = 2;
 const FAILED: u8 = 3;
+const PARKED: u8 = 4;
 
 /// Attempts before a stolen exit is left alone.
 pub const MAX_TRIES: u8 = 4;
@@ -67,11 +70,13 @@ static PLANT_OFF: AtomicU64 = AtomicU64::new(0);
 static SEAT_HPA: AtomicU64 = AtomicU64::new(0);
 static FW_ON: AtomicBool = AtomicBool::new(false);
 static FW_HPA: AtomicU64 = AtomicU64::new(0);
-static FW_EXITS: AtomicU8 = AtomicU8::new(0);
+static FW_EXITS: AtomicU32 = AtomicU32::new(0);
+static SLICES: AtomicU8 = AtomicU8::new(0);
 static READ_ON: AtomicBool = AtomicBool::new(false);
 static READ_BASE: AtomicU64 = AtomicU64::new(0);
 static READ_BYTES: AtomicU64 = AtomicU64::new(0);
 static LOADER: AtomicBool = AtomicBool::new(false);
+static KERNEL: AtomicBool = AtomicBool::new(false);
 
 pub fn clear_for_test() {
     PROBE.store(IDLE, Ordering::Release);
@@ -82,10 +87,12 @@ pub fn clear_for_test() {
     FW_ON.store(false, Ordering::Release);
     FW_HPA.store(0, Ordering::Release);
     FW_EXITS.store(0, Ordering::Release);
+    SLICES.store(0, Ordering::Release);
     READ_ON.store(false, Ordering::Release);
     READ_BASE.store(0, Ordering::Release);
     READ_BYTES.store(0, Ordering::Release);
     LOADER.store(false, Ordering::Release);
+    KERNEL.store(false, Ordering::Release);
 }
 
 pub fn probe_in_flight() -> bool {
@@ -225,6 +232,41 @@ pub fn seat_firmware_exit_capped() -> bool {
     n >= SEAT_FW_EXIT_CAP
 }
 
+/// The bootloader stays in its VMCS. The running guest is resumed.
+pub fn pause_seat() {
+    let _ = PROBE.compare_exchange(IN_FLIGHT, PARKED, Ordering::AcqRel, Ordering::Acquire);
+}
+
+pub fn seat_paused() -> bool {
+    PROBE.load(Ordering::Acquire) == PARKED
+}
+
+/// Another turn for the parked bootloader. False when the slice budget is spent.
+pub fn resume_seat() -> bool {
+    if SLICES.load(Ordering::Acquire) >= SEAT_SLICE_CAP {
+        return false;
+    }
+    if PROBE
+        .compare_exchange(PARKED, IN_FLIGHT, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        return false;
+    }
+    FW_EXITS.store(0, Ordering::Release);
+    SLICES.fetch_add(1, Ordering::AcqRel);
+    true
+}
+
+pub fn seat_slices() -> u8 {
+    SLICES.load(Ordering::Acquire)
+}
+
+/// Parked for good. Later slices do not enter it again.
+pub fn finish_paused_seat() {
+    PROBE.store(RETURNED, Ordering::Release);
+    FW_ON.store(false, Ordering::Release);
+}
+
 pub fn clear_seat_firmware() {
     FW_ON.store(false, Ordering::Release);
 }
@@ -248,6 +290,13 @@ pub fn note_seat_loader() {
 
 pub fn seat_loader_loaded() -> bool {
     LOADER.load(Ordering::Acquire)
+}
+
+/// First time the seated firmware's `ExitBootServices` succeeds.
+pub fn note_seat_kernel() -> bool {
+    KERNEL
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
 }
 
 pub fn seat_disk_bound() -> Option<(u64, u64)> {
@@ -776,6 +825,15 @@ mod tests {
         );
         assert!(seat_loader_spans(0, 4096).is_none());
         assert!(seat_loader_spans(SEAT_LOADER_MAX_FILE + 1, 4096).is_none());
+        assert!(begin_probe());
+        pause_seat();
+        assert!(seat_paused());
+        assert!(resume_seat());
+        assert!(seat_firmware_active() || probe_in_flight());
+        assert_eq!(seat_slices(), 1);
+        finish_paused_seat();
+        assert!(!resume_seat());
+        clear_for_test();
         let mut pages = Box::new(CompanionPages::ZERO);
         let eptp = program_ept_2m(&mut pages, 0x20_0000, 2 * 1024 * 1024).expect("ept");
         assert_eq!(eptp & 0xfff, 0x1E);

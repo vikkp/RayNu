@@ -177,8 +177,9 @@
             CPU. One guest is on the CPU at a time. While that second guest
             is seated, one extra VMCS runs a halt and comes back. When
             memory is free and the disks differ, that firmware loads the
-            seated disk's bootloader and enters it, then returns the CPU.
-            The guest operating system is still waiting.
+            seated disk's bootloader and keeps running it between turns
+            of the guest already on the CPU. The guest operating system
+            is still waiting.
             A second CPU is not published yet, so
             Ubuntu still boots with one. The rollback stays
             <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.6-wave6-closed"><code>v0.1.6-wave6-closed</code></a>.
