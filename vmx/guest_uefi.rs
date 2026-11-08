@@ -6821,6 +6821,9 @@ static mut COMPANION_PAGES: crate::mgmt::product_companion::CompanionPages =
 /// exit can be tried on a later slice. Anything else stops the tries.
 #[cfg(target_os = "uefi")]
 unsafe fn finish_product_companion_probe() -> ! {
+    if crate::mgmt::product_companion::seat_firmware_active() {
+        finish_seat_firmware();
+    }
     let (gpr, xmm, ubuntu, cr2) = crate::mgmt::product_companion::held_guest();
     SAVED_RAX = gpr[0];
     SAVED_RBX = gpr[1];
@@ -6963,6 +6966,304 @@ unsafe fn seat_ram_hpa() -> Option<u64> {
     Some(hpa)
 }
 
+#[cfg(target_os = "uefi")]
+static mut SEAT_IOA: [u8; 4096] = [0; 4096];
+#[cfg(target_os = "uefi")]
+static SEAT_FW_HELD: AtomicU64 = AtomicU64::new(0);
+#[cfg(target_os = "uefi")]
+static mut SEAT_FW_STATE: crate::raynu_f::FirmwareState = crate::raynu_f::FirmwareState::new();
+#[cfg(target_os = "uefi")]
+static SEAT_FW_STATE_READY: AtomicBool = AtomicBool::new(false);
+
+/// Allocate a 2 MiB-aligned 32 MiB slab and place RayNu-F in it. `None` keeps
+/// the small halt guest. The running guest's VMCS is not cleared.
+#[cfg(target_os = "uefi")]
+unsafe fn prepare_seat_firmware() -> Option<crate::mgmt::product_companion::SeatFirmware> {
+    let held = SEAT_FW_HELD.load(Ordering::Acquire);
+    let hpa = if held != 0 {
+        held
+    } else {
+        let alloc = core::ptr::read(core::ptr::addr_of!(E4_ALLOC));
+        if alloc.is_null() {
+            return None;
+        }
+        let pages = crate::mgmt::product_companion::SEAT_FW_BYTES / 4096;
+        let frame = (*alloc).allocate_contiguous_aligned(pages, 512)?;
+        let hpa = frame.to_phys();
+        let ubuntu = RAM_HPA.load(Ordering::Acquire);
+        let companion = core::ptr::addr_of!(COMPANION_PAGES) as u64;
+        let companion_len =
+            core::mem::size_of::<crate::mgmt::product_companion::CompanionPages>() as u64;
+        let overlaps = crate::mgmt::product_companion::ranges_overlap(
+            hpa,
+            crate::mgmt::product_companion::SEAT_FW_BYTES,
+            ubuntu,
+            GUEST_UEFI_LOW_RAM_BYTES,
+        ) || crate::mgmt::product_companion::ranges_overlap(
+            hpa,
+            crate::mgmt::product_companion::SEAT_FW_BYTES,
+            companion,
+            companion_len,
+        );
+        if overlaps {
+            for i in 0..pages {
+                let _ = (*alloc).free_frame(PhysFrame(frame.0 + i));
+            }
+            return None;
+        }
+        SEAT_FW_HELD.store(hpa, Ordering::Release);
+        hpa
+    };
+    let slab = core::slice::from_raw_parts_mut(
+        hpa as *mut u8,
+        crate::mgmt::product_companion::SEAT_FW_BYTES as usize,
+    );
+    let fw = crate::mgmt::product_companion::place_seat_firmware(slab)?;
+    let pages = &mut *core::ptr::addr_of_mut!(COMPANION_PAGES);
+    crate::mgmt::product_companion::program_ept_2m(
+        pages,
+        hpa,
+        crate::mgmt::product_companion::SEAT_FW_BYTES,
+    )?;
+    Some(fw)
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn vmlaunch_rcx_rdx(rcx: u64, rdx: u64) -> Result<(), ()> {
+    let mut failed: u8;
+    core::arch::asm!(
+        "vmlaunch",
+        "setbe {failed}",
+        in("rcx") rcx,
+        in("rdx") rdx,
+        failed = lateout(reg_byte) failed,
+        options(nostack),
+    );
+    if failed == 0 {
+        Ok(())
+    } else {
+        Err(())
+    }
+}
+
+/// `true` when this call owned the exit (launched, or failed and restored).
+/// `false` when no firmware slab exists and the halt guest should run.
+#[cfg(target_os = "uefi")]
+unsafe fn launch_seat_firmware(ubuntu: u64) -> bool {
+    let Some(fw) = prepare_seat_firmware() else {
+        return false;
+    };
+    let Some(eptp) = crate::mgmt::product_companion::program_ept_2m(
+        &mut *core::ptr::addr_of_mut!(COMPANION_PAGES),
+        SEAT_FW_HELD.load(Ordering::Acquire),
+        crate::mgmt::product_companion::SEAT_FW_BYTES,
+    ) else {
+        return false;
+    };
+    let io_src = ops::vmread(IO_BITMAP_A).unwrap_or(0);
+    if io_src != 0 {
+        core::ptr::copy_nonoverlapping(io_src as *const u8, SEAT_IOA.as_mut_ptr(), 4096);
+        crate::mgmt::product_companion::set_io_port_exit(&mut SEAT_IOA, 0x5246);
+    }
+    let mut vals = [0u64; 128];
+    let mut present = [false; 128];
+    let n = VMCS_CLONE_FIELDS.len();
+    let mut n_ok = 0u32;
+    for i in 0..n {
+        if let Ok(v) = ops::vmread(VMCS_CLONE_FIELDS[i]) {
+            vals[i] = v;
+            present[i] = true;
+            n_ok += 1;
+        }
+    }
+    let vmcs = page_addr_companion_vmcs();
+    let prepared = n_ok >= 40
+        && prepare_vmcs_region(vmcs).is_ok()
+        && ops::vmclear(vmcs).is_ok()
+        && prepare_vmcs_region(vmcs).is_ok()
+        && ops::vmptrld(vmcs).is_ok();
+    if !prepared {
+        let _ = ops::vmptrld(ubuntu);
+        crate::mgmt::product_companion::note_probe_failed();
+        serial::write_line("boot: B6 seated firmware entry failed; the running guest keeps the CPU");
+        return true;
+    }
+    for i in 0..n {
+        if present[i] {
+            let _ = ops::vmwrite(VMCS_CLONE_FIELDS[i], vals[i]);
+        }
+    }
+    let primary = ops::vmread(PRIMARY_PROC_BASED_VM_EXEC_CONTROL).unwrap_or(0) as u32;
+    let _ = ops::vmwrite(
+        PRIMARY_PROC_BASED_VM_EXEC_CONTROL,
+        u64::from(crate::mgmt::product_companion::primary_controls(primary)),
+    );
+    let _ = ops::vmwrite(EPT_POINTER, eptp);
+    let _ = ops::vmwrite(GUEST_CR3, fw.cr3);
+    let _ = ops::vmwrite(GUEST_RIP, fw.entry);
+    let _ = ops::vmwrite(GUEST_RSP, fw.rsp);
+    let _ = ops::vmwrite(GUEST_RFLAGS, 2);
+    let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
+    let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
+    let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+    let _ = ops::vmwrite(VMX_PREEMPTION_TIMER_VALUE, 0xFFFF_FFFF);
+    if io_src != 0 {
+        let _ = ops::vmwrite(IO_BITMAP_A, SEAT_IOA.as_ptr() as u64);
+    }
+    let hpa = SEAT_FW_HELD.load(Ordering::Acquire);
+    crate::mgmt::product_companion::note_seat_firmware(hpa);
+    if vmlaunch_rcx_rdx(fw.rcx, fw.rdx).is_err() {
+        let ierr = ops::vmread(VM_INSTRUCTION_ERROR).unwrap_or(0xFFFF);
+        crate::mgmt::product_companion::clear_seat_firmware();
+        let _ = ops::vmptrld(ubuntu);
+        crate::mgmt::product_companion::note_probe_failed();
+        serial::write_str("boot: B6 seated firmware entry failed insn_error=");
+        write_dec(ierr);
+        serial::write_line("; the running guest keeps the CPU");
+        return true;
+    }
+    crate::mgmt::product_companion::clear_seat_firmware();
+    let _ = ops::vmptrld(ubuntu);
+    crate::mgmt::product_companion::note_probe_failed();
+    serial::write_line("boot: B6 seated firmware entry returned; the running guest keeps the CPU");
+    true
+}
+
+#[cfg(target_os = "uefi")]
+fn page_addr_companion_vmcs() -> u64 {
+    unsafe { core::ptr::addr_of!(COMPANION_PAGES).cast::<u8>() as u64 }
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn hand_seat_firmware_back() -> ! {
+    crate::mgmt::product_companion::clear_seat_firmware();
+    crate::mgmt::product_companion::note_probe_hlt();
+    let (gpr, xmm, ubuntu, cr2) = crate::mgmt::product_companion::held_guest();
+    SAVED_RAX = gpr[0];
+    SAVED_RBX = gpr[1];
+    SAVED_RCX = gpr[2];
+    SAVED_RDX = gpr[3];
+    SAVED_RSI = gpr[4];
+    SAVED_RDI = gpr[5];
+    SAVED_RBP = gpr[6];
+    SAVED_R8 = gpr[7];
+    SAVED_R9 = gpr[8];
+    SAVED_R10 = gpr[9];
+    SAVED_R11 = gpr[10];
+    SAVED_R12 = gpr[11];
+    SAVED_R13 = gpr[12];
+    SAVED_R14 = gpr[13];
+    SAVED_R15 = gpr[14];
+    core::ptr::write(core::ptr::addr_of_mut!(SAVED_XMM), SavedXmm(xmm));
+    cpu::write_cr2(cr2);
+    if ubuntu == 0 || ops::vmptrld(ubuntu).is_err() {
+        serial::write_line("boot: B6 could not reload the running guest VMCS");
+        guest_uefi_resume_failed();
+    }
+    guest_uefi_vmresume();
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn seat_firmware_service() -> bool {
+    let len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(0);
+    let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+    if len == 0 || len > 15 {
+        return false;
+    }
+    struct Mem;
+    impl crate::raynu_f::GuestMem for Mem {
+        fn read(&self, addr: u64, buf: &mut [u8]) -> usize {
+            unsafe { copy_guest_linear_bytes(addr, buf) }
+        }
+        fn write(&self, addr: u64, buf: &[u8]) -> usize {
+            if unsafe { write_guest_linear_bytes(addr, buf) } {
+                buf.len()
+            } else {
+                0
+            }
+        }
+    }
+    struct Sink;
+    impl crate::raynu_f::ConsoleSink for Sink {
+        fn write_byte(&mut self, _b: u8) {}
+        fn has_input(&self) -> bool {
+            false
+        }
+        fn read_input(&mut self) -> Option<u8> {
+            None
+        }
+    }
+    struct Jump;
+    impl crate::raynu_f::TimeSource for Jump {
+        fn now_100ns(&self) -> u64 {
+            static N: AtomicU64 = AtomicU64::new(0);
+            N.fetch_add(10_000_000_000, Ordering::Relaxed)
+        }
+    }
+    let hpa = crate::mgmt::product_companion::seat_firmware_hpa();
+    if hpa == 0 {
+        return false;
+    }
+    if !SEAT_FW_STATE_READY.swap(true, Ordering::AcqRel) {
+        let st = &mut *core::ptr::addr_of_mut!(SEAT_FW_STATE);
+        *st = crate::raynu_f::FirmwareState::new();
+    }
+    let prev = RAM_HPA.swap(hpa, Ordering::AcqRel);
+    let id = crate::raynu_f::ServiceId(SAVED_RAX as u32);
+    let args = crate::raynu_f::ServiceArgs {
+        a1: SAVED_RCX,
+        a2: SAVED_R10,
+        a3: SAVED_R8,
+        a4: SAVED_R9,
+        rsp: ops::vmread(GUEST_RSP).unwrap_or(0),
+    };
+    let st = &mut *core::ptr::addr_of_mut!(SEAT_FW_STATE);
+    let d = crate::raynu_f::dispatch(
+        id,
+        args,
+        &Mem,
+        &mut Sink,
+        st,
+        &Jump,
+        GUEST_UEFI_LOW_RAM_BYTES,
+    );
+    RAM_HPA.store(prev, Ordering::Release);
+    SAVED_RAX = d.status;
+    ops::vmwrite(GUEST_RIP, rip.wrapping_add(len)).is_ok()
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn finish_seat_firmware() -> ! {
+    let basic = ops::vmread(EXIT_REASON).unwrap_or(0xFFFF) as u32 & 0xFFFF;
+    let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+    let hpa = crate::mgmt::product_companion::seat_firmware_hpa();
+    if basic == EXIT_REASON_HLT {
+        serial::write_str("boot: B6 seated firmware halted rip=0x");
+        write_hex(rip);
+        serial::write_str(" hpa=0x");
+        write_hex(hpa);
+        serial::write_line("; the guest OS is still waiting");
+        hand_seat_firmware_back();
+    }
+    if basic == EXIT_REASON_IO_INSTRUCTION
+        && !crate::mgmt::product_companion::seat_firmware_exit_capped()
+    {
+        let qual = ops::vmread(EXIT_QUALIFICATION).unwrap_or(0);
+        let port = io_port_from_qual(qual);
+        let size = (qual & 7) + 1;
+        let is_in = (qual & (1 << 3)) != 0;
+        if crate::raynu_f::is_service_call(port, is_in, size) && seat_firmware_service() {
+            guest_uefi_vmresume();
+        }
+    }
+    serial::write_str("boot: B6 seated firmware returned rip=0x");
+    write_hex(rip);
+    serial::write_str(" hpa=0x");
+    write_hex(hpa);
+    serial::write_line("; the guest OS is still waiting");
+    hand_seat_firmware_back();
+}
+
 /// After this Ubuntu exit is handled, enter the HLT VMCS once. VMLAUNCH does
 /// not return on success. A failed instruction reloads the Ubuntu VMCS.
 #[cfg(target_os = "uefi")]
@@ -6989,6 +7290,9 @@ unsafe fn maybe_enter_product_companion() {
     ];
     let xmm = core::ptr::read(core::ptr::addr_of!(SAVED_XMM));
     crate::mgmt::product_companion::hold_guest(gpr, xmm.0, ubuntu, cpu::read_cr2());
+    if launch_seat_firmware(ubuntu) {
+        return;
+    }
     let pages = &mut *core::ptr::addr_of_mut!(COMPANION_PAGES);
     let plan = crate::mgmt::product_companion::program_tables(pages);
     if let (Some(parked), Some(running)) = (

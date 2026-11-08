@@ -1,6 +1,8 @@
 //! ADR-021 B6. One extra VMCS while a second product guest is seated.
 //!
 //! The page tables map a supervisor page whose first byte is `HLT`.
+//! When a 32 MiB slab is free, the same VMCS instead enters the RayNu-F
+//! test app in that slab. That is firmware, not the seated operating system.
 //! Entering that VMCS and coming back does not mean the seated guest ran.
 //! [`crate::mgmt::product_pair`] stays at zero for the companion until that
 //! guest itself is entered. A failed entry is permanent. An exit that stole
@@ -27,6 +29,10 @@ pub const STACK_GPA: u64 = 0x6000;
 pub const SECTOR_GPA: u64 = 0x7000;
 /// Private RAM for the seated guest. Not the running guest's slab.
 pub const SEAT_RAM_BYTES: u64 = 0x8000;
+/// RayNu-F slab for a seated firmware entry. Same size as the product guest.
+pub const SEAT_FW_BYTES: u64 = crate::memory::ept_hw::GUEST_UEFI_LOW_RAM_BYTES;
+/// Service exits handled before the running guest is resumed.
+pub const SEAT_FW_EXIT_CAP: u8 = 24;
 pub const HLT_OPCODE: u8 = 0xF4;
 /// `mov al, imm8; cmp al, imm8; hlt`. The halt is this far into the page.
 pub const DISK_HLT_OFF: u64 = 4;
@@ -51,6 +57,9 @@ static TRIES: AtomicU8 = AtomicU8::new(0);
 static PLANTED: AtomicBool = AtomicBool::new(false);
 static PLANT_OFF: AtomicU64 = AtomicU64::new(0);
 static SEAT_HPA: AtomicU64 = AtomicU64::new(0);
+static FW_ON: AtomicBool = AtomicBool::new(false);
+static FW_HPA: AtomicU64 = AtomicU64::new(0);
+static FW_EXITS: AtomicU8 = AtomicU8::new(0);
 
 pub fn clear_for_test() {
     PROBE.store(IDLE, Ordering::Release);
@@ -58,6 +67,9 @@ pub fn clear_for_test() {
     PLANTED.store(false, Ordering::Release);
     PLANT_OFF.store(0, Ordering::Release);
     SEAT_HPA.store(0, Ordering::Release);
+    FW_ON.store(false, Ordering::Release);
+    FW_HPA.store(0, Ordering::Release);
+    FW_EXITS.store(0, Ordering::Release);
 }
 
 pub fn probe_in_flight() -> bool {
@@ -176,6 +188,97 @@ pub fn take_seat_ram() -> Option<u64> {
 
 /// True when the two ranges share a byte. A zero length or a zero base on
 /// `b` (unknown running-guest RAM) is not an overlap.
+pub fn note_seat_firmware(hpa: u64) {
+    FW_HPA.store(hpa, Ordering::Release);
+    FW_EXITS.store(0, Ordering::Release);
+    FW_ON.store(true, Ordering::Release);
+}
+
+pub fn seat_firmware_active() -> bool {
+    FW_ON.load(Ordering::Acquire)
+}
+
+pub fn seat_firmware_hpa() -> u64 {
+    FW_HPA.load(Ordering::Acquire)
+}
+
+/// Count one firmware exit. `true` when the cap is reached and the running
+/// guest should resume.
+pub fn seat_firmware_exit_capped() -> bool {
+    let n = FW_EXITS.fetch_add(1, Ordering::AcqRel);
+    n >= SEAT_FW_EXIT_CAP
+}
+
+pub fn clear_seat_firmware() {
+    FW_ON.store(false, Ordering::Release);
+}
+
+/// Set the I/O-bitmap bit so `port` exits. Ports at or above `0x8000` live
+/// in the second bitmap and are left alone.
+pub fn set_io_port_exit(bitmap: &mut [u8], port: u16) {
+    if port >= 0x8000 {
+        return;
+    }
+    let i = (port / 8) as usize;
+    if i < bitmap.len() {
+        bitmap[i] |= 1 << (port % 8);
+    }
+}
+
+/// Where the seated firmware app will enter. GPAs are offsets in the slab.
+pub struct SeatFirmware {
+    pub entry: u64,
+    pub hlt_ok: u64,
+    pub hlt_fail: u64,
+    pub rsp: u64,
+    pub rcx: u64,
+    pub rdx: u64,
+    pub cr3: u64,
+}
+
+/// Place RayNu-F's identity map, tables, and test app in `slab`.
+/// Does not touch the running guest's firmware state.
+pub fn place_seat_firmware(slab: &mut [u8]) -> Option<SeatFirmware> {
+    use crate::raynu_f::{
+        build_firmware_image, build_test_app, load_pe32plus, plan_f2, IMAGE_BYTES,
+        TESTAPP_FILE_BYTES, TESTAPP_HLT_FAIL_OFF, TESTAPP_HLT_OK_OFF,
+    };
+    if (slab.len() as u64) < SEAT_FW_BYTES {
+        return None;
+    }
+    let plan = plan_f2(SEAT_FW_BYTES).ok()?;
+    let hpa = slab.as_mut_ptr() as u64;
+    if unsafe {
+        crate::vmx::guest_pt::build_identity_4g(hpa, SEAT_FW_BYTES, plan.cr3).is_err()
+    } {
+        return None;
+    }
+    let tb = plan.tables_base as usize;
+    let image_end = tb.checked_add(IMAGE_BYTES)?;
+    if image_end > slab.len() {
+        return None;
+    }
+    build_firmware_image(plan.tables_base, &mut slab[tb..image_end]).ok()?;
+    let mut file = [0u8; TESTAPP_FILE_BYTES];
+    build_test_app(&mut file).ok()?;
+    let ab = plan.app_load_base as usize;
+    let app_len = plan.app_size as usize;
+    let app_end = ab.checked_add(app_len)?;
+    if app_end > slab.len() {
+        return None;
+    }
+    let loaded = load_pe32plus(&file, plan.app_load_base, &mut slab[ab..app_end]).ok()?;
+    Some(SeatFirmware {
+        entry: loaded.entry,
+        hlt_ok: loaded.entry.wrapping_add(TESTAPP_HLT_OK_OFF),
+        hlt_fail: loaded.entry.wrapping_add(TESTAPP_HLT_FAIL_OFF),
+        rsp: plan.rsp,
+        rcx: plan.rcx,
+        rdx: plan.rdx,
+        cr3: plan.cr3,
+    })
+}
+
 pub fn ranges_overlap(a: u64, a_len: u64, b: u64, b_len: u64) -> bool {
     if a_len == 0 || b_len == 0 || b == 0 {
         return false;
@@ -412,6 +515,39 @@ pub fn install_seat_ram(pages: &mut CompanionPages, ram_hpa: u64, ram: &mut [u8]
     true
 }
 
+/// Identity EPT of `bytes` using 2 MiB leaves. `ram_hpa` and `bytes` are 2 MiB aligned.
+pub fn program_ept_2m(pages: &mut CompanionPages, ram_hpa: u64, bytes: u64) -> Option<u64> {
+    const TWO_MIB: u64 = 2 * 1024 * 1024;
+    if ram_hpa & (TWO_MIB - 1) != 0 || bytes == 0 || bytes & (TWO_MIB - 1) != 0 {
+        return None;
+    }
+    let n = (bytes / TWO_MIB) as usize;
+    if n == 0 || n > 512 {
+        return None;
+    }
+    pages.ept_pml4.fill(0);
+    pages.ept_pdpt.fill(0);
+    pages.ept_pd.fill(0);
+    let pdpt = page_addr(&pages.ept_pdpt);
+    let pd = page_addr(&pages.ept_pd);
+    let pml4 = page_addr(&pages.ept_pml4);
+    write_pte(&mut pages.ept_pml4, 0, ept_link(pdpt));
+    write_pte(&mut pages.ept_pdpt, 0, ept_link(pd));
+    for i in 0..n {
+        let hpa = ram_hpa + (i as u64) * TWO_MIB;
+        write_pte(
+            &mut pages.ept_pd,
+            i,
+            crate::memory::ept_hw::ept_leaf_large(hpa, 6),
+        );
+    }
+    Some(pack_eptp(pml4))
+}
+
+pub fn ept_pd(pages: &CompanionPages, index: usize) -> u64 {
+    read_pte(&pages.ept_pd, index)
+}
+
 /// Host-physical address of `gpa` through the EPT just programmed.
 pub fn ept_hpa(pages: &CompanionPages, gpa: u64) -> Option<u64> {
     let link_ok = |pte: u64| pte & 0b111 == 0b111;
@@ -496,6 +632,31 @@ mod tests {
         assert!(ranges_overlap(hpa, SEAT_RAM_BYTES, hpa + 0x1000, 0x1000));
         assert!(!ranges_overlap(hpa, SEAT_RAM_BYTES, hpa + SEAT_RAM_BYTES, 0x1000));
         assert!(!ranges_overlap(hpa, SEAT_RAM_BYTES, 0, 0x8000));
+    }
+
+    #[test]
+    fn seat_firmware_entry_is_the_raynu_f_app() {
+        let mut slab = vec![0u8; SEAT_FW_BYTES as usize];
+        let fw = place_seat_firmware(&mut slab).expect("firmware");
+        let at = fw.entry as usize;
+        let code = &crate::raynu_f::testapp::TESTAPP_CODE;
+        assert_eq!(&slab[at..at + 4], &code[..4]);
+        assert_eq!(slab[fw.hlt_ok as usize], HLT_OPCODE);
+        assert_eq!(slab[fw.hlt_fail as usize], HLT_OPCODE);
+        assert_eq!(fw.cr3, 0x0040_0000);
+        assert_ne!(fw.rdx, 0);
+        let mut pages = Box::new(CompanionPages::ZERO);
+        let eptp = program_ept_2m(&mut pages, 0x20_0000, 2 * 1024 * 1024).expect("ept");
+        assert_eq!(eptp & 0xfff, 0x1E);
+        let leaf = ept_pd(&pages, 0);
+        assert_eq!(leaf & !0xfff, 0x20_0000);
+        assert_ne!(leaf & (1 << 7), 0);
+        assert!(program_ept_2m(&mut pages, 0x1000, 2 * 1024 * 1024).is_none());
+        let mut bitmap = vec![0u8; 4096];
+        set_io_port_exit(&mut bitmap, 0x5246);
+        assert_ne!(bitmap[0x5246 / 8] & (1 << (0x5246 % 8)), 0);
+        set_io_port_exit(&mut bitmap, 0x8000);
+        assert_eq!(bitmap[0], 0);
     }
 
     #[test]
