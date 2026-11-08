@@ -3648,7 +3648,7 @@ fn perc_seat_read_uefi(spare_base: u64, disk_bytes: u64, off: u64, buf: &mut [u8
     if !PERC_IMAGE_BOOT.load(core::sync::atomic::Ordering::Acquire) {
         return false;
     }
-    if off % 512 != 0 || buf.is_empty() || buf.len() % 512 != 0 {
+    if buf.is_empty() {
         return false;
     }
     let Some(end) = off.checked_add(buf.len() as u64) else {
@@ -3672,13 +3672,15 @@ fn perc_seat_read_uefi(spare_base: u64, disk_bytes: u64, off: u64, buf: &mut [u8
     let mut done = 0usize;
     while done < buf.len() {
         let pos = off + done as u64;
+        let sector_off = pos & !511;
+        let skip = (pos - sector_off) as usize;
         let lba = if spare_base == 0 {
-            if pos / 512 >= PERC_IMAGE_BYTES / 512 {
+            if sector_off / 512 >= PERC_IMAGE_BYTES / 512 {
                 return false;
             }
-            pos / 512
+            sector_off / 512
         } else {
-            match tail_guest_to_lba(place, pos, 512) {
+            match tail_guest_to_lba(place, sector_off, 512) {
                 Some(l) => l,
                 None => return false,
             }
@@ -3690,11 +3692,16 @@ fn perc_seat_read_uefi(spare_base: u64, disk_bytes: u64, off: u64, buf: &mut [u8
             return false;
         }
         core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
-        // SAFETY: firmware wrote 512 bytes at `data`. The copy stays in `buf`.
+        let n = (512 - skip).min(buf.len() - done);
+        // SAFETY: firmware wrote 512 bytes at `data`. `skip+n` stays in that sector.
         unsafe {
-            core::ptr::copy_nonoverlapping(data as *const u8, buf[done..].as_mut_ptr(), 512);
+            core::ptr::copy_nonoverlapping(
+                (data as *const u8).add(skip),
+                buf[done..].as_mut_ptr(),
+                n,
+            );
         }
-        done += 512;
+        done += n;
     }
     true
 }

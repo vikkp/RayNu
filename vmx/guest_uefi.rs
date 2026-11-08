@@ -7083,6 +7083,101 @@ fn seat_block_read(_media: u32, off: u64, buf: &mut [u8]) -> bool {
     crate::mgmt::megaraid::perc_seat_read(base, bytes, off, buf)
 }
 
+/// Read `\EFI\ubuntu\grubx64.efi` (or the next candidate) off the seated disk
+/// and load it into the private slab. `None` leaves the `ReadBlocks` stub.
+#[cfg(target_os = "uefi")]
+unsafe fn try_load_seat_bootloader(hpa: u64) -> Option<u64> {
+    if hpa == 0 || crate::mgmt::product_companion::seat_disk_bound().is_none() {
+        return None;
+    }
+    let disk = SeatFat { base: 0 };
+    let esp = crate::raynu_f::find_esp_skip_array_crc(&disk).ok()?;
+    let reader = SeatFat {
+        base: esp.start_lba.saturating_mul(512),
+    };
+    let mut boot = [0u8; 512];
+    if !crate::raynu_f::fat::VolumeRead::read_at(&reader, 0, &mut boot) {
+        return None;
+    }
+    let vol = crate::raynu_f::fat::parse_bpb(&boot).ok()?;
+    let choice = crate::raynu_f::fat::pick_disk_bootloader(|p| {
+        matches!(
+            crate::raynu_f::fat::resolve_path(&vol, &reader, p),
+            Ok(e) if !e.is_dir()
+        )
+    })?;
+    let entry = crate::raynu_f::fat::resolve_path(&vol, &reader, choice.path).ok()?;
+    if entry.is_dir() {
+        return None;
+    }
+    let size = u64::from(entry.size);
+    let (file_gpa, _) = crate::mgmt::product_companion::seat_loader_spans(size, 4096)?;
+    let mut off = 0u64;
+    let mut tmp = [0u8; 4096];
+    while off < size {
+        let chunk = ((size - off).min(4096)) as usize;
+        match crate::raynu_f::fat::read_chain(
+            &vol,
+            &reader,
+            entry.first_cluster,
+            off,
+            &mut tmp[..chunk],
+        ) {
+            Ok(n) if n == chunk => {}
+            _ => return None,
+        }
+        core::ptr::copy_nonoverlapping(
+            tmp.as_ptr(),
+            (hpa + file_gpa + off) as *mut u8,
+            chunk,
+        );
+        off += chunk as u64;
+    }
+    let hdr_take = (size as usize).min(4096);
+    let hdr = core::slice::from_raw_parts((hpa + file_gpa) as *const u8, hdr_take);
+    let pe = crate::raynu_f::parse_pe32plus(hdr).ok()?;
+    let image_len = u64::from(pe.size_of_image);
+    let (_, img_gpa) = crate::mgmt::product_companion::seat_loader_spans(size, image_len)?;
+    let mem = SlabMem {
+        hpa,
+        len: crate::mgmt::product_companion::SEAT_FW_BYTES,
+    };
+    let loaded = crate::raynu_f::pe::load_pe32plus_guest(
+        &mem,
+        file_gpa,
+        size,
+        img_gpa,
+        image_len,
+    )
+    .ok()?;
+    crate::mgmt::product_companion::note_seat_loader();
+    serial::write_str("boot: B6 seated bootloader ");
+    for &b in choice.path {
+        serial::write_byte(b);
+    }
+    serial::write_str(" bytes=");
+    write_dec(size);
+    serial::write_str(" entry=0x");
+    write_hex(loaded.entry);
+    serial::write_line("; the guest OS is still waiting");
+    Some(loaded.entry)
+}
+
+#[cfg(target_os = "uefi")]
+struct SeatFat {
+    base: u64,
+}
+
+#[cfg(target_os = "uefi")]
+impl crate::raynu_f::fat::VolumeRead for SeatFat {
+    fn read_at(&self, off: u64, buf: &mut [u8]) -> bool {
+        let Some((base, bytes)) = crate::mgmt::product_companion::seat_disk_bound() else {
+            return false;
+        };
+        crate::mgmt::megaraid::perc_seat_read(base, bytes, self.base.saturating_add(off), buf)
+    }
+}
+
 /// `true` when this call owned the exit (launched, or failed and restored).
 /// `false` when no firmware slab exists and the halt guest should run.
 #[cfg(target_os = "uefi")]
@@ -7092,6 +7187,10 @@ unsafe fn launch_seat_firmware(ubuntu: u64) -> bool {
     };
     if let Some(entry) = arm_seat_disk_stub() {
         fw.entry = entry;
+        let hpa = SEAT_FW_HELD.load(Ordering::Acquire);
+        if let Some(loader) = try_load_seat_bootloader(hpa) {
+            fw.entry = loader;
+        }
     }
     let Some(eptp) = crate::mgmt::product_companion::program_ept_2m(
         &mut *core::ptr::addr_of_mut!(COMPANION_PAGES),
@@ -7286,6 +7385,14 @@ unsafe fn finish_seat_firmware() -> ! {
     let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
     let hpa = crate::mgmt::product_companion::seat_firmware_hpa();
     if basic == EXIT_REASON_HLT {
+        if crate::mgmt::product_companion::seat_loader_loaded() {
+            serial::write_str("boot: B6 seated bootloader halted rip=0x");
+            write_hex(rip);
+            serial::write_str(" hpa=0x");
+            write_hex(hpa);
+            serial::write_line("; the guest OS is still waiting");
+            hand_seat_firmware_back();
+        }
         let reads = unsafe { (*core::ptr::addr_of!(SEAT_FW_STATE)).block_reads };
         if reads > 0 {
             let off = crate::mgmt::product_companion::seat_disk_bound()
@@ -7305,9 +7412,29 @@ unsafe fn finish_seat_firmware() -> ! {
         }
         hand_seat_firmware_back();
     }
-    if basic == EXIT_REASON_IO_INSTRUCTION
-        && !crate::mgmt::product_companion::seat_firmware_exit_capped()
-    {
+    if crate::mgmt::product_companion::seat_firmware_exit_capped() {
+        serial::write_line(
+            "boot: B6 seated firmware paused; the guest OS is still waiting",
+        );
+        hand_seat_firmware_back();
+    }
+    if basic == EXIT_REASON_CPUID {
+        let leaf = SAVED_RAX as u32;
+        let sub = SAVED_RCX as u32;
+        let r = guest_uefi_filter_cpuid(leaf, sub);
+        SAVED_RAX = u64::from(r.eax);
+        SAVED_RBX = u64::from(r.ebx);
+        SAVED_RCX = u64::from(r.ecx);
+        SAVED_RDX = u64::from(r.edx);
+        let len = match ops::vmread(VM_EXIT_INSTRUCTION_LEN) {
+            Ok(l) if (1..=15).contains(&l) => l,
+            _ => 2,
+        };
+        if ops::vmwrite(GUEST_RIP, rip.wrapping_add(len)).is_ok() {
+            guest_uefi_vmresume();
+        }
+    }
+    if basic == EXIT_REASON_IO_INSTRUCTION {
         let qual = ops::vmread(EXIT_QUALIFICATION).unwrap_or(0);
         let port = io_port_from_qual(qual);
         let size = (qual & 7) + 1;

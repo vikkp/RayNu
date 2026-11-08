@@ -37,6 +37,10 @@ pub const SEAT_FW_EXIT_CAP: u8 = 24;
 pub const SEAT_DISK_STUB_GPA: u64 = 0x00B0_0000;
 /// Buffer that call fills. One sector.
 pub const SEAT_DISK_BUF_GPA: u64 = 0x00B0_1000;
+/// File bytes of the seated bootloader, then the loaded PE image.
+pub const SEAT_LOADER_FILE_GPA: u64 = 0x0180_0000;
+pub const SEAT_LOADER_IMAGE_GPA: u64 = 0x0100_0000;
+pub const SEAT_LOADER_MAX_FILE: u64 = 8 * 1024 * 1024;
 pub const HLT_OPCODE: u8 = 0xF4;
 /// `mov al, imm8; cmp al, imm8; hlt`. The halt is this far into the page.
 pub const DISK_HLT_OFF: u64 = 4;
@@ -67,6 +71,7 @@ static FW_EXITS: AtomicU8 = AtomicU8::new(0);
 static READ_ON: AtomicBool = AtomicBool::new(false);
 static READ_BASE: AtomicU64 = AtomicU64::new(0);
 static READ_BYTES: AtomicU64 = AtomicU64::new(0);
+static LOADER: AtomicBool = AtomicBool::new(false);
 
 pub fn clear_for_test() {
     PROBE.store(IDLE, Ordering::Release);
@@ -80,6 +85,7 @@ pub fn clear_for_test() {
     READ_ON.store(false, Ordering::Release);
     READ_BASE.store(0, Ordering::Release);
     READ_BYTES.store(0, Ordering::Release);
+    LOADER.store(false, Ordering::Release);
 }
 
 pub fn probe_in_flight() -> bool {
@@ -233,6 +239,15 @@ pub fn bind_seat_disk(spare_base: u64, disk_bytes: u64) {
 
 pub fn clear_seat_disk() {
     READ_ON.store(false, Ordering::Release);
+    LOADER.store(false, Ordering::Release);
+}
+
+pub fn note_seat_loader() {
+    LOADER.store(true, Ordering::Release);
+}
+
+pub fn seat_loader_loaded() -> bool {
+    LOADER.load(Ordering::Acquire)
 }
 
 pub fn seat_disk_bound() -> Option<(u64, u64)> {
@@ -247,6 +262,23 @@ pub fn seat_disk_bound() -> Option<(u64, u64)> {
 }
 
 /// Write a `ReadBlocks` call at [`SEAT_DISK_STUB_GPA`]. Returns that GPA.
+/// GPAs for the file and the loaded image when both fit in the 32 MiB slab
+/// and do not overlap.
+pub fn seat_loader_spans(file_len: u64, image_len: u64) -> Option<(u64, u64)> {
+    if file_len == 0 || file_len > SEAT_LOADER_MAX_FILE || image_len == 0 {
+        return None;
+    }
+    let file_end = SEAT_LOADER_FILE_GPA.checked_add(file_len)?;
+    let image_end = SEAT_LOADER_IMAGE_GPA.checked_add(image_len)?;
+    if file_end > SEAT_FW_BYTES || image_end > SEAT_FW_BYTES {
+        return None;
+    }
+    if SEAT_LOADER_IMAGE_GPA < file_end && SEAT_LOADER_FILE_GPA < image_end {
+        return None;
+    }
+    Some((SEAT_LOADER_FILE_GPA, SEAT_LOADER_IMAGE_GPA))
+}
+
 pub fn plant_disk_read(slab: &mut [u8]) -> Option<u64> {
     let end = (SEAT_DISK_BUF_GPA as usize).checked_add(512)?;
     if slab.len() < end {
@@ -738,6 +770,12 @@ mod tests {
         assert_eq!(seat_disk_bound(), Some((PERC_IMAGE_BYTES, 512)));
         clear_seat_disk();
         assert!(seat_disk_bound().is_none());
+        assert_eq!(
+            seat_loader_spans(4096, 8192),
+            Some((SEAT_LOADER_FILE_GPA, SEAT_LOADER_IMAGE_GPA))
+        );
+        assert!(seat_loader_spans(0, 4096).is_none());
+        assert!(seat_loader_spans(SEAT_LOADER_MAX_FILE + 1, 4096).is_none());
         let mut pages = Box::new(CompanionPages::ZERO);
         let eptp = program_ept_2m(&mut pages, 0x20_0000, 2 * 1024 * 1024).expect("ept");
         assert_eq!(eptp & 0xfff, 0x1E);
