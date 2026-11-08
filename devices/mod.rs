@@ -16,6 +16,7 @@ pub mod ide_cdrom;
 pub mod lapic_virt;
 pub mod m4_blk_gate;
 pub mod m4_net_gate;
+pub mod seat_dev;
 pub mod serial_pio;
 pub mod virtio_blk;
 pub mod virtio_net;

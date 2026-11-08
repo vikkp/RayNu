@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-7-b6-kernel |
-| Summary | **B6 seated kernel can take CR exits and grow private RAM.** Shared virtio and APICs stay with the running guest. The guest operating system is still waiting. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-7-b6-devs |
+| Summary | **B6 seated guest has its own disk and interrupt registers.** The running guest keeps its virtio and APICs. The guest operating system is still waiting. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B8 lived. B6 in flight. B7 in flight. Not lived. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-08 | wave-7-b6-devs | 0.0 | 99 | **B6 seated guest has its own disk and interrupt registers.** A virtio IN reads the seated disk. The running guest keeps its devices. The guest operating system is still waiting. Not lived. Not an F11. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-08 | wave-7-b6-kernel | 0.0 | 99 | **B6 seated kernel can take CR exits and grow private RAM to 64 MiB.** Shared virtio and APICs stop that VMCS so the running guest keeps them. The guest operating system is still waiting. Not lived. Not an F11. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-08 | wave-7-b6-slices | 0.0 | 99 | **B6 keeps the seated bootloader running across turns.** 2048 exits a turn, 48 turns. ExitBootServices says the kernel is starting. The guest operating system is still waiting. Not lived. Not an F11. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-08 | wave-7-b6-loader | 0.0 | 99 | **B6 loads the seated disk's bootloader and enters it.** The running guest's disk target stays. The guest operating system is still waiting. Not lived. Not an F11. Scores held. months 0.0 held; overall 99 held |

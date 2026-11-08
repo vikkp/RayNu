@@ -7071,6 +7071,7 @@ unsafe fn arm_seat_disk_stub() -> Option<u64> {
     );
     let entry = crate::mgmt::product_companion::plant_disk_read(slab)?;
     crate::mgmt::product_companion::bind_seat_disk(parked_disk.spare_base, parked_disk.disk_bytes);
+    crate::devices::seat_dev::set_capacity_bytes(parked_disk.disk_bytes);
     Some(entry)
 }
 
@@ -7493,6 +7494,104 @@ unsafe fn seat_firmware_service() -> bool {
     ops::vmwrite(GUEST_RIP, rip.wrapping_add(len)).is_ok()
 }
 
+/// Virtio, I/O APIC, and local APIC for the seated guest only.
+#[cfg(target_os = "uefi")]
+unsafe fn seat_private_mmio(gpa: u64, _qual: u64) -> bool {
+    let virtio = crate::devices::guest_virtio_blk::is_virtio_bar_gpa(gpa);
+    let ioapic = gpa >= crate::devices::guest_irq::IOAPIC_GPA
+        && gpa < crate::devices::guest_irq::IOAPIC_GPA + crate::devices::guest_irq::IOAPIC_SIZE;
+    let apic = crate::devices::lapic_virt::is_xapic_mmio_gpa(gpa);
+    if !virtio && !ioapic && !apic {
+        return false;
+    }
+    if crate::devices::seat_dev::note_hit() {
+        serial::write_line(
+            "boot: B6 seated guest has its own disk and interrupt controller; the running guest keeps its devices",
+        );
+    }
+    let mut buf = [0u8; 16];
+    let (n, insn_len) = copy_mmio_insn(&mut buf);
+    let Some(op) = decode_mmio_or_retry(&buf, n, insn_len) else {
+        return false;
+    };
+    let val = if op.is_write { mmio_gpr_in(op) } else { 0 };
+    let (got, notify) = if let Some(off) = seat_disk_off(gpa) {
+        crate::devices::seat_dev::disk_access(off, op.is_write, op.size, val)
+    } else if ioapic {
+        let off = (gpa - crate::devices::guest_irq::IOAPIC_GPA) as u16;
+        (crate::devices::seat_dev::ioapic_access(off, op.is_write, op.size, val), false)
+    } else if apic {
+        let off = (gpa - crate::devices::lapic_virt::APIC_GPA) as u16;
+        (crate::devices::seat_dev::apic_access(off, op.is_write, op.size, val), false)
+    } else {
+        (0, false)
+    };
+    if !op.is_write {
+        mmio_gpr_out(op, got);
+    }
+    if notify {
+        seat_complete_disk_read();
+    }
+    skip_insn()
+}
+
+#[cfg(target_os = "uefi")]
+fn seat_disk_off(gpa: u64) -> Option<u16> {
+    let programmed = crate::devices::guest_virtio_blk::mmio_bar_base();
+    let bar = if programmed != 0 {
+        programmed
+    } else {
+        u64::from(crate::devices::guest_virtio_blk::GUEST_VIRTIO_BAR0_DEFAULT)
+    };
+    if gpa >= bar && gpa < bar + u64::from(crate::devices::guest_virtio_blk::GUEST_VIRTIO_BAR0_SIZE)
+    {
+        Some((gpa - bar) as u16)
+    } else {
+        None
+    }
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn seat_complete_disk_read() {
+    let (desc, driver, _device, last) = crate::devices::seat_dev::disk_queue();
+    let hpa = crate::mgmt::product_companion::seat_firmware_hpa();
+    let slab = crate::mgmt::product_companion::SEAT_FW_BYTES;
+    let mut read = |gpa: u64, buf: &mut [u8]| -> bool {
+        let Some(end) = gpa.checked_add(buf.len() as u64) else {
+            return false;
+        };
+        if hpa == 0 || end > slab {
+            return false;
+        }
+        core::ptr::copy_nonoverlapping((hpa + gpa) as *const u8, buf.as_mut_ptr(), buf.len());
+        true
+    };
+    let Some(req) = crate::devices::seat_dev::pull_in_request(&mut read, desc, driver, last) else {
+        return;
+    };
+    if req.data_len == 0 || req.data_len > 4096 {
+        return;
+    }
+    let Some((base, bytes)) = crate::mgmt::product_companion::seat_disk_bound() else {
+        return;
+    };
+    let n = req.data_len as usize;
+    let mut tmp = [0u8; 4096];
+    let off = req.sector.saturating_mul(512);
+    if !crate::mgmt::megaraid::perc_seat_read(base, bytes, off, &mut tmp[..n]) {
+        return;
+    }
+    let Some(data_end) = req.data_gpa.checked_add(req.data_len as u64) else {
+        return;
+    };
+    if data_end > slab || req.status_gpa >= slab {
+        return;
+    }
+    core::ptr::copy_nonoverlapping(tmp.as_ptr(), (hpa + req.data_gpa) as *mut u8, n);
+    core::ptr::write_volatile((hpa + req.status_gpa) as *mut u8, 0);
+    crate::devices::seat_dev::disk_set_last_avail(last.wrapping_add(1));
+}
+
 /// CR0/CR3/CR4 for the seated guest only. Does not walk the running guest's
 /// page tables and does not change the shared local APIC.
 #[cfg(target_os = "uefi")]
@@ -7653,14 +7752,8 @@ unsafe fn finish_seat_firmware() -> ! {
     }
     if basic == EXIT_REASON_EPT_VIOLATION {
         let gpa = ops::vmread(GUEST_PHYSICAL_ADDRESS).unwrap_or(0);
-        if crate::devices::guest_virtio_blk::is_virtio_bar_gpa(gpa)
-            || crate::devices::guest_irq::is_ioapic_gpa(gpa)
-            || crate::devices::lapic_virt::is_xapic_mmio_gpa(gpa)
-        {
-            serial::write_str("boot: B6 seated kernel reached shared MMIO gpa=0x");
-            write_hex(gpa);
-            serial::write_line("; paused so the running guest keeps its devices");
-            hand_seat_firmware_back();
+        if seat_private_mmio(gpa, ops::vmread(EXIT_QUALIFICATION).unwrap_or(0)) {
+            guest_uefi_vmresume();
         }
         if let Some(base) = crate::mgmt::product_companion::seat_ram_extend_base(gpa) {
             if seat_map_extra_ram(base) {
