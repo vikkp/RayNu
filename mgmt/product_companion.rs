@@ -33,8 +33,7 @@ pub const SEAT_RAM_BYTES: u64 = 0x8000;
 pub const SEAT_FW_BYTES: u64 = crate::memory::ept_hw::GUEST_UEFI_LOW_RAM_BYTES;
 /// Firmware exits in one turn before the running guest is resumed.
 pub const SEAT_FW_EXIT_CAP: u32 = 2048;
-/// Turns the seated bootloader is resumed before it is left paused.
-pub const SEAT_SLICE_CAP: u8 = 48;
+/// Turns are not capped. Each one still yields after [`SEAT_FW_EXIT_CAP`] exits.
 /// Guest code that calls `ReadBlocks` for LBA 0, then halts.
 pub const SEAT_DISK_STUB_GPA: u64 = 0x00B0_0000;
 /// Buffer that call fills. One sector.
@@ -71,7 +70,7 @@ static SEAT_HPA: AtomicU64 = AtomicU64::new(0);
 static FW_ON: AtomicBool = AtomicBool::new(false);
 static FW_HPA: AtomicU64 = AtomicU64::new(0);
 static FW_EXITS: AtomicU32 = AtomicU32::new(0);
-static SLICES: AtomicU8 = AtomicU8::new(0);
+static SLICES: AtomicU32 = AtomicU32::new(0);
 static READ_ON: AtomicBool = AtomicBool::new(false);
 static READ_BASE: AtomicU64 = AtomicU64::new(0);
 static READ_BYTES: AtomicU64 = AtomicU64::new(0);
@@ -241,11 +240,8 @@ pub fn seat_paused() -> bool {
     PROBE.load(Ordering::Acquire) == PARKED
 }
 
-/// Another turn for the parked bootloader. False when the slice budget is spent.
+/// Another turn for the parked bootloader. False only when it is no longer parked.
 pub fn resume_seat() -> bool {
-    if SLICES.load(Ordering::Acquire) >= SEAT_SLICE_CAP {
-        return false;
-    }
     if PROBE
         .compare_exchange(PARKED, IN_FLIGHT, Ordering::AcqRel, Ordering::Acquire)
         .is_err()
@@ -253,11 +249,13 @@ pub fn resume_seat() -> bool {
         return false;
     }
     FW_EXITS.store(0, Ordering::Release);
-    SLICES.fetch_add(1, Ordering::AcqRel);
+    let _ = SLICES.fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| {
+        Some(n.saturating_add(1))
+    });
     true
 }
 
-pub fn seat_slices() -> u8 {
+pub fn seat_slices() -> u32 {
     SLICES.load(Ordering::Acquire)
 }
 

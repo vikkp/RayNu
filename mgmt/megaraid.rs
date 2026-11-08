@@ -831,6 +831,36 @@ pub fn perc_seat_read(spare_base: u64, disk_bytes: u64, off: u64, buf: &mut [u8]
     }
 }
 
+/// Spare LBA for one 512-byte write on the seated disk.
+///
+/// LBA 0 is `None`, so this cannot post the start of the virtual disk.
+/// A range outside the seated image is `None`. The running guest's disk is
+/// not an argument.
+pub fn seat_write_lba(spare_base: u64, disk_bytes: u64, off: u64) -> Option<u64> {
+    if off % 512 != 0 {
+        return None;
+    }
+    let slice = image_guest_read_slice(disk_bytes, spare_base, off, 512, 0)?;
+    if slice.lba == 0 || slice.skip != 0 || slice.take != 512 {
+        return None;
+    }
+    Some(slice.lba)
+}
+
+/// Write `buf` to the seated disk at guest byte `off`, without retargeting
+/// the running guest. Host and QEMU return false. LBA 0 is not posted.
+pub fn perc_seat_write(spare_base: u64, disk_bytes: u64, off: u64, buf: &[u8]) -> bool {
+    #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+    {
+        perc_seat_write_uefi(spare_base, disk_bytes, off, buf)
+    }
+    #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+    {
+        let _ = (spare_base, disk_bytes, off, buf);
+        false
+    }
+}
+
 /// First byte of guest sector 0 on `spare_base`, without retargeting the
 /// running guest. Host and QEMU return `None`. The read uses the same DMA
 /// page as install-disk I/O and is only safe while that guest is paused.
@@ -3702,6 +3732,50 @@ fn perc_seat_read_uefi(spare_base: u64, disk_bytes: u64, off: u64, buf: &mut [u8
             );
         }
         done += n;
+    }
+    true
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn perc_seat_write_uefi(spare_base: u64, disk_bytes: u64, off: u64, buf: &[u8]) -> bool {
+    if !PERC_IMAGE_BOOT.load(core::sync::atomic::Ordering::Acquire) || buf.is_empty() {
+        return false;
+    }
+    let bar = PERC_SPARE_BAR.load(core::sync::atomic::Ordering::Acquire);
+    let data = PERC_SPARE_DATA.load(core::sync::atomic::Ordering::Acquire);
+    let frame = PERC_SPARE_FRAME.load(core::sync::atomic::Ordering::Acquire);
+    let target = PERC_SPARE_TARGET.load(core::sync::atomic::Ordering::Acquire);
+    let spare = PERC_SPARE_BYTES.load(core::sync::atomic::Ordering::Acquire);
+    if bar == 0 || data == 0 || frame == 0 || spare < PERC_IMAGE_BYTES {
+        return false;
+    }
+    let mut done = 0usize;
+    while done < buf.len() {
+        let Some(slice) = image_guest_read_slice(disk_bytes, spare_base, off, buf.len(), done)
+        else {
+            return false;
+        };
+        if slice.lba == 0 {
+            return false;
+        }
+        let mut sector = [0u8; 512];
+        let guest_sector = (off + done as u64) & !511;
+        if slice.skip != 0 || slice.take != 512 {
+            if !perc_seat_read(spare_base, disk_bytes, guest_sector, &mut sector) {
+                return false;
+            }
+        }
+        sector[slice.skip..slice.skip + slice.take]
+            .copy_from_slice(&buf[done..done + slice.take]);
+        let Some((st, timed_out)) =
+            issue_ld_write16_sector(bar, target, slice.lba, frame, data, &sector)
+        else {
+            return false;
+        };
+        if timed_out || st != MFI_STAT_OK {
+            return false;
+        }
+        done += slice.take;
     }
     true
 }

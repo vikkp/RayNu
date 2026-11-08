@@ -176,11 +176,12 @@
             A second product guest can be seated. Stop hands that guest the
             CPU. One guest is on the CPU at a time. While that second guest
             is seated, one extra VMCS runs a halt and comes back. When
-            memory is free and the disks differ, the seated kernel
-            finishes disk requests on its own queue. Reads come from
-            the seated disk. Writes are not stored. The guest already
-            running keeps its devices. The guest operating system is
-            still waiting.
+            memory is free and the disks differ, the seated guest keeps
+            its turn and stores reads and writes on its own disk. The
+            guest already running keeps its devices. COM2 can print
+            <code>boot: B6 both product guests have been entered</code>.
+            The guest operating system is still waiting. This is the
+            F11 for that line. The second CPU is not on this stick.
             A second CPU is not published yet, so
             Ubuntu still boots with one. The rollback stays
             <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.6-wave6-closed"><code>v0.1.6-wave6-closed</code></a>.

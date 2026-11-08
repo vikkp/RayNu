@@ -356,6 +356,15 @@ fn fwstate_load_is_one_harpoon_and_does_not_bus_master() {
         Some(super::PERC_IMAGE_BYTES / 512)
     );
     assert!(super::seat_sector_lba(0, 511).is_none());
+    assert_eq!(super::seat_write_lba(0, super::PERC_IMAGE_BYTES, 0), None);
+    assert_eq!(super::seat_write_lba(0, super::PERC_IMAGE_BYTES, 512), Some(1));
+    assert_eq!(
+        super::seat_write_lba(place.spare_off, place.disk_bytes, 0),
+        Some(super::PERC_IMAGE_BYTES / 512)
+    );
+    assert!(super::seat_write_lba(place.spare_off, place.disk_bytes, ten).is_none());
+    assert!(super::seat_write_lba(512, super::PERC_IMAGE_BYTES, 0).is_none());
+    assert!(!super::perc_seat_write(place.spare_off, ten, 0, &[0u8; 512]));
     assert!(super::perc_seat_byte(0, super::PERC_IMAGE_BYTES).is_none());
     assert!(super::tail_guest_to_lba(place, 0, 511).is_none());
     assert!(super::tail_guest_to_lba(place, ten, 512).is_none());

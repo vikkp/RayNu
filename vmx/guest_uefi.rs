@@ -7494,6 +7494,21 @@ unsafe fn seat_firmware_service() -> bool {
     ops::vmwrite(GUEST_RIP, rip.wrapping_add(len)).is_ok()
 }
 
+/// The HLT probe does not call this. The first exit from the seated
+/// firmware VMCS counts as that guest being entered.
+#[cfg(target_os = "uefi")]
+unsafe fn note_seated_guest_entered() {
+    static ONCE: AtomicBool = AtomicBool::new(false);
+    if !ONCE.swap(true, Ordering::AcqRel) {
+        crate::mgmt::product_pair::note_companion();
+    }
+    if crate::mgmt::product_pair::take_close_line() {
+        serial::write_line(
+            "boot: B6 both product guests have been entered; confirm this line on COM2",
+        );
+    }
+}
+
 /// Virtio, I/O APIC, and local APIC for the seated guest only.
 #[cfg(target_os = "uefi")]
 unsafe fn seat_private_mmio(gpa: u64, _qual: u64) -> bool {
@@ -7600,7 +7615,7 @@ unsafe fn seat_guest_write(gpa: u64, buf: &[u8]) -> bool {
 unsafe fn seat_service_disk() {
     use crate::devices::guest_virtio_blk::{
         VIRTIO_BLK_S_IOERR, VIRTIO_BLK_S_OK, VIRTIO_BLK_T_FLUSH, VIRTIO_BLK_T_GET_ID,
-        VIRTIO_BLK_T_IN,
+        VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT,
     };
     use crate::devices::seat_dev::{disk_advance, disk_queue, pull_request, used_bytes, used_slot};
     let mut done = 0u32;
@@ -7627,6 +7642,24 @@ unsafe fn seat_service_disk() {
                         }
                         byte_off = byte_off.saturating_add(u64::from(seg.len));
                         in_len = in_len.saturating_add(seg.len);
+                    }
+                }
+                None => status = VIRTIO_BLK_S_IOERR,
+            }
+        } else if req.ty == VIRTIO_BLK_T_OUT {
+            match crate::mgmt::product_companion::seat_disk_bound() {
+                Some((base, bytes)) => {
+                    let mut byte_off = 0u64;
+                    for seg in &req.segs[..req.nseg] {
+                        if seg.to_guest || status != VIRTIO_BLK_S_OK {
+                            status = VIRTIO_BLK_S_IOERR;
+                            break;
+                        }
+                        if !seat_store_write(base, bytes, req.sector, byte_off, seg.gpa, seg.len) {
+                            status = VIRTIO_BLK_S_IOERR;
+                            break;
+                        }
+                        byte_off = byte_off.saturating_add(u64::from(seg.len));
                     }
                 }
                 None => status = VIRTIO_BLK_S_IOERR,
@@ -7677,10 +7710,38 @@ unsafe fn seat_service_disk() {
             serial::write_str("boot: B6 seated disk completed ");
             write_dec(u64::from(done));
             serial::write_line(
-                " request(s) on its own queue; writes are not stored; the guest OS is still waiting",
+                " request(s) on its own queue; writes stay on the seated disk; the guest OS is still waiting",
             );
         }
     }
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn seat_store_write(
+    base: u64,
+    bytes: u64,
+    sector: u64,
+    byte_off: u64,
+    gpa: u64,
+    len: u32,
+) -> bool {
+    let mut done = 0u32;
+    let mut tmp = [0u8; 4096];
+    while done < len {
+        let n = (len - done).min(4096) as usize;
+        if !seat_guest_read(gpa + u64::from(done), &mut tmp[..n]) {
+            return false;
+        }
+        let off = sector
+            .saturating_mul(512)
+            .saturating_add(byte_off)
+            .saturating_add(u64::from(done));
+        if !crate::mgmt::megaraid::perc_seat_write(base, bytes, off, &tmp[..n]) {
+            return false;
+        }
+        done = done.saturating_add(n as u32);
+    }
+    true
 }
 
 #[cfg(target_os = "uefi")]
@@ -7814,6 +7875,7 @@ unsafe fn seat_map_extra_ram(gpa_base: u64) -> bool {
 
 #[cfg(target_os = "uefi")]
 unsafe fn finish_seat_firmware() -> ! {
+    note_seated_guest_entered();
     seat_try_inject();
     let basic = ops::vmread(EXIT_REASON).unwrap_or(0xFFFF) as u32 & 0xFFFF;
     let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
