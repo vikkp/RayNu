@@ -176,9 +176,9 @@
             A second product guest can be seated. Stop hands that guest the
             CPU. One guest is on the CPU at a time. While that second guest
             is seated, one extra VMCS runs a halt and comes back. When
-            memory is free, that VMCS starts the guest firmware in its
-            own 32 MiB and then returns the CPU. The guest operating
-            system is still waiting.
+            memory is free and the disks differ, that firmware reads
+            sector 0 of the seated disk, then returns the CPU. The guest
+            operating system is still waiting.
             A second CPU is not published yet, so
             Ubuntu still boots with one. The rollback stays
             <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.6-wave6-closed"><code>v0.1.6-wave6-closed</code></a>.

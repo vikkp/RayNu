@@ -7046,13 +7046,53 @@ unsafe fn vmlaunch_rcx_rdx(rcx: u64, rdx: u64) -> Result<(), ()> {
     }
 }
 
+/// Point the seated firmware at the parked disk and enter a `ReadBlocks` stub.
+/// `None` leaves the RayNu-F test app as the entry.
+#[cfg(target_os = "uefi")]
+unsafe fn arm_seat_disk_stub() -> Option<u64> {
+    let (parked, running) = (
+        crate::mgmt::product_seats::parked()?,
+        crate::mgmt::product_seats::running()?,
+    );
+    let parked_disk = crate::mgmt::product_companion::seat_disk(parked);
+    let running_disk = crate::mgmt::product_companion::seat_disk(running);
+    if !crate::mgmt::product_companion::disks_differ(running_disk, parked_disk)
+        || parked_disk.disk_bytes < 512
+    {
+        return None;
+    }
+    let hpa = SEAT_FW_HELD.load(Ordering::Acquire);
+    if hpa == 0 {
+        return None;
+    }
+    let slab = core::slice::from_raw_parts_mut(
+        hpa as *mut u8,
+        crate::mgmt::product_companion::SEAT_FW_BYTES as usize,
+    );
+    let entry = crate::mgmt::product_companion::plant_disk_read(slab)?;
+    crate::mgmt::product_companion::bind_seat_disk(parked_disk.spare_base, parked_disk.disk_bytes);
+    Some(entry)
+}
+
+/// `ReadBlocks` backing for the seated image. Does not retarget the running guest.
+#[cfg(target_os = "uefi")]
+fn seat_block_read(_media: u32, off: u64, buf: &mut [u8]) -> bool {
+    let Some((base, bytes)) = crate::mgmt::product_companion::seat_disk_bound() else {
+        return false;
+    };
+    crate::mgmt::megaraid::perc_seat_read(base, bytes, off, buf)
+}
+
 /// `true` when this call owned the exit (launched, or failed and restored).
 /// `false` when no firmware slab exists and the halt guest should run.
 #[cfg(target_os = "uefi")]
 unsafe fn launch_seat_firmware(ubuntu: u64) -> bool {
-    let Some(fw) = prepare_seat_firmware() else {
+    let Some(mut fw) = prepare_seat_firmware() else {
         return false;
     };
+    if let Some(entry) = arm_seat_disk_stub() {
+        fw.entry = entry;
+    }
     let Some(eptp) = crate::mgmt::product_companion::program_ept_2m(
         &mut *core::ptr::addr_of_mut!(COMPANION_PAGES),
         SEAT_FW_HELD.load(Ordering::Acquire),
@@ -7137,6 +7177,7 @@ fn page_addr_companion_vmcs() -> u64 {
 #[cfg(target_os = "uefi")]
 unsafe fn hand_seat_firmware_back() -> ! {
     crate::mgmt::product_companion::clear_seat_firmware();
+    crate::mgmt::product_companion::clear_seat_disk();
     crate::mgmt::product_companion::note_probe_hlt();
     let (gpr, xmm, ubuntu, cr2) = crate::mgmt::product_companion::held_guest();
     SAVED_RAX = gpr[0];
@@ -7207,6 +7248,13 @@ unsafe fn seat_firmware_service() -> bool {
     if !SEAT_FW_STATE_READY.swap(true, Ordering::AcqRel) {
         let st = &mut *core::ptr::addr_of_mut!(SEAT_FW_STATE);
         *st = crate::raynu_f::FirmwareState::new();
+        if let Some((_, bytes)) = crate::mgmt::product_companion::seat_disk_bound() {
+            let tables = crate::raynu_f::launch_plan::F2_TABLES_BASE;
+            st.blockio_disk =
+                tables + crate::raynu_f::tables::IMAGE_BLOCKIO_DISK_OFF as u64;
+            st.media_disk = crate::raynu_f::BlockMedia::disk(bytes);
+            st.read_blocks = Some(seat_block_read);
+        }
     }
     let prev = RAM_HPA.swap(hpa, Ordering::AcqRel);
     let id = crate::raynu_f::ServiceId(SAVED_RAX as u32);
@@ -7238,11 +7286,23 @@ unsafe fn finish_seat_firmware() -> ! {
     let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
     let hpa = crate::mgmt::product_companion::seat_firmware_hpa();
     if basic == EXIT_REASON_HLT {
-        serial::write_str("boot: B6 seated firmware halted rip=0x");
-        write_hex(rip);
-        serial::write_str(" hpa=0x");
-        write_hex(hpa);
-        serial::write_line("; the guest OS is still waiting");
+        let reads = unsafe { (*core::ptr::addr_of!(SEAT_FW_STATE)).block_reads };
+        if reads > 0 {
+            let off = crate::mgmt::product_companion::seat_disk_bound()
+                .map(|(base, _)| base)
+                .unwrap_or(0);
+            serial::write_str("boot: B6 seated firmware read its disk off=");
+            write_dec(off);
+            serial::write_str(" hpa=0x");
+            write_hex(hpa);
+            serial::write_line("; the guest OS is still waiting");
+        } else {
+            serial::write_str("boot: B6 seated firmware halted rip=0x");
+            write_hex(rip);
+            serial::write_str(" hpa=0x");
+            write_hex(hpa);
+            serial::write_line("; the guest OS is still waiting");
+        }
         hand_seat_firmware_back();
     }
     if basic == EXIT_REASON_IO_INSTRUCTION

@@ -33,6 +33,10 @@ pub const SEAT_RAM_BYTES: u64 = 0x8000;
 pub const SEAT_FW_BYTES: u64 = crate::memory::ept_hw::GUEST_UEFI_LOW_RAM_BYTES;
 /// Service exits handled before the running guest is resumed.
 pub const SEAT_FW_EXIT_CAP: u8 = 24;
+/// Guest code that calls `ReadBlocks` for LBA 0, then halts.
+pub const SEAT_DISK_STUB_GPA: u64 = 0x00B0_0000;
+/// Buffer that call fills. One sector.
+pub const SEAT_DISK_BUF_GPA: u64 = 0x00B0_1000;
 pub const HLT_OPCODE: u8 = 0xF4;
 /// `mov al, imm8; cmp al, imm8; hlt`. The halt is this far into the page.
 pub const DISK_HLT_OFF: u64 = 4;
@@ -60,6 +64,9 @@ static SEAT_HPA: AtomicU64 = AtomicU64::new(0);
 static FW_ON: AtomicBool = AtomicBool::new(false);
 static FW_HPA: AtomicU64 = AtomicU64::new(0);
 static FW_EXITS: AtomicU8 = AtomicU8::new(0);
+static READ_ON: AtomicBool = AtomicBool::new(false);
+static READ_BASE: AtomicU64 = AtomicU64::new(0);
+static READ_BYTES: AtomicU64 = AtomicU64::new(0);
 
 pub fn clear_for_test() {
     PROBE.store(IDLE, Ordering::Release);
@@ -70,6 +77,9 @@ pub fn clear_for_test() {
     FW_ON.store(false, Ordering::Release);
     FW_HPA.store(0, Ordering::Release);
     FW_EXITS.store(0, Ordering::Release);
+    READ_ON.store(false, Ordering::Release);
+    READ_BASE.store(0, Ordering::Release);
+    READ_BYTES.store(0, Ordering::Release);
 }
 
 pub fn probe_in_flight() -> bool {
@@ -211,6 +221,76 @@ pub fn seat_firmware_exit_capped() -> bool {
 
 pub fn clear_seat_firmware() {
     FW_ON.store(false, Ordering::Release);
+}
+
+/// Remember which image the seated firmware may read. Does not change the
+/// running guest's disk.
+pub fn bind_seat_disk(spare_base: u64, disk_bytes: u64) {
+    READ_BASE.store(spare_base, Ordering::Release);
+    READ_BYTES.store(disk_bytes, Ordering::Release);
+    READ_ON.store(true, Ordering::Release);
+}
+
+pub fn clear_seat_disk() {
+    READ_ON.store(false, Ordering::Release);
+}
+
+pub fn seat_disk_bound() -> Option<(u64, u64)> {
+    if READ_ON.load(Ordering::Acquire) {
+        Some((
+            READ_BASE.load(Ordering::Acquire),
+            READ_BYTES.load(Ordering::Acquire),
+        ))
+    } else {
+        None
+    }
+}
+
+/// Write a `ReadBlocks` call at [`SEAT_DISK_STUB_GPA`]. Returns that GPA.
+pub fn plant_disk_read(slab: &mut [u8]) -> Option<u64> {
+    let end = (SEAT_DISK_BUF_GPA as usize).checked_add(512)?;
+    if slab.len() < end {
+        return None;
+    }
+    let tables = crate::raynu_f::launch_plan::F2_TABLES_BASE;
+    let blockio = tables + crate::raynu_f::tables::IMAGE_BLOCKIO_DISK_OFF as u64;
+    let read_fn = crate::raynu_f::trampoline_slot_gpa(
+        tables + crate::raynu_f::tables::IMAGE_TRAMPOLINE_OFF as u64,
+        crate::raynu_f::ServiceId::BlockIoReadBlocks,
+    );
+    let at = SEAT_DISK_STUB_GPA as usize;
+    let b = &mut slab[at..at + 64];
+    b.fill(0);
+    let mut i = 0usize;
+    b[i..i + 7].copy_from_slice(&[0x48, 0x81, 0xEC, 0x28, 0x00, 0x00, 0x00]);
+    i += 7;
+    b[i] = 0x48;
+    b[i + 1] = 0xB9;
+    b[i + 2..i + 10].copy_from_slice(&blockio.to_le_bytes());
+    i += 10;
+    b[i..i + 5].copy_from_slice(&[0xBA, 0x02, 0x00, 0x00, 0x00]);
+    i += 5;
+    b[i..i + 3].copy_from_slice(&[0x45, 0x31, 0xC0]);
+    i += 3;
+    b[i..i + 6].copy_from_slice(&[0x41, 0xB9, 0x00, 0x02, 0x00, 0x00]);
+    i += 6;
+    b[i] = 0x48;
+    b[i + 1] = 0xB8;
+    b[i + 2..i + 10].copy_from_slice(&SEAT_DISK_BUF_GPA.to_le_bytes());
+    i += 10;
+    b[i..i + 5].copy_from_slice(&[0x48, 0x89, 0x44, 0x24, 0x20]);
+    i += 5;
+    b[i] = 0x48;
+    b[i + 1] = 0xB8;
+    b[i + 2..i + 10].copy_from_slice(&read_fn.to_le_bytes());
+    i += 10;
+    b[i] = 0xFF;
+    b[i + 1] = 0xD0;
+    i += 2;
+    b[i] = HLT_OPCODE;
+    slab[SEAT_DISK_BUF_GPA as usize..SEAT_DISK_BUF_GPA as usize + 512].fill(0);
+    let _ = i;
+    Some(SEAT_DISK_STUB_GPA)
 }
 
 /// Set the I/O-bitmap bit so `port` exits. Ports at or above `0x8000` live
@@ -636,6 +716,8 @@ mod tests {
 
     #[test]
     fn seat_firmware_entry_is_the_raynu_f_app() {
+        let _guard = lock();
+        clear_for_test();
         let mut slab = vec![0u8; SEAT_FW_BYTES as usize];
         let fw = place_seat_firmware(&mut slab).expect("firmware");
         let at = fw.entry as usize;
@@ -645,6 +727,17 @@ mod tests {
         assert_eq!(slab[fw.hlt_fail as usize], HLT_OPCODE);
         assert_eq!(fw.cr3, 0x0040_0000);
         assert_ne!(fw.rdx, 0);
+        let entry = plant_disk_read(&mut slab).expect("stub");
+        assert_eq!(entry, SEAT_DISK_STUB_GPA);
+        assert_eq!(slab[entry as usize], 0x48);
+        assert!(slab[entry as usize..entry as usize + 64]
+            .windows(2)
+            .any(|w| w == [0xFF, 0xD0]));
+        assert_eq!(slab[entry as usize + 58], HLT_OPCODE);
+        bind_seat_disk(PERC_IMAGE_BYTES, 512);
+        assert_eq!(seat_disk_bound(), Some((PERC_IMAGE_BYTES, 512)));
+        clear_seat_disk();
+        assert!(seat_disk_bound().is_none());
         let mut pages = Box::new(CompanionPages::ZERO);
         let eptp = program_ept_2m(&mut pages, 0x20_0000, 2 * 1024 * 1024).expect("ept");
         assert_eq!(eptp & 0xfff, 0x1E);
