@@ -7493,6 +7493,72 @@ unsafe fn seat_firmware_service() -> bool {
     ops::vmwrite(GUEST_RIP, rip.wrapping_add(len)).is_ok()
 }
 
+/// CR0/CR3/CR4 for the seated guest only. Does not walk the running guest's
+/// page tables and does not change the shared local APIC.
+#[cfg(target_os = "uefi")]
+unsafe fn seat_handle_cr(qual: u64) -> bool {
+    let cr = (qual & 0xf) as u8;
+    let typ = ((qual >> 4) & 3) as u8;
+    let gpr = ((qual >> 8) & 0xf) as u8;
+    match (cr, typ) {
+        (0, 0) => {
+            let _ = ops::vmwrite(GUEST_CR0, cr_gpr(gpr));
+        }
+        (3, 0) => {
+            let _ = ops::vmwrite(GUEST_CR3, cr_gpr(gpr));
+        }
+        (4, 0) => {
+            let val = apply_guest_cr4_write(cr_gpr(gpr));
+            let _ = ops::vmwrite(GUEST_CR4, val);
+            let _ = ops::vmwrite(CR4_READ_SHADOW, guest_cr4_read_shadow(val));
+        }
+        (0, 1) => set_cr_gpr(gpr, ops::vmread(GUEST_CR0).unwrap_or(0)),
+        (3, 1) => set_cr_gpr(gpr, ops::vmread(GUEST_CR3).unwrap_or(0)),
+        (4, 1) => set_cr_gpr(gpr, ops::vmread(CR4_READ_SHADOW).unwrap_or(0)),
+        _ => return false,
+    }
+    skip_insn()
+}
+
+/// Map one more 2 MiB of private RAM for the seated kernel. Not the running
+/// guest's slab and not a device page.
+#[cfg(target_os = "uefi")]
+unsafe fn seat_map_extra_ram(gpa_base: u64) -> bool {
+    let alloc = core::ptr::read(core::ptr::addr_of!(E4_ALLOC));
+    if alloc.is_null() {
+        return false;
+    }
+    let frame = match (*alloc).allocate_contiguous_aligned(512, 512) {
+        Some(f) => f,
+        None => return false,
+    };
+    let hpa = frame.to_phys();
+    let ubuntu = RAM_HPA.load(Ordering::Acquire);
+    if crate::mgmt::product_companion::ranges_overlap(
+        hpa,
+        2 * 1024 * 1024,
+        ubuntu,
+        GUEST_UEFI_LOW_RAM_BYTES,
+    ) {
+        for i in 0..512 {
+            let _ = (*alloc).free_frame(PhysFrame(frame.0 + i));
+        }
+        return false;
+    }
+    let index = (gpa_base >> 21) as usize;
+    let pages = &mut *core::ptr::addr_of_mut!(COMPANION_PAGES);
+    if !crate::mgmt::product_companion::set_ept_2m_leaf(pages, index, hpa) {
+        for i in 0..512 {
+            let _ = (*alloc).free_frame(PhysFrame(frame.0 + i));
+        }
+        return false;
+    }
+    serial::write_str("boot: B6 seated kernel RAM gpa=0x");
+    write_hex(gpa_base);
+    serial::write_line("; the guest OS is still waiting");
+    true
+}
+
 #[cfg(target_os = "uefi")]
 unsafe fn finish_seat_firmware() -> ! {
     let basic = ops::vmread(EXIT_REASON).unwrap_or(0xFFFF) as u32 & 0xFFFF;
@@ -7577,6 +7643,29 @@ unsafe fn finish_seat_firmware() -> ! {
         };
         if ops::vmwrite(GUEST_RIP, rip.wrapping_add(len)).is_ok() {
             guest_uefi_vmresume();
+        }
+    }
+    if basic == EXIT_REASON_CR_ACCESS {
+        let qual = ops::vmread(EXIT_QUALIFICATION).unwrap_or(0);
+        if seat_handle_cr(qual) {
+            guest_uefi_vmresume();
+        }
+    }
+    if basic == EXIT_REASON_EPT_VIOLATION {
+        let gpa = ops::vmread(GUEST_PHYSICAL_ADDRESS).unwrap_or(0);
+        if crate::devices::guest_virtio_blk::is_virtio_bar_gpa(gpa)
+            || crate::devices::guest_irq::is_ioapic_gpa(gpa)
+            || crate::devices::lapic_virt::is_xapic_mmio_gpa(gpa)
+        {
+            serial::write_str("boot: B6 seated kernel reached shared MMIO gpa=0x");
+            write_hex(gpa);
+            serial::write_line("; paused so the running guest keeps its devices");
+            hand_seat_firmware_back();
+        }
+        if let Some(base) = crate::mgmt::product_companion::seat_ram_extend_base(gpa) {
+            if seat_map_extra_ram(base) {
+                guest_uefi_vmresume();
+            }
         }
     }
     if basic == EXIT_REASON_IO_INSTRUCTION {

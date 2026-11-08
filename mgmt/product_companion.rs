@@ -709,6 +709,30 @@ pub fn ept_pd(pages: &CompanionPages, index: usize) -> u64 {
     read_pte(&pages.ept_pd, index)
 }
 
+/// 2 MiB base of a GPA just past the seated firmware slab, up to 64 MiB.
+/// Device MMIO above that is not RAM.
+pub fn seat_ram_extend_base(gpa: u64) -> Option<u64> {
+    const TWO_MIB: u64 = 2 * 1024 * 1024;
+    const LIMIT: u64 = 64 * 1024 * 1024;
+    if gpa < SEAT_FW_BYTES || gpa >= LIMIT {
+        return None;
+    }
+    Some(gpa & !(TWO_MIB - 1))
+}
+
+pub fn set_ept_2m_leaf(pages: &mut CompanionPages, index: usize, hpa: u64) -> bool {
+    const TWO_MIB: u64 = 2 * 1024 * 1024;
+    if index >= 512 || hpa & (TWO_MIB - 1) != 0 {
+        return false;
+    }
+    write_pte(
+        &mut pages.ept_pd,
+        index,
+        crate::memory::ept_hw::ept_leaf_large(hpa, 6),
+    );
+    true
+}
+
 /// Host-physical address of `gpa` through the EPT just programmed.
 pub fn ept_hpa(pages: &CompanionPages, gpa: u64) -> Option<u64> {
     let link_ok = |pte: u64| pte & 0b111 == 0b111;
@@ -825,6 +849,17 @@ mod tests {
         );
         assert!(seat_loader_spans(0, 4096).is_none());
         assert!(seat_loader_spans(SEAT_LOADER_MAX_FILE + 1, 4096).is_none());
+        assert_eq!(seat_ram_extend_base(SEAT_FW_BYTES), Some(SEAT_FW_BYTES));
+        assert_eq!(
+            seat_ram_extend_base(SEAT_FW_BYTES + 4096),
+            Some(SEAT_FW_BYTES)
+        );
+        assert!(seat_ram_extend_base(SEAT_FW_BYTES - 1).is_none());
+        assert!(seat_ram_extend_base(64 * 1024 * 1024).is_none());
+        let mut pages = Box::new(CompanionPages::ZERO);
+        assert!(set_ept_2m_leaf(&mut pages, 16, 0x200_0000));
+        assert_eq!(ept_pd(&pages, 16) & !0xfff, 0x200_0000);
+        assert!(!set_ept_2m_leaf(&mut pages, 16, 0x1000));
         assert!(begin_probe());
         pause_seat();
         assert!(seat_paused());
