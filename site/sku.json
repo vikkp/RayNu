@@ -202,7 +202,7 @@
           "status": "in flight",
           "ships": "S1",
           "ref": "M4",
-          "note": "Branch `cursor/wave-7-b6-seats-37d7`. Lab iron already printed `RAYNU-V-M4-2VM-OK` for the small G0/G1 guests. A product Start while another product guest owns the VMCS used to answer `busy`. It now seats the second guest (`{\"ok\":true,\"seated\":true,\"running\":false}`) and does not retarget the running guest's disk or NIC. The VMCS still runs one product guest. Not lived until two product guests both make progress on the R640",
+          "note": "Branch `cursor/wave-7-b6-seats-37d7`. Lab iron already printed `RAYNU-V-M4-2VM-OK` for the small G0/G1 guests. A product Start while another product guest owns the VMCS used to answer `busy`. It now seats the second guest (`{\"ok\":true,\"seated\":true,\"running\":false}`) and does not retarget the running guest's disk or NIC. Stop then boots that seated guest on the same VMCS (`promote_parked`). Both guests are still not on the CPU together. Not lived until two product guests both make progress on the R640",
           "wave": "7"
         },
         {

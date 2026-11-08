@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-7-b6-seats |
-| Summary | **ADR-021 B6 in flight.** A second product guest is seated beside the one on the CPU. It is not booted and does not take the NIC. The VMCS still runs one. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-7-b6-handoff |
+| Summary | **Stop boots the seated guest.** The guest on the CPU keeps running until Stop. Then the seated guest is the next boot on the same VMCS. Both are still not running together. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B6 in flight. Not lived. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-08 | wave-7-b6-handoff | 0.0 | 99 | **ADR-021 B6 in flight.** Stop boots the seated product guest on the same VMCS. Both guests are not on the CPU together. Not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-08 | wave-7-b6-seats | 0.0 | 99 | **ADR-021 B6 in flight** on `cursor/wave-7-b6-seats-37d7`. A second product Start is seated, not `busy`, and does not take the CPU. Not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-07 | wave-6-closed | 0.0 | 99 | **Wave 6 closed.** H8 terms accepted. GitHub Latest `v0.1.6-wave6-closed`. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-07 | wave-6-h8-proposal | 0.0 | 99 | **ADR-021 H8 in flight.** Support proposal: a tag, twelve months, `namaskaar@raynuv.com`, no reply clock. Not lived. Scores held. months 0.0 held; overall 99 held |

@@ -793,9 +793,10 @@ fn start_tail() -> GuestCatalogHttp {
             crate::mgmt::guest_nic_start::on_accepted_start(
                 crate::mgmt::megaraid::PERC_IMAGE_BYTES,
             );
-            crate::mgmt::product_seats::note_running(crate::mgmt::product_seats::Seat::Tail(
-                crate::mgmt::megaraid::PERC_IMAGE_BYTES,
-            ));
+            crate::mgmt::product_seats::note_running(crate::mgmt::product_seats::Seat::Tail {
+                off: crate::mgmt::megaraid::PERC_IMAGE_BYTES,
+                bytes: disk_bytes,
+            });
             let mut body = [0u8; 128];
             let mut w = JsonBuf::new(&mut body);
             w.s("{\"ok\":true,\"choice\":\"tailboot\",\"spare_off\":");
@@ -830,9 +831,10 @@ fn start_disk_at(spare_off: u64) -> GuestCatalogHttp {
             }
             crate::boot::raynu_f_flag::request_installed_boot();
             crate::mgmt::guest_nic_start::on_accepted_start(disk.spare_off);
-            crate::mgmt::product_seats::note_running(crate::mgmt::product_seats::Seat::Tail(
-                disk.spare_off,
-            ));
+            crate::mgmt::product_seats::note_running(crate::mgmt::product_seats::Seat::Tail {
+                off: disk.spare_off,
+                bytes: disk.disk_bytes,
+            });
             let mut body = [0u8; 192];
             let mut w = JsonBuf::new(&mut body);
             w.s("{\"ok\":true,\"choice\":\"tailboot\",\"spare_off\":");
@@ -1309,7 +1311,7 @@ fn write_seats(w: &mut JsonBuf<'_>) {
         any = true;
         match p.seat {
             Seat::Window => w.s("{\"k\":\"w\""),
-            Seat::Tail(off) => {
+            Seat::Tail { off, .. } => {
                 w.s("{\"k\":\"t\",\"off\":");
                 w.u(off);
             }
@@ -1389,6 +1391,15 @@ pub fn row_power(this_on: bool) -> (bool, bool) {
     (!this_on, this_on)
 }
 
+fn tail_bytes_for(off: u64) -> u64 {
+    let (tails, n) = discovered_tails();
+    tails[..n]
+        .iter()
+        .find(|d| d.spare_off == off)
+        .map(|d| d.disk_bytes)
+        .unwrap_or(0)
+}
+
 /// `Some` when the CPU is already running a guest.
 ///
 /// The same guest answers `running`. A different guest is seated and is
@@ -1400,12 +1411,18 @@ fn held_by_other(want: crate::mgmt::perc_boot_choice::VmcsGuest) -> Option<&'sta
     let want_seat = match want {
         VmcsGuest::None => return None,
         VmcsGuest::Window => Seat::Window,
-        VmcsGuest::Tail(off) => Seat::Tail(off),
+        VmcsGuest::Tail(off) => Seat::Tail {
+            off,
+            bytes: tail_bytes_for(off),
+        },
     };
     let owner = match vmcs_guest() {
         VmcsGuest::None => return None,
         VmcsGuest::Window => Seat::Window,
-        VmcsGuest::Tail(off) => Seat::Tail(off),
+        VmcsGuest::Tail(off) => Seat::Tail {
+            off,
+            bytes: tail_bytes_for(off),
+        },
     };
     match seat_beside(owner, want_seat) {
         Admit::Running => Some(b"{\"ok\":true,\"running\":true}"),
@@ -1477,7 +1494,7 @@ fn write_ip(w: &mut JsonBuf<'_>, ip: [u8; 4]) {
 
 fn catalog_note(waiting: bool, choice: PercSpaChoice, stopped: bool) -> &'static str {
     if !stopped && crate::mgmt::product_seats::has_parked() {
-        return "A second guest is seated and is not on the CPU. The guest that is on keeps running.";
+        return "A second guest is seated. Stop hands it the CPU. Until then the guest that is on keeps running.";
     }
     if stopped {
         return "Guest stopped. Start boots it again. The hypervisor stays up.";

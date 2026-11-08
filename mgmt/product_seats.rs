@@ -20,13 +20,16 @@ const TAIL: u8 = 2;
 
 static KIND: [AtomicU8; CAP] = [AtomicU8::new(EMPTY), AtomicU8::new(EMPTY)];
 static OFF: [AtomicU64; CAP] = [AtomicU64::new(0), AtomicU64::new(0)];
+static BYTES: [AtomicU64; CAP] = [AtomicU64::new(0), AtomicU64::new(0)];
 static ON_CPU: [AtomicBool; CAP] = [AtomicBool::new(false), AtomicBool::new(false)];
 
 /// One product guest the operator named.
+///
+/// `bytes` is the tail disk size. The window guest has no separate size.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Seat {
     Window,
-    Tail(u64),
+    Tail { off: u64, bytes: u64 },
 }
 
 /// What a Start may do while another guest may already own the VMCS.
@@ -52,7 +55,10 @@ fn read(i: usize) -> Option<Placed> {
     let kind = KIND[i].load(Ordering::Acquire);
     let seat = match kind {
         WINDOW => Seat::Window,
-        TAIL => Seat::Tail(OFF[i].load(Ordering::Acquire)),
+        TAIL => Seat::Tail {
+            off: OFF[i].load(Ordering::Acquire),
+            bytes: BYTES[i].load(Ordering::Acquire),
+        },
         _ => return None,
     };
     Some(Placed {
@@ -66,9 +72,11 @@ fn write(i: usize, seat: Seat, on_cpu: bool) {
         Seat::Window => {
             KIND[i].store(WINDOW, Ordering::Release);
             OFF[i].store(0, Ordering::Release);
+            BYTES[i].store(0, Ordering::Release);
         }
-        Seat::Tail(off) => {
+        Seat::Tail { off, bytes } => {
             OFF[i].store(off, Ordering::Release);
+            BYTES[i].store(bytes, Ordering::Release);
             KIND[i].store(TAIL, Ordering::Release);
         }
     }
@@ -79,10 +87,19 @@ fn clear_slot(i: usize) {
     ON_CPU[i].store(false, Ordering::Release);
     KIND[i].store(EMPTY, Ordering::Release);
     OFF[i].store(0, Ordering::Release);
+    BYTES[i].store(0, Ordering::Release);
+}
+
+fn same(a: Seat, b: Seat) -> bool {
+    match (a, b) {
+        (Seat::Window, Seat::Window) => true,
+        (Seat::Tail { off: a, .. }, Seat::Tail { off: b, .. }) => a == b,
+        _ => false,
+    }
 }
 
 fn find(seat: Seat) -> Option<usize> {
-    (0..CAP).find(|&i| read(i).is_some_and(|p| p.seat == seat))
+    (0..CAP).find(|&i| read(i).is_some_and(|p| same(p.seat, seat)))
 }
 
 fn empty_slot() -> Option<usize> {
@@ -104,6 +121,11 @@ pub fn note_running(seat: Seat) {
         }
     }
     if let Some(i) = find(seat) {
+        if let Seat::Tail { bytes, .. } = seat {
+            if bytes != 0 {
+                BYTES[i].store(bytes, Ordering::Release);
+            }
+        }
         ON_CPU[i].store(true, Ordering::Release);
         return;
     }
@@ -117,7 +139,7 @@ pub fn note_running(seat: Seat) {
 
 /// Remember `want` without giving it the CPU. `owner` is marked on the CPU.
 pub fn seat_beside(owner: Seat, want: Seat) -> Admit {
-    if owner == want {
+    if same(owner, want) {
         note_running(owner);
         return Admit::Running;
     }
@@ -146,7 +168,12 @@ pub fn placed() -> [Option<Placed>; CAP] {
 }
 
 pub fn has_parked() -> bool {
-    (0..CAP).any(|i| read(i).is_some_and(|p| !p.on_cpu))
+    parked().is_some()
+}
+
+/// The guest waiting for the CPU, if one was seated.
+pub fn parked() -> Option<Seat> {
+    (0..CAP).find_map(|i| read(i).filter(|p| !p.on_cpu).map(|p| p.seat))
 }
 
 #[cfg(test)]
@@ -156,17 +183,20 @@ mod tests {
     #[test]
     fn a_second_guest_is_seated_beside_the_one_on_the_cpu() {
         clear_all();
-        note_running(Seat::Tail(100));
+        note_running(Seat::Tail { off: 100, bytes: 50 });
         assert_eq!(
-            seat_beside(Seat::Tail(100), Seat::Window),
+            seat_beside(Seat::Tail { off: 100, bytes: 50 }, Seat::Window),
             Admit::Seated
         );
         let seats = placed();
-        assert!(seats.iter().flatten().any(|p| p.seat == Seat::Tail(100) && p.on_cpu));
+        assert!(seats
+            .iter()
+            .flatten()
+            .any(|p| p.seat == Seat::Tail { off: 100, bytes: 50 } && p.on_cpu));
         assert!(seats.iter().flatten().any(|p| p.seat == Seat::Window && !p.on_cpu));
         assert!(has_parked());
         assert_eq!(
-            seat_beside(Seat::Tail(100), Seat::Window),
+            seat_beside(Seat::Tail { off: 100, bytes: 50 }, Seat::Window),
             Admit::Seated,
             "seating the same guest again does not take the CPU"
         );
@@ -176,11 +206,14 @@ mod tests {
         note_running(Seat::Window);
         assert!(placed().iter().flatten().any(|p| p.seat == Seat::Window && p.on_cpu));
         assert_eq!(
-            seat_beside(Seat::Window, Seat::Tail(200)),
+            seat_beside(Seat::Window, Seat::Tail { off: 200, bytes: 8 }),
             Admit::Seated
         );
         assert_eq!(
-            seat_beside(Seat::Window, Seat::Tail(300)),
+            seat_beside(
+                Seat::Window,
+                Seat::Tail { off: 300, bytes: 8 }
+            ),
             Admit::Full
         );
         clear_all();

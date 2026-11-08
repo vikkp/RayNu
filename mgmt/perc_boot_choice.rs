@@ -395,6 +395,53 @@ pub fn take_guest_stop() -> bool {
     }
     GUEST_STOPPED.store(true, Ordering::Release);
     crate::mgmt::product_seats::clear_running();
+    let _ = promote_parked(
+        crate::mgmt::megaraid::perc_image_boot_latched(),
+        crate::mgmt::megaraid::perc_spare_bytes(),
+    );
+    true
+}
+
+/// After Stop, boot the seated guest on this same VMCS.
+///
+/// Host tests pass `image_latched` themselves. Iron reads the spare latch.
+/// A parked guest with no disk size stays seated. Not two guests at once.
+pub fn promote_parked(image_latched: bool, spare_bytes: u64) -> bool {
+    use crate::mgmt::product_seats::{note_running, parked, Seat};
+    if !image_latched || !guest_stopped() {
+        return false;
+    }
+    let Some(seat) = parked() else {
+        return false;
+    };
+    if matches!(seat, Seat::Tail { bytes: 0, .. }) {
+        return false;
+    }
+    if !rearm_guest_after_stop() {
+        return false;
+    }
+    let applied = match seat {
+        Seat::Window => apply_spa_choice(true, CHOICE_BOOT),
+        Seat::Tail { off, bytes } => {
+            if off == crate::mgmt::megaraid::PERC_IMAGE_BYTES {
+                apply_tail_boot_choice(true, spare_bytes, bytes)
+            } else {
+                apply_tail_boot_at(true, spare_bytes, off, bytes)
+            }
+        }
+    };
+    if applied != PercChoiceApply::Accepted {
+        GUEST_STOPPED.store(true, Ordering::Release);
+        return false;
+    }
+    note_running(seat);
+    note_perc_relaunch();
+    crate::boot::raynu_f_flag::request_installed_boot();
+    let nic_off = match seat {
+        Seat::Window => 0,
+        Seat::Tail { off, .. } => off,
+    };
+    crate::mgmt::guest_nic_start::on_accepted_start(nic_off);
     true
 }
 
@@ -843,6 +890,38 @@ mod perc_boot_choice_test {
         );
         assert_eq!(st, 409, "{body}");
         assert_eq!(perc_spa_choice(), PercSpaChoice::Pending);
+        clear_perc_spa_choice_for_test();
+    }
+
+    #[test]
+    fn stop_hands_the_cpu_to_the_seated_guest() {
+        use crate::mgmt::product_seats::{parked, seat_beside, Admit, Seat};
+        clear_perc_spa_choice_for_test();
+        crate::mgmt::product_seats::clear_all();
+        crate::boot::raynu_f_flag::clear_request();
+        let ten = 10_240u64 * 1024 * 1024;
+        let spare = crate::mgmt::megaraid::IRON_LD1_BYTES;
+        let running = Seat::Tail {
+            off: crate::mgmt::megaraid::PERC_IMAGE_BYTES,
+            bytes: ten,
+        };
+        assert_eq!(
+            apply_tail_boot_choice(true, spare, ten),
+            PercChoiceApply::Accepted
+        );
+        crate::mgmt::product_seats::note_running(running);
+        assert_eq!(seat_beside(running, Seat::Window), Admit::Seated);
+        assert!(request_guest_stop());
+        assert!(take_guest_stop());
+        assert!(guest_stopped(), "host latch is false, so Stop does not boot yet");
+        assert_eq!(parked(), Some(Seat::Window));
+        assert!(promote_parked(true, spare));
+        assert!(!guest_stopped());
+        assert!(matches!(perc_spa_choice(), PercSpaChoice::BootInstalled));
+        assert_eq!(vmcs_guest(), VmcsGuest::Window);
+        assert!(take_perc_relaunch());
+        crate::boot::raynu_f_flag::clear_request();
+        crate::mgmt::product_seats::clear_all();
         clear_perc_spa_choice_for_test();
     }
 
