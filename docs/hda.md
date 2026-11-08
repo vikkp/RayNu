@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-7-b6-handoff |
-| Summary | **Stop boots the seated guest.** The guest on the CPU keeps running until Stop. Then the seated guest is the next boot on the same VMCS. Both are still not running together. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-7-b6-f11 |
+| Summary | **B6 handoff on the lived B8 image.** Stop boots the seated guest. I/O APIC and guest SSH stay. One guest is on the CPU. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
-| Gates touched | B6 in flight. Not lived. No doorbell. No format of UBUNTU0. |
+| Gates touched | B8 lived. B6 in flight. Not lived. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
 
 ## Blockers & risks (Everest-relevant)
@@ -380,8 +380,16 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-08 | wave-7-b6-f11 | 0.0 | 99 | **B6 handoff sits on the lived B8 image.** Stop boots the seated guest. I/O APIC and guest SSH stay. One guest is on the CPU. Not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-08 | wave-7-b6-handoff | 0.0 | 99 | **ADR-021 B6 in flight.** Stop boots the seated product guest on the same VMCS. Both guests are not on the CPU together. Not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-08 | wave-7-b6-seats | 0.0 | 99 | **ADR-021 B6 in flight** on `cursor/wave-7-b6-seats-37d7`. A second product Start is seated, not `busy`, and does not take the CPU. Not lived. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-08 | wave-7-b8-guest-ssh | 0.0 | 99 | **Guest SSH is back on `64ddddafeffa` / run `42424856392`.** `00:05.0` has no `PCI INT A: no GSI`. `ssh vikkp@10.99.99.200` reached `vikkp@raynusrv2:~$`. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-07 | wave-7-b8-ci-tests | 0.0 | 99 | **Two host tests followed the longer DSDT.** The FACS pad is the byte after the 249-byte table. The RX test resets the device so a sibling test's leftover avail index does not fail `post_rx`. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-07 | wave-7-b8-net-gsi | 0.0 | 99 | **virtio-net had no GSI after the I/O APIC switch.** `_PRT` now names slots 4 and 5 at GSI 11. RX MSI-X uses queue 0. COM2 stops printing queue notify after the probe. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-07 | wave-7-b8-lived | 0.0 | 99 | **ADR-021 B8 lived on `8f69297c` / run `42398077199`.** Linux found the MADT, `IOAPIC[0]` at `0xfec00000`, `Using IOAPIC for interrupt routing`. Disk MSI-X `vec=21`. `raynusrv2 login:`. Wave 7 stays open. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-07 | wave-7-b8-sku-card | 0.0 | 99 | **Host test `sku_card_package_passes`.** The Wave 6 card names dedicated-box, no plaintext HTTP, the 2.9 TB disk is not the guest disk, and not a cluster or Windows. The check was still looking for the older lab phrases. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-07 | wave-7-b8-madt | 0.0 | 99 | **ADR-021 B8 still in flight.** Iron `09b23c5d` printed `boot: B8 virtio msi-x vec=20` and `raynusrv2 login:`, then `ACPI MADT or MP tables are not detected`. The RayNu-F XSDT now publishes a MADT. Not lived. Scores held. months 0.0 held; overall 99 held |
+| 2026-11-07 | wave-7-b8-msix | 0.0 | 99 | **ADR-021 B8 in flight.** Virtio MSI-X table delivers a programmed vector to the virtual local APIC. Shared PIC IRQ 11 remains until the guest enables MSI-X. Not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-07 | wave-6-closed | 0.0 | 99 | **Wave 6 closed.** H8 terms accepted. GitHub Latest `v0.1.6-wave6-closed`. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-07 | wave-6-h8-proposal | 0.0 | 99 | **ADR-021 H8 in flight.** Support proposal: a tag, twelve months, `namaskaar@raynuv.com`, no reply clock. Not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-07 | wave-6-d11-lived | 0.0 | 99 | **ADR-021 D11 lived.** Port 3 page, port 4 guests, iDRAC Dedicated or LOM3. `docs/customer/port-roles.md`. Scores held. months 0.0 held; overall 99 held |

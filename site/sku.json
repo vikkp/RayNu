@@ -19,15 +19,15 @@
   },
   "counts": {
     "S1": {
-      "lived": 54,
+      "lived": 55,
       "in flight": 2,
-      "planned": 11,
+      "planned": 10,
       "total": 67
     },
     "Final": {
-      "lived": 54,
+      "lived": 55,
       "in flight": 2,
-      "planned": 73,
+      "planned": 72,
       "total": 129
     }
   },
@@ -217,10 +217,10 @@
         {
           "id": "B8",
           "capability": "Guest interrupt controller beyond 8259: IOAPIC/LAPIC, MSI/MSI-X for virtio",
-          "status": "planned",
+          "status": "lived",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "PIC + IRQ 11 shared lived on `d7e2e24f`; SMP and performance need APIC",
+          "note": "Iron `8f69297c69a8` / run `42398077199`, pull-request merge of `d0a0d7cf`. Signed SHA256 `ee32b9db82c8a682833a1fbb5e3a18bbe0f014963e84d1a2a5ce5eb5e030e6e0`. `boot: B4 acpi rsdp gpa=0x804000 (power button, PCI0 IRQ 11, MADT local APIC and I/O APIC)`. Linux: `ACPI: APIC 0x804340`, `IOAPIC[0]: apic_id 0, version 17, address 0xfec00000, GSI 0-23`, `INT_SRC_OVR bus_irq 0 global_irq 2`, `Using ACPI (MADT) for SMP configuration information`, `Switch to symmetric I/O mode setup`, `Using IOAPIC for interrupt routing`. Disk MSI-X `boot: B8 virtio msi-x vec=21`, then `vda1 vda2 vda3` and `raynusrv2 login:`. Timer `linux PIT GSI 2`. `take11=0`. The `09b23c5d` boot had `ACPI MADT or MP tables are not detected` and `Using PIC`. virtio-net printed `PCI INT A: no GSI` for `00:05.0` because `_PRT` named only slots 2 and 3, and an RX completion signaled MSI-X queue 1. Follow-up confirmed on `64ddddafeffa` / run `42424856392`, pull-request merge of `9e3661fe`. DSDT length `0x11E`. `virtio-pci 0000:00:05.0: enabling device` with no `PCI INT A: no GSI`. Disk MSI-X `vec=21` again. Queue-notify COM2 lines stop at `n=961`. `systemd-networkd-wait-online` finished, `ssh.service` started, and `ssh vikkp@10.99.99.200` reached `vikkp@raynusrv2:~$`. Evidence `docs/evidence/r640/2026-11-08-64ddddaf-wave-7-b8-guest-ssh-ok.md`. Wave 7 stays open",
           "wave": "7"
         },
         {
@@ -334,15 +334,15 @@
       ],
       "counts": {
         "S1": {
-          "lived": 6,
+          "lived": 7,
           "in flight": 1,
-          "planned": 3,
+          "planned": 2,
           "total": 10
         },
         "Final": {
-          "lived": 6,
+          "lived": 7,
           "in flight": 1,
-          "planned": 13,
+          "planned": 12,
           "total": 20
         }
       }
@@ -1611,9 +1611,9 @@
       "iron": "B8",
       "why": "Performance and capacity. B8 before B7: SMP on an 8259 is misery.",
       "counts": {
-        "lived": 0,
+        "lived": 1,
         "in flight": 2,
-        "planned": 7,
+        "planned": 6,
         "total": 9
       },
       "closed": false
@@ -1852,12 +1852,6 @@
   ],
   "current_wave": "7",
   "next_up": [
-    {
-      "id": "B8",
-      "capability": "Guest interrupt controller beyond 8259: IOAPIC/LAPIC, MSI/MSI-X for virtio",
-      "status": "planned",
-      "role": "iron thread"
-    },
     {
       "id": "B6",
       "capability": "Multiple concurrent guests on one R640",

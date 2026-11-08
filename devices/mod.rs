@@ -6,6 +6,7 @@
 
 pub mod guest_acpi;
 pub mod guest_irq;
+pub mod guest_msix;
 pub mod guest_platform;
 pub mod guest_serial_answer;
 pub mod guest_uart;

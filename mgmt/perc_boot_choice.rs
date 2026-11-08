@@ -442,6 +442,10 @@ pub fn promote_parked(image_latched: bool, spare_bytes: u64) -> bool {
         Seat::Tail { off, .. } => off,
     };
     crate::mgmt::guest_nic_start::on_accepted_start(nic_off);
+    #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+    crate::boot::serial::write_line(
+        "boot: B6 seated guest takes the CPU (one VMCS; the other guest is off)",
+    );
     true
 }
 
