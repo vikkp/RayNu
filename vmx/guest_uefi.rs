@@ -6809,9 +6809,142 @@ fn note_linux_exit_kind(basic: u32, pace_exit: bool) {
     LINUX_EXIT_KIND[k].fetch_add(1, Ordering::AcqRel);
 }
 
+#[cfg(target_os = "uefi")]
+static PRODUCT_COMPANION_SLICE: AtomicBool = AtomicBool::new(false);
+
+#[cfg(target_os = "uefi")]
+static mut COMPANION_PAGES: crate::mgmt::product_companion::CompanionPages =
+    crate::mgmt::product_companion::CompanionPages::ZERO;
+
+/// A second VMCS exit lands here before any Ubuntu handling. Put the running
+/// guest's registers back and VMRESUME it. `HLT` is the only success. A stolen
+/// exit can be tried on a later slice. Anything else stops the tries.
+#[cfg(target_os = "uefi")]
+unsafe fn finish_product_companion_probe() -> ! {
+    let (gpr, xmm, ubuntu, cr2) = crate::mgmt::product_companion::held_guest();
+    SAVED_RAX = gpr[0];
+    SAVED_RBX = gpr[1];
+    SAVED_RCX = gpr[2];
+    SAVED_RDX = gpr[3];
+    SAVED_RSI = gpr[4];
+    SAVED_RDI = gpr[5];
+    SAVED_RBP = gpr[6];
+    SAVED_R8 = gpr[7];
+    SAVED_R9 = gpr[8];
+    SAVED_R10 = gpr[9];
+    SAVED_R11 = gpr[10];
+    SAVED_R12 = gpr[11];
+    SAVED_R13 = gpr[12];
+    SAVED_R14 = gpr[13];
+    SAVED_R15 = gpr[14];
+    core::ptr::write(core::ptr::addr_of_mut!(SAVED_XMM), SavedXmm(xmm));
+    cpu::write_cr2(cr2);
+    let basic = ops::vmread(EXIT_REASON).unwrap_or(0xFFFF) as u32 & 0xFFFF;
+    if basic == EXIT_REASON_HLT {
+        crate::mgmt::product_companion::note_probe_hlt();
+        serial::write_line(
+            "boot: B6 second VMCS ran HLT and returned; the seated guest is still waiting",
+        );
+    } else if crate::mgmt::product_companion::probe_exit_is_retry(basic) {
+        crate::mgmt::product_companion::note_probe_retry();
+    } else {
+        crate::mgmt::product_companion::note_probe_failed();
+        serial::write_str("boot: B6 second VMCS left on reason=0x");
+        write_hex_u32(basic);
+        serial::write_line("; the running guest keeps the CPU");
+    }
+    if ubuntu == 0 || ops::vmptrld(ubuntu).is_err() {
+        serial::write_line("boot: B6 could not reload the running guest VMCS");
+        guest_uefi_resume_failed();
+    }
+    guest_uefi_vmresume();
+}
+
+/// After this Ubuntu exit is handled, enter the HLT VMCS once. VMLAUNCH does
+/// not return on success. A failed instruction reloads the Ubuntu VMCS.
+#[cfg(target_os = "uefi")]
+unsafe fn maybe_enter_product_companion() {
+    if !crate::mgmt::product_seats::has_parked() {
+        return;
+    }
+    if !crate::mgmt::product_companion::begin_probe() {
+        return;
+    }
+    let ubuntu = match ops::vmptrst() {
+        Ok(p) if p != u64::MAX && p & 0xfff == 0 => p,
+        _ => {
+            crate::mgmt::product_companion::note_probe_failed();
+            serial::write_line(
+                "boot: B6 second VMCS entry failed; the running guest keeps the CPU",
+            );
+            return;
+        }
+    };
+    let gpr = [
+        SAVED_RAX, SAVED_RBX, SAVED_RCX, SAVED_RDX, SAVED_RSI, SAVED_RDI, SAVED_RBP, SAVED_R8,
+        SAVED_R9, SAVED_R10, SAVED_R11, SAVED_R12, SAVED_R13, SAVED_R14, SAVED_R15,
+    ];
+    let xmm = core::ptr::read(core::ptr::addr_of!(SAVED_XMM));
+    crate::mgmt::product_companion::hold_guest(gpr, xmm.0, ubuntu, cpu::read_cr2());
+    let pages = &mut *core::ptr::addr_of_mut!(COMPANION_PAGES);
+    let plan = crate::mgmt::product_companion::program_tables(pages);
+    let mut vals = [0u64; 128];
+    let mut present = [false; 128];
+    let n = VMCS_CLONE_FIELDS.len();
+    let mut n_ok = 0u32;
+    for i in 0..n {
+        if let Ok(v) = ops::vmread(VMCS_CLONE_FIELDS[i]) {
+            vals[i] = v;
+            present[i] = true;
+            n_ok += 1;
+        }
+    }
+    let prepared = n_ok >= 40
+        && prepare_vmcs_region(plan.vmcs).is_ok()
+        && ops::vmclear(plan.vmcs).is_ok()
+        && prepare_vmcs_region(plan.vmcs).is_ok()
+        && ops::vmptrld(plan.vmcs).is_ok();
+    if !prepared {
+        let _ = ops::vmptrld(ubuntu);
+        crate::mgmt::product_companion::note_probe_failed();
+        serial::write_line("boot: B6 second VMCS entry failed; the running guest keeps the CPU");
+        return;
+    }
+    for i in 0..n {
+        if present[i] {
+            let _ = ops::vmwrite(VMCS_CLONE_FIELDS[i], vals[i]);
+        }
+    }
+    let primary = ops::vmread(PRIMARY_PROC_BASED_VM_EXEC_CONTROL).unwrap_or(0) as u32;
+    let _ = ops::vmwrite(
+        PRIMARY_PROC_BASED_VM_EXEC_CONTROL,
+        u64::from(crate::mgmt::product_companion::primary_controls(primary)),
+    );
+    let _ = ops::vmwrite(EPT_POINTER, plan.eptp);
+    let _ = ops::vmwrite(GUEST_CR3, plan.guest_cr3);
+    let _ = ops::vmwrite(GUEST_RIP, plan.rip);
+    let _ = ops::vmwrite(GUEST_RSP, plan.rsp);
+    let _ = ops::vmwrite(GUEST_RFLAGS, 2);
+    let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
+    let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
+    let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+    let _ = ops::vmwrite(VMX_PREEMPTION_TIMER_VALUE, 0xFFFF_FFFF);
+    if ops::vmlaunch().is_err() {
+        let ierr = ops::vmread(VM_INSTRUCTION_ERROR).unwrap_or(0xFFFF);
+        let _ = ops::vmptrld(ubuntu);
+        crate::mgmt::product_companion::note_probe_failed();
+        serial::write_str("boot: B6 second VMCS entry failed insn_error=");
+        write_dec(ierr);
+        serial::write_line("; the running guest keeps the CPU");
+    }
+}
+
 /// HOST_RIP continuation for the private guest-UEFI VMCS. Not the E4 SHELL landing.
 #[cfg(target_os = "uefi")]
 pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
+    if crate::mgmt::product_companion::probe_in_flight() {
+        finish_product_companion_probe();
+    }
     LAUNCH_ENTERED.store(true, Ordering::Release);
     MMIO_INSN_LEN.store(0, Ordering::Relaxed);
     let reason = ops::vmread(EXIT_REASON).unwrap_or(0xFFFF) as u32;
@@ -6836,13 +6969,13 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
         raynu_f_stop("spa-stop");
     }
     // ADR-021 B6: count a primary slice while a second guest is seated.
-    // The companion VMCS entry is what moves the other counter. Until that
-    // entry exists, this boot cannot close B6.
+    // The HLT VMCS below does not move the companion counter.
     {
         static LINUX_EXITS: AtomicU32 = AtomicU32::new(0);
         let n = LINUX_EXITS.fetch_add(1, Ordering::AcqRel).wrapping_add(1);
         if crate::mgmt::product_pair::slice_due(n, crate::mgmt::product_seats::has_parked()) {
             crate::mgmt::product_pair::note_primary();
+            PRODUCT_COMPANION_SLICE.store(true, Ordering::Release);
         }
     }
     b4_service();
@@ -7518,6 +7651,9 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
             // SAFETY: VMX-root; restore guest #PF linear after any host walk.
             // KANI-TARGET: guest-UEFI Linux #PF CR2 restore (outside Proven Core).
             cpu::write_cr2(linux_cr2);
+        }
+        if PRODUCT_COMPANION_SLICE.swap(false, Ordering::AcqRel) {
+            maybe_enter_product_companion();
         }
         CONTINUE_GUEST.store(true, Ordering::Release);
         guest_uefi_vmresume();

@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-7-b6-slice |
-| Summary | **B6 slice clock and B7 startup-IPI record.** A seated companion counts primary slices. The companion counter stays zero until a second VMCS returns. A non-self INIT then startup page is recorded. The MADT still has one CPU. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-7-b6-vmcs |
+| Summary | **B6 second VMCS runs HLT and returns.** The seated guest is still waiting. The companion counter stays zero. A failed entry leaves the running guest on the CPU. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B8 lived. B6 in flight. B7 in flight. Not lived. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-08 | wave-7-b6-vmcs | 0.0 | 99 | **B6 second VMCS runs HLT and returns.** The seated guest is still waiting. A failed entry leaves the running guest on the CPU. Not lived. Not an F11. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-08 | wave-7-b6-slice | 0.0 | 99 | **B6 slice clock and B7 startup-IPI record.** Companion progress stays zero until a second VMCS returns. MADT still has one CPU. Not lived. Not an F11. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-08 | wave-7-b6-f11 | 0.0 | 99 | **B6 handoff sits on the lived B8 image.** Stop boots the seated guest. I/O APIC and guest SSH stay. One guest is on the CPU. Not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-08 | wave-7-b6-handoff | 0.0 | 99 | **ADR-021 B6 in flight.** Stop boots the seated product guest on the same VMCS. Both guests are not on the CPU together. Not lived. Scores held. months 0.0 held; overall 99 held |

@@ -2,8 +2,8 @@
 //!
 //! The guest on the CPU is the primary. A seated guest is the companion.
 //! A slice comes due on a fixed exit interval while a companion is seated.
-//! Companion progress stays zero until a second VMCS entry returns here.
-//! That entry is the close. This clock does not switch VMCS by itself.
+//! Companion progress stays zero until the seated guest itself is entered.
+//! A one-shot HLT on a second VMCS does not move that counter.
 //!
 //! Pillar: [Z]
 //! Proven Core: **outside** (ADR-002 / ADR-021).
