@@ -9,6 +9,8 @@
 //! - Host LAPIC one-shot still wakes the hypervisor; guest sees LVT vector
 //!   only through the IRR/ISR path (`RAYNU-V-M3-APIC-OK`).
 
+use core::sync::atomic::{AtomicBool, AtomicU16, Ordering};
+
 use crate::arch::apic::DEFAULT_APIC_PHYS;
 use crate::arch::cpu;
 
@@ -169,20 +171,62 @@ fn set_irr(vec: u8) {
 /// `irq_work`, and x86 raises that with a local-APIC self-IPI. Dropping
 /// the write left fsnotify in `synchronize_srcu` (`1b01c2d8`).
 /// Not `ISO-INSTALL-OK`.
+/// Delivery mode in ICR low bits 10:8.
+pub fn icr_mode(low: u32) -> u32 {
+    (low >> 8) & 0x7
+}
+
+/// Startup-IPI page (the vector field). Meaningful when [`icr_mode`] is 6.
+pub fn icr_startup_page(low: u32) -> u8 {
+    (low & 0xFF) as u8
+}
+
+static AP_INIT_SEEN: AtomicBool = AtomicBool::new(false);
+static AP_STARTUP: AtomicU16 = AtomicU16::new(0xFFFF);
+
+/// A non-self INIT or startup IPI. Fixed self-IPI stays on the running CPU.
+/// The product guest still has one CPU in the MADT, so Linux does not send
+/// these until a second local APIC is enabled. ADR-021 B7.
+pub fn note_remote_ipi(low: u32) {
+    match icr_mode(low) {
+        5 => {
+            AP_INIT_SEEN.store(true, Ordering::Release);
+        }
+        6 => {
+            AP_STARTUP.store(u16::from(icr_startup_page(low)), Ordering::Release);
+        }
+        _ => {}
+    }
+}
+
+/// Startup page after an INIT, once.
+pub fn take_ap_startup() -> Option<u8> {
+    if !AP_INIT_SEEN.load(Ordering::Acquire) {
+        return None;
+    }
+    let page = AP_STARTUP.swap(0xFFFF, Ordering::AcqRel);
+    if page == 0xFFFF {
+        None
+    } else {
+        Some(page as u8)
+    }
+}
+
 fn accept_icr_low(val: u32) {
     let shorthand = (val >> 18) & 0x3;
-    let mode = (val >> 8) & 0x7;
-    let vector = (val & 0xFF) as u8;
-    if mode != 0 || vector < 32 {
-        return;
-    }
+    let mode = icr_mode(val);
+    let vector = icr_startup_page(val);
     // SAFETY: VMEXIT path; ICR high was stored by the preceding write.
     let to_self = unsafe {
         let dest = APIC_ICR_HIGH >> 24;
         let apic_id = APIC_ID >> 24;
         shorthand == 0b01 || shorthand == 0b10 || (shorthand == 0 && dest == apic_id)
     };
-    if !to_self {
+    if !to_self && (mode == 5 || mode == 6) {
+        note_remote_ipi(val);
+        return;
+    }
+    if mode != 0 || vector < 32 || !to_self {
         return;
     }
     // SAFETY: VMEXIT path.
@@ -722,6 +766,8 @@ pub fn reset() {
         TIMER_RELA_TSC = 0;
         TIMER_RUNNING = false;
     }
+    AP_INIT_SEEN.store(false, Ordering::Release);
+    AP_STARTUP.store(0xFFFF, Ordering::Release);
 }
 
 /// Trap x2APIC MSRs in a zeroed MSR bitmap page (read + write maps).

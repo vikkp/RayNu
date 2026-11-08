@@ -20,14 +20,14 @@
   "counts": {
     "S1": {
       "lived": 55,
-      "in flight": 2,
-      "planned": 10,
+      "in flight": 3,
+      "planned": 9,
       "total": 67
     },
     "Final": {
       "lived": 55,
-      "in flight": 2,
-      "planned": 72,
+      "in flight": 3,
+      "planned": 71,
       "total": 129
     }
   },
@@ -202,16 +202,16 @@
           "status": "in flight",
           "ships": "S1",
           "ref": "M4",
-          "note": "Branch `cursor/wave-7-b6-seats-37d7`. Lab iron already printed `RAYNU-V-M4-2VM-OK` for the small G0/G1 guests. A product Start while another product guest owns the VMCS used to answer `busy`. It now seats the second guest (`{\"ok\":true,\"seated\":true,\"running\":false}`) and does not retarget the running guest's disk or NIC. Stop then boots that seated guest on the same VMCS (`promote_parked`). Both guests are still not on the CPU together. Not lived until two product guests both make progress on the R640",
+          "note": "Branch `cursor/wave-7-b6-seats-37d7`. Lab iron already printed `RAYNU-V-M4-2VM-OK` for the small G0/G1 guests. A product Start while another product guest owns the VMCS seats the second guest and does not retarget the running guest's disk or NIC. Stop then boots that seated guest on the same VMCS (`promote_parked`). While a companion is seated, `product_pair` counts a primary slice every 8192 Linux exits. The companion counter stays zero until a second VMCS entry returns. The close line stays silent until both counters move. Not lived. Not an F11 until two product guests both make progress on the R640",
           "wave": "7"
         },
         {
           "id": "B7",
           "capability": "Multi-vCPU (SMP) product guests",
-          "status": "planned",
+          "status": "in flight",
           "ships": "S1",
           "ref": "M4.5",
-          "note": "Dual-vCPU probe lived on Latitude only (`RAYNU-V-M4-SMP-OK`)",
+          "note": "Branch `cursor/wave-7-b6-seats-37d7`. Latitude probe `RAYNU-V-M4-SMP-OK` is not this row. A non-self INIT then startup IPI is recorded (`take_ap_startup`). The MADT still publishes one enabled CPU, so Ubuntu does not wait for an AP. Not lived. Not an F11 until a product guest sees more than one CPU on the R640",
           "wave": "7"
         },
         {
@@ -335,14 +335,14 @@
       "counts": {
         "S1": {
           "lived": 7,
-          "in flight": 1,
-          "planned": 2,
+          "in flight": 2,
+          "planned": 1,
           "total": 10
         },
         "Final": {
           "lived": 7,
-          "in flight": 1,
-          "planned": 12,
+          "in flight": 2,
+          "planned": 11,
           "total": 20
         }
       }
@@ -1612,8 +1612,8 @@
       "why": "Performance and capacity. B8 before B7: SMP on an 8259 is misery.",
       "counts": {
         "lived": 1,
-        "in flight": 2,
-        "planned": 6,
+        "in flight": 3,
+        "planned": 5,
         "total": 9
       },
       "closed": false
@@ -1861,7 +1861,7 @@
     {
       "id": "B7",
       "capability": "Multi-vCPU (SMP) product guests",
-      "status": "planned",
+      "status": "in flight",
       "role": "host-first"
     },
     {

@@ -6835,6 +6835,16 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
         serial::set_linux_high_half(false);
         raynu_f_stop("spa-stop");
     }
+    // ADR-021 B6: count a primary slice while a second guest is seated.
+    // The companion VMCS entry is what moves the other counter. Until that
+    // entry exists, this boot cannot close B6.
+    {
+        static LINUX_EXITS: AtomicU32 = AtomicU32::new(0);
+        let n = LINUX_EXITS.fetch_add(1, Ordering::AcqRel).wrapping_add(1);
+        if crate::mgmt::product_pair::slice_due(n, crate::mgmt::product_seats::has_parked()) {
+            crate::mgmt::product_pair::note_primary();
+        }
+    }
     b4_service();
     // A TX completion armed on the previous exit. Serial I/O exits are the
     // ones Linux takes while the watchdog is printing (iron 03906000).

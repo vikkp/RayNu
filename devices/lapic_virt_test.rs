@@ -278,3 +278,17 @@ fn icr_self_ipi_latches_irr_and_take_moves_to_isr() {
     assert!(mmio_access(APIC_GPA + 0xB0, true, 0).is_some());
     reset();
 }
+
+#[test]
+fn remote_init_then_startup_is_recorded_once() {
+    let _guard = lock();
+    reset();
+    assert!(mmio_access(APIC_GPA + 0x310, true, 1 << 24).is_some());
+    assert!(take_ap_startup().is_none());
+    assert!(mmio_access(APIC_GPA + 0x300, true, 5 << 8).is_some());
+    assert!(take_ap_startup().is_none());
+    assert!(mmio_access(APIC_GPA + 0x300, true, (6 << 8) | 0x08).is_some());
+    assert_eq!(take_ap_startup(), Some(0x08));
+    assert!(take_ap_startup().is_none());
+    reset();
+}
