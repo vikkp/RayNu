@@ -4731,7 +4731,7 @@ static mut SAVED_VMCS: u64 = 0;
 /// into the private VMCS one frame below. 32 pages leaves headroom above
 /// the largest release frame (~74 KiB) even if such a temporary returns.
 /// guest-UEFI host stack pages.
-pub const GUEST_UEFI_HOST_STACK_PAGES: u64 = 32;
+pub const GUEST_UEFI_HOST_STACK_PAGES: u64 = 48;
 /// One canary page below the host stack. Filled with
 /// [`GUEST_UEFI_HOST_STACK_GUARD_BYTE`]; checked before F7 `VMCLEAR`.
 /// guest-UEFI host stack guard.
@@ -6978,6 +6978,16 @@ unsafe fn seat_ram_hpa() -> Option<u64> {
 
 #[cfg(target_os = "uefi")]
 static mut SEAT_IOA: [u8; 4096] = [0; 4096];
+/// Disk bounce for the seated guest. Not on the host stack: that stack sits
+/// on the page above the private VMCS, and a 4 KiB temporary there overflowed
+/// the guard into the VMCS (iron `1707085e`, `guard=BREACHED`, `rev=0x0`).
+#[cfg(target_os = "uefi")]
+static mut SEAT_BOUNCE: [u8; 4096] = [0; 4096];
+
+#[cfg(target_os = "uefi")]
+unsafe fn seat_bounce() -> &'static mut [u8; 4096] {
+    &mut *core::ptr::addr_of_mut!(SEAT_BOUNCE)
+}
 #[cfg(target_os = "uefi")]
 static SEAT_FW_HELD: AtomicU64 = AtomicU64::new(0);
 #[cfg(target_os = "uefi")]
@@ -7124,7 +7134,7 @@ unsafe fn try_load_seat_bootloader(hpa: u64) -> Option<u64> {
     let size = u64::from(entry.size);
     let (file_gpa, _) = crate::mgmt::product_companion::seat_loader_spans(size, 4096)?;
     let mut off = 0u64;
-    let mut tmp = [0u8; 4096];
+    let tmp = seat_bounce();
     while off < size {
         let chunk = ((size - off).min(4096)) as usize;
         match crate::raynu_f::fat::read_chain(
@@ -7606,14 +7616,17 @@ unsafe fn seat_guest_read(gpa: u64, buf: &mut [u8]) -> bool {
 
 #[cfg(target_os = "uefi")]
 unsafe fn seat_guest_write(gpa: u64, buf: &[u8]) -> bool {
-    let mut tmp = [0u8; 4096];
+    const TWO_MIB: u64 = 2 * 1024 * 1024;
+    let pages = &*core::ptr::addr_of!(COMPANION_PAGES);
     let mut done = 0usize;
     while done < buf.len() {
-        let n = (buf.len() - done).min(tmp.len());
-        tmp[..n].copy_from_slice(&buf[done..done + n]);
-        if !seat_guest_copy(gpa + done as u64, &mut tmp[..n], true) {
+        let g = gpa + done as u64;
+        let Some(h) = crate::mgmt::product_companion::ept_2m_hpa(pages, g) else {
             return false;
-        }
+        };
+        let room = (TWO_MIB - (g & (TWO_MIB - 1))) as usize;
+        let n = room.min(buf.len() - done);
+        core::ptr::copy_nonoverlapping(buf[done..].as_ptr(), h as *mut u8, n);
         done += n;
     }
     true
@@ -7736,7 +7749,7 @@ unsafe fn seat_store_write(
     len: u32,
 ) -> bool {
     let mut done = 0u32;
-    let mut tmp = [0u8; 4096];
+    let tmp = seat_bounce();
     while done < len {
         let n = (len - done).min(4096) as usize;
         if !seat_guest_read(gpa + u64::from(done), &mut tmp[..n]) {
@@ -7764,7 +7777,7 @@ unsafe fn seat_fill_read(
     len: u32,
 ) -> bool {
     let mut done = 0u32;
-    let mut tmp = [0u8; 4096];
+    let tmp = seat_bounce();
     while done < len {
         let n = (len - done).min(4096) as usize;
         let off = sector.saturating_mul(512).saturating_add(byte_off).saturating_add(u64::from(done));
@@ -9104,6 +9117,17 @@ pub fn raynu_f_wall_check_due(n: u32) -> bool {
 }
 
 /// True when the guard page below the host stack is untouched (or not armed).
+pub fn host_stack_guard_intact() -> bool {
+    #[cfg(target_os = "uefi")]
+    {
+        guest_uefi_host_stack_guard_intact()
+    }
+    #[cfg(not(target_os = "uefi"))]
+    {
+        true
+    }
+}
+
 #[cfg(target_os = "uefi")]
 fn guest_uefi_host_stack_guard_intact() -> bool {
     let guard = HOST_STACK_GUARD.load(Ordering::Acquire);

@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-7-b6-hold |
-| Summary | **B6 iron `76f66f5c` seated the second guest, then the running guest entered the Stage 46 hold.** The confirm line prints while Linux has COM2. A failed return brings that guest back once. Not lived. B7 is not on this flash. Guest SSH stays. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-7-b6-stack |
+| Summary | **B6 iron `1707085e` breached the host stack guard and zeroed the VMCS.** The seat disk bounce is off that stack. The stack is 48 pages. Not lived. B7 is not on this flash. Guest SSH stays. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. TLS 88 held. |
 | Gates touched | B8 lived. B6 in flight. B7 in flight. Not lived. No doorbell. No format of UBUNTU0. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-09 | wave-7-b6-stack | 94 | 72 | **B6 iron `1707085e` breached the host stack guard and the VMCS revision was 0.** Seat bounce is off that stack. Stack is 48 pages. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-09 | wave-7-b6-hold | 94 | 72 | **B6 iron `76f66f5c` seated the second guest, then the running guest entered the Stage 46 hold.** Confirm line prints during Linux. One bring-back. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-08 | wave-7-b6-f11 | 94 | 72 | **B6 is ready to confirm on COM2.** Writes stay on the seated disk. Turns do not stop. Not lived until that line is on the R640. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-08 | wave-7-b6-used | 94 | 72 | **B6 seated disk requests finish on their own queue.** Reads come from the seated disk. Writes are not stored. Not an F11. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |

@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-7-b6-hold |
-| Summary | **B6 iron `76f66f5c` seated the second guest, then the running guest entered the Stage 46 hold.** The confirm line is printed while Linux has COM2. A failed return brings that guest back once. Not lived. B7 is not on this flash. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-7-b6-stack |
+| Summary | **B6 iron `1707085e` breached the host stack guard and zeroed the VMCS.** The seat disk bounce is off that stack. The stack is 48 pages. Not lived. B7 is not on this flash. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B8 lived. B6 in flight. B7 in flight. Not lived. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-09 | wave-7-b6-stack | 0.0 | 99 | **B6 iron `1707085e` breached the host stack guard and the VMCS revision was 0.** The seat disk bounce is no longer on that stack. The stack is 48 pages. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-09 | wave-7-b6-hold | 0.0 | 99 | **B6 iron `76f66f5c` seated the second guest, then an EPT exit put the running guest in the Stage 46 hold.** The confirm line now prints while Linux has COM2. A failed return brings that guest back once. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-08 | wave-7-b6-f11 | 0.0 | 99 | **B6 is ready to confirm on COM2.** Writes stay on the seated disk. LBA 0 is not posted. Turns do not stop. The line is `boot: B6 both product guests have been entered; confirm this line on COM2`. The guest operating system is still waiting. B7 is not on this flash. Not lived. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-08 | wave-7-b6-used | 0.0 | 99 | **B6 seated disk requests finish on their own queue.** Reads come from the seated disk. Writes are an I/O error and are not stored. The interrupt stays in the seated VMCS. The guest operating system is still waiting. Not lived. Not an F11. Scores held. months 0.0 held; overall 99 held |

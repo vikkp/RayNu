@@ -3528,7 +3528,7 @@ fn f7_relaunch_resets_firmware_state_without_a_stack_temporary() {
     // The FirmwareState is ~84 KiB; the old 4-page stack could not hold it.
     assert!(core::mem::size_of::<crate::raynu_f::FirmwareState>() > 4 * 4096);
     assert!(core::mem::size_of::<crate::raynu_f::FirmwareState>() < 128 * 1024);
-    // Host stack: 32 pages + 1 guard page; the guard is checked before VMCLEAR.
+    // Host stack: at least 32 pages + 1 guard page; the guard is checked before VMCLEAR.
     assert!(GUEST_UEFI_HOST_STACK_PAGES >= 32);
     assert_eq!(GUEST_UEFI_HOST_STACK_GUARD_PAGES, 1);
     assert!(guest_uefi_host_stack_headroom(4, 81_024) < 0, "16 KiB overflowed");
