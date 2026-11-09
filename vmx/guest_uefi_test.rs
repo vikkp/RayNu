@@ -3531,8 +3531,9 @@ fn f7_relaunch_resets_firmware_state_without_a_stack_temporary() {
     assert!(core::mem::size_of::<crate::raynu_f::FirmwareState>() > 4 * 4096);
     assert!(core::mem::size_of::<crate::raynu_f::FirmwareState>() < 128 * 1024);
     // Host stack: at least 32 pages + 1 guard page; the guard is checked before VMCLEAR.
-    assert!(GUEST_UEFI_HOST_STACK_PAGES >= 32);
-    assert_eq!(GUEST_UEFI_HOST_STACK_GUARD_PAGES, 1);
+    assert!(GUEST_UEFI_HOST_STACK_PAGES >= 256);
+    assert!(GUEST_UEFI_HOST_STACK_GUARD_PAGES >= 256);
+    assert!(guest_uefi_host_stack_headroom(GUEST_UEFI_HOST_STACK_PAGES, 143_328) > 0);
     // Iron `39818e87`: a `.bss` seat stack still left the VMCS guard written.
     // The seat stack is a frame-pool allocation, and the seated VMCS exits there.
     assert!(SEAT_HOST_STACK_PAGES >= 32);

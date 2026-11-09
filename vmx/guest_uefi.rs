@@ -4731,7 +4731,10 @@ static mut SAVED_VMCS: u64 = 0;
 /// into the private VMCS one frame below. 32 pages leaves headroom above
 /// the largest release frame (~74 KiB) even if such a temporary returns.
 /// guest-UEFI host stack pages.
-pub const GUEST_UEFI_HOST_STACK_PAGES: u64 = 48;
+/// 1 MiB. Iron `e15d6d49` put the seated stack at `0x597000` and still
+/// wrote the one-page guard under this stack (`guard=BREACHED`). The
+/// running guest's exit path is what reaches that guard.
+pub const GUEST_UEFI_HOST_STACK_PAGES: u64 = 256;
 /// Pages for the seated guest's host stack, not counting its guard page.
 /// Taken from the frame pool. A `.bss` array can sit on the same pages as
 /// the running guest's guard (iron `39818e87`: the switch line printed,
@@ -4740,7 +4743,9 @@ pub const SEAT_HOST_STACK_PAGES: u64 = 64;
 /// One canary page below the host stack. Filled with
 /// [`GUEST_UEFI_HOST_STACK_GUARD_BYTE`]; checked before F7 `VMCLEAR`.
 /// guest-UEFI host stack guard.
-pub const GUEST_UEFI_HOST_STACK_GUARD_PAGES: u64 = 1;
+/// 1 MiB of canary between the usable stack and the private VMCS. A
+/// smash has to cross this before it can zero the VMCS revision.
+pub const GUEST_UEFI_HOST_STACK_GUARD_PAGES: u64 = 256;
 pub const GUEST_UEFI_HOST_STACK_GUARD_BYTE: u8 = 0x5A;
 /// Physical base of the guard page (0 = not armed).
 static HOST_STACK_GUARD: AtomicU64 = AtomicU64::new(0);
@@ -9232,6 +9237,30 @@ pub fn raynu_f_wall_cap_hit(start_tsc: u64, now_tsc: u64, tsc_hz: u64, cap_s: u6
 /// True when this exit index should sample `rdtsc` for the wall cap.
 pub fn raynu_f_wall_check_due(n: u32) -> bool {
     n & RAYNU_F_WALL_CHECK_MASK == 0
+}
+
+/// True when the private VMCS revision still matches `IA32_VMX_BASIC`.
+/// A dirty canary with a matching revision can still `VMRESUME`.
+pub fn host_vmcs_revision_ok() -> bool {
+    #[cfg(target_os = "uefi")]
+    {
+        guest_uefi_host_vmcs_revision_ok()
+    }
+    #[cfg(not(target_os = "uefi"))]
+    {
+        true
+    }
+}
+
+#[cfg(target_os = "uefi")]
+fn guest_uefi_host_vmcs_revision_ok() -> bool {
+    let vmcs = unsafe { SAVED_VMCS };
+    if vmcs == 0 {
+        return false;
+    }
+    let rev_seen = unsafe { core::ptr::read_volatile(vmcs as *const u32) };
+    let rev_want = (unsafe { cpu::rdmsr(IA32_VMX_BASIC) } & 0x7FFF_FFFF) as u32;
+    rev_seen == rev_want
 }
 
 /// True when the guard page below the host stack is untouched (or not armed).

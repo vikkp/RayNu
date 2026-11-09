@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-7-b6-poolstack |
-| Summary | **B6 iron `39818e87` still breached the host stack guard.** The switch line printed, then the guard under the running guest's VMCS was written. The seated stack now comes from the frame pool, and the seated VMCS exits onto it. Not lived. B7 is not on this flash. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-7-b6-stack1m |
+| Summary | **B6 iron `e15d6d49` printed the seated stack at `0x597000` and still breached the one-page guard under the running guest's VMCS.** That stack is now 1 MiB, with 1 MiB of canary before the VMCS. Not lived. B7 is not on this flash. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B8 lived. B6 in flight. B7 in flight. Not lived. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-09 | wave-7-b6-stack1m | 0.0 | 99 | **B6 iron `e15d6d49` printed the seated stack at `0x597000` and still breached the one-page guard.** The running guest's stack is 1 MiB, with 1 MiB of canary before the VMCS. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-09 | wave-7-b6-poolstack | 0.0 | 99 | **B6 iron `39818e87` still breached the host stack guard.** The switch line printed, then the guard under the running guest's VMCS was written. The seated stack comes from the frame pool and the seated VMCS exits onto it. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-09 | wave-7-b6-stackptr | 0.0 | 99 | **B6 iron `3bf28b28` still breached the host stack guard.** The side-stack switch could keep the old pointer, and the seat firmware state was an ~81 KiB stack temporary. Both are fixed. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-09 | wave-7-b6-sidestack | 0.0 | 99 | **B6 iron `b9a70752` still breached the host stack guard with 48 pages.** The seated guest now uses its own 256 KiB stack. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |

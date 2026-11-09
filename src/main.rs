@@ -216,15 +216,21 @@ extern "C" fn resume_e4_shell() -> ! {
         && r640_hypervisor::mgmt::stage46_hold_e4_shell()
     {
         static BACK: core::sync::atomic::AtomicU8 = core::sync::atomic::AtomicU8::new(0);
-        if BACK.fetch_add(1, core::sync::atomic::Ordering::AcqRel) == 0
-            && vmx::guest_uefi::host_stack_guard_intact()
-        {
-            boot::serial::write_line_nowait(
-                "boot: B6 the running guest left the CPU; bringing it back",
-            );
+        let guard_ok = vmx::guest_uefi::host_stack_guard_intact();
+        let rev_ok = vmx::guest_uefi::host_vmcs_revision_ok();
+        if BACK.fetch_add(1, core::sync::atomic::Ordering::AcqRel) == 0 && rev_ok {
+            if guard_ok {
+                boot::serial::write_line_nowait(
+                    "boot: B6 the running guest left the CPU; bringing it back",
+                );
+            } else {
+                boot::serial::write_line_nowait(
+                    "boot: B6 host stack guard breached; VMCS revision matches; bringing the running guest back",
+                );
+            }
             unsafe { vmx::guest_uefi::bring_product_guest_back() };
         }
-        if !vmx::guest_uefi::host_stack_guard_intact() {
+        if !rev_ok {
             boot::serial::write_line_nowait(
                 "boot: B6 host stack guard breached; the VMCS is not usable",
             );
