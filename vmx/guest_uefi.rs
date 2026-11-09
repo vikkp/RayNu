@@ -5578,6 +5578,13 @@ unsafe fn launch_uefi(
     RAM_HPA.store(ram_hpa, Ordering::Release);
     FLASH_HPA.store(fw_hpa, Ordering::Release);
     FLASH_LEN.store(fw_len, Ordering::Release);
+    // Report-RAM then takes every 2 MiB block. Iron `cc85e795` asked for
+    // the 2 MiB host stack after that and `allocate_contiguous` failed, so
+    // VMLAUNCH never ran. Reserve the stack while a contiguous run remains.
+    let Some((guard, host_rsp)) = reserve_guest_uefi_host_stack(alloc) else {
+        serial::write_line("boot: guest-UEFI no frames for host stack");
+        return Err(GuestUefiLaunchError::LaunchSetupFailed);
+    };
 
     let ept_need = frames_required_firmware_alias(gpa, fw_len);
     if ept_need > 8 {
@@ -5806,27 +5813,6 @@ unsafe fn launch_uefi(
     let Some(vmcs) = alloc_phys(alloc) else {
         return Err(GuestUefiLaunchError::LaunchSetupFailed);
     };
-    // Guard page first (lowest), stack above it; an overflow hits the canary
-    // before the VMCS / EPT frames allocated earlier (iron `59ac070`).
-    let stack_total = GUEST_UEFI_HOST_STACK_GUARD_PAGES + GUEST_UEFI_HOST_STACK_PAGES;
-    let Some(stack_frame) = alloc.allocate_contiguous(stack_total) else {
-        return Err(GuestUefiLaunchError::LaunchSetupFailed);
-    };
-    let guard = stack_frame.to_phys();
-    core::ptr::write_bytes(
-        guard as *mut u8,
-        GUEST_UEFI_HOST_STACK_GUARD_BYTE,
-        (GUEST_UEFI_HOST_STACK_GUARD_PAGES * 4096) as usize,
-    );
-    HOST_STACK_GUARD.store(guard, Ordering::Release);
-    let host_stack = guard + GUEST_UEFI_HOST_STACK_GUARD_PAGES * 4096;
-    core::ptr::write_bytes(
-        host_stack as *mut u8,
-        0,
-        (GUEST_UEFI_HOST_STACK_PAGES * 4096) as usize,
-    );
-    let host_rsp = (host_stack + GUEST_UEFI_HOST_STACK_PAGES * 4096) & !0xFu64;
-    arm_seat_host_stack(alloc, guard, host_rsp);
     let Some(gdt) = alloc_phys(alloc) else {
         return Err(GuestUefiLaunchError::LaunchSetupFailed);
     };
@@ -8044,6 +8030,29 @@ unsafe fn finish_seat_firmware() -> ! {
 /// True when `[seat_lo, seat_hi)` meets `[host_lo, host_hi)`.
 pub fn seat_stack_overlaps_host(seat_lo: u64, seat_hi: u64, host_lo: u64, host_hi: u64) -> bool {
     seat_lo < seat_hi && host_lo < host_hi && seat_lo < host_hi && host_lo < seat_hi
+}
+
+/// Canary below, usable stack above. Returns `(guard, host_rsp)`.
+#[cfg(target_os = "uefi")]
+unsafe fn reserve_guest_uefi_host_stack(alloc: &mut FrameAllocator) -> Option<(u64, u64)> {
+    let stack_total = GUEST_UEFI_HOST_STACK_GUARD_PAGES + GUEST_UEFI_HOST_STACK_PAGES;
+    let frame = alloc.allocate_contiguous(stack_total)?;
+    let guard = frame.to_phys();
+    core::ptr::write_bytes(
+        guard as *mut u8,
+        GUEST_UEFI_HOST_STACK_GUARD_BYTE,
+        (GUEST_UEFI_HOST_STACK_GUARD_PAGES * 4096) as usize,
+    );
+    HOST_STACK_GUARD.store(guard, Ordering::Release);
+    let host_stack = guard + GUEST_UEFI_HOST_STACK_GUARD_PAGES * 4096;
+    core::ptr::write_bytes(
+        host_stack as *mut u8,
+        0,
+        (GUEST_UEFI_HOST_STACK_PAGES * 4096) as usize,
+    );
+    let host_rsp = (host_stack + GUEST_UEFI_HOST_STACK_PAGES * 4096) & !0xF;
+    arm_seat_host_stack(alloc, guard, host_rsp);
+    Some((guard, host_rsp))
 }
 
 #[cfg(target_os = "uefi")]
