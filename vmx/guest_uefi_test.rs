@@ -3521,7 +3521,8 @@ fn f7_relaunch_resets_firmware_state_without_a_stack_temporary() {
     assert!(src.contains("static RAYNU_F_STATE_TEMPLATE"));
     assert!(src.contains("RayNu-F F7 template reset"));
     assert!(
-        !src.contains("RAYNU_F_STATE = crate::raynu_f::FirmwareState::new()"),
+        !src.contains("RAYNU_F_STATE = crate::raynu_f::FirmwareState::new()")
+            && !src.contains("*st = crate::raynu_f::FirmwareState::new()"),
         "F7 must memcpy the .rdata template, never construct on the stack"
     );
     assert!(src.contains("core::ptr::addr_of!(RAYNU_F_STATE_TEMPLATE)"));

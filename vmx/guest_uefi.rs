@@ -7472,8 +7472,14 @@ unsafe fn seat_firmware_service() -> bool {
         return false;
     }
     if !SEAT_FW_STATE_READY.swap(true, Ordering::AcqRel) {
+        // Same rule as the F7 reset. Constructing a seat FirmwareState
+        // on the stack is ~81 KiB and overflowed the guard into the VMCS.
+        core::ptr::copy_nonoverlapping(
+            core::ptr::addr_of!(RAYNU_F_STATE_TEMPLATE),
+            core::ptr::addr_of_mut!(SEAT_FW_STATE),
+            1,
+        );
         let st = &mut *core::ptr::addr_of_mut!(SEAT_FW_STATE);
-        *st = crate::raynu_f::FirmwareState::new();
         if let Some((_, bytes)) = crate::mgmt::product_companion::seat_disk_bound() {
             let tables = crate::raynu_f::launch_plan::F2_TABLES_BASE;
             st.blockio_disk =
@@ -8028,17 +8034,25 @@ unsafe fn finish_seat_firmware() -> ! {
 static mut COMPANION_HOST_STACK: [u8; 256 * 1024] = [0; 256 * 1024];
 
 #[cfg(target_os = "uefi")]
+#[inline(never)]
 unsafe fn call_on_companion_stack(f: unsafe extern "C" fn()) {
+    static ONCE: AtomicBool = AtomicBool::new(false);
+    if !ONCE.swap(true, Ordering::AcqRel) {
+        serial::write_line_nowait("boot: B6 seated guest on its own stack");
+    }
     let base = core::ptr::addr_of_mut!(COMPANION_HOST_STACK) as u64;
     let top = (base + core::mem::size_of_val(&COMPANION_HOST_STACK) as u64) & !15;
+    // r13/r14 are fixed inputs. A generic `{top}` was allowed to be r15,
+    // and the first `mov r15, rsp` then threw the new stack pointer away
+    // (iron `3bf28b28`: guard still breached).
     core::arch::asm!(
-        "mov r15, rsp",
-        "mov rsp, {top}",
-        "call {func}",
-        "mov rsp, r15",
-        top = in(reg) top,
-        func = in(reg) f,
-        out("r15") _,
+        "mov r12, rsp",
+        "mov rsp, r13",
+        "call r14",
+        "mov rsp, r12",
+        in("r13") top,
+        in("r14") f,
+        lateout("r12") _,
         clobber_abi("sysv64"),
     );
 }

@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-7-b6-sidestack |
-| Summary | **B6 iron `b9a70752` still breached the host stack guard.** The seated guest now has its own 256 KiB stack. Not lived. B7 is not on this flash. Guest SSH stays. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-7-b6-stackptr |
+| Summary | **B6 iron `3bf28b28` still breached the host stack guard.** The side-stack pointer is fixed, and the seat firmware state is copied, not built on the stack. Not lived. B7 is not on this flash. Guest SSH stays. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. TLS 88 held. |
 | Gates touched | B8 lived. B6 in flight. B7 in flight. Not lived. No doorbell. No format of UBUNTU0. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-09 | wave-7-b6-stackptr | 94 | 72 | **B6 iron `3bf28b28` still breached the host stack guard.** Side-stack pointer fixed. Seat firmware state is copied. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-09 | wave-7-b6-sidestack | 94 | 72 | **B6 iron `b9a70752` still breached the host stack guard with 48 pages.** Seated guest uses its own 256 KiB stack. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-09 | wave-7-b6-stack | 94 | 72 | **B6 iron `1707085e` breached the host stack guard and the VMCS revision was 0.** Seat bounce is off that stack. Stack is 48 pages. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-09 | wave-7-b6-hold | 94 | 72 | **B6 iron `76f66f5c` seated the second guest, then the running guest entered the Stage 46 hold.** Confirm line prints during Linux. One bring-back. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
