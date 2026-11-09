@@ -3,8 +3,9 @@ use super::{
     guest_uefi_report_ram_should_premap, GUEST_UEFI_REPORT_RAM_PRODUCT_EXTRA,
 };
 use super::{
-    guest_uefi_host_stack_guard_ok, guest_uefi_host_stack_headroom, GUEST_UEFI_HOST_STACK_GUARD_BYTE,
-    GUEST_UEFI_HOST_STACK_GUARD_PAGES, GUEST_UEFI_HOST_STACK_PAGES,
+    guest_uefi_host_stack_guard_ok, guest_uefi_host_stack_headroom, seat_stack_overlaps_host,
+    GUEST_UEFI_HOST_STACK_GUARD_BYTE, GUEST_UEFI_HOST_STACK_GUARD_PAGES, GUEST_UEFI_HOST_STACK_PAGES,
+    SEAT_HOST_STACK_PAGES,
 };
 use super::{
     raynu_f_wall_cap_hit, raynu_f_wall_check_due, raynu_f_wall_elapsed_ms, RAYNU_F_EXIT_CAP, RAYNU_F_WALL_CAP_S,
@@ -3532,6 +3533,14 @@ fn f7_relaunch_resets_firmware_state_without_a_stack_temporary() {
     // Host stack: at least 32 pages + 1 guard page; the guard is checked before VMCLEAR.
     assert!(GUEST_UEFI_HOST_STACK_PAGES >= 32);
     assert_eq!(GUEST_UEFI_HOST_STACK_GUARD_PAGES, 1);
+    // Iron `39818e87`: a `.bss` seat stack still left the VMCS guard written.
+    // The seat stack is a frame-pool allocation, and the seated VMCS exits there.
+    assert!(SEAT_HOST_STACK_PAGES >= 32);
+    assert!(!src.contains("COMPANION_HOST_STACK"));
+    assert!(src.contains("SEAT_HOST_RSP"));
+    assert!(src.contains("seated VMCS host stack"));
+    assert!(!seat_stack_overlaps_host(0x556000, 0x596000, 0x525000, 0x556000));
+    assert!(seat_stack_overlaps_host(0x555000, 0x560000, 0x525000, 0x556000));
     assert!(guest_uefi_host_stack_headroom(4, 81_024) < 0, "16 KiB overflowed");
     assert!(guest_uefi_host_stack_headroom(GUEST_UEFI_HOST_STACK_PAGES, 81_024) > 0);
     let guard = [GUEST_UEFI_HOST_STACK_GUARD_BYTE; 4096];

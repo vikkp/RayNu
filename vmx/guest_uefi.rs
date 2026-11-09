@@ -4732,6 +4732,11 @@ static mut SAVED_VMCS: u64 = 0;
 /// the largest release frame (~74 KiB) even if such a temporary returns.
 /// guest-UEFI host stack pages.
 pub const GUEST_UEFI_HOST_STACK_PAGES: u64 = 48;
+/// Pages for the seated guest's host stack, not counting its guard page.
+/// Taken from the frame pool. A `.bss` array can sit on the same pages as
+/// the running guest's guard (iron `39818e87`: the switch line printed,
+/// then `guard=BREACHED`).
+pub const SEAT_HOST_STACK_PAGES: u64 = 64;
 /// One canary page below the host stack. Filled with
 /// [`GUEST_UEFI_HOST_STACK_GUARD_BYTE`]; checked before F7 `VMCLEAR`.
 /// guest-UEFI host stack guard.
@@ -4739,6 +4744,8 @@ pub const GUEST_UEFI_HOST_STACK_GUARD_PAGES: u64 = 1;
 pub const GUEST_UEFI_HOST_STACK_GUARD_BYTE: u8 = 0x5A;
 /// Physical base of the guard page (0 = not armed).
 static HOST_STACK_GUARD: AtomicU64 = AtomicU64::new(0);
+/// Top of the seated guest's host stack (0 = not allocated).
+static SEAT_HOST_RSP: AtomicU64 = AtomicU64::new(0);
 static mut E4_ALLOC: *mut FrameAllocator = core::ptr::null_mut();
 static mut E4_LIFE: *mut crate::vmx::lifecycle::VmxLifecycle = core::ptr::null_mut();
 static mut E4_RSP: u64 = 0;
@@ -5814,6 +5821,7 @@ unsafe fn launch_uefi(
         (GUEST_UEFI_HOST_STACK_PAGES * 4096) as usize,
     );
     let host_rsp = (host_stack + GUEST_UEFI_HOST_STACK_PAGES * 4096) & !0xFu64;
+    arm_seat_host_stack(alloc, guard, host_rsp);
     let Some(gdt) = alloc_phys(alloc) else {
         return Err(GuestUefiLaunchError::LaunchSetupFailed);
     };
@@ -7253,6 +7261,8 @@ unsafe fn launch_seat_firmware(ubuntu: u64) -> bool {
             let _ = ops::vmwrite(VMCS_CLONE_FIELDS[i], vals[i]);
         }
     }
+    // seated VMCS host stack. The clone copied the running guest's HOST_RSP.
+    seat_vmcs_host_stack();
     let primary = ops::vmread(PRIMARY_PROC_BASED_VM_EXEC_CONTROL).unwrap_or(0) as u32;
     let _ = ops::vmwrite(
         PRIMARY_PROC_BASED_VM_EXEC_CONTROL,
@@ -8026,25 +8036,84 @@ unsafe fn finish_seat_firmware() -> ! {
     hand_seat_firmware_back();
 }
 
-/// Host stack for the seated guest only. The guest-UEFI exit stack is 48
-/// pages and the private VMCS is the page under its guard. Entering the
-/// seated guest on that stack breached the guard and zeroed the VMCS
-/// (iron `b9a70752`, `guard=BREACHED`, `rev=0x0`).
+/// True when `[seat_lo, seat_hi)` meets `[host_lo, host_hi)`.
+pub fn seat_stack_overlaps_host(seat_lo: u64, seat_hi: u64, host_lo: u64, host_hi: u64) -> bool {
+    seat_lo < seat_hi && host_lo < host_hi && seat_lo < host_hi && host_lo < seat_hi
+}
+
 #[cfg(target_os = "uefi")]
-static mut COMPANION_HOST_STACK: [u8; 256 * 1024] = [0; 256 * 1024];
+unsafe fn arm_seat_host_stack(alloc: &mut FrameAllocator, host_lo: u64, host_hi: u64) {
+    let total = 1 + SEAT_HOST_STACK_PAGES;
+    let Some(frame) = alloc.allocate_contiguous(total) else {
+        serial::write_line("boot: B6 seated stack missing; the running guest keeps the CPU");
+        return;
+    };
+    let seat_lo = frame.to_phys();
+    let bytes = (SEAT_HOST_STACK_PAGES * 4096) as usize;
+    core::ptr::write_bytes(
+        seat_lo as *mut u8,
+        GUEST_UEFI_HOST_STACK_GUARD_BYTE,
+        4096,
+    );
+    let stack = seat_lo + 4096;
+    core::ptr::write_bytes(stack as *mut u8, 0, bytes);
+    let top = (stack + bytes as u64) & !0xF;
+    if seat_stack_overlaps_host(seat_lo, top, host_lo, host_hi) {
+        serial::write_line("boot: B6 seated stack overlaps the running guest stack");
+        return;
+    }
+    SEAT_HOST_RSP.store(top, Ordering::Release);
+    serial::write_str("boot: B6 seated stack top=0x");
+    write_hex(top);
+    serial::write_str(" guard=0x");
+    write_hex(seat_lo);
+    serial::write_line(" (frame pool; not the VMCS stack)");
+}
+
+/// Point the current VMCS at the seated host stack. No-op when that stack
+/// was not allocated. Caller has already `VMPTRLD`'d the seated VMCS.
+#[cfg(target_os = "uefi")]
+unsafe fn seat_vmcs_host_stack() {
+    let top = SEAT_HOST_RSP.load(Ordering::Acquire);
+    if top != 0 {
+        let _ = ops::vmwrite(HOST_RSP, top);
+    }
+}
 
 #[cfg(target_os = "uefi")]
 #[inline(never)]
 unsafe fn call_on_companion_stack(f: unsafe extern "C" fn()) {
+    let top = SEAT_HOST_RSP.load(Ordering::Acquire);
+    if top == 0 {
+        serial::write_line_nowait(
+            "boot: B6 seated stack missing; the running guest keeps the CPU",
+        );
+        return;
+    }
     static ONCE: AtomicBool = AtomicBool::new(false);
     if !ONCE.swap(true, Ordering::AcqRel) {
-        serial::write_line_nowait("boot: B6 seated guest on its own stack");
+        serial::write_str_nowait("boot: B6 seated stack top=0x");
+        write_hex_nowait(top);
+        serial::write_str_nowait(" hostguard=0x");
+        write_hex_nowait(HOST_STACK_GUARD.load(Ordering::Acquire));
+        serial::write_line_nowait("");
     }
-    let base = core::ptr::addr_of_mut!(COMPANION_HOST_STACK) as u64;
-    let top = (base + core::mem::size_of_val(&COMPANION_HOST_STACK) as u64) & !15;
+    let base = top - SEAT_HOST_STACK_PAGES * 4096;
+    let rsp: u64;
+    core::arch::asm!(
+        "mov {rsp}, rsp",
+        rsp = out(reg) rsp,
+        options(nomem, nostack, preserves_flags),
+    );
+    // Companion exits already land here (`HOST_RSP`). Switching again would
+    // reuse the live frame.
+    if rsp > base && rsp <= top {
+        f();
+        return;
+    }
     // r13/r14 are fixed inputs. A generic `{top}` was allowed to be r15,
     // and the first `mov r15, rsp` then threw the new stack pointer away
-    // (iron `3bf28b28`: guard still breached).
+    // (iron `3bf28b28`).
     core::arch::asm!(
         "mov r12, rsp",
         "mov rsp, r13",
@@ -8184,6 +8253,8 @@ unsafe fn maybe_enter_product_companion() {
             let _ = ops::vmwrite(VMCS_CLONE_FIELDS[i], vals[i]);
         }
     }
+    // seated VMCS host stack. The clone copied the running guest's HOST_RSP.
+    seat_vmcs_host_stack();
     let primary = ops::vmread(PRIMARY_PROC_BASED_VM_EXEC_CONTROL).unwrap_or(0) as u32;
     let _ = ops::vmwrite(
         PRIMARY_PROC_BASED_VM_EXEC_CONTROL,

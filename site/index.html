@@ -180,9 +180,8 @@
             its turn and stores reads and writes on its own disk. The
             guest already running keeps its devices. COM2 can print
             <code>boot: B6 both product guests have been entered</code>.
-            The guest operating system is still waiting.             Iron <code>3bf28b28</code> still breached the host stack
-            guard. This head keeps the seated guest on its own stack
-            and does not build its firmware state there. The second
+            The guest operating system is still waiting. Iron <code>39818e87</code> printed the stack switch and still breached the host stack
+            guard. This head gives the seated guest a stack from the frame pool, and that guest's VMCS exits onto it. The second
             CPU is not on this stick.
             A second CPU is not published yet, so
             Ubuntu still boots with one. The rollback stays
