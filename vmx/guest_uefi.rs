@@ -6408,7 +6408,17 @@ unsafe extern "C" fn guest_uefi_vmresume() -> ! {
 
 #[cfg(target_os = "uefi")]
 unsafe extern "C" fn guest_uefi_resume_failed() -> ! {
-    serial::write_line("boot: guest-UEFI VMRESUME failed — continuing E4 SHELL");
+    let ierr = ops::vmread(VM_INSTRUCTION_ERROR).unwrap_or(0xFFFF);
+    serial::write_str_nowait("boot: guest-UEFI VMRESUME failed insn_error=");
+    write_dec_nowait(ierr);
+    serial::write_line_nowait("; trying the running guest again");
+    static TRIED: AtomicBool = AtomicBool::new(false);
+    if !TRIED.swap(true, Ordering::AcqRel) {
+        let (_, _, ubuntu, _) = crate::mgmt::product_companion::held_guest();
+        if ubuntu != 0 && ops::vmptrld(ubuntu).is_ok() {
+            guest_uefi_vmresume();
+        }
+    }
     leave_to_e4();
 }
 
@@ -7503,7 +7513,7 @@ unsafe fn note_seated_guest_entered() {
         crate::mgmt::product_pair::note_companion();
     }
     if crate::mgmt::product_pair::take_close_line() {
-        serial::write_line(
+        serial::write_line_nowait(
             "boot: B6 both product guests have been entered; confirm this line on COM2",
         );
     }
@@ -7989,11 +7999,11 @@ unsafe fn finish_seat_firmware() -> ! {
             guest_uefi_vmresume();
         }
     }
-    serial::write_str("boot: B6 seated firmware returned rip=0x");
-    write_hex(rip);
-    serial::write_str(" hpa=0x");
-    write_hex(hpa);
-    serial::write_line("; the guest OS is still waiting");
+    serial::write_str_nowait("boot: B6 seated firmware returned rip=0x");
+    write_hex_nowait(rip);
+    serial::write_str_nowait(" hpa=0x");
+    write_hex_nowait(hpa);
+    serial::write_line_nowait("; the guest OS is still waiting");
     hand_seat_firmware_back();
 }
 
@@ -9142,6 +9152,26 @@ pub fn try_spa_product_iso_start() {
 
 /// Start after Stop, while the SPA is still up. Consumes one relaunch flag.
 /// Host does nothing. Firmware resets RayNu-F and boots the chosen disk.
+pub fn raynu_f_guest_was_running() -> bool {
+    RAYNU_F_RAN.load(Ordering::Acquire)
+}
+
+/// The product guest left the VMCS without an operator Stop. Boot it again
+/// on the same slab. A parked second guest stays seated.
+pub unsafe fn bring_product_guest_back() -> ! {
+    crate::mgmt::product_companion::unstick_in_flight_probe();
+    #[cfg(target_os = "uefi")]
+    {
+        raynu_f_reset_relaunch(crate::devices::guest_platform::ResetSrc::Kbc);
+    }
+    #[cfg(not(target_os = "uefi"))]
+    {
+        loop {
+            core::hint::spin_loop();
+        }
+    }
+}
+
 pub fn relaunch_perc_guest_from_spa() {
     #[cfg(target_os = "uefi")]
     unsafe {

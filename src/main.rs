@@ -208,6 +208,21 @@ extern "C" fn resume_e4_shell() -> ! {
     if r640_hypervisor::mgmt::perc_boot_choice::guest_stopped() {
         vmx::launch::enter_spa_stop_idle();
     }
+    // Iron 76f66f5c: seating the second guest then an EPT exit
+    // (reason=0x30) left the Ubuntu guest in the Stage 46 hold. That hold
+    // never runs either guest. Bring the product guest back once. A second
+    // drop still holds, so a loop cannot reboot forever.
+    if r640_hypervisor::vmx::guest_uefi::raynu_f_guest_was_running()
+        && r640_hypervisor::mgmt::stage46_hold_e4_shell()
+    {
+        static BACK: core::sync::atomic::AtomicU8 = core::sync::atomic::AtomicU8::new(0);
+        if BACK.fetch_add(1, core::sync::atomic::Ordering::AcqRel) == 0 {
+            boot::serial::write_line_nowait(
+                "boot: B6 the running guest left the CPU; bringing it back",
+            );
+            unsafe { vmx::guest_uefi::bring_product_guest_back() };
+        }
+    }
     if r640_hypervisor::mgmt::stage46_hold_e4_shell() {
         boot::serial::write_line(r640_hypervisor::mgmt::M7_STAGE46_HOLD_E4_NOTE);
         // Phase 0: live hold (SPA ticks + heartbeat), not a dead spin.

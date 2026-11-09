@@ -98,6 +98,17 @@ pub fn probe_in_flight() -> bool {
     PROBE.load(Ordering::Acquire) == IN_FLIGHT
 }
 
+/// An entry that left the CPU without parking. The next slice may start again.
+/// A parked seat is left parked.
+pub fn unstick_in_flight_probe() {
+    if PROBE
+        .compare_exchange(IN_FLIGHT, IDLE, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+    {
+        FW_ON.store(false, Ordering::Release);
+    }
+}
+
 pub fn probe_returned() -> bool {
     PROBE.load(Ordering::Acquire) == RETURNED
 }

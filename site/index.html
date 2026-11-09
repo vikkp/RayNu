@@ -180,8 +180,11 @@
             its turn and stores reads and writes on its own disk. The
             guest already running keeps its devices. COM2 can print
             <code>boot: B6 both product guests have been entered</code>.
-            The guest operating system is still waiting. This is the
-            F11 for that line. The second CPU is not on this stick.
+            The guest operating system is still waiting. Iron
+            <code>76f66f5c</code> seated the second guest, then the
+            running guest entered the Stage 46 hold. This head brings
+            that guest back once and prints the confirm line while
+            Linux has COM2. The second CPU is not on this stick.
             A second CPU is not published yet, so
             Ubuntu still boots with one. The rollback stays
             <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.6-wave6-closed"><code>v0.1.6-wave6-closed</code></a>.
