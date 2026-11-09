@@ -8020,6 +8020,39 @@ unsafe fn finish_seat_firmware() -> ! {
     hand_seat_firmware_back();
 }
 
+/// Host stack for the seated guest only. The guest-UEFI exit stack is 48
+/// pages and the private VMCS is the page under its guard. Entering the
+/// seated guest on that stack breached the guard and zeroed the VMCS
+/// (iron `b9a70752`, `guard=BREACHED`, `rev=0x0`).
+#[cfg(target_os = "uefi")]
+static mut COMPANION_HOST_STACK: [u8; 256 * 1024] = [0; 256 * 1024];
+
+#[cfg(target_os = "uefi")]
+unsafe fn call_on_companion_stack(f: unsafe extern "C" fn()) {
+    let base = core::ptr::addr_of_mut!(COMPANION_HOST_STACK) as u64;
+    let top = (base + core::mem::size_of_val(&COMPANION_HOST_STACK) as u64) & !15;
+    core::arch::asm!(
+        "mov r15, rsp",
+        "mov rsp, {top}",
+        "call {func}",
+        "mov rsp, r15",
+        top = in(reg) top,
+        func = in(reg) f,
+        out("r15") _,
+        clobber_abi("sysv64"),
+    );
+}
+
+#[cfg(target_os = "uefi")]
+unsafe extern "C" fn companion_exit_on_side_stack() {
+    finish_product_companion_probe();
+}
+
+#[cfg(target_os = "uefi")]
+unsafe extern "C" fn companion_enter_on_side_stack() {
+    maybe_enter_product_companion();
+}
+
 /// After this Ubuntu exit is handled, enter the HLT VMCS once. VMLAUNCH does
 /// not return on success. A failed instruction reloads the Ubuntu VMCS.
 #[cfg(target_os = "uefi")]
@@ -8167,7 +8200,7 @@ unsafe fn maybe_enter_product_companion() {
 #[cfg(target_os = "uefi")]
 pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     if crate::mgmt::product_companion::probe_in_flight() {
-        finish_product_companion_probe();
+        call_on_companion_stack(companion_exit_on_side_stack);
     }
     LAUNCH_ENTERED.store(true, Ordering::Release);
     MMIO_INSN_LEN.store(0, Ordering::Relaxed);
@@ -8877,7 +8910,7 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
             cpu::write_cr2(linux_cr2);
         }
         if PRODUCT_COMPANION_SLICE.swap(false, Ordering::AcqRel) {
-            maybe_enter_product_companion();
+            call_on_companion_stack(companion_enter_on_side_stack);
         }
         CONTINUE_GUEST.store(true, Ordering::Release);
         guest_uefi_vmresume();
