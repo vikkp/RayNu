@@ -3541,6 +3541,10 @@ fn f7_relaunch_resets_firmware_state_without_a_stack_temporary() {
     assert!(src.contains("SEAT_HOST_RSP"));
     assert!(src.contains("seated VMCS host stack"));
     assert!(src.contains("Reserve the stack while a contiguous run remains"));
+    assert!(src.contains("reserve_seat_firmware_slab"));
+    assert!(src.contains(
+        "serial::write_line_nowait(\n            \"boot: B6 seated firmware entry failed; the running guest keeps the CPU\","
+    ));
     assert!(!seat_stack_overlaps_host(0x556000, 0x596000, 0x525000, 0x556000));
     assert!(seat_stack_overlaps_host(0x555000, 0x560000, 0x525000, 0x556000));
     assert!(guest_uefi_host_stack_headroom(4, 81_024) < 0, "16 KiB overflowed");

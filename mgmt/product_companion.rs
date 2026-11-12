@@ -113,6 +113,11 @@ pub fn probe_returned() -> bool {
     PROBE.load(Ordering::Acquire) == RETURNED
 }
 
+/// The retry budget is spent. Further slices must leave the running guest alone.
+pub fn probe_tries_spent() -> bool {
+    TRIES.load(Ordering::Acquire) >= MAX_TRIES
+}
+
 /// Start the one entry. False when one is in flight, already returned, failed,
 /// or the retry budget is spent.
 pub fn begin_probe() -> bool {
@@ -962,6 +967,7 @@ mod tests {
             assert!(begin_probe());
             note_probe_retry();
         }
+        assert!(probe_tries_spent());
         assert!(!begin_probe());
         clear_for_test();
     }

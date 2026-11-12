@@ -5585,6 +5585,10 @@ unsafe fn launch_uefi(
         serial::write_line("boot: guest-UEFI no frames for host stack");
         return Err(GuestUefiLaunchError::LaunchSetupFailed);
     };
+    // Same carve-up. A 32 MiB 2 MiB-aligned slab does not fit in the hole
+    // report-RAM leaves, so Start never reached the seated firmware VMCS
+    // (iron `021d8eef`: stack line, then no confirm line).
+    reserve_seat_firmware_slab(alloc, guard, host_rsp);
 
     let ept_need = frames_required_firmware_alias(gpa, fw_len);
     if ept_need > 8 {
@@ -6919,10 +6923,10 @@ unsafe fn finish_product_companion_probe() -> ! {
     } else {
         let _ = crate::mgmt::product_companion::take_disk_plant();
         let _ = crate::mgmt::product_companion::take_seat_ram();
-        crate::mgmt::product_companion::note_probe_failed();
-        serial::write_str("boot: B6 second VMCS left on reason=0x");
-        write_hex_u32(basic);
-        serial::write_line("; the running guest keeps the CPU");
+        crate::mgmt::product_companion::note_probe_retry();
+        serial::write_str_nowait("boot: B6 second VMCS left on reason=0x");
+        write_hex_u32_nowait(basic);
+        serial::write_line_nowait("; the running guest keeps the CPU");
     }
     if ubuntu == 0 || ops::vmptrld(ubuntu).is_err() {
         serial::write_line("boot: B6 could not reload the running guest VMCS");
@@ -7203,6 +7207,9 @@ impl crate::raynu_f::fat::VolumeRead for SeatFat {
 #[cfg(target_os = "uefi")]
 unsafe fn launch_seat_firmware(ubuntu: u64) -> bool {
     let Some(mut fw) = prepare_seat_firmware() else {
+        serial::write_line_nowait(
+            "boot: B6 seated firmware slab missing; the running guest keeps the CPU",
+        );
         return false;
     };
     if let Some(entry) = arm_seat_disk_stub() {
@@ -7217,6 +7224,9 @@ unsafe fn launch_seat_firmware(ubuntu: u64) -> bool {
         SEAT_FW_HELD.load(Ordering::Acquire),
         crate::mgmt::product_companion::SEAT_FW_BYTES,
     ) else {
+        serial::write_line_nowait(
+            "boot: B6 seated firmware page tables failed; the running guest keeps the CPU",
+        );
         return false;
     };
     let io_src = ops::vmread(IO_BITMAP_A).unwrap_or(0);
@@ -7243,8 +7253,10 @@ unsafe fn launch_seat_firmware(ubuntu: u64) -> bool {
         && ops::vmptrld(vmcs).is_ok();
     if !prepared {
         let _ = ops::vmptrld(ubuntu);
-        crate::mgmt::product_companion::note_probe_failed();
-        serial::write_line("boot: B6 seated firmware entry failed; the running guest keeps the CPU");
+        crate::mgmt::product_companion::note_probe_retry();
+        serial::write_line_nowait(
+            "boot: B6 seated firmware entry failed; the running guest keeps the CPU",
+        );
         return true;
     }
     for i in 0..n {
@@ -7277,16 +7289,18 @@ unsafe fn launch_seat_firmware(ubuntu: u64) -> bool {
         let ierr = ops::vmread(VM_INSTRUCTION_ERROR).unwrap_or(0xFFFF);
         crate::mgmt::product_companion::clear_seat_firmware();
         let _ = ops::vmptrld(ubuntu);
-        crate::mgmt::product_companion::note_probe_failed();
-        serial::write_str("boot: B6 seated firmware entry failed insn_error=");
-        write_dec(ierr);
-        serial::write_line("; the running guest keeps the CPU");
+        crate::mgmt::product_companion::note_probe_retry();
+        serial::write_str_nowait("boot: B6 seated firmware entry failed insn_error=");
+        write_dec_nowait(ierr);
+        serial::write_line_nowait("; the running guest keeps the CPU");
         return true;
     }
     crate::mgmt::product_companion::clear_seat_firmware();
     let _ = ops::vmptrld(ubuntu);
-    crate::mgmt::product_companion::note_probe_failed();
-    serial::write_line("boot: B6 seated firmware entry returned; the running guest keeps the CPU");
+    crate::mgmt::product_companion::note_probe_retry();
+    serial::write_line_nowait(
+        "boot: B6 seated firmware entry returned; the running guest keeps the CPU",
+    );
     true
 }
 
@@ -8055,6 +8069,39 @@ unsafe fn reserve_guest_uefi_host_stack(alloc: &mut FrameAllocator) -> Option<(u
     Some((guard, host_rsp))
 }
 
+/// 2 MiB-aligned slab for the seated firmware. Stored for [`prepare_seat_firmware`].
+/// A missing slab does not fail the running guest's launch.
+#[cfg(target_os = "uefi")]
+unsafe fn reserve_seat_firmware_slab(alloc: &mut FrameAllocator, host_lo: u64, host_hi: u64) {
+    let bytes = crate::mgmt::product_companion::SEAT_FW_BYTES;
+    let pages = bytes / 4096;
+    let Some(frame) = alloc.allocate_contiguous_aligned(pages, 512) else {
+        serial::write_line("boot: B6 seated firmware slab missing");
+        return;
+    };
+    let hpa = frame.to_phys();
+    let host_len = host_hi.saturating_sub(host_lo);
+    let ubuntu = RAM_HPA.load(Ordering::Acquire);
+    let overlap = crate::mgmt::product_companion::ranges_overlap(
+        hpa,
+        bytes,
+        ubuntu,
+        GUEST_UEFI_LOW_RAM_BYTES,
+    ) || crate::mgmt::product_companion::ranges_overlap(hpa, bytes, host_lo, host_len);
+    if overlap {
+        for i in 0..pages {
+            let _ = alloc.free_frame(PhysFrame(frame.0 + i));
+        }
+        serial::write_line("boot: B6 seated firmware slab overlaps the running guest");
+        return;
+    }
+    core::ptr::write_bytes(hpa as *mut u8, 0, bytes as usize);
+    SEAT_FW_HELD.store(hpa, Ordering::Release);
+    serial::write_str("boot: B6 seated firmware slab hpa=0x");
+    write_hex(hpa);
+    serial::write_line("");
+}
+
 #[cfg(target_os = "uefi")]
 unsafe fn arm_seat_host_stack(alloc: &mut FrameAllocator, host_lo: u64, host_hi: u64) {
     let total = 1 + SEAT_HOST_STACK_PAGES;
@@ -8169,13 +8216,21 @@ unsafe fn maybe_enter_product_companion() {
         return;
     }
     if !crate::mgmt::product_companion::begin_probe() {
+        if crate::mgmt::product_companion::probe_tries_spent() {
+            static STOPPED: AtomicBool = AtomicBool::new(false);
+            if !STOPPED.swap(true, Ordering::AcqRel) {
+                serial::write_line_nowait(
+                    "boot: B6 seated entry stopped; the running guest keeps the CPU",
+                );
+            }
+        }
         return;
     }
     let ubuntu = match ops::vmptrst() {
         Ok(p) if p != u64::MAX && p & 0xfff == 0 => p,
         _ => {
-            crate::mgmt::product_companion::note_probe_failed();
-            serial::write_line(
+            crate::mgmt::product_companion::note_probe_retry();
+            serial::write_line_nowait(
                 "boot: B6 second VMCS entry failed; the running guest keeps the CPU",
             );
             return;
@@ -8258,8 +8313,10 @@ unsafe fn maybe_enter_product_companion() {
         let _ = ops::vmptrld(ubuntu);
         let _ = crate::mgmt::product_companion::take_disk_plant();
         let _ = crate::mgmt::product_companion::take_seat_ram();
-        crate::mgmt::product_companion::note_probe_failed();
-        serial::write_line("boot: B6 second VMCS entry failed; the running guest keeps the CPU");
+        crate::mgmt::product_companion::note_probe_retry();
+        serial::write_line_nowait(
+            "boot: B6 second VMCS entry failed; the running guest keeps the CPU",
+        );
         return;
     }
     for i in 0..n {
@@ -8288,10 +8345,10 @@ unsafe fn maybe_enter_product_companion() {
         let _ = ops::vmptrld(ubuntu);
         let _ = crate::mgmt::product_companion::take_disk_plant();
         let _ = crate::mgmt::product_companion::take_seat_ram();
-        crate::mgmt::product_companion::note_probe_failed();
-        serial::write_str("boot: B6 second VMCS entry failed insn_error=");
-        write_dec(ierr);
-        serial::write_line("; the running guest keeps the CPU");
+        crate::mgmt::product_companion::note_probe_retry();
+        serial::write_str_nowait("boot: B6 second VMCS entry failed insn_error=");
+        write_dec_nowait(ierr);
+        serial::write_line_nowait("; the running guest keeps the CPU");
     }
 }
 
