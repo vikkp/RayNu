@@ -3550,6 +3550,9 @@ fn f7_relaunch_resets_firmware_state_without_a_stack_temporary() {
     assert!(src.contains(
         "serial::write_line_nowait(\n            \"boot: B6 seated firmware entry failed; the running guest keeps the CPU\","
     ));
+    assert!(src.contains("seat_exit_keeps_the_guest"));
+    assert!(src.contains("; resuming the bootloader"));
+    assert!(src.contains("boot: B6 seated firmware exit reason=0x"));
     assert!(!seat_stack_overlaps_host(0x556000, 0x596000, 0x525000, 0x556000));
     assert!(seat_stack_overlaps_host(0x555000, 0x560000, 0x525000, 0x556000));
     assert!(guest_uefi_host_stack_headroom(4, 81_024) < 0, "16 KiB overflowed");

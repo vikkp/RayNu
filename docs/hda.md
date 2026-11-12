@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-7-b6-iobitmap |
-| Summary | **B6 iron `6a254b4d` reached the seated firmware VM-entry and failed with `insn_error=7`.** That is an invalid control field. The seated I/O bitmap is now 4 KiB aligned. Not lived. B7 is not on this flash. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-7-b6-exit |
+| Summary | **B6 iron `98ad19e2` printed the confirm line, then returned at the bootloader entry `rip=0x1001000`.** An interrupt or the preemption timer resumes that instruction. Any other exit is named on COM2. Not lived. B7 is not on this flash. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B8 lived. B6 in flight. B7 in flight. Not lived. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-12 | wave-7-b6-exit | 0.0 | 99 | **B6 iron `98ad19e2` printed the confirm line, then returned at bootloader entry `rip=0x1001000`.** An interrupt or the preemption timer resumes that instruction. Any other exit is named on COM2. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-12 | wave-7-b6-iobitmap | 0.0 | 99 | **B6 iron `6a254b4d` VMLAUNCH of the seated firmware failed `insn_error=7` (invalid control field).** The I/O bitmap is 4 KiB aligned. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-12 | wave-7-b6-fwslab | 0.0 | 99 | **B6 iron `021d8eef` seated guest 2 and kept guest 3 running, with no confirm line.** The firmware slab is reserved before report-RAM. A failed entry is visible on COM2 and can be tried again. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-09 | wave-7-b6-stackfirst | 0.0 | 99 | **B6 iron `cc85e795` never reached VMLAUNCH.** The 2 MiB host stack was requested after report-RAM had taken every 2 MiB block. The stack is reserved first. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |

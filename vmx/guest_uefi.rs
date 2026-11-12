@@ -8044,10 +8044,32 @@ unsafe fn finish_seat_firmware() -> ! {
             guest_uefi_vmresume();
         }
     }
-    serial::write_str_nowait("boot: B6 seated firmware returned rip=0x");
+    let qual = ops::vmread(EXIT_QUALIFICATION).unwrap_or(0);
+    let gpa = ops::vmread(GUEST_PHYSICAL_ADDRESS).unwrap_or(0);
+    let intr = ops::vmread(VM_EXIT_INTR_INFO).unwrap_or(0);
+    // An interrupt or the preemption timer has not finished the instruction.
+    // Name it once, then VMRESUME. Printing every timer tick would bury COM2.
+    if crate::mgmt::product_companion::seat_exit_keeps_the_guest(basic) {
+        static NAMED: AtomicBool = AtomicBool::new(false);
+        if !NAMED.swap(true, Ordering::AcqRel) {
+            serial::write_str_nowait("boot: B6 seated firmware exit reason=0x");
+            write_hex_u32_nowait(basic);
+            serial::write_str_nowait(" rip=0x");
+            write_hex_nowait(rip);
+            serial::write_line_nowait("; resuming the bootloader");
+        }
+        guest_uefi_vmresume();
+    }
+    serial::write_str_nowait("boot: B6 seated firmware exit reason=0x");
+    write_hex_u32_nowait(basic);
+    serial::write_str_nowait(" qual=0x");
+    write_hex_nowait(qual);
+    serial::write_str_nowait(" gpa=0x");
+    write_hex_nowait(gpa);
+    serial::write_str_nowait(" intr=0x");
+    write_hex_nowait(intr);
+    serial::write_str_nowait(" rip=0x");
     write_hex_nowait(rip);
-    serial::write_str_nowait(" hpa=0x");
-    write_hex_nowait(hpa);
     serial::write_line_nowait("; the guest OS is still waiting");
     hand_seat_firmware_back();
 }

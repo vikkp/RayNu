@@ -150,11 +150,18 @@ pub fn note_probe_failed() {
     PROBE.store(FAILED, Ordering::Release);
 }
 
+/// HLT must exit. An interrupt-window or NMI-window exit would steal the instruction.
 pub fn probe_exit_is_retry(basic: u32) -> bool {
     matches!(basic, 1 | 7 | 52)
 }
 
-/// HLT must exit. An interrupt-window or NMI-window exit would steal the instruction.
+/// These exits leave RIP on the current instruction. VMRESUME continues
+/// the seated bootloader. Iron `98ad19e2` returned at the entry RIP
+/// `0x1001000` and handed the CPU back.
+pub fn seat_exit_keeps_the_guest(basic: u32) -> bool {
+    matches!(basic, 1 | 7 | 8 | 52)
+}
+
 /// One seated disk. `spare_base == 0` is the 8 GiB window.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SeatDisk {
@@ -925,6 +932,13 @@ mod tests {
         assert!(probe_exit_is_retry(52));
         assert!(!probe_exit_is_retry(12));
         assert!(!probe_exit_is_retry(48));
+        assert!(seat_exit_keeps_the_guest(1));
+        assert!(seat_exit_keeps_the_guest(7));
+        assert!(seat_exit_keeps_the_guest(8));
+        assert!(seat_exit_keeps_the_guest(52));
+        assert!(!seat_exit_keeps_the_guest(0));
+        assert!(!seat_exit_keeps_the_guest(48));
+        assert!(!seat_exit_keeps_the_guest(30));
         note_probe_retry();
         assert!(begin_probe());
         note_probe_hlt();
