@@ -3,8 +3,8 @@ use super::{
     guest_uefi_report_ram_should_premap, GUEST_UEFI_REPORT_RAM_PRODUCT_EXTRA,
 };
 use super::{
-    guest_uefi_host_stack_guard_ok, guest_uefi_host_stack_headroom, seat_stack_overlaps_host,
-    vmcs_io_bitmap_addr_ok,
+    guest_uefi_host_stack_guard_ok, guest_uefi_host_stack_headroom, plant_seat_long_mode_gdt,
+    seat_stack_overlaps_host, vmcs_io_bitmap_addr_ok, vmexit_intr_is_hw_exception,
     GUEST_UEFI_HOST_STACK_GUARD_BYTE, GUEST_UEFI_HOST_STACK_GUARD_PAGES, GUEST_UEFI_HOST_STACK_PAGES,
     SEAT_HOST_STACK_PAGES,
 };
@@ -3553,6 +3553,23 @@ fn f7_relaunch_resets_firmware_state_without_a_stack_temporary() {
     assert!(src.contains("seat_exit_keeps_the_guest"));
     assert!(src.contains("; resuming the bootloader"));
     assert!(src.contains("boot: B6 seated firmware exit reason=0x"));
+    assert!(src.contains("plant_seat_long_mode_gdt"));
+    assert!(src.contains("raynu_f_reset_vmcs_guest_state(&plan, fw.entry)"));
+    assert!(vmexit_intr_is_hw_exception(0x8000_0b08, 8));
+    assert!(!vmexit_intr_is_hw_exception(0x8000_0b08, 14));
+    let mut gdt_slab = vec![0xABu8; 0xA1_1000];
+    assert!(plant_seat_long_mode_gdt(
+        &mut gdt_slab,
+        0xA0_0000,
+        0xA1_0000
+    ));
+    assert_eq!(gdt_slab[0xA0_0000], 0);
+    assert_eq!(
+        u64::from_le_bytes(gdt_slab[0xA1_0008..0xA1_0010].try_into().unwrap()),
+        0x00AF_9B00_0000_FFFF
+    );
+    assert_eq!(gdt_slab[0xA1_0000 + 24 + 5], 0x8B);
+    assert!(!plant_seat_long_mode_gdt(&mut gdt_slab, 0xA1_0000, 0xA0_0000));
     assert!(!seat_stack_overlaps_host(0x556000, 0x596000, 0x525000, 0x556000));
     assert!(seat_stack_overlaps_host(0x555000, 0x560000, 0x525000, 0x556000));
     assert!(guest_uefi_host_stack_headroom(4, 81_024) < 0, "16 KiB overflowed");

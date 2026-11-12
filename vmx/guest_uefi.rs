@@ -7279,13 +7279,35 @@ unsafe fn launch_seat_firmware(ubuntu: u64) -> bool {
         u64::from(crate::mgmt::product_companion::primary_controls(primary)),
     );
     let _ = ops::vmwrite(EPT_POINTER, eptp);
-    let _ = ops::vmwrite(GUEST_CR3, fw.cr3);
-    let _ = ops::vmwrite(GUEST_RIP, fw.entry);
-    let _ = ops::vmwrite(GUEST_RSP, fw.rsp);
-    let _ = ops::vmwrite(GUEST_RFLAGS, 2);
-    let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
-    let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
-    let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+    // Iron `006b8e62`: the clone kept Linux CR4.SMEP, a user identity page,
+    // and Linux's IDT. The first fetch was a #PF, delivery faulted, and
+    // COM2 showed reason=0x0 intr=0x80000b08 (#DF) at rip=0x1001000.
+    let hpa_fw = SEAT_FW_HELD.load(Ordering::Acquire);
+    let plan = crate::raynu_f::plan_f2(crate::mgmt::product_companion::SEAT_FW_BYTES).ok();
+    let overlaid = if hpa_fw != 0 {
+        if let Some(plan) = plan {
+            let slab = core::slice::from_raw_parts_mut(
+                hpa_fw as *mut u8,
+                crate::mgmt::product_companion::SEAT_FW_BYTES as usize,
+            );
+            plant_seat_long_mode_gdt(slab, plan.stack_base, plan.stack_top)
+                && raynu_f_reset_vmcs_guest_state(&plan, fw.entry)
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+    if !overlaid {
+        let _ = ops::vmptrld(ubuntu);
+        crate::mgmt::product_companion::note_probe_retry();
+        serial::write_line_nowait(
+            "boot: B6 seated firmware long mode failed; the running guest keeps the CPU",
+        );
+        return true;
+    }
+    // The firmware overlay arms a short preemption timer. A seated turn
+    // keeps the long timer and yields on the exit cap instead.
     let _ = ops::vmwrite(VMX_PREEMPTION_TIMER_VALUE, 0xFFFF_FFFF);
     if io_src != 0 {
         let _ = ops::vmwrite(IO_BITMAP_A, SEAT_IOA.0.as_ptr() as u64);
@@ -8072,6 +8094,35 @@ unsafe fn finish_seat_firmware() -> ! {
     write_hex_nowait(rip);
     serial::write_line_nowait("; the guest OS is still waiting");
     hand_seat_firmware_back();
+}
+
+/// VM-exit interruption information is a valid hardware exception of `vector`.
+pub fn vmexit_intr_is_hw_exception(intr: u64, vector: u8) -> bool {
+    (intr & 0x8000_0000) != 0 && ((intr >> 8) & 7) == 3 && (intr as u8) == vector
+}
+
+/// Zero the firmware stack and write the long-mode GDT the seated bootloader
+/// enters through. The descriptor cache is loaded from the VMCS; the bytes
+/// are there for a later segment reload.
+pub fn plant_seat_long_mode_gdt(slab: &mut [u8], stack_base: u64, stack_top: u64) -> bool {
+    if stack_base >= stack_top {
+        return false;
+    }
+    let base = stack_base as usize;
+    let st = stack_top as usize;
+    let Some(end) = st.checked_add(4096) else {
+        return false;
+    };
+    if end > slab.len() || base > st {
+        return false;
+    }
+    slab[base..end].fill(0);
+    slab[st + 8..st + 16].copy_from_slice(&0x00AF_9B00_0000_FFFFu64.to_le_bytes());
+    slab[st + 16..st + 24].copy_from_slice(&0x00CF_9300_0000_FFFFu64.to_le_bytes());
+    let tss_base = stack_top + RAYNU_F_TSS_OFF;
+    let tss_desc = raynu_f_tss64_desc(tss_base, RAYNU_F_TSS_LIMIT);
+    slab[st + 24..st + 40].copy_from_slice(&tss_desc);
+    true
 }
 
 /// I/O-bitmap A/B addresses must be nonzero and 4 KiB aligned or VM-entry
