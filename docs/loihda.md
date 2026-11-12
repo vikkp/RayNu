@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-7-b6-fwslab |
-| Summary | **B6 iron `021d8eef` seated guest 2 and kept guest 3 running, with no confirm line.** The firmware slab is reserved before report-RAM. A failed entry is visible on COM2 and can be tried again. Not lived. B7 is not on this flash. Guest SSH stays. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-7-b6-iobitmap |
+| Summary | **B6 iron `6a254b4d` VMLAUNCH of the seated firmware failed `insn_error=7`.** Invalid control field. The seated I/O bitmap is 4 KiB aligned. Not lived. B7 is not on this flash. Guest SSH stays. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. TLS 88 held. |
 | Gates touched | B8 lived. B6 in flight. B7 in flight. Not lived. No doorbell. No format of UBUNTU0. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-12 | wave-7-b6-iobitmap | 94 | 72 | **B6 iron `6a254b4d` VMLAUNCH failed `insn_error=7` (invalid control field).** Seated I/O bitmap is 4 KiB aligned. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-12 | wave-7-b6-fwslab | 94 | 72 | **B6 iron `021d8eef` seated guest 2 and kept guest 3 running, with no confirm line.** Firmware slab reserved before report-RAM. Failed entry is visible and retried. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-09 | wave-7-b6-stackfirst | 94 | 72 | **B6 iron `cc85e795` never reached VMLAUNCH.** The 2 MiB host stack was requested after report-RAM filled the pool. The stack is reserved first. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-09 | wave-7-b6-stack1m | 94 | 72 | **B6 iron `e15d6d49` printed the seated stack at `0x597000` and still breached the one-page guard.** Running guest stack is 1 MiB with 1 MiB of canary before the VMCS. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |

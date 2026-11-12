@@ -4,6 +4,7 @@ use super::{
 };
 use super::{
     guest_uefi_host_stack_guard_ok, guest_uefi_host_stack_headroom, seat_stack_overlaps_host,
+    vmcs_io_bitmap_addr_ok,
     GUEST_UEFI_HOST_STACK_GUARD_BYTE, GUEST_UEFI_HOST_STACK_GUARD_PAGES, GUEST_UEFI_HOST_STACK_PAGES,
     SEAT_HOST_STACK_PAGES,
 };
@@ -3542,6 +3543,10 @@ fn f7_relaunch_resets_firmware_state_without_a_stack_temporary() {
     assert!(src.contains("seated VMCS host stack"));
     assert!(src.contains("Reserve the stack while a contiguous run remains"));
     assert!(src.contains("reserve_seat_firmware_slab"));
+    assert!(src.contains("align(4096)"));
+    assert!(vmcs_io_bitmap_addr_ok(0x51e000));
+    assert!(!vmcs_io_bitmap_addr_ok(0x51e010));
+    assert!(!vmcs_io_bitmap_addr_ok(0));
     assert!(src.contains(
         "serial::write_line_nowait(\n            \"boot: B6 seated firmware entry failed; the running guest keeps the CPU\","
     ));

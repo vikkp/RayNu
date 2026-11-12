@@ -6979,8 +6979,15 @@ unsafe fn seat_ram_hpa() -> Option<u64> {
     Some(hpa)
 }
 
+/// I/O bitmap A for the seated firmware VMCS. Must be 4 KiB aligned:
+/// iron `6a254b4d` VMLAUNCH failed `insn_error=7` (invalid control field)
+/// after this page was installed unaligned.
 #[cfg(target_os = "uefi")]
-static mut SEAT_IOA: [u8; 4096] = [0; 4096];
+#[repr(C, align(4096))]
+struct SeatIoPage([u8; 4096]);
+
+#[cfg(target_os = "uefi")]
+static mut SEAT_IOA: SeatIoPage = SeatIoPage([0; 4096]);
 /// Disk bounce for the seated guest. Not on the host stack: that stack sits
 /// on the page above the private VMCS, and a 4 KiB temporary there overflowed
 /// the guard into the VMCS (iron `1707085e`, `guard=BREACHED`, `rev=0x0`).
@@ -7231,8 +7238,8 @@ unsafe fn launch_seat_firmware(ubuntu: u64) -> bool {
     };
     let io_src = ops::vmread(IO_BITMAP_A).unwrap_or(0);
     if io_src != 0 {
-        core::ptr::copy_nonoverlapping(io_src as *const u8, SEAT_IOA.as_mut_ptr(), 4096);
-        crate::mgmt::product_companion::set_io_port_exit(&mut SEAT_IOA, 0x5246);
+        core::ptr::copy_nonoverlapping(io_src as *const u8, SEAT_IOA.0.as_mut_ptr(), 4096);
+        crate::mgmt::product_companion::set_io_port_exit(&mut SEAT_IOA.0, 0x5246);
     }
     let mut vals = [0u64; 128];
     let mut present = [false; 128];
@@ -7281,7 +7288,7 @@ unsafe fn launch_seat_firmware(ubuntu: u64) -> bool {
     let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
     let _ = ops::vmwrite(VMX_PREEMPTION_TIMER_VALUE, 0xFFFF_FFFF);
     if io_src != 0 {
-        let _ = ops::vmwrite(IO_BITMAP_A, SEAT_IOA.as_ptr() as u64);
+        let _ = ops::vmwrite(IO_BITMAP_A, SEAT_IOA.0.as_ptr() as u64);
     }
     let hpa = SEAT_FW_HELD.load(Ordering::Acquire);
     crate::mgmt::product_companion::note_seat_firmware(hpa);
@@ -7292,6 +7299,10 @@ unsafe fn launch_seat_firmware(ubuntu: u64) -> bool {
         crate::mgmt::product_companion::note_probe_retry();
         serial::write_str_nowait("boot: B6 seated firmware entry failed insn_error=");
         write_dec_nowait(ierr);
+        serial::write_str_nowait(" ioa=0x");
+        write_hex_nowait(core::ptr::addr_of!(SEAT_IOA) as u64);
+        serial::write_str_nowait(" eptp=0x");
+        write_hex_nowait(eptp);
         serial::write_line_nowait("; the running guest keeps the CPU");
         return true;
     }
@@ -8039,6 +8050,12 @@ unsafe fn finish_seat_firmware() -> ! {
     write_hex_nowait(hpa);
     serial::write_line_nowait("; the guest OS is still waiting");
     hand_seat_firmware_back();
+}
+
+/// I/O-bitmap A/B addresses must be nonzero and 4 KiB aligned or VM-entry
+/// fails with instruction error 7 (invalid control field).
+pub fn vmcs_io_bitmap_addr_ok(addr: u64) -> bool {
+    addr != 0 && addr & 0xfff == 0
 }
 
 /// True when `[seat_lo, seat_hi)` meets `[host_lo, host_hi)`.

@@ -180,7 +180,7 @@
             its turn and stores reads and writes on its own disk. The
             guest already running keeps its devices. COM2 can print
             <code>boot: B6 both product guests have been entered</code>.
-            The guest operating system is still waiting. Iron <code>021d8eef</code> seated a second guest and left the first one running. The confirm line did not appear. This head reserves the seated firmware memory before the pool is carved up, and prints a failed entry on COM2. The second
+            The guest operating system is still waiting. Iron <code>6a254b4d</code> reached the second guest's entry and the processor refused it (<code>insn_error=7</code>, an invalid control field). This head page-aligns that guest's I/O bitmap. The second
             CPU is not on this stick.
             A second CPU is not published yet, so
             Ubuntu still boots with one. The rollback stays
