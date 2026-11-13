@@ -6929,7 +6929,7 @@ unsafe fn finish_product_companion_probe() -> ! {
         serial::write_line_nowait("; the running guest keeps the CPU");
     }
     if ubuntu == 0 || ops::vmptrld(ubuntu).is_err() {
-        serial::write_line("boot: B6 could not reload the running guest VMCS");
+        serial::write_line_nowait("boot: B6 could not reload the running guest VMCS");
         guest_uefi_resume_failed();
     }
     guest_uefi_vmresume();
@@ -7111,7 +7111,15 @@ fn seat_block_read(_media: u32, off: u64, buf: &mut [u8]) -> bool {
     let Some((base, bytes)) = crate::mgmt::product_companion::seat_disk_bound() else {
         return false;
     };
-    crate::mgmt::megaraid::perc_seat_read(base, bytes, off, buf)
+    let ok = crate::mgmt::megaraid::perc_seat_read(base, bytes, off, buf);
+    if !ok && !SEAT_DISK_FAIL_SAID.swap(true, Ordering::AcqRel) {
+        serial::write_str_nowait("boot: B6 seated firmware disk read failed off=");
+        write_dec_nowait(off);
+        serial::write_str_nowait(" n=");
+        write_dec_nowait(buf.len() as u64);
+        serial::write_line_nowait("");
+    }
+    ok
 }
 
 /// Read `\EFI\ubuntu\grubx64.efi` (or the next candidate) off the seated disk
@@ -7314,6 +7322,7 @@ unsafe fn launch_seat_firmware(ubuntu: u64) -> bool {
     }
     let hpa = SEAT_FW_HELD.load(Ordering::Acquire);
     crate::mgmt::product_companion::note_seat_firmware(hpa);
+    seat_trace_reset();
     if vmlaunch_rcx_rdx(fw.rcx, fw.rdx).is_err() {
         let ierr = ops::vmread(VM_INSTRUCTION_ERROR).unwrap_or(0xFFFF);
         crate::mgmt::product_companion::clear_seat_firmware();
@@ -7388,7 +7397,7 @@ unsafe fn pause_seat_for_guest() -> ! {
     save_seat_gprs();
     crate::mgmt::product_companion::pause_seat();
     if crate::mgmt::product_companion::seat_slices() == 0 {
-        serial::write_line(
+        serial::write_line_nowait(
             "boot: B6 seated bootloader continues after this turn; the guest OS is still waiting",
         );
     }
@@ -7411,7 +7420,7 @@ unsafe fn pause_seat_for_guest() -> ! {
     core::ptr::write(core::ptr::addr_of_mut!(SAVED_XMM), SavedXmm(xmm));
     cpu::write_cr2(cr2);
     if ubuntu == 0 || ops::vmptrld(ubuntu).is_err() {
-        serial::write_line("boot: B6 could not reload the running guest VMCS");
+        serial::write_line_nowait("boot: B6 could not reload the running guest VMCS");
         guest_uefi_resume_failed();
     }
     guest_uefi_vmresume();
@@ -7472,7 +7481,7 @@ unsafe fn hand_seat_firmware_back() -> ! {
     core::ptr::write(core::ptr::addr_of_mut!(SAVED_XMM), SavedXmm(xmm));
     cpu::write_cr2(cr2);
     if ubuntu == 0 || ops::vmptrld(ubuntu).is_err() {
-        serial::write_line("boot: B6 could not reload the running guest VMCS");
+        serial::write_line_nowait("boot: B6 could not reload the running guest VMCS");
         guest_uefi_resume_failed();
     }
     guest_uefi_vmresume();
@@ -7500,7 +7509,9 @@ unsafe fn seat_firmware_service() -> bool {
     }
     struct Sink;
     impl crate::raynu_f::ConsoleSink for Sink {
-        fn write_byte(&mut self, _b: u8) {}
+        fn write_byte(&mut self, b: u8) {
+            seat_con_byte(b);
+        }
         fn has_input(&self) -> bool {
             false
         }
@@ -7557,11 +7568,35 @@ unsafe fn seat_firmware_service() -> bool {
     );
     RAM_HPA.store(prev, Ordering::Release);
     SAVED_RAX = d.status;
+    if !SEAT_SVC_SAID.swap(true, Ordering::AcqRel) {
+        serial::write_str_nowait("boot: B6 seated firmware service ");
+        serial::write_str_nowait(id.name());
+        serial::write_str_nowait(" status=0x");
+        write_hex_nowait(d.status);
+        serial::write_line_nowait("");
+    }
+    if id == crate::raynu_f::ServiceId::BlockIoReadBlocks && !SEAT_READ_SAID.swap(true, Ordering::AcqRel)
+    {
+        serial::write_str_nowait("boot: B6 seated firmware disk lba=");
+        write_dec_nowait(args.a3);
+        serial::write_str_nowait(" n=");
+        write_dec_nowait(args.a4);
+        serial::write_str_nowait(" status=0x");
+        write_hex_nowait(d.status);
+        serial::write_line_nowait("");
+    }
+    if d.status != 0 && !SEAT_FAIL_SAID.swap(true, Ordering::AcqRel) {
+        serial::write_str_nowait("boot: B6 seated firmware service failed ");
+        serial::write_str_nowait(id.name());
+        serial::write_str_nowait(" status=0x");
+        write_hex_nowait(d.status);
+        serial::write_line_nowait("");
+    }
     if id == crate::raynu_f::ServiceId::ExitBootServices
         && d.status == 0
         && crate::mgmt::product_companion::note_seat_kernel()
     {
-        serial::write_line(
+        serial::write_line_nowait(
             "boot: B6 seated firmware ExitBootServices; the kernel is starting; the guest OS is still waiting",
         );
     }
@@ -7594,7 +7629,7 @@ unsafe fn seat_private_mmio(gpa: u64, _qual: u64) -> bool {
         return false;
     }
     if crate::devices::seat_dev::note_hit() {
-        serial::write_line(
+        serial::write_line_nowait(
             "boot: B6 seated guest has its own disk and interrupt controller; the running guest keeps its devices",
         );
     }
@@ -7878,9 +7913,9 @@ unsafe fn seat_try_inject() {
     crate::devices::seat_dev::clear_disk_irq();
     static SAID: AtomicBool = AtomicBool::new(false);
     if !SAID.swap(true, Ordering::AcqRel) {
-        serial::write_str("boot: B6 seated disk interrupt vec=0x");
-        write_hex(u64::from(vec));
-        serial::write_line("; the running guest is not interrupted; the guest OS is still waiting");
+        serial::write_str_nowait("boot: B6 seated disk interrupt vec=0x");
+        write_hex_nowait(u64::from(vec));
+        serial::write_line_nowait("; the running guest is not interrupted; the guest OS is still waiting");
     }
 }
 
@@ -7944,10 +7979,154 @@ unsafe fn seat_map_extra_ram(gpa_base: u64) -> bool {
         }
         return false;
     }
-    serial::write_str("boot: B6 seated kernel RAM gpa=0x");
-    write_hex(gpa_base);
-    serial::write_line("; the guest OS is still waiting");
+    serial::write_str_nowait("boot: B6 seated kernel RAM gpa=0x");
+    write_hex_nowait(gpa_base);
+    serial::write_line_nowait("; the guest OS is still waiting");
     true
+}
+
+#[cfg(target_os = "uefi")]
+static SEAT_TRACE: [AtomicU32; 9] = [const { AtomicU32::new(0) }; 9];
+#[cfg(target_os = "uefi")]
+static SEAT_TRACE_ENTRY: AtomicU64 = AtomicU64::new(0);
+#[cfg(target_os = "uefi")]
+static SEAT_TRACE_FIRST: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "uefi")]
+static SEAT_TRACE_MOVED: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "uefi")]
+static SEAT_CON_LINES: AtomicU32 = AtomicU32::new(0);
+#[cfg(target_os = "uefi")]
+static SEAT_CON_LEN: AtomicU32 = AtomicU32::new(0);
+#[cfg(target_os = "uefi")]
+static mut SEAT_CON: [u8; 72] = [0; 72];
+#[cfg(target_os = "uefi")]
+static SEAT_SVC_SAID: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "uefi")]
+static SEAT_READ_SAID: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "uefi")]
+static SEAT_FAIL_SAID: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "uefi")]
+static SEAT_DISK_FAIL_SAID: AtomicBool = AtomicBool::new(false);
+
+#[cfg(target_os = "uefi")]
+fn seat_trace_reset() {
+    for slot in SEAT_TRACE.iter() {
+        slot.store(0, Ordering::Release);
+    }
+    SEAT_TRACE_ENTRY.store(0, Ordering::Release);
+    SEAT_TRACE_FIRST.store(false, Ordering::Release);
+    SEAT_TRACE_MOVED.store(false, Ordering::Release);
+    SEAT_CON_LINES.store(0, Ordering::Release);
+    SEAT_CON_LEN.store(0, Ordering::Release);
+    SEAT_SVC_SAID.store(false, Ordering::Release);
+    SEAT_READ_SAID.store(false, Ordering::Release);
+    SEAT_FAIL_SAID.store(false, Ordering::Release);
+    SEAT_DISK_FAIL_SAID.store(false, Ordering::Release);
+}
+
+#[cfg(target_os = "uefi")]
+fn seat_trace_count(bucket: crate::mgmt::product_companion::SeatExitBucket) -> u32 {
+    SEAT_TRACE[bucket.index()].load(Ordering::Acquire)
+}
+
+/// First exit, the first RIP change, and nothing else. A turn summary is separate.
+#[cfg(target_os = "uefi")]
+fn seat_trace_exit(basic: u32, rip: u64) {
+    use crate::mgmt::product_companion::SeatExitBucket;
+    let bucket = SeatExitBucket::of(basic);
+    SEAT_TRACE[bucket.index()].fetch_add(1, Ordering::AcqRel);
+    if !SEAT_TRACE_FIRST.swap(true, Ordering::AcqRel) {
+        SEAT_TRACE_ENTRY.store(rip, Ordering::Release);
+        serial::write_str_nowait("boot: B6 seated firmware first exit reason=0x");
+        write_hex_u32_nowait(basic);
+        serial::write_str_nowait(" rip=0x");
+        write_hex_nowait(rip);
+        serial::write_line_nowait("");
+        return;
+    }
+    let entry = SEAT_TRACE_ENTRY.load(Ordering::Acquire);
+    if crate::mgmt::product_companion::seat_rip_moved(entry, rip)
+        && !SEAT_TRACE_MOVED.swap(true, Ordering::AcqRel)
+    {
+        serial::write_str_nowait("boot: B6 seated firmware rip=0x");
+        write_hex_nowait(rip);
+        serial::write_str_nowait(" reason=0x");
+        write_hex_u32_nowait(basic);
+        serial::write_line_nowait("");
+    }
+}
+
+/// One line per 2048 exits: the mix, so a stuck RIP is visible while Linux holds COM2.
+#[cfg(target_os = "uefi")]
+fn seat_trace_yield(basic: u32, rip: u64) {
+    use crate::mgmt::product_companion::SeatExitBucket;
+    let n = crate::mgmt::product_companion::seat_slices().saturating_add(1);
+    serial::write_str_nowait("boot: B6 seated turn n=");
+    write_dec_nowait(u64::from(n));
+    serial::write_str_nowait(" rip=0x");
+    write_hex_nowait(rip);
+    serial::write_str_nowait(" reason=0x");
+    write_hex_u32_nowait(basic);
+    serial::write_str_nowait(" cpuid=");
+    write_dec_nowait(u64::from(seat_trace_count(SeatExitBucket::Cpuid)));
+    serial::write_str_nowait(" msr=");
+    write_dec_nowait(u64::from(seat_trace_count(SeatExitBucket::Msr)));
+    serial::write_str_nowait(" io=");
+    write_dec_nowait(u64::from(seat_trace_count(SeatExitBucket::Io)));
+    serial::write_str_nowait(" ept=");
+    write_dec_nowait(u64::from(seat_trace_count(SeatExitBucket::Ept)));
+    serial::write_str_nowait(" hlt=");
+    write_dec_nowait(u64::from(seat_trace_count(SeatExitBucket::Hlt)));
+    serial::write_str_nowait(" intr=");
+    write_dec_nowait(u64::from(seat_trace_count(SeatExitBucket::Intr)));
+    serial::write_str_nowait(" cr=");
+    write_dec_nowait(u64::from(seat_trace_count(SeatExitBucket::Cr)));
+    serial::write_str_nowait(" exc=");
+    write_dec_nowait(u64::from(seat_trace_count(SeatExitBucket::Exc)));
+    serial::write_str_nowait(" oth=");
+    write_dec_nowait(u64::from(seat_trace_count(SeatExitBucket::Other)));
+    serial::write_line_nowait("");
+    for slot in SEAT_TRACE.iter() {
+        slot.store(0, Ordering::Release);
+    }
+}
+
+/// Up to eight firmware console lines. Grub's own text is otherwise discarded.
+#[cfg(target_os = "uefi")]
+fn seat_con_byte(b: u8) {
+    if SEAT_CON_LINES.load(Ordering::Acquire) >= 8 {
+        return;
+    }
+    if b == b'\n' || b == b'\r' {
+        seat_con_flush();
+        return;
+    }
+    if !(0x20..0x7f).contains(&b) {
+        return;
+    }
+    let i = SEAT_CON_LEN.load(Ordering::Acquire);
+    if i >= 72 {
+        seat_con_flush();
+    }
+    let i = SEAT_CON_LEN.load(Ordering::Acquire);
+    if i >= 72 {
+        return;
+    }
+    unsafe { SEAT_CON[i as usize] = b };
+    SEAT_CON_LEN.store(i + 1, Ordering::Release);
+}
+
+#[cfg(target_os = "uefi")]
+fn seat_con_flush() {
+    let n = SEAT_CON_LEN.swap(0, Ordering::AcqRel) as usize;
+    if n == 0 || SEAT_CON_LINES.fetch_add(1, Ordering::AcqRel) >= 8 {
+        return;
+    }
+    serial::write_str_nowait("boot: B6 seated con ");
+    for i in 0..n {
+        serial::write_byte_nowait(unsafe { SEAT_CON[i] });
+    }
+    serial::write_line_nowait("");
 }
 
 #[cfg(target_os = "uefi")]
@@ -7956,6 +8135,7 @@ unsafe fn finish_seat_firmware() -> ! {
     seat_try_inject();
     let basic = ops::vmread(EXIT_REASON).unwrap_or(0xFFFF) as u32 & 0xFFFF;
     let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+    seat_trace_exit(basic, rip);
     let hpa = crate::mgmt::product_companion::seat_firmware_hpa();
     if basic == EXIT_REASON_HLT && !crate::mgmt::product_companion::seat_loader_loaded() {
         let reads = unsafe { (*core::ptr::addr_of!(SEAT_FW_STATE)).block_reads };
@@ -7963,21 +8143,22 @@ unsafe fn finish_seat_firmware() -> ! {
             let off = crate::mgmt::product_companion::seat_disk_bound()
                 .map(|(base, _)| base)
                 .unwrap_or(0);
-            serial::write_str("boot: B6 seated firmware read its disk off=");
-            write_dec(off);
-            serial::write_str(" hpa=0x");
-            write_hex(hpa);
-            serial::write_line("; the guest OS is still waiting");
+            serial::write_str_nowait("boot: B6 seated firmware read its disk off=");
+            write_dec_nowait(off);
+            serial::write_str_nowait(" hpa=0x");
+            write_hex_nowait(hpa);
+            serial::write_line_nowait("; the guest OS is still waiting");
         } else {
-            serial::write_str("boot: B6 seated firmware halted rip=0x");
-            write_hex(rip);
-            serial::write_str(" hpa=0x");
-            write_hex(hpa);
-            serial::write_line("; the guest OS is still waiting");
+            serial::write_str_nowait("boot: B6 seated firmware halted rip=0x");
+            write_hex_nowait(rip);
+            serial::write_str_nowait(" hpa=0x");
+            write_hex_nowait(hpa);
+            serial::write_line_nowait("; the guest OS is still waiting");
         }
         hand_seat_firmware_back();
     }
     if crate::mgmt::product_companion::seat_firmware_exit_capped() {
+        seat_trace_yield(basic, rip);
         pause_seat_for_guest();
     }
     if basic == EXIT_REASON_HLT && crate::mgmt::product_companion::seat_loader_loaded() {

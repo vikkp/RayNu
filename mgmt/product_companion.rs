@@ -162,6 +162,71 @@ pub fn seat_exit_keeps_the_guest(basic: u32) -> bool {
     matches!(basic, 1 | 7 | 8 | 52)
 }
 
+/// Which counter a seated exit belongs in. The buckets are the exits the
+/// handler resumes without a line of their own.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SeatExitBucket {
+    Cpuid,
+    Msr,
+    Io,
+    Ept,
+    Hlt,
+    Intr,
+    Cr,
+    Exc,
+    Other,
+}
+
+impl SeatExitBucket {
+    pub fn of(basic: u32) -> Self {
+        match basic {
+            10 => Self::Cpuid,
+            31 | 32 => Self::Msr,
+            30 => Self::Io,
+            48 => Self::Ept,
+            12 => Self::Hlt,
+            1 | 7 | 8 | 52 => Self::Intr,
+            28 => Self::Cr,
+            0 => Self::Exc,
+            _ => Self::Other,
+        }
+    }
+
+    pub fn index(self) -> usize {
+        match self {
+            Self::Cpuid => 0,
+            Self::Msr => 1,
+            Self::Io => 2,
+            Self::Ept => 3,
+            Self::Hlt => 4,
+            Self::Intr => 5,
+            Self::Cr => 6,
+            Self::Exc => 7,
+            Self::Other => 8,
+        }
+    }
+}
+
+/// Nine counters, indexed by [`SeatExitBucket::index`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SeatExitCounts(pub [u32; 9]);
+
+impl SeatExitCounts {
+    pub fn note(&mut self, basic: u32) {
+        let i = SeatExitBucket::of(basic).index();
+        self.0[i] = self.0[i].saturating_add(1);
+    }
+
+    pub fn get(&self, bucket: SeatExitBucket) -> u32 {
+        self.0[bucket.index()]
+    }
+}
+
+/// True when `rip` is no longer the instruction the first exit stopped on.
+pub fn seat_rip_moved(entry: u64, rip: u64) -> bool {
+    entry != rip
+}
+
 /// One seated disk. `spare_base == 0` is the 8 GiB window.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SeatDisk {
@@ -939,6 +1004,25 @@ mod tests {
         assert!(!seat_exit_keeps_the_guest(0));
         assert!(!seat_exit_keeps_the_guest(48));
         assert!(!seat_exit_keeps_the_guest(30));
+        assert_eq!(SeatExitBucket::of(10), SeatExitBucket::Cpuid);
+        assert_eq!(SeatExitBucket::of(31), SeatExitBucket::Msr);
+        assert_eq!(SeatExitBucket::of(32), SeatExitBucket::Msr);
+        assert_eq!(SeatExitBucket::of(30), SeatExitBucket::Io);
+        assert_eq!(SeatExitBucket::of(48), SeatExitBucket::Ept);
+        assert_eq!(SeatExitBucket::of(12), SeatExitBucket::Hlt);
+        assert_eq!(SeatExitBucket::of(1), SeatExitBucket::Intr);
+        assert_eq!(SeatExitBucket::of(52), SeatExitBucket::Intr);
+        assert_eq!(SeatExitBucket::of(28), SeatExitBucket::Cr);
+        assert_eq!(SeatExitBucket::of(0), SeatExitBucket::Exc);
+        assert_eq!(SeatExitBucket::of(33), SeatExitBucket::Other);
+        let mut counts = SeatExitCounts::default();
+        counts.note(10);
+        counts.note(10);
+        counts.note(0);
+        assert_eq!(counts.get(SeatExitBucket::Cpuid), 2);
+        assert_eq!(counts.get(SeatExitBucket::Exc), 1);
+        assert!(!seat_rip_moved(0x1001000, 0x1001000));
+        assert!(seat_rip_moved(0x1001000, 0x1001010));
         note_probe_retry();
         assert!(begin_probe());
         note_probe_hlt();

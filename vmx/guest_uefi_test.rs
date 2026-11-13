@@ -3554,6 +3554,11 @@ fn f7_relaunch_resets_firmware_state_without_a_stack_temporary() {
     assert!(src.contains("; resuming the bootloader"));
     assert!(src.contains("boot: B6 seated firmware exit reason=0x"));
     assert!(src.contains("plant_seat_long_mode_gdt"));
+    assert!(src.contains("boot: B6 seated firmware first exit reason=0x"));
+    assert!(src.contains("boot: B6 seated turn n="));
+    assert!(src.contains("boot: B6 seated con "));
+    assert!(src.contains("boot: B6 seated firmware disk lba="));
+    assert!(src.contains("write_line_nowait(\n            \"boot: B6 seated firmware ExitBootServices; the kernel is starting; the guest OS is still waiting\",\n        )"));
     assert!(src.contains("raynu_f_reset_vmcs_guest_state(&plan, fw.entry)"));
     assert!(vmexit_intr_is_hw_exception(0x8000_0b08, 8));
     assert!(!vmexit_intr_is_hw_exception(0x8000_0b08, 14));

@@ -180,7 +180,7 @@
             its turn and stores reads and writes on its own disk. The
             guest already running keeps its devices. COM2 can print
             <code>boot: B6 both product guests have been entered</code>.
-            The guest operating system is still waiting. Iron <code>006b8e62</code> printed the confirm line, then a double fault at the bootloader entry (<code>intr=0x80000b08</code>). That VMCS still had Linux's SMEP and IDT. This head enters the bootloader in the firmware long-mode state. The second
+            The guest operating system is still waiting. Iron <code>611a18ab</code> printed the confirm line and then nothing else, so the bootloader was resumed without a fault line. This head names the first exit, when the instruction pointer moves, each turn, the first firmware service, disk reads, console text, and <code>ExitBootServices</code>. The second
             CPU is not on this stick.
             A second CPU is not published yet, so
             Ubuntu still boots with one. The rollback stays
