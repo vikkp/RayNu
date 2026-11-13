@@ -1519,3 +1519,47 @@ fn attach_disk_zeros_attach_disk_keep_preserves() {
     );
     reset();
 }
+
+/// ADR-021 B8. The guest can see an MSI-X capability, write a queue index,
+/// and read that index back. Delivery into the local APIC is
+/// `guest_msix::tests`. PIC IRQ 11 stays the path until MSI-X is enabled.
+#[test]
+fn b8_disk_msix_cap_and_queue_vector_round_trip() {
+    use crate::devices::guest_msix::{CAP_OFF, TABLE_OFF};
+    use crate::devices::ide_cdrom::{
+        present as present_iso, reset as reset_cd, write_placeholder_iso, ISO_SECTOR,
+        MOCK_EFI_ISO_BYTES,
+    };
+    reset();
+    reset_cd();
+    let extra = MOCK_EFI_ISO_BYTES + ISO_SECTOR;
+    let mut iso = vec![0u8; extra];
+    write_placeholder_iso(&mut iso[..MOCK_EFI_ISO_BYTES]);
+    assert!(present_iso(&iso, 9));
+    assert!(present());
+    assert!(queues_armed());
+    assert!(latch_dxe_virtio_did());
+
+    pci_write_addr(pci_config_addr() | 0x74);
+    let dev_cap = pci_read_data(0xCFC, 4);
+    assert_eq!(
+        (dev_cap >> 8) & 0xff,
+        u32::from(CAP_OFF),
+        "device cap links to MSI-X"
+    );
+    pci_write_addr(pci_config_addr() | u32::from(CAP_OFF));
+    assert_eq!(pci_read_data(0xCFC, 1), 0x11, "MSI-X cap id");
+
+    mmio_write(TABLE_OFF, 4, 0xFEE0_0000);
+    mmio_write(TABLE_OFF + 8, 4, 0x51);
+    mmio_write(TABLE_OFF + 12, 4, 0);
+    assert_eq!(mmio_read(TABLE_OFF + 8, 4), 0x51);
+    mmio_write(0x1A, 2, 0);
+    assert_eq!(mmio_read(0x1A, 2), 0, "queue 0 uses MSI-X entry 0");
+    assert_eq!(mmio_read(0x1A, 2), 0);
+    pci_write_addr(pci_config_addr() | u32::from(CAP_OFF) + 2);
+    pci_write_data(0xCFC, 2, 0x8003);
+    pci_write_addr(pci_config_addr() | u32::from(CAP_OFF));
+    assert_ne!(pci_read_data(0xCFC, 4) & 0x8000_0000, 0, "MSI-X enable");
+    reset();
+}

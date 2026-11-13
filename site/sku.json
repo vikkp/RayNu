@@ -19,15 +19,15 @@
   },
   "counts": {
     "S1": {
-      "lived": 54,
-      "in flight": 1,
-      "planned": 12,
+      "lived": 55,
+      "in flight": 3,
+      "planned": 9,
       "total": 67
     },
     "Final": {
-      "lived": 54,
-      "in flight": 1,
-      "planned": 74,
+      "lived": 55,
+      "in flight": 3,
+      "planned": 71,
       "total": 129
     }
   },
@@ -199,28 +199,28 @@
         {
           "id": "B6",
           "capability": "Multiple concurrent guests on one R640",
-          "status": "planned",
+          "status": "in flight",
           "ships": "S1",
           "ref": "M4",
-          "note": "`RAYNU-V-M4-2VM-OK` on iron for lab guests; product guests one at a time",
+          "note": "Branch `cursor/wave-7-b6-seats-37d7`. Lab iron already printed `RAYNU-V-M4-2VM-OK` for the small G0/G1 guests. A product Start while another product guest owns the VMCS seats the second guest and does not retarget the running guest's disk or NIC. Stop then boots that seated guest on the same VMCS (`promote_parked`). While a companion is seated, `product_pair` counts a primary slice every 8192 Linux exits, and one extra VMCS then runs `HLT` on its own page tables and VMRESUMEs the guest that was already on the CPU. A failed entry leaves that guest running. The `HLT` does not move the companion counter. When a 2 MiB-aligned 32 MiB slab is free and the seated disk is a different image, that VMCS loads the ESP bootloader and keeps entering it across turns of 2048 exits, and does not stop after a fixed number of turns. After `ExitBootServices` the seated kernel may write CR0, CR3, and CR4, and may grow its private RAM up to 64 MiB. Virtio-blk, the I/O APIC, and the local APIC at the usual addresses are a second set of registers. A virtio request is finished on that queue: the used ring moves, and pin 17 can raise an interrupt in the seated VMCS only. Reads and writes use the seated disk. LBA 0 is not posted. The first exit from that firmware VMCS can print `boot: B6 both product guests have been entered; confirm this line on COM2`. The HLT probe does not. Iron `76f66f5c` seated the second guest, then an EPT exit put the running guest in the Stage 46 hold. Iron `e15d6d49` / run `42689511068` printed `seated stack top=0x597000` and still breached the one-page guard under the running guest's VMCS. Iron `021d8eef` / run `42713118472` printed the seated stack line and left guest 3 running, with no confirm line. The 32 MiB firmware slab was requested at Start, after report-RAM had taken every 2 MiB block, and the failed entry was silent and not retried. The slab is reserved at boot, and the entry result is printed while Linux holds COM2. Iron `6a254b4d` / run `43260408333` then failed VMLAUNCH with `insn_error=7` (invalid control field): the seated I/O bitmap was not 4 KiB aligned. It is page-aligned now. Iron `98ad19e2` / run `43264635328` printed the confirm line, then `seated firmware returned rip=0x1001000 hpa=0x2800000`. Iron `006b8e62` / run `43308983739` named that exit: `reason=0x0 intr=0x80000b08` at the same RIP, a double fault. The seated VMCS had been cloned from Linux, so CR4.SMEP and Linux's IDT were still in force and the bootloader page is a user page. The seated entry now uses the firmware long-mode state: flat 64-bit code, no SMEP, a private GDT, and exceptions intercepted before that IDT. An external interrupt, interrupt window, NMI window, or preemption timer still resumes the current instruction. Iron `611a18ab` / run `43314873388` printed the confirm line and no exit reason, so that exit was serviced and the bootloader resumed with no further COM2. This head prints the first exit, the first RIP change, one tally every 2048 exits, the first firmware service, the first disk read, up to eight console lines, and `ExitBootServices`, all while Linux holds COM2. Not lived. B7 is not on this flash",
           "wave": "7"
         },
         {
           "id": "B7",
           "capability": "Multi-vCPU (SMP) product guests",
-          "status": "planned",
+          "status": "in flight",
           "ships": "S1",
           "ref": "M4.5",
-          "note": "Dual-vCPU probe lived on Latitude only (`RAYNU-V-M4-SMP-OK`)",
+          "note": "Branch `cursor/wave-7-b6-seats-37d7`. Latitude probe `RAYNU-V-M4-SMP-OK` is not this row. A non-self INIT then startup IPI is recorded (`take_ap_startup`). The MADT still publishes one enabled CPU, so Ubuntu does not wait for an AP. Not lived. Not an F11 until a product guest sees more than one CPU on the R640",
           "wave": "7"
         },
         {
           "id": "B8",
           "capability": "Guest interrupt controller beyond 8259: IOAPIC/LAPIC, MSI/MSI-X for virtio",
-          "status": "planned",
+          "status": "lived",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "PIC + IRQ 11 shared lived on `d7e2e24f`; SMP and performance need APIC",
+          "note": "Iron `8f69297c69a8` / run `42398077199`, pull-request merge of `d0a0d7cf`. Signed SHA256 `ee32b9db82c8a682833a1fbb5e3a18bbe0f014963e84d1a2a5ce5eb5e030e6e0`. `boot: B4 acpi rsdp gpa=0x804000 (power button, PCI0 IRQ 11, MADT local APIC and I/O APIC)`. Linux: `ACPI: APIC 0x804340`, `IOAPIC[0]: apic_id 0, version 17, address 0xfec00000, GSI 0-23`, `INT_SRC_OVR bus_irq 0 global_irq 2`, `Using ACPI (MADT) for SMP configuration information`, `Switch to symmetric I/O mode setup`, `Using IOAPIC for interrupt routing`. Disk MSI-X `boot: B8 virtio msi-x vec=21`, then `vda1 vda2 vda3` and `raynusrv2 login:`. Timer `linux PIT GSI 2`. `take11=0`. The `09b23c5d` boot had `ACPI MADT or MP tables are not detected` and `Using PIC`. virtio-net printed `PCI INT A: no GSI` for `00:05.0` because `_PRT` named only slots 2 and 3, and an RX completion signaled MSI-X queue 1. Follow-up confirmed on `64ddddafeffa` / run `42424856392`, pull-request merge of `9e3661fe`. DSDT length `0x11E`. `virtio-pci 0000:00:05.0: enabling device` with no `PCI INT A: no GSI`. Disk MSI-X `vec=21` again. Queue-notify COM2 lines stop at `n=961`. `systemd-networkd-wait-online` finished, `ssh.service` started, and `ssh vikkp@10.99.99.200` reached `vikkp@raynusrv2:~$`. Evidence `docs/evidence/r640/2026-11-08-64ddddaf-wave-7-b8-guest-ssh-ok.md`. Wave 7 stays open",
           "wave": "7"
         },
         {
@@ -334,15 +334,15 @@
       ],
       "counts": {
         "S1": {
-          "lived": 6,
-          "in flight": 0,
-          "planned": 4,
+          "lived": 7,
+          "in flight": 2,
+          "planned": 1,
           "total": 10
         },
         "Final": {
-          "lived": 6,
-          "in flight": 0,
-          "planned": 14,
+          "lived": 7,
+          "in flight": 2,
+          "planned": 11,
           "total": 20
         }
       }
@@ -1611,9 +1611,9 @@
       "iron": "B8",
       "why": "Performance and capacity. B8 before B7: SMP on an 8259 is misery.",
       "counts": {
-        "lived": 0,
-        "in flight": 1,
-        "planned": 8,
+        "lived": 1,
+        "in flight": 3,
+        "planned": 5,
         "total": 9
       },
       "closed": false
@@ -1853,21 +1853,15 @@
   "current_wave": "7",
   "next_up": [
     {
-      "id": "B8",
-      "capability": "Guest interrupt controller beyond 8259: IOAPIC/LAPIC, MSI/MSI-X for virtio",
-      "status": "planned",
-      "role": "iron thread"
-    },
-    {
       "id": "B6",
       "capability": "Multiple concurrent guests on one R640",
-      "status": "planned",
+      "status": "in flight",
       "role": "host-first"
     },
     {
       "id": "B7",
       "capability": "Multi-vCPU (SMP) product guests",
-      "status": "planned",
+      "status": "in flight",
       "role": "host-first"
     },
     {

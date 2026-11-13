@@ -793,6 +793,10 @@ fn start_tail() -> GuestCatalogHttp {
             crate::mgmt::guest_nic_start::on_accepted_start(
                 crate::mgmt::megaraid::PERC_IMAGE_BYTES,
             );
+            crate::mgmt::product_seats::note_running(crate::mgmt::product_seats::Seat::Tail {
+                off: crate::mgmt::megaraid::PERC_IMAGE_BYTES,
+                bytes: disk_bytes,
+            });
             let mut body = [0u8; 128];
             let mut w = JsonBuf::new(&mut body);
             w.s("{\"ok\":true,\"choice\":\"tailboot\",\"spare_off\":");
@@ -827,6 +831,10 @@ fn start_disk_at(spare_off: u64) -> GuestCatalogHttp {
             }
             crate::boot::raynu_f_flag::request_installed_boot();
             crate::mgmt::guest_nic_start::on_accepted_start(disk.spare_off);
+            crate::mgmt::product_seats::note_running(crate::mgmt::product_seats::Seat::Tail {
+                off: disk.spare_off,
+                bytes: disk.disk_bytes,
+            });
             let mut body = [0u8; 192];
             let mut w = JsonBuf::new(&mut body);
             w.s("{\"ok\":true,\"choice\":\"tailboot\",\"spare_off\":");
@@ -891,6 +899,7 @@ fn store_choice(choice: u8, installed: bool) -> GuestCatalogHttp {
             } else {
                 crate::boot::raynu_f_flag::request_installed_boot();
                 crate::mgmt::guest_nic_start::on_accepted_start(0);
+                crate::mgmt::product_seats::note_running(crate::mgmt::product_seats::Seat::Window);
             }
             let body: &[u8] = if choice == CHOICE_REINSTALL {
                 b"{\"ok\":true,\"choice\":\"reinstall\"}"
@@ -1276,6 +1285,7 @@ fn write_list_json(
     write_build_identity(&mut w);
     write_last_stop(&mut w);
     write_autostart(&mut w);
+    write_seats(&mut w);
     w.s("}");
     if w.fit {
         w.n
@@ -1287,6 +1297,32 @@ fn write_list_json(
 /// ADR-021 A3: this binary's SHA and CI run on the body Overview already
 /// polls. A run id that is not digits is omitted, so the page has nothing
 /// to turn into a link.
+fn write_seats(w: &mut JsonBuf<'_>) {
+    use crate::mgmt::product_seats::Seat;
+    w.s(",\"seats\":[");
+    let mut any = false;
+    for placed in crate::mgmt::product_seats::placed() {
+        let Some(p) = placed else {
+            continue;
+        };
+        if any {
+            w.s(",");
+        }
+        any = true;
+        match p.seat {
+            Seat::Window => w.s("{\"k\":\"w\""),
+            Seat::Tail { off, .. } => {
+                w.s("{\"k\":\"t\",\"off\":");
+                w.u(off);
+            }
+        }
+        w.s(",\"cpu\":");
+        w.s(if p.on_cpu { "true" } else { "false" });
+        w.s("}");
+    }
+    w.s("]");
+}
+
 fn write_autostart(w: &mut JsonBuf<'_>) {
     let p = crate::mgmt::guest_autostart::shown();
     w.s(",\"autostart\":{\"n\":");
@@ -1355,14 +1391,43 @@ pub fn row_power(this_on: bool) -> (bool, bool) {
     (!this_on, this_on)
 }
 
-/// `Some` when the CPU is already running a different guest. This guest is
-/// left off. The guest that is on is left on.
+fn tail_bytes_for(off: u64) -> u64 {
+    let (tails, n) = discovered_tails();
+    tails[..n]
+        .iter()
+        .find(|d| d.spare_off == off)
+        .map(|d| d.disk_bytes)
+        .unwrap_or(0)
+}
+
+/// `Some` when the CPU is already running a guest.
+///
+/// The same guest answers `running`. A different guest is seated and is
+/// not booted, so the VMCS, the disk, and the NIC stay with the guest
+/// that is on. A third distinct guest is still `busy`.
 fn held_by_other(want: crate::mgmt::perc_boot_choice::VmcsGuest) -> Option<&'static [u8]> {
     use crate::mgmt::perc_boot_choice::{vmcs_guest, VmcsGuest};
-    match vmcs_guest() {
-        VmcsGuest::None => None,
-        owner if owner == want => Some(b"{\"ok\":true,\"running\":true}"),
-        _ => Some(b"{\"ok\":true,\"busy\":true}"),
+    use crate::mgmt::product_seats::{seat_beside, Admit, Seat};
+    let want_seat = match want {
+        VmcsGuest::None => return None,
+        VmcsGuest::Window => Seat::Window,
+        VmcsGuest::Tail(off) => Seat::Tail {
+            off,
+            bytes: tail_bytes_for(off),
+        },
+    };
+    let owner = match vmcs_guest() {
+        VmcsGuest::None => return None,
+        VmcsGuest::Window => Seat::Window,
+        VmcsGuest::Tail(off) => Seat::Tail {
+            off,
+            bytes: tail_bytes_for(off),
+        },
+    };
+    match seat_beside(owner, want_seat) {
+        Admit::Running => Some(b"{\"ok\":true,\"running\":true}"),
+        Admit::Seated => Some(b"{\"ok\":true,\"seated\":true,\"running\":false}"),
+        Admit::Full | Admit::Free => Some(b"{\"ok\":true,\"busy\":true}"),
     }
 }
 
@@ -1428,6 +1493,9 @@ fn write_ip(w: &mut JsonBuf<'_>, ip: [u8; 4]) {
 }
 
 fn catalog_note(waiting: bool, choice: PercSpaChoice, stopped: bool) -> &'static str {
+    if !stopped && crate::mgmt::product_seats::has_parked() {
+        return "A second guest is seated. Stop hands it the CPU. Until then the guest that is on keeps running.";
+    }
     if stopped {
         return "Guest stopped. Start boots it again. The hypervisor stays up.";
     }

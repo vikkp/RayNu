@@ -6,6 +6,7 @@
 
 pub mod guest_acpi;
 pub mod guest_irq;
+pub mod guest_msix;
 pub mod guest_platform;
 pub mod guest_serial_answer;
 pub mod guest_uart;
@@ -15,6 +16,7 @@ pub mod ide_cdrom;
 pub mod lapic_virt;
 pub mod m4_blk_gate;
 pub mod m4_net_gate;
+pub mod seat_dev;
 pub mod serial_pio;
 pub mod virtio_blk;
 pub mod virtio_net;

@@ -794,6 +794,88 @@ pub fn place_in_free_tail(
     })
 }
 
+/// Spare LBA of guest sector 0 for one seated disk.
+///
+/// `spare_base == 0` is the 8 GiB window, whose first sector is spare LBA 0.
+/// A tail base is that disk's first byte, the same value [`tail_guest_to_lba`]
+/// uses. This does not change which disk the running guest reads.
+pub fn seat_sector_lba(spare_base: u64, disk_bytes: u64) -> Option<u64> {
+    if disk_bytes < 512 || spare_base % 512 != 0 {
+        return None;
+    }
+    if spare_base == 0 {
+        return Some(0);
+    }
+    tail_guest_to_lba(
+        TailPlacement {
+            spare_off: spare_base,
+            disk_bytes,
+        },
+        0,
+        512,
+    )
+}
+
+/// Read `buf` from the seated disk at guest byte `off`, without retargeting
+/// the running guest. `off` and `buf.len()` are multiples of 512. Host and
+/// QEMU return false. Uses the same DMA page as install-disk I/O.
+pub fn perc_seat_read(spare_base: u64, disk_bytes: u64, off: u64, buf: &mut [u8]) -> bool {
+    #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+    {
+        perc_seat_read_uefi(spare_base, disk_bytes, off, buf)
+    }
+    #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+    {
+        let _ = (spare_base, disk_bytes, off, buf);
+        false
+    }
+}
+
+/// Spare LBA for one 512-byte write on the seated disk.
+///
+/// LBA 0 is `None`, so this cannot post the start of the virtual disk.
+/// A range outside the seated image is `None`. The running guest's disk is
+/// not an argument.
+pub fn seat_write_lba(spare_base: u64, disk_bytes: u64, off: u64) -> Option<u64> {
+    if off % 512 != 0 {
+        return None;
+    }
+    let slice = image_guest_read_slice(disk_bytes, spare_base, off, 512, 0)?;
+    if slice.lba == 0 || slice.skip != 0 || slice.take != 512 {
+        return None;
+    }
+    Some(slice.lba)
+}
+
+/// Write `buf` to the seated disk at guest byte `off`, without retargeting
+/// the running guest. Host and QEMU return false. LBA 0 is not posted.
+pub fn perc_seat_write(spare_base: u64, disk_bytes: u64, off: u64, buf: &[u8]) -> bool {
+    #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+    {
+        perc_seat_write_uefi(spare_base, disk_bytes, off, buf)
+    }
+    #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+    {
+        let _ = (spare_base, disk_bytes, off, buf);
+        false
+    }
+}
+
+/// First byte of guest sector 0 on `spare_base`, without retargeting the
+/// running guest. Host and QEMU return `None`. The read uses the same DMA
+/// page as install-disk I/O and is only safe while that guest is paused.
+pub fn perc_seat_byte(spare_base: u64, disk_bytes: u64) -> Option<u8> {
+    #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+    {
+        perc_seat_byte_uefi(spare_base, disk_bytes)
+    }
+    #[cfg(not(all(target_os = "uefi", feature = "uefi-bin")))]
+    {
+        let _ = (spare_base, disk_bytes);
+        None
+    }
+}
+
 /// Spare LBA for one guest byte range on a tail disk.
 ///
 /// Guest offset 0 is `spare_off`, never the installed window. A range that
@@ -3591,6 +3673,136 @@ fn post_ld_write16(
 /// The GPT walker reads 128-byte partition entries. A 512-only window
 /// returned false before any READ(16). A sector-aligned run posts 64 KiB
 /// or 4 KiB. A short slice still reads the covering sector.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn perc_seat_read_uefi(spare_base: u64, disk_bytes: u64, off: u64, buf: &mut [u8]) -> bool {
+    if !PERC_IMAGE_BOOT.load(core::sync::atomic::Ordering::Acquire) {
+        return false;
+    }
+    if buf.is_empty() {
+        return false;
+    }
+    let Some(end) = off.checked_add(buf.len() as u64) else {
+        return false;
+    };
+    if end > disk_bytes {
+        return false;
+    }
+    let bar = PERC_SPARE_BAR.load(core::sync::atomic::Ordering::Acquire);
+    let data = PERC_SPARE_DATA.load(core::sync::atomic::Ordering::Acquire);
+    let frame = PERC_SPARE_FRAME.load(core::sync::atomic::Ordering::Acquire);
+    let target = PERC_SPARE_TARGET.load(core::sync::atomic::Ordering::Acquire);
+    let spare = PERC_SPARE_BYTES.load(core::sync::atomic::Ordering::Acquire);
+    if bar == 0 || data == 0 || frame == 0 || spare < PERC_IMAGE_BYTES {
+        return false;
+    }
+    let place = TailPlacement {
+        spare_off: spare_base,
+        disk_bytes,
+    };
+    let mut done = 0usize;
+    while done < buf.len() {
+        let pos = off + done as u64;
+        let sector_off = pos & !511;
+        let skip = (pos - sector_off) as usize;
+        let lba = if spare_base == 0 {
+            if sector_off / 512 >= PERC_IMAGE_BYTES / 512 {
+                return false;
+            }
+            sector_off / 512
+        } else {
+            match tail_guest_to_lba(place, sector_off, 512) {
+                Some(l) => l,
+                None => return false,
+            }
+        };
+        let Some((st, timed_out)) = issue_ld_read16(bar, target, lba, frame, data) else {
+            return false;
+        };
+        if timed_out || st != MFI_STAT_OK {
+            return false;
+        }
+        core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+        let n = (512 - skip).min(buf.len() - done);
+        // SAFETY: firmware wrote 512 bytes at `data`. `skip+n` stays in that sector.
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                (data as *const u8).add(skip),
+                buf[done..].as_mut_ptr(),
+                n,
+            );
+        }
+        done += n;
+    }
+    true
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn perc_seat_write_uefi(spare_base: u64, disk_bytes: u64, off: u64, buf: &[u8]) -> bool {
+    if !PERC_IMAGE_BOOT.load(core::sync::atomic::Ordering::Acquire) || buf.is_empty() {
+        return false;
+    }
+    let bar = PERC_SPARE_BAR.load(core::sync::atomic::Ordering::Acquire);
+    let data = PERC_SPARE_DATA.load(core::sync::atomic::Ordering::Acquire);
+    let frame = PERC_SPARE_FRAME.load(core::sync::atomic::Ordering::Acquire);
+    let target = PERC_SPARE_TARGET.load(core::sync::atomic::Ordering::Acquire);
+    let spare = PERC_SPARE_BYTES.load(core::sync::atomic::Ordering::Acquire);
+    if bar == 0 || data == 0 || frame == 0 || spare < PERC_IMAGE_BYTES {
+        return false;
+    }
+    let mut done = 0usize;
+    while done < buf.len() {
+        let Some(slice) = image_guest_read_slice(disk_bytes, spare_base, off, buf.len(), done)
+        else {
+            return false;
+        };
+        if slice.lba == 0 {
+            return false;
+        }
+        let mut sector = [0u8; 512];
+        let guest_sector = (off + done as u64) & !511;
+        if slice.skip != 0 || slice.take != 512 {
+            if !perc_seat_read(spare_base, disk_bytes, guest_sector, &mut sector) {
+                return false;
+            }
+        }
+        sector[slice.skip..slice.skip + slice.take]
+            .copy_from_slice(&buf[done..done + slice.take]);
+        let Some((st, timed_out)) =
+            issue_ld_write16_sector(bar, target, slice.lba, frame, data, &sector)
+        else {
+            return false;
+        };
+        if timed_out || st != MFI_STAT_OK {
+            return false;
+        }
+        done += slice.take;
+    }
+    true
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn perc_seat_byte_uefi(spare_base: u64, disk_bytes: u64) -> Option<u8> {
+    if !PERC_IMAGE_BOOT.load(core::sync::atomic::Ordering::Acquire) {
+        return None;
+    }
+    let lba = seat_sector_lba(spare_base, disk_bytes)?;
+    let bar = PERC_SPARE_BAR.load(core::sync::atomic::Ordering::Acquire);
+    let data = PERC_SPARE_DATA.load(core::sync::atomic::Ordering::Acquire);
+    let frame = PERC_SPARE_FRAME.load(core::sync::atomic::Ordering::Acquire);
+    let target = PERC_SPARE_TARGET.load(core::sync::atomic::Ordering::Acquire);
+    let spare = PERC_SPARE_BYTES.load(core::sync::atomic::Ordering::Acquire);
+    if bar == 0 || data == 0 || frame == 0 || spare < PERC_IMAGE_BYTES {
+        return None;
+    }
+    let (st, timed_out) = issue_ld_read16(bar, target, lba, frame, data)?;
+    if timed_out || st != MFI_STAT_OK {
+        return None;
+    }
+    core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+    // SAFETY: firmware wrote 512 bytes at `data`. One byte is copied out.
+    Some(unsafe { core::ptr::read_volatile(data as *const u8) })
+}
+
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn perc_image_read_uefi(off: u64, buf: &mut [u8]) -> bool {
     if !PERC_IMAGE_BOOT.load(core::sync::atomic::Ordering::Acquire) {
