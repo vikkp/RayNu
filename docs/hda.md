@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-7-b6-efi-dir |
-| Summary | **B6 iron `413614ea` still reached GRUB rescue: `disk ',gpt2' not found`.** The staged file was again `\EFI\BOOT\BOOTX64.EFI`, and GRUB did not read the disk. This head prints the 8.3 names in `\EFI` and whether the Ubuntu loader, shim, and `grub.cfg` are files. Not lived. B7 is not on this flash. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-7-b6-efi-nowait |
+| Summary | **B6 iron `aedcbe409869` / CI `43928791270` still reached GRUB rescue on `,gpt2`.** The `\EFI` name line used the hushed serial path, so COM2 showed LoadedImage and not the directory. This head prints that line with the nowait path. Not lived. B7 is not on this flash. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B8 lived. B6 in flight. B7 in flight. Not lived. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-16 | wave-7-b6-efi-nowait | 0.0 | 99 | **B6 iron `aedcbe409869` / CI `43928791270` still reached GRUB rescue.** The `\EFI` name line was hushed by earlycon. This head prints it nowait. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-16 | wave-7-b6-efi-dir | 0.0 | 99 | **B6 iron `413614ea` still reached GRUB rescue (`disk ',gpt2' not found`).** The staged file was `\EFI\BOOT\BOOTX64.EFI` and GRUB did not read the disk. This head prints the `\EFI` short names and whether the Ubuntu loader is a file. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-16 | wave-7-b6-f7-gate | 0.0 | 99 | **The F7 and M7.7 host gates failed on `c2352899` because `encode_whole_disk_device_path` moved into `diskboot.rs`.** They now require `publish_f7_disk`. The QEMU job on that SHA was the nested shadow-VMCS flake. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-16 | wave-7-b6-shared-disk | 0.0 | 99 | **B6 iron `623a84da` still reached GRUB rescue (`disk ',gpt2' not found`).** The seated path published the ESP as the boot device for `\EFI\BOOT\BOOTX64.EFI`. This head uses the running guest's publisher for both. A host test names a lone partition `,gpt2`, then the published boot device `hd0`. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |

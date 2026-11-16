@@ -3563,7 +3563,7 @@ fn f7_relaunch_resets_firmware_state_without_a_stack_temporary() {
     assert!(src.contains("boot: B6 seated io port=0x"));
     assert!(src.contains("boot: B6 seated LoadedImage "));
     assert!(src.contains("boot: B6 seated disk hd0"));
-    assert!(src.contains("boot: B6 seated EFI"));
+    assert!(src.contains("serial::write_str_nowait(\"boot: B6 seated EFI\")"));
     assert!(src.contains("ptr=0x"));
     assert!(src.contains("publish_f7_disk"));
     assert!(src.contains("guid="));

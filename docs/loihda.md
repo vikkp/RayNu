@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-7-b6-efi-dir |
-| Summary | **B6 iron `413614ea` still reached GRUB rescue: `disk ',gpt2' not found`.** The staged file was again `\EFI\BOOT\BOOTX64.EFI`, and GRUB did not read the disk. This head prints the 8.3 names in `\EFI` and whether the Ubuntu loader, shim, and `grub.cfg` are files. Not lived. B7 is not on this flash. Guest SSH stays. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-7-b6-efi-nowait |
+| Summary | **B6 iron `aedcbe409869` / CI `43928791270` still reached GRUB rescue on `,gpt2`.** The `\EFI` name line used the hushed serial path. This head prints that line with the nowait path. Not lived. B7 is not on this flash. Guest SSH stays. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. TLS 88 held. |
 | Gates touched | B8 lived. B6 in flight. B7 in flight. Not lived. No doorbell. No format of UBUNTU0. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-16 | wave-7-b6-efi-nowait | 94 | 72 | **B6 iron `aedcbe409869` / CI `43928791270` still reached GRUB rescue.** The `\EFI` name line was hushed by earlycon. This head prints it nowait. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-16 | wave-7-b6-efi-dir | 94 | 72 | **B6 iron `413614ea` still reached GRUB rescue (`disk ',gpt2' not found`).** The staged file was `\EFI\BOOT\BOOTX64.EFI` and GRUB did not read the disk. This head prints the `\EFI` short names and whether the Ubuntu loader is a file. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-16 | wave-7-b6-shared-disk | 94 | 72 | **B6 iron `623a84da` still reached GRUB rescue (`disk ',gpt2' not found`).** The seated path published the ESP as the boot device for `\EFI\BOOT\BOOTX64.EFI`. This head uses the running guest's publisher for both. A host test names a lone partition `,gpt2`, then the published boot device `hd0`. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-16 | wave-7-b6-hd0 | 94 | 72 | **B6 iron `f04315b2` reached GRUB rescue (`disk ',gpt2' not found`).** The staged loader was `\EFI\BOOT\BOOTX64.EFI` with no parent disk. This head publishes `hd0` and the ESP. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |

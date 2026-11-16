@@ -7373,21 +7373,23 @@ impl crate::raynu_f::fat::VolumeRead for SeatFat {
 /// prefix. This says whether `\EFI\ubuntu\grubx64.efi` was on that volume.
 #[cfg(target_os = "uefi")]
 fn seat_note_efi_dir<R: crate::raynu_f::fat::VolumeRead>(vol: &crate::raynu_f::fat::FatVolume, r: &R) {
-    serial::write_str("boot: B6 seated EFI");
+    // `write_str` is dropped while the running guest owns earlycon. Iron
+    // `aedcbe409869` (CI `43928791270`) printed LoadedImage and not this line.
+    serial::write_str_nowait("boot: B6 seated EFI");
     match crate::raynu_f::fat::resolve_path(vol, r, b"\\EFI") {
         Ok(dir) if dir.is_dir() => {
             let (_, more) = crate::raynu_f::fat::visit_dir(vol, r, dir.first_cluster, 8, |ent| {
-                serial::write_byte(b' ');
+                serial::write_byte_nowait(b' ');
                 for &b in ent.name_bytes() {
-                    serial::write_byte(b);
+                    serial::write_byte_nowait(b);
                 }
             });
             if more {
-                serial::write_str(" +");
+                serial::write_str_nowait(" +");
             }
         }
         _ => {
-            serial::write_str(" missing");
+            serial::write_str_nowait(" missing");
         }
     }
     let file = |path: &[u8]| {
@@ -7396,25 +7398,25 @@ fn seat_note_efi_dir<R: crate::raynu_f::fat::VolumeRead>(vol: &crate::raynu_f::f
             Ok(e) if !e.is_dir()
         )
     };
-    serial::write_str(" grub=");
-    serial::write_str(if file(crate::raynu_f::fat::DISK_BOOT_UBUNTU_GRUB) {
+    serial::write_str_nowait(" grub=");
+    serial::write_str_nowait(if file(crate::raynu_f::fat::DISK_BOOT_UBUNTU_GRUB) {
         "yes"
     } else {
         "no"
     });
-    serial::write_str(" shim=");
-    serial::write_str(if file(crate::raynu_f::fat::DISK_BOOT_UBUNTU_SHIM) {
+    serial::write_str_nowait(" shim=");
+    serial::write_str_nowait(if file(crate::raynu_f::fat::DISK_BOOT_UBUNTU_SHIM) {
         "yes"
     } else {
         "no"
     });
-    serial::write_str(" cfg=");
-    serial::write_str(if file(crate::raynu_f::fat::GRUB_CFG_PATH_UBUNTU) {
+    serial::write_str_nowait(" cfg=");
+    serial::write_str_nowait(if file(crate::raynu_f::fat::GRUB_CFG_PATH_UBUNTU) {
         "yes"
     } else {
         "no"
     });
-    serial::write_line("");
+    serial::write_line_nowait("");
 }
 
 /// `true` when this call owned the exit (launched, or failed and restored).
