@@ -8308,6 +8308,11 @@ fn seat_trace_reset() {
     SEAT_FW_STATE_READY.store(false, Ordering::Release);
     SEAT_PORT61.store(0, Ordering::Release);
     SEAT_PIT.store(crate::mgmt::product_companion::SeatPio::default().pack(), Ordering::Release);
+    SEAT_PCI_SEEN.store(0, Ordering::Release);
+    SEAT_PCI_ADDR.store(0, Ordering::Release);
+    SEAT_PCI_REP.store(0, Ordering::Release);
+    SEAT_PCI_EMPTY_SAID.store(false, Ordering::Release);
+    SEAT_PCI_BUDGET_SAID.store(false, Ordering::Release);
     SEAT_IO_N.store(0, Ordering::Release);
 }
 
@@ -8319,6 +8324,16 @@ static SEAT_GRANT_PAGES: AtomicU64 = AtomicU64::new(0);
 static SEAT_PORT61: AtomicU8 = AtomicU8::new(0);
 #[cfg(target_os = "uefi")]
 static SEAT_PIT: AtomicU64 = AtomicU64::new(0xFFFF_FFFF);
+#[cfg(target_os = "uefi")]
+static SEAT_PCI_SEEN: AtomicU32 = AtomicU32::new(0);
+#[cfg(target_os = "uefi")]
+static SEAT_PCI_ADDR: AtomicU32 = AtomicU32::new(0);
+#[cfg(target_os = "uefi")]
+static SEAT_PCI_REP: AtomicU32 = AtomicU32::new(0);
+#[cfg(target_os = "uefi")]
+static SEAT_PCI_EMPTY_SAID: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "uefi")]
+static SEAT_PCI_BUDGET_SAID: AtomicBool = AtomicBool::new(false);
 #[cfg(target_os = "uefi")]
 static SEAT_IO_N: AtomicU32 = AtomicU32::new(0);
 #[cfg(target_os = "uefi")]
@@ -8343,13 +8358,74 @@ fn seat_log_legacy_io(port: u16, is_in: bool) {
     serial::write_line_nowait(if is_in { " in" } else { " out" });
 }
 
+/// Configuration ports stay in the turn while the address keeps changing.
+#[cfg(target_os = "uefi")]
+fn seat_pci_step(port: u16, is_in: bool, rax: u64) -> crate::mgmt::product_companion::SeatPci {
+    use crate::mgmt::product_companion::{SeatPci, SeatPciWalk, SEAT_PCI_BUDGET};
+    let walk = SeatPciWalk {
+        seen: SEAT_PCI_SEEN.load(Ordering::Acquire),
+        addr: SEAT_PCI_ADDR.load(Ordering::Acquire),
+        repeat: SEAT_PCI_REP.load(Ordering::Acquire),
+    };
+    let (next, step) = walk.observe(port, is_in, rax);
+    SEAT_PCI_SEEN.store(next.seen, Ordering::Release);
+    SEAT_PCI_ADDR.store(next.addr, Ordering::Release);
+    SEAT_PCI_REP.store(next.repeat, Ordering::Release);
+    if step == SeatPci::Empty && !SEAT_PCI_EMPTY_SAID.swap(true, Ordering::AcqRel) {
+        serial::write_str_nowait("boot: B6 seated pci addr=0x");
+        write_hex_nowait(u64::from(next.addr));
+        serial::write_line_nowait(" reads the same register");
+    }
+    if step == SeatPci::Stop
+        && walk.seen >= SEAT_PCI_BUDGET
+        && !SEAT_PCI_BUDGET_SAID.swap(true, Ordering::AcqRel)
+    {
+        serial::write_str_nowait("boot: B6 seated pci walk budget n=");
+        write_dec_nowait(u64::from(walk.seen));
+        serial::write_line_nowait("");
+    }
+    step
+}
+
+/// Answer one legacy port and step past it. `step` is [`SeatPci::Empty`]
+/// when this `0xCFC` read should return 0.
+#[cfg(target_os = "uefi")]
+fn seat_finish_port(
+    port: u16,
+    is_in: bool,
+    size: u8,
+    rip: u64,
+    step: crate::mgmt::product_companion::SeatPci,
+) -> bool {
+    seat_log_legacy_io(port, is_in);
+    // SAFETY: BSP-only VMX-root. The seated guest is exited, so this is the
+    // only writer of the saved guest RAX.
+    // KANI-TARGET: seated legacy port RAX (outside Proven Core).
+    let rax = unsafe { SAVED_RAX };
+    if let Some(new_rax) = seat_legacy_pio(
+        port,
+        is_in,
+        size,
+        rax,
+        step == crate::mgmt::product_companion::SeatPci::Empty,
+    ) {
+        unsafe { SAVED_RAX = new_rax };
+    }
+    let len = match unsafe { ops::vmread(VM_EXIT_INSTRUCTION_LEN) } {
+        Ok(l) if (1..=15).contains(&l) => l,
+        _ => 1,
+    };
+    unsafe { ops::vmwrite(GUEST_RIP, rip.wrapping_add(len)).is_ok() }
+}
+
 /// Legacy ISA port for the seated guest. Does not use the running guest's port state.
 #[cfg(target_os = "uefi")]
-fn seat_legacy_pio(port: u16, is_in: bool, size: u8, rax: u64) -> Option<u64> {
+fn seat_legacy_pio(port: u16, is_in: bool, size: u8, rax: u64, pci_zero: bool) -> Option<u64> {
     let mut pio = crate::mgmt::product_companion::SeatPio::from_saved(
         SEAT_PORT61.load(Ordering::Acquire),
         SEAT_PIT.load(Ordering::Acquire),
     );
+    pio.pci_zero = pci_zero;
     let out = pio.access(port, is_in, size, rax);
     SEAT_PORT61.store(pio.port61, Ordering::Release);
     SEAT_PIT.store(pio.pack(), Ordering::Release);
@@ -8547,6 +8623,22 @@ unsafe fn finish_seat_firmware() -> ! {
         }
         hand_seat_firmware_back();
     }
+    // Iron `ef903ecc`: every 2048th exit was `in 0xCFC`, so one empty-bus
+    // walk took about 64 turns and iDRAC closed the console. Configuration
+    // ports stay in this turn until the walk budget, or until one register
+    // is read eight times.
+    if basic == EXIT_REASON_IO_INSTRUCTION {
+        let qual = ops::vmread(EXIT_QUALIFICATION).unwrap_or(0);
+        let info = crate::devices::serial_pio::parse_qualification(qual);
+        if !info.string && !info.rep && (info.port == 0xCF8 || info.port == 0xCFC) {
+            let step = seat_pci_step(info.port, info.is_in, SAVED_RAX);
+            if step != crate::mgmt::product_companion::SeatPci::Stop
+                && seat_finish_port(info.port, info.is_in, info.size, rip, step)
+            {
+                guest_uefi_vmresume();
+            }
+        }
+    }
     if crate::mgmt::product_companion::seat_firmware_exit_capped() {
         seat_trace_yield(basic, rip);
         pause_seat_for_guest();
@@ -8638,18 +8730,16 @@ unsafe fn finish_seat_firmware() -> ! {
         }
         // Iron `2671f3b8`: GRUB got the 256 MiB grant, then `in 0x61` at
         // rip=0x1007f96 (qual=0x610048) handed the CPU back.
-        if !info.string && !info.rep {
-            seat_log_legacy_io(info.port, info.is_in);
-            if let Some(new_rax) = seat_legacy_pio(info.port, info.is_in, info.size, SAVED_RAX) {
-                SAVED_RAX = new_rax;
-            }
-            let len = match ops::vmread(VM_EXIT_INSTRUCTION_LEN) {
-                Ok(l) if (1..=15).contains(&l) => l,
-                _ => 1,
-            };
-            if ops::vmwrite(GUEST_RIP, rip.wrapping_add(len)).is_ok() {
-                guest_uefi_vmresume();
-            }
+        if !info.string && !info.rep
+            && seat_finish_port(
+                info.port,
+                info.is_in,
+                info.size,
+                rip,
+                crate::mgmt::product_companion::SeatPci::Walk,
+            )
+        {
+            guest_uefi_vmresume();
         }
     }
     let qual = ops::vmread(EXIT_QUALIFICATION).unwrap_or(0);

@@ -3557,6 +3557,8 @@ fn f7_relaunch_resets_firmware_state_without_a_stack_temporary() {
     assert!(src.contains("boot: B6 seated firmware first exit reason=0x"));
     assert!(src.contains("boot: B6 seated turn n="));
     assert!(src.contains("spin port=0x"));
+    assert!(src.contains("boot: B6 seated pci addr=0x"));
+    assert!(src.contains("boot: B6 seated pci walk budget n="));
     assert!(src.contains("boot: B6 seated con "));
     assert!(src.contains("boot: B6 seated firmware disk lba="));
     assert!(src.contains("boot: B6 seated RAM gpa=0x"));

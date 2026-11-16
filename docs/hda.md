@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-7-b6-pit-count |
-| Summary | **B6 iron `fc5e9eb3a4ae` / CI `43942460132` read the seated disk and then stayed at `rip=0x10010f4` for 23 turns (`io=2049`).** The PIT data port returned `0xFF` every time, so GRUB's wait never ended. iDRAC closed the console. This head steps that counter by a full interval per sample and names the port on the turn line. Not flashed. Not lived. B7 is not on this flash. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-7-b6-pci-walk |
+| Summary | **B6 iron `ef903eccb27b` / CI `43954280830` named the stuck instruction: `spin port=0xcfc in`.** The timer counter was not the wait. GRUB is reading empty PCI configuration, and yielding every 2048 reads made one walk about 64 turns. This head answers `0xCF8`/`0xCFC` inside the turn for four walks. The same register eight times returns 0. Not flashed. Not lived. B7 is not on this flash. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B8 lived. B6 in flight. B7 in flight. Not lived. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -372,7 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | H10 | Persist disk must be **reliable**, not once | **HIGH** | `1f33eeda` is the sixth installed `login:` (UUID `a0ad99ac-…`, lease `.154`). vda2 `6380/521216` files and `102909/2084352` blocks. The SPA stayed up. Residual: unclean shutdown still needs ext4 journal recovery and clears a vfat dirty bit. USB ≠ PERC. 8 GiB cap stays. Plan: [m8_state.md](m8_state.md). Evidence: [2026-09-24-36d3b559-persist-login.md](evidence/r640/2026-09-24-36d3b559-persist-login.md). |
 | H11 | Truncated `site/` on feature branches | LOW | **This commit (main catch-up):** keep Kimi updater chrome from `origin/main` (nav / Status / CIO View / Stories / Please reboot); patch lived Everest-closed strings in place; `./tools/check-site-chrome.sh` + CI `site-chrome`; always-on `.cursor/rules/site-chrome.mdc`. Do not replace `site/index.html` wholesale on HDA/Everest work. |
 | H12 | A seated firmware service call wrote into the running guest's RAM | **HIGH** | Seen on iron `8b0ceac9ccc6` and present on every B6 flash that ran GRUB with the RAM grant. The buffer was GRUB's handle list above 32 MiB. This head resolves seated service buffers through the seated EPT only (`seat_mem_read` / `seat_mem_write`) and refuses the rest. Iron `fc5e9eb3a4ae` read the seated disk into the seated guest (`status=0`). Guest 3 reached `raynusrv2 login:` and the page kept answering. |
-| H13 | Seated GRUB waits on a PIT counter that does not change | **HIGH** | Iron `fc5e9eb3a4ae` stayed at `rip=0x10010f4` for 23 turns, `io=2049` each, then iDRAC closed the console. Port `0x40`/`0x42` returned `0xFF` on every read. This head steps the counter by `0xFFFF` per sample and prints `spin port=` on the turn line. Not flashed. |
+| H13 | Seated GRUB walks PCI configuration one slice at a time | **HIGH** | Iron `ef903eccb27b` printed `spin port=0xcfc in` at `rip=0x10010f4`. Every device reads empty. Yielding every 2048 reads made one walk about 64 turns. This head answers `0xCF8`/`0xCFC` inside the turn for four walks. The same register eight times returns 0 (`boot: B6 seated pci addr=`). Not flashed. |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
 | H8 | ~~Phase F coexist not closed on iron~~ | — | **Resolved** 2026-08-20 (`HOST-NIC coexist listening` + `HOST-NIC-HTTP-OK` while VMX on; G1–G3 parked) |
@@ -382,6 +382,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-16 | wave-7-b6-pci-walk | 0.0 | 99 | **B6 iron `ef903eccb27b` / CI `43954280830` printed `spin port=0xcfc in` at `rip=0x10010f4`.** That is an empty PCI configuration read, not the timer. This head keeps a four-walk scan inside one turn. The same register eight times returns 0. Not flashed. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-16 | wave-7-b6-pit-count | 0.0 | 99 | **B6 iron `fc5e9eb3a4ae` read the seated disk (`status=0`) and then sat on one I/O instruction for 23 turns.** The PIT counter did not change. This head steps channel 0 and channel 2, and the turn line names the port. Not flashed. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-16 | wave-7-b6-seat-mem | 0.0 | 99 | **B6 iron `8b0ceac9ccc6` / CI `43935705204` printed `boot: B6 seated EFI . .. ALPINE BOOT` and still reached GRUB rescue.** A seated firmware service call wrote a buffer above 32 MiB into the running guest's RAM, so GRUB's handle list stayed unfilled. This head uses the seated EPT for every such buffer. Host tests cover it. Not flashed. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-16 | wave-7-b6-efi-nowait | 0.0 | 99 | **B6 iron `aedcbe409869` / CI `43928791270` still reached GRUB rescue.** The `\EFI` name line was hushed by earlycon. This head prints it nowait. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |

@@ -255,6 +255,8 @@ pub struct SeatPio {
     count: [u16; 2],
     /// The next read of that channel returns the high byte.
     high: [bool; 2],
+    /// This `0xCFC` read returns 0. A retry of one empty register moves on.
+    pub pci_zero: bool,
 }
 
 impl Default for SeatPio {
@@ -263,6 +265,7 @@ impl Default for SeatPio {
             port61: 0,
             count: [0xFFFF, 0xFFFF],
             high: [false, false],
+            pci_zero: false,
         }
     }
 }
@@ -274,6 +277,7 @@ impl SeatPio {
             port61,
             count: [packed as u16, (packed >> 16) as u16],
             high: [(packed & (1 << 32)) != 0, (packed & (1 << 33)) != 0],
+            pci_zero: false,
         }
     }
 
@@ -319,6 +323,8 @@ impl SeatPio {
             let val = if port == 0x61 {
                 self.port61 ^= 0x30;
                 u64::from(self.port61)
+            } else if port == 0xCFC && self.pci_zero {
+                0
             } else if let Some(ch) = Self::channel(port) {
                 self.read_counter(ch)
             } else {
@@ -353,6 +359,74 @@ impl SeatPio {
                 }
             }
             None
+        }
+    }
+}
+
+/// One full walk of every PCI function: 65536 reads, and each read is an
+/// `out 0xCF8` plus an `in 0xCFC`.
+pub const SEAT_PCI_SCAN: u32 = 65536 * 2;
+/// Video, disk, and USB each walk the bus. Four walks fit in one seated turn.
+pub const SEAT_PCI_BUDGET: u32 = SEAT_PCI_SCAN * 4;
+/// Same register this many times is a retry, not the next device.
+pub const SEAT_PCI_REPEAT: u32 = 8;
+
+/// How far a seated PCI configuration walk has got.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SeatPciWalk {
+    pub seen: u32,
+    pub addr: u32,
+    pub repeat: u32,
+}
+
+impl Default for SeatPciWalk {
+    fn default() -> Self {
+        Self {
+            seen: 0,
+            addr: 0,
+            repeat: 0,
+        }
+    }
+}
+
+/// What to do with one configuration-port access.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SeatPci {
+    /// Stay in the turn. A read is an empty device (`0xFFFFFFFF`).
+    Walk,
+    /// This register was read [`SEAT_PCI_REPEAT`] times. A read returns 0.
+    Empty,
+    /// Not a configuration port, or the walk budget is spent.
+    Stop,
+}
+
+impl SeatPciWalk {
+    /// `rax` is the value written to `0xCF8`. Iron `ef903ecc` yielded every
+    /// 2048 `in 0xCFC`, so one empty-bus walk took about 64 turns.
+    pub fn observe(self, port: u16, is_in: bool, rax: u64) -> (Self, SeatPci) {
+        if port != 0xCF8 && port != 0xCFC {
+            return (self, SeatPci::Stop);
+        }
+        if self.seen >= SEAT_PCI_BUDGET {
+            return (self, SeatPci::Stop);
+        }
+        let mut next = self;
+        next.seen = self.seen.saturating_add(1);
+        if port == 0xCF8 && !is_in {
+            let addr = rax as u32;
+            if addr == self.addr {
+                next.repeat = self.repeat.saturating_add(1);
+            } else {
+                next.addr = addr;
+                next.repeat = 0;
+            }
+        } else if port == 0xCFC && is_in {
+            next.repeat = self.repeat.saturating_add(1);
+        }
+        if next.repeat >= SEAT_PCI_REPEAT {
+            (next, SeatPci::Empty)
+        } else {
+            (next, SeatPci::Walk)
         }
     }
 }
@@ -1435,6 +1509,51 @@ mod tests {
         assert_eq!(pit.access(0xCFC, true, 4, 0), Some(0xFFFF_FFFF));
         let saved = SeatPio::from_saved(pit.port61, pit.pack());
         assert_eq!(saved, pit);
+        let mut walk = SeatPciWalk::default();
+        let mut step = SeatPci::Stop;
+        for dev in 0..64u32 {
+            let addr = 0x8000_0000 | (dev << 11);
+            let (w, s) = walk.observe(0xCF8, false, u64::from(addr));
+            assert_eq!(s, SeatPci::Walk);
+            let (w, s) = w.observe(0xCFC, true, 0);
+            assert_eq!(s, SeatPci::Walk);
+            walk = w;
+            step = s;
+        }
+        assert_eq!(step, SeatPci::Walk);
+        assert_eq!(walk.seen, 128);
+        let mut stuck = SeatPciWalk {
+            seen: walk.seen,
+            addr: 0x8000_0000,
+            repeat: 0,
+        };
+        for _ in 0..(SEAT_PCI_REPEAT - 1) {
+            let (w, s) = stuck.observe(0xCFC, true, 0);
+            assert_eq!(s, SeatPci::Walk);
+            stuck = w;
+        }
+        let (stuck, s) = stuck.observe(0xCFC, true, 0);
+        assert_eq!(s, SeatPci::Empty);
+        let (_moved, s) = stuck.observe(0xCF8, false, 0x8000_0800);
+        assert_eq!(s, SeatPci::Walk);
+        let done = SeatPciWalk {
+            seen: SEAT_PCI_BUDGET,
+            ..SeatPciWalk::default()
+        };
+        let (_, s) = done.observe(0xCFC, true, 0);
+        assert_eq!(s, SeatPci::Stop);
+        let done = SeatPciWalk {
+            seen: SEAT_PCI_BUDGET - 1,
+            ..SeatPciWalk::default()
+        };
+        let (done, s) = done.observe(0xCF8, false, 0x8000_0000);
+        assert_eq!(s, SeatPci::Walk);
+        assert_eq!(done.seen, SEAT_PCI_BUDGET);
+        let (_, s) = SeatPciWalk::default().observe(0x61, true, 0);
+        assert_eq!(s, SeatPci::Stop);
+        let mut pio = SeatPio::default();
+        pio.pci_zero = true;
+        assert_eq!(pio.access(0xCFC, true, 4, 0), Some(0));
         note_probe_retry();
         assert!(begin_probe());
         note_probe_hlt();
