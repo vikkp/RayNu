@@ -241,6 +241,38 @@ pub const SEAT_RAM_MAX_CHUNKS: u64 = (256 * 1024 * 1024) / SEAT_RAM_CHUNK;
 /// is given whole, up to [`SEAT_RAM_MAX_CHUNKS`].
 pub const SEAT_RAM_FLOOR_CHUNKS: u64 = 8;
 
+/// Port `0x61` shadow for one seated guest. The running guest has its own.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SeatPio {
+    pub port61: u8,
+}
+
+impl SeatPio {
+    /// Answer one non-string port access. `Some(rax)` is an IN. `None` is an OUT.
+    /// Port `0x61` toggles the refresh and timer bits so a delay loop advances.
+    pub fn access(&mut self, port: u16, is_in: bool, size: u8, rax: u64) -> Option<u64> {
+        let mask = match size {
+            2 => 0xFFFF,
+            4 => 0xFFFF_FFFF,
+            _ => 0xFF,
+        };
+        if is_in {
+            let val = if port == 0x61 {
+                self.port61 ^= 0x30;
+                u64::from(self.port61)
+            } else {
+                mask
+            };
+            Some((rax & !mask) | (val & mask))
+        } else {
+            if port == 0x61 {
+                self.port61 = (rax as u8 & !0x30) | (self.port61 & 0x30);
+            }
+            None
+        }
+    }
+}
+
 /// How many 2 MiB chunks to give the seated guest from `available`.
 /// Zero when the remainder cannot hold a loader heap.
 pub fn seat_guest_ram_chunks(available_chunks: u64) -> u64 {
@@ -1056,6 +1088,12 @@ mod tests {
         assert_eq!(seat_guest_ram_chunks(SEAT_RAM_FLOOR_CHUNKS), SEAT_RAM_FLOOR_CHUNKS);
         assert_eq!(seat_guest_ram_chunks(10_000), SEAT_RAM_MAX_CHUNKS);
         assert!(SEAT_SLAB_CHUNKS + SEAT_RAM_MAX_CHUNKS <= SEAT_EPT_LEAVES);
+        let mut pio = SeatPio::default();
+        assert_eq!(pio.access(0x61, true, 1, 0), Some(0x30));
+        assert_eq!(pio.access(0x61, true, 1, 0), Some(0x00));
+        assert_eq!(pio.access(0x61, false, 1, 0x03), None);
+        assert_eq!(pio.access(0x61, true, 1, 0xAB00), Some(0xAB33));
+        assert_eq!(pio.access(0x80, true, 1, 0), Some(0xFF));
         note_probe_retry();
         assert!(begin_probe());
         note_probe_hlt();

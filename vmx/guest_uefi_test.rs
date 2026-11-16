@@ -3560,6 +3560,7 @@ fn f7_relaunch_resets_firmware_state_without_a_stack_temporary() {
     assert!(src.contains("boot: B6 seated firmware disk lba="));
     assert!(src.contains("boot: B6 seated RAM gpa=0x"));
     assert!(src.contains("boot: B6 seated RAM grant short avail_mib="));
+    assert!(src.contains("boot: B6 seated io port=0x"));
     assert!(src.contains("set_high_region("));
     assert!(src.contains("write_line_nowait(\n            \"boot: B6 seated firmware ExitBootServices; the kernel is starting; the guest OS is still waiting\",\n        )"));
     assert!(src.contains("raynu_f_reset_vmcs_guest_state(&plan, fw.entry)"));

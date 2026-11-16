@@ -10,7 +10,7 @@
 //! VMCS or EPT. Fixtures are refused. Host `cargo test` never executes the
 //! instruction.
 
-use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU64, AtomicU8, Ordering};
 
 use crate::arch::cpu::{CPUID_ECX_X2APIC, CPUID_ECX_HYPERVISOR};
 use crate::boot::ovmf_esp::{self, MIN_REAL_OVMF_BYTES};
@@ -8034,12 +8034,50 @@ fn seat_trace_reset() {
     SEAT_FAIL_SAID.store(false, Ordering::Release);
     SEAT_DISK_FAIL_SAID.store(false, Ordering::Release);
     SEAT_FW_STATE_READY.store(false, Ordering::Release);
+    SEAT_PORT61.store(0, Ordering::Release);
+    SEAT_IO_N.store(0, Ordering::Release);
 }
 
 /// 4 KiB pages of private RAM granted to the seated guest. Zero means the
 /// remainder after the running guest could not hold a loader heap.
 #[cfg(target_os = "uefi")]
 static SEAT_GRANT_PAGES: AtomicU64 = AtomicU64::new(0);
+#[cfg(target_os = "uefi")]
+static SEAT_PORT61: AtomicU8 = AtomicU8::new(0);
+#[cfg(target_os = "uefi")]
+static SEAT_IO_N: AtomicU32 = AtomicU32::new(0);
+#[cfg(target_os = "uefi")]
+static SEAT_IO_SEEN: [AtomicU16; 8] = [const { AtomicU16::new(0) }; 8];
+
+/// Remember up to eight distinct legacy ports so COM2 shows what GRUB touched.
+#[cfg(target_os = "uefi")]
+fn seat_log_legacy_io(port: u16, is_in: bool) {
+    let n = SEAT_IO_N.load(Ordering::Acquire).min(8);
+    for i in 0..n as usize {
+        if SEAT_IO_SEEN[i].load(Ordering::Acquire) == port {
+            return;
+        }
+    }
+    if n >= 8 {
+        return;
+    }
+    SEAT_IO_SEEN[n as usize].store(port, Ordering::Release);
+    SEAT_IO_N.store(n + 1, Ordering::Release);
+    serial::write_str_nowait("boot: B6 seated io port=0x");
+    write_hex_nowait(u64::from(port));
+    serial::write_line_nowait(if is_in { " in" } else { " out" });
+}
+
+/// Legacy ISA port for the seated guest. Does not use the running guest's port state.
+#[cfg(target_os = "uefi")]
+fn seat_legacy_pio(port: u16, is_in: bool, size: u8, rax: u64) -> Option<u64> {
+    let mut pio = crate::mgmt::product_companion::SeatPio {
+        port61: SEAT_PORT61.load(Ordering::Acquire),
+    };
+    let out = pio.access(port, is_in, size, rax);
+    SEAT_PORT61.store(pio.port61, Ordering::Release);
+    out
+}
 
 /// Map leftover DRAM into the seated EPT above the firmware slab and record
 /// the page count for [`crate::raynu_f::memory::PagePool::set_high_region`].
@@ -8306,11 +8344,26 @@ unsafe fn finish_seat_firmware() -> ! {
     }
     if basic == EXIT_REASON_IO_INSTRUCTION {
         let qual = ops::vmread(EXIT_QUALIFICATION).unwrap_or(0);
-        let port = io_port_from_qual(qual);
+        let info = crate::devices::serial_pio::parse_qualification(qual);
         let size = (qual & 7) + 1;
-        let is_in = (qual & (1 << 3)) != 0;
-        if crate::raynu_f::is_service_call(port, is_in, size) && seat_firmware_service() {
+        if crate::raynu_f::is_service_call(info.port, info.is_in, size) && seat_firmware_service()
+        {
             guest_uefi_vmresume();
+        }
+        // Iron `2671f3b8`: GRUB got the 256 MiB grant, then `in 0x61` at
+        // rip=0x1007f96 (qual=0x610048) handed the CPU back.
+        if !info.string && !info.rep {
+            seat_log_legacy_io(info.port, info.is_in);
+            if let Some(new_rax) = seat_legacy_pio(info.port, info.is_in, info.size, SAVED_RAX) {
+                SAVED_RAX = new_rax;
+            }
+            let len = match ops::vmread(VM_EXIT_INSTRUCTION_LEN) {
+                Ok(l) if (1..=15).contains(&l) => l,
+                _ => 1,
+            };
+            if ops::vmwrite(GUEST_RIP, rip.wrapping_add(len)).is_ok() {
+                guest_uefi_vmresume();
+            }
         }
     }
     let qual = ops::vmread(EXIT_QUALIFICATION).unwrap_or(0);
