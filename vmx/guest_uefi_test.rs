@@ -3581,6 +3581,9 @@ fn f7_relaunch_resets_firmware_state_without_a_stack_temporary() {
         .nth(1)
         .and_then(|rest| rest.split("\n}\n").next())
         .expect("seat_firmware_service body");
+    assert!(src.contains("d.start_image"));
+    assert!(src.contains("d.exit_image"));
+    assert!(src.contains("boot: B6 seated StartImage entry=0x"));
     assert!(svc.contains("product_companion::seat_mem_read("));
     assert!(svc.contains("product_companion::seat_mem_write("));
     assert!(svc.contains("boot: B6 seated firmware buffer outside the seated RAM "));

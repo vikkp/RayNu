@@ -7900,7 +7900,88 @@ unsafe fn seat_firmware_service() -> bool {
             "boot: B6 seated firmware ExitBootServices; the kernel is starting; the guest OS is still waiting",
         );
     }
+    // Iron `c0fe8b3e`: StartImage returned success and the guest stayed in
+    // GRUB, then UnloadImage of the running image was invalid parameter.
+    // The running guest jumps to the image entry here. The seat did not.
+    if let Some(status) = d.exit_image {
+        if seat_exit_image(&mem, status) {
+            return true;
+        }
+    }
+    if let Some((entry, handle)) = d.start_image {
+        if seat_start_image(entry, handle, args.rsp, st.system_table) {
+            return true;
+        }
+    }
     ops::vmwrite(GUEST_RIP, rip.wrapping_add(len)).is_ok()
+}
+
+/// `StartImage` on the seated guest: remember GRUB's caller and enter the image.
+#[cfg(target_os = "uefi")]
+fn seat_start_image(entry: u64, handle: u64, rsp: u64, system_table: u64) -> bool {
+    let ctx = &SEAT_START_CTX;
+    ctx.rsp.store(rsp, Ordering::Release);
+    ctx.rbx.store(unsafe { SAVED_RBX }, Ordering::Release);
+    ctx.rbp.store(unsafe { SAVED_RBP }, Ordering::Release);
+    ctx.rsi.store(unsafe { SAVED_RSI }, Ordering::Release);
+    ctx.rdi.store(unsafe { SAVED_RDI }, Ordering::Release);
+    ctx.r12.store(unsafe { SAVED_R12 }, Ordering::Release);
+    ctx.r13.store(unsafe { SAVED_R13 }, Ordering::Release);
+    ctx.r14.store(unsafe { SAVED_R14 }, Ordering::Release);
+    ctx.r15.store(unsafe { SAVED_R15 }, Ordering::Release);
+    unsafe {
+        SAVED_RCX = handle;
+        SAVED_RDX = system_table;
+    }
+    if unsafe { ops::vmwrite(GUEST_RIP, entry).is_ok() } {
+        serial::write_str_nowait("boot: B6 seated StartImage entry=0x");
+        write_hex_nowait(entry);
+        serial::write_str_nowait(" handle=0x");
+        write_hex_nowait(handle);
+        serial::write_line_nowait("");
+        true
+    } else {
+        serial::write_line_nowait("boot: B6 seated StartImage could not set the entry");
+        false
+    }
+}
+
+/// `Exit` from an image `StartImage` ran: back to GRUB with the status in RAX.
+#[cfg(target_os = "uefi")]
+fn seat_exit_image(mem: &dyn crate::raynu_f::GuestMem, status: u64) -> bool {
+    let ctx = &SEAT_START_CTX;
+    let rsp = ctx.rsp.load(Ordering::Acquire);
+    let mut ret = [0u8; 8];
+    if rsp == 0 || mem.read(rsp, &mut ret) != 8 {
+        serial::write_line_nowait("boot: B6 seated Exit could not return to StartImage");
+        return false;
+    }
+    let ret = u64::from_le_bytes(ret);
+    unsafe {
+        SAVED_RAX = status;
+        SAVED_RBX = ctx.rbx.load(Ordering::Acquire);
+        SAVED_RBP = ctx.rbp.load(Ordering::Acquire);
+        SAVED_RSI = ctx.rsi.load(Ordering::Acquire);
+        SAVED_RDI = ctx.rdi.load(Ordering::Acquire);
+        SAVED_R12 = ctx.r12.load(Ordering::Acquire);
+        SAVED_R13 = ctx.r13.load(Ordering::Acquire);
+        SAVED_R14 = ctx.r14.load(Ordering::Acquire);
+        SAVED_R15 = ctx.r15.load(Ordering::Acquire);
+    }
+    if unsafe {
+        ops::vmwrite(GUEST_RSP, rsp.wrapping_add(8)).is_ok()
+            && ops::vmwrite(GUEST_RIP, ret).is_ok()
+    } {
+        serial::write_str_nowait("boot: B6 seated Exit status=0x");
+        write_hex_nowait(status);
+        serial::write_str_nowait(" rip=0x");
+        write_hex_nowait(ret);
+        serial::write_line_nowait("");
+        true
+    } else {
+        serial::write_line_nowait("boot: B6 seated Exit could not return to StartImage");
+        false
+    }
 }
 
 /// The HLT probe does not call this. The first exit from the seated
@@ -8360,6 +8441,18 @@ static SEAT_PCI_BUDGET_SAID: AtomicBool = AtomicBool::new(false);
 static SEAT_MENU_KEY: AtomicBool = AtomicBool::new(false);
 #[cfg(target_os = "uefi")]
 static SEAT_CON_CAPPED: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "uefi")]
+static SEAT_START_CTX: RaynuFStartCtx = RaynuFStartCtx {
+    rsp: AtomicU64::new(0),
+    rbx: AtomicU64::new(0),
+    rbp: AtomicU64::new(0),
+    rsi: AtomicU64::new(0),
+    rdi: AtomicU64::new(0),
+    r12: AtomicU64::new(0),
+    r13: AtomicU64::new(0),
+    r14: AtomicU64::new(0),
+    r15: AtomicU64::new(0),
+};
 #[cfg(target_os = "uefi")]
 static SEAT_IO_N: AtomicU32 = AtomicU32::new(0);
 #[cfg(target_os = "uefi")]
