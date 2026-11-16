@@ -241,13 +241,72 @@ pub const SEAT_RAM_MAX_CHUNKS: u64 = (256 * 1024 * 1024) / SEAT_RAM_CHUNK;
 /// is given whole, up to [`SEAT_RAM_MAX_CHUNKS`].
 pub const SEAT_RAM_FLOOR_CHUNKS: u64 = 8;
 
-/// Port `0x61` shadow for one seated guest. The running guest has its own.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// Port `0x61` shadow and the two PIT counters for one seated guest.
+/// The running guest has its own.
+///
+/// Iron `fc5e9eb3` stayed at `rip=0x10010f4` for 23 turns (`io=2049` each).
+/// A read of port `0x40` or `0x42` returned `0xFF` every time, so a wait for
+/// the counter to move never ended. Each finished sample now steps the
+/// counter by one full GRUB interval (`0xFFFF`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SeatPio {
     pub port61: u8,
+    /// Channel 0 (`0x40`) and channel 2 (`0x42`).
+    count: [u16; 2],
+    /// The next read of that channel returns the high byte.
+    high: [bool; 2],
+}
+
+impl Default for SeatPio {
+    fn default() -> Self {
+        Self {
+            port61: 0,
+            count: [0xFFFF, 0xFFFF],
+            high: [false, false],
+        }
+    }
 }
 
 impl SeatPio {
+    /// Rebuild the counters saved across one seated exit.
+    pub fn from_saved(port61: u8, packed: u64) -> Self {
+        Self {
+            port61,
+            count: [packed as u16, (packed >> 16) as u16],
+            high: [(packed & (1 << 32)) != 0, (packed & (1 << 33)) != 0],
+        }
+    }
+
+    /// Counters to keep until the next exit. Port `0x61` is stored apart.
+    pub fn pack(&self) -> u64 {
+        u64::from(self.count[0])
+            | (u64::from(self.count[1]) << 16)
+            | (u64::from(self.high[0]) << 32)
+            | (u64::from(self.high[1]) << 33)
+    }
+
+    fn channel(port: u16) -> Option<usize> {
+        match port {
+            0x40 => Some(0),
+            0x42 => Some(1),
+            _ => None,
+        }
+    }
+
+    /// One 16-bit sample: low byte, then high byte, then the counter jumps
+    /// a full `0xFFFF` interval so the next sample is a different count.
+    fn read_counter(&mut self, channel: usize) -> u64 {
+        if !self.high[channel] {
+            self.high[channel] = true;
+            u64::from(self.count[channel] as u8)
+        } else {
+            self.high[channel] = false;
+            let hi = u64::from((self.count[channel] >> 8) as u8);
+            self.count[channel] = self.count[channel].wrapping_sub(0xFFFF);
+            hi
+        }
+    }
+
     /// Answer one non-string port access. `Some(rax)` is an IN. `None` is an OUT.
     /// Port `0x61` toggles the refresh and timer bits so a delay loop advances.
     pub fn access(&mut self, port: u16, is_in: bool, size: u8, rax: u64) -> Option<u64> {
@@ -260,6 +319,8 @@ impl SeatPio {
             let val = if port == 0x61 {
                 self.port61 ^= 0x30;
                 u64::from(self.port61)
+            } else if let Some(ch) = Self::channel(port) {
+                self.read_counter(ch)
             } else {
                 mask
             };
@@ -267,6 +328,29 @@ impl SeatPio {
         } else {
             if port == 0x61 {
                 self.port61 = (rax as u8 & !0x30) | (self.port61 & 0x30);
+            } else if port == 0x43 {
+                // Command bits 7:6 are 00 = channel 0, 10 = channel 2.
+                let ch = match (rax >> 6) & 3 {
+                    0 => Some(0),
+                    2 => Some(1),
+                    _ => None,
+                };
+                if let Some(ch) = ch {
+                    self.high[ch] = false;
+                    // A latch (access mode 00) keeps the count. Programming a
+                    // mode starts a fresh full interval.
+                    if rax & 0x30 != 0 {
+                        self.count[ch] = 0xFFFF;
+                    }
+                }
+            } else if let Some(ch) = Self::channel(port) {
+                if !self.high[ch] {
+                    self.count[ch] = (self.count[ch] & 0xFF00) | (rax as u16 & 0xFF);
+                    self.high[ch] = true;
+                } else {
+                    self.count[ch] = (self.count[ch] & 0x00FF) | ((rax as u16 & 0xFF) << 8);
+                    self.high[ch] = false;
+                }
             }
             None
         }
@@ -1331,6 +1415,26 @@ mod tests {
         assert_eq!(pio.access(0x61, false, 1, 0x03), None);
         assert_eq!(pio.access(0x61, true, 1, 0xAB00), Some(0xAB33));
         assert_eq!(pio.access(0x80, true, 1, 0), Some(0xFF));
+        // A latched counter that never moves keeps GRUB at one instruction.
+        // Iron `fc5e9eb3` did that for 23 turns. One sample later the count
+        // has fallen by a full interval, and an empty PCI register stays empty.
+        let sample = |p: &mut SeatPio, port: u16| -> u16 {
+            p.access(0x43, false, 1, if port == 0x40 { 0x00 } else { 0x80 });
+            let lo = p.access(port, true, 1, 0).unwrap();
+            let hi = p.access(port, true, 1, 0).unwrap();
+            ((lo as u16) & 0xFF) | (((hi as u16) & 0xFF) << 8)
+        };
+        let mut pit = SeatPio::default();
+        let first = sample(&mut pit, 0x40);
+        let second = sample(&mut pit, 0x40);
+        assert_eq!(first.wrapping_sub(second), 0xFFFF);
+        let third = sample(&mut pit, 0x40);
+        assert_ne!(third, second);
+        let ch2 = sample(&mut pit, 0x42);
+        assert_eq!(ch2, 0xFFFF);
+        assert_eq!(pit.access(0xCFC, true, 4, 0), Some(0xFFFF_FFFF));
+        let saved = SeatPio::from_saved(pit.port61, pit.pack());
+        assert_eq!(saved, pit);
         note_probe_retry();
         assert!(begin_probe());
         note_probe_hlt();

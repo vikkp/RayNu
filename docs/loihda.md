@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-7-b6-seat-mem |
-| Summary | **B6 iron `8b0ceac9ccc6` / CI `43935705204` listed `ALPINE` and `BOOT` on guest 2's ESP and still reached GRUB rescue on `,gpt2`.** A seated firmware service call resolved a buffer above 32 MiB through the running guest's tables and wrote it into that guest's RAM. This head resolves every seated service buffer through the seated EPT and refuses the rest. Host tests cover it. Not flashed. Not lived. B7 is not on this flash. Guest SSH stays. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-7-b6-pit-count |
+| Summary | **B6 iron `fc5e9eb3a4ae` / CI `43942460132` read the seated disk and then stayed at `rip=0x10010f4` for 23 turns.** The PIT counter did not change. This head steps it and names the port. Not flashed. Not lived. B7 is not on this flash. Guest SSH stays. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. TLS 88 held. |
 | Gates touched | B8 lived. B6 in flight. B7 in flight. Not lived. No doorbell. No format of UBUNTU0. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-16 | wave-7-b6-pit-count | 94 | 72 | **B6 iron `fc5e9eb3a4ae` read the seated disk and then sat on one I/O instruction for 23 turns.** The PIT counter did not change. This head steps channel 0 and channel 2 and names the port. Not flashed. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-16 | wave-7-b6-seat-mem | 94 | 72 | **B6 iron `8b0ceac9ccc6` / CI `43935705204` printed `boot: B6 seated EFI . .. ALPINE BOOT` and still reached GRUB rescue.** A seated firmware service call wrote a buffer above 32 MiB into the running guest's RAM, so GRUB's handle list stayed unfilled. This head uses the seated EPT for every such buffer. Host tests cover it. Not flashed. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-16 | wave-7-b6-efi-nowait | 94 | 72 | **B6 iron `aedcbe409869` / CI `43928791270` still reached GRUB rescue.** The `\EFI` name line was hushed by earlycon. This head prints it nowait. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-16 | wave-7-b6-efi-dir | 94 | 72 | **B6 iron `413614ea` still reached GRUB rescue (`disk ',gpt2' not found`).** The staged file was `\EFI\BOOT\BOOTX64.EFI` and GRUB did not read the disk. This head prints the `\EFI` short names and whether the Ubuntu loader is a file. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |

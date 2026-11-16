@@ -8307,6 +8307,7 @@ fn seat_trace_reset() {
     SEAT_DISK_FAIL_SAID.store(false, Ordering::Release);
     SEAT_FW_STATE_READY.store(false, Ordering::Release);
     SEAT_PORT61.store(0, Ordering::Release);
+    SEAT_PIT.store(crate::mgmt::product_companion::SeatPio::default().pack(), Ordering::Release);
     SEAT_IO_N.store(0, Ordering::Release);
 }
 
@@ -8316,6 +8317,8 @@ fn seat_trace_reset() {
 static SEAT_GRANT_PAGES: AtomicU64 = AtomicU64::new(0);
 #[cfg(target_os = "uefi")]
 static SEAT_PORT61: AtomicU8 = AtomicU8::new(0);
+#[cfg(target_os = "uefi")]
+static SEAT_PIT: AtomicU64 = AtomicU64::new(0xFFFF_FFFF);
 #[cfg(target_os = "uefi")]
 static SEAT_IO_N: AtomicU32 = AtomicU32::new(0);
 #[cfg(target_os = "uefi")]
@@ -8343,11 +8346,13 @@ fn seat_log_legacy_io(port: u16, is_in: bool) {
 /// Legacy ISA port for the seated guest. Does not use the running guest's port state.
 #[cfg(target_os = "uefi")]
 fn seat_legacy_pio(port: u16, is_in: bool, size: u8, rax: u64) -> Option<u64> {
-    let mut pio = crate::mgmt::product_companion::SeatPio {
-        port61: SEAT_PORT61.load(Ordering::Acquire),
-    };
+    let mut pio = crate::mgmt::product_companion::SeatPio::from_saved(
+        SEAT_PORT61.load(Ordering::Acquire),
+        SEAT_PIT.load(Ordering::Acquire),
+    );
     let out = pio.access(port, is_in, size, rax);
     SEAT_PORT61.store(pio.port61, Ordering::Release);
+    SEAT_PIT.store(pio.pack(), Ordering::Release);
     out
 }
 
@@ -8461,6 +8466,15 @@ fn seat_trace_yield(basic: u32, rip: u64) {
     write_dec_nowait(u64::from(seat_trace_count(SeatExitBucket::Exc)));
     serial::write_str_nowait(" oth=");
     write_dec_nowait(u64::from(seat_trace_count(SeatExitBucket::Other)));
+    // Iron `fc5e9eb3` yielded on the same I/O instruction for 23 turns and
+    // the port was not on the line. Name the instruction the cap stopped on.
+    if basic == 30 {
+        let qual = unsafe { ops::vmread(EXIT_QUALIFICATION).unwrap_or(0) };
+        let info = crate::devices::serial_pio::parse_qualification(qual);
+        serial::write_str_nowait(" spin port=0x");
+        write_hex_nowait(u64::from(info.port));
+        serial::write_str_nowait(if info.is_in { " in" } else { " out" });
+    }
     serial::write_line_nowait("");
     for slot in SEAT_TRACE.iter() {
         slot.store(0, Ordering::Release);
