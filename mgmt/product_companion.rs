@@ -431,6 +431,20 @@ impl SeatPciWalk {
     }
 }
 
+/// One Enter for the seated GRUB menu once its screen has been drawn.
+///
+/// Iron `95b0fc37` drew `GNU GRUB version 2.12` and then polled
+/// `ReadKeyStroke` (`spin port=0x5246`) with no key and no timeout.
+/// COM2 input belongs to the running guest. The highlighted entry is the one
+/// that boots.
+pub fn seat_menu_enter(lines_drawn: u32, already_sent: bool) -> Option<u8> {
+    if lines_drawn >= 8 && !already_sent {
+        Some(b'\r')
+    } else {
+        None
+    }
+}
+
 /// How many 2 MiB chunks to give the seated guest from `available`.
 /// Zero when the remainder cannot hold a loader heap.
 pub fn seat_guest_ram_chunks(available_chunks: u64) -> u64 {
@@ -1551,6 +1565,9 @@ mod tests {
         assert_eq!(done.seen, SEAT_PCI_BUDGET);
         let (_, s) = SeatPciWalk::default().observe(0x61, true, 0);
         assert_eq!(s, SeatPci::Stop);
+        assert_eq!(seat_menu_enter(7, false), None);
+        assert_eq!(seat_menu_enter(8, false), Some(b'\r'));
+        assert_eq!(seat_menu_enter(8, true), None);
         let mut pio = SeatPio::default();
         pio.pci_zero = true;
         assert_eq!(pio.access(0xCFC, true, 4, 0), Some(0));

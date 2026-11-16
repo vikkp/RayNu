@@ -7812,17 +7812,35 @@ unsafe fn seat_firmware_service() -> bool {
             seat_con_byte(b);
         }
         fn has_input(&self) -> bool {
-            false
+            crate::mgmt::product_companion::seat_menu_enter(
+                SEAT_CON_LINES.load(Ordering::Acquire),
+                SEAT_MENU_KEY.load(Ordering::Acquire),
+            )
+            .is_some()
         }
         fn read_input(&mut self) -> Option<u8> {
-            None
+            let key = crate::mgmt::product_companion::seat_menu_enter(
+                SEAT_CON_LINES.load(Ordering::Acquire),
+                SEAT_MENU_KEY.load(Ordering::Acquire),
+            )?;
+            if SEAT_MENU_KEY.swap(true, Ordering::AcqRel) {
+                return None;
+            }
+            serial::write_line_nowait("boot: B6 seated menu enter");
+            Some(key)
         }
     }
+    /// Same TSC clock as the running guest. A one-second jump per read made
+    /// `Stall` return before the TSC moved, so GRUB's menu timeout never ran.
     struct Jump;
     impl crate::raynu_f::TimeSource for Jump {
         fn now_100ns(&self) -> u64 {
-            static N: AtomicU64 = AtomicU64::new(0);
-            N.fetch_add(10_000_000_000, Ordering::Relaxed)
+            let mut hz = crate::boot::raynu_f_flag::tsc_hz();
+            if hz == 0 {
+                hz = 1_000_000_000;
+            }
+            let t = cpu::rdtsc();
+            (t / hz).saturating_mul(10_000_000) + ((t % hz).saturating_mul(10_000_000)) / hz
         }
     }
     let hpa = crate::mgmt::product_companion::seat_firmware_hpa();
@@ -8313,6 +8331,7 @@ fn seat_trace_reset() {
     SEAT_PCI_REP.store(0, Ordering::Release);
     SEAT_PCI_EMPTY_SAID.store(false, Ordering::Release);
     SEAT_PCI_BUDGET_SAID.store(false, Ordering::Release);
+    SEAT_MENU_KEY.store(false, Ordering::Release);
     SEAT_IO_N.store(0, Ordering::Release);
 }
 
@@ -8334,6 +8353,8 @@ static SEAT_PCI_REP: AtomicU32 = AtomicU32::new(0);
 static SEAT_PCI_EMPTY_SAID: AtomicBool = AtomicBool::new(false);
 #[cfg(target_os = "uefi")]
 static SEAT_PCI_BUDGET_SAID: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "uefi")]
+static SEAT_MENU_KEY: AtomicBool = AtomicBool::new(false);
 #[cfg(target_os = "uefi")]
 static SEAT_IO_N: AtomicU32 = AtomicU32::new(0);
 #[cfg(target_os = "uefi")]
