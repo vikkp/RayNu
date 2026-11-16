@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-7-b6-image |
-| Summary | **B6 iron `20c9a18a` reached GRUB rescue: `variable root isn't set`.** The first `OpenProtocol` for the loaded image returned `EFI_NOT_FOUND`. This head publishes that image and its file path before entry. Not lived. B7 is not on this flash. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-7-b6-hd0 |
+| Summary | **B6 iron `f04315b2` reached GRUB rescue: `disk ',gpt2' not found`.** LoadedImage was `\EFI\BOOT\BOOTX64.EFI` and there was no parent disk. This head publishes `hd0` and the ESP. Not lived. B7 is not on this flash. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B8 lived. B6 in flight. B7 in flight. Not lived. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-16 | wave-7-b6-hd0 | 0.0 | 99 | **B6 iron `f04315b2` reached GRUB rescue (`disk ',gpt2' not found`).** The staged loader was `\EFI\BOOT\BOOTX64.EFI` with no parent disk. This head publishes `hd0` and the ESP. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-16 | wave-7-b6-image | 0.0 | 99 | **B6 iron `20c9a18a` reached GRUB rescue (`root` isn't set).** LoadedImage was not published. This head publishes it, with the loader path, before entry. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-16 | wave-7-b6-pio | 0.0 | 99 | **B6 iron `2671f3b8` granted 256 MiB, then GRUB stopped on `in 0x61`.** The seated guest answers that port and keeps running. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-16 | wave-7-b6-grant | 0.0 | 99 | **B6 iron `5aa6594c` reached GRUB and stopped 3079 pages short of a 32 MiB heap.** The seated guest now receives leftover DRAM after the running guest's grant, up to 256 MiB. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |

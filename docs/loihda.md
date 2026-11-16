@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-7-b6-image |
-| Summary | **B6 iron `20c9a18a` reached GRUB rescue: `variable root isn't set`.** The first `OpenProtocol` for the loaded image returned `EFI_NOT_FOUND`. This head publishes that image and its file path before entry. Not lived. B7 is not on this flash. Guest SSH stays. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-7-b6-hd0 |
+| Summary | **B6 iron `f04315b2` reached GRUB rescue: `disk ',gpt2' not found`.** LoadedImage was `\EFI\BOOT\BOOTX64.EFI` and there was no parent disk. This head publishes `hd0` and the ESP. Not lived. B7 is not on this flash. Guest SSH stays. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. TLS 88 held. |
 | Gates touched | B8 lived. B6 in flight. B7 in flight. Not lived. No doorbell. No format of UBUNTU0. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-16 | wave-7-b6-hd0 | 94 | 72 | **B6 iron `f04315b2` reached GRUB rescue (`disk ',gpt2' not found`).** The staged loader was `\EFI\BOOT\BOOTX64.EFI` with no parent disk. This head publishes `hd0` and the ESP. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-16 | wave-7-b6-image | 94 | 72 | **B6 iron `20c9a18a` reached GRUB rescue (`root` isn't set).** LoadedImage was not published. This head publishes it, with the loader path, before entry. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-16 | wave-7-b6-pio | 94 | 72 | **B6 iron `2671f3b8` granted 256 MiB, then GRUB stopped on `in 0x61`.** The seated guest answers that port and keeps running. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-16 | wave-7-b6-grant | 94 | 72 | **B6 iron `5aa6594c` reached GRUB and stopped 3079 pages short of a 32 MiB heap.** The seated guest now receives leftover DRAM after the running guest's grant, up to 256 MiB. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |

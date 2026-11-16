@@ -180,7 +180,7 @@
             its turn and stores reads and writes on its own disk. The
             guest already running keeps its devices. COM2 can print
             <code>boot: B6 both product guests have been entered</code>.
-            The guest operating system is still waiting. Iron <code>20c9a18a</code> reached GRUB rescue because <code>root</code> was not set. This head publishes the loaded image and its file path before GRUB starts. The second
+            The guest operating system is still waiting. Iron <code>f04315b2</code> reached GRUB rescue because the disk name was <code>,gpt2</code>. This head publishes that disk as <code>hd0</code> and the ESP on it. The second
             CPU is not on this stick.
             A second CPU is not published yet, so
             Ubuntu still boots with one. The rollback stays

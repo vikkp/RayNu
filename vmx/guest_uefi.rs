@@ -7131,7 +7131,55 @@ fn seat_publish_esp(
     st.blockio_esp = gpa;
     st.media_esp = media;
     st.esp_byte_off = esp.start_lba.saturating_mul(512);
+    st.device_path = path_gpa;
     st.device_handle = crate::raynu_f::protocol::HANDLE_ESP;
+    true
+}
+
+/// Whole disk GRUB names `hd0`. A partition path alone becomes `,gptN`
+/// because efidisk has no parent disk. Iron `f04315b2`.
+#[cfg(target_os = "uefi")]
+fn seat_publish_whole_disk(
+    st: &mut crate::raynu_f::FirmwareState,
+    hpa: u64,
+    disk_bytes: u64,
+) -> bool {
+    if disk_bytes < 512 {
+        return false;
+    }
+    let mem = SlabMem {
+        hpa,
+        len: crate::mgmt::product_companion::SEAT_FW_BYTES,
+    };
+    let tables = crate::raynu_f::launch_plan::F2_TABLES_BASE;
+    let media = crate::raynu_f::BlockMedia::disk(disk_bytes);
+    let mut media_bytes = [0u8; crate::raynu_f::blockio::MEDIA_SIZE];
+    media.encode(&mut media_bytes);
+    let media_gpa = tables + crate::raynu_f::tables::IMAGE_MEDIA_DISK_OFF as u64;
+    let blockio = tables + crate::raynu_f::tables::IMAGE_BLOCKIO_DISK_OFF as u64;
+    let path_gpa = tables + crate::raynu_f::tables::IMAGE_DEVICE_PATH_OFF as u64;
+    let mut dp = [0u8; crate::raynu_f::protocol::DEVICE_PATH_BYTES];
+    crate::raynu_f::protocol::encode_whole_disk_device_path(&mut dp);
+    if crate::raynu_f::GuestMem::write(&mem, media_gpa, &media_bytes) != media_bytes.len()
+        || crate::raynu_f::GuestMem::write(&mem, path_gpa, &dp) != dp.len()
+    {
+        return false;
+    }
+    st.media_disk = media;
+    st.blockio_disk = blockio;
+    if st.protocols.install(
+        crate::raynu_f::HANDLE_DISK,
+        crate::raynu_f::GUID_BLOCK_IO,
+        blockio,
+    ) != 0
+        || st.protocols.install(
+            crate::raynu_f::HANDLE_DISK,
+            crate::raynu_f::protocol::GUID_DEVICE_PATH,
+            path_gpa,
+        ) != 0
+    {
+        return false;
+    }
     true
 }
 
@@ -7191,16 +7239,24 @@ unsafe fn seat_publish_loaded_image(hpa: u64) -> Option<(u64, u64)> {
     let mut path_buf = [0u8; 80];
     let n = path_len.min(path_buf.len());
     path_buf[..n].copy_from_slice(unsafe { &SEAT_LOADER_PATH[..n] });
-    if SEAT_LOADER_PUBLISH.load(Ordering::Acquire) {
-        if !seat_publish_esp(st, &esp, hpa) {
-            serial::write_line_nowait(
-                "boot: B6 seated ESP handle missing; the guest OS is still waiting",
-            );
-        }
-        st.note_staged_loader(&path_buf[..n]);
-        if let Some(gpa) = raynu_f_alloc_file_path(st, &mem, &path_buf[..n]) {
-            st.image_file_path = gpa;
-        }
+    let disk_bytes = crate::mgmt::product_companion::seat_disk_bound()
+        .map(|(_, bytes)| bytes)
+        .unwrap_or(0);
+    if !seat_publish_whole_disk(st, hpa, disk_bytes) {
+        serial::write_line_nowait(
+            "boot: B6 seated disk hd0 missing; the guest OS is still waiting",
+        );
+    } else {
+        serial::write_line_nowait("boot: B6 seated disk hd0");
+    }
+    if !seat_publish_esp(st, &esp, hpa) {
+        serial::write_line_nowait(
+            "boot: B6 seated ESP handle missing; the guest OS is still waiting",
+        );
+    }
+    st.note_staged_loader(&path_buf[..n]);
+    if let Some(gpa) = raynu_f_alloc_file_path(st, &mem, &path_buf[..n]) {
+        st.image_file_path = gpa;
     }
     st.image_base = base;
     st.image_size = size;
