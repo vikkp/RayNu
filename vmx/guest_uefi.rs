@@ -7280,6 +7280,7 @@ unsafe fn try_load_seat_bootloader(hpa: u64) -> Option<u64> {
         return None;
     }
     let vol = crate::raynu_f::fat::parse_bpb(&boot).ok()?;
+    seat_note_efi_dir(&vol, &reader);
     let choice = crate::raynu_f::fat::pick_disk_bootloader(|p| {
         matches!(
             crate::raynu_f::fat::resolve_path(&vol, &reader, p),
@@ -7365,6 +7366,55 @@ impl crate::raynu_f::fat::VolumeRead for SeatFat {
         };
         crate::mgmt::megaraid::perc_seat_read(base, bytes, self.base.saturating_add(off), buf)
     }
+}
+
+/// 8.3 names in `\EFI`, and whether the Ubuntu loader and its menu are files.
+/// Iron `413614ea` staged `\EFI\BOOT\BOOTX64.EFI` and kept the baked `,gpt2`
+/// prefix. This says whether `\EFI\ubuntu\grubx64.efi` was on that volume.
+#[cfg(target_os = "uefi")]
+fn seat_note_efi_dir<R: crate::raynu_f::fat::VolumeRead>(vol: &crate::raynu_f::fat::FatVolume, r: &R) {
+    serial::write_str("boot: B6 seated EFI");
+    match crate::raynu_f::fat::resolve_path(vol, r, b"\\EFI") {
+        Ok(dir) if dir.is_dir() => {
+            let (_, more) = crate::raynu_f::fat::visit_dir(vol, r, dir.first_cluster, 8, |ent| {
+                serial::write_byte(b' ');
+                for &b in ent.name_bytes() {
+                    serial::write_byte(b);
+                }
+            });
+            if more {
+                serial::write_str(" +");
+            }
+        }
+        _ => {
+            serial::write_str(" missing");
+        }
+    }
+    let file = |path: &[u8]| {
+        matches!(
+            crate::raynu_f::fat::resolve_path(vol, r, path),
+            Ok(e) if !e.is_dir()
+        )
+    };
+    serial::write_str(" grub=");
+    serial::write_str(if file(crate::raynu_f::fat::DISK_BOOT_UBUNTU_GRUB) {
+        "yes"
+    } else {
+        "no"
+    });
+    serial::write_str(" shim=");
+    serial::write_str(if file(crate::raynu_f::fat::DISK_BOOT_UBUNTU_SHIM) {
+        "yes"
+    } else {
+        "no"
+    });
+    serial::write_str(" cfg=");
+    serial::write_str(if file(crate::raynu_f::fat::GRUB_CFG_PATH_UBUNTU) {
+        "yes"
+    } else {
+        "no"
+    });
+    serial::write_line("");
 }
 
 /// `true` when this call owned the exit (launched, or failed and restored).
@@ -7669,6 +7719,10 @@ fn seat_log_failed_service(
         crate::raynu_f::ServiceId::LocateProtocol => a1,
         _ => 0,
     };
+    if guid_ptr != 0 {
+        serial::write_str_nowait(" ptr=0x");
+        write_hex_nowait(guid_ptr);
+    }
     if let Some(g) = crate::raynu_f::diskboot::read_guid(mem, guid_ptr) {
         serial::write_str_nowait(" guid=");
         const HEX: &[u8; 16] = b"0123456789abcdef";

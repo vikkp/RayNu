@@ -624,6 +624,29 @@ mod tests {
     }
 
     #[test]
+    fn efi_dir_lists_the_short_name() {
+        let fat = fat12(b"BOOT       ", b"BOOTX64 EFI");
+        let (disk, esp) = gpt_with_fat(&fat);
+        let vol = parse_bpb(&disk[(esp.start_lba as usize) * 512..][..512]).unwrap();
+        let reader = Disk(&disk[(esp.start_lba as usize) * 512..]);
+        let efi = resolve_path(&vol, &reader, b"\\EFI").unwrap();
+        assert!(efi.is_dir());
+        let mut saw_boot = false;
+        let (n, more) = crate::raynu_f::fat::visit_dir(&vol, &reader, efi.first_cluster, 8, |ent| {
+            if ent.name_bytes().eq_ignore_ascii_case(b"BOOT") {
+                saw_boot = true;
+            }
+        });
+        assert_eq!(n, 3);
+        assert!(!more);
+        assert!(saw_boot);
+        assert!(matches!(
+            resolve_path(&vol, &reader, b"\\EFI\\ubuntu\\grubx64.efi"),
+            Err(_)
+        ));
+    }
+
+    #[test]
     fn removable_loader_device_is_hd0() {
         let fat = fat12(b"BOOT       ", b"BOOTX64 EFI");
         let (disk, esp) = gpt_with_fat(&fat);
