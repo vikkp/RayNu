@@ -7712,20 +7712,21 @@ fn seat_log_failed_service(
     if n >= 16 {
         return;
     }
-    serial::write_str_nowait("boot: B6 seated firmware service failed ");
-    serial::write_str_nowait(id.name());
-    serial::write_str_nowait(" handle=0x");
-    write_hex_nowait(a1);
     let guid_ptr = match id {
         crate::raynu_f::ServiceId::OpenProtocol | crate::raynu_f::ServiceId::HandleProtocol => a2,
         crate::raynu_f::ServiceId::LocateProtocol => a1,
         _ => 0,
     };
+    let guid = crate::raynu_f::diskboot::read_guid(mem, guid_ptr);
+    serial::write_str_nowait("boot: B6 seated firmware service failed ");
+    serial::write_str_nowait(id.name());
+    serial::write_str_nowait(" handle=0x");
+    write_hex_nowait(a1);
     if guid_ptr != 0 {
         serial::write_str_nowait(" ptr=0x");
         write_hex_nowait(guid_ptr);
     }
-    if let Some(g) = crate::raynu_f::diskboot::read_guid(mem, guid_ptr) {
+    if let Some(g) = guid {
         serial::write_str_nowait(" guid=");
         const HEX: &[u8; 16] = b"0123456789abcdef";
         for b in g {
@@ -7745,15 +7746,62 @@ unsafe fn seat_firmware_service() -> bool {
     if len == 0 || len > 15 {
         return false;
     }
-    struct Mem;
+    // Every buffer is resolved through the seated guest's own EPT. The
+    // running guest's slab pointer and report-RAM tables are not consulted,
+    // so a service call cannot read or fill the other guest's RAM.
+    struct Mem {
+        cr3: u64,
+    }
+    impl Mem {
+        fn miss(addr: u64, len: usize, write: bool) {
+            if SEAT_MEM_MISS_N.fetch_add(1, Ordering::Relaxed) >= 4 {
+                return;
+            }
+            serial::write_str_nowait("boot: B6 seated firmware buffer outside the seated RAM ");
+            serial::write_str_nowait(if write { "write" } else { "read" });
+            serial::write_str_nowait(" addr=0x");
+            write_hex_nowait(addr);
+            serial::write_str_nowait(" n=");
+            write_dec_nowait(len as u64);
+            serial::write_line_nowait("; not touched");
+        }
+    }
     impl crate::raynu_f::GuestMem for Mem {
         fn read(&self, addr: u64, buf: &mut [u8]) -> usize {
-            unsafe { copy_guest_linear_bytes(addr, buf) }
-        }
-        fn write(&self, addr: u64, buf: &[u8]) -> usize {
-            if unsafe { write_guest_linear_bytes(addr, buf) } {
+            // SAFETY: seated EPT leaves point at the private slab and the
+            // RAM grant; the seated guest is VM-exited.
+            // KANI-TARGET: seated firmware service read (outside Proven Core).
+            let ok = unsafe {
+                crate::mgmt::product_companion::seat_mem_read(
+                    &*core::ptr::addr_of!(COMPANION_PAGES),
+                    self.cr3,
+                    addr,
+                    buf,
+                )
+            };
+            if ok {
                 buf.len()
             } else {
+                Self::miss(addr, buf.len(), false);
+                0
+            }
+        }
+        fn write(&self, addr: u64, buf: &[u8]) -> usize {
+            // SAFETY: seated EPT leaves point at the private slab and the
+            // RAM grant; the seated guest is VM-exited.
+            // KANI-TARGET: seated firmware service write (outside Proven Core).
+            let ok = unsafe {
+                crate::mgmt::product_companion::seat_mem_write(
+                    &*core::ptr::addr_of!(COMPANION_PAGES),
+                    self.cr3,
+                    addr,
+                    buf,
+                )
+            };
+            if ok {
+                buf.len()
+            } else {
+                Self::miss(addr, buf.len(), true);
                 0
             }
         }
@@ -7782,7 +7830,9 @@ unsafe fn seat_firmware_service() -> bool {
         return false;
     }
     seat_firmware_prepare(hpa);
-    let prev = RAM_HPA.swap(hpa, Ordering::AcqRel);
+    let mem = Mem {
+        cr3: ops::vmread(GUEST_CR3).unwrap_or(0),
+    };
     let id = crate::raynu_f::ServiceId(SAVED_RAX as u32);
     let args = crate::raynu_f::ServiceArgs {
         a1: SAVED_RCX,
@@ -7795,13 +7845,12 @@ unsafe fn seat_firmware_service() -> bool {
     let d = crate::raynu_f::dispatch(
         id,
         args,
-        &Mem,
+        &mem,
         &mut Sink,
         st,
         &Jump,
         GUEST_UEFI_LOW_RAM_BYTES,
     );
-    RAM_HPA.store(prev, Ordering::Release);
     SAVED_RAX = d.status;
     if !SEAT_SVC_SAID.swap(true, Ordering::AcqRel) {
         serial::write_str_nowait("boot: B6 seated firmware service ");
@@ -7821,7 +7870,7 @@ unsafe fn seat_firmware_service() -> bool {
         serial::write_line_nowait("");
     }
     if d.status != 0 {
-        seat_log_failed_service(id, d.status, args.a1, args.a2, &Mem);
+        seat_log_failed_service(id, d.status, args.a1, args.a2, &mem);
     }
     if id == crate::raynu_f::ServiceId::ExitBootServices
         && d.status == 0
@@ -8237,6 +8286,8 @@ static SEAT_READ_SAID: AtomicBool = AtomicBool::new(false);
 #[cfg(target_os = "uefi")]
 static SEAT_FAIL_N: AtomicU32 = AtomicU32::new(0);
 #[cfg(target_os = "uefi")]
+static SEAT_MEM_MISS_N: AtomicU32 = AtomicU32::new(0);
+#[cfg(target_os = "uefi")]
 static SEAT_DISK_FAIL_SAID: AtomicBool = AtomicBool::new(false);
 
 #[cfg(target_os = "uefi")]
@@ -8252,6 +8303,7 @@ fn seat_trace_reset() {
     SEAT_SVC_SAID.store(false, Ordering::Release);
     SEAT_READ_SAID.store(false, Ordering::Release);
     SEAT_FAIL_N.store(0, Ordering::Release);
+    SEAT_MEM_MISS_N.store(0, Ordering::Release);
     SEAT_DISK_FAIL_SAID.store(false, Ordering::Release);
     SEAT_FW_STATE_READY.store(false, Ordering::Release);
     SEAT_PORT61.store(0, Ordering::Release);

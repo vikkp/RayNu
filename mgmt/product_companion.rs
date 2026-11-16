@@ -870,6 +870,120 @@ pub fn ept_2m_hpa(pages: &CompanionPages, gpa: u64) -> Option<u64> {
     Some(base + (gpa & (TWO_MIB - 1)))
 }
 
+/// Host address of `gpa` in the seated guest's own EPT, and how many of
+/// `want` bytes stay inside that 2 MiB leaf. `None` when the seated guest
+/// does not own that GPA. A caller must not then ask another guest's tables.
+pub fn seat_ept_span(pages: &CompanionPages, gpa: u64, want: usize) -> Option<(u64, usize)> {
+    const TWO_MIB: u64 = 2 * 1024 * 1024;
+    let hpa = ept_2m_hpa(pages, gpa)?;
+    let room = (TWO_MIB - (gpa & (TWO_MIB - 1))) as usize;
+    Some((hpa, want.min(room)))
+}
+
+/// One step, at most to the end of the 4 KiB page, of a seated firmware
+/// service buffer at linear `addr`. RayNu-F and GRUB run 1:1, so the address
+/// is tried as a GPA first. A kernel address is walked from the seated
+/// guest's CR3, and every table read goes through the seated EPT.
+///
+/// Iron `8b0ceac9ccc6`: the service path resolved a buffer above 32 MiB
+/// through the running guest's tables. `LocateHandle` filled the running
+/// guest's RAM and GRUB read an unfilled buffer (`handle=0x10000040`).
+///
+/// SAFETY: every 2 MiB leaf in `pages.ept_pd` points at RAM the seated guest
+/// owns and that stays mapped in the host for the call.
+pub unsafe fn seat_linear_span(
+    pages: &CompanionPages,
+    cr3: u64,
+    addr: u64,
+    want: usize,
+) -> Option<(u64, usize)> {
+    let want = want.min((4096 - (addr & 0xfff)) as usize);
+    if let Some(span) = seat_ept_span(pages, addr, want) {
+        return Some(span);
+    }
+    let read = |gpa: u64| {
+        let (hpa, n) = seat_ept_span(pages, gpa, 8)?;
+        if n < 8 {
+            return None;
+        }
+        // SAFETY: `hpa` came from a leaf of the seated EPT; 8 bytes fit the leaf.
+        // KANI-TARGET: seated guest table read through its own EPT (outside Proven Core).
+        Some(unsafe { core::ptr::read_unaligned(hpa as *const u64) })
+    };
+    let gpa = crate::vmx::guest_pt::va_to_gpa_with(cr3, addr, read)?;
+    seat_ept_span(pages, gpa, want)
+}
+
+/// True when every byte of `[addr, addr + len)` is the seated guest's RAM.
+///
+/// SAFETY: as [`seat_linear_span`].
+unsafe fn seat_mem_owned(pages: &CompanionPages, cr3: u64, addr: u64, len: usize) -> bool {
+    let mut done = 0usize;
+    while done < len {
+        // SAFETY: the caller's contract is this function's contract.
+        // KANI-TARGET: seated buffer bounds pass (outside Proven Core).
+        let step =
+            unsafe { seat_linear_span(pages, cr3, addr.wrapping_add(done as u64), len - done) };
+        match step {
+            Some((_, n)) if n > 0 => done += n,
+            _ => return false,
+        }
+    }
+    true
+}
+
+/// Read a seated firmware-service buffer. All of it or none of it.
+///
+/// SAFETY: as [`seat_linear_span`].
+pub unsafe fn seat_mem_read(pages: &CompanionPages, cr3: u64, addr: u64, buf: &mut [u8]) -> bool {
+    // SAFETY: the caller's contract is this function's contract.
+    // KANI-TARGET: seated buffer bounds pass (outside Proven Core).
+    if !unsafe { seat_mem_owned(pages, cr3, addr, buf.len()) } {
+        return false;
+    }
+    let mut done = 0usize;
+    while done < buf.len() {
+        // SAFETY: `seat_mem_owned` resolved this whole range a moment ago.
+        // KANI-TARGET: seated buffer read through its own EPT (outside Proven Core).
+        unsafe {
+            let Some((hpa, n)) =
+                seat_linear_span(pages, cr3, addr.wrapping_add(done as u64), buf.len() - done)
+            else {
+                return false;
+            };
+            core::ptr::copy_nonoverlapping(hpa as *const u8, buf[done..].as_mut_ptr(), n);
+            done += n;
+        }
+    }
+    true
+}
+
+/// Write a seated firmware-service buffer. All of it or none of it.
+///
+/// SAFETY: as [`seat_linear_span`].
+pub unsafe fn seat_mem_write(pages: &CompanionPages, cr3: u64, addr: u64, buf: &[u8]) -> bool {
+    // SAFETY: the caller's contract is this function's contract.
+    // KANI-TARGET: seated buffer bounds pass (outside Proven Core).
+    if !unsafe { seat_mem_owned(pages, cr3, addr, buf.len()) } {
+        return false;
+    }
+    let mut done = 0usize;
+    while done < buf.len() {
+        // SAFETY: `seat_mem_owned` resolved this whole range a moment ago.
+        // KANI-TARGET: seated buffer write through its own EPT (outside Proven Core).
+        unsafe {
+            let Some((hpa, n)) =
+                seat_linear_span(pages, cr3, addr.wrapping_add(done as u64), buf.len() - done)
+            else {
+                return false;
+            };
+            core::ptr::copy_nonoverlapping(buf[done..].as_ptr(), hpa as *mut u8, n);
+            done += n;
+        }
+    }
+    true
+}
+
 /// 2 MiB base of a GPA just past the seated firmware slab, up to 64 MiB.
 /// Device MMIO above that is not RAM.
 pub fn seat_ram_extend_base(gpa: u64) -> Option<u64> {
@@ -937,6 +1051,129 @@ mod tests {
     fn lock() -> std::sync::MutexGuard<'static, ()> {
         static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
         LOCK.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    /// 2 MiB of host memory on a 2 MiB boundary, standing in for one guest frame.
+    struct Frame(*mut u8);
+
+    impl Frame {
+        const LEN: usize = 2 * 1024 * 1024;
+
+        fn layout() -> std::alloc::Layout {
+            std::alloc::Layout::from_size_align(Self::LEN, Self::LEN).expect("layout")
+        }
+
+        fn new() -> Self {
+            // SAFETY: non-zero size; the pointer is checked before use.
+            let p = unsafe { std::alloc::alloc_zeroed(Self::layout()) };
+            assert!(!p.is_null());
+            Self(p)
+        }
+
+        fn hpa(&self) -> u64 {
+            self.0 as u64
+        }
+
+        fn bytes(&self) -> &[u8] {
+            // SAFETY: `LEN` bytes owned by this frame.
+            unsafe { core::slice::from_raw_parts(self.0, Self::LEN) }
+        }
+
+        fn bytes_mut(&mut self) -> &mut [u8] {
+            // SAFETY: `LEN` bytes owned by this frame; `&mut self` is exclusive.
+            unsafe { core::slice::from_raw_parts_mut(self.0, Self::LEN) }
+        }
+    }
+
+    impl Drop for Frame {
+        fn drop(&mut self) {
+            // SAFETY: allocated in `new` with the same layout.
+            unsafe { std::alloc::dealloc(self.0, Self::layout()) }
+        }
+    }
+
+    const GRANT_GPA: u64 = SEAT_FW_BYTES;
+
+    fn seated(slab: &Frame, grant: &Frame) -> Box<CompanionPages> {
+        let mut pages = Box::new(CompanionPages::ZERO);
+        program_ept_2m(&mut pages, slab.hpa(), Frame::LEN as u64).expect("ept");
+        assert!(set_ept_2m_leaf(
+            &mut pages,
+            (GRANT_GPA >> 21) as usize,
+            grant.hpa()
+        ));
+        pages
+    }
+
+    #[test]
+    fn a_service_buffer_above_the_slab_is_the_seated_guests_ram() {
+        let slab = Frame::new();
+        let grant = Frame::new();
+        // The running guest has RAM at this same GPA. It is not in the seated EPT.
+        let running = Frame::new();
+        let pages = seated(&slab, &grant);
+        let handle = 0x5246_0000_0000_0021u64.to_le_bytes();
+        let addr = GRANT_GPA + 0x40;
+        // SAFETY: both leaves point at frames this test owns.
+        unsafe {
+            assert!(seat_mem_write(&pages, 0, addr, &handle));
+            let mut back = [0u8; 8];
+            assert!(seat_mem_read(&pages, 0, addr, &mut back));
+            assert_eq!(back, handle);
+        }
+        assert_eq!(&grant.bytes()[0x40..0x48], &handle);
+        assert!(running.bytes().iter().all(|b| *b == 0));
+        assert!(slab.bytes().iter().all(|b| *b == 0));
+    }
+
+    #[test]
+    fn a_buffer_the_seated_guest_does_not_own_is_refused_whole() {
+        let slab = Frame::new();
+        let grant = Frame::new();
+        let pages = seated(&slab, &grant);
+        let mut buf = [0xAAu8; 16];
+        // SAFETY: both leaves point at frames this test owns.
+        unsafe {
+            assert!(!seat_mem_write(&pages, 0, 0x40_0000, &buf));
+            assert!(!seat_mem_read(&pages, 0, 0x40_0000, &mut buf));
+            // The last 8 bytes of the slab are owned. The next 8 are not.
+            assert!(!seat_mem_write(&pages, 0, Frame::LEN as u64 - 8, &buf));
+        }
+        assert_eq!(buf, [0xAAu8; 16]);
+        assert!(slab.bytes().iter().all(|b| *b == 0));
+        assert!(grant.bytes().iter().all(|b| *b == 0));
+        assert!(seat_ept_span(&pages, GRANT_GPA + Frame::LEN as u64, 8).is_none());
+        assert_eq!(
+            seat_ept_span(&pages, GRANT_GPA + Frame::LEN as u64 - 4, 8),
+            Some((grant.hpa() + Frame::LEN as u64 - 4, 4))
+        );
+    }
+
+    #[test]
+    fn a_kernel_address_walks_the_seated_guests_own_tables() {
+        let mut slab = Frame::new();
+        let mut grant = Frame::new();
+        let put = |ram: &mut [u8], gpa: usize, index: usize, val: u64| {
+            ram[gpa + index * 8..gpa + index * 8 + 8].copy_from_slice(&val.to_le_bytes());
+        };
+        let va = 0xffff_8000_0000_0000u64;
+        put(slab.bytes_mut(), 0x1000, 256, 0x2000 | 3);
+        put(slab.bytes_mut(), 0x2000, 0, 0x3000 | 3);
+        put(slab.bytes_mut(), 0x3000, 0, GRANT_GPA | 0x83);
+        // A second top-level entry whose table is outside this guest.
+        put(slab.bytes_mut(), 0x1000, 257, 0x4000_0000 | 3);
+        grant.bytes_mut()[0x10..0x14].copy_from_slice(b"seat");
+        let pages = seated(&slab, &grant);
+        let mut back = [0u8; 4];
+        // SAFETY: both leaves point at frames this test owns.
+        unsafe {
+            assert!(seat_mem_read(&pages, 0x1000, va + 0x10, &mut back));
+            assert_eq!(&back, b"seat");
+            assert!(seat_mem_write(&pages, 0x1000, va + 0xffe, b"span"));
+            assert!(!seat_mem_read(&pages, 0x1000, va + (1 << 39), &mut back));
+            assert!(!seat_mem_read(&pages, 0, va + 0x10, &mut back));
+        }
+        assert_eq!(&grant.bytes()[0xffe..0x1002], b"span");
     }
 
     #[test]

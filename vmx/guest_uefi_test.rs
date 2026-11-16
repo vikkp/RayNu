@@ -3567,6 +3567,19 @@ fn f7_relaunch_resets_firmware_state_without_a_stack_temporary() {
     assert!(src.contains("ptr=0x"));
     assert!(src.contains("publish_f7_disk"));
     assert!(src.contains("guid="));
+    // A seated service buffer is resolved through the seated EPT only. Iron
+    // `8b0ceac9ccc6` resolved it through the running guest's tables.
+    let svc = src
+        .split("unsafe fn seat_firmware_service() -> bool {")
+        .nth(1)
+        .and_then(|rest| rest.split("\n}\n").next())
+        .expect("seat_firmware_service body");
+    assert!(svc.contains("product_companion::seat_mem_read("));
+    assert!(svc.contains("product_companion::seat_mem_write("));
+    assert!(svc.contains("boot: B6 seated firmware buffer outside the seated RAM "));
+    assert!(!svc.contains("RAM_HPA"));
+    assert!(!svc.contains("copy_guest_linear_bytes"));
+    assert!(!svc.contains("write_guest_linear_bytes"));
     assert!(src.contains("publish_loaded_image"));
     assert!(src.contains("set_high_region("));
     assert!(src.contains("write_line_nowait(\n            \"boot: B6 seated firmware ExitBootServices; the kernel is starting; the guest OS is still waiting\",\n        )"));
