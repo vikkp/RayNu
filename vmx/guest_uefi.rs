@@ -7720,6 +7720,8 @@ fn seat_log_failed_service(
     let guid = crate::raynu_f::diskboot::read_guid(mem, guid_ptr);
     serial::write_str_nowait("boot: B6 seated firmware service failed ");
     serial::write_str_nowait(id.name());
+    serial::write_str_nowait(" id=0x");
+    write_hex_nowait(u64::from(id.0));
     serial::write_str_nowait(" handle=0x");
     write_hex_nowait(a1);
     if guid_ptr != 0 {
@@ -8318,6 +8320,7 @@ fn seat_trace_reset() {
     SEAT_TRACE_MOVED.store(false, Ordering::Release);
     SEAT_CON_LINES.store(0, Ordering::Release);
     SEAT_CON_LEN.store(0, Ordering::Release);
+    SEAT_CON_CAPPED.store(false, Ordering::Release);
     SEAT_SVC_SAID.store(false, Ordering::Release);
     SEAT_READ_SAID.store(false, Ordering::Release);
     SEAT_FAIL_N.store(0, Ordering::Release);
@@ -8355,6 +8358,8 @@ static SEAT_PCI_EMPTY_SAID: AtomicBool = AtomicBool::new(false);
 static SEAT_PCI_BUDGET_SAID: AtomicBool = AtomicBool::new(false);
 #[cfg(target_os = "uefi")]
 static SEAT_MENU_KEY: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "uefi")]
+static SEAT_CON_CAPPED: AtomicBool = AtomicBool::new(false);
 #[cfg(target_os = "uefi")]
 static SEAT_IO_N: AtomicU32 = AtomicU32::new(0);
 #[cfg(target_os = "uefi")]
@@ -8578,10 +8583,23 @@ fn seat_trace_yield(basic: u32, rip: u64) {
     }
 }
 
-/// Up to eight firmware console lines. Grub's own text is otherwise discarded.
+/// Menu text plus the lines GRUB prints after Enter. Iron `2411e8d9` used
+/// the first eight on the banner, so the entry's error was discarded.
+#[cfg(target_os = "uefi")]
+const SEAT_CON_CAP: u32 = 32;
+
+#[cfg(target_os = "uefi")]
+fn seat_con_capped() {
+    if !SEAT_CON_CAPPED.swap(true, Ordering::AcqRel) {
+        serial::write_line_nowait("boot: B6 seated con capped");
+    }
+}
+
+/// GRUB's own text, up to [`SEAT_CON_CAP`] lines.
 #[cfg(target_os = "uefi")]
 fn seat_con_byte(b: u8) {
-    if SEAT_CON_LINES.load(Ordering::Acquire) >= 8 {
+    if SEAT_CON_LINES.load(Ordering::Acquire) >= SEAT_CON_CAP {
+        seat_con_capped();
         return;
     }
     if b == b'\n' || b == b'\r' {
@@ -8606,7 +8624,10 @@ fn seat_con_byte(b: u8) {
 #[cfg(target_os = "uefi")]
 fn seat_con_flush() {
     let n = SEAT_CON_LEN.swap(0, Ordering::AcqRel) as usize;
-    if n == 0 || SEAT_CON_LINES.fetch_add(1, Ordering::AcqRel) >= 8 {
+    if n == 0 || SEAT_CON_LINES.fetch_add(1, Ordering::AcqRel) >= SEAT_CON_CAP {
+        if n != 0 {
+            seat_con_capped();
+        }
         return;
     }
     serial::write_str_nowait("boot: B6 seated con ");

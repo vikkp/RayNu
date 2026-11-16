@@ -258,6 +258,8 @@ impl ServiceId {
             ServiceId::LoadImage => "LoadImage",
             ServiceId::StartImage => "StartImage",
             ServiceId::Exit => "Exit",
+            ServiceId::UnloadImage => "UnloadImage",
+            ServiceId::LocateDevicePath => "LocateDevicePath",
             ServiceId::ExitBootServices => "ExitBootServices",
             ServiceId::GetNextMonotonicCount => "GetNextMonotonicCount",
             ServiceId::Stall => "Stall",

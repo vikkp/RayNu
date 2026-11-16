@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-7-b6-menu-enter |
-| Summary | **B6 iron `95b0fc372b01` / CI `43959781111` reached `GNU GRUB version 2.12` and then polled `ReadKeyStroke` through turn 6.** The menu timeout did not run. This head uses the real TSC clock and sends one Enter after the menu is drawn. Not flashed. Not lived. B7 is not on this flash. Guest SSH stays. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-7-b6-con-cap |
+| Summary | **B6 iron `2411e8d991b4` / CI `43964980922` sent Enter. The selected entry did not start, and the error text was past the eight-line cap.** This head keeps 32 lines and names `UnloadImage`. Not flashed. Not lived. B7 is not on this flash. Guest SSH stays. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. TLS 88 held. |
 | Gates touched | B8 lived. B6 in flight. B7 in flight. Not lived. No doorbell. No format of UBUNTU0. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-16 | wave-7-b6-con-cap | 94 | 72 | **B6 iron `2411e8d991b4` sent Enter. `UnloadImage` on the running image returned invalid parameter, and the menu waited for a key again.** The entry did not start. This head keeps 32 console lines and names `UnloadImage`. Not flashed. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-16 | wave-7-b6-menu-enter | 94 | 72 | **B6 iron `95b0fc372b01` printed `GNU GRUB version 2.12` and then stayed on `ReadKeyStroke` through turn 6.** The menu timeout did not run. This head uses the real TSC clock and sends one Enter after the menu is drawn. Not flashed. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-16 | wave-7-b6-pci-walk | 94 | 72 | **B6 iron `ef903eccb27b` printed `spin port=0xcfc in` at `rip=0x10010f4`.** That is an empty PCI configuration read. This head keeps four walks inside one turn. The same register eight times returns 0. Not flashed. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-16 | wave-7-b6-pit-count | 94 | 72 | **B6 iron `fc5e9eb3a4ae` read the seated disk and then sat on one I/O instruction for 23 turns.** The PIT counter did not change. This head steps channel 0 and channel 2 and names the port. Not flashed. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |

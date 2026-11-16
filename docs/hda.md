@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-7-b6-menu-enter |
-| Summary | **B6 iron `95b0fc372b01` / CI `43959781111` reached `GNU GRUB version 2.12` and then polled `ReadKeyStroke` for turns 2 through 6.** The menu timeout did not run. This head uses the real TSC clock and sends one Enter after the menu is drawn. Not flashed. Not lived. B7 is not on this flash. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-7-b6-con-cap |
+| Summary | **B6 iron `2411e8d991b4` / CI `43964980922` printed `boot: B6 seated menu enter`, then `UnloadImage` on the running image returned invalid parameter, and turn 3 was `ReadKeyStroke` again.** The selected entry did not start. The eight-line console cap hid the error GRUB printed. This head keeps 32 lines and names `UnloadImage` with its service id. Not flashed. Not lived. B7 is not on this flash. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B8 lived. B6 in flight. B7 in flight. Not lived. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -382,6 +382,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-16 | wave-7-b6-con-cap | 0.0 | 99 | **B6 iron `2411e8d991b4` sent Enter. `UnloadImage` on the running image returned invalid parameter, and turn 3 was the menu key poll again.** The entry did not start. The error text was past the eight-line cap. This head keeps 32 lines and names `UnloadImage`. Not flashed. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-16 | wave-7-b6-menu-enter | 0.0 | 99 | **B6 iron `95b0fc372b01` / CI `43959781111` printed `GNU GRUB version 2.12` and then stayed on `ReadKeyStroke` through turn 6.** The menu timeout did not run. This head uses the real TSC clock and sends one Enter after the menu is drawn. Not flashed. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-16 | wave-7-b6-pci-walk | 0.0 | 99 | **B6 iron `ef903eccb27b` / CI `43954280830` printed `spin port=0xcfc in` at `rip=0x10010f4`.** That is an empty PCI configuration read, not the timer. This head keeps a four-walk scan inside one turn. The same register eight times returns 0. Not flashed. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-16 | wave-7-b6-pit-count | 0.0 | 99 | **B6 iron `fc5e9eb3a4ae` read the seated disk (`status=0`) and then sat on one I/O instruction for 23 turns.** The PIT counter did not change. This head steps channel 0 and channel 2, and the turn line names the port. Not flashed. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
