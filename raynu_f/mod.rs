@@ -22,6 +22,7 @@
 pub mod acpi_publish;
 pub mod blockio;
 pub mod cd_serial;
+pub mod diskboot;
 pub mod events;
 pub mod ext4;
 pub mod fat;

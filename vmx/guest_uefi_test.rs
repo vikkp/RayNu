@@ -3563,6 +3563,8 @@ fn f7_relaunch_resets_firmware_state_without_a_stack_temporary() {
     assert!(src.contains("boot: B6 seated io port=0x"));
     assert!(src.contains("boot: B6 seated LoadedImage "));
     assert!(src.contains("boot: B6 seated disk hd0"));
+    assert!(src.contains("publish_f7_disk"));
+    assert!(src.contains("guid="));
     assert!(src.contains("publish_loaded_image"));
     assert!(src.contains("set_high_region("));
     assert!(src.contains("write_line_nowait(\n            \"boot: B6 seated firmware ExitBootServices; the kernel is starting; the guest OS is still waiting\",\n        )"));

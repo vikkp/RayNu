@@ -1,6 +1,6 @@
 ---
 hda_version: 1
-last_updated: 2026-11-07
+last_updated: 2026-11-16
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-7-b6-hd0 |
-| Summary | **B6 iron `f04315b2` reached GRUB rescue: `disk ',gpt2' not found`.** LoadedImage was `\EFI\BOOT\BOOTX64.EFI` and there was no parent disk. This head publishes `hd0` and the ESP. Not lived. B7 is not on this flash. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-7-b6-shared-disk |
+| Summary | **B6 iron `623a84da` still reached GRUB rescue: `disk ',gpt2' not found`.** The seated path had published the ESP as the boot device for `\EFI\BOOT\BOOTX64.EFI`. This head uses the running guest's disk publisher for both guests. A host test names a lone partition `,gpt2`, then names the published boot device `hd0`. Not lived. B7 is not on this flash. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B8 lived. B6 in flight. B7 in flight. Not lived. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-16 | wave-7-b6-shared-disk | 0.0 | 99 | **B6 iron `623a84da` still reached GRUB rescue (`disk ',gpt2' not found`).** The seated path published the ESP as the boot device for `\EFI\BOOT\BOOTX64.EFI`. This head uses the running guest's publisher for both. A host test names a lone partition `,gpt2`, then the published boot device `hd0`. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-16 | wave-7-b6-hd0 | 0.0 | 99 | **B6 iron `f04315b2` reached GRUB rescue (`disk ',gpt2' not found`).** The staged loader was `\EFI\BOOT\BOOTX64.EFI` with no parent disk. This head publishes `hd0` and the ESP. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-16 | wave-7-b6-image | 0.0 | 99 | **B6 iron `20c9a18a` reached GRUB rescue (`root` isn't set).** LoadedImage was not published. This head publishes it, with the loader path, before entry. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-16 | wave-7-b6-pio | 0.0 | 99 | **B6 iron `2671f3b8` granted 256 MiB, then GRUB stopped on `in 0x61`.** The seated guest answers that port and keeps running. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |

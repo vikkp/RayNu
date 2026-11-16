@@ -7046,143 +7046,6 @@ unsafe fn seat_firmware_prepare(hpa: u64) {
     }
 }
 
-/// ESP handle for the seated disk. GRUB opens this from LoadedImage.DeviceHandle.
-#[cfg(target_os = "uefi")]
-fn seat_publish_esp(
-    st: &mut crate::raynu_f::FirmwareState,
-    esp: &crate::raynu_f::gpt::EspPartition,
-    hpa: u64,
-) -> bool {
-    let mem = SlabMem {
-        hpa,
-        len: crate::mgmt::product_companion::SEAT_FW_BYTES,
-    };
-    let (status, gpa) = st.pool.allocate_pages(
-        crate::raynu_f::memory::ALLOCATE_ANY_PAGES,
-        crate::raynu_f::memory::EFI_LOADER_DATA,
-        1,
-        0,
-    );
-    if status != 0 {
-        return false;
-    }
-    let media = crate::raynu_f::BlockMedia::esp(esp.size_lba());
-    let mut media_bytes = [0u8; crate::raynu_f::blockio::MEDIA_SIZE];
-    media.encode(&mut media_bytes);
-    let media_gpa = gpa + 0x40;
-    let path_gpa = gpa + 0x80;
-    let disk_blockio = st.blockio_disk;
-    let offs = [
-        crate::raynu_f::blockio::BLOCKIO_RESET_OFF,
-        crate::raynu_f::blockio::BLOCKIO_READ_OFF,
-        crate::raynu_f::blockio::BLOCKIO_WRITE_OFF,
-        crate::raynu_f::blockio::BLOCKIO_FLUSH_OFF,
-    ];
-    let mut ptrs = [0u64; 4];
-    for (i, off) in offs.iter().enumerate() {
-        let mut b = [0u8; 8];
-        if crate::raynu_f::GuestMem::read(&mem, disk_blockio + *off as u64, &mut b) != 8 {
-            return false;
-        }
-        ptrs[i] = u64::from_le_bytes(b);
-    }
-    let mut proto = [0u8; crate::raynu_f::blockio::BLOCKIO_SIZE];
-    proto[..8].copy_from_slice(&crate::raynu_f::blockio::BLOCKIO_REVISION2.to_le_bytes());
-    proto[8..16].copy_from_slice(&media_gpa.to_le_bytes());
-    proto[0x10..0x18].copy_from_slice(&ptrs[0].to_le_bytes());
-    proto[0x18..0x20].copy_from_slice(&ptrs[1].to_le_bytes());
-    proto[0x20..0x28].copy_from_slice(&ptrs[2].to_le_bytes());
-    proto[0x28..0x30].copy_from_slice(&ptrs[3].to_le_bytes());
-    let mut path = [0u8; 96];
-    let Some(n) = crate::raynu_f::protocol::encode_esp_device_path(
-        esp.partition_number,
-        esp.start_lba,
-        esp.size_lba(),
-        esp.unique_guid,
-        &mut path,
-    ) else {
-        return false;
-    };
-    if crate::raynu_f::GuestMem::write(&mem, gpa, &proto) != proto.len()
-        || crate::raynu_f::GuestMem::write(&mem, media_gpa, &media_bytes) != media_bytes.len()
-        || crate::raynu_f::GuestMem::write(&mem, path_gpa, &path[..n]) != n
-    {
-        return false;
-    }
-    let sfs = st.sfs;
-    if st.protocols.install(
-        crate::raynu_f::protocol::HANDLE_ESP,
-        crate::raynu_f::protocol::GUID_BLOCK_IO,
-        gpa,
-    ) != 0
-        || st.protocols.install(
-            crate::raynu_f::protocol::HANDLE_ESP,
-            crate::raynu_f::protocol::GUID_DEVICE_PATH,
-            path_gpa,
-        ) != 0
-        || st.protocols.install(
-            crate::raynu_f::protocol::HANDLE_ESP,
-            crate::raynu_f::protocol::GUID_SIMPLE_FILE_SYSTEM,
-            sfs,
-        ) != 0
-    {
-        return false;
-    }
-    st.blockio_esp = gpa;
-    st.media_esp = media;
-    st.esp_byte_off = esp.start_lba.saturating_mul(512);
-    st.device_path = path_gpa;
-    st.device_handle = crate::raynu_f::protocol::HANDLE_ESP;
-    true
-}
-
-/// Whole disk GRUB names `hd0`. A partition path alone becomes `,gptN`
-/// because efidisk has no parent disk. Iron `f04315b2`.
-#[cfg(target_os = "uefi")]
-fn seat_publish_whole_disk(
-    st: &mut crate::raynu_f::FirmwareState,
-    hpa: u64,
-    disk_bytes: u64,
-) -> bool {
-    if disk_bytes < 512 {
-        return false;
-    }
-    let mem = SlabMem {
-        hpa,
-        len: crate::mgmt::product_companion::SEAT_FW_BYTES,
-    };
-    let tables = crate::raynu_f::launch_plan::F2_TABLES_BASE;
-    let media = crate::raynu_f::BlockMedia::disk(disk_bytes);
-    let mut media_bytes = [0u8; crate::raynu_f::blockio::MEDIA_SIZE];
-    media.encode(&mut media_bytes);
-    let media_gpa = tables + crate::raynu_f::tables::IMAGE_MEDIA_DISK_OFF as u64;
-    let blockio = tables + crate::raynu_f::tables::IMAGE_BLOCKIO_DISK_OFF as u64;
-    let path_gpa = tables + crate::raynu_f::tables::IMAGE_DEVICE_PATH_OFF as u64;
-    let mut dp = [0u8; crate::raynu_f::protocol::DEVICE_PATH_BYTES];
-    crate::raynu_f::protocol::encode_whole_disk_device_path(&mut dp);
-    if crate::raynu_f::GuestMem::write(&mem, media_gpa, &media_bytes) != media_bytes.len()
-        || crate::raynu_f::GuestMem::write(&mem, path_gpa, &dp) != dp.len()
-    {
-        return false;
-    }
-    st.media_disk = media;
-    st.blockio_disk = blockio;
-    if st.protocols.install(
-        crate::raynu_f::HANDLE_DISK,
-        crate::raynu_f::GUID_BLOCK_IO,
-        blockio,
-    ) != 0
-        || st.protocols.install(
-            crate::raynu_f::HANDLE_DISK,
-            crate::raynu_f::protocol::GUID_DEVICE_PATH,
-            path_gpa,
-        ) != 0
-    {
-        return false;
-    }
-    true
-}
-
 /// Publish LoadedImage for the GRUB already placed in the slab. GRUB's first
 /// call is OpenProtocol on its image handle; without this it enters rescue
 /// with `root` unset. Iron `20c9a18a`.
@@ -7242,21 +7105,28 @@ unsafe fn seat_publish_loaded_image(hpa: u64) -> Option<(u64, u64)> {
     let disk_bytes = crate::mgmt::product_companion::seat_disk_bound()
         .map(|(_, bytes)| bytes)
         .unwrap_or(0);
-    if !seat_publish_whole_disk(st, hpa, disk_bytes) {
+    let publish_part = crate::raynu_f::diskboot::publish_file_path_for(&path_buf[..n]);
+    let spec = crate::raynu_f::diskboot::F7DiskPublish {
+        whole_path_gpa: tables + crate::raynu_f::tables::IMAGE_DEVICE_PATH_OFF as u64,
+        media_gpa: tables + crate::raynu_f::tables::IMAGE_MEDIA_DISK_OFF as u64,
+        blockio_disk: tables + crate::raynu_f::tables::IMAGE_BLOCKIO_DISK_OFF as u64,
+        sfs: st.sfs,
+        disk_bytes,
+    };
+    if !crate::raynu_f::diskboot::publish_f7_disk(st, &mem, &esp, publish_part, &spec) {
         serial::write_line_nowait(
             "boot: B6 seated disk hd0 missing; the guest OS is still waiting",
         );
     } else {
         serial::write_line_nowait("boot: B6 seated disk hd0");
     }
-    if !seat_publish_esp(st, &esp, hpa) {
-        serial::write_line_nowait(
-            "boot: B6 seated ESP handle missing; the guest OS is still waiting",
-        );
-    }
-    st.note_staged_loader(&path_buf[..n]);
-    if let Some(gpa) = raynu_f_alloc_file_path(st, &mem, &path_buf[..n]) {
-        st.image_file_path = gpa;
+    if publish_part {
+        st.note_staged_loader(&path_buf[..n]);
+        if let Some(gpa) = raynu_f_alloc_file_path(st, &mem, &path_buf[..n]) {
+            st.image_file_path = gpa;
+        }
+    } else {
+        st.image_file_path = 0;
     }
     st.image_base = base;
     st.image_size = size;
@@ -7775,6 +7645,43 @@ unsafe fn hand_seat_firmware_back() -> ! {
     guest_uefi_vmresume();
 }
 
+/// First sixteen failed boot-service calls, each with the handle and the
+/// protocol GUID when the call has one. Iron `623a84da` logged one
+/// `OpenProtocol` of `EFI_NOT_FOUND` and nothing else.
+#[cfg(target_os = "uefi")]
+fn seat_log_failed_service(
+    id: crate::raynu_f::ServiceId,
+    status: u64,
+    a1: u64,
+    a2: u64,
+    mem: &dyn crate::raynu_f::GuestMem,
+) {
+    let n = SEAT_FAIL_N.fetch_add(1, Ordering::Relaxed);
+    if n >= 16 {
+        return;
+    }
+    serial::write_str_nowait("boot: B6 seated firmware service failed ");
+    serial::write_str_nowait(id.name());
+    serial::write_str_nowait(" handle=0x");
+    write_hex_nowait(a1);
+    let guid_ptr = match id {
+        crate::raynu_f::ServiceId::OpenProtocol | crate::raynu_f::ServiceId::HandleProtocol => a2,
+        crate::raynu_f::ServiceId::LocateProtocol => a1,
+        _ => 0,
+    };
+    if let Some(g) = crate::raynu_f::diskboot::read_guid(mem, guid_ptr) {
+        serial::write_str_nowait(" guid=");
+        const HEX: &[u8; 16] = b"0123456789abcdef";
+        for b in g {
+            serial::write_byte_nowait(HEX[(b >> 4) as usize]);
+            serial::write_byte_nowait(HEX[(b & 0xf) as usize]);
+        }
+    }
+    serial::write_str_nowait(" status=0x");
+    write_hex_nowait(status);
+    serial::write_line_nowait("");
+}
+
 #[cfg(target_os = "uefi")]
 unsafe fn seat_firmware_service() -> bool {
     let len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(0);
@@ -7857,12 +7764,8 @@ unsafe fn seat_firmware_service() -> bool {
         write_hex_nowait(d.status);
         serial::write_line_nowait("");
     }
-    if d.status != 0 && !SEAT_FAIL_SAID.swap(true, Ordering::AcqRel) {
-        serial::write_str_nowait("boot: B6 seated firmware service failed ");
-        serial::write_str_nowait(id.name());
-        serial::write_str_nowait(" status=0x");
-        write_hex_nowait(d.status);
-        serial::write_line_nowait("");
+    if d.status != 0 {
+        seat_log_failed_service(id, d.status, args.a1, args.a2, &Mem);
     }
     if id == crate::raynu_f::ServiceId::ExitBootServices
         && d.status == 0
@@ -8276,7 +8179,7 @@ static SEAT_SVC_SAID: AtomicBool = AtomicBool::new(false);
 #[cfg(target_os = "uefi")]
 static SEAT_READ_SAID: AtomicBool = AtomicBool::new(false);
 #[cfg(target_os = "uefi")]
-static SEAT_FAIL_SAID: AtomicBool = AtomicBool::new(false);
+static SEAT_FAIL_N: AtomicU32 = AtomicU32::new(0);
 #[cfg(target_os = "uefi")]
 static SEAT_DISK_FAIL_SAID: AtomicBool = AtomicBool::new(false);
 
@@ -8292,7 +8195,7 @@ fn seat_trace_reset() {
     SEAT_CON_LEN.store(0, Ordering::Release);
     SEAT_SVC_SAID.store(false, Ordering::Release);
     SEAT_READ_SAID.store(false, Ordering::Release);
-    SEAT_FAIL_SAID.store(false, Ordering::Release);
+    SEAT_FAIL_N.store(0, Ordering::Release);
     SEAT_DISK_FAIL_SAID.store(false, Ordering::Release);
     SEAT_FW_STATE_READY.store(false, Ordering::Release);
     SEAT_PORT61.store(0, Ordering::Release);
@@ -10949,22 +10852,7 @@ fn raynu_f_alloc_file_path(
     mem: &SlabMem,
     path: &[u8],
 ) -> Option<u64> {
-    let mut buf = [0u8; 64];
-    let n = crate::raynu_f::protocol::encode_filepath_device_path(path, &mut buf)?;
-    let (status, gpa) = st.pool.allocate_pages(
-        crate::raynu_f::memory::ALLOCATE_ANY_PAGES,
-        crate::raynu_f::memory::EFI_LOADER_DATA,
-        1,
-        0,
-    );
-    if status != 0 {
-        return None;
-    }
-    if crate::raynu_f::GuestMem::write(mem, gpa, &buf[..n]) == n {
-        Some(gpa)
-    } else {
-        None
-    }
+    crate::raynu_f::diskboot::publish_loader_filepath(st, mem, path)
 }
 
 /// Stage a resolved FAT file into pool pages and `load_pe32plus`. Shared by
@@ -11191,109 +11079,6 @@ fn raynu_f_note_esp_grub_cfg<R: crate::raynu_f::fat::VolumeRead>(
     }
 }
 
-/// Publish the ESP as a GRUB partition child of the whole-disk vendor path.
-///
-/// `89a67dc4` staged `\EFI\ubuntu\grubx64.efi` with FilePath set and still
-/// stopped at `grub>`. GRUB names the device from `LoadedImage.DeviceHandle`.
-/// That handle was the raw disk, so `\EFI\ubuntu\grub.cfg` was sought at LBA 0.
-/// This handle's BlockIo starts at the ESP. The whole-disk handle stays, so
-/// GRUB can call the pair `hd0` and `hd0,gpt1`.
-#[cfg(target_os = "uefi")]
-fn raynu_f_publish_esp_partition(
-    esp: &crate::raynu_f::gpt::EspPartition,
-    disk_blockio: u64,
-    sfs: u64,
-    ram_hpa: u64,
-) -> bool {
-    // SAFETY: BSP-only firmware state; guest not yet launched.
-    // KANI-TARGET: RayNu-F ESP handle (outside Proven Core).
-    let st = unsafe { &mut *core::ptr::addr_of_mut!(RAYNU_F_STATE) };
-    let mem = SlabMem {
-        hpa: ram_hpa,
-        len: GUEST_UEFI_LOW_RAM_BYTES,
-    };
-    let (status, gpa) = st.pool.allocate_pages(
-        crate::raynu_f::memory::ALLOCATE_ANY_PAGES,
-        crate::raynu_f::memory::EFI_LOADER_DATA,
-        1,
-        0,
-    );
-    if status != 0 {
-        return false;
-    }
-    let media = crate::raynu_f::BlockMedia::esp(esp.size_lba());
-    let mut media_bytes = [0u8; crate::raynu_f::blockio::MEDIA_SIZE];
-    media.encode(&mut media_bytes);
-    let media_gpa = gpa + 0x40;
-    let path_gpa = gpa + 0x80;
-    let offs = [
-        crate::raynu_f::blockio::BLOCKIO_RESET_OFF,
-        crate::raynu_f::blockio::BLOCKIO_READ_OFF,
-        crate::raynu_f::blockio::BLOCKIO_WRITE_OFF,
-        crate::raynu_f::blockio::BLOCKIO_FLUSH_OFF,
-    ];
-    let mut ptrs = [0u64; 4];
-    for (i, off) in offs.iter().enumerate() {
-        let mut b = [0u8; 8];
-        if crate::raynu_f::GuestMem::read(&mem, disk_blockio + *off as u64, &mut b) != 8 {
-            return false;
-        }
-        ptrs[i] = u64::from_le_bytes(b);
-    }
-    let mut proto = [0u8; crate::raynu_f::blockio::BLOCKIO_SIZE];
-    proto[..8].copy_from_slice(&crate::raynu_f::blockio::BLOCKIO_REVISION2.to_le_bytes());
-    proto[8..16].copy_from_slice(&media_gpa.to_le_bytes());
-    proto[0x10..0x18].copy_from_slice(&ptrs[0].to_le_bytes());
-    proto[0x18..0x20].copy_from_slice(&ptrs[1].to_le_bytes());
-    proto[0x20..0x28].copy_from_slice(&ptrs[2].to_le_bytes());
-    proto[0x28..0x30].copy_from_slice(&ptrs[3].to_le_bytes());
-    let mut path = [0u8; 96];
-    let Some(n) = crate::raynu_f::protocol::encode_esp_device_path(
-        esp.partition_number,
-        esp.start_lba,
-        esp.size_lba(),
-        esp.unique_guid,
-        &mut path,
-    ) else {
-        return false;
-    };
-    if crate::raynu_f::GuestMem::write(&mem, gpa, &proto) != proto.len()
-        || crate::raynu_f::GuestMem::write(&mem, media_gpa, &media_bytes) != media_bytes.len()
-        || crate::raynu_f::GuestMem::write(&mem, path_gpa, &path[..n]) != n
-    {
-        return false;
-    }
-    let bio = st.protocols.install(
-        crate::raynu_f::protocol::HANDLE_ESP,
-        crate::raynu_f::protocol::GUID_BLOCK_IO,
-        gpa,
-    );
-    let dp = st.protocols.install(
-        crate::raynu_f::protocol::HANDLE_ESP,
-        crate::raynu_f::protocol::GUID_DEVICE_PATH,
-        path_gpa,
-    );
-    let fs = st.protocols.install(
-        crate::raynu_f::protocol::HANDLE_ESP,
-        crate::raynu_f::protocol::GUID_SIMPLE_FILE_SYSTEM,
-        sfs,
-    );
-    if bio != 0 || dp != 0 || fs != 0 {
-        return false;
-    }
-    st.blockio_esp = gpa;
-    st.media_esp = media;
-    st.esp_byte_off = esp.start_lba.saturating_mul(512);
-    st.device_handle = crate::raynu_f::protocol::HANDLE_ESP;
-    serial::write_str("boot: RayNu-F ESP handle part=");
-    write_dec(u64::from(esp.partition_number));
-    serial::write_str(" lba=");
-    write_dec(esp.start_lba);
-    serial::write_str(" sectors=");
-    write_dec(esp.size_lba());
-    serial::write_line(" (GRUB hd0,gpt1; not ISO-INSTALL-OK)");
-    true
-}
 
 /// F7: mount the GPT ESP on the install disk and stage its loader.
 /// Ubuntu: `\EFI\ubuntu\grubx64.efi` with that path as LoadedImage `FilePath`.
@@ -11353,29 +11138,6 @@ unsafe fn raynu_f_stage_disk_bootloader(
         st.sfs = layout.sfs;
         st.loaded_image_proto = layout.loaded_image;
         st.system_table = layout.system_table;
-        let _ = st.protocols.install(
-            crate::raynu_f::HANDLE_DISK,
-            crate::raynu_f::protocol::GUID_SIMPLE_FILE_SYSTEM,
-            layout.sfs,
-        );
-        let mut dp = [0u8; crate::raynu_f::protocol::DEVICE_PATH_BYTES];
-        crate::raynu_f::protocol::encode_whole_disk_device_path(&mut dp);
-        let mem_dp = SlabMem {
-            hpa: ram_hpa,
-            len: GUEST_UEFI_LOW_RAM_BYTES,
-        };
-        if crate::raynu_f::GuestMem::write(&mem_dp, layout.device_path, &dp) == dp.len() {
-            st.device_path = layout.device_path;
-            st.device_handle = crate::raynu_f::HANDLE_DISK;
-            let _ = st.protocols.install(
-                crate::raynu_f::HANDLE_DISK,
-                crate::raynu_f::protocol::GUID_DEVICE_PATH,
-                layout.device_path,
-            );
-            serial::write_line(
-                "boot: RayNu-F disk whole-disk path (F7; not ISO-INSTALL-OK)",
-            );
-        }
     }
     let choice = crate::raynu_f::fat::pick_disk_bootloader(|p| {
         matches!(
@@ -11407,16 +11169,45 @@ unsafe fn raynu_f_stage_disk_bootloader(
     write_dec(u64::from(entry.size));
     serial::write_line(" (F7 disk; not ISO-INSTALL-OK)");
     raynu_f_note_esp_grub_cfg(&vol, &vol_reader, path);
-    let file_path = if choice.publish_file_path {
-        if !raynu_f_publish_esp_partition(&esp, layout.blockio_disk, layout.sfs, ram_hpa) {
+    {
+        let st = unsafe { &mut *core::ptr::addr_of_mut!(RAYNU_F_STATE) };
+        let mem = SlabMem {
+            hpa: ram_hpa,
+            len: GUEST_UEFI_LOW_RAM_BYTES,
+        };
+        let spec = crate::raynu_f::diskboot::F7DiskPublish {
+            whole_path_gpa: layout.device_path,
+            media_gpa: layout.media_disk,
+            blockio_disk: layout.blockio_disk,
+            sfs: layout.sfs,
+            disk_bytes: crate::devices::guest_virtio_blk::disk_bytes(),
+        };
+        if crate::raynu_f::diskboot::publish_f7_disk(
+            st,
+            &mem,
+            &esp,
+            choice.publish_file_path,
+            &spec,
+        ) {
+            serial::write_line(
+                "boot: RayNu-F disk whole-disk path (F7; not ISO-INSTALL-OK)",
+            );
+            if choice.publish_file_path {
+                serial::write_str("boot: RayNu-F ESP handle part=");
+                write_dec(u64::from(esp.partition_number));
+                serial::write_str(" lba=");
+                write_dec(esp.start_lba);
+                serial::write_str(" sectors=");
+                write_dec(esp.size_lba());
+                serial::write_line(" (GRUB hd0,gpt1; not ISO-INSTALL-OK)");
+            }
+        } else if choice.publish_file_path {
             serial::write_line(
                 "boot: RayNu-F WARN ESP handle not published (GRUB may stay at grub>)",
             );
         }
-        Some(path)
-    } else {
-        None
-    };
+    }
+    let file_path = if choice.publish_file_path { Some(path) } else { None };
     let loaded = raynu_f_stage_bootloader_from_volume(
         &vol,
         &vol_reader,
