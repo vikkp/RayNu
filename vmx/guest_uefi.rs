@@ -7004,6 +7004,221 @@ static SEAT_FW_HELD: AtomicU64 = AtomicU64::new(0);
 static mut SEAT_FW_STATE: crate::raynu_f::FirmwareState = crate::raynu_f::FirmwareState::new();
 #[cfg(target_os = "uefi")]
 static SEAT_FW_STATE_READY: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "uefi")]
+static mut SEAT_LOADER_PATH: [u8; 80] = [0; 80];
+#[cfg(target_os = "uefi")]
+static SEAT_LOADER_PATH_LEN: AtomicU8 = AtomicU8::new(0);
+#[cfg(target_os = "uefi")]
+static SEAT_LOADER_PUBLISH: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "uefi")]
+static SEAT_LOADER_BASE: AtomicU64 = AtomicU64::new(0);
+#[cfg(target_os = "uefi")]
+static SEAT_LOADER_SIZE: AtomicU64 = AtomicU64::new(0);
+#[cfg(target_os = "uefi")]
+static SEAT_LOADER_ENTRY: AtomicU64 = AtomicU64::new(0);
+
+/// Copy the firmware template once and attach the seated disk and RAM grant.
+/// A second call leaves the published loaded image in place.
+#[cfg(target_os = "uefi")]
+unsafe fn seat_firmware_prepare(hpa: u64) {
+    if hpa == 0 || SEAT_FW_STATE_READY.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    // Same rule as the F7 reset. Constructing a seat FirmwareState
+    // on the stack is ~81 KiB and overflowed the guard into the VMCS.
+    core::ptr::copy_nonoverlapping(
+        core::ptr::addr_of!(RAYNU_F_STATE_TEMPLATE),
+        core::ptr::addr_of_mut!(SEAT_FW_STATE),
+        1,
+    );
+    let st = &mut *core::ptr::addr_of_mut!(SEAT_FW_STATE);
+    if let Some((_, bytes)) = crate::mgmt::product_companion::seat_disk_bound() {
+        let tables = crate::raynu_f::launch_plan::F2_TABLES_BASE;
+        st.blockio_disk = tables + crate::raynu_f::tables::IMAGE_BLOCKIO_DISK_OFF as u64;
+        st.media_disk = crate::raynu_f::BlockMedia::disk(bytes);
+        st.read_blocks = Some(seat_block_read);
+    }
+    let grant = SEAT_GRANT_PAGES.load(Ordering::Acquire) as usize;
+    if grant > 0 {
+        let _ = st
+            .pool
+            .set_high_region(crate::mgmt::product_companion::SEAT_FW_BYTES, grant);
+    }
+}
+
+/// ESP handle for the seated disk. GRUB opens this from LoadedImage.DeviceHandle.
+#[cfg(target_os = "uefi")]
+fn seat_publish_esp(
+    st: &mut crate::raynu_f::FirmwareState,
+    esp: &crate::raynu_f::gpt::EspPartition,
+    hpa: u64,
+) -> bool {
+    let mem = SlabMem {
+        hpa,
+        len: crate::mgmt::product_companion::SEAT_FW_BYTES,
+    };
+    let (status, gpa) = st.pool.allocate_pages(
+        crate::raynu_f::memory::ALLOCATE_ANY_PAGES,
+        crate::raynu_f::memory::EFI_LOADER_DATA,
+        1,
+        0,
+    );
+    if status != 0 {
+        return false;
+    }
+    let media = crate::raynu_f::BlockMedia::esp(esp.size_lba());
+    let mut media_bytes = [0u8; crate::raynu_f::blockio::MEDIA_SIZE];
+    media.encode(&mut media_bytes);
+    let media_gpa = gpa + 0x40;
+    let path_gpa = gpa + 0x80;
+    let disk_blockio = st.blockio_disk;
+    let offs = [
+        crate::raynu_f::blockio::BLOCKIO_RESET_OFF,
+        crate::raynu_f::blockio::BLOCKIO_READ_OFF,
+        crate::raynu_f::blockio::BLOCKIO_WRITE_OFF,
+        crate::raynu_f::blockio::BLOCKIO_FLUSH_OFF,
+    ];
+    let mut ptrs = [0u64; 4];
+    for (i, off) in offs.iter().enumerate() {
+        let mut b = [0u8; 8];
+        if crate::raynu_f::GuestMem::read(&mem, disk_blockio + *off as u64, &mut b) != 8 {
+            return false;
+        }
+        ptrs[i] = u64::from_le_bytes(b);
+    }
+    let mut proto = [0u8; crate::raynu_f::blockio::BLOCKIO_SIZE];
+    proto[..8].copy_from_slice(&crate::raynu_f::blockio::BLOCKIO_REVISION2.to_le_bytes());
+    proto[8..16].copy_from_slice(&media_gpa.to_le_bytes());
+    proto[0x10..0x18].copy_from_slice(&ptrs[0].to_le_bytes());
+    proto[0x18..0x20].copy_from_slice(&ptrs[1].to_le_bytes());
+    proto[0x20..0x28].copy_from_slice(&ptrs[2].to_le_bytes());
+    proto[0x28..0x30].copy_from_slice(&ptrs[3].to_le_bytes());
+    let mut path = [0u8; 96];
+    let Some(n) = crate::raynu_f::protocol::encode_esp_device_path(
+        esp.partition_number,
+        esp.start_lba,
+        esp.size_lba(),
+        esp.unique_guid,
+        &mut path,
+    ) else {
+        return false;
+    };
+    if crate::raynu_f::GuestMem::write(&mem, gpa, &proto) != proto.len()
+        || crate::raynu_f::GuestMem::write(&mem, media_gpa, &media_bytes) != media_bytes.len()
+        || crate::raynu_f::GuestMem::write(&mem, path_gpa, &path[..n]) != n
+    {
+        return false;
+    }
+    let sfs = st.sfs;
+    if st.protocols.install(
+        crate::raynu_f::protocol::HANDLE_ESP,
+        crate::raynu_f::protocol::GUID_BLOCK_IO,
+        gpa,
+    ) != 0
+        || st.protocols.install(
+            crate::raynu_f::protocol::HANDLE_ESP,
+            crate::raynu_f::protocol::GUID_DEVICE_PATH,
+            path_gpa,
+        ) != 0
+        || st.protocols.install(
+            crate::raynu_f::protocol::HANDLE_ESP,
+            crate::raynu_f::protocol::GUID_SIMPLE_FILE_SYSTEM,
+            sfs,
+        ) != 0
+    {
+        return false;
+    }
+    st.blockio_esp = gpa;
+    st.media_esp = media;
+    st.esp_byte_off = esp.start_lba.saturating_mul(512);
+    st.device_handle = crate::raynu_f::protocol::HANDLE_ESP;
+    true
+}
+
+/// Publish LoadedImage for the GRUB already placed in the slab. GRUB's first
+/// call is OpenProtocol on its image handle; without this it enters rescue
+/// with `root` unset. Iron `20c9a18a`.
+#[cfg(target_os = "uefi")]
+unsafe fn seat_publish_loaded_image(hpa: u64) -> Option<(u64, u64)> {
+    let base = SEAT_LOADER_BASE.load(Ordering::Acquire);
+    let size = SEAT_LOADER_SIZE.load(Ordering::Acquire);
+    let entry = SEAT_LOADER_ENTRY.load(Ordering::Acquire);
+    let path_len = SEAT_LOADER_PATH_LEN.load(Ordering::Acquire) as usize;
+    if hpa == 0 || base == 0 || size == 0 || entry == 0 || path_len == 0 {
+        if entry != 0 || path_len != 0 {
+            serial::write_line_nowait(
+                "boot: B6 seated LoadedImage missing; the guest OS is still waiting",
+            );
+        }
+        return None;
+    }
+    seat_firmware_prepare(hpa);
+    let st = &mut *core::ptr::addr_of_mut!(SEAT_FW_STATE);
+    let tables = crate::raynu_f::launch_plan::F2_TABLES_BASE;
+    st.loaded_image_proto = tables + crate::raynu_f::tables::IMAGE_LOADED_IMAGE_OFF as u64;
+    st.system_table = tables + crate::raynu_f::tables::IMAGE_SYSTEM_TABLE_OFF as u64;
+    st.file_proto_base = tables + crate::raynu_f::tables::IMAGE_FILE_PROTO_OFF as u64;
+    st.sfs = tables + crate::raynu_f::tables::IMAGE_SFS_OFF as u64;
+    st.config_table = tables + crate::raynu_f::tables::IMAGE_CONFIG_TABLE_OFF as u64;
+    let disk = SeatFat { base: 0 };
+    let Some(esp) = crate::raynu_f::find_esp_skip_array_crc(&disk).ok() else {
+        serial::write_line_nowait(
+            "boot: B6 seated LoadedImage missing; the guest OS is still waiting",
+        );
+        return None;
+    };
+    let fat_off = esp.start_lba.saturating_mul(512);
+    let reader = SeatFat { base: fat_off };
+    let mut boot = [0u8; 512];
+    if !crate::raynu_f::fat::VolumeRead::read_at(&reader, 0, &mut boot) {
+        return None;
+    }
+    let vol = crate::raynu_f::fat::parse_bpb(&boot).ok()?;
+    st.fs.volume = Some(vol);
+    st.fat_volume_off = fat_off;
+    st.fat_media_id = crate::raynu_f::MEDIA_ID_DISK;
+    let mem = SlabMem {
+        hpa,
+        len: crate::mgmt::product_companion::SEAT_FW_BYTES,
+    };
+    let pages = (size + 4095) / 4096;
+    let _ = st.pool.allocate_pages(
+        crate::raynu_f::memory::ALLOCATE_ADDRESS,
+        crate::raynu_f::memory::EFI_LOADER_CODE,
+        pages,
+        base,
+    );
+    let mut path_buf = [0u8; 80];
+    let n = path_len.min(path_buf.len());
+    path_buf[..n].copy_from_slice(unsafe { &SEAT_LOADER_PATH[..n] });
+    if SEAT_LOADER_PUBLISH.load(Ordering::Acquire) {
+        if !seat_publish_esp(st, &esp, hpa) {
+            serial::write_line_nowait(
+                "boot: B6 seated ESP handle missing; the guest OS is still waiting",
+            );
+        }
+        st.note_staged_loader(&path_buf[..n]);
+        if let Some(gpa) = raynu_f_alloc_file_path(st, &mem, &path_buf[..n]) {
+            st.image_file_path = gpa;
+        }
+    }
+    st.image_base = base;
+    st.image_size = size;
+    st.image_entry = entry;
+    st.image_handle = crate::raynu_f::protocol::HANDLE_IMAGE;
+    if !crate::raynu_f::publish_loaded_image(st, &mem, 0) {
+        serial::write_line_nowait(
+            "boot: B6 seated LoadedImage missing; the guest OS is still waiting",
+        );
+        return None;
+    }
+    serial::write_str_nowait("boot: B6 seated LoadedImage ");
+    for &b in &path_buf[..n] {
+        serial::write_byte_nowait(b);
+    }
+    serial::write_line_nowait("");
+    Some((st.image_handle, st.system_table))
+}
 
 /// Allocate a 2 MiB-aligned 32 MiB slab and place RayNu-F in it. `None` keeps
 /// the small halt guest. The running guest's VMCS is not cleared.
@@ -7189,6 +7404,15 @@ unsafe fn try_load_seat_bootloader(hpa: u64) -> Option<u64> {
         image_len,
     )
     .ok()?;
+    let n = choice.path.len().min(80);
+    unsafe {
+        SEAT_LOADER_PATH[..n].copy_from_slice(&choice.path[..n]);
+    }
+    SEAT_LOADER_PATH_LEN.store(n as u8, Ordering::Release);
+    SEAT_LOADER_PUBLISH.store(choice.publish_file_path, Ordering::Release);
+    SEAT_LOADER_BASE.store(loaded.load_base, Ordering::Release);
+    SEAT_LOADER_SIZE.store(u64::from(loaded.size_of_image), Ordering::Release);
+    SEAT_LOADER_ENTRY.store(loaded.entry, Ordering::Release);
     crate::mgmt::product_companion::note_seat_loader();
     serial::write_str("boot: B6 seated bootloader ");
     for &b in choice.path {
@@ -7327,6 +7551,10 @@ unsafe fn launch_seat_firmware(ubuntu: u64) -> bool {
     let hpa = SEAT_FW_HELD.load(Ordering::Acquire);
     crate::mgmt::product_companion::note_seat_firmware(hpa);
     seat_trace_reset();
+    if let Some((handle, table)) = seat_publish_loaded_image(hpa) {
+        fw.rcx = handle;
+        fw.rdx = table;
+    }
     if vmlaunch_rcx_rdx(fw.rcx, fw.rdx).is_err() {
         let ierr = ops::vmread(VM_INSTRUCTION_ERROR).unwrap_or(0xFFFF);
         crate::mgmt::product_companion::clear_seat_firmware();
@@ -7534,30 +7762,7 @@ unsafe fn seat_firmware_service() -> bool {
     if hpa == 0 {
         return false;
     }
-    if !SEAT_FW_STATE_READY.swap(true, Ordering::AcqRel) {
-        // Same rule as the F7 reset. Constructing a seat FirmwareState
-        // on the stack is ~81 KiB and overflowed the guard into the VMCS.
-        core::ptr::copy_nonoverlapping(
-            core::ptr::addr_of!(RAYNU_F_STATE_TEMPLATE),
-            core::ptr::addr_of_mut!(SEAT_FW_STATE),
-            1,
-        );
-        let st = &mut *core::ptr::addr_of_mut!(SEAT_FW_STATE);
-        if let Some((_, bytes)) = crate::mgmt::product_companion::seat_disk_bound() {
-            let tables = crate::raynu_f::launch_plan::F2_TABLES_BASE;
-            st.blockio_disk =
-                tables + crate::raynu_f::tables::IMAGE_BLOCKIO_DISK_OFF as u64;
-            st.media_disk = crate::raynu_f::BlockMedia::disk(bytes);
-            st.read_blocks = Some(seat_block_read);
-        }
-        let grant = SEAT_GRANT_PAGES.load(Ordering::Acquire) as usize;
-        if grant > 0 {
-            let _ = st.pool.set_high_region(
-                crate::mgmt::product_companion::SEAT_FW_BYTES,
-                grant,
-            );
-        }
-    }
+    seat_firmware_prepare(hpa);
     let prev = RAM_HPA.swap(hpa, Ordering::AcqRel);
     let id = crate::raynu_f::ServiceId(SAVED_RAX as u32);
     let args = crate::raynu_f::ServiceArgs {
