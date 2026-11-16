@@ -227,6 +227,34 @@ pub fn seat_rip_moved(entry: u64, rip: u64) -> bool {
     entry != rip
 }
 
+/// 2 MiB chunk of private seated RAM, backed by leftover DRAM.
+pub const SEAT_RAM_CHUNK: u64 = 2 * 1024 * 1024;
+/// Leaves in the seated EPT page directory. One directory covers 1 GiB.
+pub const SEAT_EPT_LEAVES: u64 = 512;
+/// The firmware slab occupies the low leaves. Grant starts at the next one.
+pub const SEAT_SLAB_CHUNKS: u64 = SEAT_FW_BYTES / SEAT_RAM_CHUNK;
+/// `PagePool`'s per-page bitmap is 256 MiB. A grant stays inside it so every
+/// advertised page is `AllocateAddress`-honest.
+pub const SEAT_RAM_MAX_CHUNKS: u64 = (256 * 1024 * 1024) / SEAT_RAM_CHUNK;
+/// GRUB asks for a 32 MiB heap. The slab pool is 20 MiB, so eight chunks
+/// are the smallest grant that can satisfy that heap. A larger remainder
+/// is given whole, up to [`SEAT_RAM_MAX_CHUNKS`].
+pub const SEAT_RAM_FLOOR_CHUNKS: u64 = 8;
+
+/// How many 2 MiB chunks to give the seated guest from `available`.
+/// Zero when the remainder cannot hold a loader heap.
+pub fn seat_guest_ram_chunks(available_chunks: u64) -> u64 {
+    let room = SEAT_EPT_LEAVES.saturating_sub(SEAT_SLAB_CHUNKS);
+    let n = available_chunks
+        .min(SEAT_RAM_MAX_CHUNKS)
+        .min(room);
+    if n < SEAT_RAM_FLOOR_CHUNKS {
+        0
+    } else {
+        n
+    }
+}
+
 /// One seated disk. `spare_base == 0` is the 8 GiB window.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SeatDisk {
@@ -1023,6 +1051,11 @@ mod tests {
         assert_eq!(counts.get(SeatExitBucket::Exc), 1);
         assert!(!seat_rip_moved(0x1001000, 0x1001000));
         assert!(seat_rip_moved(0x1001000, 0x1001010));
+        assert_eq!(seat_guest_ram_chunks(0), 0);
+        assert_eq!(seat_guest_ram_chunks(SEAT_RAM_FLOOR_CHUNKS - 1), 0);
+        assert_eq!(seat_guest_ram_chunks(SEAT_RAM_FLOOR_CHUNKS), SEAT_RAM_FLOOR_CHUNKS);
+        assert_eq!(seat_guest_ram_chunks(10_000), SEAT_RAM_MAX_CHUNKS);
+        assert!(SEAT_SLAB_CHUNKS + SEAT_RAM_MAX_CHUNKS <= SEAT_EPT_LEAVES);
         note_probe_retry();
         assert!(begin_probe());
         note_probe_hlt();

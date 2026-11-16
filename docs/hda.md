@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-7-b6-trace |
-| Summary | **B6 iron `611a18ab` resumed the bootloader and then printed nothing.** The serviced exits and the turn line were silent while Linux held COM2. This head names the first exit, a moved RIP, each turn, the first service, disk reads, console text, and `ExitBootServices`. Not lived. B7 is not on this flash. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-7-b6-grant |
+| Summary | **B6 iron `5aa6594c` reached GRUB and stopped 3079 pages short of a 32 MiB heap.** The seated map only had the 20 MiB pool. This head grants the seated guest the leftover DRAM after the running guest's grant, up to 256 MiB, in its own page tables. Not lived. B7 is not on this flash. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B8 lived. B6 in flight. B7 in flight. Not lived. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -380,6 +380,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-16 | wave-7-b6-grant | 0.0 | 99 | **B6 iron `5aa6594c` reached GRUB and stopped 3079 pages short of a 32 MiB heap.** The seated guest now receives leftover DRAM after the running guest's grant, up to 256 MiB. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-12 | wave-7-b6-trace | 0.0 | 99 | **B6 iron `611a18ab` resumed the bootloader and then printed nothing.** Serviced exits and the turn line were silent during Linux. This head names the first exit, a moved RIP, each turn, the first service, disk reads, console text, and `ExitBootServices`. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-12 | wave-7-b6-longmode | 0.0 | 99 | **B6 iron `006b8e62` double-faulted at the bootloader entry (`intr=0x80000b08`).** Linux SMEP and IDT were still in the seated VMCS. Entry now uses the firmware long-mode state. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-12 | wave-7-b6-exit | 0.0 | 99 | **B6 iron `98ad19e2` printed the confirm line, then returned at bootloader entry `rip=0x1001000`.** An interrupt or the preemption timer resumes that instruction. Any other exit is named on COM2. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |

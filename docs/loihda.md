@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-7-b6-trace |
-| Summary | **B6 iron `611a18ab` resumed the bootloader and then printed nothing.** The serviced exits and the turn line were silent while Linux held COM2. This head names the first exit, a moved RIP, each turn, the first service, disk reads, console text, and `ExitBootServices`. Not lived. B7 is not on this flash. Guest SSH stays. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-7-b6-grant |
+| Summary | **B6 iron `5aa6594c` reached GRUB and stopped 3079 pages short of a 32 MiB heap.** The seated map only had the 20 MiB pool. This head grants the seated guest the leftover DRAM after the running guest's grant, up to 256 MiB. Not lived. B7 is not on this flash. Guest SSH stays. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. TLS 88 held. |
 | Gates touched | B8 lived. B6 in flight. B7 in flight. Not lived. No doorbell. No format of UBUNTU0. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-16 | wave-7-b6-grant | 94 | 72 | **B6 iron `5aa6594c` reached GRUB and stopped 3079 pages short of a 32 MiB heap.** The seated guest now receives leftover DRAM after the running guest's grant, up to 256 MiB. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-12 | wave-7-b6-trace | 94 | 72 | **B6 iron `611a18ab` resumed the bootloader and then printed nothing.** Serviced exits and the turn line were silent during Linux. This head names the first exit, a moved RIP, each turn, the first service, disk reads, console text, and `ExitBootServices`. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-12 | wave-7-b6-longmode | 94 | 72 | **B6 iron `006b8e62` double-faulted at the bootloader entry (`intr=0x80000b08`).** Linux SMEP and IDT were still in the seated VMCS. Entry now uses the firmware long-mode state. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-12 | wave-7-b6-exit | 94 | 72 | **B6 iron `98ad19e2` printed the confirm line, then returned at bootloader entry `rip=0x1001000`.** An interrupt or the preemption timer resumes that instruction. Any other exit is named on COM2. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |

@@ -7244,6 +7244,10 @@ unsafe fn launch_seat_firmware(ubuntu: u64) -> bool {
         );
         return false;
     };
+    if seat_install_ram_grant() == 0 {
+        crate::mgmt::product_companion::note_probe_retry();
+        return true;
+    }
     let io_src = ops::vmread(IO_BITMAP_A).unwrap_or(0);
     if io_src != 0 {
         core::ptr::copy_nonoverlapping(io_src as *const u8, SEAT_IOA.0.as_mut_ptr(), 4096);
@@ -7545,6 +7549,13 @@ unsafe fn seat_firmware_service() -> bool {
                 tables + crate::raynu_f::tables::IMAGE_BLOCKIO_DISK_OFF as u64;
             st.media_disk = crate::raynu_f::BlockMedia::disk(bytes);
             st.read_blocks = Some(seat_block_read);
+        }
+        let grant = SEAT_GRANT_PAGES.load(Ordering::Acquire) as usize;
+        if grant > 0 {
+            let _ = st.pool.set_high_region(
+                crate::mgmt::product_companion::SEAT_FW_BYTES,
+                grant,
+            );
         }
     }
     let prev = RAM_HPA.swap(hpa, Ordering::AcqRel);
@@ -8022,6 +8033,61 @@ fn seat_trace_reset() {
     SEAT_READ_SAID.store(false, Ordering::Release);
     SEAT_FAIL_SAID.store(false, Ordering::Release);
     SEAT_DISK_FAIL_SAID.store(false, Ordering::Release);
+    SEAT_FW_STATE_READY.store(false, Ordering::Release);
+}
+
+/// 4 KiB pages of private RAM granted to the seated guest. Zero means the
+/// remainder after the running guest could not hold a loader heap.
+#[cfg(target_os = "uefi")]
+static SEAT_GRANT_PAGES: AtomicU64 = AtomicU64::new(0);
+
+/// Map leftover DRAM into the seated EPT above the firmware slab and record
+/// the page count for [`crate::raynu_f::memory::PagePool::set_high_region`].
+/// The running guest's frames are not in this bump anymore.
+#[cfg(target_os = "uefi")]
+unsafe fn seat_install_ram_grant() -> u64 {
+    use crate::mgmt::product_companion::{
+        seat_guest_ram_chunks, set_ept_2m_leaf, SEAT_RAM_CHUNK, SEAT_RAM_FLOOR_CHUNKS,
+        SEAT_SLAB_CHUNKS,
+    };
+    let avail = crate::boot::handoff::report_ram_extra_remaining() / SEAT_RAM_CHUNK;
+    let chunks = seat_guest_ram_chunks(avail);
+    SEAT_GRANT_PAGES.store(0, Ordering::Release);
+    if chunks == 0 {
+        serial::write_str_nowait("boot: B6 seated RAM grant short avail_mib=");
+        write_dec_nowait(avail.saturating_mul(2));
+        serial::write_line_nowait("; the running guest keeps the CPU");
+        return 0;
+    }
+    let pages = &mut *core::ptr::addr_of_mut!(COMPANION_PAGES);
+    let mut got = 0u64;
+    for i in 0..chunks {
+        let Some(hpa) = crate::boot::handoff::take_report_ram_extra_2m() else {
+            break;
+        };
+        core::ptr::write_bytes(hpa as *mut u8, 0, SEAT_RAM_CHUNK as usize);
+        let index = (SEAT_SLAB_CHUNKS + i) as usize;
+        if !set_ept_2m_leaf(pages, index, hpa) {
+            break;
+        }
+        got += 1;
+    }
+    if got < SEAT_RAM_FLOOR_CHUNKS {
+        serial::write_str_nowait("boot: B6 seated RAM grant short chunks=");
+        write_dec_nowait(got);
+        serial::write_line_nowait("; the running guest keeps the CPU");
+        return 0;
+    }
+    let page4k = got * (SEAT_RAM_CHUNK / 4096);
+    SEAT_GRANT_PAGES.store(page4k, Ordering::Release);
+    serial::write_str_nowait("boot: B6 seated RAM gpa=0x");
+    write_hex_nowait(crate::mgmt::product_companion::SEAT_FW_BYTES);
+    serial::write_str_nowait(" bytes=");
+    write_dec_nowait(got * SEAT_RAM_CHUNK);
+    serial::write_str_nowait(" avail_mib=");
+    write_dec_nowait(avail.saturating_mul(2));
+    serial::write_line_nowait("");
+    page4k
 }
 
 #[cfg(target_os = "uefi")]
