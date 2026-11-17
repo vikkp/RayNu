@@ -66,6 +66,21 @@ pub const RAYNU_F_FLAG_PATH: &str = "\\EFI\\RayNu\\raynuf.txt";
 pub const RAYNU_F_REQUESTED_MARKER: &str =
     "boot: RayNu-F launch requested (EFI/RayNu/raynuf.txt; ADR-016 F2b; not ISO-INSTALL-OK)";
 
+/// Lab flag: boot a second guest beside the first (ADR-022). Nested QEMU
+/// has no PERC catalog to start one from; `TWO_GUESTS=1` stages the file.
+/// Iron starts guests from the Guests screen and never reads this.
+pub const TWO_GUESTS_FLAG_PATH: &str = "\\EFI\\RayNu\\twoguest.txt";
+/// Serial line when the lab flag is found pre-EBS.
+pub const TWO_GUESTS_REQUESTED_NOTE: &str =
+    "boot: lab second guest requested (EFI/RayNu/twoguest.txt; ADR-022; not ISO-INSTALL-OK)";
+static TWO_GUESTS: AtomicBool = AtomicBool::new(false);
+
+/// One-shot: the lab flag asked for a second guest and it was not asked
+/// for yet.
+pub fn take_two_guests() -> bool {
+    TWO_GUESTS.swap(false, Ordering::AcqRel)
+}
+
 /// Whether the operator asked for the RayNu-F F2 launch.
 #[inline]
 pub fn requested() -> bool {
@@ -148,6 +163,12 @@ pub fn probe() {
     if fs.read(p.as_ref()).is_ok() {
         REQUESTED.store(true, Ordering::Release);
         crate::boot::serial::write_line(RAYNU_F_REQUESTED_MARKER);
+    }
+    if let Ok(p) = CString16::try_from(TWO_GUESTS_FLAG_PATH) {
+        if fs.read(p.as_ref()).is_ok() {
+            TWO_GUESTS.store(true, Ordering::Release);
+            crate::boot::serial::write_line(TWO_GUESTS_REQUESTED_NOTE);
+        }
     }
 }
 
