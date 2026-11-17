@@ -22,30 +22,29 @@ pub const SKU_CARD_RESIDUAL_NOTE: &str =
     "residual: A3 SKU card is docs; A4 TLS iron DONE (lab millicert); PRE-EBS SNP plaintext HTTP remains; lab latch until auth.token; 8 GiB USB slice; not PERC; not cluster; not Windows; nested QEMU ≠ R640";
 
 /// True when the SKU page and LOIHDA A3 row stay honest.
+///
+/// Wave 6 rewrote the card. The ships-versus-does-not lines are the
+/// dedicated-box letter, no plaintext HTTP before ExitBootServices, the
+/// 2.9 TB virtual disk is not the guest disk, and not a cluster or Windows.
 pub fn prop_sku_card_package() -> bool {
     let sku = include_str!("../docs/sku.md");
     let html = include_str!("../site/sku.html");
     let loi = include_str!("../docs/loihda.md");
-    sku.contains("dedicated-box")
-        && sku.contains("8 GiB")
-        && sku.contains("plaintext HTTP")
-        && sku.contains("lab latch")
-        && sku.contains("auth.token")
-        && sku.contains("not PERC")
-        && sku.contains("not cluster")
-        && sku.contains("not Windows")
-        && sku.contains("A3 This SKU card")
-        && sku.contains("**DONE**")
-        && html.contains("dedicated-box")
-        && html.contains("8 GiB")
-        && html.contains("plaintext HTTP")
-        && html.contains("lab latch")
-        && html.contains("auth.token")
-        && html.contains("not PERC")
-        && html.contains("not cluster")
-        && html.contains("not Windows")
+    fn names_the_box(s: &str) -> bool {
+        s.contains("dedicated-box")
+            && s.contains("plaintext HTTP")
+            && s.contains("2.9 TB")
+            && s.contains("Not a cluster")
+            && s.contains("Not Windows")
+            && s.contains("Shipment 1")
+    }
+    names_the_box(sku)
+        && sku.contains("final SKU")
+        && names_the_box(html)
+        && html.contains("Final SKU")
         && loi.contains("| A3 |")
         && loi.contains("SKU card")
+        && loi.contains("**DONE**")
         && SKU_CARD_RESIDUAL_NOTE.contains("A4 TLS iron DONE")
         && SKU_CARD_RESIDUAL_NOTE.contains("not PERC")
         && prop_sku_catalog_published()

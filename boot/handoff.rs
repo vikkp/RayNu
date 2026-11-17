@@ -21,9 +21,11 @@ use uefi::mem::memory_map::{MemoryMap, MemoryType};
 /// Distinctive M1.0 gate marker — must appear on COM1 *after* ExitBootServices.
 pub const M1_EBS_OK_MARKER: &str = "RAYNU-V-M1-EBS-OK";
 
-/// Cap leftover DRAM taken for guest-UEFI report-RAM (2 GiB CMOS lie).
-/// Does not expand [`crate::memory::PRECISE_BYTES`]. Not invented HPA (ADR-004).
-pub const REPORT_RAM_EXTRA_MAX_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+/// Cap leftover DRAM recorded for guest RAM. The running guest still takes
+/// only its own grant (the 2 GiB CMOS window). Frames past that stay in the
+/// bump for another guest. Does not expand [`crate::memory::PRECISE_BYTES`].
+/// Not invented HPA (ADR-004).
+pub const REPORT_RAM_EXTRA_MAX_BYTES: u64 = 64 * 1024 * 1024 * 1024;
 /// 1008×2 MiB = `[32MiB, 2GiB)`. Prefer a span this large just above PRECISE.
 pub const REPORT_RAM_EXTRA_WANT_PAGES: u64 = 1008 * 512;
 const REPORT_RAM_EXTRA_2M: u64 = 2 * 1024 * 1024;
@@ -55,6 +57,19 @@ pub fn seed_report_ram_extra(start: u64, bytes: u64) -> u64 {
     aligned
 }
 
+/// Whole 2 MiB chunks still in the leftover-DRAM bump, in bytes. A short
+/// tail past the last chunk is not a frame. Zero when the bump was never
+/// seeded or the cursor has reached the end.
+pub fn report_ram_extra_remaining() -> u64 {
+    let n = REPORT_RAM_EXTRA_NEXT.load(Ordering::Acquire);
+    let end = REPORT_RAM_EXTRA_END.load(Ordering::Acquire);
+    if n == 0 || n >= end {
+        0
+    } else {
+        (end - n) & !(REPORT_RAM_EXTRA_2M - 1)
+    }
+}
+
 /// Take one exclusive 2 MiB HPA from the leftover-DRAM bump, or `None`.
 pub fn take_report_ram_extra_2m() -> Option<u64> {
     loop {
@@ -66,6 +81,33 @@ pub fn take_report_ram_extra_2m() -> Option<u64> {
         match REPORT_RAM_EXTRA_NEXT.compare_exchange(
             n,
             n + REPORT_RAM_EXTRA_2M,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) => return Some(n),
+            Err(_) => core::hint::spin_loop(),
+        }
+    }
+}
+
+/// Take `chunks` exclusive 2 MiB HPAs that are one contiguous run, or
+/// `None` (the cursor does not move). The bump is one span handed out in
+/// address order, so a run is contiguous by construction. A guest slot's
+/// low-RAM slab and its flash image are runs (ADR-022).
+pub fn take_report_ram_extra_run(chunks: u64) -> Option<u64> {
+    if chunks == 0 {
+        return None;
+    }
+    let bytes = chunks.checked_mul(REPORT_RAM_EXTRA_2M)?;
+    loop {
+        let n = REPORT_RAM_EXTRA_NEXT.load(Ordering::Acquire);
+        let end = REPORT_RAM_EXTRA_END.load(Ordering::Acquire);
+        if n == 0 || n.checked_add(bytes)? > end {
+            return None;
+        }
+        match REPORT_RAM_EXTRA_NEXT.compare_exchange(
+            n,
+            n + bytes,
             Ordering::AcqRel,
             Ordering::Acquire,
         ) {
@@ -421,8 +463,38 @@ mod handoff_test {
         let c = take_report_ram_extra_2m().expect("third");
         assert_eq!(c, 0x2060_0000);
         assert!(take_report_ram_extra_2m().is_none());
+        assert_eq!(report_ram_extra_remaining(), 0);
         seed_report_ram_extra(0, 0);
         assert!(take_report_ram_extra_2m().is_none());
+    }
+
+    #[test]
+    fn extra_bump_keeps_dram_past_one_guest_grant() {
+        let start = 0x1_0000_0000u64;
+        let bytes = 3 * 1024 * 1024 * 1024;
+        assert_ne!(seed_report_ram_extra(start, bytes), 0);
+        assert!(report_ram_extra_remaining() > 2 * 1024 * 1024 * 1024);
+        seed_report_ram_extra(0, 0);
+        assert_eq!(report_ram_extra_remaining(), 0);
+    }
+
+    #[test]
+    fn a_run_is_contiguous_and_a_short_bump_gives_nothing() {
+        let start = 0x1_0000_0000u64;
+        assert_ne!(seed_report_ram_extra(start, 40 * 1024 * 1024), 0);
+        assert_eq!(take_report_ram_extra_2m(), Some(start));
+        // 16 chunks is a guest slot's 32 MiB slab.
+        assert_eq!(take_report_ram_extra_run(16), Some(start + 2 * 1024 * 1024));
+        // Three chunks are left. A run of four does not move the cursor.
+        assert_eq!(report_ram_extra_remaining(), 6 * 1024 * 1024);
+        assert!(take_report_ram_extra_run(4).is_none());
+        assert_eq!(report_ram_extra_remaining(), 6 * 1024 * 1024);
+        assert!(take_report_ram_extra_run(0).is_none());
+        assert!(take_report_ram_extra_run(u64::MAX).is_none());
+        assert_eq!(take_report_ram_extra_run(3), Some(start + 34 * 1024 * 1024));
+        assert!(take_report_ram_extra_2m().is_none());
+        seed_report_ram_extra(0, 0);
+        assert!(take_report_ram_extra_run(1).is_none());
     }
 
     #[test]

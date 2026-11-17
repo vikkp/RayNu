@@ -304,6 +304,7 @@ All ADRs live in `docs/adr/`. Format: numbered, dated, context/decision/rational
 | 019   | Guests screen is the spare boot policy | Guests lists the latched spare image and chooses boot or `linux_iso`. Slice 1 places only the 8 GiB window. Windows is refused. Decision 9 reserves an ISO library at the high end of RAYNU-SPARE. M8.8 lived on `c3a70e62`. Rollback `v0.1.0-m8-8-ubuntu` |
 | 020   | RayNu VM Generation 1                  | One specified VM that boots unmodified OS media. RayNu-F stays host-side and outside the Proven Core. Phases 0–5. Patched Alpine reboot-to-disk lived; the patcher is still on the product path. Not built past that. |
 | 021   | Professional-grade bar: Shipment 1 and the final SKU | One catalog (A–K; lived / in flight / planned) is the single source for `site/sku.json` via `./tools/sync-sku-site.sh`; S1 = dedicated-box letter; **build order = waves 0–17 + V**, one iron thread per wave; `./tools/sync-sku-site.sh --next` says what to pick up (`.cursor/rules/build-order.mdc`); no Proven Core expansion |
+| 022   | One guest model, N guest slots         | A second product guest is a second instance of the one guest machine, not a second implementation. Per-guest state banks (`guest/slot.rs`, `MAX_GUESTS = 4`); a slot is a whole machine built from leftover DRAM; one launch path and one exit path; `vmx/guest_sched.rs` time-slices the slots (2 ms quantum) and carries the CPU state the VMCS does not hold; disk span, console and uplink are per slot. Keeps any-Linux and Windows open. **Lived on iron `4f581a4dcd93` (2026-11-17):** two product guests side by side (ADR-021 B6); no Proven Core expansion |
 
 **Rule:** Any new ADR is added here AND to `docs/adr/ADR-NNN.md`.
 
@@ -513,7 +514,8 @@ COM2 must read `build: sha=c3a70e623aec`. Not GitHub Latest.
 → EFI built from `1f33eeda72f99e432204dc943386d99d3d341be8` / CI `--run 36137732145` /
 SHA256 `5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693`.
 COM2 must read `build: sha=1f33eeda72f9`. Not GitHub Latest.
-**Everest-loop rollback (GitHub Latest):**
+**Current rollback (GitHub Latest):** [`v0.1.7-b6`](https://github.com/vikkp/RayNu/releases/tag/v0.1.7-b6) → B6 lived on `4f581a4dcd93` / CI `--run 44174137515`. A rebuild of the tag does not stamp `4f581a4dcd93`. Wave 7 is not closed. Previous [`v0.1.6-wave6-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.6-wave6-closed).
+**Everest-loop rollback (M7 pin, not Latest):**
 [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed)
 → git `f72b4276d198b5e90147e9be1037d0d0b7213a28` / CI `--run 34552377351` /
 EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc`.

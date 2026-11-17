@@ -7,8 +7,15 @@
 //! PCI `00:05.0`, virtio-net `1AF4:1041`, only while a Start carries a
 //! saved NIC. The MAC in device config is that guest MAC. TX frames are
 //! handed to the function-1 egress path. This is not the M4 vSwitch.
+//!
+//! One guest on: every frame the uplink receives is posted to that guest,
+//! as before. More than one guest on (ADR-022): the uplink is split by
+//! destination MAC, and a frame one guest sends to another is posted to
+//! that guest directly, because the wire does not send a frame back.
 
-use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use crate::guest::slot::{self, PerGuest, PerGuestCell, MAX_GUESTS};
+use crate::{per_guest, per_guest_cell};
+use core::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 
 use crate::devices::guest_platform::{pci_bdf, pci_cfg_offset};
 use crate::mgmt::guest_nic_start::armed_start;
@@ -80,9 +87,11 @@ struct Net {
     q: [Queue; 2],
     notify: bool,
     logged: bool,
+    /// ADR-021 B8. Off until the guest enables MSI-X.
+    msix: crate::devices::guest_msix::Msix,
 }
 
-static mut NET: Net = Net {
+static NET: PerGuestCell<Net> = per_guest_cell!(Net {
     bar: GUEST_NET_BAR,
     sizing: false,
     cmd: 0,
@@ -103,24 +112,32 @@ static mut NET: Net = Net {
     }; 2],
     notify: false,
     logged: false,
-};
+    msix: crate::devices::guest_msix::Msix::empty(),
+});
 
-static LOGGED_TX: AtomicBool = AtomicBool::new(false);
+static LOGGED_TX: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// 1 when a TX used-ring update is waiting for the next VM exit.
 ///
 /// Iron `03906000`: `enp0s5` printed `NETDEV WATCHDOG` on virtqueue 1.
 /// The completion IRQ was armed only for a preemption-timer exit, and the
 /// guest was leaving on serial I/O, so the driver never reaped the packet.
-static TX_IRQ_ARM: AtomicU8 = AtomicU8::new(0);
+static TX_IRQ_ARM: PerGuest<AtomicU8> = per_guest!(AtomicU8::new(0));
+/// 1 when an RX used-ring update is waiting for the next VM exit.
+///
+/// Queue 0 is receive. Signaling queue 1 for an RX completion wakes the
+/// transmit poll and leaves the receive queue asleep, so a guest that is
+/// idle never sees an SSH SYN. Iron `8f69297c` printed `PCI INT A: no GSI`
+/// for `00:05.0` and `10.99.99.200` stopped answering.
+static RX_IRQ_ARM: PerGuest<AtomicU8> = per_guest!(AtomicU8::new(0));
 /// 1 when a config-change interrupt (carrier flip) waits for the next exit.
-static CFG_IRQ_ARM: AtomicU8 = AtomicU8::new(0);
-static LOGGED_KICK_IDLE: AtomicBool = AtomicBool::new(false);
-static LOGGED_RX: AtomicBool = AtomicBool::new(false);
-static LOGGED_RX_IDLE: AtomicBool = AtomicBool::new(false);
-static TX_DONE_N: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
-static TX_SENT_N: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
-static TX_HELD_N: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
-static RX_POSTED_N: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
+static CFG_IRQ_ARM: PerGuest<AtomicU8> = per_guest!(AtomicU8::new(0));
+static LOGGED_KICK_IDLE: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static LOGGED_RX: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static LOGGED_RX_IDLE: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static TX_DONE_N: PerGuest<core::sync::atomic::AtomicU32> = per_guest!(core::sync::atomic::AtomicU32::new(0));
+static TX_SENT_N: PerGuest<core::sync::atomic::AtomicU32> = per_guest!(core::sync::atomic::AtomicU32::new(0));
+static TX_HELD_N: PerGuest<core::sync::atomic::AtomicU32> = per_guest!(core::sync::atomic::AtomicU32::new(0));
+static RX_POSTED_N: PerGuest<core::sync::atomic::AtomicU32> = per_guest!(core::sync::atomic::AtomicU32::new(0));
 
 /// Frames parsed, frames posted to RX, frames the NIC accepted, frames held.
 pub fn net_counts() -> (u32, u32, u32, u32) {
@@ -138,14 +155,14 @@ pub fn net_counts() -> (u32, u32, u32, u32) {
 pub fn irq_state() -> (u8, bool) {
     (
         with_net(|n| n.isr),
-        TX_IRQ_ARM.load(Ordering::Acquire) == 1,
+        TX_IRQ_ARM.load(Ordering::Acquire) == 1 || RX_IRQ_ARM.load(Ordering::Acquire) == 1,
     )
 }
 
 fn with_net<R>(f: impl FnOnce(&mut Net) -> R) -> R {
     // SAFETY: BSP guest-exit path and single-threaded host tests.
     // KANI-TARGET: virtio-net PCI config bytes (outside Proven Core).
-    unsafe { f(&mut *core::ptr::addr_of_mut!(NET)) }
+    unsafe { f(&mut *NET.p()) }
 }
 
 pub fn pci_write_addr(addr: u32) {
@@ -191,6 +208,8 @@ pub fn pci_write_data(port: u16, size: u8, val: u32) {
                 let next = val & BAR_MASK;
                 n.bar = if next == 0 { GUEST_NET_BAR } else { next };
             }
+        } else {
+            let _ = n.msix.write_cfg(off, size, val);
         }
         let _ = size;
     });
@@ -228,7 +247,10 @@ fn cfg_dword(off: u8) -> u32 {
         0x68 => 0,
         0x6C => 0x100,
         0x70 => 4,
-        0x74 => 0x0410_0009,
+        0x74 => 0x0410_8409,
+        0x84 => n.msix.cfg_dword(0x84),
+        0x88 => n.msix.cfg_dword(0x88),
+        0x8C => n.msix.cfg_dword(0x8C),
         0x78 => 0,
         0x7C => u32::from(OFF_DEVICE),
         0x80 => 12,
@@ -267,6 +289,9 @@ pub fn mmio_read(gpa: u64, size: u8) -> u64 {
     if off < 0x38 {
         return common_read(off, size);
     }
+    if crate::devices::guest_msix::Msix::mmio_hit(off) {
+        return with_net(|n| n.msix.mmio_read(off, size));
+    }
     if off == 0x100 {
         return with_net(|n| {
             let v = u64::from(n.isr);
@@ -274,7 +299,8 @@ pub fn mmio_read(gpa: u64, size: u8) -> u64 {
             // Level INTx stays asserted until this ack. Leaving IRQ 11
             // pending made every inject take the PIC and starved the
             // LAPIC timer (iron `9cdf496c`, `sleep 1` then no `exit:`).
-            if v != 0 {
+            // MSI-X is an edge into the local APIC and does not own that pin.
+            if v != 0 && !n.msix.enabled() {
                 crate::devices::guest_irq::lower_virtio();
             }
             v
@@ -341,6 +367,8 @@ fn write_byte(off: u16, val: u8) {
     with_net(|n| {
         if off < 0x38 {
             write_common(n, off, val);
+        } else if crate::devices::guest_msix::Msix::mmio_hit(off) {
+            n.msix.mmio_write(off, 1, u64::from(val));
         } else if off == OFF_NOTIFY || off == OFF_NOTIFY + 1 {
             n.notify = true;
         }
@@ -357,12 +385,19 @@ fn write_common(n: &mut Net, off: u16, val: u8) {
             let bit = 8 * (off - 0x0C);
             n.drv_feat = (n.drv_feat & !(0xffu64 << bit)) | (u64::from(val) << bit);
         }
+        0x10 | 0x11 => {
+            let sh = 8 * (off - 0x10);
+            let cur = n.msix.config_vec();
+            n.msix
+                .set_config_vec((cur & !(0xffu16 << sh)) | (u16::from(val) << sh));
+        }
         0x14 => {
             n.status = val;
             if val == 0 {
                 n.isr = 0;
                 n.notify = false;
                 n.qsel = 0;
+                n.msix.virtio_reset();
                 n.q = [Queue {
                     enable: 0,
                     desc: 0,
@@ -377,6 +412,12 @@ fn write_common(n: &mut Net, off: u16, val: u8) {
             }
         }
         0x16 => n.qsel = u16::from(val),
+        0x1A | 0x1B => {
+            let sh = 8 * (off - 0x1A);
+            let cur = n.msix.queue_vec(n.qsel);
+            n.msix
+                .set_queue_vec(n.qsel, (cur & !(0xffu16 << sh)) | (u16::from(val) << sh));
+        }
         0x17 => n.qsel = (n.qsel & 0xff) | (u16::from(val) << 8),
         0x1C => n.q[q].enable = u16::from(val),
         0x1D => n.q[q].enable = (n.q[q].enable & 0xff) | (u16::from(val) << 8),
@@ -428,7 +469,7 @@ fn common_byte(off: u16) -> u8 {
             0x04..=0x07 => (feat >> (8 * (off - 0x04))) as u8,
             0x08..=0x0B => (n.drv_sel >> (8 * (off - 0x08))) as u8,
             0x0C..=0x0F => (n.drv_feat >> (8 * (off - 0x0C))) as u8,
-            0x10 | 0x11 => 0xFF,
+            0x10 | 0x11 => n.msix.config_byte(off - 0x10),
             0x12 => 2,
             0x13 => 0,
             0x14 => n.status,
@@ -437,7 +478,7 @@ fn common_byte(off: u16) -> u8 {
             0x17 => (n.qsel >> 8) as u8,
             0x18 => QSIZE as u8,
             0x19 => (QSIZE >> 8) as u8,
-            0x1A | 0x1B => 0xFF,
+            0x1A | 0x1B => n.msix.queue_byte(n.qsel, off - 0x1A),
             0x1C => n.q[q].enable as u8,
             0x1D => (n.q[q].enable >> 8) as u8,
             0x20..=0x27 => (n.q[q].desc >> (8 * (off - 0x20))) as u8,
@@ -451,7 +492,7 @@ fn common_byte(off: u16) -> u8 {
 fn note_tx_queue(n: &Net) {
     #[cfg(feature = "uefi-bin")]
     {
-        static ONCE: AtomicBool = AtomicBool::new(false);
+        static ONCE: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
         if ONCE.swap(true, Ordering::AcqRel) {
             return;
         }
@@ -598,7 +639,11 @@ fn drain_one(translate: &impl Fn(u64) -> Option<u64>) -> bool {
             };
             let take = len.min(frame.len().saturating_sub(flen));
             unsafe {
-                core::ptr::copy_nonoverlapping(hpa as *const u8, frame.as_mut_ptr().add(flen), take);
+                core::ptr::copy_nonoverlapping(
+                    hpa as *const u8,
+                    frame.as_mut_ptr().add(flen),
+                    take,
+                );
             }
             flen += take;
         }
@@ -650,12 +695,17 @@ fn drain_one(translate: &impl Fn(u64) -> Option<u64>) -> bool {
     TX_DONE_N.fetch_add(1, Ordering::AcqRel);
     #[cfg(feature = "uefi-bin")]
     {
-        static DONE: AtomicBool = AtomicBool::new(false);
+        static DONE: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
         if !DONE.swap(true, Ordering::AcqRel) {
-            crate::boot::serial::write_line(
-                "boot: M8.9 virtio-net tx done (not ISO-INSTALL-OK)",
-            );
+            crate::boot::serial::write_line("boot: M8.9 virtio-net tx done (not ISO-INSTALL-OK)");
         }
+    }
+    TX_SRC_MAC.store(pack_mac(&eth[6..12]), Ordering::Release);
+    if slot::shared() && deliver_to_peers(eth, translate) {
+        // Unicast to another guest on this host. The wire would not bring
+        // it back.
+        TX_SENT_N.fetch_add(1, Ordering::AcqRel);
+        return true;
     }
     let result = crate::mgmt::bcm5720_mmio::egress_send(eth);
     match result {
@@ -690,6 +740,125 @@ fn drain_one(translate: &impl Fn(u64) -> Option<u64>) -> bool {
     true
 }
 
+/// Source MAC of the last frame this guest sent, packed little-end first;
+/// 0 until it sends. A guest that changes its address, or bridges, is
+/// still found by the address it actually uses.
+static TX_SRC_MAC: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+
+fn pack_mac(mac: &[u8]) -> u64 {
+    let mut v = 0u64;
+    for (i, b) in mac.iter().take(6).enumerate() {
+        v |= u64::from(*b) << (8 * i);
+    }
+    v
+}
+
+/// The addresses one guest answers to: the one in its device config and
+/// the one it last sent from.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct GuestMacs {
+    pub config: u64,
+    pub learned: u64,
+}
+
+/// Which guest slots a frame for `dst` is posted to (bit N = slot N).
+///
+/// INVARIANTS:
+/// - A slot without a NIC (`None`) never gets a frame
+/// - Broadcast and multicast go to every slot with a NIC
+/// - Unicast goes only to the slot that owns the address; an address no
+///   guest owns goes to no guest
+///
+/// VERIFICATION: L1 (host tests)
+pub fn rx_slot_mask(dst: &[u8], macs: &[Option<GuestMacs>; MAX_GUESTS]) -> u8 {
+    if dst.len() < 6 {
+        return 0;
+    }
+    let group = dst[0] & 1 != 0;
+    let want = pack_mac(dst);
+    let mut mask = 0u8;
+    for (s, m) in macs.iter().enumerate() {
+        let Some(m) = m else {
+            continue;
+        };
+        if group || m.config == want || (m.learned != 0 && m.learned == want) {
+            mask |= 1 << s;
+        }
+    }
+    mask
+}
+
+/// NIC addresses of the guests that are on, by slot.
+fn guest_macs() -> [Option<GuestMacs>; MAX_GUESTS] {
+    core::array::from_fn(|s| {
+        if !slot::is_on(s) {
+            return None;
+        }
+        slot::with_slot(s, || {
+            armed_start().map(|n| GuestMacs {
+                config: pack_mac(&n.mac),
+                learned: TX_SRC_MAC.load(Ordering::Acquire),
+            })
+        })
+    })
+}
+
+/// Post `eth` to every slot in `mask`. A guest that is not on the CPU is
+/// woken so a halted guest sees the frame.
+fn post_to_slots(eth: &[u8], mask: u8, translate: &impl Fn(u64) -> Option<u64>) {
+    let cur = slot::current();
+    for t in 0..MAX_GUESTS {
+        if mask & (1 << t) == 0 {
+            continue;
+        }
+        let posted = slot::with_slot(t, || {
+            let ok = post_rx(eth, translate);
+            #[cfg(feature = "uefi-bin")]
+            if ok && !LOGGED_RX.swap(true, Ordering::AcqRel) {
+                crate::boot::serial::write_line("boot: M8.9 virtio-net rx (not ISO-INSTALL-OK)");
+            }
+            ok
+        });
+        if posted && t != cur {
+            slot::wake(t);
+        }
+    }
+}
+
+/// More than one guest is on: split the uplink by destination MAC.
+fn poll_rx_shared(translate: &impl Fn(u64) -> Option<u64>) {
+    let macs = guest_macs();
+    if macs.iter().all(Option::is_none) {
+        return;
+    }
+    for _ in 0..4 {
+        let mut buf = [0u8; 1514];
+        let Some(n) = crate::mgmt::bcm5720_mmio::egress_recv(&mut buf) else {
+            break;
+        };
+        if n < 14 {
+            continue;
+        }
+        let mask = rx_slot_mask(&buf[..6], &macs);
+        post_to_slots(&buf[..n], mask, translate);
+    }
+}
+
+/// A guest sent `eth` while other guests are on. Post it to the guests it
+/// is for. Returns true when it was for another guest alone, so it does
+/// not go to the wire.
+fn deliver_to_peers(eth: &[u8], translate: &impl Fn(u64) -> Option<u64>) -> bool {
+    let cur = slot::current();
+    let mut macs = guest_macs();
+    macs[cur] = None;
+    let mask = rx_slot_mask(&eth[..6], &macs);
+    if mask == 0 {
+        return false;
+    }
+    post_to_slots(eth, mask, translate);
+    eth[0] & 1 == 0
+}
+
 /// Raise IRQ 11 for a TX completion whose kick has already returned.
 ///
 /// Call at VM-exit entry. The notify exit arms the flag after this has
@@ -697,8 +866,27 @@ fn drain_one(translate: &impl Fn(u64) -> Option<u64>) -> bool {
 pub fn raise_deferred_tx_irq(now: u64) {
     let _ = now;
     let tx = TX_IRQ_ARM.swap(0, Ordering::AcqRel) == 1;
+    let rx = RX_IRQ_ARM.swap(0, Ordering::AcqRel) == 1;
     let cfg = CFG_IRQ_ARM.swap(0, Ordering::AcqRel) == 1;
-    if tx || cfg {
+    if !tx && !rx && !cfg {
+        return;
+    }
+    let owned = with_net(|n| {
+        if !n.msix.enabled() {
+            return false;
+        }
+        if rx {
+            let _ = n.msix.deliver_queue(0);
+        }
+        if tx {
+            let _ = n.msix.deliver_queue(1);
+        }
+        if cfg {
+            let _ = n.msix.deliver_config();
+        }
+        true
+    });
+    if !owned {
         crate::devices::guest_irq::raise_virtio();
     }
 }
@@ -717,6 +905,10 @@ fn ethernet_from_virtio(buf: &[u8]) -> Option<&[u8]> {
 /// Call from the Linux VM-exit path. `poll_idle` does not touch the BAR,
 /// so a drain that runs only on virtio MMIO never sees the SYN-ACK.
 pub fn poll_rx(translate: impl Fn(u64) -> Option<u64>) {
+    if slot::shared() {
+        poll_rx_shared(&translate);
+        return;
+    }
     if armed_start().is_none() {
         return;
     }
@@ -844,7 +1036,7 @@ fn post_rx(eth: &[u8], translate: &impl Fn(u64) -> Option<u64>) -> bool {
             }
         }
     }
-    TX_IRQ_ARM.store(1, Ordering::Release);
+    RX_IRQ_ARM.store(1, Ordering::Release);
     RX_POSTED_N.fetch_add(1, Ordering::AcqRel);
     true
 }
@@ -1053,7 +1245,9 @@ mod guest_virtio_net_test {
             .expect("raise")
             .0;
         assert!(!one.contains("raise_virtio()"));
-        assert!(include_str!("../vmx/guest_uefi.rs").contains("raise_deferred_tx_irq(cpu::rdtsc())"));
+        assert!(
+            include_str!("../vmx/guest_uefi.rs").contains("raise_deferred_tx_irq(cpu::rdtsc())")
+        );
         assert!(include_str!("../vmx/guest_uefi.rs").contains("poll_rx(guest_uefi_gpa_to_hpa)"));
         clear_panel_for_test();
         clear_start_for_test();
@@ -1067,10 +1261,16 @@ mod guest_virtio_net_test {
         // MAX_SKB_FRAGS` and wakes it at `>= 2 + MAX_SKB_FRAGS`; an 8-entry
         // ring can never satisfy the wake.
         const MAX_SKB_FRAGS: u16 = 17;
-        assert!(QSIZE >= 2 + MAX_SKB_FRAGS + 1, "queue can never wake below this");
+        assert!(
+            QSIZE >= 2 + MAX_SKB_FRAGS + 1,
+            "queue can never wake below this"
+        );
         assert!(QSIZE.is_power_of_two(), "virtio 1.0 split ring");
         assert_eq!(QSIZE, 256);
-        assert!(CHAIN_MAX >= usize::from(2 + MAX_SKB_FRAGS), "one skb per chain");
+        assert!(
+            CHAIN_MAX >= usize::from(2 + MAX_SKB_FRAGS),
+            "one skb per chain"
+        );
         let _guard = lock();
         clear_panel_for_test();
         clear_start_for_test();
@@ -1091,7 +1291,11 @@ mod guest_virtio_net_test {
         let bar = u64::from(GUEST_NET_BAR);
         for q in 0..2u64 {
             mmio_write(bar + 0x16, 2, q);
-            assert_eq!(mmio_read(bar + 0x18, 2), u64::from(QSIZE), "queue_size for queue {q}");
+            assert_eq!(
+                mmio_read(bar + 0x18, 2),
+                u64::from(QSIZE),
+                "queue_size for queue {q}"
+            );
         }
         clear_panel_for_test();
         clear_start_for_test();
@@ -1196,7 +1400,10 @@ mod guest_virtio_net_test {
         // Driven and dark: NO-CARRIER. A flip before DRIVER_OK bumps the
         // generation but raises nothing (the driver is not listening yet).
         mmio_write(bar + 0x14, 1, 0);
-        let dark_driven = LinkSample { driven: true, ..dark };
+        let dark_driven = LinkSample {
+            driven: true,
+            ..dark
+        };
         assert!(observe(1, [0; 6], dark_driven).is_some());
         note_carrier_change();
         assert_eq!(mmio_read(status, 2), 0);
@@ -1304,7 +1511,131 @@ mod guest_virtio_net_test {
         assert_eq!(len, 12 + 14);
         let isr = mmio_read(bar + 0x100, 1);
         assert_eq!(isr, 1);
+        RX_IRQ_ARM.store(0, Ordering::Release);
         clear_panel_for_test();
         clear_start_for_test();
+    }
+
+    #[test]
+    fn rx_completion_signals_queue_zero() {
+        let _guard = lock();
+        clear_panel_for_test();
+        clear_start_for_test();
+        RX_IRQ_ARM.store(0, Ordering::Release);
+        TX_IRQ_ARM.store(0, Ordering::Release);
+        CFG_IRQ_ARM.store(0, Ordering::Release);
+        crate::devices::lapic_virt::reset();
+        let off = 8u64 * 1024 * 1024 * 1024;
+        panel_save(
+            0,
+            NicDraft {
+                spare_off: off,
+                mode: NicMode::Manual,
+                prefix: 24,
+                ipv4: [10, 99, 99, 200],
+                gateway: [10, 99, 99, 1],
+                dns: [1, 1, 1, 1],
+            },
+        )
+        .unwrap();
+        on_accepted_start(off);
+        let bar = u64::from(GUEST_NET_BAR);
+        // A sibling test can leave queue 0's last_avail at 1. Status 0
+        // clears that. It also clears queue vectors, so those are programmed
+        // after this reset. CI runs the suite in parallel and failed
+        // `post_rx` when this test did not reset.
+        mmio_write(bar + 0x14, 1, 0);
+        let addr = 0x8000_0000 | (u32::from(GUEST_NET_PCI_DEV) << 11) | 0x84;
+        crate::devices::ide_cdrom::pci_write_addr(addr);
+        pci_write_data(0xCFC, 4, 0x8003_0011);
+        mmio_write(bar + 0x800, 4, 0xFEE0_0000);
+        mmio_write(bar + 0x808, 4, 0x40);
+        mmio_write(bar + 0x80C, 4, 0);
+        mmio_write(bar + 0x810, 4, 0xFEE0_0000);
+        mmio_write(bar + 0x818, 4, 0x41);
+        mmio_write(bar + 0x81C, 4, 0);
+        mmio_write(bar + 0x16, 1, 0);
+        mmio_write(bar + 0x1A, 2, 0);
+        mmio_write(bar + 0x16, 1, 1);
+        mmio_write(bar + 0x1A, 2, 1);
+        mmio_write(bar + 0x16, 1, 0);
+        let mut desc = [0u8; 16];
+        let mut avail = [0u8; 8];
+        let used = [0u8; 16];
+        let mut buf = [0u8; 64];
+        let desc_gpa = 0x10_0000u64;
+        let avail_gpa = 0x20_0000u64;
+        let used_gpa = 0x30_0000u64;
+        let buf_gpa = 0x40_0000u64;
+        desc[0..8].copy_from_slice(&buf_gpa.to_le_bytes());
+        desc[8..12].copy_from_slice(&64u32.to_le_bytes());
+        desc[12] = 2;
+        avail[2] = 1;
+        mmio_write(bar + 0x20, 8, desc_gpa);
+        mmio_write(bar + 0x28, 8, avail_gpa);
+        mmio_write(bar + 0x30, 8, used_gpa);
+        mmio_write(bar + 0x1C, 2, 1);
+        let desc_ptr = desc.as_ptr() as u64;
+        let avail_ptr = avail.as_ptr() as u64;
+        let used_ptr = used.as_ptr() as u64;
+        let buf_ptr = buf.as_mut_ptr() as u64;
+        let translate = move |gpa: u64| -> Option<u64> {
+            if gpa == desc_gpa {
+                Some(desc_ptr)
+            } else if (avail_gpa..avail_gpa + 8).contains(&gpa) {
+                Some(avail_ptr + (gpa - avail_gpa))
+            } else if (used_gpa..used_gpa + 16).contains(&gpa) {
+                Some(used_ptr + (gpa - used_gpa))
+            } else if gpa == buf_gpa {
+                Some(buf_ptr)
+            } else {
+                None
+            }
+        };
+        assert!(post_rx(&[0x02, 0, 0, 0, 0, 0, 0xb0, 0, 0, 0, 0, 0, 0x08, 0x00], &translate));
+        assert!(irq_state().1, "RX completion waits for the next exit");
+        raise_deferred_tx_irq(0);
+        assert_eq!(crate::devices::guest_msix::last_vector(), 0x40);
+        assert!(crate::devices::lapic_virt::has_irr_vec(0x40));
+        assert!(!crate::devices::lapic_virt::has_irr_vec(0x41));
+        crate::devices::lapic_virt::reset();
+        clear_panel_for_test();
+        clear_start_for_test();
+    }
+
+    #[test]
+    fn uplink_is_split_by_destination_mac_between_guests() {
+        let a = GuestMacs { config: pack_mac(&[2, 0, 0, 0, 0, 0x0a]), learned: 0 };
+        let b = GuestMacs {
+            config: pack_mac(&[2, 0, 0, 0, 0, 0x0b]),
+            learned: pack_mac(&[2, 0, 0, 0, 0, 0xbb]),
+        };
+        let macs = [Some(a), None, Some(b), None];
+        // Unicast reaches only its owner.
+        assert_eq!(rx_slot_mask(&[2, 0, 0, 0, 0, 0x0a], &macs), 0b0001);
+        assert_eq!(rx_slot_mask(&[2, 0, 0, 0, 0, 0x0b], &macs), 0b0100);
+        // The address a guest last sent from is its address too.
+        assert_eq!(rx_slot_mask(&[2, 0, 0, 0, 0, 0xbb], &macs), 0b0100);
+        // Nobody's address reaches nobody: one guest does not read
+        // another machine's traffic.
+        assert_eq!(rx_slot_mask(&[2, 0, 0, 0, 0, 0x0c], &macs), 0);
+        // Broadcast and multicast reach every guest with a NIC, and no
+        // slot without one.
+        assert_eq!(rx_slot_mask(&[0xff; 6], &macs), 0b0101);
+        assert_eq!(rx_slot_mask(&[0x33, 0x33, 0, 0, 0, 1], &macs), 0b0101);
+        assert_eq!(rx_slot_mask(&[0xff; 6], &[None; MAX_GUESTS]), 0);
+        assert_eq!(rx_slot_mask(&[2, 0, 0], &macs), 0, "short header");
+        // An unset learned address never matches the all-zero MAC.
+        assert_eq!(rx_slot_mask(&[0; 6], &macs), 0);
+    }
+
+    #[test]
+    fn one_guest_keeps_the_single_guest_uplink_path() {
+        let src = include_str!("guest_virtio_net.rs");
+        let poll = src.split("pub fn poll_rx(").nth(1).expect("poll_rx");
+        let shared = poll.find("slot::shared()").expect("shared branch");
+        let single = poll.find("armed_start().is_none()").expect("single branch");
+        assert!(shared < single);
+        assert!(src.contains("if slot::shared() && deliver_to_peers(eth, translate)"));
     }
 }

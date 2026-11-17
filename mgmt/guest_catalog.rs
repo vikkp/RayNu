@@ -15,7 +15,7 @@ use super::megaraid::{
     classify_ld_bytes, place_in_free_tail, LdClass, PERC_IMAGE_BYTES, SPARE_HIGH_RESERVE,
 };
 use super::perc_boot_choice::{
-    apply_spa_choice, apply_tail_choice, perc_spa_choice, perc_spa_wait_required, PercChoiceApply,
+    apply_spa_choice, apply_tail_choice, perc_spa_wait_required, PercChoiceApply,
     PercSpaChoice, CHOICE_BOOT, CHOICE_REINSTALL, CHOICE_TAIL,
 };
 
@@ -285,8 +285,8 @@ pub fn guest_catalog_rest(method: RestMethod, path: &str, authed: bool) -> Guest
     if let Some(next) = parse_boot_next(path) {
         return boot_next_rest(method, next, authed);
     }
-    if let Some(ask) = parse_power(path) {
-        return power_rest(method, ask, authed);
+    if let Some((ask, row)) = parse_power(path) {
+        return power_rest(method, ask, row, authed);
     }
     let action = match parse_guest_route(path) {
         None => return GuestCatalogHttp::NotMine,
@@ -327,7 +327,16 @@ pub fn guest_catalog_rest(method: RestMethod, path: &str, authed: bool) -> Guest
             if !matches!(method, RestMethod::Post) {
                 return GuestCatalogHttp::BadMethod;
             }
-            return stop_guest();
+            return stop_guest(None);
+        }
+        Some(GuestRoute::StopDisk(off)) => {
+            if !authed {
+                return GuestCatalogHttp::Unauthorized;
+            }
+            if !matches!(method, RestMethod::Post) {
+                return GuestCatalogHttp::BadMethod;
+            }
+            return stop_guest(Some(off));
         }
         Some(GuestRoute::Linux(mib)) => CatalogAction::Linux { disk_mib: mib },
         Some(GuestRoute::Windows(mib)) => CatalogAction::Windows { disk_mib: mib },
@@ -353,6 +362,8 @@ enum GuestRoute {
     StartTail,
     StartDisk(u64),
     Stop,
+    /// Stop the guest on the disk at this spare offset (0 is the window).
+    StopDisk(u64),
     Linux(u32),
     Windows(u32),
     Bad,
@@ -373,6 +384,9 @@ fn parse_guest_route(path: &str) -> Option<GuestRoute> {
     }
     if path == GUEST_STOP_PATH {
         return Some(GuestRoute::Stop);
+    }
+    if let Some(off) = parse_disk_stop(path) {
+        return Some(GuestRoute::StopDisk(off));
     }
     if let Some(rest) = path.strip_prefix(LINUX_PREFIX) {
         return Some(match parse_mib(rest) {
@@ -570,54 +584,91 @@ enum PowerRoute {
     Status,
 }
 
-fn parse_power(path: &str) -> Option<PowerRoute> {
+/// `(ask, row)`. `row` is the spare offset a targeted request names
+/// (0 is the 8 GiB window). None is the one running guest.
+fn parse_power(path: &str) -> Option<(PowerRoute, Option<u64>)> {
     match path {
-        "/perc/guests/power/shutdown" => Some(PowerRoute::Shutdown),
-        "/perc/guests/power/reboot" => Some(PowerRoute::Reboot),
-        "/perc/guests/power" => Some(PowerRoute::Status),
+        "/perc/guests/power/shutdown" => return Some((PowerRoute::Shutdown, None)),
+        "/perc/guests/power/reboot" => return Some((PowerRoute::Reboot, None)),
+        "/perc/guests/power" => return Some((PowerRoute::Status, None)),
+        _ => {}
+    }
+    let rest = path.strip_prefix("/perc/guests/disk/")?;
+    let (off, kind) = rest.split_once("/power/")?;
+    let off = parse_u64_token(off)?;
+    match kind {
+        "shutdown" => Some((PowerRoute::Shutdown, Some(off))),
+        "reboot" => Some((PowerRoute::Reboot, Some(off))),
         _ => None,
     }
 }
 
-fn power_rest(method: RestMethod, ask: PowerRoute, authed: bool) -> GuestCatalogHttp {
+/// Slot a Stop or power request acts on. `Err` is the 409 body.
+fn slot_for_request(row: Option<u64>) -> Result<usize, &'static [u8]> {
+    use crate::mgmt::guest_slots::{only_running, slot_of_row, Only};
+    match row {
+        Some(off) => slot_of_row(off).ok_or(b"{\"ok\":false,\"reason\":\"idle\"}".as_slice()),
+        None => match only_running() {
+            Only::Slot(s) => Ok(s),
+            Only::None => Err(b"{\"ok\":false,\"reason\":\"idle\"}"),
+            Only::Many => Err(b"{\"ok\":false,\"reason\":\"which\"}"),
+        },
+    }
+}
+
+fn power_rest(
+    method: RestMethod,
+    ask: PowerRoute,
+    row: Option<u64>,
+    authed: bool,
+) -> GuestCatalogHttp {
     use crate::mgmt::guest_power::{acked, pending, request, PowerAsk};
     if !authed {
         return GuestCatalogHttp::Unauthorized;
     }
-    match ask {
+    let want = match ask {
         PowerRoute::Status => {
             if !matches!(method, RestMethod::Get) {
                 return GuestCatalogHttp::BadMethod;
             }
+            None
         }
-        PowerRoute::Shutdown => {
-            if !matches!(method, RestMethod::Post) {
-                return GuestCatalogHttp::BadMethod;
-            }
-            request(PowerAsk::Shutdown);
-        }
-        PowerRoute::Reboot => {
-            if !matches!(method, RestMethod::Post) {
-                return GuestCatalogHttp::BadMethod;
-            }
-            request(PowerAsk::Reboot);
-        }
-    }
-    let name = match pending() {
-        Some(PowerAsk::Shutdown) => "shutdown",
-        Some(PowerAsk::Reboot) => "reboot",
-        None => "none",
+        PowerRoute::Shutdown => Some(PowerAsk::Shutdown),
+        PowerRoute::Reboot => Some(PowerAsk::Reboot),
     };
-    let ack = if acked() { "true" } else { "false" };
-    let mut body = [0u8; 64];
-    let mut w = JsonBuf::new(&mut body);
-    w.s("{\"ok\":true,\"ask\":\"");
-    w.s(name);
-    w.s("\",\"acked\":");
-    w.s(ack);
-    w.s("}");
-    let n = if w.fit { w.n } else { 0 };
-    ready(200, &body[..n], None)
+    if want.is_some() && !matches!(method, RestMethod::Post) {
+        return GuestCatalogHttp::BadMethod;
+    }
+    // With no guest on, a request keeps its old meaning: it is remembered
+    // in the slot the next Start takes.
+    let slot = match slot_for_request(row) {
+        Ok(s) => s,
+        Err(body) if row.is_some() || body.ends_with(b"\"which\"}") => {
+            return ready(409, body, None);
+        }
+        Err(_) => crate::mgmt::guest_slots::free_slot().unwrap_or(0),
+    };
+    crate::guest::slot::with_slot(slot, || {
+        if let Some(a) = want {
+            request(a);
+            crate::guest::slot::wake(slot);
+        }
+        let name = match pending() {
+            Some(PowerAsk::Shutdown) => "shutdown",
+            Some(PowerAsk::Reboot) => "reboot",
+            None => "none",
+        };
+        let ack = if acked() { "true" } else { "false" };
+        let mut body = [0u8; 64];
+        let mut w = JsonBuf::new(&mut body);
+        w.s("{\"ok\":true,\"ask\":\"");
+        w.s(name);
+        w.s("\",\"acked\":");
+        w.s(ack);
+        w.s("}");
+        let n = if w.fit { w.n } else { 0 };
+        ready(200, &body[..n], None)
+    })
 }
 
 enum BootNext {
@@ -718,6 +769,37 @@ fn parse_disk_off(path: &str) -> Option<u64> {
     off.parse().ok()
 }
 
+fn parse_disk_stop(path: &str) -> Option<u64> {
+    let rest = path.strip_prefix("/perc/guests/disk/")?;
+    parse_u64_token(rest.strip_suffix("/stop")?)
+}
+
+/// Slot a Start of `want` takes. `Err` is the 200 body that answers
+/// without starting anything: the disk is already in a slot, or every
+/// slot has a guest.
+fn slot_for_start(
+    want: crate::mgmt::perc_boot_choice::VmcsGuest,
+) -> Result<usize, &'static [u8]> {
+    if crate::mgmt::guest_slots::slot_running(want).is_some() {
+        return Err(b"{\"ok\":true,\"running\":true}");
+    }
+    crate::mgmt::guest_slots::free_slot().ok_or(b"{\"ok\":true,\"busy\":true}".as_slice())
+}
+
+/// Slot a new install takes: the lowest slot with no guest.
+fn slot_for_install() -> Result<usize, &'static [u8]> {
+    crate::mgmt::guest_slots::free_slot().ok_or(b"{\"ok\":true,\"busy\":true}".as_slice())
+}
+
+/// Slot 0's first Start is taken by the boot wait. Every other Start is
+/// launched by the idle loop or, while a guest is running, by the guest
+/// scheduler.
+fn note_launch(slot: usize, restarted: bool) {
+    if restarted || slot != 0 {
+        crate::mgmt::perc_boot_choice::note_perc_relaunch();
+    }
+}
+
 fn parse_mib(s: &str) -> Option<u32> {
     if s.is_empty() || s.len() > 7 || !s.bytes().all(|b| b.is_ascii_digit()) {
         return None;
@@ -743,7 +825,12 @@ fn apply_action(action: CatalogAction) -> GuestCatalogHttp {
         CatalogDecision::PlaceTail {
             spare_off,
             disk_bytes,
-        } => store_tail(installed, spare, spare_off, disk_bytes),
+        } => match slot_for_install() {
+            Ok(slot) => crate::guest::slot::with_slot(slot, || {
+                store_tail(slot, installed, spare, spare_off, disk_bytes)
+            }),
+            Err(body) => ready(200, body, None),
+        },
         CatalogDecision::Refuse(CatalogRefuse::NoGuest) => {
             ready(409, b"{\"ok\":false,\"reason\":\"noguest\"}", None)
         }
@@ -777,35 +864,38 @@ fn start_tail() -> GuestCatalogHttp {
         apply_tail_boot_choice, PercChoiceApply, VmcsGuest, CHOICE_TAIL_BOOT,
     };
     let off = crate::mgmt::megaraid::PERC_IMAGE_BYTES;
-    if let Some(body) = held_by_other(VmcsGuest::Tail(off)) {
-        return ready(200, body, None);
-    }
-    let restarted = crate::mgmt::perc_boot_choice::rearm_guest_after_stop();
+    let slot = match slot_for_start(VmcsGuest::Tail(off)) {
+        Ok(s) => s,
+        Err(body) => return ready(200, body, None),
+    };
     let installed = crate::mgmt::megaraid::perc_image_boot_latched();
     let spare = crate::mgmt::megaraid::perc_spare_bytes();
     let disk_bytes = known_tail_bytes(spare, installed);
-    match apply_tail_boot_choice(installed, spare, disk_bytes) {
-        PercChoiceApply::Accepted => {
-            if restarted {
-                crate::mgmt::perc_boot_choice::note_perc_relaunch();
+    crate::guest::slot::with_slot(slot, || {
+        let restarted = crate::mgmt::perc_boot_choice::rearm_guest_after_stop();
+        match apply_tail_boot_choice(installed, spare, disk_bytes) {
+            PercChoiceApply::Accepted => {
+                note_launch(slot, restarted);
+                crate::boot::raynu_f_flag::request_installed_boot();
+                crate::mgmt::guest_nic_start::on_accepted_start(off);
+                let mut body = [0u8; 128];
+                let mut w = JsonBuf::new(&mut body);
+                w.s("{\"ok\":true,\"choice\":\"tailboot\",\"spare_off\":");
+                w.u(off);
+                w.s(",\"disk_bytes\":");
+                w.u(disk_bytes);
+                w.s("}");
+                let n = if w.fit { w.n } else { 0 };
+                ready(200, &body[..n], Some(CHOICE_TAIL_BOOT))
             }
-            crate::boot::raynu_f_flag::request_installed_boot();
-            crate::mgmt::guest_nic_start::on_accepted_start(
-                crate::mgmt::megaraid::PERC_IMAGE_BYTES,
-            );
-            let mut body = [0u8; 128];
-            let mut w = JsonBuf::new(&mut body);
-            w.s("{\"ok\":true,\"choice\":\"tailboot\",\"spare_off\":");
-            w.u(crate::mgmt::megaraid::PERC_IMAGE_BYTES);
-            w.s(",\"disk_bytes\":");
-            w.u(disk_bytes);
-            w.s("}");
-            let n = if w.fit { w.n } else { 0 };
-            ready(200, &body[..n], Some(CHOICE_TAIL_BOOT))
+            PercChoiceApply::NoImage => {
+                ready(409, b"{\"ok\":false,\"reason\":\"notail\"}", None)
+            }
+            PercChoiceApply::AlreadyChosen => {
+                ready(409, b"{\"ok\":false,\"reason\":\"chosen\"}", None)
+            }
         }
-        PercChoiceApply::NoImage => ready(409, b"{\"ok\":false,\"reason\":\"notail\"}", None),
-        PercChoiceApply::AlreadyChosen => ready(409, b"{\"ok\":false,\"reason\":\"chosen\"}", None),
-    }
+    })
 }
 
 fn start_disk_at(spare_off: u64) -> GuestCatalogHttp {
@@ -816,34 +906,48 @@ fn start_disk_at(spare_off: u64) -> GuestCatalogHttp {
     let Some(disk) = tails[..n].iter().find(|d| d.spare_off == spare_off) else {
         return ready(409, b"{\"ok\":false,\"reason\":\"nodisk\"}", None);
     };
-    if let Some(body) = held_by_other(crate::mgmt::perc_boot_choice::VmcsGuest::Tail(spare_off)) {
-        return ready(200, body, None);
-    }
-    let restarted = crate::mgmt::perc_boot_choice::rearm_guest_after_stop();
-    match apply_tail_boot_at(installed, spare, disk.spare_off, disk.disk_bytes) {
-        PercChoiceApply::Accepted => {
-            if restarted {
-                crate::mgmt::perc_boot_choice::note_perc_relaunch();
+    let slot = match slot_for_start(crate::mgmt::perc_boot_choice::VmcsGuest::Tail(spare_off)) {
+        Ok(s) => s,
+        Err(body) => return ready(200, body, None),
+    };
+    crate::guest::slot::with_slot(slot, || {
+        let restarted = crate::mgmt::perc_boot_choice::rearm_guest_after_stop();
+        match apply_tail_boot_at(installed, spare, disk.spare_off, disk.disk_bytes) {
+            PercChoiceApply::Accepted => {
+                note_launch(slot, restarted);
+                crate::boot::raynu_f_flag::request_installed_boot();
+                crate::mgmt::guest_nic_start::on_accepted_start(disk.spare_off);
+                let mut body = [0u8; 192];
+                let mut w = JsonBuf::new(&mut body);
+                w.s("{\"ok\":true,\"choice\":\"tailboot\",\"spare_off\":");
+                w.u(disk.spare_off);
+                w.s(",\"disk_bytes\":");
+                w.u(disk.disk_bytes);
+                w.s("}");
+                let len = if w.fit { w.n } else { 0 };
+                ready(200, &body[..len], Some(CHOICE_TAIL_BOOT))
             }
-            crate::boot::raynu_f_flag::request_installed_boot();
-            crate::mgmt::guest_nic_start::on_accepted_start(disk.spare_off);
-            let mut body = [0u8; 192];
-            let mut w = JsonBuf::new(&mut body);
-            w.s("{\"ok\":true,\"choice\":\"tailboot\",\"spare_off\":");
-            w.u(disk.spare_off);
-            w.s(",\"disk_bytes\":");
-            w.u(disk.disk_bytes);
-            w.s("}");
-            let len = if w.fit { w.n } else { 0 };
-            ready(200, &body[..len], Some(CHOICE_TAIL_BOOT))
+            PercChoiceApply::NoImage => {
+                ready(409, b"{\"ok\":false,\"reason\":\"notail\"}", None)
+            }
+            PercChoiceApply::AlreadyChosen => {
+                ready(409, b"{\"ok\":false,\"reason\":\"chosen\"}", None)
+            }
         }
-        PercChoiceApply::NoImage => ready(409, b"{\"ok\":false,\"reason\":\"notail\"}", None),
-        PercChoiceApply::AlreadyChosen => ready(409, b"{\"ok\":false,\"reason\":\"chosen\"}", None),
-    }
+    })
 }
 
-fn stop_guest() -> GuestCatalogHttp {
-    if crate::mgmt::perc_boot_choice::request_guest_stop() {
+/// Stop one guest. `row` names its disk; None is the one running guest.
+fn stop_guest(row: Option<u64>) -> GuestCatalogHttp {
+    let slot = match slot_for_request(row) {
+        Ok(s) => s,
+        Err(body) => return ready(409, body, None),
+    };
+    let asked = crate::guest::slot::with_slot(slot, || {
+        crate::mgmt::perc_boot_choice::request_guest_stop()
+    });
+    if asked {
+        crate::guest::slot::wake(slot);
         ready(200, b"{\"ok\":true,\"choice\":\"stop\"}", None)
     } else {
         ready(409, b"{\"ok\":false,\"reason\":\"idle\"}", None)
@@ -851,13 +955,16 @@ fn stop_guest() -> GuestCatalogHttp {
 }
 
 fn store_tail(
+    slot: usize,
     installed: bool,
     spare_bytes: u64,
     spare_off: u64,
     disk_bytes: u64,
 ) -> GuestCatalogHttp {
+    let restarted = crate::mgmt::perc_boot_choice::rearm_guest_after_stop();
     match apply_tail_choice(installed, spare_bytes, spare_off, disk_bytes) {
         PercChoiceApply::Accepted => {
+            note_launch(slot, restarted);
             let _ = crate::mgmt::iso_library::choose_held_library();
             crate::boot::raynu_f_flag::request_from_spa();
             let mut body = [0u8; 576];
@@ -870,38 +977,49 @@ fn store_tail(
 }
 
 fn store_choice(choice: u8, installed: bool) -> GuestCatalogHttp {
-    if choice == CHOICE_BOOT {
-        if let Some(body) = held_by_other(crate::mgmt::perc_boot_choice::VmcsGuest::Window) {
-            return ready(200, body, None);
-        }
-    }
-    let restarted = if choice == CHOICE_BOOT {
-        crate::mgmt::perc_boot_choice::rearm_guest_after_stop()
+    let slot = if choice == CHOICE_BOOT {
+        slot_for_start(crate::mgmt::perc_boot_choice::VmcsGuest::Window)
+    } else if crate::mgmt::guest_slots::slot_running(
+        crate::mgmt::perc_boot_choice::VmcsGuest::Window,
+    )
+    .is_some()
+    {
+        // A reinstall writes the window. The guest on it is still running.
+        Err(b"{\"ok\":true,\"running\":true}".as_slice())
     } else {
-        false
+        slot_for_install()
     };
-    match apply_spa_choice(installed, choice) {
-        PercChoiceApply::Accepted => {
-            if restarted {
-                crate::mgmt::perc_boot_choice::note_perc_relaunch();
+    let slot = match slot {
+        Ok(s) => s,
+        Err(body) => return ready(200, body, None),
+    };
+    crate::guest::slot::with_slot(slot, || {
+        let restarted = crate::mgmt::perc_boot_choice::rearm_guest_after_stop();
+        match apply_spa_choice(installed, choice) {
+            PercChoiceApply::Accepted => {
+                note_launch(slot, restarted);
+                if choice == CHOICE_REINSTALL {
+                    let _ = crate::mgmt::iso_library::choose_held_library();
+                    crate::boot::raynu_f_flag::request_from_spa();
+                } else {
+                    crate::boot::raynu_f_flag::request_installed_boot();
+                    crate::mgmt::guest_nic_start::on_accepted_start(0);
+                }
+                let body: &[u8] = if choice == CHOICE_REINSTALL {
+                    b"{\"ok\":true,\"choice\":\"reinstall\"}"
+                } else {
+                    b"{\"ok\":true,\"choice\":\"boot\"}"
+                };
+                ready(200, body, Some(choice))
             }
-            if choice == CHOICE_REINSTALL {
-                let _ = crate::mgmt::iso_library::choose_held_library();
-                crate::boot::raynu_f_flag::request_from_spa();
-            } else {
-                crate::boot::raynu_f_flag::request_installed_boot();
-                crate::mgmt::guest_nic_start::on_accepted_start(0);
+            PercChoiceApply::NoImage => {
+                ready(409, b"{\"ok\":false,\"reason\":\"noimage\"}", None)
             }
-            let body: &[u8] = if choice == CHOICE_REINSTALL {
-                b"{\"ok\":true,\"choice\":\"reinstall\"}"
-            } else {
-                b"{\"ok\":true,\"choice\":\"boot\"}"
-            };
-            ready(200, body, Some(choice))
+            PercChoiceApply::AlreadyChosen => {
+                ready(409, b"{\"ok\":false,\"reason\":\"chosen\"}", None)
+            }
         }
-        PercChoiceApply::NoImage => ready(409, b"{\"ok\":false,\"reason\":\"noimage\"}", None),
-        PercChoiceApply::AlreadyChosen => ready(409, b"{\"ok\":false,\"reason\":\"chosen\"}", None),
-    }
+    })
 }
 
 fn ready(status: u16, body: &[u8], audit_choice: Option<u8>) -> GuestCatalogHttp {
@@ -920,10 +1038,12 @@ fn ready(status: u16, body: &[u8], audit_choice: Option<u8>) -> GuestCatalogHttp
 pub fn occupied_guest_end() -> u64 {
     let (tails, n) = discovered_tails();
     let mut end = occupied_from_tails(&tails[..n]);
-    if let Some((off, bytes)) = crate::mgmt::perc_boot_choice::armed_tail() {
-        let armed_end = off.saturating_add(bytes);
-        if armed_end > end {
-            end = armed_end;
+    // A tail that is being installed has no GPT yet. Every slot's armed
+    // tail counts, so a second install is never placed on top of the first.
+    for slot in 0..crate::guest::slot::MAX_GUESTS {
+        let armed = crate::guest::slot::with_slot(slot, crate::mgmt::perc_boot_choice::armed_tail);
+        if let Some((off, bytes)) = armed {
+            end = end.max(off.saturating_add(bytes));
         }
     }
     end
@@ -939,10 +1059,11 @@ fn fill_list_json(buf: &mut [u8]) -> usize {
     let installed = crate::mgmt::megaraid::perc_image_boot_latched();
     let spare = crate::mgmt::megaraid::perc_spare_bytes();
     let numbers = catalog_numbers(spare, SLICE1_WINDOW_BYTES, installed);
-    let choice = perc_spa_choice();
-    let waiting = perc_spa_wait_required(installed, choice);
+    let views = crate::mgmt::guest_slots::views();
+    // The boot wait is on slot 0. It ends with the first Start.
+    let waiting = perc_spa_wait_required(installed, views[0].choice);
     let (tails, n) = discovered_tails();
-    write_list_json(buf, numbers, waiting, choice, installed, &tails[..n])
+    write_list_json(buf, numbers, waiting, &views, installed, &tails[..n])
 }
 
 /// One GPT header sector at guest LBA 1 of a disk that starts at the 8 GiB mark.
@@ -1027,11 +1148,18 @@ pub fn walk_gpt_disks(
 }
 
 fn known_tail_bytes(spare: u64, installed: bool) -> u64 {
-    if let Some((_, bytes)) = crate::mgmt::perc_boot_choice::armed_tail() {
-        bytes
-    } else {
-        discover_tail_bytes(spare, installed)
+    // The first tail starts on the 8 GiB boundary. A slot that already
+    // holds it knows its size.
+    let first = crate::mgmt::megaraid::PERC_IMAGE_BYTES;
+    for slot in 0..crate::guest::slot::MAX_GUESTS {
+        let armed = crate::guest::slot::with_slot(slot, crate::mgmt::perc_boot_choice::armed_tail);
+        if let Some((off, bytes)) = armed {
+            if off == first {
+                return bytes;
+            }
+        }
     }
+    discover_tail_bytes(spare, installed)
 }
 
 /// Every GPT tail after the 8 GiB window, in order. Host tests see none.
@@ -1128,11 +1256,30 @@ fn write_list_json(
     buf: &mut [u8],
     numbers: CatalogNumbers,
     waiting: bool,
-    choice: PercSpaChoice,
+    views: &[crate::mgmt::guest_slots::SlotView],
     installed: bool,
     tails: &[FoundDisk],
 ) -> usize {
-    let stopped = crate::mgmt::perc_boot_choice::guest_stopped();
+    use crate::mgmt::guest_slots::SlotView;
+    // A disk is in at most one slot. A slot with a guest wins over a slot
+    // that still remembers a stopped one.
+    let pick = |holds: &dyn Fn(&SlotView) -> bool| -> Option<SlotView> {
+        views
+            .iter()
+            .find(|v| holds(v) && v.on())
+            .or_else(|| views.iter().find(|v| holds(v)))
+            .copied()
+    };
+    let on = views.iter().filter(|v| v.on()).count();
+    // The top-level `choice` is the guest that is on, else the last one
+    // stopped, else pending. One guest reads exactly as it did before.
+    let primary = views
+        .iter()
+        .find(|v| v.on())
+        .or_else(|| views.iter().find(|v| v.stopped))
+        .copied()
+        .unwrap_or(SlotView::EMPTY);
+    let choice = primary.choice;
     let library = crate::mgmt::iso_library::held_bytes();
     let iso_ready = crate::mgmt::iso_library::library_complete();
     let tail_bytes: u64 = tails.iter().map(|d| d.disk_bytes).sum();
@@ -1171,7 +1318,9 @@ fn write_list_json(
     w.s(if waiting { "true" } else { "false" });
     w.s(",\"choice\":\"");
     w.s(choice_name(choice));
-    w.s("\",\"cap\":\"Spare ");
+    w.s("\",\"on\":");
+    w.u(on as u64);
+    w.s(",\"cap\":\"Spare ");
     w.u(numbers.spare_bytes / (1024 * 1024));
     w.s(" MiB. Used ");
     w.u(used / (1024 * 1024));
@@ -1180,27 +1329,17 @@ fn write_list_json(
     w.s(". Placeable ");
     w.u(placeable / (1024 * 1024));
     w.s(".\",\"note\":\"");
-    w.s(catalog_note(waiting, choice, stopped));
+    w.s(catalog_note(waiting, choice, primary.stopped, on));
     w.s("\",\"guests\":[");
-    let window_on = installed
-        && !stopped
-        && matches!(
-            choice,
-            PercSpaChoice::BootInstalled | PercSpaChoice::CleanReinstall
-        );
-    let tail_on = !stopped
-        && matches!(
-            choice,
-            PercSpaChoice::Tail { .. } | PercSpaChoice::TailBoot { .. }
-        );
-    let iso_on = iso_ready && crate::mgmt::iso_library::present_as_cd() && !stopped;
     if installed {
-        let (start, stop) = row_power(window_on);
+        let mine = pick(&|v| v.holds_window());
+        let active = mine.is_some_and(|v| v.on());
+        let (start, stop) = row_power(active);
         w.s("{\"id\":1,\"name\":\"alpine\",\"state\":\"");
-        w.s(if stopped {
-            "stopped"
-        } else {
-            window_state(choice)
+        w.s(match mine {
+            Some(v) if v.stopped => "stopped",
+            Some(v) => window_state(v.choice),
+            None => "installed",
         });
         w.s("\",\"disk_mib\":");
         w.u(numbers.used_bytes / (1024 * 1024));
@@ -1210,12 +1349,6 @@ fn write_list_json(
         w.s(if stop { "true" } else { "false" });
         w.s(",\"boot\":\"/perc/guests/1/start\"}");
     }
-    let armed_off = match choice {
-        PercSpaChoice::Tail { .. } | PercSpaChoice::TailBoot { .. } => {
-            crate::mgmt::perc_boot_choice::armed_tail().map(|(off, _)| off)
-        }
-        _ => None,
-    };
     let mut next_id = if installed { 2u64 } else { 1 };
     let mut any_guest = installed;
     for disk in tails {
@@ -1226,19 +1359,17 @@ fn write_list_json(
             w.s(",");
         }
         any_guest = true;
-        let mine = armed_off == Some(disk.spare_off);
-        let active = mine && tail_on;
+        let mine = pick(&|v| v.holds_tail(disk.spare_off));
+        let active = mine.is_some_and(|v| v.on());
         let (start, stop) = row_power(active);
         w.s("{\"id\":");
         w.u(next_id);
         next_id += 1;
         w.s(",\"name\":\"disk\",\"state\":\"");
-        w.s(if stopped {
-            "stopped"
-        } else if !mine {
-            "installed"
-        } else {
-            tail_row_state(choice)
+        w.s(match mine {
+            Some(v) if v.stopped => "stopped",
+            Some(v) => tail_row_state(v.choice),
+            None => "installed",
         });
         w.s("\",\"disk_mib\":");
         w.u(disk.disk_bytes / (1024 * 1024));
@@ -1256,14 +1387,20 @@ fn write_list_json(
         if any_guest {
             w.s(",");
         }
-        let chosen = crate::mgmt::iso_library::present_as_cd();
-        let (start, stop) = row_power(iso_on);
+        // The slot that booted the library ISO is the install in progress.
+        let cd = views.iter().find(|v| v.cd && !v.stopped).copied();
+        let chosen = views.iter().any(|v| v.cd);
+        let (start, stop) = row_power(cd.is_some());
         w.s("{\"id\":");
         w.u(next_id);
         w.s(",\"name\":\"ubuntu\",\"state\":\"");
         w.s(if chosen { "loading" } else { "waiting" });
         w.s("\",\"disk_mib\":");
         w.u(library / (1024 * 1024));
+        if let Some(off) = cd.and_then(|v| v.tail_off) {
+            w.s(",\"off_mib\":");
+            w.u(off / (1024 * 1024));
+        }
         w.s(",\"image_type\":\"ubuntu\",\"start\":");
         w.s(if start { "true" } else { "false" });
         w.s(",\"stop\":");
@@ -1284,9 +1421,6 @@ fn write_list_json(
     }
 }
 
-/// ADR-021 A3: this binary's SHA and CI run on the body Overview already
-/// polls. A run id that is not digits is omitted, so the page has nothing
-/// to turn into a link.
 fn write_autostart(w: &mut JsonBuf<'_>) {
     let p = crate::mgmt::guest_autostart::shown();
     w.s(",\"autostart\":{\"n\":");
@@ -1303,6 +1437,9 @@ fn write_autostart(w: &mut JsonBuf<'_>) {
     w.s("]}");
 }
 
+/// ADR-021 A3: this binary's SHA and CI run on the body Overview already
+/// polls. A run id that is not digits is omitted, so the page has nothing
+/// to turn into a link.
 fn write_build_identity(w: &mut JsonBuf<'_>) {
     w.s(",\"build_sha\":\"");
     if !crate::BUILD_SHA.is_empty() && crate::BUILD_SHA.bytes().all(|b| b.is_ascii_alphanumeric()) {
@@ -1353,17 +1490,6 @@ fn write_hex_field(w: &mut JsonBuf<'_>, mut n: u64) {
 /// change this row.
 pub fn row_power(this_on: bool) -> (bool, bool) {
     (!this_on, this_on)
-}
-
-/// `Some` when the CPU is already running a different guest. This guest is
-/// left off. The guest that is on is left on.
-fn held_by_other(want: crate::mgmt::perc_boot_choice::VmcsGuest) -> Option<&'static [u8]> {
-    use crate::mgmt::perc_boot_choice::{vmcs_guest, VmcsGuest};
-    match vmcs_guest() {
-        VmcsGuest::None => None,
-        owner if owner == want => Some(b"{\"ok\":true,\"running\":true}"),
-        _ => Some(b"{\"ok\":true,\"busy\":true}"),
-    }
 }
 
 fn write_nic_json(w: &mut JsonBuf<'_>) {
@@ -1427,7 +1553,10 @@ fn write_ip(w: &mut JsonBuf<'_>, ip: [u8; 4]) {
     w.u(u64::from(ip[3]));
 }
 
-fn catalog_note(waiting: bool, choice: PercSpaChoice, stopped: bool) -> &'static str {
+fn catalog_note(waiting: bool, choice: PercSpaChoice, stopped: bool, on: usize) -> &'static str {
+    if on > 1 {
+        return "More than one guest is on. Each row has its own Start and Stop.";
+    }
     if stopped {
         return "Guest stopped. Start boots it again. The hypervisor stays up.";
     }
@@ -1568,8 +1697,10 @@ pub fn prop_guest_catalog() -> bool {
         && html.contains("/perc/guests/2/start")
         && html.contains("/perc/guests/stop")
         && html.contains("\"/perc/guests/power/\"+kind")
-        && html.contains("guestPower(\"shutdown\")")
-        && html.contains("guestPower(\"reboot\")")
+        && html.contains("guestPower(\"shutdown\",vm)")
+        && html.contains("guestPower(\"reboot\",vm)")
+        && html.contains("guestStop(vm)")
+        && html.contains("\"/perc/guests/disk/\"+off+tail")
         && html.contains("Shut down")
         && html.contains("textContent=\"Reboot\"")
         && html.contains("/perc/guests/1/linux/")
@@ -1768,7 +1899,7 @@ mod guest_catalog_test {
             &mut buf,
             catalog_numbers(IRON_LD1_BYTES, SLICE1_WINDOW_BYTES, true),
             true,
-            PercSpaChoice::Pending,
+            &[crate::mgmt::guest_slots::SlotView::EMPTY],
             true,
             &disks,
         );
@@ -1881,7 +2012,7 @@ mod guest_catalog_test {
             spare_off: SLICE1_WINDOW_BYTES,
             disk_bytes: ten,
         }];
-        let n = write_list_json(&mut buf, n, true, PercSpaChoice::Pending, true, &disks);
+        let n = write_list_json(&mut buf, n, true, &[crate::mgmt::guest_slots::SlotView::EMPTY], true, &disks);
         let body = core::str::from_utf8(&buf[..n]).unwrap_or("");
         assert!(body.ends_with('}'), "{body}");
         assert!(body.contains("\"build_sha\":\""), "{body}");
@@ -1922,7 +2053,7 @@ mod guest_catalog_test {
             &mut buf2,
             catalog_numbers(IRON_LD1_BYTES, SLICE1_WINDOW_BYTES, true),
             true,
-            PercSpaChoice::Pending,
+            &[crate::mgmt::guest_slots::SlotView::EMPTY],
             true,
             &walked[..wn],
         );
@@ -1961,7 +2092,7 @@ mod guest_catalog_test {
             &mut buf,
             numbers,
             true,
-            PercSpaChoice::Pending,
+            &[crate::mgmt::guest_slots::SlotView::EMPTY],
             true,
             &disks,
         );
@@ -1974,7 +2105,7 @@ mod guest_catalog_test {
             &mut buf,
             numbers,
             true,
-            PercSpaChoice::Pending,
+            &[crate::mgmt::guest_slots::SlotView::EMPTY],
             true,
             &disks,
         );
@@ -1991,7 +2122,7 @@ mod guest_catalog_test {
             &mut buf,
             numbers,
             true,
-            PercSpaChoice::Pending,
+            &crate::mgmt::guest_slots::views(),
             true,
             &disks,
         );

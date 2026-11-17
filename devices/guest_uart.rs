@@ -49,6 +49,8 @@
 //! whole 16550A FIFO per THRE window. guest UART TX ring room.
 //! Not `ISO-INSTALL-OK`.
 
+use crate::guest::slot::PerGuest;
+use crate::per_guest;
 use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 
 /// ISA COM1.
@@ -56,22 +58,22 @@ pub const COM1_IRQ: u8 = 4;
 const RX_CAP: usize = 16;
 
 /// COM1 IIR reads that reported RX / THRE / no interrupt.
-static STAT_IIR_RX: AtomicU32 = AtomicU32::new(0);
-static STAT_IIR_THRE: AtomicU32 = AtomicU32::new(0);
-static STAT_IIR_NONE: AtomicU32 = AtomicU32::new(0);
+static STAT_IIR_RX: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static STAT_IIR_THRE: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static STAT_IIR_NONE: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 /// COM1 LSR reads while IER.ETBEI was set: THRE reported 1 / 0.
-static STAT_LSR_THRE_ON: AtomicU32 = AtomicU32::new(0);
-static STAT_LSR_THRE_OFF: AtomicU32 = AtomicU32::new(0);
+static STAT_LSR_THRE_ON: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static STAT_LSR_THRE_OFF: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 /// COM1 THR writes; IER writes with ETBEI set / clear.
-static STAT_THR_WR: AtomicU32 = AtomicU32::new(0);
-static STAT_IER_ETBEI_ON: AtomicU32 = AtomicU32::new(0);
-static STAT_IER_ETBEI_OFF: AtomicU32 = AtomicU32::new(0);
+static STAT_THR_WR: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static STAT_IER_ETBEI_ON: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static STAT_IER_ETBEI_OFF: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 /// IRQ 4 raised by [`reassert_irq`]; raised / lowered by a COM1 PIO.
-static STAT_REASSERT_RAISE: AtomicU32 = AtomicU32::new(0);
-static STAT_PIO_RAISE: AtomicU32 = AtomicU32::new(0);
-static STAT_PIO_LOWER: AtomicU32 = AtomicU32::new(0);
+static STAT_REASSERT_RAISE: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static STAT_PIO_RAISE: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static STAT_PIO_LOWER: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 /// Last TSC [`poll_host_rx_paced`] actually issued host COM2 `inb`.
-static LAST_HOST_RX_TSC: AtomicU64 = AtomicU64::new(0);
+static LAST_HOST_RX_TSC: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
 /// Host COM2 RX at most 100 times/s (10 ms). Iron `b5e290be` polled on
 /// every RayNu-F vmexit (~2M/s at GRUB) and the chassis powered off.
 pub const HOST_RX_PACE_HZ_DIV: u64 = 100;
@@ -191,11 +193,11 @@ struct GuestUart(core::cell::UnsafeCell<Uarts>);
 // KANI-TARGET: guest-UEFI UART mutex (outside Proven Core).
 unsafe impl Sync for GuestUart {}
 
-static UARTS: GuestUart = GuestUart(core::cell::UnsafeCell::new(Uarts {
+static UARTS: PerGuest<GuestUart> = per_guest!(GuestUart(core::cell::UnsafeCell::new(Uarts {
     com1: Uart::empty(),
     com2: Uart::empty(),
-}));
-static UART_LOCK: AtomicBool = AtomicBool::new(false);
+})));
+static UART_LOCK: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 
 fn with_uart<R>(f: impl FnOnce(&mut Uarts) -> R) -> R {
     while UART_LOCK.swap(true, Ordering::Acquire) {
@@ -388,15 +390,23 @@ pub fn push_host_rx(b: u8) -> bool {
 }
 
 /// Magic SysRq into guest COM1: a line BREAK then `key`. Returns false when
-/// a BREAK is still unread or the FIFO is full (caller retries later).
+/// a BREAK is still unread, or input is still queued for the guest (caller
+/// retries later).
 /// Linux 8250 console: `uart_handle_break` arms `port->sysrq` for 5 s of
 /// jiffies; the next RBR byte goes to `handle_sysrq`. The BREAK and the key
 /// sit back to back so the window cannot lapse. `sysrq_always_enabled` is
 /// on the patched product-ISO cmdline. UART sysrq break.
 /// Not `ISO-INSTALL-OK`.
 pub fn inject_sysrq(key: u8) -> bool {
+    // A BREAK between two typed bytes makes the next typed byte the SysRq
+    // key. Nested two-guest run: the installer line lost the space in
+    // `-m sys -s 0`, printed `sysrq: HELP`, and `setup-disk` refused `0`.
+    // Wait until the typed line is in and read.
+    if crate::devices::guest_serial_answer::queued() != 0 {
+        return false;
+    }
     let (ok, pending) = with_uart(|u| {
-        if u.com1.break_pending || (u.com1.rx_len as usize) >= RX_CAP {
+        if u.com1.break_pending || u.com1.rx_len != 0 {
             return (false, false);
         }
         u.com1.break_pending = true;
@@ -417,6 +427,12 @@ pub fn inject_sysrq(key: u8) -> bool {
 /// Linux resume path must call [`poll_host_rx_paced`], never this, on
 /// the vmexit hot path.
 pub fn poll_host_rx() {
+    // COM2 input belongs to the guest that owns the console. Another guest
+    // still gets its auto-answers.
+    if crate::boot::serial::side_console() {
+        drain_answers();
+        return;
+    }
     for _ in 0..RX_CAP {
         let Some(b) = crate::boot::serial::try_read_byte() else {
             break;

@@ -423,6 +423,74 @@ pub fn find_in_dir<R: VolumeRead>(
     }
 }
 
+/// Short names in one directory. `more` is set when `max` stopped the walk
+/// before the end marker. `dir_cluster == 0` is the FAT12/16 fixed root.
+pub fn visit_dir<R: VolumeRead>(
+    vol: &FatVolume,
+    r: &R,
+    dir_cluster: u32,
+    max: usize,
+    mut visit: impl FnMut(&FatEntry),
+) -> (usize, bool) {
+    let mut seen = 0usize;
+    let mut e = [0u8; DIR_ENTRY_SIZE];
+    let mut one = |entry: &[u8], seen: &mut usize| -> bool {
+        if *seen >= max {
+            return false;
+        }
+        if let Some(ent) = parse_dir_entry(entry) {
+            visit(&ent);
+            *seen += 1;
+        }
+        true
+    };
+    if dir_cluster == 0 && vol.kind != FatKind::Fat32 {
+        let base = vol.root_start as u64 * vol.bytes_per_sector as u64;
+        for i in 0..vol.root_entries as u64 {
+            if !r.read_at(base + i * DIR_ENTRY_SIZE as u64, &mut e) || e[0] == DIR_ENTRY_END {
+                return (seen, false);
+            }
+            if !one(&e, &mut seen) {
+                return (seen, true);
+            }
+        }
+        return (seen, false);
+    }
+    let start = if dir_cluster == 0 {
+        vol.root_cluster
+    } else {
+        dir_cluster
+    };
+    let per_cluster = (vol.cluster_bytes() / DIR_ENTRY_SIZE as u32) as u64;
+    let mut cluster = start;
+    let mut hops = 0u32;
+    loop {
+        if !vol.cluster_is_valid(cluster) || per_cluster == 0 {
+            return (seen, false);
+        }
+        let base = vol.cluster_offset(cluster);
+        for i in 0..per_cluster {
+            if !r.read_at(base + i * DIR_ENTRY_SIZE as u64, &mut e) || e[0] == DIR_ENTRY_END {
+                return (seen, false);
+            }
+            if !one(&e, &mut seen) {
+                return (seen, true);
+            }
+        }
+        cluster = match next_cluster(vol, r, cluster) {
+            Ok(c) => c,
+            Err(_) => return (seen, false),
+        };
+        if vol.is_end_of_chain(cluster) {
+            return (seen, false);
+        }
+        hops += 1;
+        if hops > MAX_CHAIN_HOPS {
+            return (seen, false);
+        }
+    }
+}
+
 /// Resolve a `\`-separated path (e.g. `\EFI\BOOT\BOOTX64.EFI`) from the root.
 /// Leading/duplicate separators are ignored; `/` is accepted too.
 pub fn resolve_path<R: VolumeRead>(

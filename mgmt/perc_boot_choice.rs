@@ -11,6 +11,8 @@
 //! Proven Core: **outside** (ADR-002). The HTTPS listener is armed before
 //! this wait; the PERC walk itself is earlier and cannot see the browser.
 
+use crate::guest::slot::PerGuest;
+use crate::per_guest;
 use core::sync::atomic::{AtomicU8, Ordering};
 
 use super::api::RestMethod;
@@ -52,15 +54,15 @@ pub const PERC_SPA_TAIL_BOOT_NOTE: &str =
 
 /// JUSTIFICATION: one BSP latch. The coexist HTTP handler stores it; the
 /// boot wait and the RayNu-F stager load it. Not the Proven Core allocator.
-static CHOICE: AtomicU8 = AtomicU8::new(CHOICE_PENDING);
+static CHOICE: PerGuest<AtomicU8> = per_guest!(AtomicU8::new(CHOICE_PENDING));
 /// Guest-visible size of a tail disk. Zero unless a tail choice won the race.
-static TAIL_BYTES: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static TAIL_BYTES: PerGuest<core::sync::atomic::AtomicU64> = per_guest!(core::sync::atomic::AtomicU64::new(0));
 /// Spare byte offset of that disk. Zero unless it is the free tail.
-static TAIL_OFF: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static TAIL_OFF: PerGuest<core::sync::atomic::AtomicU64> = per_guest!(core::sync::atomic::AtomicU64::new(0));
 /// SPA Stop. The RayNu-F exit loop takes it and leaves the guest.
-static GUEST_STOP: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+static GUEST_STOP: PerGuest<core::sync::atomic::AtomicBool> = per_guest!(core::sync::atomic::AtomicBool::new(false));
 /// Stop already landed. Start stays refused until the next hypervisor boot.
-static GUEST_STOPPED: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+static GUEST_STOPPED: PerGuest<core::sync::atomic::AtomicBool> = per_guest!(core::sync::atomic::AtomicBool::new(false));
 
 /// What the operator has posted, if anything.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -397,6 +399,20 @@ pub fn take_guest_stop() -> bool {
     true
 }
 
+/// Stop is posted for this slot and its exit path has not taken it yet.
+/// The guest scheduler runs a halted guest so the Stop lands.
+pub fn stop_pending() -> bool {
+    GUEST_STOP.load(Ordering::Acquire)
+}
+
+/// The guest left the VMCS on its own (ACPI power-off, a failed launch).
+/// Same latch as a landed Stop, so the row reads stopped and Start boots
+/// it again.
+pub fn note_guest_off() {
+    GUEST_STOP.store(false, Ordering::Release);
+    GUEST_STOPPED.store(true, Ordering::Release);
+}
+
 /// True after Stop has landed.
 pub fn guest_stopped() -> bool {
     GUEST_STOPPED.load(Ordering::Acquire)
@@ -416,7 +432,7 @@ pub fn rearm_guest_after_stop() -> bool {
     true
 }
 
-static PERC_RELAUNCH: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+static PERC_RELAUNCH: PerGuest<core::sync::atomic::AtomicBool> = per_guest!(core::sync::atomic::AtomicBool::new(false));
 
 /// Which guest, if any, is in the RayNu-F VMCS.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -446,9 +462,15 @@ pub fn note_perc_relaunch() {
     PERC_RELAUNCH.store(true, Ordering::Release);
 }
 
-/// One-shot. The idle loop consumes this and relaunches RayNu-F.
+/// One-shot. The idle loop or the guest scheduler consumes this and
+/// launches RayNu-F in this slot.
 pub fn take_perc_relaunch() -> bool {
     PERC_RELAUNCH.swap(false, Ordering::AcqRel)
+}
+
+/// A Start is waiting for this slot. Does not consume it.
+pub fn relaunch_pending() -> bool {
+    PERC_RELAUNCH.load(Ordering::Acquire)
 }
 
 fn status_body() -> &'static [u8] {
@@ -649,12 +671,14 @@ pub fn prop_perc_spa_choice() -> bool {
 /// Host tests only.
 #[cfg(test)]
 pub fn clear_perc_spa_choice_for_test() {
-    CHOICE.store(CHOICE_PENDING, Ordering::Release);
-    TAIL_BYTES.store(0, Ordering::Release);
-    TAIL_OFF.store(0, Ordering::Release);
-    GUEST_STOP.store(false, Ordering::Release);
-    GUEST_STOPPED.store(false, Ordering::Release);
-    PERC_RELAUNCH.store(false, Ordering::Release);
+    for slot in 0..crate::guest::slot::MAX_GUESTS {
+        CHOICE.of(slot).store(CHOICE_PENDING, Ordering::Release);
+        TAIL_BYTES.of(slot).store(0, Ordering::Release);
+        TAIL_OFF.of(slot).store(0, Ordering::Release);
+        GUEST_STOP.of(slot).store(false, Ordering::Release);
+        GUEST_STOPPED.of(slot).store(false, Ordering::Release);
+        PERC_RELAUNCH.of(slot).store(false, Ordering::Release);
+    }
 }
 
 #[cfg(test)]

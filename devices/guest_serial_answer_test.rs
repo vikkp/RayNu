@@ -1,8 +1,8 @@
 use super::{
     apk_media_mounted, apk_overlay_needs_pit, apk_packages_overlay_active, begin_second_boot,
-    note_tx, queued, reset, second_boot, setup_wipe_allowed, take_rx, take_setup_withheld_line,
-    take_setup_withheld_log, BOOTLOADER, DISK, GRUB_ENTER, GUESTS_ISO_SETUP_NOTE, MOUNT_EXIT, NO,
-    PROVE, REBOOT, ROOT, SETUP, SETUP_WITHHELD_NOTE, SYS, YES,
+    lab_power_off_after_prove, note_tx, queued, reset, second_boot, setup_wipe_allowed, take_rx, take_setup_withheld_line,
+    take_setup_withheld_log, BOOTLOADER, DISK, GRUB_ENTER, GUESTS_ISO_SETUP_NOTE, LAB_POWEROFF,
+    MOUNT_EXIT, NO, PROVE, REBOOT, ROOT, SETUP, SETUP_WITHHELD_NOTE, SYS, YES,
 };
 
 #[test]
@@ -500,6 +500,48 @@ fn second_boot_answers_root_then_prove_never_setup() {
     assert!(!got.windows(SETUP.len()).any(|w| w == SETUP));
     reset();
     assert!(!second_boot());
+}
+
+#[test]
+fn lab_second_guest_types_poweroff_once_after_the_proof() {
+    begin_second_boot();
+    lab_power_off_after_prove();
+    for &b in b"localhost login:" {
+        note_tx(b);
+    }
+    while take_rx().is_some() {}
+    for &b in b"localhost:~# " {
+        note_tx(b);
+    }
+    let mut got = Vec::new();
+    while let Some(b) = take_rx() {
+        got.push(b);
+    }
+    let mut want = PROVE.to_vec();
+    want.extend_from_slice(LAB_POWEROFF);
+    assert_eq!(got, want);
+    assert_eq!(
+        crate::mgmt::guest_power::pending(),
+        Some(crate::mgmt::guest_power::PowerAsk::Shutdown)
+    );
+    crate::mgmt::guest_power::clear();
+
+    // The flag is one-shot: the restarted guest proves and stays up.
+    begin_second_boot();
+    for &b in b"localhost login:" {
+        note_tx(b);
+    }
+    while take_rx().is_some() {}
+    for &b in b"localhost:~# " {
+        note_tx(b);
+    }
+    got.clear();
+    while let Some(b) = take_rx() {
+        got.push(b);
+    }
+    assert_eq!(got, PROVE);
+    assert_eq!(crate::mgmt::guest_power::pending(), None);
+    reset();
 }
 
 #[test]

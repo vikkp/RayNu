@@ -57,6 +57,8 @@
 //! ATAPI READ does not truncate a distro image into the 72 KiB lab stub.
 //! Not virtio-in-guest. Not a distro installer. Not Everest E5.
 
+use crate::guest::slot::PerGuest;
+use crate::per_guest;
 use crate::devices::guest_platform::pci_cfg_offset;
 use core::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU64, AtomicU8, Ordering};
 
@@ -240,8 +242,8 @@ struct GuestCd(core::cell::UnsafeCell<CdMedia>);
 // KANI-TARGET: management-plane CD media; outside Proven Core.
 unsafe impl Sync for GuestCd {}
 
-static GUEST_CD: GuestCd = GuestCd(core::cell::UnsafeCell::new(CdMedia::empty()));
-static GUEST_CD_LOCK: AtomicBool = AtomicBool::new(false);
+static GUEST_CD: PerGuest<GuestCd> = per_guest!(GuestCd(core::cell::UnsafeCell::new(CdMedia::empty())));
+static GUEST_CD_LOCK: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 
 fn with_cd<R>(f: impl FnOnce(&mut CdMedia) -> R) -> R {
     while GUEST_CD_LOCK.swap(true, Ordering::Acquire) {
@@ -254,35 +256,35 @@ fn with_cd<R>(f: impl FnOnce(&mut CdMedia) -> R) -> R {
     out
 }
 
-static VISIBLE: AtomicBool = AtomicBool::new(false);
-static PCI_ENUM: AtomicBool = AtomicBool::new(false);
-static HIDE_SLOT0: AtomicBool = AtomicBool::new(false);
-static HIDE_PIIX: AtomicBool = AtomicBool::new(false);
-static HIDE_PRODUCT: AtomicBool = AtomicBool::new(false);
-static HIDE_PRODUCT_SLOT0: AtomicBool = AtomicBool::new(false);
-static ATA_FLOAT: AtomicBool = AtomicBool::new(false);
-static SECTORS: AtomicU32 = AtomicU32::new(0);
-static ISO_ID: AtomicU64 = AtomicU64::new(0);
-static ISO_LEN: AtomicU64 = AtomicU64::new(0);
-static MARKER: AtomicBool = AtomicBool::new(false);
-static PACKET_N: AtomicU32 = AtomicU32::new(0);
-static LAST_SCSI: AtomicU8 = AtomicU8::new(0);
-static ATA_CMD_N: AtomicU32 = AtomicU32::new(0);
-static LAST_ATA_CMD: AtomicU8 = AtomicU8::new(0);
-static ATA_IO_N: AtomicU32 = AtomicU32::new(0);
-static PCI_CMD_WRITES: AtomicU32 = AtomicU32::new(0);
-static LAST_PCI_CMD_WR: AtomicU16 = AtomicU16::new(0);
-static PCI_CMD_ENABLE_PRINTED: AtomicBool = AtomicBool::new(false);
+static VISIBLE: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static PCI_ENUM: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static HIDE_SLOT0: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static HIDE_PIIX: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static HIDE_PRODUCT: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static HIDE_PRODUCT_SLOT0: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static ATA_FLOAT: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static SECTORS: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static ISO_ID: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+static ISO_LEN: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+static MARKER: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static PACKET_N: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static LAST_SCSI: PerGuest<AtomicU8> = per_guest!(AtomicU8::new(0));
+static ATA_CMD_N: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static LAST_ATA_CMD: PerGuest<AtomicU8> = per_guest!(AtomicU8::new(0));
+static ATA_IO_N: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static PCI_CMD_WRITES: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static LAST_PCI_CMD_WR: PerGuest<AtomicU16> = per_guest!(AtomicU16::new(0));
+static PCI_CMD_ENABLE_PRINTED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// Last write to IDE Expansion ROM (offset `0x30`). Iron COM2 `7ba1ccf`
 /// HLT `cf8ide=0x80000930` (`00:01.1+30`). No option ROM (QEMU PIIX).
-static LAST_PCI_ROM_WR: AtomicU32 = AtomicU32::new(0);
-static PCI_ROM_WR_PRINTED: AtomicBool = AtomicBool::new(false);
+static LAST_PCI_ROM_WR: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static PCI_ROM_WR_PRINTED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// PciBus EnableAttributes IO+BusMaster. Iron COM2 `c144001` restored
 /// this after write-0 (`pcicmd=0x5`) and still `ataio=0`. COMMAND closed.
 /// Do not OR `0x0001`.
 const IDE_PCI_CMD_ENABLE: u16 = 0x0005;
 const PCI_CMD_WR_SEQ_CAP: usize = 8;
-static PCI_CMD_WR_SEQ: [AtomicU16; PCI_CMD_WR_SEQ_CAP] = [
+static PCI_CMD_WR_SEQ: PerGuest<[AtomicU16; PCI_CMD_WR_SEQ_CAP]> = per_guest!([
     AtomicU16::new(0),
     AtomicU16::new(0),
     AtomicU16::new(0),
@@ -291,10 +293,10 @@ static PCI_CMD_WR_SEQ: [AtomicU16; PCI_CMD_WR_SEQ_CAP] = [
     AtomicU16::new(0),
     AtomicU16::new(0),
     AtomicU16::new(0),
-];
-static CATALOG_READ: AtomicBool = AtomicBool::new(false);
-static BOOT_IMAGE_READ: AtomicBool = AtomicBool::new(false);
-static LAST_READ_LBA: AtomicU32 = AtomicU32::new(0);
+]);
+static CATALOG_READ: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static BOOT_IMAGE_READ: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static LAST_READ_LBA: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 
 /// Decode PCI config address (mechanism #1).
 pub fn pci_bdf(addr: u32) -> (u8, u8, u8, u8) {

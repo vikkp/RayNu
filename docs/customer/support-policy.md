@@ -6,14 +6,17 @@ This is what a Shipment 1 customer gets for a year. The terms were accepted 2026
 
 A supported release is a git tag. The tag names one signed `r640-hypervisor.efi`, its SHA256, and the build line the page shows: `build <sha> · CI <run>`.
 
-The current release, and the rollback a new flash returns to, is [`v0.1.6-wave6-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.6-wave6-closed). GitHub Latest is that tag. The next wave close is `v0.1.7-wave7-closed`. A wave number is the tag's minor number.
+The current release, and the rollback a new flash returns to, is [`v0.1.7-b6`](https://github.com/vikkp/RayNu/releases/tag/v0.1.7-b6). GitHub Latest is that tag. Wave 7 is open: two product guests lived, and a guest still has one CPU. The next wave close is `v0.1.7-wave7-closed`. A wave number is the tag's minor number.
 
-The image that lived Wave 6 on the R640 is `4e327820e039`, CI run `42384654720`, signed SHA256 `1101880eb670530ee3e23a5499cc9b0a2ac5579954c755dbe455fa9aa2b1995a`. A rebuild of this tag stamps its own build line. The stick keeps `4e327820e039` until that file is staged.
+The image that lived B6 on the R640 is `4f581a4dcd93`, CI run `44174137515`. The page showed `build 4f581a4dcd93 · CI 44174137515`. The signed SHA256 of that stick was not recorded. A rebuild of this tag stamps its own build line. The stick keeps `4f581a4dcd93` until that file is staged.
+
+The image that lived Wave 6 is `4e327820e039`, CI run `42384654720`, signed SHA256 `1101880eb670530ee3e23a5499cc9b0a2ac5579954c755dbe455fa9aa2b1995a`. Its tag is `v0.1.6-wave6-closed`.
 
 Older tags stay available. They are not Latest:
 
 | Tag | Build |
 |-----|--------|
+| `v0.1.6-wave6-closed` | `4e327820e039` |
 | `v0.1.0-wave-5-closed` | `9516e470` |
 | `v0.1.0-m8-9-lan` | `0d865c7f` |
 | `v0.1.0-m8-8-ubuntu` | `c3a70e62` |

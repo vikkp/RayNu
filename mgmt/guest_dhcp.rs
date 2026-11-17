@@ -10,7 +10,11 @@
 //! (`01:00.1` / `:39`). Function 0 stays the SPA. The APE phylock stays
 //! with iDRAC. Rings on that port are not programmed.
 
+#[cfg(test)]
+use crate::guest::slot::PerGuest;
 use crate::mgmt::guest_nic::mint_mac;
+#[cfg(test)]
+use crate::per_guest;
 
 #[cfg(test)]
 use crate::mgmt::guest_nic::{EGRESS_PHY_MAC, SPA_MAC};
@@ -221,15 +225,15 @@ fn ip_checksum(hdr: &[u8]) -> u16 {
 }
 
 #[cfg(test)]
-static INJECT_ON: AtomicBool = AtomicBool::new(false);
+static INJECT_ON: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 #[cfg(test)]
-static INJECT_IP: AtomicU32 = AtomicU32::new(0);
+static INJECT_IP: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 #[cfg(test)]
-static INJECT_PX: AtomicU8 = AtomicU8::new(0);
+static INJECT_PX: PerGuest<AtomicU8> = per_guest!(AtomicU8::new(0));
 #[cfg(test)]
-static INJECT_GW: AtomicU32 = AtomicU32::new(0);
+static INJECT_GW: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 #[cfg(test)]
-static INJECT_DNS: AtomicU32 = AtomicU32::new(0);
+static INJECT_DNS: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 
 #[cfg(test)]
 pub fn inject_offer_for_test(fields: Option<DhcpFields>) {

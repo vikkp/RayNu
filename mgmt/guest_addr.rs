@@ -18,6 +18,8 @@
 //! and manual entry typed one; both are a static `Address=` here. RayNu-V
 //! does not run a second DHCP client on that MAC.
 
+use crate::guest::slot::PerGuest;
+use crate::per_guest;
 use core::sync::atomic::{AtomicU8, Ordering};
 
 use crate::mgmt::guest_nic::SPA_MAC;
@@ -203,9 +205,9 @@ impl IpToken {
     }
 }
 
-static HELD: AtomicU8 = AtomicU8::new(0);
-static TOKEN_BYTES: [AtomicU8; 96] = [const { AtomicU8::new(0) }; 96];
-static AMEND_LOGGED: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+static HELD: PerGuest<AtomicU8> = per_guest!(AtomicU8::new(0));
+static TOKEN_BYTES: PerGuest<[AtomicU8; 96]> = per_guest!([const { AtomicU8::new(0) }; 96]);
+static AMEND_LOGGED: PerGuest<core::sync::atomic::AtomicBool> = per_guest!(core::sync::atomic::AtomicBool::new(false));
 
 /// `ip=<client>::<gw>:<mask>:::off[:<dns>]`.
 ///

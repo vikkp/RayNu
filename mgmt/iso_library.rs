@@ -14,6 +14,8 @@
 //! The firmware chunk writer and the CD device are the iron half. This
 //! module is the placement and the policy. A failed install keeps the file.
 
+use crate::guest::slot::PerGuest;
+use crate::per_guest;
 use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use crate::mgmt::megaraid::{
@@ -38,8 +40,8 @@ pub const LIBRARY_CLOUD_INIT_ARG: &str = "fsck.mode=skip systemd.mask=casper-md5
 
 static LIB_OFF: AtomicU64 = AtomicU64::new(0);
 static LIB_LEN: AtomicU64 = AtomicU64::new(0);
-static CD_BOOT: AtomicBool = AtomicBool::new(false);
-static DISK_BOOTED: AtomicBool = AtomicBool::new(false);
+static CD_BOOT: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static DISK_BOOTED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// One library POST should not print the per-exchange SOL lines.
 static LOG_QUIET: AtomicBool = AtomicBool::new(false);
 
@@ -148,8 +150,7 @@ pub fn begin_library(spare_bytes: u64, occupied_end: u64, iso_bytes: u64) -> Opt
     let place = place_iso_library(spare_bytes, occupied_end, iso_bytes)?;
     LIB_OFF.store(place.spare_off, Ordering::Release);
     LIB_LEN.store(place.bytes, Ordering::Release);
-    CD_BOOT.store(false, Ordering::Release);
-    DISK_BOOTED.store(false, Ordering::Release);
+    forget_cd_everywhere();
     Some(place)
 }
 
@@ -334,7 +335,17 @@ pub fn note_install_failed() {
 fn clear_held() {
     LIB_OFF.store(0, Ordering::Release);
     LIB_LEN.store(0, Ordering::Release);
-    CD_BOOT.store(false, Ordering::Release);
+    for slot in 0..crate::guest::slot::MAX_GUESTS {
+        CD_BOOT.of(slot).store(false, Ordering::Release);
+    }
+}
+
+/// A new library file is not the CD of any slot until Guests chooses it.
+fn forget_cd_everywhere() {
+    for slot in 0..crate::guest::slot::MAX_GUESTS {
+        CD_BOOT.of(slot).store(false, Ordering::Release);
+        DISK_BOOTED.of(slot).store(false, Ordering::Release);
+    }
 }
 
 /// One POST body. Fits the 8 KiB coexist receive buffer with the headers.

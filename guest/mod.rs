@@ -6,6 +6,7 @@
 //! G0 lab bzImage backend, not the only installer.
 
 pub mod linux_boot;
+pub mod slot;
 
 pub use linux_boot::{
     build_minimal_bzimage, claim_load_pages, load_bzimage_guest, load_synthetic_guest,

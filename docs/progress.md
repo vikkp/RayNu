@@ -191,7 +191,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next (numbered)
 
-**Wave 6 closed 2026-11-07.** H8 terms accepted. GitHub Latest and the current rollback is `v0.1.6-wave6-closed`. The next wave close is `v0.1.7-wave7-closed`. The lab stick remains `4e327820e039` until that file is staged.
+**B6 lived 2026-11-17.** GitHub Latest and the current rollback is `v0.1.7-b6`. The image is `4f581a4dcd93` / run `44174137515`. Wave 7 is open on B7. The next wave close is `v0.1.7-wave7-closed`. Previous rollback `v0.1.6-wave6-closed` (`4e327820e039` / run `42384654720`).
 
 **ADR-021 D11 lived 2026-11-07.** Port roles are fixed in `docs/customer/port-roles.md`: port 3 is the page, port 4 is the guests, iDRAC is Dedicated or LOM3. CI runs `./tools/check-d11-docs.sh`. No new EFI. Wave 6 stays open. Next host-first row is H8.
 

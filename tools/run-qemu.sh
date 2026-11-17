@@ -134,6 +134,17 @@ if [[ "${RAYNU_F:-0}" == "1" ]]; then
   echo "==> ADR-016 RayNu-F: staged $ESP/EFI/RayNu/raynuf.txt"
 fi
 
+# ADR-022 lab: TWO_GUESTS=1 stages EFI/RayNu/twoguest.txt so the EFI boots a
+# second guest (slot 1) beside the first once the first hands off to Linux.
+# Needs PRODUCT_ISO; the second guest's RAM and disk come from DRAM above 4G.
+rm -f "$ESP/EFI/RayNu/twoguest.txt" 2>/dev/null || true
+if [[ "${TWO_GUESTS:-0}" == "1" ]]; then
+  mkdir -p "$ESP/EFI/RayNu"
+  : >"$ESP/EFI/RayNu/twoguest.txt"
+  QEMU_MEM="${QEMU_MEM:-8192M}"
+  echo "==> ADR-022 two guests: staged $ESP/EFI/RayNu/twoguest.txt mem=$QEMU_MEM"
+fi
+
 # Stage 46: leftover product ISO would HOLD guest-UEFI instead of E4 LINUX-EARLY.
 rm -f "$ESP/linux.iso" "$ESP/install.iso" \
   "$ESP/EFI/RayNu/linux.iso" "$ESP/EFI/RayNu/install.iso" 2>/dev/null || true
@@ -345,6 +356,10 @@ if [[ -n "${PRODUCT_ISO:-}" || -n "${M8_PERSIST_IMG:-}" ]]; then
     cap_b=$((3584 * 1024 * 1024))
     if [[ "$ram_b" -gt "$cap_b" ]]; then
         below4g="3584M"
+    fi
+    # Two guests: keep most RAM above 4G so it is one span that holds both.
+    if [[ "${TWO_GUESTS:-0}" == "1" ]]; then
+        below4g="2048M"
     fi
     for i in "${!ACCEL_ARGS[@]}"; do
         if [[ "${ACCEL_ARGS[$i]}" == "-machine" ]]; then

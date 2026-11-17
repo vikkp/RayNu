@@ -17,6 +17,8 @@
 //!
 //! The backing store is not written. Alpine disk reads do not call this.
 
+use crate::guest::slot::PerGuest;
+use crate::per_guest;
 use core::cell::UnsafeCell;
 use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 
@@ -57,7 +59,7 @@ struct View {
 // KANI-TARGET: library CD linux-line view (outside Proven Core).
 unsafe impl Sync for View {}
 
-static VIEW: View = View {
+static VIEW: PerGuest<View> = per_guest!(View {
     slots: [
         Slot {
             on: AtomicBool::new(false),
@@ -77,7 +79,7 @@ static VIEW: View = View {
     raw: UnsafeCell::new([0; VIEW_CAP]),
     noted_orig: AtomicU32::new(0),
     noted_new: AtomicU32::new(0),
-};
+});
 
 /// Drop remembered extents. `FirmwareState` reset does not clear this.
 pub fn reset_cd_linux_view() {

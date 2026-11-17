@@ -3,7 +3,8 @@ use super::{
     guest_uefi_report_ram_should_premap, GUEST_UEFI_REPORT_RAM_PRODUCT_EXTRA,
 };
 use super::{
-    guest_uefi_host_stack_guard_ok, guest_uefi_host_stack_headroom, GUEST_UEFI_HOST_STACK_GUARD_BYTE,
+    guest_uefi_host_stack_guard_ok, guest_uefi_host_stack_headroom, vmcs_io_bitmap_addr_ok,
+    vmexit_intr_is_hw_exception, GUEST_UEFI_HOST_STACK_GUARD_BYTE,
     GUEST_UEFI_HOST_STACK_GUARD_PAGES, GUEST_UEFI_HOST_STACK_PAGES,
 };
 use super::{
@@ -100,6 +101,7 @@ use super::{
     guest_uefi_linux_pit_jiffies_now, LINUX_PIT_RESUME_MIN_TSC,
     guest_uefi_virtio_mmio_heartbeat,
     guest_uefi_installer_console_quiet,
+    guest_uefi_virtio_mmio_notify_quiet,
     guest_uefi_linux_io_raises_pit, guest_uefi_linux_preempt_deadloop_noskip,
     guest_uefi_linux_pic_before_lapic, guest_uefi_linux_pic_before_leftover_gsi2,
     guest_uefi_pic_before_lapic,
@@ -1725,6 +1727,11 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_installer_console_quiet(false, 9000));
     assert!(!guest_uefi_installer_console_quiet(true, 8191));
     assert!(guest_uefi_installer_console_quiet(true, 8192));
+    assert!(!guest_uefi_virtio_mmio_notify_quiet(true, 1023, 0x300));
+    assert!(guest_uefi_virtio_mmio_notify_quiet(true, 1024, 0x300));
+    assert!(guest_uefi_virtio_mmio_notify_quiet(true, 5828, 0x100));
+    assert!(!guest_uefi_virtio_mmio_notify_quiet(true, 5828, 0x14));
+    assert!(!guest_uefi_virtio_mmio_notify_quiet(false, 5828, 0x300));
     assert!(guest_uefi_virtio_mmio_heartbeat(0));
     assert!(guest_uefi_virtio_mmio_heartbeat(31));
     assert!(guest_uefi_virtio_mmio_heartbeat(64));
@@ -3515,16 +3522,35 @@ fn f7_relaunch_resets_firmware_state_without_a_stack_temporary() {
     assert!(src.contains("static RAYNU_F_STATE_TEMPLATE"));
     assert!(src.contains("RayNu-F F7 template reset"));
     assert!(
-        !src.contains("RAYNU_F_STATE = crate::raynu_f::FirmwareState::new()"),
+        !src.contains("RAYNU_F_STATE = crate::raynu_f::FirmwareState::new()")
+            && !src.contains("*st = crate::raynu_f::FirmwareState::new()"),
         "F7 must memcpy the .rdata template, never construct on the stack"
     );
     assert!(src.contains("core::ptr::addr_of!(RAYNU_F_STATE_TEMPLATE)"));
     // The FirmwareState is ~84 KiB; the old 4-page stack could not hold it.
     assert!(core::mem::size_of::<crate::raynu_f::FirmwareState>() > 4 * 4096);
     assert!(core::mem::size_of::<crate::raynu_f::FirmwareState>() < 128 * 1024);
-    // Host stack: 32 pages + 1 guard page; the guard is checked before VMCLEAR.
-    assert!(GUEST_UEFI_HOST_STACK_PAGES >= 32);
-    assert_eq!(GUEST_UEFI_HOST_STACK_GUARD_PAGES, 1);
+    // Host stack: at least 32 pages + 1 guard page; the guard is checked before VMCLEAR.
+    assert!(GUEST_UEFI_HOST_STACK_PAGES >= 256);
+    assert!(GUEST_UEFI_HOST_STACK_GUARD_PAGES >= 256);
+    assert!(guest_uefi_host_stack_headroom(GUEST_UEFI_HOST_STACK_PAGES, 143_328) > 0);
+    // ADR-022: every guest slot exits onto this one host stack. There is no
+    // second copy of the firmware, the exit handler, or the stack.
+    assert!(!src.contains("COMPANION_HOST_STACK"));
+    assert!(!src.contains("SEAT_HOST_RSP"));
+    assert!(!src.contains("seat_firmware_service"));
+    assert!(vmcs_io_bitmap_addr_ok(0x51e000));
+    assert!(!vmcs_io_bitmap_addr_ok(0x51e010));
+    assert!(!vmcs_io_bitmap_addr_ok(0));
+    assert!(src.contains("publish_f7_disk"));
+    assert!(src.contains("guid="));
+    assert!(src.contains("d.start_image"));
+    assert!(src.contains("d.exit_image"));
+    assert!(src.contains("ServiceId::InitrdLoadFile"));
+    assert!(src.contains("publish_loaded_image"));
+    assert!(src.contains("set_high_region("));
+    assert!(vmexit_intr_is_hw_exception(0x8000_0b08, 8));
+    assert!(!vmexit_intr_is_hw_exception(0x8000_0b08, 14));
     assert!(guest_uefi_host_stack_headroom(4, 81_024) < 0, "16 KiB overflowed");
     assert!(guest_uefi_host_stack_headroom(GUEST_UEFI_HOST_STACK_PAGES, 81_024) > 0);
     let guard = [GUEST_UEFI_HOST_STACK_GUARD_BYTE; 4096];

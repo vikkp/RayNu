@@ -12,6 +12,8 @@
 //! `try_inject_guest_irq`) so Linux EOI matches. This module is live only
 //! while the product ISO window is armed. Host/CI never prints `ISO-INSTALL-OK`.
 
+use crate::guest::slot::PerGuest;
+use crate::per_guest;
 use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 
 /// IOAPIC MMIO window (QEMU/ICH).
@@ -121,8 +123,8 @@ struct GuestIrq(core::cell::UnsafeCell<IrqChip>);
 // KANI-TARGET: guest-UEFI IRQ chip mutex (outside Proven Core).
 unsafe impl Sync for GuestIrq {}
 
-static IRQ: GuestIrq = GuestIrq(core::cell::UnsafeCell::new(IrqChip::empty()));
-static IRQ_LOCK: AtomicBool = AtomicBool::new(false);
+static IRQ: PerGuest<GuestIrq> = per_guest!(GuestIrq(core::cell::UnsafeCell::new(IrqChip::empty())));
+static IRQ_LOCK: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 
 fn with_irq<R>(f: impl FnOnce(&mut IrqChip) -> R) -> R {
     while IRQ_LOCK.swap(true, Ordering::Acquire) {
@@ -137,7 +139,7 @@ fn with_irq<R>(f: impl FnOnce(&mut IrqChip) -> R) -> R {
 
 /// Installed-disk Linux has no product ISO, so the IRQ chip stayed dark and
 /// `raise_virtio` was a no-op. Set at RayNu-F Linux handoff.
-static LINUX_DEV_IRQ: AtomicBool = AtomicBool::new(false);
+static LINUX_DEV_IRQ: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 
 /// True when device IRQs should be latched. Product ISO, or Linux handoff.
 pub fn guest_irq_live(product_iso: bool, linux_handoff: bool) -> bool {
@@ -156,8 +158,8 @@ pub fn note_linux_dev_irq() {
     LINUX_DEV_IRQ.store(true, Ordering::Release);
 }
 
-static PREFER_PIT_ONCE: AtomicBool = AtomicBool::new(false);
-static PREFER_PIT_HOLD: AtomicBool = AtomicBool::new(false);
+static PREFER_PIT_ONCE: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static PREFER_PIT_HOLD: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// After PIC 11 is taken, the next peek/take prefers PIT if both are
 /// pending **1:1 until** Alpine usbdelay finishes, then every third
 /// PIC 11 (3:1) so apk overlay INTx and jiffies both move.
@@ -166,28 +168,28 @@ static PREFER_PIT_HOLD: AtomicBool = AtomicBool::new(false);
 /// yield after `media: ok` still froze apk at `n=1345`.
 /// linux PIC IRQ11 yield PIT. linux PIC IRQ11 yield until mount.
 /// linux PIC IRQ11 yield 3 after mount.
-static IRQ11_YIELD_PIT: AtomicBool = AtomicBool::new(false);
-static PIC11_SINCE_PIT: AtomicU8 = AtomicU8::new(0);
-static FIRMWARE_WIRE: AtomicBool = AtomicBool::new(false);
+static IRQ11_YIELD_PIT: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static PIC11_SINCE_PIT: PerGuest<AtomicU8> = per_guest!(AtomicU8::new(0));
+static FIRMWARE_WIRE: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// Linux itself wrote IOAPIC pin 2. Firmware virtual-wire leftover does not
 /// count — that leftover made iron `c61942b` skip PIC virtio (no
 /// `linux PIC IRQ0`, apk `n=1345`). linux PIC before leftover GSI 2.
-static LINUX_IOAPIC_GSI2: AtomicBool = AtomicBool::new(false);
+static LINUX_IOAPIC_GSI2: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// 8259 INTA counts for IRQ 0 (PIT) and IRQ 4 (COM1) since reset.
 /// UART THRE chain telemetry.
-static TAKE_IRQ0: AtomicU32 = AtomicU32::new(0);
-static TAKE_IRQ4: AtomicU32 = AtomicU32::new(0);
+static TAKE_IRQ0: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static TAKE_IRQ4: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 /// 8259 INTA count for slave IRQ 11 (virtio INTx) and [`raise_pit`] calls
 /// since reset. M8.9 post-TX trace.
-static TAKE_IRQ11: AtomicU32 = AtomicU32::new(0);
-static PIT_RAISES: AtomicU32 = AtomicU32::new(0);
+static TAKE_IRQ11: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static PIT_RAISES: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 /// OCW2 EOI writes per 8259 and the last OCW2 byte each one saw since
 /// reset. Iron `0dcc1cea` left master ISR=1 / slave ISR=8 ten seconds after
 /// the first frame; these say whether the guest ever wrote the EOI.
-static EOI_MASTER: AtomicU32 = AtomicU32::new(0);
-static EOI_SLAVE: AtomicU32 = AtomicU32::new(0);
-static LAST_OCW2_MASTER: AtomicU8 = AtomicU8::new(0);
-static LAST_OCW2_SLAVE: AtomicU8 = AtomicU8::new(0);
+static EOI_MASTER: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static EOI_SLAVE: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static LAST_OCW2_MASTER: PerGuest<AtomicU8> = per_guest!(AtomicU8::new(0));
+static LAST_OCW2_SLAVE: PerGuest<AtomicU8> = per_guest!(AtomicU8::new(0));
 
 /// Both 8259s plus the INTA / PIT-raise / EOI counters. M8.9 post-TX trace.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

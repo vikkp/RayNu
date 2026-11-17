@@ -19,15 +19,15 @@
   },
   "counts": {
     "S1": {
-      "lived": 54,
-      "in flight": 1,
-      "planned": 12,
+      "lived": 56,
+      "in flight": 2,
+      "planned": 9,
       "total": 67
     },
     "Final": {
-      "lived": 54,
-      "in flight": 1,
-      "planned": 74,
+      "lived": 56,
+      "in flight": 2,
+      "planned": 71,
       "total": 129
     }
   },
@@ -184,7 +184,7 @@
           "status": "lived",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Iron `621654369b68` / run `40958321431`. `boot: B4 acpi rsdp gpa=0x804000 (power button and PCI0 IRQ 11; no MADT)`. Shut down: `boot: B4 sci`, `systemd-poweroff.service`, `reboot: Power down`, `boot: B4 power off`; the guest stayed down. Reboot on a later F11 of the same stick: `boot: B4 sci`, `reboot: Power down`, `boot: B4 power cycle`, `guest reset requested src=acpi n=1`, then `raynusrv2 login:` again. Stop was not the path. `84ad5422` had no `PCI0` and the initrd never saw `vda`. Evidence `docs/evidence/r640/2026-10-29-62165436-wave-4-b4-power-ok.md`. Wave 4 stays open on D9",
+          "note": "Iron `621654369b68` / run `40958321431`. `boot: B4 acpi rsdp gpa=0x804000 (power button and PCI0 IRQ 11; no MADT)`. Shut down: `boot: B4 sci`, `systemd-poweroff.service`, `reboot: Power down`, `boot: B4 power off`; the guest stayed down. Reboot on a later F11 of the same stick: `boot: B4 sci`, `reboot: Power down`, `boot: B4 power cycle`, `guest reset requested src=acpi n=1`, then `raynusrv2 login:` again. Stop was not the path. `84ad5422` had no `PCI0` and the initrd never saw `vda`. Evidence `docs/evidence/r640/2026-10-29-62165436-wave-4-b4-power-ok.md`. Wave 4 stays open on D9. That iron run took SCI on the 8259. Since B8 Linux takes it on the I/O APIC, where a level line that stays high is delivered again after every EOI; a nested run on branch `cursor/wave-7-b6-seats-37d7` printed `soft lockup ... irq/9-acpi`. IRQ 9 now goes low when the guest clears the button status. Shut down on the I/O APIC has not been re-run on iron",
           "wave": "4"
         },
         {
@@ -199,28 +199,28 @@
         {
           "id": "B6",
           "capability": "Multiple concurrent guests on one R640",
-          "status": "planned",
+          "status": "lived",
           "ships": "S1",
           "ref": "M4",
-          "note": "`RAYNU-V-M4-2VM-OK` on iron for lab guests; product guests one at a time",
+          "note": "Iron `4f581a4dcd93` / run `44174137515`, branch `cursor/wave-7-b6-seats-37d7`, PR #439. Evidence `2026-11-17-4f581a4d-wave-7-b6-two-guests-ok.md`. Guest 3 (Ubuntu) was at `raynusrv2 login:`; Start of guest 2 (Alpine) on Guests printed `boot: guest slot 1 disk bytes=10737418240 spare_off=8589934592`, `boot: guest slot 1 machine VMCS=0x1a660b000`, `boot: guest slot 1 start guests_on=1`, `boot: guest scheduler: two guests share the CPU`, then `RAYNU-V-RAYNU-F-DISK-BOOT-OK`, `root=UUID=ee851fd5-…` and `localhost login:`. Five status lines 30 s apart: `boot: guests on=2 switches=14036 g0 runs=7018 … g1 runs=7018` through `switches=73080 g0 runs=36540 … g1 runs=36540`, each guest gaining about 15 s of CPU per 30 s. With both on, `ssh vikkp@10.99.99.200` reached `vikkp@raynusrv2:~$` and the page read `2 guests running`. Stop on the Alpine row: `RayNu-F stop spa-stop`, `VmStopped guest_id=1`, `boot: guest slot 1 is off; 1 guest(s) still on`. Design is ADR-022: a second product guest is a second instance of the one guest machine (`guest/slot.rs`, four slots), built from leftover DRAM on its first Start, launched and exited through the same code as the first; `vmx/guest_sched.rs` shares one CPU on a 2 ms quantum; each guest has its own span of RAYNU-SPARE; COM2 belongs to the guest started last and other lines carry `[gN]`; Stop, Shut down and Reboot name a row. The operator then started the Alpine row again and it reached `localhost login:`, and Shut down on that row completed. COM2 for those two steps was not pasted. Not shown on iron: two guest NICs at once (the Alpine guest has no vNIC, so the split by destination MAC has run in host tests only). Each guest has one CPU and half of one core; that is B7. Lab iron `RAYNU-V-M4-2VM-OK` for the small G0/G1 guests is not this row. The earlier seated-copy design (iron `76f66f5c` through `767261a7`) was removed in `c5e0b719`",
           "wave": "7"
         },
         {
           "id": "B7",
           "capability": "Multi-vCPU (SMP) product guests",
-          "status": "planned",
+          "status": "in flight",
           "ships": "S1",
           "ref": "M4.5",
-          "note": "Dual-vCPU probe lived on Latitude only (`RAYNU-V-M4-SMP-OK`)",
+          "note": "Branch `cursor/wave-7-b6-seats-37d7`. Latitude probe `RAYNU-V-M4-SMP-OK` is not this row. A non-self INIT then startup IPI is recorded (`take_ap_startup`). The MADT still publishes one enabled CPU, so Ubuntu does not wait for an AP. B6 lived on this branch (`4f581a4dcd93`); each guest still has one CPU. Not lived. Not an F11 until a product guest sees more than one CPU on the R640",
           "wave": "7"
         },
         {
           "id": "B8",
           "capability": "Guest interrupt controller beyond 8259: IOAPIC/LAPIC, MSI/MSI-X for virtio",
-          "status": "planned",
+          "status": "lived",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "PIC + IRQ 11 shared lived on `d7e2e24f`; SMP and performance need APIC",
+          "note": "Iron `8f69297c69a8` / run `42398077199`, pull-request merge of `d0a0d7cf`. Signed SHA256 `ee32b9db82c8a682833a1fbb5e3a18bbe0f014963e84d1a2a5ce5eb5e030e6e0`. `boot: B4 acpi rsdp gpa=0x804000 (power button, PCI0 IRQ 11, MADT local APIC and I/O APIC)`. Linux: `ACPI: APIC 0x804340`, `IOAPIC[0]: apic_id 0, version 17, address 0xfec00000, GSI 0-23`, `INT_SRC_OVR bus_irq 0 global_irq 2`, `Using ACPI (MADT) for SMP configuration information`, `Switch to symmetric I/O mode setup`, `Using IOAPIC for interrupt routing`. Disk MSI-X `boot: B8 virtio msi-x vec=21`, then `vda1 vda2 vda3` and `raynusrv2 login:`. Timer `linux PIT GSI 2`. `take11=0`. The `09b23c5d` boot had `ACPI MADT or MP tables are not detected` and `Using PIC`. virtio-net printed `PCI INT A: no GSI` for `00:05.0` because `_PRT` named only slots 2 and 3, and an RX completion signaled MSI-X queue 1. Follow-up confirmed on `64ddddafeffa` / run `42424856392`, pull-request merge of `9e3661fe`. DSDT length `0x11E`. `virtio-pci 0000:00:05.0: enabling device` with no `PCI INT A: no GSI`. Disk MSI-X `vec=21` again. Queue-notify COM2 lines stop at `n=961`. `systemd-networkd-wait-online` finished, `ssh.service` started, and `ssh vikkp@10.99.99.200` reached `vikkp@raynusrv2:~$`. Evidence `docs/evidence/r640/2026-11-08-64ddddaf-wave-7-b8-guest-ssh-ok.md`. Wave 7 stays open",
           "wave": "7"
         },
         {
@@ -334,15 +334,15 @@
       ],
       "counts": {
         "S1": {
-          "lived": 6,
-          "in flight": 0,
-          "planned": 4,
+          "lived": 8,
+          "in flight": 1,
+          "planned": 1,
           "total": 10
         },
         "Final": {
-          "lived": 6,
-          "in flight": 0,
-          "planned": 14,
+          "lived": 8,
+          "in flight": 1,
+          "planned": 11,
           "total": 20
         }
       }
@@ -1178,7 +1178,7 @@
           "status": "lived",
           "ships": "S1",
           "ref": "ADR-018",
-          "note": "Current rollback `v0.1.6-wave6-closed` (GitHub Latest). Older: `v0.1.0-wave-5-closed` (`9516e470`), `v0.1.0-m8-9-lan` (`0d865c7f`), `v0.1.0-m8-8-ubuntu` (`c3a70e62`), `v0.1.0-everest-closed` (`f72b4276`)",
+          "note": "Current rollback `v0.1.7-b6` (GitHub Latest). Lived image `4f581a4dcd93` / run `44174137515`; the signed SHA256 of the stick was not recorded. Older: `v0.1.6-wave6-closed` (`4e327820e039`), `v0.1.0-wave-5-closed` (`9516e470`), `v0.1.0-m8-9-lan` (`0d865c7f`), `v0.1.0-m8-8-ubuntu` (`c3a70e62`), `v0.1.0-everest-closed` (`f72b4276`)",
           "wave": "0"
         },
         {
@@ -1196,7 +1196,7 @@
           "status": "lived",
           "ships": "S1",
           "ref": "ADR-021",
-          "note": "Accepted 2026-11-07. `docs/customer/support-policy.md`. CI `./tools/check-h8-docs.sh`. A supported release is a git tag. GitHub Latest and the current rollback is `v0.1.6-wave6-closed`. The next wave close is `v0.1.7-wave7-closed`. The year is twelve months from the tag the customer installs. Mailbox `namaskaar@raynuv.com`. No reply clock. Older tags `v0.1.0-wave-5-closed`, `v0.1.0-m8-9-lan`, `v0.1.0-m8-8-ubuntu`, and `v0.1.0-everest-closed` stay available and are not Latest. The lab stick is still `4e327820e039` until that file is staged.",
+          "note": "Accepted 2026-11-07. `docs/customer/support-policy.md`. CI `./tools/check-h8-docs.sh`. A supported release is a git tag. GitHub Latest and the current rollback is `v0.1.7-b6` (B6 lived on `4f581a4dcd93` / run `44174137515`; signed SHA256 not recorded). The next wave close is `v0.1.7-wave7-closed`. Wave 7 is not closed. The year is twelve months from the tag the customer installs. Mailbox `namaskaar@raynuv.com`. No reply clock. Older tags `v0.1.6-wave6-closed`, `v0.1.0-wave-5-closed`, `v0.1.0-m8-9-lan`, `v0.1.0-m8-8-ubuntu`, and `v0.1.0-everest-closed` stay available and are not Latest. The lab stick is `4f581a4dcd93` until a build of the tag is staged.",
           "wave": "6"
         }
       ],
@@ -1585,7 +1585,7 @@
         "H8"
       ],
       "iron": "A7",
-      "why": "Needs C8 (lived) so an update keeps guests. A5 lived 2026-11-05: RayNu-V `db` certificate, shim not built. A7 lived 2026-11-05: `318c6617c99b` restored `BOOTX64.OLD` and the next F11 was `fa3f4860c6a7` / run `42096983983`. A4 lived 2026-11-07: `4e327820e039` / run `42384654720` reached `pending 0 · durable yes · saved` while Guest 3 stayed running. H5 lived 2026-11-07: `docs/customer/` install, cabling, operator runbook, and support matrix, checked by `./tools/check-h5-docs.sh`. F10 lived 2026-11-07: iDRAC `10.99.99.24` on Dedicated and on LOM3 `NIC.Integrated.1-3-1`, page `4e327820e039` with Guest 3 running both times, then Dedicated again. D11 lived 2026-11-07: `docs/customer/port-roles.md`, port 3 management, port 4 guests, iDRAC Dedicated or LOM3. H8 lived 2026-11-07. Terms accepted. Current rollback is `v0.1.6-wave6-closed`, GitHub Latest. Wave 6 is closed.",
+      "why": "Needs C8 (lived) so an update keeps guests. A5 lived 2026-11-05: RayNu-V `db` certificate, shim not built. A7 lived 2026-11-05: `318c6617c99b` restored `BOOTX64.OLD` and the next F11 was `fa3f4860c6a7` / run `42096983983`. A4 lived 2026-11-07: `4e327820e039` / run `42384654720` reached `pending 0 · durable yes · saved` while Guest 3 stayed running. H5 lived 2026-11-07: `docs/customer/` install, cabling, operator runbook, and support matrix, checked by `./tools/check-h5-docs.sh`. F10 lived 2026-11-07: iDRAC `10.99.99.24` on Dedicated and on LOM3 `NIC.Integrated.1-3-1`, page `4e327820e039` with Guest 3 running both times, then Dedicated again. D11 lived 2026-11-07: `docs/customer/port-roles.md`, port 3 management, port 4 guests, iDRAC Dedicated or LOM3. H8 lived 2026-11-07. Terms accepted. Wave 6 close tag is `v0.1.6-wave6-closed`. Current rollback is `v0.1.7-b6`, GitHub Latest. Wave 6 is closed. Wave 7 is open.",
       "counts": {
         "lived": 7,
         "in flight": 0,
@@ -1611,9 +1611,9 @@
       "iron": "B8",
       "why": "Performance and capacity. B8 before B7: SMP on an 8259 is misery.",
       "counts": {
-        "lived": 0,
-        "in flight": 1,
-        "planned": 8,
+        "lived": 2,
+        "in flight": 2,
+        "planned": 5,
         "total": 9
       },
       "closed": false
@@ -1853,21 +1853,9 @@
   "current_wave": "7",
   "next_up": [
     {
-      "id": "B8",
-      "capability": "Guest interrupt controller beyond 8259: IOAPIC/LAPIC, MSI/MSI-X for virtio",
-      "status": "planned",
-      "role": "iron thread"
-    },
-    {
-      "id": "B6",
-      "capability": "Multiple concurrent guests on one R640",
-      "status": "planned",
-      "role": "host-first"
-    },
-    {
       "id": "B7",
       "capability": "Multi-vCPU (SMP) product guests",
-      "status": "planned",
+      "status": "in flight",
       "role": "host-first"
     },
     {

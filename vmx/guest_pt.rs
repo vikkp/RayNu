@@ -108,6 +108,41 @@ pub unsafe fn va_to_gpa(cr3: u64, gva: u64) -> Option<u64> {
     Some(base | (gva & 0xfff))
 }
 
+/// The same 4-level walk with the caller supplying each table read.
+///
+/// `read` takes the GPA of one 8-byte entry and returns it, or `None` when
+/// that GPA is not the caller's guest. A guest whose RAM is not GPA=HPA uses
+/// this so every table read goes through that guest's own EPT.
+pub fn va_to_gpa_with(cr3: u64, gva: u64, read: impl Fn(u64) -> Option<u64>) -> Option<u64> {
+    let pml4 = cr3 & ADDR_MASK;
+    if pml4 == 0 {
+        return None;
+    }
+    let e4 = read(pml4 + 8 * ((gva >> 39) & 0x1ff))?;
+    if (e4 & PRESENT) == 0 {
+        return None;
+    }
+    let e3 = read((e4 & ADDR_MASK) + 8 * ((gva >> 30) & 0x1ff))?;
+    if (e3 & PRESENT) == 0 {
+        return None;
+    }
+    if (e3 & LARGE) != 0 {
+        return Some((e3 & 0x000f_ffff_c000_0000) | (gva & 0x3fff_ffff));
+    }
+    let e2 = read((e3 & ADDR_MASK) + 8 * ((gva >> 21) & 0x1ff))?;
+    if (e2 & PRESENT) == 0 {
+        return None;
+    }
+    if (e2 & LARGE) != 0 {
+        return Some((e2 & 0x000f_ffff_ffe0_0000) | (gva & 0x1f_ffff));
+    }
+    let e1 = read((e2 & ADDR_MASK) + 8 * ((gva >> 12) & 0x1ff))?;
+    if (e1 & PRESENT) == 0 {
+        return None;
+    }
+    Some((e1 & ADDR_MASK) | (gva & 0xfff))
+}
+
 /// Copy `out.len()` bytes from guest linear `gva` into `out`.
 ///
 /// SAFETY: same identity-EPT assumption as [`va_to_gpa`].
@@ -1233,6 +1268,35 @@ mod guest_pt_test {
 
     unsafe fn set_entry(table: &mut PageTable, index: usize, val: u64) {
         core::ptr::write_volatile(table.0.as_mut_ptr().add(index), val);
+    }
+
+    #[test]
+    fn walk_with_reads_only_what_the_caller_owns() {
+        // Tables keyed by entry GPA. Nothing here is host memory.
+        let tables: [(u64, u64); 7] = [
+            (0x1000 + 8 * 256, 0x2000 | PRESENT),
+            (0x2000, 0x3000 | PRESENT),
+            (0x2000 + 8, 0x4000_0000 | PRESENT | LARGE),
+            (0x3000, 0x4000 | PRESENT),
+            (0x3000 + 8, 0x0200_0000 | PRESENT | LARGE),
+            (0x4000 + 8 * 5, 0x0080_0000 | PRESENT),
+            (0x1000 + 8 * 257, 0x9000 | PRESENT),
+        ];
+        let read = |gpa: u64| tables.iter().find(|(at, _)| *at == gpa).map(|(_, e)| *e);
+        let va = 0xffff_8000_0000_0000u64;
+        assert_eq!(va_to_gpa_with(0x1000, va + 0x5123, read), Some(0x0080_0123));
+        assert_eq!(
+            va_to_gpa_with(0x1000, va + 0x20_0000 + 0x1234, read),
+            Some(0x0200_1234)
+        );
+        assert_eq!(
+            va_to_gpa_with(0x1000, va + 0x4000_0000 + 0x12_3456, read),
+            Some(0x4012_3456)
+        );
+        // A table the caller cannot read ends the walk.
+        assert_eq!(va_to_gpa_with(0x1000, va + (1 << 39), read), None);
+        assert_eq!(va_to_gpa_with(0x1000, 0x5000, read), None);
+        assert_eq!(va_to_gpa_with(0, va, read), None);
     }
 
     #[test]

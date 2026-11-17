@@ -203,9 +203,15 @@ extern "C" fn resume_e4_shell() -> ! {
     // spa-stop`, then the product-ISO window sent this resume into the
     // Stage 46 hold. That hold ticks HTTP and never consumes Start
     // (`PercSpaChoice choice=4` left the guest off). A stopped guest
-    // returns to an idle that relaunches. A guest that dies on its own
-    // still enters the hold below.
-    if r640_hypervisor::mgmt::perc_boot_choice::guest_stopped() {
+    // returns to an idle that relaunches.
+    //
+    // A guest that left without a Stop is booted again once per Start by
+    // the guest scheduler (ADR-022): its Start is then waiting, and the
+    // same idle boots it. Iron 76f66f5c left the Ubuntu guest in the hold
+    // after an EPT exit; the hold runs no guest.
+    if r640_hypervisor::mgmt::perc_boot_choice::guest_stopped()
+        || vmx::guest_uefi::guest_start_waiting()
+    {
         vmx::launch::enter_spa_stop_idle();
     }
     if r640_hypervisor::mgmt::stage46_hold_e4_shell() {

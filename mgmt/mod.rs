@@ -337,6 +337,7 @@ pub mod guest_image;
 pub mod guest_nic;
 pub mod guest_nic_start;
 pub mod guest_power;
+pub mod guest_slots;
 pub mod guest_stop;
 pub mod ha;
 pub mod host_addr;
