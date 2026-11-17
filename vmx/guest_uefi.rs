@@ -9521,9 +9521,12 @@ fn raynu_f_publish_acpi(layout: &crate::raynu_f::FirmwareImageLayout, img: &mut 
 /// finishes `_S5`, stop it or boot it again. Stop remains the hard path.
 #[cfg(target_os = "uefi")]
 unsafe fn b4_service() {
-    if crate::mgmt::guest_power::arm_sci(crate::devices::guest_platform::pm1_enable()) {
+    let pm1_en = crate::devices::guest_platform::pm1_enable();
+    if crate::mgmt::guest_power::arm_sci(pm1_en) {
         crate::devices::guest_irq::raise_gsi(crate::mgmt::guest_power::SCI_GSI);
         serial::write_line_nowait("boot: B4 sci");
+    } else if crate::mgmt::guest_power::drop_sci(pm1_en) {
+        crate::devices::guest_irq::lower_gsi(crate::mgmt::guest_power::SCI_GSI);
     }
     let Some(ask) = crate::mgmt::guest_power::take_s5() else {
         return;

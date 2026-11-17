@@ -5,8 +5,9 @@
 //! VERIFICATION: L1 (host tests)
 //!
 //! A shutdown or reboot ask raises PM1_STS bit 8. When the guest has enabled
-//! that button, the exit loop raises SCI (IRQ 9) once. The guest clears the
-//! status bit, shuts down, and writes `_S5` (`SLP_TYP` 5, `SLP_EN`). The
+//! that button, the exit loop raises SCI (IRQ 9) and lowers it when the
+//! guest clears the status bit. The guest shuts down and writes `_S5`
+//! (`SLP_TYP` 5, `SLP_EN`). The
 //! exit loop then stops the guest or boots it again. Stop stays a separate
 //! path and this module does not call it.
 
@@ -85,6 +86,29 @@ pub fn arm_sci(pm1_en: u16) -> bool {
         return false;
     }
     SCI.compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire).is_ok()
+}
+
+/// True once when the SCI line that [`arm_sci`] raised must go low: the
+/// guest cleared the power-button status, or turned the button's enable
+/// off. The caller lowers IRQ 9.
+///
+/// SCI is a level. On an I/O APIC a level pin that stays high is delivered
+/// again after every EOI. Nested two-guest run: the ask raised IRQ 9 and
+/// nothing lowered it, and the guest printed `soft lockup ... irq/9-acpi`.
+/// B4 lived on the 8259 (`62165436`), where one raise is one interrupt.
+pub fn drop_sci(pm1_en: u16) -> bool {
+    if SCI.load(Ordering::Acquire) != 1 {
+        return false;
+    }
+    let open = pending().is_some() && PHASE.load(Ordering::Acquire) == OPEN;
+    if open && pm1_en & PM1_EN_PWRBTN != 0 {
+        return false;
+    }
+    // Status still set and only the enable went off: the line rises again
+    // when the guest turns the enable back on.
+    let next = if open { 0 } else { 2 };
+    SCI.compare_exchange(1, next, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
 }
 
 /// Guest wrote `SLP_EN` with this `SLP_TYP`. Only type 5, and only while an
@@ -184,6 +208,28 @@ mod guest_power_test {
         request(PowerAsk::Reboot);
         note_s5(SLP_TYP_S5);
         assert_eq!(take_s5(), Some(PowerAsk::Reboot));
+        drop(_g);
+        reset_for_test();
+    }
+
+    #[test]
+    fn the_sci_line_goes_low_when_the_guest_clears_the_button() {
+        reset_for_test();
+        let _g = test_lock();
+        assert!(!drop_sci(PM1_EN_PWRBTN), "nothing raised");
+        request(PowerAsk::Shutdown);
+        assert!(arm_sci(PM1_EN_PWRBTN));
+        assert!(!drop_sci(PM1_EN_PWRBTN), "status set and enabled: stays high");
+        note_cleared(PM1_STS_PWRBTN);
+        assert!(drop_sci(PM1_EN_PWRBTN), "cleared: the line goes low");
+        assert!(!drop_sci(PM1_EN_PWRBTN), "once");
+        assert!(!arm_sci(PM1_EN_PWRBTN), "one ask is one interrupt");
+        // The enable going off also lowers the line, and it rises again
+        // when the enable comes back with the status still set.
+        request(PowerAsk::Reboot);
+        assert!(arm_sci(PM1_EN_PWRBTN));
+        assert!(drop_sci(0));
+        assert!(arm_sci(PM1_EN_PWRBTN));
         drop(_g);
         reset_for_test();
     }
