@@ -390,15 +390,23 @@ pub fn push_host_rx(b: u8) -> bool {
 }
 
 /// Magic SysRq into guest COM1: a line BREAK then `key`. Returns false when
-/// a BREAK is still unread or the FIFO is full (caller retries later).
+/// a BREAK is still unread, or input is still queued for the guest (caller
+/// retries later).
 /// Linux 8250 console: `uart_handle_break` arms `port->sysrq` for 5 s of
 /// jiffies; the next RBR byte goes to `handle_sysrq`. The BREAK and the key
 /// sit back to back so the window cannot lapse. `sysrq_always_enabled` is
 /// on the patched product-ISO cmdline. UART sysrq break.
 /// Not `ISO-INSTALL-OK`.
 pub fn inject_sysrq(key: u8) -> bool {
+    // A BREAK between two typed bytes makes the next typed byte the SysRq
+    // key. Nested two-guest run: the installer line lost the space in
+    // `-m sys -s 0`, printed `sysrq: HELP`, and `setup-disk` refused `0`.
+    // Wait until the typed line is in and read.
+    if crate::devices::guest_serial_answer::queued() != 0 {
+        return false;
+    }
     let (ok, pending) = with_uart(|u| {
-        if u.com1.break_pending || (u.com1.rx_len as usize) >= RX_CAP {
+        if u.com1.break_pending || u.com1.rx_len != 0 {
             return (false, false);
         }
         u.com1.break_pending = true;
@@ -419,6 +427,12 @@ pub fn inject_sysrq(key: u8) -> bool {
 /// Linux resume path must call [`poll_host_rx_paced`], never this, on
 /// the vmexit hot path.
 pub fn poll_host_rx() {
+    // COM2 input belongs to the guest that owns the console. Another guest
+    // still gets its auto-answers.
+    if crate::boot::serial::side_console() {
+        drain_answers();
+        return;
+    }
     for _ in 0..RX_CAP {
         let Some(b) = crate::boot::serial::try_read_byte() else {
             break;

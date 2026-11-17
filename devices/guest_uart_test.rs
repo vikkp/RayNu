@@ -250,6 +250,12 @@ fn sysrq_break_then_key_follows_8250_rx_loop() {
     assert_eq!(key, b'w');
     let (lsr3, _, _) = pio(0x03FD, true, 0);
     assert_eq!(lsr3, 0x60);
+    // Typed input that the guest has not read yet is never split by a
+    // BREAK: the byte after it would become the SysRq key.
+    assert!(crate::devices::guest_uart::push_host_rx(b' '));
+    assert!(!inject_sysrq(b't'), "SysRq waits for unread input");
+    let (typed, _, _) = pio(0x03F8, true, 0);
+    assert_eq!(typed, b' ');
     assert!(inject_sysrq(b't'));
     // FCR RX reset drops both the BREAK and the key.
     let _ = pio(0x03FA, false, 0x03);

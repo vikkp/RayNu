@@ -125,6 +125,236 @@ pub fn linux_high_half() -> bool {
     LINUX_HIGH_HALF.load(Ordering::Acquire)
 }
 
+/// One line of a guest that does not own COM2, while it is being typed.
+pub const SIDE_LINE_CAP: usize = 192;
+/// Finished side lines waiting for COM2. Whole lines only.
+pub const SIDE_QUEUE_CAP: usize = 8192;
+/// Room the side queue keeps before a non-owner guest's 16550 reads THRE.
+pub const SIDE_QUEUE_THRE_ROOM: usize = 1024;
+/// TSC ticks the owner's line may sit unfinished before a side line is
+/// allowed to cut in (about 50 ms at 2 GHz; a prompt has no newline).
+const SIDE_CUT_IN_TSC: u64 = 100_000_000;
+/// TSC ticks a side line may sit without a newline before it is shown as
+/// it stands (about 250 ms at 2 GHz; a login prompt never ends its line).
+const SIDE_STALE_TSC: u64 = 500_000_000;
+
+struct SideLine {
+    buf: [u8; SIDE_LINE_CAP],
+    len: usize,
+    /// 0 text · 1 after ESC · 2 inside a CSI sequence.
+    esc: u8,
+    /// TSC of the last byte added.
+    tsc: u64,
+}
+
+static SIDE_LINE: PerGuestCell<SideLine> = per_guest_cell!(SideLine {
+    buf: [0; SIDE_LINE_CAP],
+    len: 0,
+    esc: 0,
+    tsc: 0,
+});
+static mut SIDE_Q: [u8; SIDE_QUEUE_CAP] = [0; SIDE_QUEUE_CAP];
+static mut SIDE_Q_HEAD: usize = 0;
+static mut SIDE_Q_LEN: usize = 0;
+static SIDE_DROPPED: AtomicU32 = AtomicU32::new(0);
+/// Last byte queued for COM2 and when. A side line goes out only at the
+/// start of a line, so the owner's text is never cut mid-word.
+static mut COM2_TAIL: u8 = b'\n';
+static COM2_TAIL_TSC: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+
+/// True when the current guest shares the host with another guest and is
+/// not the one that owns COM2. Its console is then written as `[gN] `
+/// lines between the owner's lines, and it gets no COM2 input.
+///
+/// INVARIANTS:
+/// - `false` with one guest on, so one guest writes COM2 exactly as before
+/// - `false` for the console owner
+///
+/// VERIFICATION: L1 (host tests)
+pub fn side_console() -> bool {
+    crate::guest::slot::shared()
+        && crate::guest::slot::current() != crate::guest::slot::console_owner()
+}
+
+fn side_q_room() -> usize {
+    // SAFETY: single-threaded HV; the queue is touched only by serial writers.
+    unsafe { SIDE_QUEUE_CAP - SIDE_Q_LEN }
+}
+
+fn side_q_push(byte: u8) {
+    // SAFETY: caller checked room; single-threaded HV.
+    unsafe {
+        let idx = (SIDE_Q_HEAD + SIDE_Q_LEN) % SIDE_QUEUE_CAP;
+        SIDE_Q[idx] = byte;
+        SIDE_Q_LEN += 1;
+    }
+}
+
+/// Close the current guest's side line and queue it as `[gN] text`.
+fn side_flush_line() {
+    let slot = crate::guest::slot::current();
+    // SAFETY: BSP-only; one writer at a time.
+    let line = unsafe { &mut *SIDE_LINE.p() };
+    let n = line.len;
+    line.len = 0;
+    if n == 0 {
+        return;
+    }
+    let need = 5 + n + 2;
+    if side_q_room() < need {
+        SIDE_DROPPED.fetch_add(1, Ordering::AcqRel);
+        return;
+    }
+    for &b in &[b'[', b'g', b'0' + (slot as u8 % 10), b']', b' '] {
+        side_q_push(b);
+        log_push(b);
+    }
+    for &b in &line.buf[..n] {
+        side_q_push(b);
+        log_push(b);
+    }
+    side_q_push(b'\r');
+    side_q_push(b'\n');
+    log_push(b'\r');
+    log_push(b'\n');
+}
+
+/// One console byte of a guest that does not own COM2.
+///
+/// The byte is kept in that guest's SPA console log as written. For COM2
+/// the terminal control sequences are dropped and the text is collected
+/// into a line, so two guests never interleave inside a line.
+fn side_push(byte: u8) {
+    spa_guest_log_push(byte);
+    // SAFETY: BSP-only; one writer at a time.
+    let line = unsafe { &mut *SIDE_LINE.p() };
+    match line.esc {
+        1 => {
+            line.esc = if byte == b'[' { 2 } else { 0 };
+            return;
+        }
+        2 => {
+            if (0x40..=0x7e).contains(&byte) {
+                line.esc = 0;
+            }
+            return;
+        }
+        _ => {}
+    }
+    match byte {
+        0x1b => line.esc = 1,
+        b'\r' => {}
+        b'\n' => side_flush_line(),
+        0x20..=0x7e | b'\t' => {
+            if line.len == SIDE_LINE_CAP {
+                side_flush_line();
+            }
+            // SAFETY: same exclusive borrow; flush only reset `len`.
+            let line = unsafe { &mut *SIDE_LINE.p() };
+            line.buf[line.len] = byte;
+            line.len += 1;
+            line.tsc = crate::arch::cpu::rdtsc();
+        }
+        _ => {}
+    }
+}
+
+/// Lines of non-owner guests dropped because COM2 could not keep up.
+pub fn side_dropped() -> u32 {
+    SIDE_DROPPED.load(Ordering::Acquire)
+}
+
+/// Bytes of finished side lines waiting for COM2.
+pub fn side_queue_len() -> usize {
+    // SAFETY: single-threaded HV.
+    unsafe { SIDE_Q_LEN }
+}
+
+/// Close the current guest's side line as it stands. The guest scheduler
+/// calls this when that guest leaves for good, so its last words are shown.
+pub fn side_break() {
+    if side_console() {
+        side_flush_line();
+    }
+}
+
+/// Close the current guest's side line when nothing was added to it for a
+/// while (a login prompt has no newline). The guest scheduler calls this
+/// when it switches away from a non-owner guest. A line that is still
+/// being written is left alone: a 2 ms quantum must not cut it in pieces
+/// (nested two-guest run printed `[g0] inux`, `[g0]  vers`, `[g0] ion `).
+pub fn side_break_stale(now: u64) {
+    if !side_console() {
+        return;
+    }
+    // SAFETY: BSP-only; one writer at a time.
+    let (len, tsc) = unsafe {
+        let line = &*SIDE_LINE.p();
+        (line.len, line.tsc)
+    };
+    if side_line_is_stale(len, tsc, now) {
+        side_flush_line();
+    }
+}
+
+/// Pure form of [`side_break_stale`].
+pub fn side_line_is_stale(len: usize, last_tsc: u64, now: u64) -> bool {
+    len != 0 && now.wrapping_sub(last_tsc) >= SIDE_STALE_TSC
+}
+
+/// Move whole side lines into the COM2 ring when the owner is at the
+/// start of a line, or has left a line unfinished for a while.
+fn side_pump() {
+    // SAFETY: single-threaded HV; rings touched only from serial writers.
+    unsafe {
+        while SIDE_Q_LEN != 0 {
+            let mut n = 0usize;
+            while n < SIDE_Q_LEN && SIDE_Q[(SIDE_Q_HEAD + n) % SIDE_QUEUE_CAP] != b'\n' {
+                n += 1;
+            }
+            if n == SIDE_Q_LEN {
+                return;
+            }
+            n += 1;
+            let at_start = COM2_TAIL == b'\n';
+            if !at_start {
+                let quiet = crate::arch::cpu::rdtsc()
+                    .wrapping_sub(COM2_TAIL_TSC.load(Ordering::Acquire));
+                if quiet < SIDE_CUT_IN_TSC {
+                    return;
+                }
+            }
+            if GUEST_TX_CAP - GUEST_TX_LEN < n + 2 {
+                return;
+            }
+            if !at_start {
+                guest_tx_ring_put(b'\r');
+                guest_tx_ring_put(b'\n');
+            }
+            for _ in 0..n {
+                let b = SIDE_Q[SIDE_Q_HEAD];
+                SIDE_Q_HEAD = (SIDE_Q_HEAD + 1) % SIDE_QUEUE_CAP;
+                SIDE_Q_LEN -= 1;
+                guest_tx_ring_put(b);
+            }
+        }
+    }
+}
+
+/// Drop every queued side line (tests / leaving the guest path).
+pub fn side_clear() {
+    // SAFETY: single-threaded HV.
+    unsafe {
+        SIDE_Q_HEAD = 0;
+        SIDE_Q_LEN = 0;
+        COM2_TAIL = b'\n';
+    }
+    for slot in 0..crate::guest::slot::MAX_GUESTS {
+        // SAFETY: BSP-only.
+        unsafe { (*SIDE_LINE.p_of(slot)).len = 0 };
+    }
+}
+
 fn log_push(byte: u8) {
     // SAFETY: single-threaded boot / HV; ring only touched from serial writers.
     unsafe {
@@ -164,6 +394,12 @@ pub fn serial_log_clear() {
 }
 
 fn guest_tx_push(byte: u8) {
+    guest_tx_ring_put(byte);
+    spa_guest_log_push(byte);
+}
+
+/// Queue one byte for COM2. Drops the oldest byte when the ring is full.
+fn guest_tx_ring_put(byte: u8) {
     // SAFETY: single-threaded boot / HV; ring only touched from serial writers.
     unsafe {
         if GUEST_TX_LEN == GUEST_TX_CAP {
@@ -173,8 +409,9 @@ fn guest_tx_push(byte: u8) {
         let idx = (GUEST_TX_HEAD + GUEST_TX_LEN) % GUEST_TX_CAP;
         GUEST_TX[idx] = byte;
         GUEST_TX_LEN += 1;
-        spa_guest_log_push(byte);
+        COM2_TAIL = byte;
     }
+    COM2_TAIL_TSC.store(crate::arch::cpu::rdtsc(), Ordering::Release);
 }
 
 fn spa_guest_log_push(byte: u8) {
@@ -362,6 +599,12 @@ pub fn set_guest_tx_test_ring_full(on: bool) {
 ///
 /// VERIFICATION: L1 (host tests)
 pub fn guest_tx_guest_lsr_thre() -> bool {
+    if side_console() {
+        // A guest that does not own COM2 writes lines into the side queue.
+        // Its THRE follows that queue, not the owner's ring.
+        let _ = drain_guest_tx(GUEST_TX_DRAIN_CHUNK);
+        return side_q_room() >= SIDE_QUEUE_THRE_ROOM;
+    }
     if !linux_earlycon_share() {
         return true;
     }
@@ -424,6 +667,7 @@ pub fn guest_tx_burst_for_window(fifo: bool, max_left: usize) -> usize {
 ///
 /// VERIFICATION: L1 (host tests)
 pub fn drain_guest_tx(max: usize) -> usize {
+    side_pump();
     let mut n = 0usize;
     let fifo = com2_fifo();
     while n < max {
@@ -536,6 +780,17 @@ pub fn write_byte(byte: u8) {
     if linux_earlycon_share() {
         return;
     }
+    if side_console() {
+        side_push(byte);
+        return;
+    }
+    // While guests share the host, the ring can hold another guest's
+    // finished lines. They go out first, so this line is not written into
+    // the middle of one (nested two-guest run: a `[g0]` line ended inside
+    // the other guest's `RayNu-F svc=` line). One guest: unchanged.
+    if crate::guest::slot::shared() && guest_tx_len() != 0 {
+        let _ = flush_guest_tx();
+    }
     // Translate `\n` → `\r\n` for typical serial terminals.
     if byte == b'\n' {
         write_raw(b'\r');
@@ -554,6 +809,11 @@ pub fn write_byte(byte: u8) {
 /// fragments) while HV `write_byte` ticks held THRE. Guest UART TX ring
 /// drain retries on later exits. Not `ISO-INSTALL-OK`.
 pub fn write_byte_nowait(byte: u8) {
+    if side_console() {
+        side_push(byte);
+        let _ = drain_guest_tx(GUEST_TX_DRAIN_CHUNK);
+        return;
+    }
     if byte == b'\n' {
         guest_tx_push(b'\r');
         log_push(b'\r');
@@ -564,6 +824,10 @@ pub fn write_byte_nowait(byte: u8) {
 }
 
 fn write_raw(byte: u8) {
+    // SAFETY: single-threaded boot / HV.
+    unsafe {
+        COM2_TAIL = byte;
+    }
     #[cfg(target_os = "uefi")]
     {
         // SAFETY: single-threaded boot / post-EBS HV; THR wait, no LIVE clear.
@@ -921,5 +1185,110 @@ mod serial_test {
         set_linux_earlycon_share(false);
         serial_log_clear();
         guest_tx_clear();
+    }
+
+    /// Two guests on, slot 1 owns COM2. Restores the run table on drop.
+    struct TwoGuests;
+    impl TwoGuests {
+        fn new() -> Self {
+            use crate::guest::slot;
+            serial_log_clear();
+            guest_tx_clear();
+            side_clear();
+            slot::set_on(0, true);
+            slot::set_on(1, true);
+            slot::set_console_owner(1);
+            TwoGuests
+        }
+    }
+    impl Drop for TwoGuests {
+        fn drop(&mut self) {
+            use crate::guest::slot;
+            slot::set_current(0);
+            slot::set_on(0, false);
+            slot::set_on(1, false);
+            slot::set_console_owner(0);
+            side_clear();
+            serial_log_clear();
+            guest_tx_clear();
+        }
+    }
+
+    fn log_text() -> std::string::String {
+        let mut buf = [0u8; 1024];
+        let n = serial_log_snapshot(&mut buf);
+        std::string::String::from_utf8_lossy(&buf[..n]).into_owned()
+    }
+
+    #[test]
+    fn one_guest_never_has_a_side_console() {
+        use crate::guest::slot;
+        assert!(!slot::shared());
+        assert!(!side_console());
+        slot::set_on(0, true);
+        slot::set_console_owner(1);
+        assert!(!side_console(), "one guest on writes COM2 as it always did");
+        slot::set_on(0, false);
+        slot::set_console_owner(0);
+    }
+
+    #[test]
+    fn a_side_guest_is_written_as_whole_prefixed_lines() {
+        use crate::guest::slot;
+        let _g = TwoGuests::new();
+        slot::set_current(0);
+        assert!(side_console());
+        // A guest switch in the middle of a line does not end it.
+        write_str_nowait("[    0.000000] Linux vers");
+        side_break_stale(crate::arch::cpu::rdtsc());
+        assert_eq!(side_queue_len(), 0, "a line still being written stays whole");
+        assert_eq!(guest_tx_len(), 0);
+        write_str_nowait("ion 6.12\x1b[0m\r\n");
+        slot::set_current(1);
+        assert!(!side_console());
+        write_str_nowait("owner\n");
+        let _ = flush_guest_tx();
+        let text = log_text();
+        assert!(
+            text.contains("[g0] [    0.000000] Linux version 6.12\r\n"),
+            "side line is whole, prefixed and stripped of escapes: {text:?}"
+        );
+        assert!(text.contains("owner\r\n"));
+        assert_eq!(side_dropped(), 0);
+    }
+
+    #[test]
+    fn a_side_prompt_without_a_newline_is_shown_once_it_is_stale() {
+        use crate::guest::slot;
+        let _g = TwoGuests::new();
+        slot::set_current(0);
+        write_str_nowait("localhost login: ");
+        let now = crate::arch::cpu::rdtsc();
+        side_break_stale(now);
+        assert_eq!(side_queue_len(), 0);
+        side_break_stale(now.wrapping_add(SIDE_STALE_TSC * 2));
+        assert!(side_queue_len() > 0, "a quiet prompt is shown as it stands");
+        assert!(!side_line_is_stale(0, 0, u64::MAX), "an empty line is never stale");
+        assert!(side_line_is_stale(1, 10, 10 + SIDE_STALE_TSC));
+        assert!(!side_line_is_stale(1, 10, 9 + SIDE_STALE_TSC));
+    }
+
+    #[test]
+    fn a_direct_line_waits_for_queued_side_lines() {
+        use crate::guest::slot;
+        let _g = TwoGuests::new();
+        slot::set_current(0);
+        write_str_nowait("side line one\n");
+        slot::set_current(1);
+        // The owner is in its firmware phase: the hypervisor writes its
+        // lines straight to the port. The queued side line goes out whole
+        // first.
+        write_str("boot: RayNu-F svc=OpenProtocol\n");
+        assert_eq!(guest_tx_len(), 0);
+        assert_eq!(side_queue_len(), 0);
+        let text = log_text();
+        let side = text.find("[g0] side line one\r\n").expect("side line whole");
+        let direct = text.find("boot: RayNu-F svc=OpenProtocol").expect("direct line");
+        assert!(side < direct, "queued side line is written before the direct line");
     }
 }
