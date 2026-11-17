@@ -180,7 +180,7 @@
             its turn and stores reads and writes on its own disk. The
             guest already running keeps its devices. COM2 can print
             <code>boot: B6 both product guests have been entered</code>.
-            The guest operating system is still waiting. Iron <code>c0fe8b3ed807</code> highlighted Alpine Linux and sent Enter. <code>StartImage</code> returned without entering the kernel. This head jumps to that entry. It is not flashed. The second
+            The guest operating system is still waiting. Iron <code>055351fd3fab</code> entered the kernel. The initrd load was unsupported, so the stub returned to the menu. This head serves that initrd. It is not flashed. The second
             CPU is not on this stick.
             A second CPU is not published yet, so
             Ubuntu still boots with one. The rollback stays

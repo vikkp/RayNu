@@ -7862,6 +7862,22 @@ unsafe fn seat_firmware_service() -> bool {
         rsp: ops::vmread(GUEST_RSP).unwrap_or(0),
     };
     let st = &mut *core::ptr::addr_of_mut!(SEAT_FW_STATE);
+    // Iron `055351fd`: the stub's initrd `LoadFile` (`id=0xf210`) fell
+    // through to unsupported, and the stub exited `EFI_LOAD_ERROR`. The
+    // running guest answers this id by copying the ext4 initrd or by
+    // entering GRUB's own LoadFile.
+    if id == crate::raynu_f::ServiceId::InitrdLoadFile {
+        let jump = redirect_initrd_loadfile(st, &mem, &args);
+        serial::write_str_nowait("boot: B6 seated initrd LoadFile jump=");
+        serial::write_str_nowait(if jump { "yes" } else { "no" });
+        serial::write_str_nowait(" status=0x");
+        write_hex_nowait(SAVED_RAX);
+        serial::write_line_nowait("");
+        if jump {
+            return true;
+        }
+        return ops::vmwrite(GUEST_RIP, rip.wrapping_add(len)).is_ok();
+    }
     let d = crate::raynu_f::dispatch(
         id,
         args,

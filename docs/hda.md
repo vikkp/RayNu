@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-7-b6-start-image |
-| Summary | **B6 iron `c0fe8b3ed807` / CI `43969480990` showed the menu entry `Alpine Linux v3.21, with Linux lts` and a 2s countdown.** Enter was sent. `UnloadImage` on the running image returned invalid parameter because `StartImage` returned success without entering the kernel. This head jumps to that entry, the same way the running guest does. Not flashed. Not lived. B7 is not on this flash. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-7-b6-initrd |
+| Summary | **B6 iron `055351fd3fab` / CI `43973493031` entered the kernel at `0x2b09515`.** The initrd `LoadFile` `id=0xf210` returned unsupported, and the stub exited `EFI_LOAD_ERROR`. The menu came back. This head answers that call the way the running guest does. Not flashed. Not lived. B7 is not on this flash. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B8 lived. B6 in flight. B7 in flight. Not lived. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -372,7 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | H10 | Persist disk must be **reliable**, not once | **HIGH** | `1f33eeda` is the sixth installed `login:` (UUID `a0ad99ac-…`, lease `.154`). vda2 `6380/521216` files and `102909/2084352` blocks. The SPA stayed up. Residual: unclean shutdown still needs ext4 journal recovery and clears a vfat dirty bit. USB ≠ PERC. 8 GiB cap stays. Plan: [m8_state.md](m8_state.md). Evidence: [2026-09-24-36d3b559-persist-login.md](evidence/r640/2026-09-24-36d3b559-persist-login.md). |
 | H11 | Truncated `site/` on feature branches | LOW | **This commit (main catch-up):** keep Kimi updater chrome from `origin/main` (nav / Status / CIO View / Stories / Please reboot); patch lived Everest-closed strings in place; `./tools/check-site-chrome.sh` + CI `site-chrome`; always-on `.cursor/rules/site-chrome.mdc`. Do not replace `site/index.html` wholesale on HDA/Everest work. |
 | H12 | A seated firmware service call wrote into the running guest's RAM | **HIGH** | Seen on iron `8b0ceac9ccc6` and present on every B6 flash that ran GRUB with the RAM grant. The buffer was GRUB's handle list above 32 MiB. This head resolves seated service buffers through the seated EPT only (`seat_mem_read` / `seat_mem_write`) and refuses the rest. Iron `fc5e9eb3a4ae` read the seated disk into the seated guest (`status=0`). Guest 3 reached `raynusrv2 login:` and the page kept answering. |
-| H13 | Seated `StartImage` returns to GRUB without entering the kernel | **HIGH** | Iron `c0fe8b3ed807` highlighted `Alpine Linux v3.21, with Linux lts` and counted `2s`. Enter ran. `StartImage` set the image running and returned to GRUB, so `UnloadImage id=0x219` was invalid parameter and the menu came back. This head jumps to the entry (`boot: B6 seated StartImage entry=`). Not flashed. |
+| H13 | Seated kernel exits because the initrd LoadFile is unsupported | **HIGH** | Iron `055351fd3fab` entered `StartImage entry=0x2b09515`. The stub called initrd `LoadFile` `id=0xf210`, got unsupported, and `Exit status=0x8000000000000001`. The menu came back. This head answers that call the way the running guest does (`boot: B6 seated initrd LoadFile jump=`). Not flashed. |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
 | H8 | ~~Phase F coexist not closed on iron~~ | — | **Resolved** 2026-08-20 (`HOST-NIC coexist listening` + `HOST-NIC-HTTP-OK` while VMX on; G1–G3 parked) |
@@ -382,6 +382,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-16 | wave-7-b6-initrd | 0.0 | 99 | **B6 iron `055351fd3fab` printed `StartImage entry=0x2b09515`.** The stub's initrd `LoadFile` `id=0xf210` was unsupported, so it exited `EFI_LOAD_ERROR` and the menu returned. This head serves that call. Not flashed. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-16 | wave-7-b6-start-image | 0.0 | 99 | **B6 iron `c0fe8b3ed807` highlighted `Alpine Linux v3.21, with Linux lts`.** Enter ran. `StartImage` did not enter the kernel, so `UnloadImage` failed and the menu returned. This head jumps to the image entry. Not flashed. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-16 | wave-7-b6-con-cap | 0.0 | 99 | **B6 iron `2411e8d991b4` sent Enter. `UnloadImage` on the running image returned invalid parameter, and turn 3 was the menu key poll again.** The entry did not start. The error text was past the eight-line cap. This head keeps 32 lines and names `UnloadImage`. Not flashed. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-16 | wave-7-b6-menu-enter | 0.0 | 99 | **B6 iron `95b0fc372b01` / CI `43959781111` printed `GNU GRUB version 2.12` and then stayed on `ReadKeyStroke` through turn 6.** The menu timeout did not run. This head uses the real TSC clock and sends one Enter after the menu is drawn. Not flashed. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
