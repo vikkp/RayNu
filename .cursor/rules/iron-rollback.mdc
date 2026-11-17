@@ -7,7 +7,21 @@ alwaysApply: true
 
 # Iron rollback
 
-You are working in **RayNu-V** (`vikkp/RayNu`). GitHub Latest and the current rollback is **`v0.1.6-wave6-closed`**. The next wave close is `v0.1.7-wave7-closed`. The lab stick that lived Wave 6 is `4e327820e039` / run `42384654720`. Older pins stay below. **`v0.1.0-m8-9-lan`** is the wave 2 pin. **`v0.1.0-m8-8-ubuntu`** is the older M8.8 pin. **`v0.1.0-m8-perc-spa`** is the older SPA-choice pin. **A4s** is the older standing-SPA pin. **`v0.1.0-everest-closed`** is the M7 install-loop pin, not Latest.
+You are working in **RayNu-V** (`vikkp/RayNu`). GitHub Latest and the current rollback is **`v0.1.7-b6`**. Wave 7 is not closed. The next wave close is `v0.1.7-wave7-closed`. The lab stick that lived B6 is `4f581a4dcd93` / run `44174137515`. The previous rollback is `v0.1.6-wave6-closed` (`4e327820e039` / run `42384654720`). Older pins stay below. **`v0.1.0-m8-9-lan`** is the wave 2 pin. **`v0.1.0-m8-8-ubuntu`** is the older M8.8 pin. **`v0.1.0-m8-perc-spa`** is the older SPA-choice pin. **A4s** is the older standing-SPA pin. **`v0.1.0-everest-closed`** is the M7 install-loop pin, not Latest.
+
+## Flash `v0.1.7-b6` to return to the B6 close
+
+This is GitHub Latest and the current rollback. It is the EFI on which two product guests ran side by side. Wave 7 is not closed, and B7 is not in this tag.
+
+| Field | Value |
+|----|----|
+| GitHub | https://github.com/vikkp/RayNu/releases/tag/v0.1.7-b6 |
+| EFI that lived B6 | `4f581a4dcd93640486e68e1a112ec938ffe40619` |
+| CI | `--run 44174137515` · page `build 4f581a4dcd93 · CI 44174137515` |
+| Signed SHA256 | not recorded |
+| Lived | Ubuntu at `raynusrv2 login:`, Alpine at `localhost login:` on its own span, `boot: guests on=2` with both `runs=` counts moving, `ssh` to `10.99.99.200` with both on, Stop of Alpine left one guest on. The operator then started Alpine again to `localhost login:` and Shut down completed. COM2 for those two steps was not pasted |
+
+A rebuild of the tag commit will not stamp `4f581a4dcd93`. The previous rollback is `v0.1.6-wave6-closed`.
 
 ## Flash `v0.1.0-m8-9-lan` to return to the M8.9 close
 

@@ -6,12 +6,12 @@
     <title>RayNu-V — Single-binary hypervisor, designed for proof</title>
     <meta
       name="description"
-      content="RayNu-V is a single-binary Type-1 hypervisor. Wave 6 is closed on a PowerEdge R640: a signed EFI, a page at 10.99.99.201, and an update that leaves the guest running. GitHub Latest is v0.1.6-wave6-closed."
+      content="RayNu-V is a single-binary Type-1 hypervisor. Wave 6 is closed on a PowerEdge R640: a signed EFI, a page at 10.99.99.201, and an update that leaves the guest running. GitHub Latest is v0.1.7-b6."
     />
     <meta property="og:title" content="RayNu-V — Wave 6 is closed" />
     <meta
       property="og:description"
-      content="A signed EFI on a PowerEdge R640. The page shows the build and the guest. An update can be staged while the guest keeps running. GitHub Latest is v0.1.6-wave6-closed."
+      content="A signed EFI on a PowerEdge R640. The page shows the build and the guest. An update can be staged while the guest keeps running. GitHub Latest is v0.1.7-b6."
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://raynuv.com/" />
@@ -33,7 +33,7 @@
     />
     <meta
       name="twitter:description"
-      content="Wave 6 is closed on a real R640. Signed EFI, page at 10.99.99.201, guest still running through a hypervisor update. Latest release v0.1.6-wave6-closed."
+      content="Wave 6 is closed on a real R640. Two guests now run side by side. Latest release v0.1.7-b6."
     />
     <meta name="twitter:image" content="https://raynuv.com/assets/hero.jpg" />
     <link rel="canonical" href="https://raynuv.com/" />
@@ -44,7 +44,7 @@
         "name": "RayNu-V",
         "applicationCategory": "SystemsApplication",
         "operatingSystem": "UEFI bare-metal; Dell PowerEdge R640",
-        "description": "Single-binary Type-1 hypervisor. Wave 6 is closed on a PowerEdge R640: signed EFI, a page, and an update that leaves the guest running. GitHub Latest is v0.1.6-wave6-closed.",
+        "description": "Single-binary Type-1 hypervisor. Wave 6 is closed on a PowerEdge R640: signed EFI, a page, and an update that leaves the guest running. GitHub Latest is v0.1.7-b6.",
         "url": "https://raynuv.com/",
         "codeRepository": "https://github.com/vikkp/RayNu",
         "license": "https://github.com/vikkp/RayNu/blob/main/LICENSE",
@@ -131,9 +131,9 @@
         </div>
         <p class="hero__proof reveal reveal--delay-3">
           Latest
-          <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.6-wave6-closed"><code>v0.1.6-wave6-closed</code></a>
-          · build <code>4e327820e039</code>
-          · Guest 3 running
+          <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.7-b6"><code>v0.1.7-b6</code></a>
+          · build <code>4f581a4dcd93</code>
+          · two guests
         </p>
       </div>
     </header>
@@ -163,8 +163,10 @@
             then on LOM port 3 beside the page, with no cable moved. Port 4
             stayed the guest. The setting was put back to Dedicated.
             Install, cabling, port roles, and a twelve-month support term
-            are written down. The release is
-            <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.6-wave6-closed"><code>v0.1.6-wave6-closed</code></a>,
+            are written down. That release is
+            <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.6-wave6-closed"><code>v0.1.6-wave6-closed</code></a>.
+            The current release is
+            <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.7-b6"><code>v0.1.7-b6</code></a>,
             GitHub Latest and the current rollback.
             Track the product progress in the
             <a href="sku.html">SKU details</a>.
@@ -179,9 +181,10 @@
             them. Both reached their own login, <code>ssh</code> to Ubuntu
             answered while both ran, and Stop of one left the other up.
             Two guest network cards at once have not run there yet.
-            A second CPU is not published yet, so
-            each guest still boots with one. The rollback stays
-            <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.6-wave6-closed"><code>v0.1.6-wave6-closed</code></a>.
+            The operator started Alpine again and it reached its login, and
+            Shut down of that guest completed. A second CPU is not published
+            yet, so each guest still boots with one. The rollback is
+            <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.7-b6"><code>v0.1.7-b6</code></a>.
           </p>
           <p class="section__lede">
             Ubuntu on the spare, the guest LAN, and the September install
@@ -222,7 +225,8 @@ v0.1.6-wave6-closed</code></pre>
             Evidence:
             <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-11-07-4e327820e039-wave-6-a4-saved-while-guest-up.md">update while the guest stayed up</a>
             · <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-11-07-4e327820e039-wave-6-f10-idrac-nic-ok.md">iDRAC Dedicated and LOM3</a>
-            · <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.6-wave6-closed">GitHub Latest <code>v0.1.6-wave6-closed</code></a>
+            · <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-11-17-4f581a4d-wave-7-b6-two-guests-ok.md">two guests side by side</a>
+            · <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.7-b6">GitHub Latest <code>v0.1.7-b6</code></a>
             · <a href="https://github.com/vikkp/RayNu/blob/main/docs/customer/support-policy.md">the year of support</a>
             · <a href="stories.html">earlier stories</a>.
           </p>

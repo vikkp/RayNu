@@ -514,7 +514,8 @@ COM2 must read `build: sha=c3a70e623aec`. Not GitHub Latest.
 → EFI built from `1f33eeda72f99e432204dc943386d99d3d341be8` / CI `--run 36137732145` /
 SHA256 `5539d83806e120eb6c331c11281407c0f902b121a770c7faa46d6a1a26280693`.
 COM2 must read `build: sha=1f33eeda72f9`. Not GitHub Latest.
-**Everest-loop rollback (GitHub Latest):**
+**Current rollback (GitHub Latest):** [`v0.1.7-b6`](https://github.com/vikkp/RayNu/releases/tag/v0.1.7-b6) → B6 lived on `4f581a4dcd93` / CI `--run 44174137515`. A rebuild of the tag does not stamp `4f581a4dcd93`. Wave 7 is not closed. Previous [`v0.1.6-wave6-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.6-wave6-closed).
+**Everest-loop rollback (M7 pin, not Latest):**
 [`v0.1.0-everest-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.0-everest-closed)
 → git `f72b4276d198b5e90147e9be1037d0d0b7213a28` / CI `--run 34552377351` /
 EFI SHA256 `e74460ff0e248a06d2e4ab546684d1006edd25855f50c8dc27dc202facab9cbc`.

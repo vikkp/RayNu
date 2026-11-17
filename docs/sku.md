@@ -10,7 +10,7 @@ Two shipments, one catalog. Every capability a professional operator expects fro
 
 ## Today's box, after Wave 6
 
-Wave 6 closed on 7 November 2026. This is what a diligence reader would hold. GitHub Latest is `v0.1.6-wave6-closed`. The stick on the lab box is still `4e327820e039` / CI `42384654720` until a build of that tag is staged.
+Wave 6 closed on 7 November 2026. B6 lived on 17 November 2026. GitHub Latest is `v0.1.7-b6`. The stick that lived it is `4f581a4dcd93` / CI `44174137515`. Wave 7 is open. The previous rollback is `v0.1.6-wave6-closed` (`4e327820e039` / CI `42384654720`).
 
 - One signed `r640-hypervisor.efi` on one PowerEdge R640. Secure Boot is on. The page is `https://10.99.99.201:8443/`. Guest 3 is running.
 - The page is TLS 1.3 with the operator certificate. The operator signs in. This tree does not open plaintext HTTP before ExitBootServices.
@@ -73,4 +73,4 @@ Waves, not letters: [ADR-021 · Build order](adr/ADR-021.md#build-order-the-rule
 - Edit rows in `docs/adr/ADR-021.md`, then run `./tools/sync-sku-site.sh`. Stage `site/sku.json` with it. Every row must be in exactly one wave; the tool fails otherwise.
 - A row becomes **lived** only with R640 evidence (or CI for a host artifact). Latitude and QEMU do not count. The sync tool rejects a lived row with no SHA, marker, tool or document in its note.
 - The LOI tracker ([`docs/loihda.md`](loihda.md), [`site/loi.html`](../site/loi.html)) measures distance to the letter; this card lists what the letter and the product contain.
-- Rollbacks: current GitHub Latest `v0.1.6-wave6-closed`. Older: wave 5 `v0.1.0-wave-5-closed` (`9516e470`); wave 2 `v0.1.0-m8-9-lan` (`0d865c7f`); M8.8 `v0.1.0-m8-8-ubuntu` (`c3a70e62`); M8.0 `v0.1.0-everest-closed` (`f72b4276`).
+- Rollbacks: current GitHub Latest `v0.1.7-b6` (`4f581a4dcd93`). Older: wave 6 `v0.1.6-wave6-closed` (`4e327820e039`); wave 5 `v0.1.0-wave-5-closed` (`9516e470`); wave 2 `v0.1.0-m8-9-lan` (`0d865c7f`); M8.8 `v0.1.0-m8-8-ubuntu` (`c3a70e62`); M8.0 `v0.1.0-everest-closed` (`f72b4276`).

@@ -10,7 +10,7 @@ M8 is the polish table that used to read as “Everest residual.” It is **not*
 
 ## Iron rollback
 
-GitHub Latest is [`v0.1.6-wave6-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.6-wave6-closed), the Wave 6 close and the current rollback. The next wave close is `v0.1.7-wave7-closed`. The pins below are older. The M8.9 close is the wave 2 pin. The M8.8 close is the older pin without a guest LAN. The PERC SPA pin is older still. The standing-SPA pin is the older path back to `1f33eeda`. Everest is the M7 install-loop pin, not Latest. Do **not** treat an untagged tip as any of these pins.
+GitHub Latest is [`v0.1.7-b6`](https://github.com/vikkp/RayNu/releases/tag/v0.1.7-b6), the B6 close and the current rollback. Wave 7 is not closed. The next wave close is `v0.1.7-wave7-closed`. The previous rollback is [`v0.1.6-wave6-closed`](https://github.com/vikkp/RayNu/releases/tag/v0.1.6-wave6-closed). The pins below are older. The M8.9 close is the wave 2 pin. The M8.8 close is the older pin without a guest LAN. The PERC SPA pin is older still. The standing-SPA pin is the older path back to `1f33eeda`. Everest is the M7 install-loop pin, not Latest. Do **not** treat an untagged tip as any of these pins.
 
 ### M8.9 close (`v0.1.0-m8-9-lan`)
 
@@ -120,7 +120,7 @@ M8.9  Admin-attached guest NIC (ADR-013 Appendix C)
    `docs/customer/` install, cabling, operator runbook, and support matrix.
    F10 lived 2026-11-07: iDRAC Dedicated and LOM3, SPA stayed up.
    D11 lived 2026-11-07: port 3 page, port 4 guests.
-   H8 lived 2026-11-07. GitHub Latest is `v0.1.6-wave6-closed`. Wave 6 is closed.
+   H8 lived 2026-11-07. GitHub Latest is `v0.1.7-b6`. Wave 6 is closed. Wave 7 is open.
 → M9 sketch: vMotion-like · DRS-like · hot-add
 ```
 

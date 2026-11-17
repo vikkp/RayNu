@@ -1,7 +1,7 @@
 # 2026-11-17 — `4f581a4dcd93`: two product guests run side by side (ADR-021 B6)
 
 **EFI:** push build of `4f581a4dcd93640486e68e1a112ec938ffe40619` on branch `cursor/wave-7-b6-seats-37d7` (PR #439). The Guests page read `build 4f581a4dcd93 · CI 44174137515`. The signed SHA256 was not pasted.
-**Rollback:** `v0.1.6-wave6-closed`.
+**Rollback at the time of the flash:** `v0.1.6-wave6-closed`. This boot is the image named by GitHub Latest `v0.1.7-b6`.
 **Design:** [ADR-022](../../adr/ADR-022.md), one guest model and guest slots.
 
 ## What iron showed
@@ -56,11 +56,13 @@ boot: guest slot 1 is off; 1 guest(s) still on (ADR-022; not ISO-INSTALL-OK)
 
 **B6 lived.** Two product guests, each started from the Guests page on its own span of RAYNU-SPARE, ran at the same time and each answered at its own login. Wave 7 stays open on B7. HDA stays 99%.
 
+## Same boot, after the paste
+
+The operator started the Alpine row again. It reached `localhost login:`. Shut down on that row then completed. COM2 for these two steps was not pasted, so those lines are not quoted. Ubuntu answering after the Stop was not separately reported.
+
 ## What this run did not show
 
 - **Two guest NICs.** The Alpine guest has no saved vNIC (`M8.9 net tx=0 rx=0`). Ubuntu's `ssh` worked with two guests on. A split of the uplink between two guest MACs has not run.
-- **After the Stop.** The paste ends at `guest slot 1 is off; 1 guest(s) still on`. Ubuntu answering after the Stop, and a second Start of the stopped row, were not pasted.
-- **Shut down.** The row's ACPI Shut down was not pressed. It has not run on iron since Linux moved to the I/O APIC (B8).
 - **More than one CPU.** B7 is not on this EFI. Each guest saw one CPU and half of one core.
 
 ## Lines that are not new claims
