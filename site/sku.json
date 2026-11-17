@@ -19,14 +19,14 @@
   },
   "counts": {
     "S1": {
-      "lived": 55,
-      "in flight": 3,
+      "lived": 56,
+      "in flight": 2,
       "planned": 9,
       "total": 67
     },
     "Final": {
-      "lived": 55,
-      "in flight": 3,
+      "lived": 56,
+      "in flight": 2,
       "planned": 71,
       "total": 129
     }
@@ -199,10 +199,10 @@
         {
           "id": "B6",
           "capability": "Multiple concurrent guests on one R640",
-          "status": "in flight",
+          "status": "lived",
           "ships": "S1",
           "ref": "M4",
-          "note": "Branch `cursor/wave-7-b6-seats-37d7`, PR #439. Lab iron already printed `RAYNU-V-M4-2VM-OK` for the small G0/G1 guests; that is not this row. ADR-022: a second product guest is a second instance of the one guest machine, not a second implementation. Its state is a second entry in the per-guest banks (`guest/slot.rs`, four slots). Its VMCS, EPT, RAM and devices are built from leftover DRAM on its first Start, and it is launched and exits through the same code as the first guest. `vmx/guest_sched.rs` shares one CPU between the guests that are on: a 2 ms quantum, and an idle guest gives the CPU up at once. A switch carries the registers, the full extended state, the debug registers and the syscall MSRs. Each guest runs on its own span of RAYNU-SPARE. COM2 belongs to the guest started last, and another guest's lines carry `[gN]`. The guest uplink is split by destination MAC. Stop, Shut down and Reboot name a row; an untargeted Stop with two guests on is refused. Nested QEMU (`TWO_GUESTS=1 ./tools/run-qemu.sh`): two Alpine guests installed, rebooted, and logged in from their own disks side by side; the second then powered off while the first kept running and was started again in its slot. Nested does not make this row lived. The uplink split and a PERC span in a second slot have run in host tests only. The earlier seated-copy design (iron `76f66f5c` through `767261a7`; it reached a second Linux banner one missing device at a time) was removed in `c5e0b719`. Not flashed. Not lived. Iron close: with two guests started from Guests, COM2 prints `boot: guests on=2 switches=` with both `runs=` counts moving, and both guests answer at their own login. B7 is not on this flash",
+          "note": "Iron `4f581a4dcd93` / run `44174137515`, branch `cursor/wave-7-b6-seats-37d7`, PR #439. Evidence `2026-11-17-4f581a4d-wave-7-b6-two-guests-ok.md`. Guest 3 (Ubuntu) was at `raynusrv2 login:`; Start of guest 2 (Alpine) on Guests printed `boot: guest slot 1 disk bytes=10737418240 spare_off=8589934592`, `boot: guest slot 1 machine VMCS=0x1a660b000`, `boot: guest slot 1 start guests_on=1`, `boot: guest scheduler: two guests share the CPU`, then `RAYNU-V-RAYNU-F-DISK-BOOT-OK`, `root=UUID=ee851fd5-…` and `localhost login:`. Five status lines 30 s apart: `boot: guests on=2 switches=14036 g0 runs=7018 … g1 runs=7018` through `switches=73080 g0 runs=36540 … g1 runs=36540`, each guest gaining about 15 s of CPU per 30 s. With both on, `ssh vikkp@10.99.99.200` reached `vikkp@raynusrv2:~$` and the page read `2 guests running`. Stop on the Alpine row: `RayNu-F stop spa-stop`, `VmStopped guest_id=1`, `boot: guest slot 1 is off; 1 guest(s) still on`. Design is ADR-022: a second product guest is a second instance of the one guest machine (`guest/slot.rs`, four slots), built from leftover DRAM on its first Start, launched and exited through the same code as the first; `vmx/guest_sched.rs` shares one CPU on a 2 ms quantum; each guest has its own span of RAYNU-SPARE; COM2 belongs to the guest started last and other lines carry `[gN]`; Stop, Shut down and Reboot name a row. Not shown on iron: two guest NICs at once (the Alpine guest has no vNIC, so the split by destination MAC has run in host tests only), a second Start of a stopped row, and Shut down on the I/O APIC. Each guest has one CPU and half of one core; that is B7. Lab iron `RAYNU-V-M4-2VM-OK` for the small G0/G1 guests is not this row. The earlier seated-copy design (iron `76f66f5c` through `767261a7`) was removed in `c5e0b719`",
           "wave": "7"
         },
         {
@@ -211,7 +211,7 @@
           "status": "in flight",
           "ships": "S1",
           "ref": "M4.5",
-          "note": "Branch `cursor/wave-7-b6-seats-37d7`. Latitude probe `RAYNU-V-M4-SMP-OK` is not this row. A non-self INIT then startup IPI is recorded (`take_ap_startup`). The MADT still publishes one enabled CPU, so Ubuntu does not wait for an AP. Not lived. Not an F11 until a product guest sees more than one CPU on the R640",
+          "note": "Branch `cursor/wave-7-b6-seats-37d7`. Latitude probe `RAYNU-V-M4-SMP-OK` is not this row. A non-self INIT then startup IPI is recorded (`take_ap_startup`). The MADT still publishes one enabled CPU, so Ubuntu does not wait for an AP. B6 lived on this branch (`4f581a4dcd93`); each guest still has one CPU. Not lived. Not an F11 until a product guest sees more than one CPU on the R640",
           "wave": "7"
         },
         {
@@ -334,14 +334,14 @@
       ],
       "counts": {
         "S1": {
-          "lived": 7,
-          "in flight": 2,
+          "lived": 8,
+          "in flight": 1,
           "planned": 1,
           "total": 10
         },
         "Final": {
-          "lived": 7,
-          "in flight": 2,
+          "lived": 8,
+          "in flight": 1,
           "planned": 11,
           "total": 20
         }
@@ -1611,8 +1611,8 @@
       "iron": "B8",
       "why": "Performance and capacity. B8 before B7: SMP on an 8259 is misery.",
       "counts": {
-        "lived": 1,
-        "in flight": 3,
+        "lived": 2,
+        "in flight": 2,
         "planned": 5,
         "total": 9
       },
@@ -1852,12 +1852,6 @@
   ],
   "current_wave": "7",
   "next_up": [
-    {
-      "id": "B6",
-      "capability": "Multiple concurrent guests on one R640",
-      "status": "in flight",
-      "role": "host-first"
-    },
     {
       "id": "B7",
       "capability": "Multi-vCPU (SMP) product guests",

@@ -8,7 +8,7 @@ mount_everest_target: "CLOSED on iron 2026-09-11: Ship EFI on real R640 + networ
 months_to_everest: 0.0
 months_to_everest_prev: 0.0
 velocity_commits_30d: 620
-velocity_gates_30d: 65
+velocity_gates_30d: 66
 overall_pct: 99
 confidence: high
 baseline_date: 2026-07-20
@@ -354,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-7-b6-one-guest-model |
-| Summary | **B6 is rebuilt as one guest model with guest slots ([ADR-022](adr/ADR-022.md)).** The seated second-guest copy is removed. A second product guest is a second instance of the same machine: its own VMCS, EPT, RAM and devices built from leftover DRAM, the same launch path, the same exit path. `vmx/guest_sched.rs` shares one CPU between the guests that are on (2 ms quantum). Disk span, console and uplink are per slot, and Stop names a row. Nested QEMU: two Alpine guests installed, rebooted, and logged in from their own disks side by side. Nested is not lived. Not flashed. B7 is not on this flash. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-7-b6-lived |
+| Summary | **Iron `4f581a4dcd93` / run `44174137515`: B6 lived. Two product guests ran side by side on the R640.** Ubuntu was at `raynusrv2 login:`. Start of the Alpine row on Guests printed `boot: guest slot 1 start guests_on=1` and `boot: guest scheduler: two guests share the CPU`, and Alpine reached `localhost login:` from `root=UUID=ee851fd5-…` on its own span of the spare. COM2 printed `boot: guests on=2` five times, 30 s apart, with both `runs=` counts moving (7018 to 36540). `ssh vikkp@10.99.99.200` answered with both on. Stop on the Alpine row left `1 guest(s) still on`. Design is [ADR-022](adr/ADR-022.md). Wave 7 stays open on B7: each guest still has one CPU. Not shown: two guest NICs at once, a second Start of a stopped row, Shut down on the I/O APIC. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
-| Gates touched | B8 lived. B6 in flight (ADR-022, PR #439). B7 in flight. Not lived. No doorbell. No format of UBUNTU0. |
+| Gates touched | **B6 lived** (`4f581a4dcd93`, [evidence](evidence/r640/2026-11-17-4f581a4d-wave-7-b6-two-guests-ok.md)). B8 lived. B7 in flight. Wave 7 open. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
 
 ## Blockers & risks (Everest-relevant)
@@ -373,7 +373,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | H11 | Truncated `site/` on feature branches | LOW | **This commit (main catch-up):** keep Kimi updater chrome from `origin/main` (nav / Status / CIO View / Stories / Please reboot); patch lived Everest-closed strings in place; `./tools/check-site-chrome.sh` + CI `site-chrome`; always-on `.cursor/rules/site-chrome.mdc`. Do not replace `site/index.html` wholesale on HDA/Everest work. |
 | H12 | ~~A seated firmware service call wrote into the running guest's RAM~~ | — | **Closed by removal** (`c5e0b719`, ADR-022). The seated firmware copy is gone. Every guest resolves its service buffers through its own slot's EPT because there is one firmware path. |
 | H13 | ~~Seated local APIC read ends the seat~~ | — | **Closed by removal** (`c5e0b719`, ADR-022). A second guest has the first guest's local APIC model, in its own slot. |
-| H14 | Two product guests have not run on the R640 | **HIGH** | ADR-022 ran in nested QEMU only. Not exercised anywhere: the uplink split by destination MAC (no BCM5720 in QEMU), a second slot on a PERC span, and a Stop of one guest while the other runs on the spare. Host tests cover each. A second slot is refused with a COM2 line when it cannot be built, and the first guest keeps the CPU. Rollback is `v0.1.6-wave6-closed`. |
+| H14 | ~~Two product guests have not run on the R640~~ | **Resolved** | Iron `4f581a4dcd93`: `boot: guests on=2` with both `runs=` counts moving, both guests at their own login, Stop of one left the other on. Still not run on iron: two guest NICs at once (the split by destination MAC has host tests only) and a second Start of a stopped row. Rollback is `v0.1.6-wave6-closed`. |
 | H15 | Shut down (B4) has not run on iron since Linux moved to the I/O APIC (B8) | MED | The SCI line was raised and never lowered. Nested printed `soft lockup ... irq/9-acpi`. IRQ 9 now goes low when the guest clears the button status (`guest_power::drop_sci`, host test). Stop is the hard path and does not use SCI. |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
@@ -384,6 +384,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-17 | wave-7-b6-lived | 0.0 | 99 | **Iron `4f581a4dcd93` / run `44174137515`: B6 lived.** Ubuntu (guest 3) at `raynusrv2 login:`, then Start of the Alpine row (guest 2) on Guests: `boot: guest slot 1 disk bytes=10737418240 spare_off=8589934592`, `boot: guest slot 1 machine VMCS=0x1a660b000`, `boot: guest slot 1 start guests_on=1`, `boot: guest scheduler: two guests share the CPU`, `RAYNU-V-RAYNU-F-DISK-BOOT-OK`, `localhost login:` from `root=UUID=ee851fd5-…`. `boot: guests on=2 switches=14036 g0 runs=7018 … g1 runs=7018` through `switches=73080 g0 runs=36540 … g1 runs=36540`, about 15 s of CPU each per 30 s. `ssh vikkp@10.99.99.200` reached `vikkp@raynusrv2:~$` with both on. Page `2 guests running`. Stop on the Alpine row: `VmStopped guest_id=1`, `boot: guest slot 1 is off; 1 guest(s) still on`. Evidence [`2026-11-17-4f581a4d`](evidence/r640/2026-11-17-4f581a4d-wave-7-b6-two-guests-ok.md). Wave 7 stays open on B7 (one CPU per guest). Not shown: two guest NICs at once, a second Start of a stopped row, Shut down on the I/O APIC (H15). `RAYNU-V-M7-ISO-INSTALL-OK` printed on Alpine's journal replay; it is the known spurious print on a `keep=0` tail and not a new install. Rollback stays `v0.1.6-wave6-closed`. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-17 | wave-7-b6-one-guest-model | 0.0 | 99 | **B6 rebuilt: one guest model, N guest slots ([ADR-022](adr/ADR-022.md)).** The seated copy (`76f66f5c` through `767261a7`) is removed. Per-guest state banks; a slot is a whole machine built from leftover DRAM; one launch and one exit path; `vmx/guest_sched.rs` time-slices the slots; disk span, COM2 and the uplink are per slot; Stop names a row. Nested QEMU: two Alpine guests installed, rebooted and logged in from their own disks side by side (`guests on=2`, even `cpu_ms`). Single-guest product and lab nested runs unchanged. The second guest then powered off while the first kept running, and was started again in its slot. Two older faults found on the way are fixed for every guest: a SysRq BREAK in front of typed input, and an ACPI SCI line that was never lowered (a storm on the I/O APIC; B4 lived on the 8259). Nested is not lived. Not flashed. H12 and H13 closed by removal; H14 opened. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-17 | wave-7-b6-apic-read | 0.0 | 99 | **B6 iron `767261a7df1e` / CI `44122386769` printed `Linux version 6.12.13-0-lts`, e820 `[mem 0x02000000-0x11ffffff] usable`, and `RAMDISK: [mem 0x02b4b000-0x0393ffff]`.** `boot: B6 seated k capped` then `reason=0x30 gpa=0xfee00020` ended the seat. This head reads that instruction from the seated guest. Not flashed. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-17 | wave-7-b6-uart | 0.0 | 99 | **B6 iron `3cbac9d1fba0` / CI `44115608987` printed `kernel owns its page faults`.** Turns 2 and 3 then stopped on `in 0x3fd` and turn 4 on `out 0x3f8`. A seated port read returns `0xFF`, so the line status always says a byte is waiting. This head answers COM1 as its own 16550 and prints `boot: B6 seated k `. Not flashed. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
@@ -1268,7 +1269,7 @@ Mount Everest:  CLOSED on iron 2026-09-11 (`f72b4276` / `34552377351`)
 Loop:          Ship EFI → R640 → UI → Linux ISO  (M7 / ADR-009)
 COM2:          HTTP-OK 10.99.99.145:8443 → SPA Start RayNu-F → ISO-INSTALL-OK → DISK-BOOT-OK → login:
 Months left:   0.0  (ETA 2026-09; overall 99% — not 100%)
-Next move:     Wave 6 is closed. GitHub Latest is v0.1.6-wave6-closed. Wave 7 is next. Auth.token A5 stays parked. Standing SPA is 10.99.99.201. The running image is 4e327820e039. iDRAC is 10.99.99.24, NIC Selection Dedicated. Do not format UBUNTU0. No doorbell. See docs/m8_plan.md.
+Next move:     Wave 6 is closed. GitHub Latest is v0.1.6-wave6-closed. Wave 7 is open: B8 and B6 lived (two guests side by side on 4f581a4dcd93), B7 (more than one CPU per guest) is next. Auth.token A5 stays parked. Standing SPA is 10.99.99.201. The running image is 4e327820e039. iDRAC is 10.99.99.24, NIC Selection Dedicated. Do not format UBUNTU0. No doorbell. See docs/m8_plan.md.
 Rollback:      GitHub Latest v0.1.6-wave6-closed. Lab stick 4e327820e039 / run 42384654720 / signed SHA256 1101880eb670530ee3e23a5499cc9b0a2ac5579954c755dbe455fa9aa2b1995a. Older M8.9 pin: v0.1.0-m8-9-lan → CI 40603110937 / COM2 sha=0d865c7fcb0a / EFI SHA256 df6fc3465cecf1eaf058d5c8e675501827c16eb55e7b2c9758bc5e68326ad91b
 Older M8.8:    v0.1.0-m8-8-ubuntu → CI 38454398693 / COM2 sha=c3a70e623aec / EFI SHA256 08ef31ba87136577102ac378d8e0a512327994e8794c41c64444f5be5f8812c4
 Older SPA:     v0.1.0-m8-perc-spa → CI 36362775808 / COM2 sha=8ad2ac89125e / EFI SHA256 6d5dc7cbe088182b6dcd7896717f1cb204ba2e3604f477404ef0b809349c6849

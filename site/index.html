@@ -173,14 +173,14 @@
             Wave 7 is open. The guest interrupt controller lived: Linux uses
             the I/O APIC, the disk completes on MSI-X, and
             <code>ssh</code> to <code>10.99.99.200</code> reaches a shell.
-            A second guest is being rebuilt as a second copy of the same
-            machine: its own memory, disk, and devices, and one scheduler
-            that shares the CPU between the guests that are on. Two guests
-            installed and rebooted side by side in a nested test. That is
-            not the R640. It is not flashed, and two guests have not run
-            there yet.
+            Two guests now run side by side on the R640: Ubuntu and Alpine,
+            each a full copy of the same machine with its own memory, disk,
+            and devices, and one scheduler that shares the CPU between
+            them. Both reached their own login, <code>ssh</code> to Ubuntu
+            answered while both ran, and Stop of one left the other up.
+            Two guest network cards at once have not run there yet.
             A second CPU is not published yet, so
-            Ubuntu still boots with one. The rollback stays
+            each guest still boots with one. The rollback stays
             <a href="https://github.com/vikkp/RayNu/releases/tag/v0.1.6-wave6-closed"><code>v0.1.6-wave6-closed</code></a>.
           </p>
           <p class="section__lede">
