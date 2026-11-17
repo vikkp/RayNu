@@ -617,6 +617,10 @@ pub fn note_seat_kernel() -> bool {
         .is_ok()
 }
 
+pub fn seat_kernel_started() -> bool {
+    KERNEL.load(Ordering::Acquire)
+}
+
 pub fn seat_disk_bound() -> Option<(u64, u64)> {
     if READ_ON.load(Ordering::Acquire) {
         Some((

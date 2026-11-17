@@ -1,6 +1,6 @@
 ---
 loihda_version: 1
-last_updated: 2026-11-16
+last_updated: 2026-11-17
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-7-b6-initrd |
-| Summary | **B6 iron `055351fd3fab` / CI `43973493031` entered the kernel at `0x2b09515`.** The initrd `LoadFile` returned unsupported and the stub exited `EFI_LOAD_ERROR`. This head serves that call. Not flashed. Not lived. B7 is not on this flash. Guest SSH stays. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-7-b6-kernel-pf |
+| Summary | **B6 iron `113314181397` / CI `43989045928` served the initrd and reached `ExitBootServices`.** A `#PF` then ended the seat. This head gives page faults to the kernel after that call. Not flashed. Not lived. B7 is not on this flash. Guest SSH stays. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. TLS 88 held. |
 | Gates touched | B8 lived. B6 in flight. B7 in flight. Not lived. No doorbell. No format of UBUNTU0. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-17 | wave-7-b6-kernel-pf | 94 | 72 | **B6 iron `113314181397` printed `initrd LoadFile jump=yes` and `ExitBootServices`.** A `#PF` at `rip=0xffffffff96caa675` ended the seat. This head stops intercepting kernel page faults at that call. Not flashed. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-16 | wave-7-b6-initrd | 94 | 72 | **B6 iron `055351fd3fab` printed `StartImage entry=0x2b09515`.** Initrd `LoadFile` `id=0xf210` was unsupported, so the stub exited `EFI_LOAD_ERROR` and the menu returned. This head serves that call. Not flashed. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-16 | wave-7-b6-start-image | 94 | 72 | **B6 iron `c0fe8b3ed807` highlighted `Alpine Linux v3.21, with Linux lts`.** Enter ran. `StartImage` did not enter the kernel, so `UnloadImage` failed and the menu returned. This head jumps to the image entry. Not flashed. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-16 | wave-7-b6-con-cap | 94 | 72 | **B6 iron `2411e8d991b4` sent Enter. `UnloadImage` on the running image returned invalid parameter, and the menu waited for a key again.** The entry did not start. This head keeps 32 console lines and names `UnloadImage`. Not flashed. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |

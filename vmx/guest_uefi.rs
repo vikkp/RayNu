@@ -7915,6 +7915,14 @@ unsafe fn seat_firmware_service() -> bool {
         serial::write_line_nowait(
             "boot: B6 seated firmware ExitBootServices; the kernel is starting; the guest OS is still waiting",
         );
+        // The seat VMCS still intercepts every exception, including #PF.
+        // Iron `113314181397` took one at `rip=0xffffffff96caa675` and the
+        // seat was ended. The kernel owns its faults after this call.
+        let _ = ops::vmwrite(
+            EXCEPTION_BITMAP,
+            u64::from(guest_uefi_raynu_f_handoff_exception_bitmap()),
+        );
+        serial::write_line_nowait("boot: B6 seated kernel owns its page faults");
     }
     // Iron `c0fe8b3e`: StartImage returned success and the guest stayed in
     // GRUB, then UnloadImage of the running image was invalid parameter.
@@ -8909,6 +8917,13 @@ unsafe fn finish_seat_firmware() -> ! {
         }
         guest_uefi_vmresume();
     }
+    if basic == 0
+        && vmexit_intr_is_hw_exception(intr, 14)
+        && crate::mgmt::product_companion::seat_kernel_started()
+        && seat_reinject_page_fault()
+    {
+        guest_uefi_vmresume();
+    }
     serial::write_str_nowait("boot: B6 seated firmware exit reason=0x");
     write_hex_u32_nowait(basic);
     serial::write_str_nowait(" qual=0x");
@@ -8921,6 +8936,31 @@ unsafe fn finish_seat_firmware() -> ! {
     write_hex_nowait(rip);
     serial::write_line_nowait("; the guest OS is still waiting");
     hand_seat_firmware_back();
+}
+
+/// Give a seated kernel `#PF` back to the guest and stop intercepting it.
+#[cfg(target_os = "uefi")]
+unsafe fn seat_reinject_page_fault() -> bool {
+    let err = ops::vmread(VM_EXIT_INTR_ERROR_CODE).unwrap_or(0);
+    let cr2 = cpu::read_cr2();
+    let bmp = ops::vmread(EXCEPTION_BITMAP).unwrap_or(0);
+    let info_ok = ops::vmwrite(
+        EXCEPTION_BITMAP,
+        bmp & !GUEST_UEFI_EXC_BITMAP_PF,
+    )
+    .is_ok()
+        && ops::vmwrite(VM_ENTRY_EXCEPTION_ERROR_CODE, err).is_ok()
+        && ops::vmwrite(
+            VM_ENTRY_INTERRUPTION_INFO,
+            u64::from(guest_uefi_linux_pf_entry_info()),
+        )
+        .is_ok();
+    serial::write_str_nowait("boot: B6 seated kernel page fault cr2=0x");
+    write_hex_nowait(cr2);
+    serial::write_str_nowait(" err=0x");
+    write_hex_nowait(err);
+    serial::write_line_nowait("");
+    info_ok
 }
 
 /// VM-exit interruption information is a valid hardware exception of `vector`.
