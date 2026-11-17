@@ -299,6 +299,10 @@ mod hw {
     /// ISO beside slot 0. Zero when nothing is asked. Nested QEMU has no
     /// PERC catalog to start a second guest from.
     static LAB_START: AtomicUsize = AtomicUsize::new(0);
+    /// Lab only: slot + 1 that is started once more after it powers off,
+    /// so nested QEMU runs "one guest leaves, the other keeps running"
+    /// and "Start of a slot that already has a machine".
+    static LAB_AGAIN: AtomicUsize = AtomicUsize::new(0);
     static SWITCHES: AtomicU64 = AtomicU64::new(0);
     static SWITCH_LOGGED: AtomicBool = AtomicBool::new(false);
     /// The scheduler is booting this slot and it has not entered yet. A
@@ -315,6 +319,8 @@ mod hw {
     pub fn request_lab_start(slot: usize) {
         if slot != 0 && slot < MAX_GUESTS {
             LAB_START.store(slot + 1, Ordering::Release);
+            LAB_AGAIN.store(slot + 1, Ordering::Release);
+            slot::with_slot(slot, crate::devices::guest_serial_answer::lab_power_off_after_prove);
         }
     }
 
@@ -863,6 +869,18 @@ mod hw {
             Leave::Off => crate::mgmt::perc_boot_choice::note_guest_off(),
         }
         audit_log!(AuditEvent::VmStopped { guest_id: cur as u64 });
+        if was_on
+            && LAB_AGAIN
+                .compare_exchange(cur + 1, 0, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok()
+        {
+            // What the Guests page does on Start of a stopped row.
+            let _ = crate::mgmt::perc_boot_choice::rearm_guest_after_stop();
+            LAB_START.store(cur + 1, Ordering::Release);
+            serial::write_line(
+                "boot: lab second guest powered off and is started again (twoguest.txt; ADR-022; not ISO-INSTALL-OK)",
+            );
+        }
         let Some(next) = next else {
             serial::write_str("boot: guest slot ");
             serial::write_byte(b'0' + cur as u8);

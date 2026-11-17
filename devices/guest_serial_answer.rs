@@ -100,8 +100,11 @@ pub(crate) const BOOTLOADER: &[u8] = b"grub\r";
 pub(crate) const REBOOT: &[u8] = b"reboot\r";
 /// F7 second boot: prove root is on the installed ext4, not modloop.
 pub(crate) const PROVE: &[u8] = b"cat /proc/cmdline; mount | head -3\r";
+/// Lab only (`twoguest.txt`, nested QEMU): typed after [`PROVE`] in the
+/// slot the lab armed, so one guest leaves the CPU while another runs.
+pub(crate) const LAB_POWEROFF: &[u8] = b"poweroff\r";
 const _: () = assert!(REBOOT.len() <= QCAP);
-const _: () = assert!(PROVE.len() <= QCAP);
+const _: () = assert!(PROVE.len() + LAB_POWEROFF.len() <= QCAP);
 const PLEASE_REBOOT: &[u8] = b"Please reboot.";
 
 const PHASE_LOGIN: u8 = 0;
@@ -163,6 +166,14 @@ static MOUNT_LOG: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 static REBOOT_SENT: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// F7: second Linux boot after RayNu-F relaunch. `reset()` does not clear this.
 static SECOND_BOOT: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+
+/// Lab only: this slot types [`LAB_POWEROFF`] once, after its proof line.
+static LAB_OFF: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+
+/// Lab only (`twoguest.txt`). Iron and the Guests page never call this.
+pub fn lab_power_off_after_prove() {
+    LAB_OFF.store(true, Ordering::Release);
+}
 
 fn with<R>(f: impl FnOnce(&mut Answer) -> R) -> R {
     while LOCK.swap(true, Ordering::Acquire) {
@@ -401,6 +412,12 @@ pub fn note_tx(b: u8) {
             }
             PHASE_SHELL if second && is_shell_prompt(&a.win, a.wlen) => {
                 enqueue(a, PROVE);
+                if LAB_OFF.swap(false, Ordering::AcqRel) {
+                    // The same ask the Shut down button opens, so the
+                    // guest's S5 is a power-off and not an ignored write.
+                    crate::mgmt::guest_power::request(crate::mgmt::guest_power::PowerAsk::Shutdown);
+                    enqueue(a, LAB_POWEROFF);
+                }
                 PHASE.store(PHASE_DONE, Ordering::Release);
             }
             PHASE_SHELL if !second && is_shell_prompt(&a.win, a.wlen) => {
