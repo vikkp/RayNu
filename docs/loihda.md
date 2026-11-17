@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-7-b6-apic-read |
-| Summary | **B6 iron `767261a7df1e` / CI `44122386769` printed the Alpine banner and the 256 MiB grant.** A local APIC read at `0xfee00020` then ended the seat. This head fetches that instruction from the seated guest. Not flashed. Not lived. B7 is not on this flash. Guest SSH stays. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | wave-7-b6-one-guest-model |
+| Summary | **B6 is rebuilt as one guest model with guest slots ([ADR-022](adr/ADR-022.md)).** The seated copy is removed. A second guest is a second instance of the same machine on its own span of the spare, and one scheduler shares the CPU. Nested QEMU: two Alpine guests installed, rebooted, and logged in from their own disks side by side. Nested is not lived. Not flashed. B7 is not on this flash. Guest SSH stays. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. TLS 88 held. |
-| Gates touched | B8 lived. B6 in flight. B7 in flight. Not lived. No doorbell. No format of UBUNTU0. |
+| Gates touched | B8 lived. B6 in flight (ADR-022, PR #439). B7 in flight. Not lived. No doorbell. No format of UBUNTU0. |
 
 ---
 
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-17 | wave-7-b6-one-guest-model | 94 | 72 | **B6 rebuilt: one guest model, N guest slots ([ADR-022](adr/ADR-022.md)).** The seated copy is removed. Each guest is the same machine on its own span of the spare; one scheduler shares the CPU; Stop names a row. Nested QEMU: two Alpine guests installed, rebooted and logged in from their own disks side by side. Nested is not lived. Not flashed. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-17 | wave-7-b6-apic-read | 94 | 72 | **B6 iron `767261a7df1e` printed `Linux version 6.12.13-0-lts` and `RAMDISK: [mem 0x02b4b000-0x0393ffff]`.** `reason=0x30 gpa=0xfee00020` ended the seat. This head fetches that instruction from the seated guest. Not flashed. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-17 | wave-7-b6-uart | 94 | 72 | **B6 iron `3cbac9d1fba0` printed `kernel owns its page faults`, then stayed on `in 0x3fd` and `out 0x3f8`.** This head answers COM1 as its own 16550 and prints `boot: B6 seated k `. Not flashed. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
 | 2026-11-17 | wave-7-b6-kernel-pf | 94 | 72 | **B6 iron `113314181397` printed `initrd LoadFile jump=yes` and `ExitBootServices`.** A `#PF` at `rip=0xffffffff96caa675` ended the seat. This head stops intercepting kernel page faults at that call. Not flashed. Not lived. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |
