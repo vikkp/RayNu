@@ -180,7 +180,7 @@
             its turn and stores reads and writes on its own disk. The
             guest already running keeps its devices. COM2 can print
             <code>boot: B6 both product guests have been entered</code>.
-            The guest operating system is still waiting. Iron <code>113314181397</code> started the seated kernel. A page fault then ended that guest. This head lets the kernel handle its own page faults. It is not flashed. The second
+            The guest operating system is still waiting. Iron <code>3cbac9d1fba0</code> started the seated kernel. That kernel is waiting on the serial port. This head answers that port and prints what the kernel sends. It is not flashed. The second
             CPU is not on this stick.
             A second CPU is not published yet, so
             Ubuntu still boots with one. The rollback stays

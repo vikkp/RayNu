@@ -363,6 +363,201 @@ impl SeatPio {
     }
 }
 
+/// Seated COM1 (`0x3F8`–`0x3FF`). The running guest keeps its own UART.
+///
+/// Iron `3cbac9d1fba0` reached the kernel, then turns 2 and 3 stopped on
+/// `in 0x3fd` and turn 4 on `out 0x3f8`. An ordinary seated port read
+/// returns `0xFF`, so the line-status register always says a byte is
+/// waiting and the transmitted bytes are discarded.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SeatUart {
+    lcr: u8,
+    ier: u8,
+    mcr: u8,
+    dll: u8,
+    dlm: u8,
+    scr: u8,
+    /// Bit 0: `rx` holds a loopback byte.
+    flags: u8,
+    rx: u8,
+}
+
+impl Default for SeatUart {
+    fn default() -> Self {
+        Self {
+            lcr: 0x03,
+            ier: 0,
+            mcr: 0,
+            dll: 1,
+            dlm: 0,
+            scr: 0,
+            flags: 0,
+            rx: 0,
+        }
+    }
+}
+
+/// What one access of the seated COM1 did.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SeatUartAnswer {
+    /// Port outside `0x3F8`–`0x3FF`.
+    Outside,
+    /// IN. The low byte is the register.
+    In(u64),
+    /// OUT of a control register.
+    Out,
+    /// One byte left the transmitter.
+    Tx(u8),
+}
+
+impl SeatUart {
+    pub fn from_saved(packed: u64) -> Self {
+        Self {
+            lcr: packed as u8,
+            ier: (packed >> 8) as u8,
+            mcr: (packed >> 16) as u8,
+            dll: (packed >> 24) as u8,
+            dlm: (packed >> 32) as u8,
+            scr: (packed >> 40) as u8,
+            flags: (packed >> 48) as u8,
+            rx: (packed >> 56) as u8,
+        }
+    }
+
+    pub fn pack(&self) -> u64 {
+        u64::from(self.lcr)
+            | (u64::from(self.ier) << 8)
+            | (u64::from(self.mcr) << 16)
+            | (u64::from(self.dll) << 24)
+            | (u64::from(self.dlm) << 32)
+            | (u64::from(self.scr) << 40)
+            | (u64::from(self.flags) << 48)
+            | (u64::from(self.rx) << 56)
+    }
+
+    fn dlab(&self) -> bool {
+        self.lcr & 0x80 != 0
+    }
+
+    fn rx_full(&self) -> bool {
+        self.flags & 1 != 0
+    }
+
+    /// Line status: transmitter empty. Data-ready only while a loopback
+    /// byte is waiting. `0xFF` kept data-ready set on every read.
+    fn lsr(&self) -> u8 {
+        if self.rx_full() {
+            0x61
+        } else {
+            0x60
+        }
+    }
+
+    fn msr(&self) -> u8 {
+        if self.mcr & 0x10 != 0 {
+            let mut m = 0u8;
+            if self.mcr & 0x02 != 0 {
+                m |= 0x10;
+            }
+            if self.mcr & 0x01 != 0 {
+                m |= 0x20;
+            }
+            if self.mcr & 0x04 != 0 {
+                m |= 0x40;
+            }
+            if self.mcr & 0x08 != 0 {
+                m |= 0x80;
+            }
+            m
+        } else {
+            // CTS, DSR, and carrier, so a console that waits on CTS can send.
+            0xB0
+        }
+    }
+
+    fn read(&mut self, off: u8) -> u8 {
+        match off {
+            0 if self.dlab() => self.dll,
+            0 => {
+                if self.rx_full() {
+                    self.flags &= !1;
+                    self.rx
+                } else {
+                    0
+                }
+            }
+            1 if self.dlab() => self.dlm,
+            1 => self.ier,
+            2 => 0x01,
+            3 => self.lcr,
+            4 => self.mcr,
+            5 => self.lsr(),
+            6 => self.msr(),
+            7 => self.scr,
+            _ => 0,
+        }
+    }
+
+    fn write(&mut self, off: u8, val: u8) -> Option<u8> {
+        match off {
+            0 if self.dlab() => {
+                self.dll = val;
+                None
+            }
+            0 if self.mcr & 0x10 != 0 => {
+                self.rx = val;
+                self.flags |= 1;
+                None
+            }
+            0 => Some(val),
+            1 if self.dlab() => {
+                self.dlm = val;
+                None
+            }
+            1 => {
+                self.ier = val;
+                None
+            }
+            3 => {
+                self.lcr = val;
+                None
+            }
+            4 => {
+                self.mcr = val;
+                None
+            }
+            7 => {
+                self.scr = val;
+                None
+            }
+            _ => None,
+        }
+    }
+
+    /// One non-string access. `Outside` leaves the port to the PIT and PCI path.
+    pub fn access(&mut self, port: u16, is_in: bool, size: u8, rax: u64) -> SeatUartAnswer {
+        let Some(off) = port.checked_sub(0x3F8) else {
+            return SeatUartAnswer::Outside;
+        };
+        if off > 7 {
+            return SeatUartAnswer::Outside;
+        }
+        let mask = match size {
+            2 => 0xFFFF,
+            4 => 0xFFFF_FFFF,
+            _ => 0xFF,
+        };
+        if is_in {
+            let val = u64::from(self.read(off as u8));
+            SeatUartAnswer::In((rax & !mask) | (val & mask))
+        } else if let Some(b) = self.write(off as u8, rax as u8) {
+            SeatUartAnswer::Tx(b)
+        } else {
+            SeatUartAnswer::Out
+        }
+    }
+}
+
 /// One full walk of every PCI function: 65536 reads, and each read is an
 /// `out 0xCF8` plus an `in 0xCFC`.
 pub const SEAT_PCI_SCAN: u32 = 65536 * 2;
@@ -1572,6 +1767,35 @@ mod tests {
         assert_eq!(seat_menu_enter(7, false), None);
         assert_eq!(seat_menu_enter(8, false), Some(b'\r'));
         assert_eq!(seat_menu_enter(8, true), None);
+        let mut uart = SeatUart::default();
+        assert!(matches!(uart.access(0x61, true, 1, 0), SeatUartAnswer::Outside));
+        match uart.access(0x3FD, true, 1, 0xAA00) {
+            SeatUartAnswer::In(v) => assert_eq!(v, 0xAA60, "THRE and TEMT, data-ready clear"),
+            other => panic!("lsr {other:?}"),
+        }
+        assert_eq!(uart.access(0x3F9, false, 1, 0), SeatUartAnswer::Out);
+        assert_eq!(uart.access(0x3F9, true, 1, 0), SeatUartAnswer::In(0));
+        assert_eq!(uart.access(0x3F9, false, 1, 0x0F), SeatUartAnswer::Out);
+        assert_eq!(uart.access(0x3F9, true, 1, 0), SeatUartAnswer::In(0x0F));
+        assert_eq!(uart.access(0x3FA, true, 1, 0), SeatUartAnswer::In(0x01));
+        assert_eq!(uart.access(0x3FE, true, 1, 0), SeatUartAnswer::In(0xB0));
+        assert_eq!(uart.access(0x3FF, false, 1, 0x55), SeatUartAnswer::Out);
+        assert_eq!(uart.access(0x3FF, true, 1, 0), SeatUartAnswer::In(0x55));
+        assert_eq!(uart.access(0x3F8, false, 1, u64::from(b'L')), SeatUartAnswer::Tx(b'L'));
+        assert_eq!(uart.access(0x3FB, false, 1, 0x83), SeatUartAnswer::Out);
+        assert_eq!(uart.access(0x3F8, false, 1, 12), SeatUartAnswer::Out);
+        assert_eq!(uart.access(0x3F8, true, 1, 0), SeatUartAnswer::In(12));
+        let mut saved = SeatUart::from_saved(uart.pack());
+        assert_eq!(saved.access(0x3FB, true, 1, 0), SeatUartAnswer::In(0x83));
+        assert_eq!(saved.access(0x3F8, true, 1, 0), SeatUartAnswer::In(12));
+        assert_eq!(saved.access(0x3FB, false, 1, 0x03), SeatUartAnswer::Out);
+        assert_eq!(saved.access(0x3F9, true, 1, 0), SeatUartAnswer::In(0x0F));
+        let mut looped = SeatUart::default();
+        assert_eq!(looped.access(0x3FC, false, 1, 0x10), SeatUartAnswer::Out);
+        assert_eq!(looped.access(0x3F8, false, 1, 0xAE), SeatUartAnswer::Out);
+        assert_eq!(looped.access(0x3FD, true, 1, 0), SeatUartAnswer::In(0x61));
+        assert_eq!(looped.access(0x3F8, true, 1, 0), SeatUartAnswer::In(0xAE));
+        assert_eq!(looped.access(0x3FD, true, 1, 0), SeatUartAnswer::In(0x60));
         let mut pio = SeatPio::default();
         pio.pci_zero = true;
         assert_eq!(pio.access(0xCFC, true, 4, 0), Some(0));

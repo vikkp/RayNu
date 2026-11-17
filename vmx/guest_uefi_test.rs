@@ -3587,6 +3587,8 @@ fn f7_relaunch_resets_firmware_state_without_a_stack_temporary() {
     assert!(src.contains("boot: B6 seated initrd LoadFile jump="));
     assert!(src.contains("boot: B6 seated kernel owns its page faults"));
     assert!(src.contains("seat_reinject_page_fault"));
+    assert!(src.contains("boot: B6 seated k "));
+    assert!(src.contains("SeatUart::from_saved"));
     assert!(src.contains("ServiceId::InitrdLoadFile"));
     assert!(svc.contains("product_companion::seat_mem_read("));
     assert!(svc.contains("product_companion::seat_mem_write("));

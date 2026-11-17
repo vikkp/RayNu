@@ -8434,6 +8434,10 @@ fn seat_trace_reset() {
     SEAT_FW_STATE_READY.store(false, Ordering::Release);
     SEAT_PORT61.store(0, Ordering::Release);
     SEAT_PIT.store(crate::mgmt::product_companion::SeatPio::default().pack(), Ordering::Release);
+    SEAT_UART.store(crate::mgmt::product_companion::SeatUart::default().pack(), Ordering::Release);
+    SEAT_K_LINES.store(0, Ordering::Release);
+    SEAT_K_LEN.store(0, Ordering::Release);
+    SEAT_K_CAPPED.store(false, Ordering::Release);
     SEAT_PCI_SEEN.store(0, Ordering::Release);
     SEAT_PCI_ADDR.store(0, Ordering::Release);
     SEAT_PCI_REP.store(0, Ordering::Release);
@@ -8451,6 +8455,16 @@ static SEAT_GRANT_PAGES: AtomicU64 = AtomicU64::new(0);
 static SEAT_PORT61: AtomicU8 = AtomicU8::new(0);
 #[cfg(target_os = "uefi")]
 static SEAT_PIT: AtomicU64 = AtomicU64::new(0xFFFF_FFFF);
+#[cfg(target_os = "uefi")]
+static SEAT_UART: AtomicU64 = AtomicU64::new(0);
+#[cfg(target_os = "uefi")]
+static SEAT_K_LINES: AtomicU32 = AtomicU32::new(0);
+#[cfg(target_os = "uefi")]
+static SEAT_K_LEN: AtomicU32 = AtomicU32::new(0);
+#[cfg(target_os = "uefi")]
+static SEAT_K_CAPPED: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "uefi")]
+static mut SEAT_K: [u8; 96] = [0; 96];
 #[cfg(target_os = "uefi")]
 static SEAT_PCI_SEEN: AtomicU32 = AtomicU32::new(0);
 #[cfg(target_os = "uefi")]
@@ -8564,6 +8578,25 @@ fn seat_finish_port(
 /// Legacy ISA port for the seated guest. Does not use the running guest's port state.
 #[cfg(target_os = "uefi")]
 fn seat_legacy_pio(port: u16, is_in: bool, size: u8, rax: u64, pci_zero: bool) -> Option<u64> {
+    let mut uart = crate::mgmt::product_companion::SeatUart::from_saved(
+        SEAT_UART.load(Ordering::Acquire),
+    );
+    match uart.access(port, is_in, size, rax) {
+        crate::mgmt::product_companion::SeatUartAnswer::Outside => {}
+        crate::mgmt::product_companion::SeatUartAnswer::In(v) => {
+            SEAT_UART.store(uart.pack(), Ordering::Release);
+            return Some(v);
+        }
+        crate::mgmt::product_companion::SeatUartAnswer::Out => {
+            SEAT_UART.store(uart.pack(), Ordering::Release);
+            return None;
+        }
+        crate::mgmt::product_companion::SeatUartAnswer::Tx(b) => {
+            SEAT_UART.store(uart.pack(), Ordering::Release);
+            seat_k_byte(b);
+            return None;
+        }
+    }
     let mut pio = crate::mgmt::product_companion::SeatPio::from_saved(
         SEAT_PORT61.load(Ordering::Acquire),
         SEAT_PIT.load(Ordering::Acquire),
@@ -8573,6 +8606,54 @@ fn seat_legacy_pio(port: u16, is_in: bool, size: u8, rax: u64, pci_zero: bool) -
     SEAT_PORT61.store(pio.port61, Ordering::Release);
     SEAT_PIT.store(pio.pack(), Ordering::Release);
     out
+}
+
+/// Kernel text from the seated COM1 transmitter. COM2 belongs to the
+/// running guest, so this is a `nowait` line and it stops after 48 lines.
+#[cfg(target_os = "uefi")]
+fn seat_k_byte(b: u8) {
+    if SEAT_K_LINES.load(Ordering::Acquire) >= 48 {
+        if !SEAT_K_CAPPED.swap(true, Ordering::AcqRel) {
+            serial::write_line_nowait("boot: B6 seated k capped");
+        }
+        return;
+    }
+    if b == b'\r' {
+        return;
+    }
+    if b == b'\n' {
+        seat_k_flush();
+        return;
+    }
+    if !(0x20..0x7f).contains(&b) {
+        return;
+    }
+    let i = SEAT_K_LEN.load(Ordering::Acquire);
+    if i >= 96 {
+        seat_k_flush();
+    }
+    let i = SEAT_K_LEN.load(Ordering::Acquire);
+    if i >= 96 {
+        return;
+    }
+    unsafe { SEAT_K[i as usize] = b };
+    SEAT_K_LEN.store(i + 1, Ordering::Release);
+}
+
+#[cfg(target_os = "uefi")]
+fn seat_k_flush() {
+    let n = SEAT_K_LEN.swap(0, Ordering::AcqRel) as usize;
+    if n == 0 || SEAT_K_LINES.fetch_add(1, Ordering::AcqRel) >= 48 {
+        if n != 0 && !SEAT_K_CAPPED.swap(true, Ordering::AcqRel) {
+            serial::write_line_nowait("boot: B6 seated k capped");
+        }
+        return;
+    }
+    serial::write_str_nowait("boot: B6 seated k ");
+    for i in 0..n {
+        serial::write_byte_nowait(unsafe { SEAT_K[i] });
+    }
+    serial::write_line_nowait("");
 }
 
 /// Map leftover DRAM into the seated EPT above the firmware slab and record
