@@ -8,6 +8,8 @@
 //!
 //! Pillar: [Z] · Proven Core: **outside** (ADR-002)
 
+use crate::guest::slot::PerGuest;
+use crate::per_guest;
 use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 static REQUESTED: AtomicBool = AtomicBool::new(false);
@@ -73,7 +75,7 @@ pub fn requested() -> bool {
 /// Distinguishes an operator SPA Start from the `raynuf.txt` flag file.
 /// Phase 0: only an explicit Start may let the installer auto-answer wipe
 /// a virtio disk that is backed by a durable LUN.
-static SPA_STARTED: AtomicBool = AtomicBool::new(false);
+static SPA_STARTED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 
 /// SPA/REST product-ISO start (Phase B / P0-63). Same latch as `raynuf.txt`.
 /// Does not print `ISO-INSTALL-OK`. Firmware serial is the SPA start note.

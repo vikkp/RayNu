@@ -11,6 +11,8 @@
 //! Proven Core: **outside** (ADR-002). The HTTPS listener is armed before
 //! this wait; the PERC walk itself is earlier and cannot see the browser.
 
+use crate::guest::slot::PerGuest;
+use crate::per_guest;
 use core::sync::atomic::{AtomicU8, Ordering};
 
 use super::api::RestMethod;
@@ -52,15 +54,15 @@ pub const PERC_SPA_TAIL_BOOT_NOTE: &str =
 
 /// JUSTIFICATION: one BSP latch. The coexist HTTP handler stores it; the
 /// boot wait and the RayNu-F stager load it. Not the Proven Core allocator.
-static CHOICE: AtomicU8 = AtomicU8::new(CHOICE_PENDING);
+static CHOICE: PerGuest<AtomicU8> = per_guest!(AtomicU8::new(CHOICE_PENDING));
 /// Guest-visible size of a tail disk. Zero unless a tail choice won the race.
-static TAIL_BYTES: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static TAIL_BYTES: PerGuest<core::sync::atomic::AtomicU64> = per_guest!(core::sync::atomic::AtomicU64::new(0));
 /// Spare byte offset of that disk. Zero unless it is the free tail.
-static TAIL_OFF: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static TAIL_OFF: PerGuest<core::sync::atomic::AtomicU64> = per_guest!(core::sync::atomic::AtomicU64::new(0));
 /// SPA Stop. The RayNu-F exit loop takes it and leaves the guest.
-static GUEST_STOP: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+static GUEST_STOP: PerGuest<core::sync::atomic::AtomicBool> = per_guest!(core::sync::atomic::AtomicBool::new(false));
 /// Stop already landed. Start stays refused until the next hypervisor boot.
-static GUEST_STOPPED: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+static GUEST_STOPPED: PerGuest<core::sync::atomic::AtomicBool> = per_guest!(core::sync::atomic::AtomicBool::new(false));
 
 /// What the operator has posted, if anything.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -394,59 +396,21 @@ pub fn take_guest_stop() -> bool {
         return false;
     }
     GUEST_STOPPED.store(true, Ordering::Release);
-    crate::mgmt::product_seats::clear_running();
-    let _ = promote_parked(
-        crate::mgmt::megaraid::perc_image_boot_latched(),
-        crate::mgmt::megaraid::perc_spare_bytes(),
-    );
     true
 }
 
-/// After Stop, boot the seated guest on this same VMCS.
-///
-/// Host tests pass `image_latched` themselves. Iron reads the spare latch.
-/// A parked guest with no disk size stays seated. Not two guests at once.
-pub fn promote_parked(image_latched: bool, spare_bytes: u64) -> bool {
-    use crate::mgmt::product_seats::{note_running, parked, Seat};
-    if !image_latched || !guest_stopped() {
-        return false;
-    }
-    let Some(seat) = parked() else {
-        return false;
-    };
-    if matches!(seat, Seat::Tail { bytes: 0, .. }) {
-        return false;
-    }
-    if !rearm_guest_after_stop() {
-        return false;
-    }
-    let applied = match seat {
-        Seat::Window => apply_spa_choice(true, CHOICE_BOOT),
-        Seat::Tail { off, bytes } => {
-            if off == crate::mgmt::megaraid::PERC_IMAGE_BYTES {
-                apply_tail_boot_choice(true, spare_bytes, bytes)
-            } else {
-                apply_tail_boot_at(true, spare_bytes, off, bytes)
-            }
-        }
-    };
-    if applied != PercChoiceApply::Accepted {
-        GUEST_STOPPED.store(true, Ordering::Release);
-        return false;
-    }
-    note_running(seat);
-    note_perc_relaunch();
-    crate::boot::raynu_f_flag::request_installed_boot();
-    let nic_off = match seat {
-        Seat::Window => 0,
-        Seat::Tail { off, .. } => off,
-    };
-    crate::mgmt::guest_nic_start::on_accepted_start(nic_off);
-    #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
-    crate::boot::serial::write_line(
-        "boot: B6 seated guest takes the CPU (one VMCS; the other guest is off)",
-    );
-    true
+/// Stop is posted for this slot and its exit path has not taken it yet.
+/// The guest scheduler runs a halted guest so the Stop lands.
+pub fn stop_pending() -> bool {
+    GUEST_STOP.load(Ordering::Acquire)
+}
+
+/// The guest left the VMCS on its own (ACPI power-off, a failed launch).
+/// Same latch as a landed Stop, so the row reads stopped and Start boots
+/// it again.
+pub fn note_guest_off() {
+    GUEST_STOP.store(false, Ordering::Release);
+    GUEST_STOPPED.store(true, Ordering::Release);
 }
 
 /// True after Stop has landed.
@@ -468,7 +432,7 @@ pub fn rearm_guest_after_stop() -> bool {
     true
 }
 
-static PERC_RELAUNCH: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+static PERC_RELAUNCH: PerGuest<core::sync::atomic::AtomicBool> = per_guest!(core::sync::atomic::AtomicBool::new(false));
 
 /// Which guest, if any, is in the RayNu-F VMCS.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -498,9 +462,15 @@ pub fn note_perc_relaunch() {
     PERC_RELAUNCH.store(true, Ordering::Release);
 }
 
-/// One-shot. The idle loop consumes this and relaunches RayNu-F.
+/// One-shot. The idle loop or the guest scheduler consumes this and
+/// launches RayNu-F in this slot.
 pub fn take_perc_relaunch() -> bool {
     PERC_RELAUNCH.swap(false, Ordering::AcqRel)
+}
+
+/// A Start is waiting for this slot. Does not consume it.
+pub fn relaunch_pending() -> bool {
+    PERC_RELAUNCH.load(Ordering::Acquire)
 }
 
 fn status_body() -> &'static [u8] {
@@ -701,12 +671,14 @@ pub fn prop_perc_spa_choice() -> bool {
 /// Host tests only.
 #[cfg(test)]
 pub fn clear_perc_spa_choice_for_test() {
-    CHOICE.store(CHOICE_PENDING, Ordering::Release);
-    TAIL_BYTES.store(0, Ordering::Release);
-    TAIL_OFF.store(0, Ordering::Release);
-    GUEST_STOP.store(false, Ordering::Release);
-    GUEST_STOPPED.store(false, Ordering::Release);
-    PERC_RELAUNCH.store(false, Ordering::Release);
+    for slot in 0..crate::guest::slot::MAX_GUESTS {
+        CHOICE.of(slot).store(CHOICE_PENDING, Ordering::Release);
+        TAIL_BYTES.of(slot).store(0, Ordering::Release);
+        TAIL_OFF.of(slot).store(0, Ordering::Release);
+        GUEST_STOP.of(slot).store(false, Ordering::Release);
+        GUEST_STOPPED.of(slot).store(false, Ordering::Release);
+        PERC_RELAUNCH.of(slot).store(false, Ordering::Release);
+    }
 }
 
 #[cfg(test)]
@@ -894,38 +866,6 @@ mod perc_boot_choice_test {
         );
         assert_eq!(st, 409, "{body}");
         assert_eq!(perc_spa_choice(), PercSpaChoice::Pending);
-        clear_perc_spa_choice_for_test();
-    }
-
-    #[test]
-    fn stop_hands_the_cpu_to_the_seated_guest() {
-        use crate::mgmt::product_seats::{parked, seat_beside, Admit, Seat};
-        clear_perc_spa_choice_for_test();
-        crate::mgmt::product_seats::clear_all();
-        crate::boot::raynu_f_flag::clear_request();
-        let ten = 10_240u64 * 1024 * 1024;
-        let spare = crate::mgmt::megaraid::IRON_LD1_BYTES;
-        let running = Seat::Tail {
-            off: crate::mgmt::megaraid::PERC_IMAGE_BYTES,
-            bytes: ten,
-        };
-        assert_eq!(
-            apply_tail_boot_choice(true, spare, ten),
-            PercChoiceApply::Accepted
-        );
-        crate::mgmt::product_seats::note_running(running);
-        assert_eq!(seat_beside(running, Seat::Window), Admit::Seated);
-        assert!(request_guest_stop());
-        assert!(take_guest_stop());
-        assert!(guest_stopped(), "host latch is false, so Stop does not boot yet");
-        assert_eq!(parked(), Some(Seat::Window));
-        assert!(promote_parked(true, spare));
-        assert!(!guest_stopped());
-        assert!(matches!(perc_spa_choice(), PercSpaChoice::BootInstalled));
-        assert_eq!(vmcs_guest(), VmcsGuest::Window);
-        assert!(take_perc_relaunch());
-        crate::boot::raynu_f_flag::clear_request();
-        crate::mgmt::product_seats::clear_all();
         clear_perc_spa_choice_for_test();
     }
 

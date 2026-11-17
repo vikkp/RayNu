@@ -112,7 +112,7 @@ pub unsafe fn va_to_gpa(cr3: u64, gva: u64) -> Option<u64> {
 ///
 /// `read` takes the GPA of one 8-byte entry and returns it, or `None` when
 /// that GPA is not the caller's guest. A guest whose RAM is not GPA=HPA uses
-/// this so every table read goes through that guest's own EPT (B6 seat).
+/// this so every table read goes through that guest's own EPT.
 pub fn va_to_gpa_with(cr3: u64, gva: u64, read: impl Fn(u64) -> Option<u64>) -> Option<u64> {
     let pml4 = cr3 & ADDR_MASK;
     if pml4 == 0 {

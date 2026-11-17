@@ -21,8 +21,7 @@
 
 use core::cell::UnsafeCell;
 use core::ops::Deref;
-#[cfg(not(test))]
-use core::sync::atomic::{AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 /// Product guests that can exist at once. Each slot costs one copy of the
 /// per-guest state banks; the machine itself (RAM, EPT, VMCS) is allocated
@@ -82,6 +81,66 @@ pub fn with_slot<R>(slot: usize, f: impl FnOnce() -> R) -> R {
     let r = f();
     set_current(prev);
     r
+}
+
+/// A guest is in this slot's VMCS (launched and not yet left).
+static ON: [AtomicBool; MAX_GUESTS] = [const { AtomicBool::new(false) }; MAX_GUESTS];
+/// A device event is waiting for this slot's guest (uplink frame, console
+/// byte). The scheduler takes it; a halted guest becomes runnable.
+static WAKE: [AtomicBool; MAX_GUESTS] = [const { AtomicBool::new(false) }; MAX_GUESTS];
+/// Slot whose guest has COM2 and the management plane's untargeted routes.
+static CONSOLE: AtomicUsize = AtomicUsize::new(0);
+
+/// Mark `slot` on (its guest is launched) or off (it left the VMCS).
+pub fn set_on(slot: usize, on: bool) {
+    if slot < MAX_GUESTS {
+        ON[slot].store(on, Ordering::Release);
+    }
+}
+
+/// True while a guest is launched in `slot`.
+pub fn is_on(slot: usize) -> bool {
+    slot < MAX_GUESTS && ON[slot].load(Ordering::Acquire)
+}
+
+/// Guests launched right now.
+pub fn on_count() -> usize {
+    ON.iter().filter(|s| s.load(Ordering::Acquire)).count()
+}
+
+/// More than one guest is launched. The console and the uplink split their
+/// traffic by slot only then; one guest keeps the single-guest paths.
+pub fn shared() -> bool {
+    on_count() > 1
+}
+
+/// Lowest slot that is on, other than `not`.
+pub fn first_on_except(not: usize) -> Option<usize> {
+    (0..MAX_GUESTS).find(|&s| s != not && is_on(s))
+}
+
+/// A host-side event for `slot`'s guest arrived.
+pub fn wake(slot: usize) {
+    if slot < MAX_GUESTS {
+        WAKE[slot].store(true, Ordering::Release);
+    }
+}
+
+/// One-shot read of [`wake`].
+pub fn take_wake(slot: usize) -> bool {
+    slot < MAX_GUESTS && WAKE[slot].swap(false, Ordering::AcqRel)
+}
+
+/// Slot that owns COM2 input and unprefixed COM2 output.
+pub fn console_owner() -> usize {
+    CONSOLE.load(Ordering::Acquire) % MAX_GUESTS
+}
+
+/// Hand COM2 to `slot`. Out-of-range is refused.
+pub fn set_console_owner(slot: usize) {
+    if slot < MAX_GUESTS {
+        CONSOLE.store(slot, Ordering::Release);
+    }
 }
 
 /// One `T` per guest slot. Dereferences to the current slot's `T`.
@@ -167,7 +226,7 @@ macro_rules! per_guest_cell {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use core::sync::atomic::{AtomicU32, Ordering};
+    use core::sync::atomic::AtomicU32;
 
     static COUNT: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(7));
     static CELL: PerGuestCell<u64> = per_guest_cell!(1);
@@ -211,6 +270,26 @@ mod tests {
         // Debug builds assert; release builds refuse. Neither moves the slot.
         let _ = r;
         assert_eq!(current(), 0);
+    }
+
+    #[test]
+    fn the_run_table_counts_launched_guests() {
+        // Slot 3 is not used by any other host test.
+        assert!(!is_on(3));
+        let before = on_count();
+        set_on(3, true);
+        assert!(is_on(3));
+        assert_eq!(on_count(), before + 1);
+        assert_eq!(first_on_except(0).is_some(), true);
+        wake(3);
+        assert!(take_wake(3));
+        assert!(!take_wake(3));
+        set_on(3, false);
+        assert_eq!(on_count(), before);
+        set_on(MAX_GUESTS, true);
+        assert!(!is_on(MAX_GUESTS));
+        set_console_owner(MAX_GUESTS);
+        assert!(console_owner() < MAX_GUESTS);
     }
 
     #[test]

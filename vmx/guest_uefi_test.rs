@@ -3,10 +3,9 @@ use super::{
     guest_uefi_report_ram_should_premap, GUEST_UEFI_REPORT_RAM_PRODUCT_EXTRA,
 };
 use super::{
-    guest_uefi_host_stack_guard_ok, guest_uefi_host_stack_headroom, plant_seat_long_mode_gdt,
-    seat_stack_overlaps_host, vmcs_io_bitmap_addr_ok, vmexit_intr_is_hw_exception,
-    GUEST_UEFI_HOST_STACK_GUARD_BYTE, GUEST_UEFI_HOST_STACK_GUARD_PAGES, GUEST_UEFI_HOST_STACK_PAGES,
-    SEAT_HOST_STACK_PAGES,
+    guest_uefi_host_stack_guard_ok, guest_uefi_host_stack_headroom, vmcs_io_bitmap_addr_ok,
+    vmexit_intr_is_hw_exception, GUEST_UEFI_HOST_STACK_GUARD_BYTE,
+    GUEST_UEFI_HOST_STACK_GUARD_PAGES, GUEST_UEFI_HOST_STACK_PAGES,
 };
 use super::{
     raynu_f_wall_cap_hit, raynu_f_wall_check_due, raynu_f_wall_elapsed_ms, RAYNU_F_EXIT_CAP, RAYNU_F_WALL_CAP_S,
@@ -3535,90 +3534,23 @@ fn f7_relaunch_resets_firmware_state_without_a_stack_temporary() {
     assert!(GUEST_UEFI_HOST_STACK_PAGES >= 256);
     assert!(GUEST_UEFI_HOST_STACK_GUARD_PAGES >= 256);
     assert!(guest_uefi_host_stack_headroom(GUEST_UEFI_HOST_STACK_PAGES, 143_328) > 0);
-    // Iron `39818e87`: a `.bss` seat stack still left the VMCS guard written.
-    // The seat stack is a frame-pool allocation, and the seated VMCS exits there.
-    assert!(SEAT_HOST_STACK_PAGES >= 32);
+    // ADR-022: every guest slot exits onto this one host stack. There is no
+    // second copy of the firmware, the exit handler, or the stack.
     assert!(!src.contains("COMPANION_HOST_STACK"));
-    assert!(src.contains("SEAT_HOST_RSP"));
-    assert!(src.contains("seated VMCS host stack"));
-    assert!(src.contains("Reserve the stack while a contiguous run remains"));
-    assert!(src.contains("reserve_seat_firmware_slab"));
-    assert!(src.contains("align(4096)"));
+    assert!(!src.contains("SEAT_HOST_RSP"));
+    assert!(!src.contains("seat_firmware_service"));
     assert!(vmcs_io_bitmap_addr_ok(0x51e000));
     assert!(!vmcs_io_bitmap_addr_ok(0x51e010));
     assert!(!vmcs_io_bitmap_addr_ok(0));
-    assert!(src.contains(
-        "serial::write_line_nowait(\n            \"boot: B6 seated firmware entry failed; the running guest keeps the CPU\","
-    ));
-    assert!(src.contains("seat_exit_keeps_the_guest"));
-    assert!(src.contains("; resuming the bootloader"));
-    assert!(src.contains("boot: B6 seated firmware exit reason=0x"));
-    assert!(src.contains("plant_seat_long_mode_gdt"));
-    assert!(src.contains("boot: B6 seated firmware first exit reason=0x"));
-    assert!(src.contains("boot: B6 seated turn n="));
-    assert!(src.contains("spin port=0x"));
-    assert!(src.contains("boot: B6 seated pci addr=0x"));
-    assert!(src.contains("boot: B6 seated pci walk budget n="));
-    assert!(src.contains("boot: B6 seated menu enter"));
-    assert!(src.contains("seat_menu_enter("));
-    assert!(src.contains("boot: B6 seated con "));
-    assert!(src.contains("boot: B6 seated con capped"));
-    assert!(src.contains(" id=0x"));
-    assert!(src.contains("boot: B6 seated firmware disk lba="));
-    assert!(src.contains("boot: B6 seated RAM gpa=0x"));
-    assert!(src.contains("boot: B6 seated RAM grant short avail_mib="));
-    assert!(src.contains("boot: B6 seated io port=0x"));
-    assert!(src.contains("boot: B6 seated LoadedImage "));
-    assert!(src.contains("boot: B6 seated disk hd0"));
-    assert!(src.contains("serial::write_str_nowait(\"boot: B6 seated EFI\")"));
-    assert!(src.contains("ptr=0x"));
     assert!(src.contains("publish_f7_disk"));
     assert!(src.contains("guid="));
-    // A seated service buffer is resolved through the seated EPT only. Iron
-    // `8b0ceac9ccc6` resolved it through the running guest's tables.
-    let svc = src
-        .split("unsafe fn seat_firmware_service() -> bool {")
-        .nth(1)
-        .and_then(|rest| rest.split("\n}\n").next())
-        .expect("seat_firmware_service body");
     assert!(src.contains("d.start_image"));
     assert!(src.contains("d.exit_image"));
-    assert!(src.contains("boot: B6 seated StartImage entry=0x"));
-    assert!(src.contains("boot: B6 seated initrd LoadFile jump="));
-    assert!(src.contains("boot: B6 seated kernel owns its page faults"));
-    assert!(src.contains("seat_reinject_page_fault"));
-    assert!(src.contains("boot: B6 seated k "));
-    assert!(src.contains("SeatUart::from_saved"));
-    assert!(src.contains("fn seat_copy_mmio_insn"));
-    assert!(src.contains("boot: B6 seated apic off=0x"));
     assert!(src.contains("ServiceId::InitrdLoadFile"));
-    assert!(svc.contains("product_companion::seat_mem_read("));
-    assert!(svc.contains("product_companion::seat_mem_write("));
-    assert!(svc.contains("boot: B6 seated firmware buffer outside the seated RAM "));
-    assert!(!svc.contains("RAM_HPA"));
-    assert!(!svc.contains("copy_guest_linear_bytes"));
-    assert!(!svc.contains("write_guest_linear_bytes"));
     assert!(src.contains("publish_loaded_image"));
     assert!(src.contains("set_high_region("));
-    assert!(src.contains("write_line_nowait(\n            \"boot: B6 seated firmware ExitBootServices; the kernel is starting; the guest OS is still waiting\",\n        )"));
-    assert!(src.contains("raynu_f_reset_vmcs_guest_state(&plan, fw.entry)"));
     assert!(vmexit_intr_is_hw_exception(0x8000_0b08, 8));
     assert!(!vmexit_intr_is_hw_exception(0x8000_0b08, 14));
-    let mut gdt_slab = vec![0xABu8; 0xA1_1000];
-    assert!(plant_seat_long_mode_gdt(
-        &mut gdt_slab,
-        0xA0_0000,
-        0xA1_0000
-    ));
-    assert_eq!(gdt_slab[0xA0_0000], 0);
-    assert_eq!(
-        u64::from_le_bytes(gdt_slab[0xA1_0008..0xA1_0010].try_into().unwrap()),
-        0x00AF_9B00_0000_FFFF
-    );
-    assert_eq!(gdt_slab[0xA1_0000 + 24 + 5], 0x8B);
-    assert!(!plant_seat_long_mode_gdt(&mut gdt_slab, 0xA1_0000, 0xA0_0000));
-    assert!(!seat_stack_overlaps_host(0x556000, 0x596000, 0x525000, 0x556000));
-    assert!(seat_stack_overlaps_host(0x555000, 0x560000, 0x525000, 0x556000));
     assert!(guest_uefi_host_stack_headroom(4, 81_024) < 0, "16 KiB overflowed");
     assert!(guest_uefi_host_stack_headroom(GUEST_UEFI_HOST_STACK_PAGES, 81_024) > 0);
     let guard = [GUEST_UEFI_HOST_STACK_GUARD_BYTE; 4096];

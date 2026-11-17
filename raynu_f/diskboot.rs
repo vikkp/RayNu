@@ -1,13 +1,12 @@
-//! One disk publisher for the running guest and a seated guest.
+//! The disk publisher every guest slot's firmware uses.
 //!
-//! Pillar: [Z] · Proven Core: **outside** (ADR-016 / ADR-021 B6)
+//! Pillar: [Z] · Proven Core: **outside** (ADR-016 / ADR-022)
 //!
 //! GRUB `efidisk` names a Media/HardDrive path `,gptN` when no whole-disk
 //! path is that partition's parent. Nested `3492ebc` and iron `623a84da`
-//! both printed `disk ',gpt2' not found`. The running guest's F7 path
-//! publishes the whole disk as `hd0` and, only for a loader that carries
-//! a file path, the ESP as `hd0,gpt1`. The seated guest calls this same
-//! function.
+//! both printed `disk ',gpt2' not found`. The F7 path publishes the whole
+//! disk as `hd0` and, only for a loader that carries a file path, the ESP
+//! as `hd0,gpt1`.
 
 use super::blockio::{
     BlockMedia, BLOCKIO_FLUSH_OFF, BLOCKIO_READ_OFF, BLOCKIO_RESET_OFF, BLOCKIO_REVISION2,

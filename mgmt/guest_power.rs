@@ -10,6 +10,8 @@
 //! exit loop then stops the guest or boots it again. Stop stays a separate
 //! path and this module does not call it.
 
+use crate::guest::slot::PerGuest;
+use crate::per_guest;
 use core::sync::atomic::{AtomicU8, Ordering};
 
 /// ACPI PM1 status, power button.
@@ -28,9 +30,9 @@ const OPEN: u8 = 0;
 const SEEN: u8 = 1;
 const DONE: u8 = 2;
 
-static ASK: AtomicU8 = AtomicU8::new(NONE);
-static PHASE: AtomicU8 = AtomicU8::new(OPEN);
-static SCI: AtomicU8 = AtomicU8::new(0);
+static ASK: PerGuest<AtomicU8> = per_guest!(AtomicU8::new(NONE));
+static PHASE: PerGuest<AtomicU8> = per_guest!(AtomicU8::new(OPEN));
+static SCI: PerGuest<AtomicU8> = per_guest!(AtomicU8::new(0));
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PowerAsk {

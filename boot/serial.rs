@@ -12,6 +12,8 @@
 //! redirect. Post-M0 HV progress is port-I/O; without COM2 mirror, SOL stays
 //! frozen at M0 after ExitBootServices tears down ConOut.
 
+use crate::guest::slot::{PerGuest, PerGuestCell};
+use crate::{per_guest, per_guest_cell};
 use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 /// Distinctive M0 gate marker — CI greps for this exact string on the serial log.
@@ -80,16 +82,16 @@ static mut GUEST_TX: [u8; GUEST_TX_CAP] = [0; GUEST_TX_CAP];
 static mut GUEST_TX_HEAD: usize = 0;
 static mut GUEST_TX_LEN: usize = 0;
 /// SPA copy of guest COM1 TX (survives SOL drain). Not iDRAC COM2.
-static mut SPA_GUEST_LOG: [u8; GUEST_TX_CAP] = [0; GUEST_TX_CAP];
-static mut SPA_GUEST_LOG_HEAD: usize = 0;
-static mut SPA_GUEST_LOG_LEN: usize = 0;
+static SPA_GUEST_LOG: PerGuestCell<[u8; GUEST_TX_CAP]> = per_guest_cell!([0; GUEST_TX_CAP]);
+static SPA_GUEST_LOG_HEAD: PerGuestCell<usize> = per_guest_cell!(0);
+static SPA_GUEST_LOG_LEN: PerGuestCell<usize> = per_guest_cell!(0);
 /// Iron `202312f`: TX ring made `Linux version` readable, then a blocking HV
 /// `write_byte` (hypervisor-scan bump) interleaved e820 and COM2 cut mid-word.
 /// After Linux `#PF` deliver, HV diagnostics share the guest TX ring.
-static LINUX_EARLYCON_SHARE: AtomicBool = AtomicBool::new(false);
+static LINUX_EARLYCON_SHARE: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// Product-ISO Linux high-half RIP (bit 63). Distinct from earlycon share,
 /// which latches at El Torito bootimg while GRUB still needs PIIX ATAPI.
-static LINUX_HIGH_HALF: AtomicBool = AtomicBool::new(false);
+static LINUX_HIGH_HALF: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 
 /// Route HV `write_byte` through the guest TX ring during Linux earlycon.
 ///
@@ -178,13 +180,13 @@ fn guest_tx_push(byte: u8) {
 fn spa_guest_log_push(byte: u8) {
     // SAFETY: same BSP serial writers as [`guest_tx_push`].
     unsafe {
-        if SPA_GUEST_LOG_LEN == GUEST_TX_CAP {
-            SPA_GUEST_LOG_HEAD = (SPA_GUEST_LOG_HEAD + 1) % GUEST_TX_CAP;
-            SPA_GUEST_LOG_LEN -= 1;
+        if (*SPA_GUEST_LOG_LEN.p()) == GUEST_TX_CAP {
+            (*SPA_GUEST_LOG_HEAD.p()) = ((*SPA_GUEST_LOG_HEAD.p()) + 1) % GUEST_TX_CAP;
+            (*SPA_GUEST_LOG_LEN.p()) -= 1;
         }
-        let idx = (SPA_GUEST_LOG_HEAD + SPA_GUEST_LOG_LEN) % GUEST_TX_CAP;
-        SPA_GUEST_LOG[idx] = byte;
-        SPA_GUEST_LOG_LEN += 1;
+        let idx = ((*SPA_GUEST_LOG_HEAD.p()) + (*SPA_GUEST_LOG_LEN.p())) % GUEST_TX_CAP;
+        (*SPA_GUEST_LOG.p())[idx] = byte;
+        (*SPA_GUEST_LOG_LEN.p()) += 1;
     }
 }
 
@@ -193,9 +195,9 @@ fn spa_guest_log_push(byte: u8) {
 pub fn spa_guest_log_snapshot(out: &mut [u8]) -> usize {
     // SAFETY: single-threaded boot / HV; ring only touched from serial writers.
     unsafe {
-        let n = SPA_GUEST_LOG_LEN.min(out.len());
+        let n = (*SPA_GUEST_LOG_LEN.p()).min(out.len());
         for i in 0..n {
-            out[i] = SPA_GUEST_LOG[(SPA_GUEST_LOG_HEAD + i) % GUEST_TX_CAP];
+            out[i] = (*SPA_GUEST_LOG.p())[((*SPA_GUEST_LOG_HEAD.p()) + i) % GUEST_TX_CAP];
         }
         n
     }
@@ -204,8 +206,8 @@ pub fn spa_guest_log_snapshot(out: &mut [u8]) -> usize {
 /// Drop the SPA guest log (tests / guest-UEFI reset).
 pub fn spa_guest_log_clear() {
     unsafe {
-        SPA_GUEST_LOG_HEAD = 0;
-        SPA_GUEST_LOG_LEN = 0;
+        (*SPA_GUEST_LOG_HEAD.p()) = 0;
+        (*SPA_GUEST_LOG_LEN.p()) = 0;
     }
 }
 

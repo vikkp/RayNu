@@ -13,6 +13,8 @@
 //! `guest_egress::discovered()` named (ADR-021 D4), all-zero before the
 //! SPA NIC init has run.
 
+use crate::guest::slot::PerGuest;
+use crate::per_guest;
 use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, Ordering};
 
 use crate::mgmt::guest_egress::discovered_phy_mac;
@@ -59,13 +61,13 @@ fn from_record(rec: NicRecord) -> Option<StartNic> {
     })
 }
 
-static SEEN: AtomicBool = AtomicBool::new(false);
-static OFF: AtomicU64 = AtomicU64::new(0);
-static MAC: AtomicU64 = AtomicU64::new(0);
-static IP: AtomicU32 = AtomicU32::new(0);
-static PX: AtomicU8 = AtomicU8::new(0);
-static GW: AtomicU32 = AtomicU32::new(0);
-static DNS: AtomicU32 = AtomicU32::new(0);
+static SEEN: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static OFF: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+static MAC: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+static IP: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static PX: PerGuest<AtomicU8> = per_guest!(AtomicU8::new(0));
+static GW: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static DNS: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 
 fn pack_mac(mac: [u8; 6]) -> u64 {
     let mut v = 0u64;

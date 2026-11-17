@@ -15,6 +15,8 @@
 //! `File.Open` is resolved against the directory in `This`. An empty name
 //! duplicates that handle.
 
+use crate::guest::slot::PerGuest;
+use crate::per_guest;
 use core::cell::UnsafeCell;
 use core::sync::atomic::{AtomicU32, Ordering};
 
@@ -537,12 +539,12 @@ struct LibraryGrubCfg {
 // KANI-TARGET: library grub.cfg view static (outside Proven Core).
 unsafe impl Sync for LibraryGrubCfg {}
 
-static LIBRARY_GRUB_CFG: LibraryGrubCfg = LibraryGrubCfg {
+static LIBRARY_GRUB_CFG: PerGuest<LibraryGrubCfg> = per_guest!(LibraryGrubCfg {
     cluster: AtomicU32::new(0),
     len: AtomicU32::new(0),
     bytes: UnsafeCell::new([0; GRUB_CFG_VIEW_CAP]),
     raw: UnsafeCell::new([0; GRUB_CFG_VIEW_CAP]),
-};
+});
 
 /// Drop the amended view. File handles are cleared with `FirmwareState`.
 pub fn reset_library_grub_cfg_view() {
