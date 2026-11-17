@@ -283,6 +283,10 @@ static MARKER: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 static QUEUES: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 static DISK_HPA: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
 static DISK_LEN: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+/// Spare offset of the PERC span [`bind_perc_span`] last gave this slot.
+/// `u64::MAX` until the first bind, so the boot-time attach of the 8 GiB
+/// window (offset 0) is not mistaken for a bind of the same span.
+static PERC_SPAN_OFF: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(u64::MAX));
 static LUN_ATTACHED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 static DISK_ATTACHED_KEEP: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 static BYTES_WRITTEN: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
@@ -487,6 +491,7 @@ pub fn reset() {
     DISK_LEN.store(0, Ordering::Release);
     LUN_ATTACHED.store(false, Ordering::Release);
     DISK_ATTACHED_KEEP.store(false, Ordering::Release);
+    PERC_SPAN_OFF.store(u64::MAX, Ordering::Release);
     BYTES_WRITTEN.store(0, Ordering::Release);
     ISO_PTR.store(0, Ordering::Release);
     ISO_LEN.store(0, Ordering::Release);
@@ -642,6 +647,43 @@ pub fn attach_lun(bytes: usize, _zero: bool) -> bool {
     DISK_ATTACHED_KEEP.store(!_zero, Ordering::Release);
     BYTES_WRITTEN.store(0, Ordering::Release);
     true
+}
+
+/// Give the current guest slot the size of the disk it was started on,
+/// when that disk is a span of the latched PERC spare (ADR-022).
+///
+/// The bytes are read and written through
+/// [`crate::mgmt::megaraid::perc_image_read`] at the slot's own span; only
+/// the geometry lives here. A slot that boots a second, different disk
+/// must not keep the first one's size, and a slot built after boot has no
+/// attach at all. The written-bytes count restarts only when the span
+/// changes, so a reboot of the same disk keeps it.
+///
+/// INVARIANTS:
+/// - `bytes` is a non-zero multiple of the sector size
+/// - No backing memory is named (`DISK_HPA` is 0) and nothing is zeroed
+pub fn bind_perc_span(spare_off: u64, bytes: u64, keep: bool) -> bool {
+    if bytes == 0 || bytes % SECTOR as u64 != 0 {
+        return false;
+    }
+    let same = perc_span_is(spare_off, bytes);
+    DISK_HPA.store(0, Ordering::Release);
+    DISK_LEN.store(bytes, Ordering::Release);
+    LUN_ATTACHED.store(true, Ordering::Release);
+    DISK_ATTACHED_KEEP.store(keep, Ordering::Release);
+    PERC_SPAN_OFF.store(spare_off, Ordering::Release);
+    if !same {
+        BYTES_WRITTEN.store(0, Ordering::Release);
+    }
+    true
+}
+
+/// The current slot's disk is already this span of the PERC spare.
+pub fn perc_span_is(spare_off: u64, bytes: u64) -> bool {
+    DISK_LEN.load(Ordering::Acquire) == bytes
+        && DISK_HPA.load(Ordering::Acquire) == 0
+        && LUN_ATTACHED.load(Ordering::Acquire)
+        && PERC_SPAN_OFF.load(Ordering::Acquire) == spare_off
 }
 
 /// True when virtio attached without zeroing an installed GPT (keep=1).

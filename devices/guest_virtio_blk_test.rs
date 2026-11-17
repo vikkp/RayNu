@@ -823,6 +823,37 @@ fn install_disk_partition_table_gpt_and_mbr() {
 }
 
 #[test]
+fn each_guest_slot_keeps_the_size_of_its_own_spare_span() {
+    use crate::guest::slot;
+    const WINDOW: u64 = 8 << 30;
+    const TAIL: u64 = 10 << 30;
+    slot::with_slot(0, || {
+        reset();
+        assert!(!super::perc_span_is(0, WINDOW));
+        assert!(!super::bind_perc_span(0, 0, true), "empty span");
+        assert!(!super::bind_perc_span(0, 513, true), "not whole sectors");
+        assert!(super::bind_perc_span(0, WINDOW, true));
+        assert!(super::perc_span_is(0, WINDOW));
+        assert!(super::disk_attached_keep());
+    });
+    slot::with_slot(1, || {
+        reset();
+        assert!(!super::perc_span_is(0, WINDOW), "slot 1 has no disk yet");
+        assert!(super::bind_perc_span(WINDOW, TAIL, false));
+        assert_eq!(disk_bytes(), TAIL);
+        assert!(!super::disk_attached_keep());
+        assert!(!super::perc_span_is(0, TAIL), "same size, other offset");
+    });
+    slot::with_slot(0, || {
+        assert_eq!(disk_bytes(), WINDOW, "slot 0 kept its own size");
+        assert!(super::perc_span_is(0, WINDOW));
+        reset();
+        assert!(!super::perc_span_is(0, WINDOW));
+    });
+    slot::with_slot(1, reset);
+}
+
+#[test]
 fn keep_attach_never_takes_iso_install_ok() {
     reset();
     let mut disk = vec![0u8; 4096];

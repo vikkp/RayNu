@@ -2423,8 +2423,7 @@ pub fn flush_audit_chain() {
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn flush_audit_chain_uefi() {
     use crate::boot::serial;
-    use crate::mgmt::perc_boot_choice::{vmcs_guest, VmcsGuest};
-    if !matches!(vmcs_guest(), VmcsGuest::None) || !crate::audit::persist::staged_on() {
+    if crate::mgmt::guest_slots::any_guest_on() || !crate::audit::persist::staged_on() {
         return;
     }
     let bar = PERC_SPARE_BAR.load(core::sync::atomic::Ordering::Acquire);
@@ -2507,8 +2506,7 @@ pub fn flush_nic_catalog() {
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn flush_nic_catalog_uefi() {
     use crate::boot::serial;
-    use crate::mgmt::perc_boot_choice::{vmcs_guest, VmcsGuest};
-    if !matches!(vmcs_guest(), VmcsGuest::None) {
+    if crate::mgmt::guest_slots::any_guest_on() {
         return;
     }
     let Some((gen, sector)) = crate::mgmt::guest_nic::copy_dirty() else {
@@ -2696,8 +2694,7 @@ pub fn flush_autostart() {
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 fn flush_autostart_uefi() {
     use crate::boot::serial;
-    use crate::mgmt::perc_boot_choice::{vmcs_guest, VmcsGuest};
-    if !matches!(vmcs_guest(), VmcsGuest::None) {
+    if crate::mgmt::guest_slots::any_guest_on() {
         return;
     }
     let Some((gen, sector)) = crate::mgmt::guest_autostart::copy_dirty() else {
