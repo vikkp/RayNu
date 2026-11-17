@@ -4438,6 +4438,13 @@ static PREEMPT_UART_PACED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(fal
 /// This VM exit is a UART pacing tick (drain + inject only; no HPET step,
 /// no PIT raise, no exit-count bump). Cleared at resume.
 static UART_PACE_EXIT: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+/// The exit being handled is a nominal (HPET/PIT) preemption tick, not a
+/// pacing or scheduling one. The next arm starts a new nominal period.
+static PREEMPT_TICK_TAKEN: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+/// The last arm clamped the timer for the guest scheduler (ADR-022). The
+/// first arm after the guest has the CPU to itself again puts back the
+/// value the VMCS held.
+static PREEMPT_SHARED_ARMED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// Pacing ticks taken since reset (stall heartbeat `pace=`).
 static UART_PACE_EXITS: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 static UART_PACE_LOG: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
@@ -4740,6 +4747,17 @@ pub const GUEST_UEFI_HOST_STACK_GUARD_PAGES: u64 = 256;
 pub const GUEST_UEFI_HOST_STACK_GUARD_BYTE: u8 = 0x5A;
 /// Physical base of the guard page (0 = not armed).
 static HOST_STACK_GUARD: AtomicU64 = AtomicU64::new(0);
+/// `HOST_RSP` of the first guest's VMCS. A slot built later names the same
+/// stack (ADR-022): one guest is in VMX non-root at a time.
+static HOST_RSP_SHARED: AtomicU64 = AtomicU64::new(0);
+/// 4 KiB table pages of a slot built after boot: `[next, end)` inside one
+/// 2 MiB chunk of leftover DRAM. Zero for slot 0 (its tables come from the
+/// frame allocator).
+static SLOT_POOL_NEXT: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+static SLOT_POOL_END: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+/// A build of this slot took DRAM and then failed. The bump has no free,
+/// so the slot is not built again on this boot.
+static SLOT_BUILD_FAILED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 static mut E4_ALLOC: *mut FrameAllocator = core::ptr::null_mut();
 static mut E4_LIFE: *mut crate::vmx::lifecycle::VmxLifecycle = core::ptr::null_mut();
 static mut E4_RSP: u64 = 0;
@@ -5266,6 +5284,8 @@ pub fn reset_guest_uefi_launch() {
         Ordering::Release,
     );
     PREEMPT_UART_PACED.store(false, Ordering::Release);
+    PREEMPT_TICK_TAKEN.store(false, Ordering::Release);
+    PREEMPT_SHARED_ARMED.store(false, Ordering::Release);
     UART_PACE_EXIT.store(false, Ordering::Release);
     UART_PACE_EXITS.store(0, Ordering::Release);
     UART_PACE_LOG.store(false, Ordering::Release);
@@ -5393,6 +5413,15 @@ unsafe fn attach_product_iso_install_disk(alloc: &mut FrameAllocator, warn: bool
         };
         crate::mgmt::disk_persist::set_install_disk_keep(keep);
         if crate::devices::guest_virtio_blk::attach_lun(bytes as usize, !keep) {
+            if crate::mgmt::megaraid::perc_image_boot_latched() {
+                // Remember which span of the spare this is, so a later
+                // Start of the same disk in this slot is not a re-bind.
+                let _ = crate::devices::guest_virtio_blk::bind_perc_span(
+                    tail.map_or(0, |(off, _)| off),
+                    bytes,
+                    keep,
+                );
+            }
             serial::write_str("boot: Stage 46 virtio-blk install disk bytes=");
             write_dec(crate::devices::guest_virtio_blk::disk_bytes());
             serial::write_str(" keep=");
@@ -5572,6 +5601,7 @@ unsafe fn launch_uefi(
         serial::write_line("boot: guest-UEFI no frames for host stack");
         return Err(GuestUefiLaunchError::LaunchSetupFailed);
     };
+    HOST_RSP_SHARED.store(host_rsp, Ordering::Release);
 
     let ept_need = frames_required_firmware_alias(gpa, fw_len);
     if ept_need > 8 {
@@ -6455,11 +6485,59 @@ pub fn guest_uefi_hpet_uart_tsc_step(tsc_delta: u64) -> u64 {
 fn arm_preempt_on_resume() {
     let reload = PREEMPT_RELOAD.load(Ordering::Acquire);
     UART_PACE_EXIT.store(false, Ordering::Release);
+    let real_tick = PREEMPT_TICK_TAKEN.swap(false, Ordering::AcqRel);
+    let shift = PREEMPT_SHIFT.load(Ordering::Acquire);
+    if let Some(quantum) = guest_sched::clamp_ticks(shift) {
+        // More than one guest is on (ADR-022). The timer is also the
+        // scheduler's clock, so no guest runs past its quantum, and the
+        // nominal tick keeps a wall deadline so time spent off the CPU
+        // does not cost this guest its HPET/PIT cadence.
+        let now = cpu::rdtsc();
+        let pace = guest_uefi_uart_pace_wanted(
+            serial::linux_earlycon_share(),
+            crate::devices::ide_cdrom::product_iso_window_armed(),
+            serial::guest_tx_len(),
+        );
+        let nominal = if reload == 0 {
+            VMX_PREEMPTION_TIMER_TICKS as u32
+        } else {
+            reload
+        };
+        let uart = if pace {
+            Some(guest_uefi_uart_pace_ticks(crate::boot::raynu_f_flag::tsc_hz(), shift))
+        } else {
+            None
+        };
+        let (value, paced, due) = guest_sched::shared_preempt_arm(
+            nominal,
+            PREEMPT_NOMINAL_DUE_TSC.load(Ordering::Acquire),
+            now,
+            shift,
+            real_tick,
+            uart,
+            quantum,
+        );
+        PREEMPT_NOMINAL_DUE_TSC.store(due, Ordering::Release);
+        PREEMPT_UART_PACED.store(paced, Ordering::Release);
+        PREEMPT_SHARED_ARMED.store(true, Ordering::Release);
+        // SAFETY: VMX-root with this guest's VMCS current (resume path or
+        // the scheduler's switch-in). KANI-TARGET: guest-UEFI preemption
+        // timer arm, shared CPU (outside Proven Core).
+        let _ = unsafe { ops::vmwrite(VMX_PREEMPTION_TIMER_VALUE, u64::from(value)) };
+        return;
+    }
+    if PREEMPT_SHARED_ARMED.swap(false, Ordering::AcqRel) && reload == 0 {
+        // The guest has the CPU to itself again and takes no nominal
+        // arming of its own: put back the value its VMCS held.
+        PREEMPT_NOMINAL_DUE_TSC.store(0, Ordering::Release);
+        // SAFETY: as above. KANI-TARGET: guest-UEFI preemption timer
+        // restore after sharing (outside Proven Core).
+        let _ = unsafe { ops::vmwrite(VMX_PREEMPTION_TIMER_VALUE, VMX_PREEMPTION_TIMER_TICKS) };
+    }
     if reload == 0 {
         PREEMPT_UART_PACED.store(false, Ordering::Release);
         return;
     }
-    let shift = PREEMPT_SHIFT.load(Ordering::Acquire);
     let now = cpu::rdtsc();
     let pace = guest_uefi_uart_pace_wanted(
         serial::linux_earlycon_share(),
@@ -6895,6 +6973,8 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     UART_PACE_EXIT.store(pace_exit, Ordering::Release);
     if pace_exit {
         UART_PACE_EXITS.fetch_add(1, Ordering::AcqRel);
+    } else if (reason & 0xFFFF) == EXIT_REASON_PREEMPTION_TIMER {
+        PREEMPT_TICK_TAKEN.store(true, Ordering::Release);
     }
     note_linux_exit_kind(reason & 0xFFFF, pace_exit);
     // An exit in the middle of delivering an injected external interrupt
@@ -7532,7 +7612,13 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
             cpu::write_cr2(linux_cr2);
         }
         CONTINUE_GUEST.store(true, Ordering::Release);
-        guest_uefi_vmresume();
+        // One guest on: a plain VMRESUME. More than one: the scheduler
+        // decides who enters (ADR-022). A guest that halted with nothing
+        // to deliver gives the CPU up at once.
+        guest_sched::resume(guest_sched::guest_idle(
+            (reason & 0xFFFF) == EXIT_REASON_HLT,
+            ops::vmread(VM_ENTRY_INTERRUPTION_INFO).unwrap_or(0),
+        ));
     }
     if serial::linux_earlycon_share() {
         serial::write_line_nowait("boot: guest-UEFI stop during earlycon share");
@@ -7850,37 +7936,47 @@ pub fn try_spa_product_iso_start() {
     }
 }
 
-/// Start after Stop, while the SPA is still up. Consumes one relaunch flag.
-/// Host does nothing. Firmware resets RayNu-F and boots the chosen disk.
-pub fn raynu_f_guest_was_running() -> bool {
-    RAYNU_F_RAN.load(Ordering::Acquire)
-}
-
-/// The product guest left the VMCS without an operator Stop. Boot it again
-/// on the same slab.
-pub unsafe fn bring_product_guest_back() -> ! {
+/// A Start is waiting for a guest slot. The idle loop boots it.
+pub fn guest_start_waiting() -> bool {
     #[cfg(target_os = "uefi")]
     {
-        raynu_f_reset_relaunch(crate::devices::guest_platform::ResetSrc::Kbc);
+        guest_sched::start_waiting()
     }
     #[cfg(not(target_os = "uefi"))]
     {
-        loop {
-            core::hint::spin_loop();
-        }
+        false
     }
 }
 
+/// Lab only (`twoguest.txt` on the ESP): boot the retained product ISO in
+/// slot 1 beside the first guest. Nested QEMU has no PERC catalog to start
+/// a second guest from. Host and iron do nothing with it.
+pub fn request_second_lab_guest() {
+    #[cfg(target_os = "uefi")]
+    {
+        guest_sched::request_lab_start(1);
+    }
+}
+
+/// Guest switches since boot (ADR-022). Host builds return 0.
+pub fn guest_switches() -> u64 {
+    #[cfg(target_os = "uefi")]
+    {
+        guest_sched::switches()
+    }
+    #[cfg(not(target_os = "uefi"))]
+    {
+        0
+    }
+}
+
+/// No guest is on the CPU: boot the first slot that has a Start waiting.
+/// Host does nothing. Called from the idle loops; returns when no slot is
+/// waiting or the waiting slot could not boot.
 pub fn relaunch_perc_guest_from_spa() {
     #[cfg(target_os = "uefi")]
     unsafe {
-        if !crate::mgmt::perc_boot_choice::take_perc_relaunch() {
-            return;
-        }
-        serial::write_line(
-            "boot: perc SPA start again (guest was stopped; hypervisor stays up; not ISO-INSTALL-OK)",
-        );
-        raynu_f_reset_relaunch(crate::devices::guest_platform::ResetSrc::Kbc);
+        guest_sched::start_pending_from_idle();
     }
 }
 
@@ -8178,6 +8274,9 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
     serial::write_str(" wall_cap_s=");
     write_dec(RAYNU_F_WALL_CAP_S);
     serial::write_line(" (F2b/F5; not ISO-INSTALL-OK)");
+    // The slot is on from here: the scheduler may give it the CPU and a
+    // leave is a guest that ran (ADR-022).
+    guest_sched::mark_running();
     raynu_f_vmlaunch();
 }
 
@@ -8520,6 +8619,8 @@ unsafe fn raynu_f_reset_relaunch(_src: crate::devices::guest_platform::ResetSrc)
         Ordering::Release,
     );
     PREEMPT_UART_PACED.store(false, Ordering::Release);
+    PREEMPT_TICK_TAKEN.store(false, Ordering::Release);
+    PREEMPT_SHARED_ARMED.store(false, Ordering::Release);
     UART_PACE_EXIT.store(false, Ordering::Release);
     UART_PACE_EXITS.store(0, Ordering::Release);
     UART_PACE_LOG.store(false, Ordering::Release);
@@ -9430,6 +9531,9 @@ unsafe fn b4_service() {
     match ask {
         crate::mgmt::guest_power::PowerAsk::Shutdown => {
             serial::write_line_nowait("boot: B4 power off");
+            // The operator asked for this. The row reads stopped and the
+            // guest is not booted again until Start.
+            crate::mgmt::perc_boot_choice::note_guest_off();
             raynu_f_stop("acpi-s5");
         }
         crate::mgmt::guest_power::PowerAsk::Reboot => {
@@ -9686,7 +9790,7 @@ unsafe fn raynu_f_vmexit(reason: u32, qual: u64, rip: u64, intr: u64) -> ! {
                     raynu_f_stop("io-skip");
                 }
             }
-            guest_uefi_vmresume();
+            guest_sched::resume(false);
         }
         EXIT_REASON_HLT => {
             let entry = RAYNU_F_ENTRY.load(Ordering::Acquire);
@@ -9702,10 +9806,10 @@ unsafe fn raynu_f_vmexit(reason: u32, qual: u64, rip: u64, intr: u64) -> ! {
         }
         EXIT_REASON_PREEMPTION_TIMER => {
             let _ = ops::vmwrite(VMX_PREEMPTION_TIMER_VALUE, VMX_PREEMPTION_TIMER_TICKS);
-            guest_uefi_vmresume();
+            guest_sched::resume(false);
         }
         EXIT_REASON_EXTERNAL_INTERRUPT | EXIT_REASON_INTERRUPT_WINDOW => {
-            guest_uefi_vmresume();
+            guest_sched::resume(false);
         }
         EXIT_REASON_CPUID => {
             // CPUID always exits under VMX (SDM 25.1.2). GRUB's first one is
@@ -9737,7 +9841,7 @@ unsafe fn raynu_f_vmexit(reason: u32, qual: u64, rip: u64, intr: u64) -> ! {
             if ops::vmwrite(GUEST_RIP, rip.wrapping_add(len)).is_err() {
                 raynu_f_stop("cpuid-skip");
             }
-            guest_uefi_vmresume();
+            guest_sched::resume(false);
         }
         EXIT_REASON_EXCEPTION_NMI => {
             let err = ops::vmread(VM_EXIT_INTR_ERROR_CODE).unwrap_or(0);
@@ -9762,13 +9866,13 @@ unsafe fn raynu_f_vmexit(reason: u32, qual: u64, rip: u64, intr: u64) -> ! {
             let gpa = ops::vmread(GUEST_PHYSICAL_ADDRESS).unwrap_or(0);
             if crate::devices::lapic_virt::is_xapic_mmio_gpa(gpa) && handle_xapic_ept(gpa, qual)
             {
-                guest_uefi_vmresume();
+                guest_sched::resume(false);
             }
             if gpa >= crate::devices::guest_irq::IOAPIC_GPA
                 && gpa < crate::devices::guest_irq::IOAPIC_GPA + crate::devices::guest_irq::IOAPIC_SIZE
                 && handle_ioapic_ept(gpa, qual)
             {
-                guest_uefi_vmresume();
+                guest_sched::resume(false);
             }
             serial::write_str("boot: RayNu-F EPT violation gpa=0x");
             write_hex(gpa);
@@ -13094,6 +13198,12 @@ unsafe fn handle_raynu_f_service() -> bool {
     if d.exited_boot_services && !RAYNU_F_EBS_LOGGED.swap(true, Ordering::AcqRel) {
         serial::write_line(crate::raynu_f::RAYNU_F_EBS_OK_MARKER);
         raynu_f_linux_handoff();
+        // Lab: the first guest handed off to its kernel. Ask for the
+        // second one now, so one guest is in its firmware while the other
+        // runs Linux, and then both run Linux.
+        if crate::guest::slot::current() == 0 && crate::boot::raynu_f_flag::take_two_guests() {
+            request_second_lab_guest();
+        }
     }
     let n = RAYNU_F_CALLS.fetch_add(1, Ordering::AcqRel);
     // Log the opening sequence, then every non-success (capped) — that is the
@@ -13471,7 +13581,7 @@ unsafe fn maybe_virtio_stall_dump() {
         crate::devices::guest_serial_answer::apk_packages_overlay_active(),
     );
     if !guest_uefi_virtio_stall_dump_ready(
-        cpu::rdtsc(),
+        guest_sched::guest_tsc(cpu::rdtsc()),
         LAST_VIRTIO_MMIO_TSC.load(Ordering::Acquire),
         VIRTIO_STALL_DUMPED.load(Ordering::Acquire),
         hold_usb,
@@ -13520,7 +13630,7 @@ unsafe fn maybe_virtio_stall_dump() {
     serial::write_str_nowait(" n=");
     write_dec_nowait(u64::from(LAST_VIRTIO_MMIO_HIT.load(Ordering::Acquire)));
     serial::write_str_nowait(" (not ISO-INSTALL-OK)\n");
-    VIRTIO_STALL_DUMP_TSC.store(cpu::rdtsc(), Ordering::Release);
+    VIRTIO_STALL_DUMP_TSC.store(guest_sched::guest_tsc(cpu::rdtsc()), Ordering::Release);
     VIRTIO_STALL_PROBE_STEP.store(0, Ordering::Release);
     virtio_stall_dump_ring(false);
     virtio_stall_dump_ring(true);
@@ -13724,7 +13834,7 @@ unsafe fn virtio_stall_probe_step() {
         return;
     }
     let step = VIRTIO_STALL_PROBE_STEP.load(Ordering::Acquire);
-    let elapsed = cpu::rdtsc().wrapping_sub(base);
+    let elapsed = guest_sched::guest_tsc(cpu::rdtsc()).wrapping_sub(base);
     let Some(probe) = guest_uefi_virtio_stall_probe(elapsed, step) else {
         return;
     };
@@ -14120,7 +14230,7 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
     }
     static HIT_N: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
     let n = HIT_N.fetch_add(1, Ordering::AcqRel);
-    LAST_VIRTIO_MMIO_TSC.store(cpu::rdtsc(), Ordering::Release);
+    LAST_VIRTIO_MMIO_TSC.store(guest_sched::guest_tsc(cpu::rdtsc()), Ordering::Release);
     LAST_VIRTIO_MMIO_HIT.store(n.saturating_add(1), Ordering::Release);
     let off = gpa.wrapping_sub(bar);
     if guest_uefi_virtio_stall_dump_reset_on_notify(off, is_write) {
@@ -15494,12 +15604,20 @@ unsafe fn ept_split_2m_trap_4k(gpa: u64) -> bool {
         crate::memory::ept_hw::invept_global();
         return true;
     }
-    let alloc = e4_alloc();
-    if alloc.is_null() {
-        return false;
-    }
-    let Some(pt_hpa) = alloc_phys(&mut *alloc) else {
-        return false;
+    // A slot built after boot splits from its own table pool; slot 0
+    // from the boot frame pool, as before.
+    let pt_hpa = match slot_pool_page() {
+        Some(p) => p,
+        None => {
+            let alloc = e4_alloc();
+            if alloc.is_null() {
+                return false;
+            }
+            let Some(p) = alloc_phys(&mut *alloc) else {
+                return false;
+            };
+            p
+        }
     };
     if (pt_hpa & 0xfff) != 0 {
         return false;
@@ -16692,6 +16810,9 @@ unsafe fn handle_wrmsr() -> bool {
 
 #[cfg(target_os = "uefi")]
 unsafe fn leave_to_e4() -> ! {
+    // The guest in the current slot is done. While another guest is on,
+    // the CPU goes to it and this does not return (ADR-022).
+    guest_sched::on_guest_left();
     restore_host_xsave_after_guest_uefi();
     let vmcs = *SAVED_VMCS.p();
     if vmcs != 0 {
@@ -16733,6 +16854,491 @@ pub fn e4_alloc() -> *mut FrameAllocator {
 
 pub fn e4_life() -> *mut crate::vmx::lifecycle::VmxLifecycle {
     unsafe { E4_LIFE }
+}
+
+// ── Guest slots built after boot (ADR-022) ──────────────────────────────
+//
+// Slot 0's machine is built once by `launch_uefi`. Every other slot gets
+// the same machine here, from leftover DRAM, the first time it is started.
+// The scheduler ([`guest_sched`]) is the only caller of the hooks below.
+
+/// GPRs of the guest whose exit is being handled, in the trampoline's
+/// order (RAX RBX RCX RDX RSI RDI RBP R8–R15).
+#[cfg(target_os = "uefi")]
+unsafe fn saved_gprs() -> [u64; 15] {
+    [
+        SAVED_RAX, SAVED_RBX, SAVED_RCX, SAVED_RDX, SAVED_RSI, SAVED_RDI, SAVED_RBP, SAVED_R8,
+        SAVED_R9, SAVED_R10, SAVED_R11, SAVED_R12, SAVED_R13, SAVED_R14, SAVED_R15,
+    ]
+}
+
+/// Load the GPRs the resume trampoline hands to the next guest.
+#[cfg(target_os = "uefi")]
+unsafe fn load_saved_gprs(g: &[u64; 15]) {
+    SAVED_RAX = g[0];
+    SAVED_RBX = g[1];
+    SAVED_RCX = g[2];
+    SAVED_RDX = g[3];
+    SAVED_RSI = g[4];
+    SAVED_RDI = g[5];
+    SAVED_RBP = g[6];
+    SAVED_R8 = g[7];
+    SAVED_R9 = g[8];
+    SAVED_R10 = g[9];
+    SAVED_R11 = g[10];
+    SAVED_R12 = g[11];
+    SAVED_R13 = g[12];
+    SAVED_R14 = g[13];
+    SAVED_R15 = g[14];
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn saved_xmm() -> [u8; 256] {
+    // SAFETY: exit path only; the trampoline wrote the image before the
+    // handler ran and nothing else writes it until the resume.
+    // KANI-TARGET: guest scheduler XMM image read (outside Proven Core).
+    core::ptr::addr_of!(SAVED_XMM).read().0
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn load_saved_xmm(x: &[u8; 256]) {
+    // SAFETY: as [`saved_xmm`]; the resume trampoline reads it next.
+    // KANI-TARGET: guest scheduler XMM image write (outside Proven Core).
+    core::ptr::addr_of_mut!(SAVED_XMM).write(SavedXmm(*x));
+}
+
+/// The current slot's VMCS, or 0 when the slot has no machine.
+#[cfg(target_os = "uefi")]
+unsafe fn slot_vmcs() -> u64 {
+    *SAVED_VMCS.p()
+}
+
+/// The current slot has a machine (VMCS, EPT, low-RAM slab).
+#[cfg(target_os = "uefi")]
+unsafe fn slot_built() -> bool {
+    *SAVED_VMCS.p() != 0 && RAM_HPA.load(Ordering::Acquire) != 0
+}
+
+/// An operator Start gets a fresh reset budget ([`RAYNU_F_RESET_MAX`]).
+#[cfg(target_os = "uefi")]
+fn clear_guest_reset_count() {
+    RAYNU_F_RESET_N.store(0, Ordering::Release);
+}
+
+/// The scheduler just made the current slot's VMCS current again. Arm its
+/// preemption timer the way its own resume path would have.
+#[cfg(target_os = "uefi")]
+unsafe fn rearm_preempt_on_switch_in() {
+    if RAYNU_F_MODE.load(Ordering::Acquire) {
+        let value = match guest_sched::clamp_ticks(PREEMPT_SHIFT.load(Ordering::Acquire)) {
+            Some(q) => u64::from(q),
+            None => VMX_PREEMPTION_TIMER_TICKS,
+        };
+        let _ = ops::vmwrite(VMX_PREEMPTION_TIMER_VALUE, value);
+    } else {
+        arm_preempt_on_resume();
+    }
+}
+
+/// A guest still in its firmware phase arms no timer of its own. While it
+/// shares the CPU its timer is the scheduler's quantum.
+#[cfg(target_os = "uefi")]
+unsafe fn clamp_firmware_preempt() {
+    if !RAYNU_F_MODE.load(Ordering::Acquire) {
+        return;
+    }
+    if let Some(q) = guest_sched::clamp_ticks(PREEMPT_SHIFT.load(Ordering::Acquire)) {
+        let _ = ops::vmwrite(VMX_PREEMPTION_TIMER_VALUE, u64::from(q));
+    }
+}
+
+/// Something is waiting for the current slot's halted guest: a LAPIC timer
+/// that ran out, a latched interrupt, or its nominal HPET/PIT tick. No
+/// port I/O and no VMCS access; the scheduler asks this for a guest that
+/// is off the CPU.
+#[cfg(target_os = "uefi")]
+fn guest_irq_waiting(now: u64) -> bool {
+    let _ = crate::devices::lapic_virt::poll_timer_expiry();
+    if crate::devices::lapic_virt::has_pending_irr()
+        || crate::devices::guest_irq::pic_has_deliverable()
+        || crate::devices::guest_irq::has_deliverable()
+    {
+        return true;
+    }
+    let due = PREEMPT_NOMINAL_DUE_TSC.load(Ordering::Acquire);
+    due != 0 && now >= due
+}
+
+/// One zeroed 4 KiB table page from the current slot's pool.
+#[cfg(target_os = "uefi")]
+unsafe fn slot_pool_page() -> Option<u64> {
+    let next = SLOT_POOL_NEXT.load(Ordering::Acquire);
+    let end = SLOT_POOL_END.load(Ordering::Acquire);
+    if next == 0 || next + 4096 > end {
+        return None;
+    }
+    SLOT_POOL_NEXT.store(next + 4096, Ordering::Release);
+    // SAFETY: `[next, next + 4096)` is inside the slot's exclusive 2 MiB
+    // pool chunk (identity-mapped leftover DRAM) and was never handed out.
+    // KANI-TARGET: guest slot table page zero (outside Proven Core).
+    core::ptr::write_bytes(next as *mut u8, 0, 4096);
+    crate::audit::integrity::record_event(AuditEvent::FrameAllocated { frame: next >> 12 });
+    Some(next)
+}
+
+/// Bind the current slot's install disk to the disk it is started on.
+///
+/// With the PERC spare latched the bytes are the slot's own span of the
+/// spare (its Guests-row choice), so only the geometry is set here. Without
+/// it (nested QEMU) the disk is the DRAM the slot was built with.
+#[cfg(target_os = "uefi")]
+unsafe fn bind_slot_disk() {
+    if !crate::mgmt::megaraid::perc_image_boot_latched() {
+        return;
+    }
+    let tail = crate::mgmt::perc_boot_choice::armed_tail();
+    let (spare_off, bytes) = match tail {
+        Some((off, disk)) => (off, disk),
+        None => (0, crate::mgmt::megaraid::PERC_IMAGE_BYTES),
+    };
+    if crate::devices::guest_virtio_blk::perc_span_is(spare_off, bytes) {
+        return;
+    }
+    // Same rule as the boot-time attach: a tail disk never claims the
+    // window's keep; the window keeps an installed GPT.
+    let keep = tail.is_none() && crate::mgmt::disk_persist::persist_lun_keep();
+    if crate::devices::guest_virtio_blk::bind_perc_span(spare_off, bytes, keep) {
+        serial::write_str("boot: guest slot ");
+        write_dec(crate::guest::slot::current() as u64);
+        serial::write_str(" disk bytes=");
+        write_dec(bytes);
+        serial::write_str(" spare_off=");
+        write_dec(spare_off);
+        serial::write_str(" keep=");
+        write_dec(u64::from(keep));
+        serial::write_line(" (its own span of the spare; ADR-022; not ISO-INSTALL-OK)");
+    }
+}
+
+/// Zero the current slot's report-RAM. An operator Start may boot a
+/// different disk than the slot ran before; the new guest must not read
+/// the old one's memory.
+#[cfg(target_os = "uefi")]
+unsafe fn zero_slot_report_ram() {
+    for cell in REPORT_RAM_HPA.iter() {
+        let hpa = cell.load(Ordering::Acquire);
+        if hpa == 0 {
+            break;
+        }
+        // SAFETY: an exclusive 2 MiB report-RAM frame of this slot; its
+        // guest is not running. KANI-TARGET: guest slot report-RAM zero
+        // (outside Proven Core).
+        core::ptr::write_bytes(hpa as *mut u8, 0, GUEST_UEFI_REPORT_RAM_PAGE as usize);
+    }
+}
+
+/// Build the machine of a guest slot other than slot 0: private flash,
+/// low-RAM slab, EPT, platform pages, report-RAM, devices and VMCS. The
+/// same machine `launch_uefi` builds for slot 0, from leftover DRAM
+/// instead of the boot frame pool, and with the first guest's host stack.
+///
+/// INVARIANTS:
+/// - Every frame comes from the leftover-DRAM bump, which hands out each
+///   2 MiB chunk once: no frame is shared with another slot or the host
+///   (ADR-004 ownership; the EPT builder itself is not changed)
+/// - Nothing of another slot is read or written
+/// - On `Err` the slot has no VMCS and is not entered
+///
+/// VERIFICATION: L1 (nested two-guest boot; host tests on the budget)
+#[cfg(target_os = "uefi")]
+unsafe fn build_slot_machine(lab: bool) -> Result<(), &'static str> {
+    use crate::boot::handoff::{
+        report_ram_extra_remaining, take_report_ram_extra_2m, take_report_ram_extra_run,
+    };
+    const CHUNK: u64 = guest_sched::ARENA_CHUNK_BYTES;
+    let s = crate::guest::slot::current();
+    if s == 0 {
+        return Err("slot 0 is built at boot");
+    }
+    if SLOT_BUILD_FAILED.load(Ordering::Acquire) {
+        return Err("an earlier build of this slot failed; it is not built again on this boot");
+    }
+    let host_rsp = HOST_RSP_SHARED.load(Ordering::Acquire);
+    if host_rsp == 0 {
+        return Err("the first guest's machine was never built (no host stack)");
+    }
+    let perc = crate::mgmt::megaraid::perc_image_boot_latched();
+    let nested = guest_uefi_host_hypervisor_present();
+    if !perc && !(lab && nested) {
+        return Err("no disk for this slot (the PERC spare is not latched)");
+    }
+    let Some((gpa, _pad)) = flash_window_gpa_and_pad(GUEST_UEFI_FLASH_WINDOW) else {
+        return Err("flash window");
+    };
+    let fw_len = GUEST_UEFI_FLASH_WINDOW;
+    let ept_need = frames_required_firmware_alias(gpa, fw_len);
+    if ept_need > 8 {
+        return Err("EPT table count");
+    }
+
+    // Budget first. The bump has no free, so nothing is taken unless the
+    // whole machine fits.
+    let overhead = guest_sched::slot_overhead_chunks(
+        GUEST_UEFI_LOW_RAM_BYTES,
+        fw_len,
+        GUEST_UEFI_MMIO_SCRATCH_SLOTS as u64,
+    );
+    let arena = report_ram_extra_remaining() / CHUNK;
+    let disk_bytes: u64 = if perc {
+        0
+    } else if arena >= overhead + (1 << 30) / CHUNK + REPORT_RAM_ARRAY as u64 {
+        1 << 30
+    } else {
+        guest_sched::NESTED_SLOT_DISK_BYTES
+    };
+    let Some(report_want) = guest_sched::slot_report_chunks(
+        arena,
+        overhead,
+        disk_bytes / CHUNK,
+        REPORT_RAM_ARRAY as u64,
+    ) else {
+        return Err("not enough free DRAM for another guest");
+    };
+
+    // From here DRAM is taken. A failure latches the slot off.
+    SLOT_BUILD_FAILED.store(true, Ordering::Release);
+    let Some(pool) = take_report_ram_extra_2m() else {
+        return Err("DRAM: table pool");
+    };
+    SLOT_POOL_NEXT.store(pool, Ordering::Release);
+    SLOT_POOL_END.store(pool + CHUNK, Ordering::Release);
+
+    guest_uefi_mtrr_reset();
+    guest_uefi_mtrr_set_admit_uc(true);
+    // No OVMF runs in this slot (RayNu-F is the firmware, ADR-016), but
+    // the machine has a flash window like slot 0's: erased NOR, private.
+    let Some(fw_hpa) = take_report_ram_extra_run(fw_len.div_ceil(CHUNK)) else {
+        return Err("DRAM: flash window");
+    };
+    // SAFETY: exclusive run just taken from the bump; identity-mapped.
+    // KANI-TARGET: guest slot flash fill (outside Proven Core).
+    core::ptr::write_bytes(fw_hpa as *mut u8, 0xFF, fw_len as usize);
+    let Some(ram_hpa) = take_report_ram_extra_run(GUEST_UEFI_LOW_RAM_BYTES / CHUNK) else {
+        return Err("DRAM: low-RAM slab");
+    };
+    // SAFETY: as above. KANI-TARGET: guest slot slab zero (outside Proven Core).
+    core::ptr::write_bytes(ram_hpa as *mut u8, 0, GUEST_UEFI_LOW_RAM_BYTES as usize);
+    RAM_HPA.store(ram_hpa, Ordering::Release);
+    FLASH_HPA.store(fw_hpa, Ordering::Release);
+    FLASH_LEN.store(fw_len, Ordering::Release);
+
+    let mut ept_frames = [0u64; 8];
+    for f in ept_frames.iter_mut().take(ept_need) {
+        let Some(p) = slot_pool_page() else {
+            return Err("table pool: EPT");
+        };
+        *f = p;
+    }
+    let Ok(eptp) = ept_hw::build_firmware_alias_ept(
+        gpa,
+        fw_hpa,
+        fw_len,
+        ram_hpa,
+        &mut ept_frames[..ept_need],
+    ) else {
+        return Err("alias EPT build");
+    };
+    let pml4 = ept_frames[0];
+    if !ept_hw::gpa_is_mapped(pml4, GUEST_UEFI_RESET_VECTOR_GPA)
+        || !ept_hw::gpa_is_mapped(pml4, gpa)
+        || !ept_hw::gpa_is_mapped(pml4, 0)
+        || !ept_hw::gpa_is_mapped(pml4, GUEST_UEFI_LOW_RAM_BYTES - 4096)
+    {
+        return Err("alias EPT walk");
+    }
+    crate::devices::guest_platform::reset();
+    EPT_PML4.store(pml4, Ordering::Release);
+
+    let Some(sink_hpa) = take_report_ram_extra_2m() else {
+        return Err("DRAM: platform sink");
+    };
+    // SAFETY: exclusive 2 MiB sink; HPET sits at 0xFED00000 in this page.
+    // KANI-TARGET: guest slot HPET sink (outside Proven Core).
+    core::ptr::write_bytes(sink_hpa as *mut u8, 0, CHUNK as usize);
+    let hpet_ok = crate::devices::guest_platform::hpet_init_sink(core::slice::from_raw_parts_mut(
+        sink_hpa as *mut u8,
+        CHUNK as usize,
+    ));
+    SINK_HPA.store(sink_hpa, Ordering::Release);
+    let Some(hole_zero) = take_report_ram_extra_2m() else {
+        return Err("DRAM: hole-zero page");
+    };
+    // SAFETY: exclusive chunk. KANI-TARGET: guest slot hole-zero (outside Proven Core).
+    core::ptr::write_bytes(hole_zero as *mut u8, 0, CHUNK as usize);
+    HOLE_ZERO_HPA.store(hole_zero, Ordering::Release);
+
+    // Media and disk before the virtio functions are presented, in the
+    // order `launch_uefi` uses.
+    let _ = crate::mgmt::iso_install::present_boot_iso();
+    if perc {
+        bind_slot_disk();
+    } else {
+        let Some(disk_hpa) = take_report_ram_extra_run(disk_bytes / CHUNK) else {
+            return Err("DRAM: install disk");
+        };
+        // SAFETY: exclusive run; `attach_disk` zeroes it and the guest
+        // reaches it only through virtio-blk / RayNu-F BlockIo.
+        // KANI-TARGET: guest slot DRAM install disk (outside Proven Core).
+        if !crate::devices::guest_virtio_blk::attach_disk(disk_hpa, disk_bytes as usize) {
+            return Err("install disk attach");
+        }
+    }
+
+    for i in 0..GUEST_UEFI_MMIO_SCRATCH_SLOTS {
+        let Some(h) = take_report_ram_extra_2m() else {
+            return Err("DRAM: MMIO scratch");
+        };
+        // SAFETY: exclusive chunk. KANI-TARGET: guest slot scratch zero (outside Proven Core).
+        core::ptr::write_bytes(h as *mut u8, 0, CHUNK as usize);
+        MMIO_SCRATCH_HPA[i].store(h, Ordering::Release);
+        MMIO_SCRATCH_GPA[i].store(u64::MAX, Ordering::Release);
+    }
+    let mut report_n = 0usize;
+    for i in 0..report_want as usize {
+        let Some(h) = take_report_ram_extra_2m() else {
+            break;
+        };
+        // Leftover DRAM holds whatever the platform firmware left there.
+        // SAFETY: exclusive chunk. KANI-TARGET: guest slot report-RAM zero (outside Proven Core).
+        core::ptr::write_bytes(h as *mut u8, 0, CHUNK as usize);
+        REPORT_RAM_HPA[i].store(h, Ordering::Release);
+        REPORT_RAM_GPA[i].store(u64::MAX, Ordering::Release);
+        report_n += 1;
+    }
+    if (report_n as u64) < guest_sched::SLOT_MIN_REPORT_CHUNKS {
+        return Err("DRAM: report-RAM");
+    }
+    for i in 1usize..=2 {
+        let Some(pd) = slot_pool_page() else {
+            return Err("table pool: PD");
+        };
+        let _ = ept_link_empty_pd(i, pd);
+    }
+    let mut pre = 0u64;
+    for i in 0..report_n {
+        let Some(g) = guest_uefi_report_ram_premap_gpa(i, report_n) else {
+            break;
+        };
+        let hpa = REPORT_RAM_HPA[i].load(Ordering::Acquire);
+        REPORT_RAM_GPA[i].store(g, Ordering::Release);
+        if ept_map_2m_hpa_mt(g, hpa, false, true, GUEST_UEFI_EPT_MT_WB, false) {
+            pre += 1;
+        } else {
+            REPORT_RAM_GPA[i].store(u64::MAX, Ordering::Release);
+        }
+    }
+    crate::memory::ept_hw::invept_global();
+    REPORT_RAM_MAPS.store(pre as u32, Ordering::Release);
+
+    let _ = crate::mgmt::iso_install::present_boot_iso();
+    let _ = ept_map_2m_scratch(0x8000_0000);
+    let ioapic_trapped = match slot_pool_page() {
+        Some(pt) => ept_install_ioapic_trap(pt),
+        None => false,
+    };
+    if !ioapic_trapped {
+        for &mm in &[0xFEC0_0000u64, 0xFED0_0000] {
+            if ept_map_2m_sink(mm) {
+                SINK_MAPS.fetch_add(1, Ordering::AcqRel);
+            }
+        }
+    }
+    let (Some(xapic_pt), Some(lapic)) = (slot_pool_page(), slot_pool_page()) else {
+        return Err("table pool: xAPIC");
+    };
+    // SAFETY: exclusive zeroed 4 KiB xAPIC image; not the host LAPIC.
+    // KANI-TARGET: guest slot xAPIC fill (outside Proven Core).
+    crate::devices::lapic_virt::fill_xapic_page(core::slice::from_raw_parts_mut(
+        lapic as *mut u8,
+        4096,
+    ));
+    if !ept_install_xapic_4k(xapic_pt, lapic, true) {
+        return Err("xAPIC 4K EPT map");
+    }
+
+    let (Some(vmcs), Some(gdt), Some(tss), Some(io_a), Some(io_b), Some(msr_bmp)) = (
+        slot_pool_page(),
+        slot_pool_page(),
+        slot_pool_page(),
+        slot_pool_page(),
+        slot_pool_page(),
+        slot_pool_page(),
+    ) else {
+        return Err("table pool: VMCS");
+    };
+    let _ = crate::mgmt::iso_install::present_boot_iso();
+    let _ = crate::devices::ide_cdrom::present_placeholder_if_idle();
+    let _ = crate::devices::guest_virtio_blk::present();
+
+    serial::write_str("boot: guest slot ");
+    write_dec(s as u64);
+    serial::write_str(" machine VMCS=0x");
+    write_hex(vmcs);
+    serial::write_str(" EPTP=0x");
+    write_hex(eptp);
+    serial::write_str(" slab=0x");
+    write_hex(ram_hpa);
+    serial::write_str(" report_ram_mib=");
+    write_dec(pre * 2);
+    serial::write_str(" disk_bytes=");
+    write_dec(crate::devices::guest_virtio_blk::disk_bytes());
+    serial::write_str(" ioapic_trap=");
+    write_dec(u64::from(ioapic_trapped));
+    serial::write_str(" hpet=");
+    write_dec(u64::from(hpet_ok));
+    serial::write_str(" dram_left_mib=");
+    write_dec(report_ram_extra_remaining() >> 20);
+    serial::write_line(" (ADR-022; not ISO-INSTALL-OK)");
+
+    // The host stack, GDT and TSS are the ones slot 0's VMCS names. The
+    // host state read here is live: in the idle loop it is the boot
+    // context, in the exit path it is what the last VM exit loaded from a
+    // VMCS that was written from that same context.
+    if setup_guest_uefi_vmcs(vmcs, host_rsp, gdt, tss, eptp, Some(io_a), Some(io_b), Some(msr_bmp))
+        .is_err()
+    {
+        let _ = ops::vmclear(vmcs);
+        return Err("VMCS setup");
+    }
+    *SAVED_VMCS.p() = vmcs;
+    crate::audit::integrity::record_event(AuditEvent::VmcsCreated {
+        vcpu_id: s as u32,
+        vmcs_id: vmcs,
+    });
+    SLOT_BUILD_FAILED.store(false, Ordering::Release);
+    Ok(())
+}
+
+/// Boot the guest of the current slot on its own machine. The scheduler
+/// made the slot current and loaded reset CPU state. `operator` is a Start
+/// from the Guests row (or the lab flag), not the scheduler's own restart.
+///
+/// The first boot of a slot launches RayNu-F on the VMCS as built; every
+/// later one goes through the same reset a guest reboot takes, so the two
+/// paths cannot drift.
+#[cfg(target_os = "uefi")]
+unsafe fn launch_slot_guest(operator: bool) -> ! {
+    bind_slot_disk();
+    if operator {
+        zero_slot_report_ram();
+    }
+    if RAYNU_F_RAN.swap(true, Ordering::AcqRel) {
+        serial::write_line(
+            "boot: perc SPA start again (guest was stopped; hypervisor stays up; not ISO-INSTALL-OK)",
+        );
+        raynu_f_reset_relaunch(crate::devices::guest_platform::ResetSrc::Kbc);
+    }
+    raynu_f_launch_on_stopped_vmcs()
 }
 
 #[cfg(target_os = "uefi")]
@@ -16828,6 +17434,10 @@ fn write_dec_nowait(mut n: u64) {
         serial::write_byte_nowait(b);
     }
 }
+
+/// Guest scheduler: N guest slots on one CPU (ADR-022).
+#[path = "guest_sched.rs"]
+pub mod guest_sched;
 
 #[cfg(test)]
 #[path = "guest_uefi_test.rs"]
