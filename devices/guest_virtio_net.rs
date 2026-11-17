@@ -7,10 +7,15 @@
 //! PCI `00:05.0`, virtio-net `1AF4:1041`, only while a Start carries a
 //! saved NIC. The MAC in device config is that guest MAC. TX frames are
 //! handed to the function-1 egress path. This is not the M4 vSwitch.
+//!
+//! One guest on: every frame the uplink receives is posted to that guest,
+//! as before. More than one guest on (ADR-022): the uplink is split by
+//! destination MAC, and a frame one guest sends to another is posted to
+//! that guest directly, because the wire does not send a frame back.
 
-use crate::guest::slot::{PerGuest, PerGuestCell};
+use crate::guest::slot::{self, PerGuest, PerGuestCell, MAX_GUESTS};
 use crate::{per_guest, per_guest_cell};
-use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 
 use crate::devices::guest_platform::{pci_bdf, pci_cfg_offset};
 use crate::mgmt::guest_nic_start::armed_start;
@@ -695,6 +700,13 @@ fn drain_one(translate: &impl Fn(u64) -> Option<u64>) -> bool {
             crate::boot::serial::write_line("boot: M8.9 virtio-net tx done (not ISO-INSTALL-OK)");
         }
     }
+    TX_SRC_MAC.store(pack_mac(&eth[6..12]), Ordering::Release);
+    if slot::shared() && deliver_to_peers(eth, translate) {
+        // Unicast to another guest on this host. The wire would not bring
+        // it back.
+        TX_SENT_N.fetch_add(1, Ordering::AcqRel);
+        return true;
+    }
     let result = crate::mgmt::bcm5720_mmio::egress_send(eth);
     match result {
         crate::mgmt::bcm5720_mmio::EgressSend::Sent(_) => {
@@ -726,6 +738,125 @@ fn drain_one(translate: &impl Fn(u64) -> Option<u64>) -> bool {
         }
     }
     true
+}
+
+/// Source MAC of the last frame this guest sent, packed little-end first;
+/// 0 until it sends. A guest that changes its address, or bridges, is
+/// still found by the address it actually uses.
+static TX_SRC_MAC: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+
+fn pack_mac(mac: &[u8]) -> u64 {
+    let mut v = 0u64;
+    for (i, b) in mac.iter().take(6).enumerate() {
+        v |= u64::from(*b) << (8 * i);
+    }
+    v
+}
+
+/// The addresses one guest answers to: the one in its device config and
+/// the one it last sent from.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct GuestMacs {
+    pub config: u64,
+    pub learned: u64,
+}
+
+/// Which guest slots a frame for `dst` is posted to (bit N = slot N).
+///
+/// INVARIANTS:
+/// - A slot without a NIC (`None`) never gets a frame
+/// - Broadcast and multicast go to every slot with a NIC
+/// - Unicast goes only to the slot that owns the address; an address no
+///   guest owns goes to no guest
+///
+/// VERIFICATION: L1 (host tests)
+pub fn rx_slot_mask(dst: &[u8], macs: &[Option<GuestMacs>; MAX_GUESTS]) -> u8 {
+    if dst.len() < 6 {
+        return 0;
+    }
+    let group = dst[0] & 1 != 0;
+    let want = pack_mac(dst);
+    let mut mask = 0u8;
+    for (s, m) in macs.iter().enumerate() {
+        let Some(m) = m else {
+            continue;
+        };
+        if group || m.config == want || (m.learned != 0 && m.learned == want) {
+            mask |= 1 << s;
+        }
+    }
+    mask
+}
+
+/// NIC addresses of the guests that are on, by slot.
+fn guest_macs() -> [Option<GuestMacs>; MAX_GUESTS] {
+    core::array::from_fn(|s| {
+        if !slot::is_on(s) {
+            return None;
+        }
+        slot::with_slot(s, || {
+            armed_start().map(|n| GuestMacs {
+                config: pack_mac(&n.mac),
+                learned: TX_SRC_MAC.load(Ordering::Acquire),
+            })
+        })
+    })
+}
+
+/// Post `eth` to every slot in `mask`. A guest that is not on the CPU is
+/// woken so a halted guest sees the frame.
+fn post_to_slots(eth: &[u8], mask: u8, translate: &impl Fn(u64) -> Option<u64>) {
+    let cur = slot::current();
+    for t in 0..MAX_GUESTS {
+        if mask & (1 << t) == 0 {
+            continue;
+        }
+        let posted = slot::with_slot(t, || {
+            let ok = post_rx(eth, translate);
+            #[cfg(feature = "uefi-bin")]
+            if ok && !LOGGED_RX.swap(true, Ordering::AcqRel) {
+                crate::boot::serial::write_line("boot: M8.9 virtio-net rx (not ISO-INSTALL-OK)");
+            }
+            ok
+        });
+        if posted && t != cur {
+            slot::wake(t);
+        }
+    }
+}
+
+/// More than one guest is on: split the uplink by destination MAC.
+fn poll_rx_shared(translate: &impl Fn(u64) -> Option<u64>) {
+    let macs = guest_macs();
+    if macs.iter().all(Option::is_none) {
+        return;
+    }
+    for _ in 0..4 {
+        let mut buf = [0u8; 1514];
+        let Some(n) = crate::mgmt::bcm5720_mmio::egress_recv(&mut buf) else {
+            break;
+        };
+        if n < 14 {
+            continue;
+        }
+        let mask = rx_slot_mask(&buf[..6], &macs);
+        post_to_slots(&buf[..n], mask, translate);
+    }
+}
+
+/// A guest sent `eth` while other guests are on. Post it to the guests it
+/// is for. Returns true when it was for another guest alone, so it does
+/// not go to the wire.
+fn deliver_to_peers(eth: &[u8], translate: &impl Fn(u64) -> Option<u64>) -> bool {
+    let cur = slot::current();
+    let mut macs = guest_macs();
+    macs[cur] = None;
+    let mask = rx_slot_mask(&eth[..6], &macs);
+    if mask == 0 {
+        return false;
+    }
+    post_to_slots(eth, mask, translate);
+    eth[0] & 1 == 0
 }
 
 /// Raise IRQ 11 for a TX completion whose kick has already returned.
@@ -774,6 +905,10 @@ fn ethernet_from_virtio(buf: &[u8]) -> Option<&[u8]> {
 /// Call from the Linux VM-exit path. `poll_idle` does not touch the BAR,
 /// so a drain that runs only on virtio MMIO never sees the SYN-ACK.
 pub fn poll_rx(translate: impl Fn(u64) -> Option<u64>) {
+    if slot::shared() {
+        poll_rx_shared(&translate);
+        return;
+    }
     if armed_start().is_none() {
         return;
     }
@@ -1466,5 +1601,41 @@ mod guest_virtio_net_test {
         crate::devices::lapic_virt::reset();
         clear_panel_for_test();
         clear_start_for_test();
+    }
+
+    #[test]
+    fn uplink_is_split_by_destination_mac_between_guests() {
+        let a = GuestMacs { config: pack_mac(&[2, 0, 0, 0, 0, 0x0a]), learned: 0 };
+        let b = GuestMacs {
+            config: pack_mac(&[2, 0, 0, 0, 0, 0x0b]),
+            learned: pack_mac(&[2, 0, 0, 0, 0, 0xbb]),
+        };
+        let macs = [Some(a), None, Some(b), None];
+        // Unicast reaches only its owner.
+        assert_eq!(rx_slot_mask(&[2, 0, 0, 0, 0, 0x0a], &macs), 0b0001);
+        assert_eq!(rx_slot_mask(&[2, 0, 0, 0, 0, 0x0b], &macs), 0b0100);
+        // The address a guest last sent from is its address too.
+        assert_eq!(rx_slot_mask(&[2, 0, 0, 0, 0, 0xbb], &macs), 0b0100);
+        // Nobody's address reaches nobody: one guest does not read
+        // another machine's traffic.
+        assert_eq!(rx_slot_mask(&[2, 0, 0, 0, 0, 0x0c], &macs), 0);
+        // Broadcast and multicast reach every guest with a NIC, and no
+        // slot without one.
+        assert_eq!(rx_slot_mask(&[0xff; 6], &macs), 0b0101);
+        assert_eq!(rx_slot_mask(&[0x33, 0x33, 0, 0, 0, 1], &macs), 0b0101);
+        assert_eq!(rx_slot_mask(&[0xff; 6], &[None; MAX_GUESTS]), 0);
+        assert_eq!(rx_slot_mask(&[2, 0, 0], &macs), 0, "short header");
+        // An unset learned address never matches the all-zero MAC.
+        assert_eq!(rx_slot_mask(&[0; 6], &macs), 0);
+    }
+
+    #[test]
+    fn one_guest_keeps_the_single_guest_uplink_path() {
+        let src = include_str!("guest_virtio_net.rs");
+        let poll = src.split("pub fn poll_rx(").nth(1).expect("poll_rx");
+        let shared = poll.find("slot::shared()").expect("shared branch");
+        let single = poll.find("armed_start().is_none()").expect("single branch");
+        assert!(shared < single);
+        assert!(src.contains("if slot::shared() && deliver_to_peers(eth, translate)"));
     }
 }
