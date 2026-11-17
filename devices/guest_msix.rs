@@ -12,6 +12,8 @@
 //! never print an iron `*-OK` marker. The firmware line
 //! `boot: B8 virtio msi-x vec=` is the iron evidence, and it is not that close.
 
+use crate::guest::slot::PerGuest;
+use crate::per_guest;
 use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 use crate::devices::lapic_virt;
@@ -30,8 +32,8 @@ const CTRL_ENABLE: u16 = 1 << 15;
 const CTRL_FMASK: u16 = 1 << 14;
 const CTRL_SIZE: u16 = (ENTRIES as u16) - 1;
 
-static NOTE_ONCE: AtomicBool = AtomicBool::new(false);
-static LAST_VEC: AtomicU8 = AtomicU8::new(0);
+static NOTE_ONCE: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static LAST_VEC: PerGuest<AtomicU8> = per_guest!(AtomicU8::new(0));
 
 #[derive(Clone, Copy)]
 struct Entry {

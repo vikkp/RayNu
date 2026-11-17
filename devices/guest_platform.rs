@@ -37,6 +37,8 @@
 //! empty-slot scan). PIRQ `0x60-0x63` reset `0x80` (disabled) matches
 //! QEMU so IRQ assign is not IRQ0.
 
+use crate::guest::slot::PerGuest;
+use crate::per_guest;
 use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, Ordering};
 
 /// Must match [`crate::memory::ept_hw::GUEST_UEFI_LOW_RAM_BYTES`] (32 MiB).
@@ -1021,20 +1023,20 @@ struct GuestPlat(core::cell::UnsafeCell<Platform>);
 // KANI-TARGET: guest-UEFI platform mutex (outside Proven Core).
 unsafe impl Sync for GuestPlat {}
 
-static PLAT: GuestPlat = GuestPlat(core::cell::UnsafeCell::new(Platform::empty()));
-static PLAT_LOCK: AtomicBool = AtomicBool::new(false);
-static CMOS_MEM: AtomicBool = AtomicBool::new(false);
-static FWCFG_RAM: AtomicBool = AtomicBool::new(false);
-static FWCFG_BOOT: AtomicBool = AtomicBool::new(false);
-static FWCFG_E820: AtomicBool = AtomicBool::new(false);
-static FWCFG_DIR: AtomicBool = AtomicBool::new(false);
-static FWCFG_WAIT: AtomicBool = AtomicBool::new(false);
-static FWCFG_ACPI: AtomicBool = AtomicBool::new(false);
-static FWCFG_BOOT_PRODUCT_LOG: AtomicBool = AtomicBool::new(false);
-static PM1_SCI: AtomicBool = AtomicBool::new(false);
-static HOST_ENUM: AtomicBool = AtomicBool::new(false);
-static ACPI_PM: AtomicU32 = AtomicU32::new(0);
-static LAST_CMOS: AtomicU8 = AtomicU8::new(0);
+static PLAT: PerGuest<GuestPlat> = per_guest!(GuestPlat(core::cell::UnsafeCell::new(Platform::empty())));
+static PLAT_LOCK: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static CMOS_MEM: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static FWCFG_RAM: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static FWCFG_BOOT: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static FWCFG_E820: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static FWCFG_DIR: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static FWCFG_WAIT: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static FWCFG_ACPI: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static FWCFG_BOOT_PRODUCT_LOG: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static PM1_SCI: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static HOST_ENUM: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static ACPI_PM: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static LAST_CMOS: PerGuest<AtomicU8> = per_guest!(AtomicU8::new(0));
 
 fn with_plat<R>(f: impl FnOnce(&mut Platform) -> R) -> R {
     while PLAT_LOCK.swap(true, Ordering::Acquire) {
@@ -1351,10 +1353,10 @@ struct Pit2Gate {
     start: AtomicU64,
 }
 
-static PIT2: Pit2Gate = Pit2Gate {
+static PIT2: PerGuest<Pit2Gate> = per_guest!(Pit2Gate {
     on: AtomicBool::new(false),
     start: AtomicU64::new(0),
-};
+});
 
 /// TSC ticks for GRUB's channel-2 wait at `tsc_hz` (0 → 2.1 GHz).
 pub fn pit2_grub_wait_ticks(tsc_hz: u64) -> u64 {

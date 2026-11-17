@@ -8,6 +8,8 @@
 //! into RBR. Lab UART stub never calls this. Host/CI never prints
 //! `ISO-INSTALL-OK`.
 
+use crate::guest::slot::PerGuest;
+use crate::per_guest;
 use core::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 
 const WIN: usize = 48;
@@ -133,34 +135,34 @@ struct Box(core::cell::UnsafeCell<Answer>);
 // KANI-TARGET: guest-UEFI serial auto-answer mutex (outside Proven Core).
 unsafe impl Sync for Box {}
 
-static STATE: Box = Box(core::cell::UnsafeCell::new(Answer::empty()));
-static LOCK: AtomicBool = AtomicBool::new(false);
-static PHASE: AtomicU8 = AtomicU8::new(PHASE_LOGIN);
-static YES_LEFT: AtomicU8 = AtomicU8::new(YES_MAX);
-static GRUB_SENT: AtomicBool = AtomicBool::new(false);
+static STATE: PerGuest<Box> = per_guest!(Box(core::cell::UnsafeCell::new(Answer::empty())));
+static LOCK: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static PHASE: PerGuest<AtomicU8> = per_guest!(AtomicU8::new(PHASE_LOGIN));
+static YES_LEFT: PerGuest<AtomicU8> = per_guest!(AtomicU8::new(YES_MAX));
+static GRUB_SENT: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// Next `(y/n)` is "Try boot media?" after `No disks available` — answer n.
-static NEXT_YES_IS_NO: AtomicBool = AtomicBool::new(false);
+static NEXT_YES_IS_NO: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// Initramfs `/ # ` already queued [`MOUNT_EXIT`]. Stay PHASE_LOGIN.
-static MOUNT_SENT: AtomicBool = AtomicBool::new(false);
+static MOUNT_SENT: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// Alpine `Mounting boot media: ok.` / `usbdelay=30` done. PIC 11 then
 /// yields PIT only every third take (3:1) so apk overlay INTx and
 /// jiffies both move. Iron `c2cd099` / `34172103709`: stopping yield
 /// after `media: ok` still froze at virtio `n=1345`.
 /// linux PIC IRQ11 yield until mount. linux PIC IRQ11 yield 3 after mount.
 /// Not `ISO-INSTALL-OK`.
-static MEDIA_MOUNTED: AtomicBool = AtomicBool::new(false);
+static MEDIA_MOUNTED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// Alpine `Installing packages` (UART, not usbdelay TSC). INTx pulse
 /// after empty-ring dump only then. Iron `6d0c58a` / `34292570282`
 /// pulsed during usbdelay and apk ISR ACK re-armed the dump.
 /// virtio stall dump notify reset. Not `ISO-INSTALL-OK`.
-static PACKAGES_OVERLAY: AtomicBool = AtomicBool::new(false);
+static PACKAGES_OVERLAY: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// Host TSC when PIT-hold armed (DRIVER_OK). `usbdelay=30` fallback.
-static HOLD_TSC: AtomicU64 = AtomicU64::new(0);
-static MOUNT_LOG: AtomicBool = AtomicBool::new(false);
+static HOLD_TSC: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+static MOUNT_LOG: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// F7: `reboot\r` queued after the install completed.
-static REBOOT_SENT: AtomicBool = AtomicBool::new(false);
+static REBOOT_SENT: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// F7: second Linux boot after RayNu-F relaunch. `reset()` does not clear this.
-static SECOND_BOOT: AtomicBool = AtomicBool::new(false);
+static SECOND_BOOT: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 
 fn with<R>(f: impl FnOnce(&mut Answer) -> R) -> R {
     while LOCK.swap(true, Ordering::Acquire) {
@@ -237,9 +239,9 @@ fn is_shell_prompt(win: &[u8], wlen: usize) -> bool {
 }
 
 /// One-shot COM2 note: `SETUP` was withheld by [`setup_wipe_allowed`].
-static SETUP_WITHHELD_LOG: AtomicBool = AtomicBool::new(false);
+static SETUP_WITHHELD_LOG: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// The withhold was a Guests `linux_iso` (Slice 3), not the durable-LUN policy.
-static WITHHOLD_GUESTS_ISO: AtomicBool = AtomicBool::new(false);
+static WITHHOLD_GUESTS_ISO: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 
 /// Phase 0 (M8 recovery) wipe policy for the installer auto-answer.
 ///

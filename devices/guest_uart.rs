@@ -49,6 +49,8 @@
 //! whole 16550A FIFO per THRE window. guest UART TX ring room.
 //! Not `ISO-INSTALL-OK`.
 
+use crate::guest::slot::PerGuest;
+use crate::per_guest;
 use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 
 /// ISA COM1.
@@ -56,22 +58,22 @@ pub const COM1_IRQ: u8 = 4;
 const RX_CAP: usize = 16;
 
 /// COM1 IIR reads that reported RX / THRE / no interrupt.
-static STAT_IIR_RX: AtomicU32 = AtomicU32::new(0);
-static STAT_IIR_THRE: AtomicU32 = AtomicU32::new(0);
-static STAT_IIR_NONE: AtomicU32 = AtomicU32::new(0);
+static STAT_IIR_RX: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static STAT_IIR_THRE: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static STAT_IIR_NONE: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 /// COM1 LSR reads while IER.ETBEI was set: THRE reported 1 / 0.
-static STAT_LSR_THRE_ON: AtomicU32 = AtomicU32::new(0);
-static STAT_LSR_THRE_OFF: AtomicU32 = AtomicU32::new(0);
+static STAT_LSR_THRE_ON: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static STAT_LSR_THRE_OFF: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 /// COM1 THR writes; IER writes with ETBEI set / clear.
-static STAT_THR_WR: AtomicU32 = AtomicU32::new(0);
-static STAT_IER_ETBEI_ON: AtomicU32 = AtomicU32::new(0);
-static STAT_IER_ETBEI_OFF: AtomicU32 = AtomicU32::new(0);
+static STAT_THR_WR: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static STAT_IER_ETBEI_ON: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static STAT_IER_ETBEI_OFF: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 /// IRQ 4 raised by [`reassert_irq`]; raised / lowered by a COM1 PIO.
-static STAT_REASSERT_RAISE: AtomicU32 = AtomicU32::new(0);
-static STAT_PIO_RAISE: AtomicU32 = AtomicU32::new(0);
-static STAT_PIO_LOWER: AtomicU32 = AtomicU32::new(0);
+static STAT_REASSERT_RAISE: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static STAT_PIO_RAISE: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static STAT_PIO_LOWER: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 /// Last TSC [`poll_host_rx_paced`] actually issued host COM2 `inb`.
-static LAST_HOST_RX_TSC: AtomicU64 = AtomicU64::new(0);
+static LAST_HOST_RX_TSC: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
 /// Host COM2 RX at most 100 times/s (10 ms). Iron `b5e290be` polled on
 /// every RayNu-F vmexit (~2M/s at GRUB) and the chassis powered off.
 pub const HOST_RX_PACE_HZ_DIV: u64 = 100;
@@ -191,11 +193,11 @@ struct GuestUart(core::cell::UnsafeCell<Uarts>);
 // KANI-TARGET: guest-UEFI UART mutex (outside Proven Core).
 unsafe impl Sync for GuestUart {}
 
-static UARTS: GuestUart = GuestUart(core::cell::UnsafeCell::new(Uarts {
+static UARTS: PerGuest<GuestUart> = per_guest!(GuestUart(core::cell::UnsafeCell::new(Uarts {
     com1: Uart::empty(),
     com2: Uart::empty(),
-}));
-static UART_LOCK: AtomicBool = AtomicBool::new(false);
+})));
+static UART_LOCK: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 
 fn with_uart<R>(f: impl FnOnce(&mut Uarts) -> R) -> R {
     while UART_LOCK.swap(true, Ordering::Acquire) {

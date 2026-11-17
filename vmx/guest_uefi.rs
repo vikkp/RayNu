@@ -10,6 +10,8 @@
 //! VMCS or EPT. Fixtures are refused. Host `cargo test` never executes the
 //! instruction.
 
+use crate::guest::slot::{PerGuest, PerGuestCell};
+use crate::{per_guest, per_guest_cell};
 use core::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU64, AtomicU8, Ordering};
 
 use crate::arch::cpu::{CPUID_ECX_X2APIC, CPUID_ECX_HYPERVISOR};
@@ -4281,94 +4283,89 @@ pub fn guest_uefi_fwcfg_identity_overlay_restore(ram: &mut [u8], dest: u64, save
     write_low_ram_bytes(ram, dest, saved)
 }
 
-static LAUNCH_ENTERED: AtomicBool = AtomicBool::new(false);
-static MARKER_PRINTED: AtomicBool = AtomicBool::new(false);
-static LAST_EXIT_REASON: AtomicU32 = AtomicU32::new(0);
-static LAST_GUEST_RIP: AtomicU64 = AtomicU64::new(0);
-static LAST_LINEAR: AtomicU64 = AtomicU64::new(0);
-static LAST_GUEST_PHYS: AtomicU64 = AtomicU64::new(0);
-static LAST_INSN_ERROR: AtomicU32 = AtomicU32::new(0);
+static LAUNCH_ENTERED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static MARKER_PRINTED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static LAST_EXIT_REASON: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static LAST_GUEST_RIP: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+static LAST_LINEAR: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+static LAST_GUEST_PHYS: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+static LAST_INSN_ERROR: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 #[cfg(target_os = "uefi")]
-static FWCFG_OVERLAY_PENDING: AtomicBool = AtomicBool::new(false);
+static FWCFG_OVERLAY_PENDING: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 #[cfg(target_os = "uefi")]
-static FWCFG_OVERLAY_GPA: AtomicU64 = AtomicU64::new(0);
+static FWCFG_OVERLAY_GPA: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
 #[cfg(target_os = "uefi")]
-static FWCFG_OVERLAY_N: AtomicU64 = AtomicU64::new(0);
+static FWCFG_OVERLAY_N: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
 /// Single-vCPU guest-UEFI overlay slot. Firmware is halted in VMX; only
 /// [`save_fwcfg_identity_overlay`] / [`restore_fwcfg_identity_overlay`]
 /// touch this buffer. fw_cfg identity overlay.
 #[cfg(target_os = "uefi")]
-static mut FWCFG_OVERLAY_SAVED: [u8; GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_CAP as usize] =
-    [0; GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_CAP as usize];
+static FWCFG_OVERLAY_SAVED: PerGuestCell<[u8; GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_CAP as usize]> = per_guest_cell!([0; GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_CAP as usize]);
 /// Decoded MMIO instruction length for this exit. Zeroed at each
 /// [`guest_uefi_vmexit`] so HLT/INVD cannot skip a stale length.
 #[cfg(target_os = "uefi")]
-static MMIO_INSN_LEN: AtomicU64 = AtomicU64::new(0);
-static EXIT_COUNT: AtomicU32 = AtomicU32::new(0);
-static NON_TF_EXITS: AtomicU32 = AtomicU32::new(0);
-static ALIVE_PRINTED: AtomicBool = AtomicBool::new(false);
-static PAST_SEC_PRINTED: AtomicBool = AtomicBool::new(false);
-static LEFT_SEC: AtomicBool = AtomicBool::new(false);
-static PCI_CONFIG_SEEN: AtomicBool = AtomicBool::new(false);
-static COM_BYTES: AtomicU32 = AtomicU32::new(0);
-static COM_BANNER: AtomicBool = AtomicBool::new(false);
-static UART_LCR_COM1: AtomicU8 = AtomicU8::new(0);
-static UART_LCR_COM2: AtomicU8 = AtomicU8::new(0);
-static CONTINUE_GUEST: AtomicBool = AtomicBool::new(false);
-static DXE_PRINTED: AtomicBool = AtomicBool::new(false);
-static BOTH_PRINTED: AtomicBool = AtomicBool::new(false);
-static ATAPI_PRINTED: AtomicBool = AtomicBool::new(false);
-static ELTORITO_PRINTED: AtomicBool = AtomicBool::new(false);
-static ELTORITO_CATALOG_PRINTED: AtomicBool = AtomicBool::new(false);
-static ELTORITO_BOOTIMG_PRINTED: AtomicBool = AtomicBool::new(false);
-static POST_CD_NON_IO: AtomicBool = AtomicBool::new(false);
-static ELTORITO_COM_MATCH: AtomicU8 = AtomicU8::new(0);
+static MMIO_INSN_LEN: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+static EXIT_COUNT: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static NON_TF_EXITS: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static ALIVE_PRINTED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static PAST_SEC_PRINTED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static LEFT_SEC: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static PCI_CONFIG_SEEN: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static COM_BYTES: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static COM_BANNER: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static UART_LCR_COM1: PerGuest<AtomicU8> = per_guest!(AtomicU8::new(0));
+static UART_LCR_COM2: PerGuest<AtomicU8> = per_guest!(AtomicU8::new(0));
+static CONTINUE_GUEST: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static DXE_PRINTED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static BOTH_PRINTED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static ATAPI_PRINTED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static ELTORITO_PRINTED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static ELTORITO_CATALOG_PRINTED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static ELTORITO_BOOTIMG_PRINTED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static POST_CD_NON_IO: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static ELTORITO_COM_MATCH: PerGuest<AtomicU8> = per_guest!(AtomicU8::new(0));
 #[cfg(target_os = "uefi")]
-static GPA0_SPLIT_PRINTED: AtomicBool = AtomicBool::new(false);
+static GPA0_SPLIT_PRINTED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 #[cfg(target_os = "uefi")]
-static PDPT0_SPLIT_PRINTED: AtomicBool = AtomicBool::new(false);
-static DXE_AT_N: AtomicU32 = AtomicU32::new(0);
-static ATAPI_AT_N: AtomicU32 = AtomicU32::new(0);
-static EPT_PML4: AtomicU64 = AtomicU64::new(0);
-static SINK_HPA: AtomicU64 = AtomicU64::new(0);
-static HOLE_ZERO_HPA: AtomicU64 = AtomicU64::new(0);
-static MMIO_SCRATCH_HPA: [AtomicU64; GUEST_UEFI_MMIO_SCRATCH_SLOTS] =
-    [const { AtomicU64::new(0) }; GUEST_UEFI_MMIO_SCRATCH_SLOTS];
-static MMIO_SCRATCH_GPA: [AtomicU64; GUEST_UEFI_MMIO_SCRATCH_SLOTS] =
-    [const { AtomicU64::new(u64::MAX) }; GUEST_UEFI_MMIO_SCRATCH_SLOTS];
-static REPORT_RAM_HPA: [AtomicU64; REPORT_RAM_ARRAY] =
-    [const { AtomicU64::new(0) }; REPORT_RAM_ARRAY];
-static REPORT_RAM_GPA: [AtomicU64; REPORT_RAM_ARRAY] =
-    [const { AtomicU64::new(u64::MAX) }; REPORT_RAM_ARRAY];
-static REPORT_RAM_MAPS: AtomicU32 = AtomicU32::new(0);
-static CPU_FLUSH_PATCHED: AtomicU32 = AtomicU32::new(0);
-static CPU_FLUSH_SKIP_LOG: AtomicBool = AtomicBool::new(false);
-static LIVE_UC_PT_PAINTED: AtomicU32 = AtomicU32::new(0);
-static LIVE_GPA0_SPLIT: AtomicU32 = AtomicU32::new(0);
-static LIVE_VGA_PT_PAINTED: AtomicU32 = AtomicU32::new(0);
-static SINK_MAPS: AtomicU32 = AtomicU32::new(0);
-static PCI_DID_TRACE: AtomicU32 = AtomicU32::new(0);
-static PCI_HT_TRACE: AtomicU32 = AtomicU32::new(0);
-static PCI_BAR_TRACE: AtomicU32 = AtomicU32::new(0);
-static HLT_SKIPS: AtomicU32 = AtomicU32::new(0);
-static HLT_STALL_LOGGED: AtomicBool = AtomicBool::new(false);
-static SKIP_AFTER_INJECT_LOGGED: AtomicBool = AtomicBool::new(false);
-static WAIT_FOR_IRQ_LOGGED: AtomicBool = AtomicBool::new(false);
-static SKIP_AFTER_ONESHOT_LOGGED: AtomicBool = AtomicBool::new(false);
-static FIRMWARE_PIT_ONESHOT: AtomicBool = AtomicBool::new(false);
-static FIRMWARE_CONIN_CR: AtomicBool = AtomicBool::new(false);
-static FIRMWARE_WFE_RETURN: AtomicBool = AtomicBool::new(false);
-static FIRMWARE_WFE_STATE4: AtomicBool = AtomicBool::new(false);
-static FIRMWARE_WFE_EVENT_PF: AtomicBool = AtomicBool::new(false);
-static FIRMWARE_ZEROMEM_EPT: AtomicBool = AtomicBool::new(false);
-static INJECT_N: AtomicU32 = AtomicU32::new(0);
+static PDPT0_SPLIT_PRINTED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static DXE_AT_N: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static ATAPI_AT_N: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static EPT_PML4: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+static SINK_HPA: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+static HOLE_ZERO_HPA: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+static MMIO_SCRATCH_HPA: PerGuest<[AtomicU64; GUEST_UEFI_MMIO_SCRATCH_SLOTS]> = per_guest!([const { AtomicU64::new(0) }; GUEST_UEFI_MMIO_SCRATCH_SLOTS]);
+static MMIO_SCRATCH_GPA: PerGuest<[AtomicU64; GUEST_UEFI_MMIO_SCRATCH_SLOTS]> = per_guest!([const { AtomicU64::new(u64::MAX) }; GUEST_UEFI_MMIO_SCRATCH_SLOTS]);
+static REPORT_RAM_HPA: PerGuest<[AtomicU64; REPORT_RAM_ARRAY]> = per_guest!([const { AtomicU64::new(0) }; REPORT_RAM_ARRAY]);
+static REPORT_RAM_GPA: PerGuest<[AtomicU64; REPORT_RAM_ARRAY]> = per_guest!([const { AtomicU64::new(u64::MAX) }; REPORT_RAM_ARRAY]);
+static REPORT_RAM_MAPS: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static CPU_FLUSH_PATCHED: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static CPU_FLUSH_SKIP_LOG: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static LIVE_UC_PT_PAINTED: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static LIVE_GPA0_SPLIT: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static LIVE_VGA_PT_PAINTED: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static SINK_MAPS: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static PCI_DID_TRACE: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static PCI_HT_TRACE: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static PCI_BAR_TRACE: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static HLT_SKIPS: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static HLT_STALL_LOGGED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static SKIP_AFTER_INJECT_LOGGED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static WAIT_FOR_IRQ_LOGGED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static SKIP_AFTER_ONESHOT_LOGGED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static FIRMWARE_PIT_ONESHOT: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static FIRMWARE_CONIN_CR: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static FIRMWARE_WFE_RETURN: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static FIRMWARE_WFE_STATE4: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static FIRMWARE_WFE_EVENT_PF: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static FIRMWARE_ZEROMEM_EPT: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static INJECT_N: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 const ATOMIC_U32_ZERO: AtomicU32 = AtomicU32::new(0);
 /// Why [`try_inject_guest_irq`] returned without a VM-entry inject.
 /// 0 exception pending · 1 product window not armed · 2 nothing pending ·
 /// 3 IF=0 / interrupt shadow (window armed) · 4 take returned none ·
 /// 5 firmware skip-PIT · 6 `prepare_external_inject` failed.
 /// M8.9 post-TX trace.
-static INJECT_SKIP: [AtomicU32; 7] = [ATOMIC_U32_ZERO; 7];
+static INJECT_SKIP: PerGuest<[AtomicU32; 7]> = per_guest!([ATOMIC_U32_ZERO; 7]);
 const INJECT_SKIP_EXC: usize = 0;
 const INJECT_SKIP_UNARMED: usize = 1;
 const INJECT_SKIP_IDLE: usize = 2;
@@ -4380,16 +4377,16 @@ const INJECT_SKIP_PREP: usize = 6;
 /// `RAYNU_F_EXITS`). 0 preempt tick · 1 preempt paced · 2 I/O · 3 EPT ·
 /// 4 external interrupt · 5 interrupt window · 6 HLT · 7 other.
 /// M8.9 post-TX trace.
-static LINUX_EXIT_KIND: [AtomicU32; 8] = [ATOMIC_U32_ZERO; 8];
+static LINUX_EXIT_KIND: PerGuest<[AtomicU32; 8]> = per_guest!([ATOMIC_U32_ZERO; 8]);
 /// M8.9 post-TX trace: stage (see [`guest_uefi_net_trace_due`]), TSC of
 /// the first guest frame, and the counter baseline captured at that time
 /// so each line prints deltas since the TX.
-static NET_TRACE_STAGE: AtomicU32 = AtomicU32::new(0);
-static NET_TRACE_TX_TSC: AtomicU64 = AtomicU64::new(0);
+static NET_TRACE_STAGE: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static NET_TRACE_TX_TSC: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
 /// `TX_DONE_N` at the last guest launch; the net counters are not reset
 /// per Start, so a frame is "first" when the count moves past this.
-static NET_TRACE_TX_SEEN: AtomicU32 = AtomicU32::new(0);
-static NET_TRACE_BASE: [AtomicU32; NET_TRACE_N] = [ATOMIC_U32_ZERO; NET_TRACE_N];
+static NET_TRACE_TX_SEEN: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static NET_TRACE_BASE: PerGuest<[AtomicU32; NET_TRACE_N]> = per_guest!([ATOMIC_U32_ZERO; NET_TRACE_N]);
 const NET_TRACE_N: usize = 25;
 /// VM exits that interrupted event delivery (`IDT_VECTORING_INFO` valid)
 /// in the Linux phase, how many of those external-interrupt events were
@@ -4399,68 +4396,68 @@ const NET_TRACE_N: usize = 25;
 /// injected vector never ran. An exit during delivery is the one way VMX
 /// drops an injected event unless the VMM re-injects it (SDM 27.2.4 /
 /// 26.5.1.2); the old exit path never read the field.
-static IDTV_SEEN: AtomicU32 = AtomicU32::new(0);
-static REINJECT_N: AtomicU32 = AtomicU32::new(0);
-static REINJECT_INFO: AtomicU32 = AtomicU32::new(0);
-static SPIN_JMP_SKIPS: AtomicU32 = AtomicU32::new(0);
-static LAST_PREEMPT_RIP: AtomicU64 = AtomicU64::new(u64::MAX);
-static PREEMPT_SAME_RIP: AtomicU32 = AtomicU32::new(0);
-static CR_ACCESSES: AtomicU32 = AtomicU32::new(0);
-static PCI_BDF_SEEN0: AtomicU64 = AtomicU64::new(0);
-static PCI_BDF_SEEN1: AtomicU64 = AtomicU64::new(0);
-static PCI_BDF_SEEN2: AtomicU64 = AtomicU64::new(0);
-static PCI_BDF_SEEN3: AtomicU64 = AtomicU64::new(0);
-static LAST_IO_PORT: AtomicU32 = AtomicU32::new(0);
-static LAST_CF8: AtomicU32 = AtomicU32::new(0);
+static IDTV_SEEN: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static REINJECT_N: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static REINJECT_INFO: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static SPIN_JMP_SKIPS: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static LAST_PREEMPT_RIP: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(u64::MAX));
+static PREEMPT_SAME_RIP: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static CR_ACCESSES: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static PCI_BDF_SEEN0: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+static PCI_BDF_SEEN1: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+static PCI_BDF_SEEN2: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+static PCI_BDF_SEEN3: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+static LAST_IO_PORT: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static LAST_CF8: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 /// Last CF8 with CONFIG_ADDRESS enable (bit 31). Iron COM2 `61991be`
 /// HLT `cf8=0x0` (deselect). Need the last live BDF before that write.
-static LAST_CF8_EN: AtomicU32 = AtomicU32::new(0);
+static LAST_CF8_EN: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 /// Last enabled CF8 that selected IDE `00:00.1` / `00:01.1`.
 /// Iron COM2 `5de9e1c` `cf8en=0x80004008` is i440FX host `00:08.0+08`.
-static LAST_CF8_IDE: AtomicU32 = AtomicU32::new(0);
+static LAST_CF8_IDE: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 /// CpuSleep `[RSP]` return address. Iron COM2 `6c4bfde` ConIn CR still
 /// `ret=0x7ff0e055` `ataio=0`. print HLT callsite.
-static LAST_HLT_RET: AtomicU64 = AtomicU64::new(0);
-static LAST_HLT_CALL: AtomicU64 = AtomicU64::new(0);
-static RAM_HPA: AtomicU64 = AtomicU64::new(0);
+static LAST_HLT_RET: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+static LAST_HLT_CALL: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+static RAM_HPA: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
 /// Exclusive 4 MiB guest-private OVMF copy (`alias_gpa=0xFFC00000`).
-static FLASH_HPA: AtomicU64 = AtomicU64::new(0);
-static FLASH_LEN: AtomicU64 = AtomicU64::new(0);
-static RAM_REMAP_N: AtomicU32 = AtomicU32::new(0);
-static RAM_REMAP_TRIES: AtomicU32 = AtomicU32::new(0);
-static HPET_TICKS: AtomicU32 = AtomicU32::new(0);
-static LAST_HPET_TSC: AtomicU64 = AtomicU64::new(0);
-static PREEMPT_RELOAD: AtomicU32 = AtomicU32::new(0);
+static FLASH_HPA: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+static FLASH_LEN: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+static RAM_REMAP_N: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static RAM_REMAP_TRIES: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static HPET_TICKS: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static LAST_HPET_TSC: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+static PREEMPT_RELOAD: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 /// IA32_VMX_MISC bits 4:0 read at launch (preemption timer = TSC >> shift).
-static PREEMPT_SHIFT: AtomicU32 = AtomicU32::new(PREEMPT_SHIFT_DEFAULT);
+static PREEMPT_SHIFT: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(PREEMPT_SHIFT_DEFAULT));
 /// TSC at which the nominal (HPET/PIT) preemption tick is owed while the
 /// timer is clamped for UART pacing. 0 = not tracking.
-static PREEMPT_NOMINAL_DUE_TSC: AtomicU64 = AtomicU64::new(0);
+static PREEMPT_NOMINAL_DUE_TSC: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
 /// The last resume armed a UART pacing clamp, not the nominal reload.
-static PREEMPT_UART_PACED: AtomicBool = AtomicBool::new(false);
+static PREEMPT_UART_PACED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// This VM exit is a UART pacing tick (drain + inject only; no HPET step,
 /// no PIT raise, no exit-count bump). Cleared at resume.
-static UART_PACE_EXIT: AtomicBool = AtomicBool::new(false);
+static UART_PACE_EXIT: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// Pacing ticks taken since reset (stall heartbeat `pace=`).
-static UART_PACE_EXITS: AtomicU32 = AtomicU32::new(0);
-static UART_PACE_LOG: AtomicBool = AtomicBool::new(false);
-static IO_UNHANDLED_N: AtomicU32 = AtomicU32::new(0);
+static UART_PACE_EXITS: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static UART_PACE_LOG: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static IO_UNHANDLED_N: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 /// RayNu-F service calls seen (ADR-016). First few are logged.
-static RAYNU_F_CALLS: AtomicU32 = AtomicU32::new(0);
+static RAYNU_F_CALLS: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 /// One-shot `RAYNU-V-RAYNU-F-CONOUT-OK` on the first live guest OutputString.
-static RAYNU_F_CONOUT_LOGGED: AtomicBool = AtomicBool::new(false);
+static RAYNU_F_CONOUT_LOGGED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// F2b: the private VMCS is running the RayNu-F test app (not OVMF). Routes
 /// `guest_uefi_vmexit` to the small RayNu-F fast path.
-static RAYNU_F_MODE: AtomicBool = AtomicBool::new(false);
+static RAYNU_F_MODE: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 
 /// True after RayNu-F VMLAUNCH. Diskprime / GPT staging run before this.
 pub fn raynu_f_running() -> bool {
     RAYNU_F_MODE.load(Ordering::Acquire)
 }
 /// F2b one-shot: the RayNu-F launch has been attempted on this boot.
-static RAYNU_F_RAN: AtomicBool = AtomicBool::new(false);
+static RAYNU_F_RAN: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// F2b exit counter (cap guards a runaway guest).
-static RAYNU_F_EXITS: AtomicU32 = AtomicU32::new(0);
+static RAYNU_F_EXITS: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 /// F2b/F5/F7: secondary exit-count cap. Iron `975f8fc` (run `34474850361`)
 /// proved a count is not a time bound: GRUB's menu loop on the installed
 /// disk polls `ReadKeyStroke` **and** the serial terminal's LSR with no idle
@@ -4483,60 +4480,60 @@ pub const RAYNU_F_WALL_CAP_S: u64 = 600;
 pub const RAYNU_F_WALL_CHECK_MASK: u32 = 0xFFF;
 /// TSC at the RayNu-F launch/relaunch (wall cap base; `raynu_f_stop` prints
 /// the elapsed ms).
-static RAYNU_F_LAUNCH_TSC: AtomicU64 = AtomicU64::new(0);
+static RAYNU_F_LAUNCH_TSC: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
 /// F2b: entry RIP of the launched app (decodes the HLT path on stop).
-static RAYNU_F_ENTRY: AtomicU64 = AtomicU64::new(0);
+static RAYNU_F_ENTRY: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
 /// F3 one-shot markers.
-static RAYNU_F_TIMER_LOGGED: AtomicBool = AtomicBool::new(false);
-static RAYNU_F_MEM_LOGGED: AtomicBool = AtomicBool::new(false);
+static RAYNU_F_TIMER_LOGGED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static RAYNU_F_MEM_LOGGED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// One line when Ubuntu's loader asks for pool type 0 and receives memory.
-static RAYNU_F_POOL0_LOGGED: AtomicBool = AtomicBool::new(false);
+static RAYNU_F_POOL0_LOGGED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// One line when `SetVariable` stores a Mok variable.
-static RAYNU_F_SETVAR_LOGGED: AtomicBool = AtomicBool::new(false);
+static RAYNU_F_SETVAR_LOGGED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// One line when shim's `File.Open` of `grubx64.efi` succeeds.
-static RAYNU_F_GRUB_OPEN_LOGGED: AtomicBool = AtomicBool::new(false);
+static RAYNU_F_GRUB_OPEN_LOGGED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// One line when that open's path is published on GRUB's LoadedImage.
-static RAYNU_F_GRUB_PREFIX_LOGGED: AtomicBool = AtomicBool::new(false);
+static RAYNU_F_GRUB_PREFIX_LOGGED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// One line when the first `BlockIo` read completes (`blk_rd` leaves zero).
-static RAYNU_F_BLKRD_LOGGED: AtomicBool = AtomicBool::new(false);
+static RAYNU_F_BLKRD_LOGGED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// One line when the stub's initrd `LocateDevicePath` returns.
-static RAYNU_F_INITRD_DP_LOGGED: AtomicBool = AtomicBool::new(false);
+static RAYNU_F_INITRD_DP_LOGGED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// How many initrd LoadFile entries have been logged (size query, then the copy).
-static RAYNU_F_INITRD_LF_LOGS: AtomicU32 = AtomicU32::new(0);
+static RAYNU_F_INITRD_LF_LOGS: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 /// One line for the first failed disk `ReadBlocks` (initrd extent).
-static RAYNU_F_BLKFAIL_LOGGED: AtomicBool = AtomicBool::new(false);
+static RAYNU_F_BLKFAIL_LOGGED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// One line when GRUB's PIT channel-2 calibration wait completes.
-static RAYNU_F_PIT2_LOGGED: AtomicBool = AtomicBool::new(false);
+static RAYNU_F_PIT2_LOGGED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// One line when StartImage appends `console=ttyS0` for the library CD.
-static RAYNU_F_SERIAL_LOGGED: AtomicBool = AtomicBool::new(false);
+static RAYNU_F_SERIAL_LOGGED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// One line when the library `grub.cfg` read view gains `console=ttyS0`.
-static RAYNU_F_GRUBCFG_LOGGED: AtomicBool = AtomicBool::new(false);
+static RAYNU_F_GRUBCFG_LOGGED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// One line when that view is skipped because the file does not fit.
-static RAYNU_F_GRUBCFG_SKIP_LOGGED: AtomicBool = AtomicBool::new(false);
+static RAYNU_F_GRUBCFG_SKIP_LOGGED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// One line when a library-CD `ReadBlocks` grows the ISO9660 menu file.
-static RAYNU_F_CD_LINUX_LOGGED: AtomicBool = AtomicBool::new(false);
+static RAYNU_F_CD_LINUX_LOGGED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// One line when that menu file does not fit in its last sector.
-static RAYNU_F_CD_LINUX_SKIP_LOGGED: AtomicBool = AtomicBool::new(false);
-static RAYNU_F_EBS_LOGGED: AtomicBool = AtomicBool::new(false);
-static RAYNU_F_BLOCKIO_LOGGED: AtomicBool = AtomicBool::new(false);
-static RAYNU_F_FS_LOGGED: AtomicBool = AtomicBool::new(false);
-static RAYNU_F_START_IMAGE_LOGGED: AtomicBool = AtomicBool::new(false);
+static RAYNU_F_CD_LINUX_SKIP_LOGGED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static RAYNU_F_EBS_LOGGED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static RAYNU_F_BLOCKIO_LOGGED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static RAYNU_F_FS_LOGGED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static RAYNU_F_START_IMAGE_LOGGED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// Non-success service returns logged so far (bounded).
-static RAYNU_F_SVC_ERRS: AtomicU32 = AtomicU32::new(0);
+static RAYNU_F_SVC_ERRS: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 /// CPUID exits taken on the RayNu-F path (first 8 are logged).
-static RAYNU_F_CPUID_LOGGED: AtomicU32 = AtomicU32::new(0);
+static RAYNU_F_CPUID_LOGGED: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 /// F6b: `ExitBootServices` on RayNu-F handed the VMCS to the Linux exit path.
-static RAYNU_F_LINUX_HANDOFF: AtomicBool = AtomicBool::new(false);
+static RAYNU_F_LINUX_HANDOFF: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// F7: staged `\EFI\BOOT\BOOTX64.EFI` came from the install-disk GPT ESP.
-static RAYNU_F_STAGED_FROM_DISK: AtomicBool = AtomicBool::new(false);
+static RAYNU_F_STAGED_FROM_DISK: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// F7: Linux asked for a reset (CF9/KBC); consumed by relaunch or TF.
-static RAYNU_F_RESET_PENDING: AtomicBool = AtomicBool::new(false);
+static RAYNU_F_RESET_PENDING: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// F7: resets taken this QEMU session. Cap [`RAYNU_F_RESET_MAX`].
-static RAYNU_F_RESET_N: AtomicU32 = AtomicU32::new(0);
+static RAYNU_F_RESET_N: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 /// Sticky EFER.NXE after Linux was allowed NX this boot. Nested `2bebea7`:
 /// RayNu-F never intercepts `#PF`, so `PF_LINUX_DELIVER` stays 0 and a
 /// userspace RIP would otherwise strip NXE on the next VM-exit.
-static LINUX_EFER_NX_HOLD: AtomicBool = AtomicBool::new(false);
+static LINUX_EFER_NX_HOLD: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// `StartImage` caller context for `Exit`: guest RSP at the `out` (points at
 /// the caller's return address) and the MS x64 callee-saved GPRs.
 struct RaynuFStartCtx {
@@ -4550,7 +4547,7 @@ struct RaynuFStartCtx {
     r14: AtomicU64,
     r15: AtomicU64,
 }
-static RAYNU_F_START_CTX: RaynuFStartCtx = RaynuFStartCtx {
+static RAYNU_F_START_CTX: PerGuest<RaynuFStartCtx> = per_guest!(RaynuFStartCtx {
     rsp: AtomicU64::new(0),
     rbx: AtomicU64::new(0),
     rbp: AtomicU64::new(0),
@@ -4560,15 +4557,15 @@ static RAYNU_F_START_CTX: RaynuFStartCtx = RaynuFStartCtx {
     r13: AtomicU64::new(0),
     r14: AtomicU64::new(0),
     r15: AtomicU64::new(0),
-};
-static RAYNU_F_CLOCK_WARNED: AtomicBool = AtomicBool::new(false);
+});
+static RAYNU_F_CLOCK_WARNED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// One byte of host serial RX buffered for `ConIn` (`0x100` = none).
-static RAYNU_F_PENDING_RX: AtomicU32 = AtomicU32::new(0x100);
+static RAYNU_F_PENDING_RX: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0x100));
 /// RayNu-F firmware state (pool, events, TPL). Single BSP-owned instance;
 /// touched only from the guest-firmware VM-exit path while the guest is
 /// halted, so no lock is needed (same discipline as the SAVED_* GPR slots).
 #[cfg(target_os = "uefi")]
-static mut RAYNU_F_STATE: crate::raynu_f::FirmwareState = crate::raynu_f::FirmwareState::new();
+static RAYNU_F_STATE: PerGuestCell<crate::raynu_f::FirmwareState> = per_guest_cell!(crate::raynu_f::FirmwareState::new());
 /// Const-evaluated pristine [`crate::raynu_f::FirmwareState`] (`.rdata`).
 /// F7 resets `RAYNU_F_STATE` by `copy_nonoverlapping` from here.
 ///
@@ -4582,107 +4579,107 @@ static mut RAYNU_F_STATE: crate::raynu_f::FirmwareState = crate::raynu_f::Firmwa
 #[cfg(target_os = "uefi")]
 static RAYNU_F_STATE_TEMPLATE: crate::raynu_f::FirmwareState = crate::raynu_f::FirmwareState::new();
 #[cfg(target_os = "uefi")]
-static IO_STRING_N: AtomicU32 = AtomicU32::new(0);
+static IO_STRING_N: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 #[cfg(target_os = "uefi")]
-static KBC_WR_N: AtomicU32 = AtomicU32::new(0);
+static KBC_WR_N: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 #[cfg(target_os = "uefi")]
-static XSETBV_N: AtomicU32 = AtomicU32::new(0);
+static XSETBV_N: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 #[cfg(target_os = "uefi")]
-static USER_CPUID_VENDOR_N: AtomicU32 = AtomicU32::new(0);
+static USER_CPUID_VENDOR_N: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 #[cfg(target_os = "uefi")]
-static UD_XSAVE_RETRY: AtomicU32 = AtomicU32::new(0);
+static UD_XSAVE_RETRY: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 #[cfg(target_os = "uefi")]
-static UD2_SKIPS: AtomicU32 = AtomicU32::new(0);
+static UD2_SKIPS: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 #[cfg(target_os = "uefi")]
-static ASSERT_DEADLOOP_DUMP: AtomicU32 = AtomicU32::new(0);
+static ASSERT_DEADLOOP_DUMP: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 #[cfg(target_os = "uefi")]
-static PF_FIXUPS: AtomicU32 = AtomicU32::new(0);
+static PF_FIXUPS: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 #[cfg(target_os = "uefi")]
-static PF_LINUX_DELIVER: AtomicU32 = AtomicU32::new(0);
+static PF_LINUX_DELIVER: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 #[cfg(target_os = "uefi")]
-static PF_LINUX_CR2: AtomicU64 = AtomicU64::new(0);
+static PF_LINUX_CR2: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
 #[cfg(target_os = "uefi")]
-static LINUX_EXC_INJECT: AtomicBool = AtomicBool::new(false);
+static LINUX_EXC_INJECT: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 #[cfg(target_os = "uefi")]
-static LINUX_CPUID: AtomicU32 = AtomicU32::new(0);
+static LINUX_CPUID: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 #[cfg(target_os = "uefi")]
-static LINUX_HV_SCAN_BUMP: AtomicBool = AtomicBool::new(false);
+static LINUX_HV_SCAN_BUMP: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 #[cfg(target_os = "uefi")]
-static LINUX_DELAY_LOOP_SKIP: AtomicBool = AtomicBool::new(false);
+static LINUX_DELAY_LOOP_SKIP: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 #[cfg(target_os = "uefi")]
-static UART_HPET_LOG: AtomicBool = AtomicBool::new(false);
+static UART_HPET_LOG: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 #[cfg(target_os = "uefi")]
-static LINUX_VIRTIO_DRIVER_OK_LOG: AtomicBool = AtomicBool::new(false);
-static LINUX_PIT_DURING_APK_LOG: AtomicBool = AtomicBool::new(false);
+static LINUX_VIRTIO_DRIVER_OK_LOG: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static LINUX_PIT_DURING_APK_LOG: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 #[cfg(target_os = "uefi")]
-static LINUX_PIT_HOLD_LOG: AtomicBool = AtomicBool::new(false);
+static LINUX_PIT_HOLD_LOG: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 #[cfg(target_os = "uefi")]
-static LINUX_PIT_PACED_LOG: AtomicBool = AtomicBool::new(false);
+static LINUX_PIT_PACED_LOG: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 #[cfg(target_os = "uefi")]
-static LINUX_PIT_RESUME_TSC: AtomicU64 = AtomicU64::new(0);
+static LINUX_PIT_RESUME_TSC: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
 #[cfg(target_os = "uefi")]
-static LAST_VIRTIO_MMIO_TSC: AtomicU64 = AtomicU64::new(0);
+static LAST_VIRTIO_MMIO_TSC: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
 #[cfg(target_os = "uefi")]
-static LAST_VIRTIO_MMIO_HIT: AtomicU32 = AtomicU32::new(0);
+static LAST_VIRTIO_MMIO_HIT: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 #[cfg(target_os = "uefi")]
-static VIRTIO_STALL_DUMPED: AtomicBool = AtomicBool::new(false);
+static VIRTIO_STALL_DUMPED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 #[cfg(target_os = "uefi")]
-static VIRTIO_STALL_PIT_HOLD_LOG: AtomicBool = AtomicBool::new(false);
+static VIRTIO_STALL_PIT_HOLD_LOG: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 #[cfg(target_os = "uefi")]
-static VIRTIO_STALL_PIT_HOLD_TSC: AtomicU64 = AtomicU64::new(0);
+static VIRTIO_STALL_PIT_HOLD_TSC: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
 /// TSC at the apk empty-ring dump (virtio stall probe schedule base).
 #[cfg(target_os = "uefi")]
-static VIRTIO_STALL_DUMP_TSC: AtomicU64 = AtomicU64::new(0);
+static VIRTIO_STALL_DUMP_TSC: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
 /// Next [`guest_uefi_virtio_stall_probe`] step after the dump.
 #[cfg(target_os = "uefi")]
-static VIRTIO_STALL_PROBE_STEP: AtomicU8 = AtomicU8::new(0);
+static VIRTIO_STALL_PROBE_STEP: PerGuest<AtomicU8> = per_guest!(AtomicU8::new(0));
 /// Last `n=` printed by the stall heartbeat (frozen-n cap).
 #[cfg(target_os = "uefi")]
-static VIRTIO_STALL_FROZEN_N: AtomicU32 = AtomicU32::new(0);
+static VIRTIO_STALL_FROZEN_N: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 #[cfg(target_os = "uefi")]
-static VIRTIO_STALL_FROZEN_HITS: AtomicU32 = AtomicU32::new(0);
+static VIRTIO_STALL_FROZEN_HITS: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 #[cfg(target_os = "uefi")]
-static LINUX_PIC_LEFTOVER_GSI2_LOG: AtomicBool = AtomicBool::new(false);
+static LINUX_PIC_LEFTOVER_GSI2_LOG: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 #[cfg(target_os = "uefi")]
-static LINUX_VIRTIO_REASSERT_LOG: AtomicBool = AtomicBool::new(false);
+static LINUX_VIRTIO_REASSERT_LOG: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 #[cfg(target_os = "uefi")]
-static LINUX_VIRTIO_PIC_LOG: AtomicBool = AtomicBool::new(false);
+static LINUX_VIRTIO_PIC_LOG: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 #[cfg(target_os = "uefi")]
-static LINUX_PIC_IRQ0_LOG: AtomicBool = AtomicBool::new(false);
+static LINUX_PIC_IRQ0_LOG: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 #[cfg(target_os = "uefi")]
-static LINUX_GSI2_LOG: AtomicBool = AtomicBool::new(false);
+static LINUX_GSI2_LOG: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 #[cfg(target_os = "uefi")]
-static LINUX_LEAF4: AtomicU32 = AtomicU32::new(0);
+static LINUX_LEAF4: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 #[cfg(target_os = "uefi")]
-static LINUX_SKIP2: AtomicU32 = AtomicU32::new(0);
+static LINUX_SKIP2: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 #[cfg(target_os = "uefi")]
-static LINUX_UNHANDLED_SKIP: AtomicU32 = AtomicU32::new(0);
+static LINUX_UNHANDLED_SKIP: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 #[cfg(target_os = "uefi")]
-static LINUX_INVLPG_MISS: AtomicU32 = AtomicU32::new(0);
+static LINUX_INVLPG_MISS: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 #[cfg(target_os = "uefi")]
-static SEC_IDENTITY_REBUILT: AtomicBool = AtomicBool::new(false);
+static SEC_IDENTITY_REBUILT: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 #[cfg(target_os = "uefi")]
-static MSR_SEEN: [AtomicU32; 24] = [const { AtomicU32::new(0xFFFF_FFFF) }; 24];
+static MSR_SEEN: PerGuest<[AtomicU32; 24]> = per_guest!([const { AtomicU32::new(0xFFFF_FFFF) }; 24]);
 #[cfg(target_os = "uefi")]
-static MSR_SEEN_N: AtomicU32 = AtomicU32::new(0);
+static MSR_SEEN_N: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 #[cfg(target_os = "uefi")]
-static WRMSR_SEEN: [AtomicU32; 16] = [const { AtomicU32::new(0xFFFF_FFFF) }; 16];
+static WRMSR_SEEN: PerGuest<[AtomicU32; 16]> = per_guest!([const { AtomicU32::new(0xFFFF_FFFF) }; 16]);
 #[cfg(target_os = "uefi")]
-static WRMSR_SEEN_N: AtomicU32 = AtomicU32::new(0);
+static WRMSR_SEEN_N: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 #[cfg(target_os = "uefi")]
-static LAST_GUEST_MSR: AtomicU32 = AtomicU32::new(0);
+static LAST_GUEST_MSR: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 #[cfg(target_os = "uefi")]
-static LAST_EFER: AtomicU64 = AtomicU64::new(0);
+static LAST_EFER: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
 #[cfg(target_os = "uefi")]
-static CPUID_SEEN: [AtomicU64; 16] = [const { AtomicU64::new(u64::MAX) }; 16];
+static CPUID_SEEN: PerGuest<[AtomicU64; 16]> = per_guest!([const { AtomicU64::new(u64::MAX) }; 16]);
 #[cfg(target_os = "uefi")]
-static CPUID_SEEN_N: AtomicU32 = AtomicU32::new(0);
+static CPUID_SEEN_N: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 #[cfg(target_os = "uefi")]
-static DBG_LEN: AtomicU32 = AtomicU32::new(0);
+static DBG_LEN: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 #[cfg(target_os = "uefi")]
-static DBG_LINES: AtomicU32 = AtomicU32::new(0);
+static DBG_LINES: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 #[cfg(target_os = "uefi")]
-static DBG_BUF: [AtomicU8; 80] = [const { AtomicU8::new(0) }; 80];
+static DBG_BUF: PerGuest<[AtomicU8; 80]> = per_guest!([const { AtomicU8::new(0) }; 80]);
 
 #[cfg(target_os = "uefi")]
 static mut SAVED_RAX: u64 = 0;
@@ -4723,7 +4720,7 @@ struct SavedXmm([u8; 256]);
 #[cfg(target_os = "uefi")]
 static mut SAVED_XMM: SavedXmm = SavedXmm([0; 256]);
 
-static mut SAVED_VMCS: u64 = 0;
+static SAVED_VMCS: PerGuestCell<u64> = per_guest_cell!(0);
 /// Host stack pages for the guest-UEFI VM-exit path (`HOST_RSP` points at
 /// the top). Every exit re-enters at the top, so only the deepest single
 /// exit matters. Was 4 (16 KiB); iron `59ac070` / `34425781629` F7 relaunch
@@ -4925,17 +4922,15 @@ pub const GUEST_UEFI_MTRR_PCI_UC_BASE: u64 = 0xC000_0000;
 /// 36-bit physmask for that 1 GiB region plus Valid (bit 11).
 pub const GUEST_UEFI_MTRR_PCI_UC_MASK: u64 = 0xF_C000_0800;
 
-static GUEST_MTRR_DEF: AtomicU64 = AtomicU64::new(GUEST_UEFI_MTRR_DEF_DEFAULT);
-static GUEST_MTRR_VAR: [AtomicU64; GUEST_UEFI_MTRR_VAR_MSRS] =
-    [const { AtomicU64::new(0) }; GUEST_UEFI_MTRR_VAR_MSRS];
-static GUEST_MTRR_FIXED: [AtomicU64; 11] =
-    [const { AtomicU64::new(0) }; 11];
-static GUEST_MISC_ENABLE: AtomicU64 = AtomicU64::new(GUEST_UEFI_MISC_ENABLE_DEFAULT);
+static GUEST_MTRR_DEF: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(GUEST_UEFI_MTRR_DEF_DEFAULT));
+static GUEST_MTRR_VAR: PerGuest<[AtomicU64; GUEST_UEFI_MTRR_VAR_MSRS]> = per_guest!([const { AtomicU64::new(0) }; GUEST_UEFI_MTRR_VAR_MSRS]);
+static GUEST_MTRR_FIXED: PerGuest<[AtomicU64; 11]> = per_guest!([const { AtomicU64::new(0) }; 11]);
+static GUEST_MISC_ENABLE: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(GUEST_UEFI_MISC_ENABLE_DEFAULT));
 /// Iron `f07a597`: PAT-UC+MTRR match still ASSERT. Hold valid UC variable
 /// pairs so CpuDxe RefreshGcd sees default WB in one GCD range.
-static MTRR_ADMIT_UC: AtomicBool = AtomicBool::new(false);
-static MTRR_UC_HELD: AtomicU32 = AtomicU32::new(0);
-static MTRR_VGA_FIX_WB_HELD: AtomicU32 = AtomicU32::new(0);
+static MTRR_ADMIT_UC: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static MTRR_UC_HELD: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static MTRR_VGA_FIX_WB_HELD: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 
 /// True for IA32 MTRR MSRs (not PAT `0x277`).
 pub fn guest_uefi_is_mtrr_msr(msr: u32) -> bool {
@@ -5827,7 +5822,7 @@ unsafe fn launch_uefi(
     let io_b = alloc_phys(alloc);
     let msr_bmp = alloc_phys(alloc);
 
-    SAVED_VMCS = vmcs;
+    *SAVED_VMCS.p() = vmcs;
     let _ = GUEST_UEFI_PRIVATE_VMCS_ID;
 
     serial::write_str("boot: guest-UEFI private VMCS=0x");
@@ -10444,7 +10439,7 @@ pub fn host_vmcs_revision_ok() -> bool {
 
 #[cfg(target_os = "uefi")]
 fn guest_uefi_host_vmcs_revision_ok() -> bool {
-    let vmcs = unsafe { SAVED_VMCS };
+    let vmcs = unsafe { *SAVED_VMCS.p() };
     if vmcs == 0 {
         return false;
     }
@@ -10554,7 +10549,7 @@ unsafe fn try_spa_product_iso_start_firmware() {
         );
         return;
     }
-    let vmcs = SAVED_VMCS;
+    let vmcs = *SAVED_VMCS.p();
     let ram_hpa = RAM_HPA.load(Ordering::Acquire);
     if vmcs == 0 || ram_hpa == 0 {
         serial::write_line(
@@ -10577,7 +10572,7 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
         build_firmware_image, build_test_app, load_pe32plus, plan_f2, IMAGE_BYTES,
         TESTAPP_FILE_BYTES,
     };
-    let vmcs = SAVED_VMCS;
+    let vmcs = *SAVED_VMCS.p();
     let ram_hpa = RAM_HPA.load(Ordering::Acquire);
     if vmcs == 0 || ram_hpa == 0 {
         serial::write_line("boot: RayNu-F launch skipped: no VMCS/slab (F2b)");
@@ -10626,7 +10621,7 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
     {
         // SAFETY: BSP-only firmware state; guest not yet launched (see decl).
         // KANI-TARGET: RayNu-F table GPAs into state (outside Proven Core).
-        let st = unsafe { &mut *core::ptr::addr_of_mut!(RAYNU_F_STATE) };
+        let st = unsafe { &mut *RAYNU_F_STATE.p() };
         st.system_table = layout.system_table;
         st.config_table = layout.config_table;
     }
@@ -10856,7 +10851,7 @@ unsafe fn raynu_f_configure_high_ram() {
     );
     // SAFETY: BSP-only firmware state; guest not yet launched (see decl).
     // KANI-TARGET: RayNu-F high-RAM region configure (outside Proven Core).
-    let st = unsafe { &mut *core::ptr::addr_of_mut!(RAYNU_F_STATE) };
+    let st = unsafe { &mut *RAYNU_F_STATE.p() };
     if bytes == 0 {
         serial::write_line(
             "boot: RayNu-F WARN no pre-mapped report-RAM; loader gets the slab pool only (F6-prep)",
@@ -11257,7 +11252,7 @@ unsafe fn raynu_f_reset_relaunch(_src: crate::devices::guest_platform::ResetSrc)
     // KANI-TARGET: RayNu-F F7 FirmwareState reset (outside Proven Core).
     core::ptr::copy_nonoverlapping(
         core::ptr::addr_of!(RAYNU_F_STATE_TEMPLATE),
-        core::ptr::addr_of_mut!(RAYNU_F_STATE),
+        RAYNU_F_STATE.p(),
         1,
     );
     guest_uefi_mtrr_reset();
@@ -11448,7 +11443,7 @@ unsafe fn raynu_f_stage_bootloader_from_volume<R: crate::raynu_f::fat::VolumeRea
     let size = u64::from(entry.size);
     // SAFETY: BSP-only firmware state; guest not yet launched.
     // KANI-TARGET: RayNu-F bootloader stage (outside Proven Core).
-    let st = unsafe { &mut *core::ptr::addr_of_mut!(RAYNU_F_STATE) };
+    let st = unsafe { &mut *RAYNU_F_STATE.p() };
     let mem = SlabMem {
         hpa: ram_hpa,
         len: GUEST_UEFI_LOW_RAM_BYTES,
@@ -11700,7 +11695,7 @@ unsafe fn raynu_f_stage_disk_bootloader(
     // SAFETY: BSP-only firmware state; guest not yet launched.
     // KANI-TARGET: RayNu-F disk FS mount (outside Proven Core).
     {
-        let st = unsafe { &mut *core::ptr::addr_of_mut!(RAYNU_F_STATE) };
+        let st = unsafe { &mut *RAYNU_F_STATE.p() };
         st.fs.volume = Some(vol);
         st.fat_volume_off = fat_off;
         st.fat_media_id = crate::raynu_f::MEDIA_ID_DISK;
@@ -11740,7 +11735,7 @@ unsafe fn raynu_f_stage_disk_bootloader(
     serial::write_line(" (F7 disk; not ISO-INSTALL-OK)");
     raynu_f_note_esp_grub_cfg(&vol, &vol_reader, path);
     {
-        let st = unsafe { &mut *core::ptr::addr_of_mut!(RAYNU_F_STATE) };
+        let st = unsafe { &mut *RAYNU_F_STATE.p() };
         let mem = SlabMem {
             hpa: ram_hpa,
             len: GUEST_UEFI_LOW_RAM_BYTES,
@@ -11856,7 +11851,7 @@ unsafe fn raynu_f_stage_library_bootloader(
     // SAFETY: BSP-only firmware state; guest not yet launched.
     // KANI-TARGET: RayNu-F library FS mount (outside Proven Core).
     {
-        let st = unsafe { &mut *core::ptr::addr_of_mut!(RAYNU_F_STATE) };
+        let st = unsafe { &mut *RAYNU_F_STATE.p() };
         st.fs.volume = Some(vol);
         st.fat_volume_off = fat_off;
         st.fat_media_id = crate::raynu_f::MEDIA_ID_CD;
@@ -11962,7 +11957,7 @@ unsafe fn raynu_f_stage_iso_bootloader(
     // SAFETY: BSP-only firmware state; guest not yet launched.
     // KANI-TARGET: RayNu-F FS mount (outside Proven Core).
     {
-        let st = unsafe { &mut *core::ptr::addr_of_mut!(RAYNU_F_STATE) };
+        let st = unsafe { &mut *RAYNU_F_STATE.p() };
         st.fs.volume = Some(vol);
         st.fat_volume_off = fat_off;
         st.fat_media_id = crate::raynu_f::MEDIA_ID_CD;
@@ -12128,7 +12123,7 @@ unsafe fn raynu_f_publish_block_devices(
     );
     // SAFETY: BSP-only firmware state; guest not yet launched (see decl).
     // KANI-TARGET: RayNu-F block device publish (outside Proven Core).
-    let st = unsafe { &mut *core::ptr::addr_of_mut!(RAYNU_F_STATE) };
+    let st = unsafe { &mut *RAYNU_F_STATE.p() };
     st.media_cd = media_cd;
     st.media_disk = media_disk;
     st.blockio_cd = layout.blockio_cd;
@@ -12236,7 +12231,7 @@ unsafe fn raynu_f_stop(why: &str) -> ! {
     write_dec(u64::from(RAYNU_F_CONOUT_LOGGED.load(Ordering::Acquire)));
     // SAFETY: BSP-only firmware state; the guest is stopped (see decl).
     // KANI-TARGET: RayNu-F stop summary read (outside Proven Core).
-    let st = unsafe { &*core::ptr::addr_of!(RAYNU_F_STATE) };
+    let st = unsafe { &*RAYNU_F_STATE.p().cast_const() };
     serial::write_str(" blk_rd=");
     write_dec(u64::from(st.block_reads));
     serial::write_str(" blk_wr=");
@@ -15323,7 +15318,7 @@ unsafe fn save_fwcfg_identity_overlay(dest: u64, nbytes: usize) -> bool {
     // KANI-TARGET: fw_cfg identity overlay save (outside Proven Core).
     let ram = core::slice::from_raw_parts_mut(hpa as *mut u8, GUEST_UEFI_LOW_RAM_BYTES as usize);
     // SAFETY: exclusive overlay slot; single vCPU; firmware halted in VMX.
-    let saved = unsafe { &mut FWCFG_OVERLAY_SAVED[..nbytes] };
+    let saved = unsafe { &mut (&mut *FWCFG_OVERLAY_SAVED.p())[..nbytes] };
     if !copy_low_ram_bytes(ram, dest, saved) {
         return false;
     }
@@ -15353,9 +15348,9 @@ unsafe fn restore_fwcfg_identity_overlay() {
     // KANI-TARGET: fw_cfg identity overlay restore (outside Proven Core).
     let ram = core::slice::from_raw_parts_mut(hpa as *mut u8, GUEST_UEFI_LOW_RAM_BYTES as usize);
     // SAFETY: exclusive overlay slot; single vCPU; firmware halted in VMX.
-    let saved = unsafe { &FWCFG_OVERLAY_SAVED[..n] };
+    let saved = unsafe { &(&*FWCFG_OVERLAY_SAVED.p())[..n] };
     let _ = guest_uefi_fwcfg_identity_overlay_restore(ram, dest, saved);
-    static RESTORED: AtomicBool = AtomicBool::new(false);
+    static RESTORED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
     if !RESTORED.swap(true, Ordering::AcqRel) {
         serial::write_str("boot: guest-UEFI fw_cfg identity overlay restore dest=0x");
         write_hex(dest);
@@ -15631,7 +15626,7 @@ unsafe fn handle_raynu_f_service() -> bool {
     };
     // SAFETY: BSP-only firmware state; guest halted on this exit (see decl).
     // KANI-TARGET: RayNu-F firmware state mutation (outside Proven Core).
-    let st = unsafe { &mut *core::ptr::addr_of_mut!(RAYNU_F_STATE) };
+    let st = unsafe { &mut *RAYNU_F_STATE.p() };
     if id == crate::raynu_f::ServiceId::InitrdLoadFile {
         return redirect_initrd_loadfile(st, &Mem, &args);
     }
@@ -16009,7 +16004,7 @@ unsafe fn handle_io_string(qual: u64, port: u16, is_in: bool, size: u8) -> bool 
         && guest_uefi_fwcfg_identity_overlay(port, addr, nbytes, df)
         && save_fwcfg_identity_overlay(addr, nbytes as usize);
     if overlay {
-        static OV: AtomicBool = AtomicBool::new(false);
+        static OV: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
         if !OV.swap(true, Ordering::AcqRel) {
             serial::write_str(GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_PREFIX);
             write_hex(addr);
@@ -16054,7 +16049,7 @@ unsafe fn handle_io_string(qual: u64, port: u16, is_in: bool, size: u8) -> bool 
         if is_in {
             if overlay {
                 if !store_guest_io(addr, size, SAVED_RAX, true) {
-                    static DROP: AtomicBool = AtomicBool::new(false);
+                    static DROP: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
                     if !DROP.swap(true, Ordering::AcqRel) {
                         serial::write_str("boot: guest-UEFI string INS drop gpa=0x");
                         write_hex(addr);
@@ -16062,7 +16057,7 @@ unsafe fn handle_io_string(qual: u64, port: u16, is_in: bool, size: u8) -> bool 
                     }
                 }
             } else if !guest_uefi_io_string_dest_ok(addr) {
-                static HV: AtomicBool = AtomicBool::new(false);
+                static HV: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
                 if !HV.swap(true, Ordering::AcqRel) {
                     serial::write_str(GUEST_UEFI_FWCFG_SKIP_HV_IDENTITY_PREFIX);
                     write_hex(addr);
@@ -16072,7 +16067,7 @@ unsafe fn handle_io_string(qual: u64, port: u16, is_in: bool, size: u8) -> bool 
                     serial::write_byte(b'\n');
                 }
             } else if !store_guest_io(addr, size, SAVED_RAX, false) {
-                static DROP: AtomicBool = AtomicBool::new(false);
+                static DROP: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
                 if !DROP.swap(true, Ordering::AcqRel) {
                     serial::write_str("boot: guest-UEFI string INS drop gpa=0x");
                     write_hex(addr);
@@ -16101,7 +16096,7 @@ unsafe fn handle_io_string(qual: u64, port: u16, is_in: bool, size: u8) -> bool 
         }
     }
     if dest_ok_fill && filled != 0 {
-        static FILL: AtomicU32 = AtomicU32::new(0);
+        static FILL: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
         let n = FILL.fetch_add(1, Ordering::AcqRel);
         if guest_uefi_fwcfg_dest_ok_fill_should_log(n) {
             serial::write_str(GUEST_UEFI_FWCFG_DEST_OK_FILL_PREFIX);
@@ -16565,8 +16560,8 @@ unsafe fn handle_io(qual: u64) -> bool {
 
 #[cfg(target_os = "uefi")]
 fn maybe_print_fwcfg_pei() {
-    static DIR: AtomicBool = AtomicBool::new(false);
-    static E820: AtomicBool = AtomicBool::new(false);
+    static DIR: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+    static E820: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
     if crate::devices::guest_platform::fwcfg_file_dir_served() && !DIR.swap(true, Ordering::AcqRel)
     {
         serial::write_line("boot: guest-UEFI fw_cfg file dir (PEI FindFile)");
@@ -16754,7 +16749,7 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
     // 0xFE003000 returned false here (reason=0x30) and Stage 46 held the
     // guest. The net BAR now resolves, so this access is emulated.
     if crate::devices::guest_virtio_net::covers(gpa) {
-        static NET_MMIO: AtomicBool = AtomicBool::new(false);
+        static NET_MMIO: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
         if !NET_MMIO.swap(true, Ordering::AcqRel) {
             serial::write_line_nowait(
                 "boot: M8.9 virtio-net MMIO (guest keeps running; not ISO-INSTALL-OK)",
@@ -16780,7 +16775,7 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
     ) {
         let _ = crate::devices::lapic_virt::poll_timer_expiry();
     }
-    static HIT_N: AtomicU32 = AtomicU32::new(0);
+    static HIT_N: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
     let n = HIT_N.fetch_add(1, Ordering::AcqRel);
     LAST_VIRTIO_MMIO_TSC.store(cpu::rdtsc(), Ordering::Release);
     LAST_VIRTIO_MMIO_HIT.store(n.saturating_add(1), Ordering::Release);
@@ -16799,7 +16794,7 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
         }
     }
     let overlay = crate::devices::guest_serial_answer::apk_media_mounted();
-    static LAST_KICK_LINE_TSC: AtomicU64 = AtomicU64::new(0);
+    static LAST_KICK_LINE_TSC: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
     let now = cpu::rdtsc();
     let kick_due = guest_uefi_virtio_mmio_kick_line_due(
         now,
@@ -16831,7 +16826,7 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
     let mut buf = [0u8; 16];
     let (n, insn_len) = copy_mmio_insn(&mut buf);
     let Some(op) = decode_mmio_or_retry(&buf, n, insn_len) else {
-        static FAIL_N: AtomicU32 = AtomicU32::new(0);
+        static FAIL_N: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
         if FAIL_N.fetch_add(1, Ordering::AcqRel) < 8 {
             serial::write_str_nowait("boot: guest-UEFI virtio MMIO decode fail gpa=0x");
             write_hex_nowait(gpa);
@@ -17168,7 +17163,7 @@ unsafe fn handle_ioapic_ept(gpa: u64, qual: u64) -> bool {
     let (n, insn_len) = copy_mmio_insn(&mut buf);
     let Some(op) = decode_mmio_or_retry(&buf, n, insn_len) else {
         // IOAPIC decode fail nowait (share hushes write_str).
-        static FAIL_N: AtomicU32 = AtomicU32::new(0);
+        static FAIL_N: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
         if FAIL_N.fetch_add(1, Ordering::AcqRel) < 8 {
             serial::write_str_nowait("boot: guest-UEFI IOAPIC decode fail gpa=0x");
             write_hex_nowait(gpa);
@@ -17329,7 +17324,7 @@ unsafe fn handle_xapic_ept(gpa: u64, qual: u64) -> bool {
     let (n, insn_len) = copy_mmio_insn(&mut buf);
     let Some(op) = decode_mmio_or_retry(&buf, n, insn_len)
     else {
-        static FAIL_N: AtomicU32 = AtomicU32::new(0);
+        static FAIL_N: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
         if FAIL_N.fetch_add(1, Ordering::AcqRel) < 8 {
             serial::write_str("boot: guest-UEFI xAPIC MMIO decode fail gpa=0x");
             write_hex(gpa);
@@ -17828,7 +17823,7 @@ unsafe fn try_inject_guest_irq() {
             serial::write_line_nowait(" (not ISO-INSTALL-OK)");
         }
         if from_self {
-            static SELF_IPI_LOG: AtomicU32 = AtomicU32::new(0);
+            static SELF_IPI_LOG: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
             if SELF_IPI_LOG.fetch_add(1, Ordering::AcqRel) < 4 {
                 serial::write_str_nowait("boot: RayNu-F lapic self-ipi vec=0x");
                 write_hex_nowait(u64::from(vec));
@@ -18197,7 +18192,7 @@ unsafe fn ept_trap_programmed_virtio_bars() {
         }
         let ok = ept_split_2m_trap_4k(bar);
         if guest_uefi_virtio_bar_overlaps_scratch(bar) {
-            static N: AtomicU32 = AtomicU32::new(0);
+            static N: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
             if N.fetch_add(1, Ordering::AcqRel) < 4 {
                 serial::write_str_nowait("boot: guest-UEFI virtio BAR trap gpa=0x");
                 write_hex_nowait(bar);
@@ -19355,7 +19350,7 @@ unsafe fn handle_wrmsr() -> bool {
 #[cfg(target_os = "uefi")]
 unsafe fn leave_to_e4() -> ! {
     restore_host_xsave_after_guest_uefi();
-    let vmcs = SAVED_VMCS;
+    let vmcs = *SAVED_VMCS.p();
     if vmcs != 0 {
         let _ = ops::vmclear(vmcs);
     }

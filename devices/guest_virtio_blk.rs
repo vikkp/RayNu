@@ -44,6 +44,8 @@
 //! (non-contiguous HPA) are not overrun. Not the M4.3 virtio-mmio probe.
 //! Not ISO-INSTALL-OK.
 
+use crate::guest::slot::PerGuest;
+use crate::per_guest;
 use crate::devices::guest_platform::{
     boot_order_cd_then_disk, pci_bdf, pci_cfg_offset, HOST_BRIDGE_DEVICE, HOST_BRIDGE_VENDOR,
     PCI_HEADER_MULTIFUNCTION,
@@ -273,29 +275,29 @@ struct GuestVirtio(core::cell::UnsafeCell<VirtioBox>);
 // KANI-TARGET: guest-UEFI virtio-blk mutex (outside Proven Core).
 unsafe impl Sync for GuestVirtio {}
 
-static VIRTIO: GuestVirtio = GuestVirtio(core::cell::UnsafeCell::new(VirtioBox::empty()));
-static VIRTIO_LOCK: AtomicBool = AtomicBool::new(false);
-static VISIBLE: AtomicBool = AtomicBool::new(false);
-static PCI_ENUM: AtomicBool = AtomicBool::new(false);
-static MARKER: AtomicBool = AtomicBool::new(false);
-static QUEUES: AtomicBool = AtomicBool::new(false);
-static DISK_HPA: AtomicU64 = AtomicU64::new(0);
-static DISK_LEN: AtomicU64 = AtomicU64::new(0);
-static LUN_ATTACHED: AtomicBool = AtomicBool::new(false);
-static DISK_ATTACHED_KEEP: AtomicBool = AtomicBool::new(false);
-static BYTES_WRITTEN: AtomicU64 = AtomicU64::new(0);
-static ISO_PTR: AtomicU64 = AtomicU64::new(0);
-static ISO_LEN: AtomicU64 = AtomicU64::new(0);
-static ISO_READ: AtomicU64 = AtomicU64::new(0);
+static VIRTIO: PerGuest<GuestVirtio> = per_guest!(GuestVirtio(core::cell::UnsafeCell::new(VirtioBox::empty())));
+static VIRTIO_LOCK: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static VISIBLE: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static PCI_ENUM: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static MARKER: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static QUEUES: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static DISK_HPA: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+static DISK_LEN: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+static LUN_ATTACHED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static DISK_ATTACHED_KEEP: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static BYTES_WRITTEN: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+static ISO_PTR: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+static ISO_LEN: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+static ISO_READ: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
 /// GPA→HPA misses inside [`process_blk_queue`] (ring, header, status or
 /// used-ring write). Never reset; COM2 stall dump prints it.
 /// virtio stall dump ring.
-static XLATE_FAIL: AtomicU32 = AtomicU32::new(0);
-static ISO_VISIBLE: AtomicBool = AtomicBool::new(false);
-static ISO_OK: AtomicBool = AtomicBool::new(false);
+static XLATE_FAIL: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static ISO_VISIBLE: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static ISO_OK: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// PEI `PciRead16(00:00.0 DID)` must be i440FX so `HostBridgeDevId==0x1237`.
 /// Sticky-false after [`latch_dxe_virtio_did`] (virtio appears at `00:02.0`).
-static PEI_I440FX_DID: AtomicBool = AtomicBool::new(true);
+static PEI_I440FX_DID: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(true));
 
 /// True until DXE / MiscInitialization has selected a BDF other than `00:00.0`.
 ///
@@ -340,7 +342,7 @@ fn with_spare<R>(f: impl FnOnce(&mut VirtioPci) -> R) -> R {
 
 /// True only while [`drain_spare`] is inside [`process_blk_queue`].
 /// Install-disk and ISO drains leave this clear.
-static PERC_XFER: AtomicBool = AtomicBool::new(false);
+static PERC_XFER: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 
 pub fn pci_addr_selects_slot0(addr: u32) -> bool {
     if (addr & 0x8000_0000) == 0 {

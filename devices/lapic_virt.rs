@@ -9,6 +9,8 @@
 //! - Host LAPIC one-shot still wakes the hypervisor; guest sees LVT vector
 //!   only through the IRR/ISR path (`RAYNU-V-M3-APIC-OK`).
 
+use crate::guest::slot::{PerGuest, PerGuestCell};
+use crate::{per_guest, per_guest_cell};
 use core::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 
 use crate::arch::apic::DEFAULT_APIC_PHYS;
@@ -53,33 +55,33 @@ pub const XAPIC_VERSION: u32 = 0x0005_0014;
 /// TSC ticks per undivided APIC-bus cycle (~100 MHz bus @ ~3.2 GHz TSC).
 const TSC_PER_BUS_CYCLE: u64 = 32;
 
-static mut APIC_ID: u32 = 0;
-static mut APIC_TPR: u32 = 0;
-static mut APIC_SVR: u32 = 0xFF | SVR_ENABLED;
-static mut APIC_LVT_TIMER: u32 = LVT_MASKED | 0xEF;
-static mut APIC_DIVIDE: u32 = 0b0011; // ÷16 (Linux calibrate default)
-static mut APIC_INIT_COUNT: u32 = 0;
+static APIC_ID: PerGuestCell<u32> = per_guest_cell!(0);
+static APIC_TPR: PerGuestCell<u32> = per_guest_cell!(0);
+static APIC_SVR: PerGuestCell<u32> = per_guest_cell!(0xFF | SVR_ENABLED);
+static APIC_LVT_TIMER: PerGuestCell<u32> = per_guest_cell!(LVT_MASKED | 0xEF);
+static APIC_DIVIDE: PerGuestCell<u32> = per_guest_cell!(0b0011); // ÷16 (Linux calibrate default)
+static APIC_INIT_COUNT: PerGuestCell<u32> = per_guest_cell!(0);
 /// In-service and request registers (8×32 = 256 vectors).
-static mut APIC_ISR: [u32; 8] = [0; 8];
-static mut APIC_IRR: [u32; 8] = [0; 8];
+static APIC_ISR: PerGuestCell<[u32; 8]> = per_guest_cell!([0; 8]);
+static APIC_IRR: PerGuestCell<[u32; 8]> = per_guest_cell!([0; 8]);
 /// Host one-shot armed on behalf of guest (LVT unmasked + counting).
-static mut HOST_TIMER_FOR_GUEST: bool = false;
-static mut GTIMER3_OK: bool = false;
-static mut GTIMER3_PRINT: bool = false;
-static mut APIC_OK: bool = false;
-static mut APIC_OK_PRINT: bool = false;
+static HOST_TIMER_FOR_GUEST: PerGuestCell<bool> = per_guest_cell!(false);
+static GTIMER3_OK: PerGuestCell<bool> = per_guest_cell!(false);
+static GTIMER3_PRINT: PerGuestCell<bool> = per_guest_cell!(false);
+static APIC_OK: PerGuestCell<bool> = per_guest_cell!(false);
+static APIC_OK_PRINT: PerGuestCell<bool> = per_guest_cell!(false);
 /// Vector latched when the guest last armed delivery (for host-fire → IRR).
-static mut PENDING_VECTOR: Option<u8> = None;
+static PENDING_VECTOR: PerGuestCell<Option<u8>> = per_guest_cell!(None);
 /// TSC of the last stalled-timer relatch. 0 means not yet.
-static mut TIMER_RELA_TSC: u64 = 0;
+static TIMER_RELA_TSC: PerGuestCell<u64> = per_guest_cell!(0);
 /// TSC when INIT_COUNT was last written (countdown base).
-static mut TIMER_START_TSC: u64 = 0;
-static mut TIMER_RUNNING: bool = false;
+static TIMER_START_TSC: PerGuestCell<u64> = per_guest_cell!(0);
+static TIMER_RUNNING: PerGuestCell<bool> = per_guest_cell!(false);
 /// Last ICR high (destination). A following ICR low sends the IPI.
-static mut APIC_ICR_HIGH: u32 = 0;
+static APIC_ICR_HIGH: PerGuestCell<u32> = per_guest_cell!(0);
 /// Vectors latched by a fixed self-IPI. Linux 7 `irq_work` starts SRCU
 /// grace periods this way (`1b01c2d8`: fsnotify workers never woke).
-static mut SELF_IPI_MASK: [u32; 8] = [0; 8];
+static SELF_IPI_MASK: PerGuestCell<[u32; 8]> = per_guest_cell!([0; 8]);
 
 pub fn is_x2apic_msr(index: u32) -> bool {
     (X2APIC_MSR_BASE..=X2APIC_MSR_LAST).contains(&index)
@@ -117,12 +119,12 @@ fn divide_value(dcr: u32) -> u32 {
 
 fn timer_should_deliver() -> bool {
     // SAFETY: VMEXIT path.
-    unsafe { (APIC_LVT_TIMER & LVT_MASKED) == 0 && (APIC_SVR & SVR_ENABLED) != 0 }
+    unsafe { ((*APIC_LVT_TIMER.p()) & LVT_MASKED) == 0 && ((*APIC_SVR.p()) & SVR_ENABLED) != 0 }
 }
 
 fn lvt_timer_vector() -> u8 {
     // SAFETY: VMEXIT path.
-    unsafe { (APIC_LVT_TIMER & 0xFF) as u8 }
+    unsafe { ((*APIC_LVT_TIMER.p()) & 0xFF) as u8 }
 }
 
 fn bit_set(regs: *mut [u32; 8], vec: u8) {
@@ -164,7 +166,7 @@ fn bit_is_set(regs: *const [u32; 8], vec: u8) -> bool {
 }
 
 fn set_irr(vec: u8) {
-    bit_set(core::ptr::addr_of_mut!(APIC_IRR), vec)
+    bit_set(APIC_IRR.p(), vec)
 }
 
 /// Fixed ICR send aimed at this CPU. Linux 7 queues `process_srcu` from
@@ -181,8 +183,8 @@ pub fn icr_startup_page(low: u32) -> u8 {
     (low & 0xFF) as u8
 }
 
-static AP_INIT_SEEN: AtomicBool = AtomicBool::new(false);
-static AP_STARTUP: AtomicU16 = AtomicU16::new(0xFFFF);
+static AP_INIT_SEEN: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static AP_STARTUP: PerGuest<AtomicU16> = per_guest!(AtomicU16::new(0xFFFF));
 
 /// A non-self INIT or startup IPI. Fixed self-IPI stays on the running CPU.
 /// The product guest still has one CPU in the MADT, so Linux does not send
@@ -218,8 +220,8 @@ fn accept_icr_low(val: u32) {
     let vector = icr_startup_page(val);
     // SAFETY: VMEXIT path; ICR high was stored by the preceding write.
     let to_self = unsafe {
-        let dest = APIC_ICR_HIGH >> 24;
-        let apic_id = APIC_ID >> 24;
+        let dest = (*APIC_ICR_HIGH.p()) >> 24;
+        let apic_id = (*APIC_ID.p()) >> 24;
         shorthand == 0b01 || shorthand == 0b10 || (shorthand == 0 && dest == apic_id)
     };
     if !to_self && (mode == 5 || mode == 6) {
@@ -232,7 +234,7 @@ fn accept_icr_low(val: u32) {
     // SAFETY: VMEXIT path.
     unsafe {
         set_irr(vector);
-        bit_set(core::ptr::addr_of_mut!(SELF_IPI_MASK), vector);
+        bit_set(SELF_IPI_MASK.p(), vector);
     }
 }
 
@@ -240,7 +242,7 @@ fn highest_self_ipi() -> Option<u8> {
     // SAFETY: VMEXIT path.
     unsafe {
         for i in (0..8).rev() {
-            let w = SELF_IPI_MASK[i] & APIC_IRR[i];
+            let w = (*SELF_IPI_MASK.p())[i] & (*APIC_IRR.p())[i];
             if w != 0 {
                 let bit = 31 - w.leading_zeros();
                 return Some((i as u8) * 32 + bit as u8);
@@ -264,7 +266,7 @@ pub fn take_self_ipi() -> Option<u32> {
     }
     // SAFETY: VMEXIT path.
     unsafe {
-        bit_clear(core::ptr::addr_of_mut!(SELF_IPI_MASK), vec);
+        bit_clear(SELF_IPI_MASK.p(), vec);
     }
     take_irr_vec(vec, false)
 }
@@ -272,13 +274,13 @@ pub fn take_self_ipi() -> Option<u32> {
 /// APIC TPR (8-bit). CR8 is bits 7:4.
 pub fn tpr() -> u32 {
     // SAFETY: VMEXIT / host-test path.
-    unsafe { APIC_TPR & 0xFF }
+    unsafe { (*APIC_TPR.p()) & 0xFF }
 }
 
 pub fn set_tpr(val: u32) {
     // SAFETY: VMEXIT / host-test path.
     unsafe {
-        APIC_TPR = val & 0xFF;
+        (*APIC_TPR.p()) = val & 0xFF;
     }
 }
 
@@ -303,8 +305,8 @@ pub fn latch_irr(vec: u8) {
 fn processor_priority() -> u32 {
     // SAFETY: VMEXIT path.
     unsafe {
-        let tpr = APIC_TPR & 0xFF;
-        let isr = match highest_bit(core::ptr::addr_of!(APIC_ISR)) {
+        let tpr = (*APIC_TPR.p()) & 0xFF;
+        let isr = match highest_bit(APIC_ISR.p().cast_const()) {
             Some(v) => (v as u32) & 0xF0,
             None => 0,
         };
@@ -336,9 +338,9 @@ fn irr_reg_index(reg: u32) -> Option<usize> {
 fn arm_guest_delivery_if_needed() {
     // SAFETY: VMEXIT path.
     unsafe {
-        if TIMER_RUNNING && timer_should_deliver() && current_count_raw() != 0 {
-            HOST_TIMER_FOR_GUEST = true;
-            PENDING_VECTOR = Some(lvt_timer_vector());
+        if (*TIMER_RUNNING.p()) && timer_should_deliver() && current_count_raw() != 0 {
+            (*HOST_TIMER_FOR_GUEST.p()) = true;
+            (*PENDING_VECTOR.p()) = Some(lvt_timer_vector());
         }
     }
 }
@@ -347,24 +349,24 @@ fn arm_guest_delivery_if_needed() {
 fn elapsed_counts() -> u64 {
     // SAFETY: VMEXIT path.
     unsafe {
-        if !TIMER_RUNNING || APIC_INIT_COUNT == 0 {
+        if !(*TIMER_RUNNING.p()) || (*APIC_INIT_COUNT.p()) == 0 {
             return 0;
         }
-        let elapsed_tsc = cpu::rdtsc().wrapping_sub(TIMER_START_TSC);
+        let elapsed_tsc = cpu::rdtsc().wrapping_sub((*TIMER_START_TSC.p()));
         let bus = elapsed_tsc / TSC_PER_BUS_CYCLE;
-        bus / divide_value(APIC_DIVIDE) as u64
+        bus / divide_value((*APIC_DIVIDE.p())) as u64
     }
 }
 
 fn current_count_raw() -> u32 {
     // SAFETY: VMEXIT path.
     unsafe {
-        if !TIMER_RUNNING || APIC_INIT_COUNT == 0 {
+        if !(*TIMER_RUNNING.p()) || (*APIC_INIT_COUNT.p()) == 0 {
             return 0;
         }
-        let init = APIC_INIT_COUNT as u64;
+        let init = (*APIC_INIT_COUNT.p()) as u64;
         let elapsed = elapsed_counts();
-        if (APIC_LVT_TIMER & LVT_PERIODIC) != 0 {
+        if ((*APIC_LVT_TIMER.p()) & LVT_PERIODIC) != 0 {
             if init == 0 {
                 return 0;
             }
@@ -379,8 +381,8 @@ fn current_count_raw() -> u32 {
 }
 
 fn handle_eoi() {
-    if let Some(v) = highest_bit(core::ptr::addr_of!(APIC_ISR)) {
-        bit_clear(core::ptr::addr_of_mut!(APIC_ISR), v);
+    if let Some(v) = highest_bit(APIC_ISR.p().cast_const()) {
+        bit_clear(APIC_ISR.p(), v);
         crate::devices::guest_irq::ioapic_eoi(v);
     }
 }
@@ -389,22 +391,22 @@ fn read_reg(reg: u32) -> u32 {
     // SAFETY: single-threaded VMEXIT path.
     unsafe {
         if let Some(i) = isr_reg_index(reg) {
-            return APIC_ISR[i];
+            return (*APIC_ISR.p())[i];
         }
         if let Some(i) = irr_reg_index(reg) {
-            return APIC_IRR[i];
+            return (*APIC_IRR.p())[i];
         }
         match reg {
-            REG_ID => APIC_ID,
+            REG_ID => (*APIC_ID.p()),
             REG_VERSION => XAPIC_VERSION,
-            REG_TPR => APIC_TPR,
+            REG_TPR => (*APIC_TPR.p()),
             REG_PPR => processor_priority(),
             REG_EOI => 0,
-            REG_SVR => APIC_SVR,
-            REG_LVT_TIMER => APIC_LVT_TIMER,
-            REG_INIT_COUNT => APIC_INIT_COUNT,
+            REG_SVR => (*APIC_SVR.p()),
+            REG_LVT_TIMER => (*APIC_LVT_TIMER.p()),
+            REG_INIT_COUNT => (*APIC_INIT_COUNT.p()),
             REG_CUR_COUNT => current_count_raw(),
-            REG_DIVIDE => APIC_DIVIDE,
+            REG_DIVIDE => (*APIC_DIVIDE.p()),
             _ => 0,
         }
     }
@@ -414,15 +416,15 @@ fn read_reg(reg: u32) -> u32 {
 fn start_countdown(val: u32) {
     // SAFETY: VMEXIT path.
     unsafe {
-        APIC_INIT_COUNT = val;
+        (*APIC_INIT_COUNT.p()) = val;
         if val == 0 {
-            TIMER_RUNNING = false;
-            HOST_TIMER_FOR_GUEST = false;
-            PENDING_VECTOR = None;
+            (*TIMER_RUNNING.p()) = false;
+            (*HOST_TIMER_FOR_GUEST.p()) = false;
+            (*PENDING_VECTOR.p()) = None;
             return;
         }
-        TIMER_START_TSC = cpu::rdtsc();
-        TIMER_RUNNING = true;
+        (*TIMER_START_TSC.p()) = cpu::rdtsc();
+        (*TIMER_RUNNING.p()) = true;
         arm_guest_delivery_if_needed();
     }
 }
@@ -431,19 +433,19 @@ fn write_reg(reg: u32, val: u32) {
     // SAFETY: single-threaded VMEXIT path.
     unsafe {
         match reg {
-            REG_TPR => APIC_TPR = val,
+            REG_TPR => (*APIC_TPR.p()) = val,
             REG_EOI => handle_eoi(),
             REG_SVR => {
-                APIC_SVR = val;
+                (*APIC_SVR.p()) = val;
                 arm_guest_delivery_if_needed();
             }
             REG_LVT_TIMER => {
-                APIC_LVT_TIMER = val;
+                (*APIC_LVT_TIMER.p()) = val;
                 arm_guest_delivery_if_needed();
             }
-            REG_DIVIDE => APIC_DIVIDE = val & 0b1011,
+            REG_DIVIDE => (*APIC_DIVIDE.p()) = val & 0b1011,
             REG_INIT_COUNT => start_countdown(val),
-            REG_ICR_HIGH => APIC_ICR_HIGH = val,
+            REG_ICR_HIGH => (*APIC_ICR_HIGH.p()) = val,
             REG_ICR_LOW => accept_icr_low(val),
             REG_ID | REG_VERSION | REG_CUR_COUNT | REG_PPR => {}
             _ => {
@@ -456,7 +458,7 @@ fn write_reg(reg: u32, val: u32) {
 /// True when the hypervisor should arm a host one-shot for the guest timer.
 pub fn host_timer_armed_for_guest() -> bool {
     // SAFETY: VMEXIT path.
-    unsafe { HOST_TIMER_FOR_GUEST }
+    unsafe { (*HOST_TIMER_FOR_GUEST.p()) }
 }
 
 /// Guest-UEFI has no host LAPIC one-shot. Poll CUR_COUNT on VMX preempt/HLT
@@ -464,10 +466,10 @@ pub fn host_timer_armed_for_guest() -> bool {
 pub fn poll_timer_expiry() -> bool {
     // SAFETY: VMEXIT path.
     unsafe {
-        if !HOST_TIMER_FOR_GUEST || !TIMER_RUNNING || APIC_INIT_COUNT == 0 {
+        if !(*HOST_TIMER_FOR_GUEST.p()) || !(*TIMER_RUNNING.p()) || (*APIC_INIT_COUNT.p()) == 0 {
             return false;
         }
-        if elapsed_counts() < APIC_INIT_COUNT as u64 {
+        if elapsed_counts() < (*APIC_INIT_COUNT.p()) as u64 {
             return false;
         }
     }
@@ -482,28 +484,28 @@ pub fn poll_timer_expiry() -> bool {
 pub fn force_firmware_lapic_timer_expiry() -> bool {
     // SAFETY: VMEXIT / host-test path.
     unsafe {
-        let masked = (APIC_LVT_TIMER & LVT_MASKED) != 0;
+        let masked = ((*APIC_LVT_TIMER.p()) & LVT_MASKED) != 0;
         if masked {
-            APIC_LVT_TIMER =
-                (APIC_LVT_TIMER & !0xFF & !LVT_MASKED) | 0x20 | LVT_PERIODIC;
+            (*APIC_LVT_TIMER.p()) =
+                ((*APIC_LVT_TIMER.p()) & !0xFF & !LVT_MASKED) | 0x20 | LVT_PERIODIC;
         } else {
-            APIC_LVT_TIMER = (APIC_LVT_TIMER & !LVT_MASKED) | LVT_PERIODIC;
+            (*APIC_LVT_TIMER.p()) = ((*APIC_LVT_TIMER.p()) & !LVT_MASKED) | LVT_PERIODIC;
         }
-        APIC_SVR |= SVR_ENABLED;
-        if APIC_INIT_COUNT == 0 {
-            APIC_INIT_COUNT = 1;
+        (*APIC_SVR.p()) |= SVR_ENABLED;
+        if (*APIC_INIT_COUNT.p()) == 0 {
+            (*APIC_INIT_COUNT.p()) = 1;
         }
-        TIMER_START_TSC = 0;
-        TIMER_RUNNING = true;
-        HOST_TIMER_FOR_GUEST = true;
-        PENDING_VECTOR = Some(lvt_timer_vector());
+        (*TIMER_START_TSC.p()) = 0;
+        (*TIMER_RUNNING.p()) = true;
+        (*HOST_TIMER_FOR_GUEST.p()) = true;
+        (*PENDING_VECTOR.p()) = Some(lvt_timer_vector());
     }
     on_host_timer_fire()
 }
 
 /// True when IRR holds a vector deliverable against the current PPR.
 pub fn has_deliverable_irr() -> bool {
-    let Some(vec) = highest_bit(core::ptr::addr_of!(APIC_IRR)) else {
+    let Some(vec) = highest_bit(APIC_IRR.p().cast_const()) else {
         return false;
     };
     let ppr = processor_priority() & 0xF0;
@@ -513,7 +515,7 @@ pub fn has_deliverable_irr() -> bool {
 /// True when IRR has any latched vector, ignoring TPR/PPR.
 /// firmware HLT ignores TPR. Not `ISO-INSTALL-OK`.
 pub fn has_pending_irr() -> bool {
-    highest_bit(core::ptr::addr_of!(APIC_IRR)).is_some()
+    highest_bit(APIC_IRR.p().cast_const()).is_some()
 }
 
 /// True when IRR holds `vec` (does not consult TPR/PPR).
@@ -522,7 +524,7 @@ pub fn has_irr_vec(vec: u8) -> bool {
     if vec < 16 {
         return false;
     }
-    bit_is_set(core::ptr::addr_of!(APIC_IRR), vec)
+    bit_is_set(APIC_IRR.p().cast_const(), vec)
 }
 
 /// LVT timer vector is sitting in IRR. Does not consume it.
@@ -542,13 +544,13 @@ pub fn relatch_if_idle(now: u64) -> bool {
         if !timer_should_deliver() || timer_vector_pending() {
             return false;
         }
-        if APIC_INIT_COUNT == 0 || (TIMER_RUNNING && HOST_TIMER_FOR_GUEST) {
+        if (*APIC_INIT_COUNT.p()) == 0 || ((*TIMER_RUNNING.p()) && (*HOST_TIMER_FOR_GUEST.p())) {
             return false;
         }
-        if TIMER_RELA_TSC != 0 && now.wrapping_sub(TIMER_RELA_TSC) < MIN_TSC {
+        if (*TIMER_RELA_TSC.p()) != 0 && now.wrapping_sub((*TIMER_RELA_TSC.p())) < MIN_TSC {
             return false;
         }
-        TIMER_RELA_TSC = now;
+        (*TIMER_RELA_TSC.p()) = now;
         set_irr(lvt_timer_vector());
         true
     }
@@ -566,26 +568,26 @@ pub fn take_timer_vector() -> Option<u32> {
 pub fn on_host_timer_fire() -> bool {
     // SAFETY: VMEXIT path.
     unsafe {
-        if !HOST_TIMER_FOR_GUEST {
+        if !(*HOST_TIMER_FOR_GUEST.p()) {
             return false;
         }
-        HOST_TIMER_FOR_GUEST = false;
-        let v = PENDING_VECTOR.unwrap_or(lvt_timer_vector());
-        PENDING_VECTOR = None;
+        (*HOST_TIMER_FOR_GUEST.p()) = false;
+        let v = (*PENDING_VECTOR.p()).unwrap_or(lvt_timer_vector());
+        (*PENDING_VECTOR.p()) = None;
         if timer_should_deliver() {
             set_irr(v);
         }
-        if !GTIMER3_OK {
-            GTIMER3_OK = true;
-            GTIMER3_PRINT = true;
+        if !(*GTIMER3_OK.p()) {
+            (*GTIMER3_OK.p()) = true;
+            (*GTIMER3_PRINT.p()) = true;
         }
-        if (APIC_LVT_TIMER & LVT_PERIODIC) != 0 && APIC_INIT_COUNT != 0 && timer_should_deliver()
+        if ((*APIC_LVT_TIMER.p()) & LVT_PERIODIC) != 0 && (*APIC_INIT_COUNT.p()) != 0 && timer_should_deliver()
         {
-            TIMER_START_TSC = cpu::rdtsc();
-            TIMER_RUNNING = true;
+            (*TIMER_START_TSC.p()) = cpu::rdtsc();
+            (*TIMER_RUNNING.p()) = true;
             arm_guest_delivery_if_needed();
         } else {
-            TIMER_RUNNING = false;
+            (*TIMER_RUNNING.p()) = false;
         }
         true
     }
@@ -594,20 +596,20 @@ pub fn on_host_timer_fire() -> bool {
 fn take_irr_vector(ignore_tpr: bool) -> Option<u32> {
     // SAFETY: VMEXIT path.
     unsafe {
-        let vec = highest_bit(core::ptr::addr_of!(APIC_IRR))?;
+        let vec = highest_bit(APIC_IRR.p().cast_const())?;
         if !ignore_tpr {
             let ppr = processor_priority() & 0xF0;
             if ((vec as u32) & 0xF0) <= ppr {
                 return None;
             }
         }
-        bit_clear(core::ptr::addr_of_mut!(APIC_IRR), vec);
-        bit_set(core::ptr::addr_of_mut!(APIC_ISR), vec);
+        bit_clear(APIC_IRR.p(), vec);
+        bit_set(APIC_ISR.p(), vec);
         // Timer LVT vector (typically 0xEF) → M3.12 APIC-OK.
         if vec == lvt_timer_vector() || vec == 0xEF {
-            if !APIC_OK {
-                APIC_OK = true;
-                APIC_OK_PRINT = true;
+            if !(*APIC_OK.p()) {
+                (*APIC_OK.p()) = true;
+                (*APIC_OK_PRINT.p()) = true;
             }
         }
         Some(vec as u32)
@@ -636,7 +638,7 @@ pub fn take_irr_vec(vec: u8, ignore_tpr: bool) -> Option<u32> {
     }
     // SAFETY: VMEXIT / host-test path.
     unsafe {
-        if !bit_is_set(core::ptr::addr_of!(APIC_IRR), vec) {
+        if !bit_is_set(APIC_IRR.p().cast_const(), vec) {
             return None;
         }
         if !ignore_tpr {
@@ -645,12 +647,12 @@ pub fn take_irr_vec(vec: u8, ignore_tpr: bool) -> Option<u32> {
                 return None;
             }
         }
-        bit_clear(core::ptr::addr_of_mut!(APIC_IRR), vec);
-        bit_set(core::ptr::addr_of_mut!(APIC_ISR), vec);
+        bit_clear(APIC_IRR.p(), vec);
+        bit_set(APIC_ISR.p(), vec);
         if vec == lvt_timer_vector() || vec == 0xEF {
-            if !APIC_OK {
-                APIC_OK = true;
-                APIC_OK_PRINT = true;
+            if !(*APIC_OK.p()) {
+                (*APIC_OK.p()) = true;
+                (*APIC_OK_PRINT.p()) = true;
             }
         }
         Some(vec as u32)
@@ -661,8 +663,8 @@ pub fn take_irr_vec(vec: u8, ignore_tpr: bool) -> Option<u32> {
 pub fn take_gtimer3_latch() -> bool {
     // SAFETY: VMEXIT path.
     unsafe {
-        if GTIMER3_PRINT {
-            GTIMER3_PRINT = false;
+        if (*GTIMER3_PRINT.p()) {
+            (*GTIMER3_PRINT.p()) = false;
             true
         } else {
             false
@@ -674,8 +676,8 @@ pub fn take_gtimer3_latch() -> bool {
 pub fn take_apic_ok_latch() -> bool {
     // SAFETY: VMEXIT path.
     unsafe {
-        if APIC_OK_PRINT {
-            APIC_OK_PRINT = false;
+        if (*APIC_OK_PRINT.p()) {
+            (*APIC_OK_PRINT.p()) = false;
             true
         } else {
             false
@@ -685,12 +687,12 @@ pub fn take_apic_ok_latch() -> bool {
 
 pub fn gtimer3_ok() -> bool {
     // SAFETY: written on VMEXIT; read for gate.
-    unsafe { GTIMER3_OK }
+    unsafe { (*GTIMER3_OK.p()) }
 }
 
 pub fn apic_ok() -> bool {
     // SAFETY: written on VMEXIT; read for gate / IRQ0 drop.
-    unsafe { APIC_OK }
+    unsafe { (*APIC_OK.p()) }
 }
 
 pub fn rdmsr(index: u32) -> Option<u64> {
@@ -706,7 +708,7 @@ pub fn wrmsr(index: u32, value: u64) -> Option<bool> {
         return None;
     }
     write_reg(reg_from_msr(index), value as u32);
-    Some(unsafe { HOST_TIMER_FOR_GUEST })
+    Some(unsafe { (*HOST_TIMER_FOR_GUEST.p()) })
 }
 
 /// Stamp a 4 KiB xAPIC MMIO image (version ≠ 0, LVTs masked, flat DFR).
@@ -746,25 +748,25 @@ pub fn reset() {
     // SAFETY: BSP-only guest-UEFI path; the guest is halted for relaunch.
     // KANI-TARGET: guest-UEFI LAPIC reset (outside Proven Core).
     unsafe {
-        APIC_ID = 0;
-        APIC_TPR = 0;
-        APIC_SVR = 0xFF | SVR_ENABLED;
-        APIC_LVT_TIMER = LVT_MASKED | 0xEF;
-        APIC_DIVIDE = 0b0011;
-        APIC_INIT_COUNT = 0;
-        APIC_ISR = [0; 8];
-        APIC_IRR = [0; 8];
-        APIC_ICR_HIGH = 0;
-        SELF_IPI_MASK = [0; 8];
-        HOST_TIMER_FOR_GUEST = false;
-        GTIMER3_OK = false;
-        GTIMER3_PRINT = false;
-        APIC_OK = false;
-        APIC_OK_PRINT = false;
-        PENDING_VECTOR = None;
-        TIMER_START_TSC = 0;
-        TIMER_RELA_TSC = 0;
-        TIMER_RUNNING = false;
+        (*APIC_ID.p()) = 0;
+        (*APIC_TPR.p()) = 0;
+        (*APIC_SVR.p()) = 0xFF | SVR_ENABLED;
+        (*APIC_LVT_TIMER.p()) = LVT_MASKED | 0xEF;
+        (*APIC_DIVIDE.p()) = 0b0011;
+        (*APIC_INIT_COUNT.p()) = 0;
+        (*APIC_ISR.p()) = [0; 8];
+        (*APIC_IRR.p()) = [0; 8];
+        (*APIC_ICR_HIGH.p()) = 0;
+        (*SELF_IPI_MASK.p()) = [0; 8];
+        (*HOST_TIMER_FOR_GUEST.p()) = false;
+        (*GTIMER3_OK.p()) = false;
+        (*GTIMER3_PRINT.p()) = false;
+        (*APIC_OK.p()) = false;
+        (*APIC_OK_PRINT.p()) = false;
+        (*PENDING_VECTOR.p()) = None;
+        (*TIMER_START_TSC.p()) = 0;
+        (*TIMER_RELA_TSC.p()) = 0;
+        (*TIMER_RUNNING.p()) = false;
     }
     AP_INIT_SEEN.store(false, Ordering::Release);
     AP_STARTUP.store(0xFFFF, Ordering::Release);

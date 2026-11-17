@@ -8,6 +8,8 @@
 //! saved NIC. The MAC in device config is that guest MAC. TX frames are
 //! handed to the function-1 egress path. This is not the M4 vSwitch.
 
+use crate::guest::slot::{PerGuest, PerGuestCell};
+use crate::{per_guest, per_guest_cell};
 use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 use crate::devices::guest_platform::{pci_bdf, pci_cfg_offset};
@@ -84,7 +86,7 @@ struct Net {
     msix: crate::devices::guest_msix::Msix,
 }
 
-static mut NET: Net = Net {
+static NET: PerGuestCell<Net> = per_guest_cell!(Net {
     bar: GUEST_NET_BAR,
     sizing: false,
     cmd: 0,
@@ -106,31 +108,31 @@ static mut NET: Net = Net {
     notify: false,
     logged: false,
     msix: crate::devices::guest_msix::Msix::empty(),
-};
+});
 
-static LOGGED_TX: AtomicBool = AtomicBool::new(false);
+static LOGGED_TX: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// 1 when a TX used-ring update is waiting for the next VM exit.
 ///
 /// Iron `03906000`: `enp0s5` printed `NETDEV WATCHDOG` on virtqueue 1.
 /// The completion IRQ was armed only for a preemption-timer exit, and the
 /// guest was leaving on serial I/O, so the driver never reaped the packet.
-static TX_IRQ_ARM: AtomicU8 = AtomicU8::new(0);
+static TX_IRQ_ARM: PerGuest<AtomicU8> = per_guest!(AtomicU8::new(0));
 /// 1 when an RX used-ring update is waiting for the next VM exit.
 ///
 /// Queue 0 is receive. Signaling queue 1 for an RX completion wakes the
 /// transmit poll and leaves the receive queue asleep, so a guest that is
 /// idle never sees an SSH SYN. Iron `8f69297c` printed `PCI INT A: no GSI`
 /// for `00:05.0` and `10.99.99.200` stopped answering.
-static RX_IRQ_ARM: AtomicU8 = AtomicU8::new(0);
+static RX_IRQ_ARM: PerGuest<AtomicU8> = per_guest!(AtomicU8::new(0));
 /// 1 when a config-change interrupt (carrier flip) waits for the next exit.
-static CFG_IRQ_ARM: AtomicU8 = AtomicU8::new(0);
-static LOGGED_KICK_IDLE: AtomicBool = AtomicBool::new(false);
-static LOGGED_RX: AtomicBool = AtomicBool::new(false);
-static LOGGED_RX_IDLE: AtomicBool = AtomicBool::new(false);
-static TX_DONE_N: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
-static TX_SENT_N: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
-static TX_HELD_N: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
-static RX_POSTED_N: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
+static CFG_IRQ_ARM: PerGuest<AtomicU8> = per_guest!(AtomicU8::new(0));
+static LOGGED_KICK_IDLE: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static LOGGED_RX: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static LOGGED_RX_IDLE: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static TX_DONE_N: PerGuest<core::sync::atomic::AtomicU32> = per_guest!(core::sync::atomic::AtomicU32::new(0));
+static TX_SENT_N: PerGuest<core::sync::atomic::AtomicU32> = per_guest!(core::sync::atomic::AtomicU32::new(0));
+static TX_HELD_N: PerGuest<core::sync::atomic::AtomicU32> = per_guest!(core::sync::atomic::AtomicU32::new(0));
+static RX_POSTED_N: PerGuest<core::sync::atomic::AtomicU32> = per_guest!(core::sync::atomic::AtomicU32::new(0));
 
 /// Frames parsed, frames posted to RX, frames the NIC accepted, frames held.
 pub fn net_counts() -> (u32, u32, u32, u32) {
@@ -155,7 +157,7 @@ pub fn irq_state() -> (u8, bool) {
 fn with_net<R>(f: impl FnOnce(&mut Net) -> R) -> R {
     // SAFETY: BSP guest-exit path and single-threaded host tests.
     // KANI-TARGET: virtio-net PCI config bytes (outside Proven Core).
-    unsafe { f(&mut *core::ptr::addr_of_mut!(NET)) }
+    unsafe { f(&mut *NET.p()) }
 }
 
 pub fn pci_write_addr(addr: u32) {
@@ -485,7 +487,7 @@ fn common_byte(off: u16) -> u8 {
 fn note_tx_queue(n: &Net) {
     #[cfg(feature = "uefi-bin")]
     {
-        static ONCE: AtomicBool = AtomicBool::new(false);
+        static ONCE: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
         if ONCE.swap(true, Ordering::AcqRel) {
             return;
         }
@@ -688,7 +690,7 @@ fn drain_one(translate: &impl Fn(u64) -> Option<u64>) -> bool {
     TX_DONE_N.fetch_add(1, Ordering::AcqRel);
     #[cfg(feature = "uefi-bin")]
     {
-        static DONE: AtomicBool = AtomicBool::new(false);
+        static DONE: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
         if !DONE.swap(true, Ordering::AcqRel) {
             crate::boot::serial::write_line("boot: M8.9 virtio-net tx done (not ISO-INSTALL-OK)");
         }
