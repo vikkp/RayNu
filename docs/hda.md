@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | wave-7-b6-uart |
-| Summary | **B6 iron `3cbac9d1fba0` / CI `44115608987` printed `kernel owns its page faults`.** The kernel then stayed on `in 0x3fd` and `out 0x3f8`. A seated port read returns `0xFF`, so the line status always says a byte is waiting and the transmitted bytes are discarded. This head answers COM1 as its own 16550 and prints the bytes (`boot: B6 seated k `). Not flashed. Not lived. B7 is not on this flash. HDA months **0.0 held**. Overall **99 held**. |
+| Commit | wave-7-b6-apic-read |
+| Summary | **B6 iron `767261a7df1e` / CI `44122386769` printed `Linux version 6.12.13-0-lts` and the 256 MiB grant.** The initrd is `RAMDISK: [mem 0x02b4b000-0x0393ffff]`. The text window filled, then `reason=0x30` at `gpa=0xfee00020` ended the seat. The APIC instruction was fetched from the running guest. This head fetches it from the seated guest. Not flashed. Not lived. B7 is not on this flash. HDA months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B8 lived. B6 in flight. B7 in flight. Not lived. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -372,7 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | H10 | Persist disk must be **reliable**, not once | **HIGH** | `1f33eeda` is the sixth installed `login:` (UUID `a0ad99ac-…`, lease `.154`). vda2 `6380/521216` files and `102909/2084352` blocks. The SPA stayed up. Residual: unclean shutdown still needs ext4 journal recovery and clears a vfat dirty bit. USB ≠ PERC. 8 GiB cap stays. Plan: [m8_state.md](m8_state.md). Evidence: [2026-09-24-36d3b559-persist-login.md](evidence/r640/2026-09-24-36d3b559-persist-login.md). |
 | H11 | Truncated `site/` on feature branches | LOW | **This commit (main catch-up):** keep Kimi updater chrome from `origin/main` (nav / Status / CIO View / Stories / Please reboot); patch lived Everest-closed strings in place; `./tools/check-site-chrome.sh` + CI `site-chrome`; always-on `.cursor/rules/site-chrome.mdc`. Do not replace `site/index.html` wholesale on HDA/Everest work. |
 | H12 | A seated firmware service call wrote into the running guest's RAM | **HIGH** | Seen on iron `8b0ceac9ccc6` and present on every B6 flash that ran GRUB with the RAM grant. The buffer was GRUB's handle list above 32 MiB. This head resolves seated service buffers through the seated EPT only (`seat_mem_read` / `seat_mem_write`) and refuses the rest. Iron `fc5e9eb3a4ae` read the seated disk into the seated guest (`status=0`). Guest 3 reached `raynusrv2 login:` and the page kept answering. |
-| H13 | Seated kernel serial is a stuck `0xFF` line status | **HIGH** | Iron `3cbac9d1fba0` printed `kernel owns its page faults`, then turns 2 and 3 stopped on `in 0x3fd` and turn 4 on `out 0x3f8`. This head returns line status `0x60` and prints transmitter bytes. Not flashed. |
+| H13 | Seated local APIC read ends the seat | **HIGH** | Iron `767261a7df1e` printed the Alpine banner, the 256 MiB grant, and a 14 MiB initrd. `reason=0x30` at `gpa=0xfee00020` then ended the seat because the instruction fetch used the running guest. This head fetches it from the seated guest. Not flashed. |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
 | H8 | ~~Phase F coexist not closed on iron~~ | — | **Resolved** 2026-08-20 (`HOST-NIC coexist listening` + `HOST-NIC-HTTP-OK` while VMX on; G1–G3 parked) |
@@ -382,6 +382,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-17 | wave-7-b6-apic-read | 0.0 | 99 | **B6 iron `767261a7df1e` / CI `44122386769` printed `Linux version 6.12.13-0-lts`, e820 `[mem 0x02000000-0x11ffffff] usable`, and `RAMDISK: [mem 0x02b4b000-0x0393ffff]`.** `boot: B6 seated k capped` then `reason=0x30 gpa=0xfee00020` ended the seat. This head reads that instruction from the seated guest. Not flashed. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-17 | wave-7-b6-uart | 0.0 | 99 | **B6 iron `3cbac9d1fba0` / CI `44115608987` printed `kernel owns its page faults`.** Turns 2 and 3 then stopped on `in 0x3fd` and turn 4 on `out 0x3f8`. A seated port read returns `0xFF`, so the line status always says a byte is waiting. This head answers COM1 as its own 16550 and prints `boot: B6 seated k `. Not flashed. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-17 | wave-7-b6-kernel-pf | 0.0 | 99 | **B6 iron `113314181397` / CI `43989045928` printed `initrd LoadFile jump=yes` and `ExitBootServices`.** A `#PF` (`intr=0x80000b0e`) at `rip=0xffffffff96caa675` ended the seat. This head stops intercepting kernel page faults at that call. Not flashed. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |
 | 2026-11-16 | wave-7-b6-initrd | 0.0 | 99 | **B6 iron `055351fd3fab` printed `StartImage entry=0x2b09515`.** The stub's initrd `LoadFile` `id=0xf210` was unsupported, so it exited `EFI_LOAD_ERROR` and the menu returned. This head serves that call. Not flashed. Not lived. B7 is not on this flash. Scores held. months 0.0 held; overall 99 held |

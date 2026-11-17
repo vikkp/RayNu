@@ -8025,7 +8025,7 @@ unsafe fn note_seated_guest_entered() {
 
 /// Virtio, I/O APIC, and local APIC for the seated guest only.
 #[cfg(target_os = "uefi")]
-unsafe fn seat_private_mmio(gpa: u64, _qual: u64) -> bool {
+unsafe fn seat_private_mmio(gpa: u64, qual: u64) -> bool {
     let virtio = crate::devices::guest_virtio_blk::is_virtio_bar_gpa(gpa);
     let ioapic = gpa >= crate::devices::guest_irq::IOAPIC_GPA
         && gpa < crate::devices::guest_irq::IOAPIC_GPA + crate::devices::guest_irq::IOAPIC_SIZE;
@@ -8038,10 +8038,13 @@ unsafe fn seat_private_mmio(gpa: u64, _qual: u64) -> bool {
             "boot: B6 seated guest has its own disk and interrupt controller; the running guest keeps its devices",
         );
     }
+    // Iron `767261a7`: the kernel read local APIC ID at `0xfee00020`
+    // (`reason=0x30`). The fetch used the running guest's tables, so the
+    // decode was empty and the seat was ended.
     let mut buf = [0u8; 16];
-    let (n, insn_len) = copy_mmio_insn(&mut buf);
+    let (n, insn_len) = seat_copy_mmio_insn(&mut buf);
     let Some(op) = decode_mmio_or_retry(&buf, n, insn_len) else {
-        return false;
+        return seat_mmio_eax_fallback(gpa, qual, n, insn_len);
     };
     let val = if op.is_write { mmio_gpr_in(op) } else { 0 };
     let (got, notify) = if let Some(off) = seat_disk_off(gpa) {
@@ -8051,6 +8054,12 @@ unsafe fn seat_private_mmio(gpa: u64, _qual: u64) -> bool {
         (crate::devices::seat_dev::ioapic_access(off, op.is_write, op.size, val), false)
     } else if apic {
         let off = (gpa - crate::devices::lapic_virt::APIC_GPA) as u16;
+        static SAID: AtomicBool = AtomicBool::new(false);
+        if !SAID.swap(true, Ordering::AcqRel) {
+            serial::write_str_nowait("boot: B6 seated apic off=0x");
+            write_hex_nowait(u64::from(off));
+            serial::write_line_nowait("");
+        }
         (crate::devices::seat_dev::apic_access(off, op.is_write, op.size, val), false)
     } else {
         (0, false)
@@ -8063,6 +8072,79 @@ unsafe fn seat_private_mmio(gpa: u64, _qual: u64) -> bool {
     }
     seat_try_inject();
     skip_insn()
+}
+
+/// Instruction bytes at the seated guest's RIP, walked from its own CR3.
+#[cfg(target_os = "uefi")]
+unsafe fn seat_copy_mmio_insn(buf: &mut [u8]) -> (usize, u64) {
+    let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+    let cr3 = ops::vmread(GUEST_CR3).unwrap_or(0);
+    let pages = &*core::ptr::addr_of!(COMPANION_PAGES);
+    let mut n = 0usize;
+    while n < buf.len() {
+        let mut one = [0u8; 1];
+        if !crate::mgmt::product_companion::seat_mem_read(
+            pages,
+            cr3,
+            rip.wrapping_add(n as u64),
+            &mut one,
+        ) {
+            break;
+        }
+        buf[n] = one[0];
+        n += 1;
+    }
+    let vmcs_len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(0);
+    let ar = ops::vmread(GUEST_CS_ACCESS_RIGHTS).unwrap_or(0);
+    let long64 = guest_uefi_cs_ar_is_long(ar);
+    let effective =
+        crate::devices::guest_virtio_blk::mmio_effective_len(&buf[..n], vmcs_len, long64);
+    MMIO_INSN_LEN.store(effective, Ordering::Relaxed);
+    (n, effective)
+}
+
+/// The running guest's xAPIC path does this when the fetch is empty.
+/// A 32-bit EAX access is what Linux uses for the APIC ID register.
+#[cfg(target_os = "uefi")]
+unsafe fn seat_mmio_eax_fallback(gpa: u64, qual: u64, n: usize, insn_len: u64) -> bool {
+    if !xapic_fetch_miss_eax_fallback(n, insn_len) {
+        serial::write_str_nowait("boot: B6 seated mmio decode failed gpa=0x");
+        write_hex_nowait(gpa);
+        serial::write_str_nowait(" n=");
+        write_dec_nowait(n as u64);
+        serial::write_line_nowait("");
+        return false;
+    }
+    let is_write = (qual & 2) != 0;
+    let val = if is_write { SAVED_RAX } else { 0 };
+    let got = if let Some(off) = seat_disk_off(gpa) {
+        crate::devices::seat_dev::disk_access(off, is_write, 4, val).0
+    } else if gpa >= crate::devices::guest_irq::IOAPIC_GPA
+        && gpa < crate::devices::guest_irq::IOAPIC_GPA + crate::devices::guest_irq::IOAPIC_SIZE
+    {
+        let off = (gpa - crate::devices::guest_irq::IOAPIC_GPA) as u16;
+        crate::devices::seat_dev::ioapic_access(off, is_write, 4, val)
+    } else if crate::devices::lapic_virt::is_xapic_mmio_gpa(gpa) {
+        let off = (gpa - crate::devices::lapic_virt::APIC_GPA) as u16;
+        static SAID: AtomicBool = AtomicBool::new(false);
+        if !SAID.swap(true, Ordering::AcqRel) {
+            serial::write_str_nowait("boot: B6 seated apic off=0x");
+            write_hex_nowait(u64::from(off));
+            serial::write_line_nowait("");
+        }
+        crate::devices::seat_dev::apic_access(off, is_write, 4, val)
+    } else {
+        return false;
+    };
+    if !is_write {
+        SAVED_RAX = (SAVED_RAX & !0xffff_ffff) | (got & 0xffff_ffff);
+    }
+    let skip = xapic_eax_fallback_skip_len(ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(insn_len));
+    if skip == 0 {
+        return false;
+    }
+    let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+    ops::vmwrite(GUEST_RIP, rip.wrapping_add(skip)).is_ok()
 }
 
 #[cfg(target_os = "uefi")]
@@ -8609,10 +8691,14 @@ fn seat_legacy_pio(port: u16, is_in: bool, size: u8, rax: u64, pci_zero: bool) -
 }
 
 /// Kernel text from the seated COM1 transmitter. COM2 belongs to the
-/// running guest, so this is a `nowait` line and it stops after 48 lines.
+/// running guest, so this is a `nowait` line. Iron `767261a7` filled 48
+/// lines at the memory-node dump, one line before the APIC read.
+#[cfg(target_os = "uefi")]
+const SEAT_K_CAP: u32 = 256;
+
 #[cfg(target_os = "uefi")]
 fn seat_k_byte(b: u8) {
-    if SEAT_K_LINES.load(Ordering::Acquire) >= 48 {
+    if SEAT_K_LINES.load(Ordering::Acquire) >= SEAT_K_CAP {
         if !SEAT_K_CAPPED.swap(true, Ordering::AcqRel) {
             serial::write_line_nowait("boot: B6 seated k capped");
         }
@@ -8643,7 +8729,7 @@ fn seat_k_byte(b: u8) {
 #[cfg(target_os = "uefi")]
 fn seat_k_flush() {
     let n = SEAT_K_LEN.swap(0, Ordering::AcqRel) as usize;
-    if n == 0 || SEAT_K_LINES.fetch_add(1, Ordering::AcqRel) >= 48 {
+    if n == 0 || SEAT_K_LINES.fetch_add(1, Ordering::AcqRel) >= SEAT_K_CAP {
         if n != 0 && !SEAT_K_CAPPED.swap(true, Ordering::AcqRel) {
             serial::write_line_nowait("boot: B6 seated k capped");
         }
