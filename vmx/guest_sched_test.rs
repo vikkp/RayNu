@@ -205,6 +205,26 @@ fn a_halted_sibling_with_no_work_is_skipped_until_starve() {
 }
 
 #[test]
+fn pick_on_core_ignores_another_cores_vcpu() {
+    let home = |u: usize| if u == slot::unit(0, 1) { 1 } else { 0 };
+    let both = |u: usize| {
+        if u == slot::unit(0, 0) || u == slot::unit(0, 1) {
+            busy()
+        } else {
+            off()
+        }
+    };
+    assert_eq!(
+        pick_on_core(0, slot::unit(0, 0), false, Q, Q, STARVE, both, home),
+        Pick::Stay
+    );
+    assert_eq!(
+        pick_on_core(1, slot::unit(0, 0), true, Q, Q, STARVE, both, home),
+        Pick::Switch(slot::unit(0, 1))
+    );
+}
+
+#[test]
 fn pick_never_returns_the_current_unit() {
     for cur in 0..MAX_UNITS {
         assert_eq!(

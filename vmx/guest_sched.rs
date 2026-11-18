@@ -105,6 +105,34 @@ pub fn pick(
     Pick::Stay
 }
 
+/// [`pick`] limited to the units whose home is `core`. A unit homed
+/// elsewhere is invisible, so a core does not run another core's vCPU.
+pub fn pick_on_core(
+    core: usize,
+    cur: usize,
+    cur_idle: bool,
+    slice_used_tsc: u64,
+    quantum_tsc: u64,
+    starve_tsc: u64,
+    mut other: impl FnMut(usize) -> Other,
+    mut home: impl FnMut(usize) -> usize,
+) -> Pick {
+    pick(
+        cur,
+        cur_idle,
+        slice_used_tsc,
+        quantum_tsc,
+        starve_tsc,
+        |u| {
+            if home(u) == core {
+                other(u)
+            } else {
+                Other::default()
+            }
+        },
+    )
+}
+
 /// TSC ticks in `us` microseconds. `tsc_hz == 0` uses `fallback_hz`.
 pub fn us_to_tsc(us: u64, tsc_hz: u64, fallback_hz: u64) -> u64 {
     let hz = if tsc_hz == 0 { fallback_hz } else { tsc_hz };

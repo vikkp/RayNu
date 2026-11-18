@@ -590,6 +590,16 @@ pub fn pick_core(loads: &[u8], online: usize) -> usize {
     best
 }
 
+/// Core a vCPU is placed on when it comes up. vCPU 0 stays on core 0.
+/// A later vCPU uses [`pick_core`] once more than one host core is online.
+pub fn place_vcpu(vcpu: usize, loads: &[u8], online: usize) -> usize {
+    if vcpu == 0 || online <= 1 {
+        0
+    } else {
+        pick_core(loads, online)
+    }
+}
+
 /// Read MP Services and reserve per-core blocks. Does not start a core.
 ///
 /// # Safety

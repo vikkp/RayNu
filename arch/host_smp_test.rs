@@ -244,3 +244,12 @@ fn pick_core_prefers_the_lightest_nonzero() {
     assert_eq!(pick_core(&[5, 3, 3], 3), 1);
     assert_eq!(pick_core(&[0], 1), 0);
 }
+
+#[test]
+fn place_vcpu_keeps_vcpu0_on_core0() {
+    let loads = [1u8, 0, 0];
+    assert_eq!(place_vcpu(0, &loads, 3), 0);
+    assert_eq!(place_vcpu(1, &loads, 1), 0);
+    assert_eq!(place_vcpu(1, &loads, 3), 1);
+    assert_eq!(place_vcpu(2, &[0, 1, 0], 3), 2);
+}
