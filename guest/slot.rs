@@ -16,8 +16,8 @@
 //!     entry is shared between two guests.
 //!
 //! One physical CPU runs the guests today, and the host never preempts
-//! itself, so one current-slot word is enough. Multi-vCPU (ADR-021 B7) makes
-//! the word per physical CPU; the banks do not change.
+//! itself, so one current-slot word is enough. B7 adds a vCPU index beside
+//! the slot (ADR-023); B21 makes both per physical CPU.
 
 use core::cell::UnsafeCell;
 use core::ops::Deref;
