@@ -9,8 +9,8 @@
 //! - Host LAPIC one-shot still wakes the hypervisor; guest sees LVT vector
 //!   only through the IRR/ISR path (`RAYNU-V-M3-APIC-OK`).
 
-use crate::guest::slot::{PerGuest, PerGuestCell};
-use crate::{per_guest, per_guest_cell};
+use crate::guest::slot::{self, PerVcpu, PerVcpuCell};
+use crate::{per_vcpu, per_vcpu_cell};
 use core::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 
 use crate::arch::apic::DEFAULT_APIC_PHYS;
@@ -45,6 +45,8 @@ const REG_DIVIDE: u32 = 0x3E0;
 /// ICR low triggers a send. ICR high holds the destination (xAPIC bits 31:24).
 const REG_ICR_LOW: u32 = 0x300;
 const REG_ICR_HIGH: u32 = 0x310;
+const REG_LDR: u32 = 0xD0;
+const REG_DFR: u32 = 0xE0;
 
 const LVT_MASKED: u32 = 1 << 16;
 const LVT_PERIODIC: u32 = 1 << 17;
@@ -55,33 +57,41 @@ pub const XAPIC_VERSION: u32 = 0x0005_0014;
 /// TSC ticks per undivided APIC-bus cycle (~100 MHz bus @ ~3.2 GHz TSC).
 const TSC_PER_BUS_CYCLE: u64 = 32;
 
-static APIC_ID: PerGuestCell<u32> = per_guest_cell!(0);
-static APIC_TPR: PerGuestCell<u32> = per_guest_cell!(0);
-static APIC_SVR: PerGuestCell<u32> = per_guest_cell!(0xFF | SVR_ENABLED);
-static APIC_LVT_TIMER: PerGuestCell<u32> = per_guest_cell!(LVT_MASKED | 0xEF);
-static APIC_DIVIDE: PerGuestCell<u32> = per_guest_cell!(0b0011); // ÷16 (Linux calibrate default)
-static APIC_INIT_COUNT: PerGuestCell<u32> = per_guest_cell!(0);
+static APIC_ID: PerVcpuCell<u32> = per_vcpu_cell!(0);
+static APIC_TPR: PerVcpuCell<u32> = per_vcpu_cell!(0);
+static APIC_SVR: PerVcpuCell<u32> = per_vcpu_cell!(0xFF | SVR_ENABLED);
+static APIC_LVT_TIMER: PerVcpuCell<u32> = per_vcpu_cell!(LVT_MASKED | 0xEF);
+static APIC_DIVIDE: PerVcpuCell<u32> = per_vcpu_cell!(0b0011); // ÷16 (Linux calibrate default)
+static APIC_INIT_COUNT: PerVcpuCell<u32> = per_vcpu_cell!(0);
 /// In-service and request registers (8×32 = 256 vectors).
-static APIC_ISR: PerGuestCell<[u32; 8]> = per_guest_cell!([0; 8]);
-static APIC_IRR: PerGuestCell<[u32; 8]> = per_guest_cell!([0; 8]);
+static APIC_ISR: PerVcpuCell<[u32; 8]> = per_vcpu_cell!([0; 8]);
+static APIC_IRR: PerVcpuCell<[u32; 8]> = per_vcpu_cell!([0; 8]);
 /// Host one-shot armed on behalf of guest (LVT unmasked + counting).
-static HOST_TIMER_FOR_GUEST: PerGuestCell<bool> = per_guest_cell!(false);
-static GTIMER3_OK: PerGuestCell<bool> = per_guest_cell!(false);
-static GTIMER3_PRINT: PerGuestCell<bool> = per_guest_cell!(false);
-static APIC_OK: PerGuestCell<bool> = per_guest_cell!(false);
-static APIC_OK_PRINT: PerGuestCell<bool> = per_guest_cell!(false);
+static HOST_TIMER_FOR_GUEST: PerVcpuCell<bool> = per_vcpu_cell!(false);
+static GTIMER3_OK: PerVcpuCell<bool> = per_vcpu_cell!(false);
+static GTIMER3_PRINT: PerVcpuCell<bool> = per_vcpu_cell!(false);
+static APIC_OK: PerVcpuCell<bool> = per_vcpu_cell!(false);
+static APIC_OK_PRINT: PerVcpuCell<bool> = per_vcpu_cell!(false);
 /// Vector latched when the guest last armed delivery (for host-fire → IRR).
-static PENDING_VECTOR: PerGuestCell<Option<u8>> = per_guest_cell!(None);
+static PENDING_VECTOR: PerVcpuCell<Option<u8>> = per_vcpu_cell!(None);
 /// TSC of the last stalled-timer relatch. 0 means not yet.
-static TIMER_RELA_TSC: PerGuestCell<u64> = per_guest_cell!(0);
+static TIMER_RELA_TSC: PerVcpuCell<u64> = per_vcpu_cell!(0);
 /// TSC when INIT_COUNT was last written (countdown base).
-static TIMER_START_TSC: PerGuestCell<u64> = per_guest_cell!(0);
-static TIMER_RUNNING: PerGuestCell<bool> = per_guest_cell!(false);
+static TIMER_START_TSC: PerVcpuCell<u64> = per_vcpu_cell!(0);
+static TIMER_RUNNING: PerVcpuCell<bool> = per_vcpu_cell!(false);
 /// Last ICR high (destination). A following ICR low sends the IPI.
-static APIC_ICR_HIGH: PerGuestCell<u32> = per_guest_cell!(0);
+static APIC_ICR_HIGH: PerVcpuCell<u32> = per_vcpu_cell!(0);
+static APIC_LDR: PerVcpuCell<u32> = per_vcpu_cell!(0);
+static APIC_DFR: PerVcpuCell<u32> = per_vcpu_cell!(0xFFFF_FFFF);
+/// NMI accepted by this vCPU and not yet injected.
+static NMI_PENDING: PerVcpu<AtomicBool> = per_vcpu!(AtomicBool::new(false));
+/// INIT accepted for this vCPU (an AP). Drained once by the exit path.
+static AP_INIT: PerVcpu<AtomicBool> = per_vcpu!(AtomicBool::new(false));
+/// SIPI page for this vCPU, or `0xFFFF` when none is waiting.
+static AP_SIPI: PerVcpu<AtomicU16> = per_vcpu!(AtomicU16::new(0xFFFF));
 /// Vectors latched by a fixed self-IPI. Linux 7 `irq_work` starts SRCU
 /// grace periods this way (`1b01c2d8`: fsnotify workers never woke).
-static SELF_IPI_MASK: PerGuestCell<[u32; 8]> = per_guest_cell!([0; 8]);
+static SELF_IPI_MASK: PerVcpuCell<[u32; 8]> = per_vcpu_cell!([0; 8]);
 
 pub fn is_x2apic_msr(index: u32) -> bool {
     (X2APIC_MSR_BASE..=X2APIC_MSR_LAST).contains(&index)
@@ -183,30 +193,183 @@ pub fn icr_startup_page(low: u32) -> u8 {
     (low & 0xFF) as u8
 }
 
-static AP_INIT_SEEN: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
-static AP_STARTUP: PerGuest<AtomicU16> = per_guest!(AtomicU16::new(0xFFFF));
+/// One LAPIC accepts `dest`. Physical: its ID or 0xFF. Logical flat: LDR
+/// bit test. Logical cluster (`DFR[31:28] == 0`): same cluster and a set bit.
+pub fn dest_hit(dest: u8, logical: bool, apic_id: u8, ldr: u32, dfr: u32) -> bool {
+    if !logical {
+        return dest == 0xFF || dest == apic_id;
+    }
+    let ldr_log = (ldr >> 24) as u8;
+    if (dfr >> 28) == 0 {
+        let same_cluster = (dest & 0xF0) == (ldr_log & 0xF0);
+        let bit = (dest & 0x0F) & (ldr_log & 0x0F) != 0;
+        return same_cluster && bit;
+    }
+    dest & ldr_log != 0
+}
 
-/// A non-self INIT or startup IPI. Fixed self-IPI stays on the running CPU.
-/// The product guest still has one CPU in the MADT, so Linux does not send
-/// these until a second local APIC is enabled. ADR-021 B7.
-pub fn note_remote_ipi(low: u32) {
-    match icr_mode(low) {
+/// Bit v set means vCPU v of the current slot accepts `dest`. Only `v < vcpus()`.
+///
+/// The architectural APIC ID of vCPU v is v (ADR-023 D7). The ID register is
+/// written when that vCPU is reset; a SIPI arrives before the AP has run, so
+/// the match uses the index.
+pub fn dest_mask(dest: u8, logical: bool) -> u8 {
+    let n = slot::vcpus();
+    let s = slot::current();
+    let mut mask = 0u8;
+    for v in 0..n {
+        // SAFETY: VMEXIT or host-test path; read of this slot's LAPIC bank.
+        // KANI-TARGET: virtual LAPIC destination read (outside Proven Core).
+        let (ldr, dfr) = unsafe { (*APIC_LDR.p_at(s, v), *APIC_DFR.p_at(s, v)) };
+        if dest_hit(dest, logical, v as u8, ldr, dfr) {
+            mask |= 1u8 << v;
+        }
+    }
+    mask
+}
+
+/// The one vCPU a device interrupt goes to: lowest set bit of
+/// `dest_mask & up_mask`. 0 when nothing matches.
+pub fn pick_target(dest: u8, logical: bool) -> usize {
+    let m = dest_mask(dest, logical) & slot::up_mask(slot::current());
+    if m == 0 {
+        0
+    } else {
+        m.trailing_zeros() as usize
+    }
+}
+
+/// Post `vector` to vCPU `v` of slot `s`, which is not on the CPU.
+///
+/// One host core today, so these are plain stores (the PerVcpuCell argument).
+/// B21: an atomic store, then a host IPI to the core running (s, v).
+fn post_remote(s: usize, v: usize, vector: u8, ipi: bool) {
+    // SAFETY: VMEXIT path on the one CPU that runs guests. `s`/`v` name a
+    // bank entry; the target vCPU is not executing.
+    // KANI-TARGET: remote LAPIC post (outside Proven Core).
+    unsafe {
+        bit_set(APIC_IRR.p_at(s, v), vector);
+        if ipi {
+            bit_set(SELF_IPI_MASK.p_at(s, v), vector);
+        }
+    }
+    slot::wake_vcpu(s, v);
+}
+
+fn accept_icr_low(val: u32) {
+    if slot::vcpus() == 1 {
+        accept_icr_low_uniprocessor(val);
+        return;
+    }
+    let me = slot::current_vcpu();
+    let s = slot::current();
+    // SAFETY: VMEXIT path; ICR high was stored by the preceding write.
+    // KANI-TARGET: virtual LAPIC ICR high read (outside Proven Core).
+    let high = unsafe { *APIC_ICR_HIGH.p() };
+    let all = ((1u16 << slot::vcpus()) - 1) as u8;
+    let mut mask = match (val >> 18) & 3 {
+        1 => 1u8 << me,
+        2 => all,
+        3 => all & !(1u8 << me),
+        _ => dest_mask((high >> 24) as u8, val & (1 << 11) != 0),
+    };
+    let vector = icr_startup_page(val);
+    match icr_mode(val) {
+        0 | 1 => {
+            if vector < 32 {
+                return;
+            }
+            if icr_mode(val) == 1 {
+                mask &= mask.wrapping_neg();
+            }
+            for v in 0..slot::vcpus() {
+                if mask & (1u8 << v) == 0 {
+                    continue;
+                }
+                if v == me {
+                    set_irr(vector);
+                    bit_set(SELF_IPI_MASK.p(), vector);
+                } else if slot::vcpu_up(s, v)
+                    && crate::sched::ipi::validate_ipi_target(s as u64, s as u64, v as u32).is_ok()
+                {
+                    post_remote(s, v, vector, true);
+                }
+            }
+        }
+        4 => {
+            for v in 0..slot::vcpus() {
+                if mask & (1u8 << v) == 0 || !slot::vcpu_up(s, v) {
+                    continue;
+                }
+                NMI_PENDING.at(s, v).store(true, Ordering::Release);
+                slot::wake_vcpu(s, v);
+            }
+        }
         5 => {
-            AP_INIT_SEEN.store(true, Ordering::Release);
+            if val & (1 << 15) != 0 && val & (1 << 14) == 0 {
+                return;
+            }
+            for v in 0..slot::vcpus() {
+                if mask & (1u8 << v) == 0 || v == me || v == 0 {
+                    continue;
+                }
+                AP_INIT.at(s, v).store(true, Ordering::Release);
+            }
         }
         6 => {
-            AP_STARTUP.store(u16::from(icr_startup_page(low)), Ordering::Release);
+            for v in 0..slot::vcpus() {
+                if mask & (1u8 << v) == 0 || v == me || v == 0 {
+                    continue;
+                }
+                AP_SIPI.at(s, v).store(u16::from(vector), Ordering::Release);
+            }
         }
         _ => {}
     }
 }
 
-/// Startup page after an INIT, once.
-pub fn take_ap_startup() -> Option<u8> {
-    if !AP_INIT_SEEN.load(Ordering::Acquire) {
+/// N=1 ICR: the path `main` had, without a recorded remote INIT/SIPI.
+fn accept_icr_low_uniprocessor(val: u32) {
+    let shorthand = (val >> 18) & 0x3;
+    let mode = icr_mode(val);
+    let vector = icr_startup_page(val);
+    // SAFETY: VMEXIT path; ICR high was stored by the preceding write.
+    // KANI-TARGET: virtual LAPIC uniprocessor ICR (outside Proven Core).
+    let to_self = unsafe {
+        let dest = (*APIC_ICR_HIGH.p()) >> 24;
+        let apic_id = (*APIC_ID.p()) >> 24;
+        shorthand == 0b01 || shorthand == 0b10 || (shorthand == 0 && dest == apic_id)
+    };
+    if !to_self && (mode == 5 || mode == 6) {
+        return;
+    }
+    if mode != 0 || vector < 32 || !to_self {
+        return;
+    }
+    // SAFETY: VMEXIT path.
+    // KANI-TARGET: virtual LAPIC self-IPI latch (outside Proven Core).
+    unsafe {
+        set_irr(vector);
+        bit_set(SELF_IPI_MASK.p(), vector);
+    }
+}
+
+/// INIT latched for vCPU `v` of the current slot, once.
+pub fn take_ap_init(v: usize) -> bool {
+    if v >= slot::MAX_VCPUS {
+        return false;
+    }
+    AP_INIT.at(slot::current(), v).swap(false, Ordering::AcqRel)
+}
+
+/// SIPI page latched for vCPU `v` of the current slot, once.
+pub fn take_ap_sipi(v: usize) -> Option<u8> {
+    if v >= slot::MAX_VCPUS {
         return None;
     }
-    let page = AP_STARTUP.swap(0xFFFF, Ordering::AcqRel);
+    let page = AP_SIPI
+        .at(slot::current(), v)
+        .swap(0xFFFF, Ordering::AcqRel);
     if page == 0xFFFF {
         None
     } else {
@@ -214,28 +377,14 @@ pub fn take_ap_startup() -> Option<u8> {
     }
 }
 
-fn accept_icr_low(val: u32) {
-    let shorthand = (val >> 18) & 0x3;
-    let mode = icr_mode(val);
-    let vector = icr_startup_page(val);
-    // SAFETY: VMEXIT path; ICR high was stored by the preceding write.
-    let to_self = unsafe {
-        let dest = (*APIC_ICR_HIGH.p()) >> 24;
-        let apic_id = (*APIC_ID.p()) >> 24;
-        shorthand == 0b01 || shorthand == 0b10 || (shorthand == 0 && dest == apic_id)
-    };
-    if !to_self && (mode == 5 || mode == 6) {
-        note_remote_ipi(val);
-        return;
-    }
-    if mode != 0 || vector < 32 || !to_self {
-        return;
-    }
-    // SAFETY: VMEXIT path.
-    unsafe {
-        set_irr(vector);
-        bit_set(SELF_IPI_MASK.p(), vector);
-    }
+/// NMI waiting on the current vCPU, once.
+pub fn take_nmi() -> bool {
+    NMI_PENDING.swap(false, Ordering::AcqRel)
+}
+
+/// NMI waiting on the current vCPU.
+pub fn nmi_pending() -> bool {
+    NMI_PENDING.load(Ordering::Acquire)
 }
 
 fn highest_self_ipi() -> Option<u8> {
@@ -299,6 +448,22 @@ pub fn set_cr8(val: u64) {
 pub fn latch_irr(vec: u8) {
     if vec >= 16 {
         set_irr(vec);
+    }
+}
+
+/// MSI-X message. With one vCPU this is [`latch_irr`]. With more, the
+/// address names the vCPU (destination in bits 19:12, logical when bit 2
+/// is set).
+pub fn latch_irr_msi(addr: u64, vec: u8) {
+    if slot::vcpus() == 1 {
+        latch_irr(vec);
+        return;
+    }
+    let v = pick_target(((addr >> 12) & 0xFF) as u8, addr & 4 != 0);
+    if v == slot::current_vcpu() {
+        latch_irr(vec);
+    } else if vec >= 16 {
+        post_remote(slot::current(), v, vec, false);
     }
 }
 
@@ -407,6 +572,20 @@ fn read_reg(reg: u32) -> u32 {
             REG_INIT_COUNT => (*APIC_INIT_COUNT.p()),
             REG_CUR_COUNT => current_count_raw(),
             REG_DIVIDE => (*APIC_DIVIDE.p()),
+            REG_LDR => {
+                if slot::vcpus() > 1 {
+                    *APIC_LDR.p()
+                } else {
+                    0
+                }
+            }
+            REG_DFR => {
+                if slot::vcpus() > 1 {
+                    *APIC_DFR.p()
+                } else {
+                    0
+                }
+            }
             _ => 0,
         }
     }
@@ -447,6 +626,8 @@ fn write_reg(reg: u32, val: u32) {
             REG_INIT_COUNT => start_countdown(val),
             REG_ICR_HIGH => (*APIC_ICR_HIGH.p()) = val,
             REG_ICR_LOW => accept_icr_low(val),
+            REG_LDR => (*APIC_LDR.p()) = val & 0xFF00_0000,
+            REG_DFR => (*APIC_DFR.p()) = val | 0x0FFF_FFFF,
             REG_ID | REG_VERSION | REG_CUR_COUNT | REG_PPR => {}
             _ => {
                 // ISR/IRR are read-only; ignore guest stores.
@@ -581,7 +762,9 @@ pub fn on_host_timer_fire() -> bool {
             (*GTIMER3_OK.p()) = true;
             (*GTIMER3_PRINT.p()) = true;
         }
-        if ((*APIC_LVT_TIMER.p()) & LVT_PERIODIC) != 0 && (*APIC_INIT_COUNT.p()) != 0 && timer_should_deliver()
+        if ((*APIC_LVT_TIMER.p()) & LVT_PERIODIC) != 0
+            && (*APIC_INIT_COUNT.p()) != 0
+            && timer_should_deliver()
         {
             (*TIMER_START_TSC.p()) = cpu::rdtsc();
             (*TIMER_RUNNING.p()) = true;
@@ -748,7 +931,9 @@ pub fn reset() {
     // SAFETY: BSP-only guest-UEFI path; the guest is halted for relaunch.
     // KANI-TARGET: guest-UEFI LAPIC reset (outside Proven Core).
     unsafe {
-        (*APIC_ID.p()) = 0;
+        (*APIC_ID.p()) = (slot::current_vcpu() as u32) << 24;
+        (*APIC_LDR.p()) = 0;
+        (*APIC_DFR.p()) = 0xFFFF_FFFF;
         (*APIC_TPR.p()) = 0;
         (*APIC_SVR.p()) = 0xFF | SVR_ENABLED;
         (*APIC_LVT_TIMER.p()) = LVT_MASKED | 0xEF;
@@ -768,8 +953,9 @@ pub fn reset() {
         (*TIMER_RELA_TSC.p()) = 0;
         (*TIMER_RUNNING.p()) = false;
     }
-    AP_INIT_SEEN.store(false, Ordering::Release);
-    AP_STARTUP.store(0xFFFF, Ordering::Release);
+    NMI_PENDING.store(false, Ordering::Release);
+    AP_INIT.store(false, Ordering::Release);
+    AP_SIPI.store(0xFFFF, Ordering::Release);
 }
 
 /// Trap x2APIC MSRs in a zeroed MSR bitmap page (read + write maps).
