@@ -3911,6 +3911,28 @@ fn sipi_entry_and_mirror_masks_and_ap_state() {
 }
 
 #[test]
+fn a_com_string_is_capped_and_other_ports_are_not() {
+    assert_eq!(super::com_io_string_budget(true, 1), 1);
+    assert_eq!(super::com_io_string_budget(true, 10_000), 32);
+    assert_eq!(super::com_io_string_budget(false, 10_000), 10_000);
+}
+
+#[test]
+fn linux_com_exit_resumes_before_the_host_tick() {
+    let g = include_str!("guest_uefi.rs");
+    let beat = g
+        .find("b21_exit_beat(core_now, reason, rip)")
+        .expect("beat");
+    let fast = g[beat..]
+        .find("linux_com_exit(reason, qual)")
+        .expect("fast com");
+    let tick = g[beat..]
+        .find("maybe_tick_standing_spa()")
+        .expect("tick");
+    assert!(fast < tick, "COM is answered before the host tick");
+}
+
+#[test]
 fn a_vcpu_is_placed_when_it_starts_and_collapse_recalls_it() {
     let g = include_str!("guest_uefi.rs");
     let start = g.find("unsafe fn ap_start(").expect("ap_start");

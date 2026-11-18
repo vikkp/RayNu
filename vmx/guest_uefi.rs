@@ -3784,6 +3784,12 @@ pub fn ud_is_ud2(bytes: &[u8]) -> bool {
 }
 
 /// I/O exit qualification → port (SDM 28.2.1 bits 31:16).
+/// Bytes of a `rep` string I/O one exit may perform. A COM `rep` with a
+/// huge count must not live inside the exit that printk is waiting on.
+pub fn com_io_string_budget(com: bool, count: u64) -> u64 {
+    if com { count.min(32) } else { count }
+}
+
 pub fn io_port_from_qual(qual: u64) -> u16 {
     ((qual >> 16) & 0xffff) as u16
 }
@@ -6820,6 +6826,13 @@ unsafe fn bind_host_rsp() -> bool {
 /// One line every two seconds while Linux owns COM2, so a stall names the
 /// exit it stopped on.
 #[cfg(target_os = "uefi")]
+fn linux_com_exit(reason: u32, qual: u64) -> bool {
+    serial::linux_earlycon_share()
+        && (reason & 0xFFFF) == EXIT_REASON_IO_INSTRUCTION
+        && is_com_uart_port(io_port_from_qual(qual))
+}
+
+#[cfg(target_os = "uefi")]
 fn b21_exit_beat(core: usize, reason: u32, rip: u64) {
     if crate::arch::host_smp::cores_online() <= 1 || !serial::linux_earlycon_share() {
         return;
@@ -7639,6 +7652,15 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     let qual = ops::vmread(EXIT_QUALIFICATION).unwrap_or(0);
     let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
     b21_exit_beat(core_now, reason, rip);
+    // Linux printk polls COM1 one byte at a time. Answer that here and
+    // resume. The host NIC, the SPA tick, and the firmware heuristics are
+    // what a console exit was dying inside (iron ebc8fb5ddb61, COM2 frozen
+    // on `[` after the Spectre line, no later B21 cpu0 beat).
+    if linux_com_exit(reason, qual) && handle_io(qual) {
+        let _ = serial::drain_guest_tx(serial::GUEST_TX_DRAIN_PACE);
+        arm_preempt_on_resume();
+        guest_sched::resume(false);
+    }
     if slot::current_vcpu() != 0 {
         ap_breadcrumb(reason, rip);
     }
@@ -14209,7 +14231,10 @@ unsafe fn emulate_io_port(port: u16, is_in: bool, size: u64) {
 #[cfg(target_os = "uefi")]
 unsafe fn handle_io_string(qual: u64, port: u16, is_in: bool, size: u8) -> bool {
     let long = guest_uefi_cs_ar_is_long(ops::vmread(GUEST_CS_ACCESS_RIGHTS).unwrap_or(0));
-    let count = guest_uefi_io_string_count(qual, guest_uefi_io_addr_reg(SAVED_RCX, long));
+    let count = com_io_string_budget(
+        is_com_uart_port(port),
+        guest_uefi_io_string_count(qual, guest_uefi_io_addr_reg(SAVED_RCX, long)),
+    );
     let rflags = ops::vmread(GUEST_RFLAGS).unwrap_or(0x2);
     let df = (rflags & (1 << 10)) != 0;
     let mut addr = guest_uefi_io_addr_reg(if is_in { SAVED_RDI } else { SAVED_RSI }, long);
