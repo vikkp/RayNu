@@ -337,7 +337,7 @@
           "status": "in flight",
           "ships": "S1",
           "ref": "ADR-024",
-          "note": "Branch `cursor/wave-7-b21-host-cores-25ca`. Guests run in parallel; hypervisor work runs one core at a time. Not lived",
+          "note": "Branch `cursor/wave-7-b21-host-cores-25ca`. Nested `0b5df509`: 3 host cores online; vCPUs still on core 0. Guests run in parallel; hypervisor work runs one core at a time. Not lived",
           "wave": "7"
         },
         {

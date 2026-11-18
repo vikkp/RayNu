@@ -1,8 +1,8 @@
 ---
 loihda_version: 1
 last_updated: 2026-11-18
-last_commit: PENDING
-last_commit_short: PENDING
+last_commit: 0b5df5095150e3e633f3864455036b5fc3b9aeda
+last_commit_short: 0b5df509
 updated_by: cursor
 loi_target: "Non-prod Letter of Intent. Bar A = dedicated-box lab. Bar B = RAID-fleet replacement. HDA 99% is Everest, not an LOI."
 months_to_loi_a: 0.25
@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | PENDING |
-| Summary | **B7 lived on iron `505ef6bdbc73`.** Ubuntu `nproc` printed `2`. Alpine reached `localhost login:` beside it. Not a Bar A or Bar B piece. Auth stays 38. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | `0b5df509` |
+| Summary | **B21 nested: 3 host cores online.** Not a Bar A or Bar B piece. Not lived. Auth stays 38. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. TLS 88 held. |
-| Gates touched | B7 in flight. B21 planned, S1, wave 7. B6 and B8 stay lived. Wave 7 open. No doorbell. No format of UBUNTU0. |
+| Gates touched | B7 lived. B21 in flight, S1, wave 7. B6 and B8 stay lived. Wave 7 open. No doorbell. No format of UBUNTU0. |
 
 ---
 
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-18 | wave-7-b21-cores | 94 | 72 | **B21 nested `0b5df509`: `boot: B21 host cores online=3 of 3`.** vCPUs stay on core 0. Not lived. No piece score moves. Wave 7 stays open. Bar A 94. Bar B 72. Overall 80. |
 | 2026-11-18 | wave-7-b7-lived | 94 | 72 | **Iron `505ef6bdbc73` / run `44336344309`: B7 lived.** `nproc` printed `2` after `GuestCpuSaved prev=1 n=2`, `boot: B7 vcpu 1 long mode`, and `Brought up 1 node, 2 CPUs`. Alpine then reached `localhost login:` while Ubuntu kept answering. No piece score moves. Wave 7 stays open on B21. Bar A 94. Bar B 72. Overall 80. |
 | 2026-11-18 | wave-7-b7-spa-script | 94 | 72 | **Iron `33698b27cda2` / run `44215529886` reached `raynusrv2 login:` with one CPU.** The page script on that stick does not parse, so Sign in does nothing and the saved account (`E6 operator rd … set`) was not checked. Auth piece stays 38. Not lived. No piece score moves. Bar A 94. Bar B 72. Overall 80. |
 | 2026-11-17 | wave-7-b7-smp | 94 | 72 | **B7 in flight ([ADR-023](adr/ADR-023.md)).** Nested Alpine reports 2 and 4 CPUs on one host core. Not lived. No piece score moves. B21 is planned S1 in wave 7. Wave 7 stays open. Bar A 94. Bar B 72. Overall 80. |
