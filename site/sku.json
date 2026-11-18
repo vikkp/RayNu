@@ -211,7 +211,7 @@
           "status": "in flight",
           "ships": "S1",
           "ref": "M4.5",
-          "note": "Branch `cursor/wave-7-b7-smp-25ca`. Nested: Alpine reports N CPUs (`smp: Brought up 1 node, 2 CPUs` and `4 CPUs`; `nproc` prints 2). N CPUs visible, one core of capacity (ADR-023; B21 adds the cores). Not lived",
+          "note": "Branch `cursor/wave-7-b7-smp-25ca`, PR #440. Nested: Alpine reports N CPUs (`smp: Brought up 1 node, 2 CPUs` and `4 CPUs`; `nproc` prints 2). N CPUs visible, one core of capacity (ADR-023; B21 adds the cores). Not lived",
           "wave": "7"
         },
         {
