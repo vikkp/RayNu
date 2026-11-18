@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-11-18
-last_commit: 418d4d1ce8eccb0d6d0570c1413e7f29b56f4960
-last_commit_short: 418d4d1c
+last_commit: 45ec0f9763f4fffb38f42aae8ae1b4ca699fb773
+last_commit_short: 45ec0f97
 updated_by: cursor
 mount_everest_target: "CLOSED on iron 2026-09-11: Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest). Next: M8 operator hardening (ADR-018)."
 months_to_everest: 0.0
@@ -354,7 +354,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | `418d4d1c` |
+| Commit | `45ec0f97` |
 | Summary | **A Linux COM exit returns before the host tick.** Iron `ebc8fb5ddb61` / run `44406469957` printed `B21 cpu0 core=0 reason=0xa rip=0x410004d tx=1088` once, then stopped on `[` after `Spectre V2 : Enabling IBPB for BPF` with no later beat. Not lived. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B7 lived. B21 in flight, S1, wave 7. B6 and B8 stay lived. Wave 7 open. No doorbell. No format of UBUNTU0. |
