@@ -6364,6 +6364,15 @@ pub unsafe extern "C" fn guest_uefi_vmexit_landing() -> ! {
     );
 }
 
+/// Enter the current vCPU. An AP's first entry is `VMLAUNCH` (ADR-023);
+/// every later entry is `VMRESUME`.
+#[cfg(target_os = "uefi")]
+unsafe fn enter_guest() -> ! {
+    // `guest_uefi_vmresume` stays the naked path. The AP launch flag selects
+    // VMLAUNCH once that flag exists.
+    guest_uefi_vmresume()
+}
+
 #[cfg(target_os = "uefi")]
 #[unsafe(naked)]
 unsafe extern "C" fn guest_uefi_vmresume() -> ! {
