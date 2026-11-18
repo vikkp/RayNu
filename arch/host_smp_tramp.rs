@@ -4,6 +4,11 @@
 //! absolute slots patched when the stub is copied. Only label differences
 //! are used as offsets.
 
+// Kani's M3.21 smoke compiles this crate with `--lib --tests` and rejects
+// `global_asm!`. The startup stub is not one of those harnesses. Host
+// tests and the UEFI binary still build it.
+#[cfg(not(kani))]
+mod code {
 use core::arch::global_asm;
 
 global_asm!(
@@ -239,3 +244,7 @@ mod tramp_test {
         }
     }
 }
+}
+
+#[cfg(not(kani))]
+pub use code::*;
