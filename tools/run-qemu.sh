@@ -154,6 +154,25 @@ if [[ "${VCPUS:-1}" == "2" || "${VCPUS:-1}" == "4" ]]; then
   echo "==> ADR-023 vCPUs: staged $ESP/EFI/RayNu/vcpu${VCPUS}.txt (one host core)"
 fi
 
+# ADR-024 lab: ONECORE=1 keeps the B7 machine. NOKICK=1 sends no host IPI.
+# HOST_SMP is passed to QEMU as -smp (a count, or a full -smp string).
+rm -f "$ESP/EFI/RayNu/onecore.txt" "$ESP/EFI/RayNu/nokick.txt" 2>/dev/null || true
+if [[ "${ONECORE:-0}" == "1" ]]; then
+  mkdir -p "$ESP/EFI/RayNu"
+  : >"$ESP/EFI/RayNu/onecore.txt"
+  echo "==> ADR-024 onecore: staged $ESP/EFI/RayNu/onecore.txt"
+fi
+if [[ "${NOKICK:-0}" == "1" ]]; then
+  mkdir -p "$ESP/EFI/RayNu"
+  : >"$ESP/EFI/RayNu/nokick.txt"
+  echo "==> ADR-024 nokick: staged $ESP/EFI/RayNu/nokick.txt"
+fi
+SMP_ARGS=()
+if [[ -n "${HOST_SMP:-}" ]]; then
+  SMP_ARGS+=(-smp "$HOST_SMP")
+  echo "==> ADR-024 host cores: -smp $HOST_SMP"
+fi
+
 # Stage 46: leftover product ISO would HOLD guest-UEFI instead of E4 LINUX-EARLY.
 rm -f "$ESP/linux.iso" "$ESP/install.iso" \
   "$ESP/EFI/RayNu/linux.iso" "$ESP/EFI/RayNu/install.iso" 2>/dev/null || true
@@ -425,4 +444,5 @@ exec qemu-system-x86_64 \
   "${PERSIST_MEM_ARGS[@]}" \
   "${NVME_ARGS[@]}" \
   "${USB_ARGS[@]}" \
+  "${SMP_ARGS[@]}" \
   "$@"

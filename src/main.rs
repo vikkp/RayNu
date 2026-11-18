@@ -96,6 +96,10 @@ fn main() -> Status {
     r640_hypervisor::mgmt::probe_product_linux_iso();
     r640_hypervisor::mgmt::probe_durable_lun();
     r640_hypervisor::mgmt::probe_host_nic_lab_flag();
+    // ADR-024: MP Services topology and per-core blocks. No core is started.
+    unsafe {
+        r640_hypervisor::arch::host_smp::probe_pre_ebs();
+    }
     let _ = r640_hypervisor::mgmt::run_pre_ebs_mgmt_listen();
 
     boot_note("boot: calling ExitBootServices — ConOut/video ends after this line");

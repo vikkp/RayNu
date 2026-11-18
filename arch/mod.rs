@@ -6,6 +6,7 @@
 
 pub mod apic;
 pub mod cpu;
+pub mod host_smp;
 
 /// Stub for future SMBIOS vendor logging (Tier 1, ADR-005).
 pub fn log_cpu_vendor_stub() {
