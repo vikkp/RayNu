@@ -89,6 +89,10 @@ pub fn cores_online() -> usize {
     CORES_ONLINE.load(Ordering::Acquire).max(1)
 }
 
+pub(super) fn set_cores_online(n: usize) {
+    CORES_ONLINE.store(n.max(1), Ordering::Release);
+}
+
 pub fn low_base() -> u64 {
     LOW_BASE.load(Ordering::Acquire)
 }
@@ -492,6 +496,61 @@ fn push_dec(buf: &mut [u8], n: usize, mut v: u64) -> usize {
     }
     push(buf, n, &tmp[k..])
 }
+
+const PTE_P: u64 = 1;
+const PTE_RW: u64 = 1 << 1;
+const PTE_PS: u64 = 1 << 7;
+const PTE_ADDR: u64 = 0x000F_FFFF_FFFF_F000;
+
+/// Clone the map of the first 2 MiB and share the rest with core 0.
+/// `pd[0]` is an executable identity 2 MiB page so the trampoline can run
+/// even when the firmware mapped low memory no-execute.
+pub fn build_boot_tables(
+    bsp_cr3: u64,
+    pdpt_pa: u64,
+    pd_pa: u64,
+    read: impl Fn(u64) -> [u64; 512],
+) -> Option<([u64; 512], [u64; 512], [u64; 512])> {
+    let pml4_pa = bsp_cr3 & PTE_ADDR;
+    let mut pml4 = read(pml4_pa);
+    let pml4_0 = pml4[0];
+    if pml4_0 & PTE_P == 0 {
+        return None;
+    }
+    let pdpt_src = pml4_0 & PTE_ADDR;
+    let mut pdpt = read(pdpt_src);
+    let pdpt_0 = pdpt[0];
+    if pdpt_0 & PTE_P == 0 {
+        return None;
+    }
+    let mut pd = if pdpt_0 & PTE_PS != 0 {
+        let base = pdpt_0 & 0x000F_FFFF_C000_0000;
+        if base != 0 {
+            return None;
+        }
+        let mut page = [0u64; 512];
+        for i in 0..512 {
+            page[i] = ((i as u64) << 21) | PTE_P | PTE_RW | PTE_PS;
+        }
+        page
+    } else {
+        read(pdpt_0 & PTE_ADDR)
+    };
+    pd[0] = PTE_P | PTE_RW | PTE_PS;
+    pml4[0] = (pdpt_pa & PTE_ADDR) | PTE_P | PTE_RW;
+    pdpt[0] = (pd_pa & PTE_ADDR) | PTE_P | PTE_RW;
+    Some((pml4, pdpt, pd))
+}
+
+#[cfg(feature = "uefi-bin")]
+#[path = "host_smp_start.rs"]
+mod start;
+
+#[cfg(feature = "uefi-bin")]
+pub use start::start_cores;
+
+#[cfg(not(feature = "uefi-bin"))]
+pub unsafe fn start_cores() {}
 
 #[cfg(test)]
 #[path = "host_smp_test.rs"]

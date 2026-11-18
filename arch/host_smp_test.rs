@@ -114,6 +114,44 @@ fn cpu_cap_keeps_b7_on_one_core() {
 }
 
 #[test]
+fn boot_tables_make_the_low_2mib_executable() {
+    let mut tables = std::collections::HashMap::<u64, [u64; 512]>::new();
+    let mut pml4 = [0u64; 512];
+    pml4[0] = 0x2000 | 1 | (1 << 63);
+    let mut pdpt = [0u64; 512];
+    pdpt[0] = 0x3000 | 1 | (1 << 63);
+    let mut pd = [0u64; 512];
+    pd[0] = 0 | 1 | (1 << 7) | (1 << 63);
+    pd[1] = (1 << 21) | 1 | (1 << 7);
+    tables.insert(0x1000, pml4);
+    tables.insert(0x2000, pdpt);
+    tables.insert(0x3000, pd);
+    let got = build_boot_tables(0x1000, 0x5000, 0x6000, |pa| tables[&(pa & !0xFFF)]);
+    let (pml4, pdpt, pd) = got.expect("tables");
+    assert_eq!(pml4[0], 0x5000 | 1 | 2);
+    assert_eq!(pdpt[0], 0x6000 | 1 | 2);
+    assert_eq!(pd[0], 1 | 2 | (1 << 7));
+    assert_eq!(pd[1], (1 << 21) | 1 | (1 << 7));
+    assert_eq!(pml4[0] >> 63, 0);
+}
+
+#[test]
+fn boot_tables_reject_a_nonzero_1gib_page() {
+    let mut pml4 = [0u64; 512];
+    pml4[0] = 0x2000 | 1;
+    let mut pdpt = [0u64; 512];
+    pdpt[0] = (1 << 30) | 1 | (1 << 7);
+    let got = build_boot_tables(0, 0x5000, 0x6000, |pa| {
+        if pa & !0xFFF == 0 {
+            pml4
+        } else {
+            pdpt
+        }
+    });
+    assert!(got.is_none());
+}
+
+#[test]
 fn pick_core_prefers_the_lightest_nonzero() {
     assert_eq!(pick_core(&[2, 2, 1], 3), 2);
     assert_eq!(pick_core(&[1, 1, 1], 3), 1);
