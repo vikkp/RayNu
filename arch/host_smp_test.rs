@@ -255,6 +255,21 @@ fn place_vcpu_keeps_vcpu0_on_core0() {
 }
 
 #[test]
+fn exits_stay_on_core0_until_a_vcpu_is_placed() {
+    for u in 0..MAX_CORES {
+        assign_unit(u, 0);
+    }
+    assert!(!remote_placed());
+    assert!(!running_remote(4));
+    assign_unit(1, 2);
+    assert!(remote_placed());
+    assert!(running_remote(2));
+    assert!(!running_remote(0));
+    assign_unit(1, 0);
+    assert!(!remote_placed());
+}
+
+#[test]
 fn recall_stays_open_until_the_core_finishes() {
     finish_recall(15);
     assert!(recall_finished(15));

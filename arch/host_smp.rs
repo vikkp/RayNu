@@ -164,6 +164,23 @@ pub fn finish_recall(core: usize) {
     RECALL_DONE[core].store(true, Ordering::Release);
 }
 
+/// A vCPU is homed on a core other than core 0.
+pub fn remote_placed() -> bool {
+    ASSIGNED.iter().any(|a| a.load(Ordering::Acquire) != 0)
+}
+
+pub fn vmcs_loaded_on(core: usize) -> bool {
+    core < MAX_CORES && VMCS_LOADED[core].load(Ordering::Acquire)
+}
+
+/// This exit is a core that is running a placed vCPU.
+///
+/// Until that happens, every exit is core 0's. A stack pointer that falls
+/// inside an AP block must not divert CPU 0 onto the AP resume path.
+pub fn running_remote(core: usize) -> bool {
+    core != 0 && (remote_placed() || vmcs_loaded_on(core))
+}
+
 /// Flush this core's EPT TLB and ask every other online core to flush
 /// before its next guest entry.
 ///
@@ -171,6 +188,11 @@ pub fn finish_recall(core: usize) {
 /// VMX root. `INVEPT` is valid.
 pub unsafe fn invept_guests() {
     crate::memory::ept_hw::invept_global();
+    // No other core is in a guest yet. Do not store the shootdown flags:
+    // those stores sit near the lines the idle cores monitor.
+    if !remote_placed() {
+        return;
+    }
     let me = this_core();
     let n = cores_online().min(MAX_CORES);
     for c in 0..n {

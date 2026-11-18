@@ -595,11 +595,11 @@ mod hw {
         if vmcs == 0 || ops::vmptrld(vmcs).is_err() {
             return false;
         }
-        if !super::super::bind_host_rsp() {
-            return false;
-        }
         let core = crate::arch::host_smp::this_core();
         if core != 0 {
+            if !super::super::bind_host_rsp() {
+                return false;
+            }
             crate::arch::host_smp::note_loaded(core);
         }
         let c = &*CTX.p_at(s, v);
@@ -866,7 +866,8 @@ mod hw {
     /// `idle` is [`guest_idle`] for the guest that took the exit. With one
     /// guest on and no Start waiting this is `VMRESUME`.
     pub unsafe fn resume(idle: bool) -> ! {
-        if crate::arch::host_smp::this_core() != 0 {
+        let core_now = crate::arch::host_smp::this_core();
+        if crate::arch::host_smp::running_remote(core_now) {
             resume_on_ap(idle);
         }
         let cu = cur_unit();

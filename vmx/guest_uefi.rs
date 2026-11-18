@@ -6790,6 +6790,11 @@ pub unsafe fn remote_recall_and_park() -> ! {
 /// The mailbox woke this core. The caller does not hold the monitor.
 #[cfg(target_os = "uefi")]
 pub unsafe fn on_ap_wake(core: usize) {
+    if !crate::arch::host_smp::remote_placed()
+        && !crate::arch::host_smp::recall_waiting(core)
+    {
+        return;
+    }
     crate::arch::host_smp::acquire();
     if !guest_sched::launch_on_core(core) {
         crate::arch::host_smp::release();
@@ -6799,11 +6804,43 @@ pub unsafe fn on_ap_wake(core: usize) {
 /// Point the current VMCS at this core's host stack.
 #[cfg(target_os = "uefi")]
 unsafe fn bind_host_rsp() -> bool {
-    let top = crate::arch::host_smp::stack_top_of(crate::arch::host_smp::this_core());
+    let core = crate::arch::host_smp::this_core();
+    // Core 0's VMCS already names its stack. Rewriting it from a
+    // mis-identified exit would point the next exit at another core's stack.
+    if core == 0 {
+        return true;
+    }
+    let top = crate::arch::host_smp::stack_top_of(core);
     if top == 0 {
         return true;
     }
     ops::vmwrite(HOST_RSP, top).is_ok()
+}
+
+/// One line every two seconds while Linux owns COM2, so a stall names the
+/// exit it stopped on.
+#[cfg(target_os = "uefi")]
+fn b21_exit_beat(core: usize, reason: u32, rip: u64) {
+    if crate::arch::host_smp::cores_online() <= 1 || !serial::linux_earlycon_share() {
+        return;
+    }
+    static LAST: AtomicU64 = AtomicU64::new(0);
+    let now = cpu::rdtsc();
+    let hz = crate::boot::raynu_f_flag::tsc_hz().max(1_000_000);
+    let last = LAST.load(Ordering::Acquire);
+    if last != 0 && now.wrapping_sub(last) < hz.saturating_mul(2) {
+        return;
+    }
+    LAST.store(now, Ordering::Release);
+    serial::write_str_nowait("boot: B21 cpu0 core=");
+    write_dec_nowait(core as u64);
+    serial::write_str_nowait(" reason=0x");
+    write_hex_u32_nowait(reason);
+    serial::write_str_nowait(" rip=0x");
+    write_hex_nowait(rip);
+    serial::write_str_nowait(" tx=");
+    write_dec_nowait(serial::guest_tx_len() as u64);
+    serial::write_line_nowait("");
 }
 
 /// A halted vCPU's core waits outside the monitor, then enters it again.
@@ -7049,7 +7086,7 @@ unsafe fn ap_start(v: usize, page: u8) {
 
 #[cfg(target_os = "uefi")]
 unsafe fn smp_service() {
-    if crate::arch::host_smp::this_core() != 0 {
+    if crate::arch::host_smp::running_remote(crate::arch::host_smp::this_core()) {
         return;
     }
     let s = slot::current();
@@ -7583,7 +7620,9 @@ unsafe fn reserve_guest_uefi_host_stack(alloc: &mut FrameAllocator) -> Option<(u
 pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     crate::arch::host_smp::monitor_enter();
     let core_now = crate::arch::host_smp::this_core();
-    if core_now != 0 && crate::arch::host_smp::recall_waiting(core_now) {
+    if crate::arch::host_smp::running_remote(core_now)
+        && crate::arch::host_smp::recall_waiting(core_now)
+    {
         remote_recall_and_park();
     }
     if core_now == 0 && take_remote_reset() {
@@ -7599,6 +7638,7 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     let reason = ops::vmread(EXIT_REASON).unwrap_or(0xFFFF) as u32;
     let qual = ops::vmread(EXIT_QUALIFICATION).unwrap_or(0);
     let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+    b21_exit_beat(core_now, reason, rip);
     if slot::current_vcpu() != 0 {
         ap_breadcrumb(reason, rip);
     }
@@ -7616,7 +7656,9 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     // After EBS, RAYNU_F_MODE is clear and Linux owns this exit path.
     // SPA Stop is posted inside the tick above. Consume it here or the
     // flag sits until the next hypervisor boot (iron f44ba647).
-    if crate::arch::host_smp::this_core() == 0 && crate::mgmt::perc_boot_choice::take_guest_stop() {
+    if !crate::arch::host_smp::running_remote(crate::arch::host_smp::this_core())
+        && crate::mgmt::perc_boot_choice::take_guest_stop()
+    {
         serial::set_linux_earlycon_share(false);
         serial::set_linux_high_half(false);
         raynu_f_stop("spa-stop");
@@ -9219,7 +9261,7 @@ unsafe fn raynu_f_reapply_host_xsave() {
 /// [`raynu_f_launch_on_stopped_vmcs`] (it `vmclear`s/`vmptrld`s first).
 #[cfg(target_os = "uefi")]
 unsafe fn raynu_f_reset_relaunch(_src: crate::devices::guest_platform::ResetSrc) -> ! {
-    if crate::arch::host_smp::this_core() != 0 {
+    if crate::arch::host_smp::running_remote(crate::arch::host_smp::this_core()) {
         hand_back_to_core0(true);
     }
     smp_collapse();
@@ -10430,7 +10472,9 @@ unsafe fn raynu_f_stop(why: &str) -> ! {
 #[cfg(target_os = "uefi")]
 unsafe fn raynu_f_vmexit(reason: u32, qual: u64, rip: u64, intr: u64) -> ! {
     crate::mgmt::maybe_tick_standing_spa();
-    if crate::arch::host_smp::this_core() == 0 && crate::mgmt::perc_boot_choice::take_guest_stop() {
+    if !crate::arch::host_smp::running_remote(crate::arch::host_smp::this_core())
+        && crate::mgmt::perc_boot_choice::take_guest_stop()
+    {
         raynu_f_stop("spa-stop");
     }
     b4_service();
@@ -17552,7 +17596,7 @@ unsafe fn handle_wrmsr() -> bool {
 
 #[cfg(target_os = "uefi")]
 unsafe fn leave_to_e4() -> ! {
-    if crate::arch::host_smp::this_core() != 0 {
+    if crate::arch::host_smp::running_remote(crate::arch::host_smp::this_core()) {
         hand_back_to_core0(false);
     }
     smp_collapse();
