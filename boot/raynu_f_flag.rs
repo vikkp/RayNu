@@ -81,6 +81,12 @@ pub fn take_two_guests() -> bool {
     TWO_GUESTS.swap(false, Ordering::AcqRel)
 }
 
+/// Lab vCPU count from `vcpuN.txt`. WP8 reads the file. Until then the
+/// count is 1, so a product guest stays the N=1 machine.
+pub fn lab_vcpus() -> u8 {
+    1
+}
+
 /// Whether the operator asked for the RayNu-F F2 launch.
 #[inline]
 pub fn requested() -> bool {

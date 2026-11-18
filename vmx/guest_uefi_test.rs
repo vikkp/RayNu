@@ -3847,3 +3847,37 @@ fn idt_vectoring_reinjects_a_lost_external_interrupt_and_the_trace_shows_eois() 
     }
     assert!(dump.contains("crate::mgmt::bcm5720_mmio::egress_wire()"));
 }
+
+#[test]
+fn sipi_entry_and_mirror_masks_and_ap_state() {
+    assert_eq!(super::sipi_entry(0x08), (0x0800, 0x8000, 0));
+    assert_eq!(super::sipi_entry(0), (0, 0, 0));
+    let primary = (1u64 << 2) | (1u64 << 22) | (1u64 << 31);
+    assert_eq!(super::ap_mirror_primary(primary), 1u64 << 31);
+    let entry = (1u64 << 9) | (1u64 << 15);
+    assert_eq!(super::ap_mirror_entry(entry), 1u64 << 15);
+    assert_eq!(super::ap_state_step(super::AP_OFF, true, false), super::AP_WAIT_SIPI);
+    assert_eq!(
+        super::ap_state_step(super::AP_WAIT_SIPI, false, true),
+        super::AP_RUNNING
+    );
+    assert_eq!(
+        super::ap_state_step(super::AP_RUNNING, false, true),
+        super::AP_RUNNING,
+        "a second SIPI does not move a running AP"
+    );
+}
+
+#[test]
+fn smp_service_precedes_inject_and_collapse_is_on_the_leave_paths() {
+    let g = include_str!("guest_uefi.rs");
+    let call = g.find("smp_service();").expect("smp_service");
+    let inj = g[call..].find("try_inject_guest_irq();").expect("inject");
+    assert!(inj < 120, "INIT/SIPI drain before inject");
+    let leave = g.find("unsafe fn leave_to_e4()").expect("leave");
+    let left = g[leave..].find("guest_sched::on_guest_left()").expect("left");
+    assert!(g[leave..leave + left].contains("smp_collapse()"));
+    let reset = g.find("unsafe fn raynu_f_reset_relaunch(").expect("reset");
+    let flush = g[reset..].find("serial::flush_guest_tx()").expect("flush");
+    assert!(g[reset..reset + flush].contains("smp_collapse()"));
+}
