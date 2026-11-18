@@ -19,14 +19,14 @@
   },
   "counts": {
     "S1": {
-      "lived": 56,
-      "in flight": 2,
+      "lived": 57,
+      "in flight": 1,
       "planned": 10,
       "total": 68
     },
     "Final": {
-      "lived": 56,
-      "in flight": 2,
+      "lived": 57,
+      "in flight": 1,
       "planned": 72,
       "total": 130
     }
@@ -208,10 +208,10 @@
         {
           "id": "B7",
           "capability": "Multi-vCPU (SMP) product guests",
-          "status": "in flight",
+          "status": "lived",
           "ships": "S1",
           "ref": "M4.5",
-          "note": "Branch `cursor/wave-7-b7-smp-25ca`, PR #440. Nested: Alpine reports N CPUs (`smp: Brought up 1 node, 2 CPUs` and `4 CPUs`; `nproc` prints 2). Iron `33698b27cda2` / run `44215529886` autostarted Ubuntu with 1 CPU; the page on that stick does not parse. N CPUs visible, one core of capacity (ADR-023; B21 adds the cores). Not lived",
+          "note": "Iron `505ef6bdbc73` / run `44336344309`, branch `cursor/wave-7-b7-smp-25ca`, PR #440. Evidence `2026-11-18-505ef6bd`. Autostart Ubuntu was 1 CPU (`Brought up 1 node, 1 CPU`, APIC `0x4A`, `nproc` printed `1`). After Shut down (`boot: B4 power off`) the row was set to 2: `GuestCpuSaved off_mib=18432 prev=1 n=2`, `boot: B7 guest slot 0 vcpus=2`, `boot: B7 acpi madt local_apics=2` (APIC `0x52`), `boot: B7 vcpu 1 start page=0x99`, `boot: B7 vcpu 1 long mode`, `smp: Brought up 1 node, 2 CPUs`. `ssh vikkp@10.99.99.200` `nproc` printed `2`. Alpine on the 8192 MiB image then reached `localhost login:` while Ubuntu kept answering; the page read `2 guests running`. COM2 for that second Start was not pasted. N CPUs visible, one core of capacity (ADR-023). B21 is next",
           "wave": "7"
         },
         {
@@ -343,14 +343,14 @@
       ],
       "counts": {
         "S1": {
-          "lived": 8,
-          "in flight": 1,
+          "lived": 9,
+          "in flight": 0,
           "planned": 2,
           "total": 11
         },
         "Final": {
-          "lived": 8,
-          "in flight": 1,
+          "lived": 9,
+          "in flight": 0,
           "planned": 12,
           "total": 21
         }
@@ -1621,8 +1621,8 @@
       "iron": "B8",
       "why": "Performance and capacity. B8 before B7: SMP on an 8259 is misery. B21 after B7: real cores before the wave 9 soak (owner, 2026-11-17).",
       "counts": {
-        "lived": 2,
-        "in flight": 2,
+        "lived": 3,
+        "in flight": 1,
         "planned": 6,
         "total": 10
       },
@@ -1862,12 +1862,6 @@
   ],
   "current_wave": "7",
   "next_up": [
-    {
-      "id": "B7",
-      "capability": "Multi-vCPU (SMP) product guests",
-      "status": "in flight",
-      "role": "host-first"
-    },
     {
       "id": "B21",
       "capability": "Guest vCPUs run on more than one host core (host AP bring-up, per-core VMXON); a guest's vCPU count is capped at the host cores online",

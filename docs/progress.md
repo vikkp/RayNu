@@ -191,7 +191,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next (numbered)
 
-**B6 lived 2026-11-17.** GitHub Latest and the current rollback is `v0.1.7-b6`. The image is `4f581a4dcd93` / run `44174137515`. Wave 7 is open. B7 is in flight on `cursor/wave-7-b7-smp-25ca`: N CPUs visible, one core of capacity (ADR-023). Nested Alpine reports 2 and 4 CPUs. Not lived. Iron `33698b27cda2` / run `44215529886` autostarted the Ubuntu tail to `raynusrv2 login:` with one CPU (`Brought up 1 node, 1 CPU`, ACPI APIC length `0x4A`). The page on that stick does not run, so Sign in has no handler. B21 (real cores) is planned in wave 7, S1, after B7. The next wave close is `v0.1.7-wave7-closed`. Previous rollback `v0.1.6-wave6-closed` (`4e327820e039` / run `42384654720`).
+**B7 lived 2026-11-18.** Iron `505ef6bdbc73` / run `44336344309`. Ubuntu on the tail reported `nproc` `1`, then after the Guests menu was set to 2 it reported `nproc` `2` (`Brought up 1 node, 2 CPUs`, `boot: B7 vcpu 1 long mode`). Alpine on the 8192 MiB image then reached `localhost login:` while Ubuntu at `10.99.99.200` kept answering. Evidence `docs/evidence/r640/2026-11-18-505ef6bd-wave-7-b7-smp-ok.md`. N CPUs visible, one core of capacity. B21 is next and is not started. Wave 7 stays open. GitHub Latest and the rollback stay `v0.1.7-b6` (`4f581a4dcd93` / run `44174137515`). The next wave close is `v0.1.7-wave7-closed`.
 
 **ADR-021 D11 lived 2026-11-07.** Port roles are fixed in `docs/customer/port-roles.md`: port 3 is the page, port 4 is the guests, iDRAC is Dedicated or LOM3. CI runs `./tools/check-d11-docs.sh`. No new EFI. Wave 6 stays open. Next host-first row is H8.
 
