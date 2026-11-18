@@ -19,16 +19,16 @@
   },
   "counts": {
     "S1": {
-      "lived": 56,
-      "in flight": 2,
-      "planned": 9,
-      "total": 67
+      "lived": 57,
+      "in flight": 1,
+      "planned": 10,
+      "total": 68
     },
     "Final": {
-      "lived": 56,
-      "in flight": 2,
-      "planned": 71,
-      "total": 129
+      "lived": 57,
+      "in flight": 1,
+      "planned": 72,
+      "total": 130
     }
   },
   "areas": [
@@ -208,10 +208,10 @@
         {
           "id": "B7",
           "capability": "Multi-vCPU (SMP) product guests",
-          "status": "in flight",
+          "status": "lived",
           "ships": "S1",
           "ref": "M4.5",
-          "note": "Branch `cursor/wave-7-b6-seats-37d7`. Latitude probe `RAYNU-V-M4-SMP-OK` is not this row. A non-self INIT then startup IPI is recorded (`take_ap_startup`). The MADT still publishes one enabled CPU, so Ubuntu does not wait for an AP. B6 lived on this branch (`4f581a4dcd93`); each guest still has one CPU. Not lived. Not an F11 until a product guest sees more than one CPU on the R640",
+          "note": "Iron `505ef6bdbc73` / run `44336344309`, branch `cursor/wave-7-b7-smp-25ca`, PR #440. Evidence `2026-11-18-505ef6bd`. Autostart Ubuntu was 1 CPU (`Brought up 1 node, 1 CPU`, APIC `0x4A`, `nproc` printed `1`). After Shut down (`boot: B4 power off`) the row was set to 2: `GuestCpuSaved off_mib=18432 prev=1 n=2`, `boot: B7 guest slot 0 vcpus=2`, `boot: B7 acpi madt local_apics=2` (APIC `0x52`), `boot: B7 vcpu 1 start page=0x99`, `boot: B7 vcpu 1 long mode`, `smp: Brought up 1 node, 2 CPUs`. `ssh vikkp@10.99.99.200` `nproc` printed `2`. Alpine on the 8192 MiB image then reached `localhost login:` while Ubuntu kept answering; the page read `2 guests running`. COM2 for that second Start was not pasted. N CPUs visible, one core of capacity (ADR-023). B21 is next",
           "wave": "7"
         },
         {
@@ -330,20 +330,29 @@
           "ref": "ADR-021",
           "note": "`ddbaf11cd11c` (PR #419, CI `40900796962`; pull-request merge of `cff61509`): Guest tile `Guest 3 is running` with the tail row `RUNNING`; after Stop, tile `Guest is stopped`, rows `STOPPED`, line `Stopped from the Guests page. reason=0x34 rip=0xffffffff85b2bebd`. While it ran, the line still showed the OVMF first-exit handoff (`Exit cap reached. reason=0x1c rip=0xfffffe94`); Stop replaced it. docs/evidence/r640/2026-10-29-ddbaf11c-wave-2-b20-stop-on-page-ok.md",
           "wave": "2"
+        },
+        {
+          "id": "B21",
+          "capability": "Guest vCPUs run on more than one host core (host AP bring-up, per-core VMXON); a guest's vCPU count is capped at the host cores online",
+          "status": "planned",
+          "ships": "S1",
+          "ref": "ADR-023",
+          "note": "The VMware benchmark: a vCPU is backed by a real core. B7 gives a guest N CPUs on one host core; this row gives them the cores. Prerequisite of B17.",
+          "wave": "7"
         }
       ],
       "counts": {
         "S1": {
-          "lived": 8,
-          "in flight": 1,
-          "planned": 1,
-          "total": 10
+          "lived": 9,
+          "in flight": 0,
+          "planned": 2,
+          "total": 11
         },
         "Final": {
-          "lived": 8,
-          "in flight": 1,
-          "planned": 11,
-          "total": 20
+          "lived": 9,
+          "in flight": 0,
+          "planned": 12,
+          "total": 21
         }
       }
     },
@@ -1601,6 +1610,7 @@
         "B6",
         "B8",
         "B7",
+        "B21",
         "B9",
         "C4",
         "C6",
@@ -1609,12 +1619,12 @@
         "A8"
       ],
       "iron": "B8",
-      "why": "Performance and capacity. B8 before B7: SMP on an 8259 is misery.",
+      "why": "Performance and capacity. B8 before B7: SMP on an 8259 is misery. B21 after B7: real cores before the wave 9 soak (owner, 2026-11-17).",
       "counts": {
-        "lived": 2,
-        "in flight": 2,
-        "planned": 5,
-        "total": 9
+        "lived": 3,
+        "in flight": 1,
+        "planned": 6,
+        "total": 10
       },
       "closed": false
     },
@@ -1853,9 +1863,9 @@
   "current_wave": "7",
   "next_up": [
     {
-      "id": "B7",
-      "capability": "Multi-vCPU (SMP) product guests",
-      "status": "in flight",
+      "id": "B21",
+      "capability": "Guest vCPUs run on more than one host core (host AP bring-up, per-core VMXON); a guest's vCPU count is capped at the host cores online",
+      "status": "planned",
       "role": "host-first"
     },
     {

@@ -1,6 +1,6 @@
 ---
 loihda_version: 1
-last_updated: 2026-11-17
+last_updated: 2026-11-18
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
@@ -207,11 +207,11 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | v0.1.7-b6 |
-| Summary | **GitHub Latest is `v0.1.7-b6`.** Iron `4f581a4dcd93` / run `44174137515`: B6 lived. The operator started Alpine again to `localhost login:` and Shut down completed. Ubuntu and Alpine ran side by side on their own spans of the spare. COM2 printed `boot: guests on=2` five times with both `runs=` counts moving. `ssh` to Ubuntu answered with both on. Stop of the Alpine row left `1 guest(s) still on`. Design is [ADR-022](adr/ADR-022.md). B6 is not a Bar A or Bar B piece, so no piece score moves. B7 is not on this flash. Guest SSH stays. TLS piece stays 88. Scores held. Bar A 94. Bar B 72. Overall 80. |
+| Commit | PENDING |
+| Summary | **B7 lived on iron `505ef6bdbc73`.** Ubuntu `nproc` printed `2`. Alpine reached `localhost login:` beside it. Not a Bar A or Bar B piece. Auth stays 38. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. TLS 88 held. |
-| Gates touched | **B6 lived** (`4f581a4dcd93`). B8 lived. B7 in flight. Wave 7 open. No doorbell. No format of UBUNTU0. |
+| Gates touched | B7 in flight. B21 planned, S1, wave 7. B6 and B8 stay lived. Wave 7 open. No doorbell. No format of UBUNTU0. |
 
 ---
 
@@ -219,6 +219,9 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-18 | wave-7-b7-lived | 94 | 72 | **Iron `505ef6bdbc73` / run `44336344309`: B7 lived.** `nproc` printed `2` after `GuestCpuSaved prev=1 n=2`, `boot: B7 vcpu 1 long mode`, and `Brought up 1 node, 2 CPUs`. Alpine then reached `localhost login:` while Ubuntu kept answering. No piece score moves. Wave 7 stays open on B21. Bar A 94. Bar B 72. Overall 80. |
+| 2026-11-18 | wave-7-b7-spa-script | 94 | 72 | **Iron `33698b27cda2` / run `44215529886` reached `raynusrv2 login:` with one CPU.** The page script on that stick does not parse, so Sign in does nothing and the saved account (`E6 operator rd … set`) was not checked. Auth piece stays 38. Not lived. No piece score moves. Bar A 94. Bar B 72. Overall 80. |
+| 2026-11-17 | wave-7-b7-smp | 94 | 72 | **B7 in flight ([ADR-023](adr/ADR-023.md)).** Nested Alpine reports 2 and 4 CPUs on one host core. Not lived. No piece score moves. B21 is planned S1 in wave 7. Wave 7 stays open. Bar A 94. Bar B 72. Overall 80. |
 | 2026-11-17 | v0.1.7-b6 | 94 | 72 | **GitHub Latest is `v0.1.7-b6`.** B6 stays lived. The operator started Alpine again to `localhost login:` and Shut down completed. No piece score moves. Wave 7 stays open. Bar A 94. Bar B 72. Overall 80. |
 | 2026-11-17 | wave-7-b6-lived | 94 | 72 | **Iron `4f581a4dcd93` / run `44174137515`: B6 lived.** Start of the Alpine row while Ubuntu was at its login: `boot: guest slot 1 start guests_on=1`, `localhost login:` from `root=UUID=ee851fd5-…`. `boot: guests on=2` five times, both `runs=` counts moving. `ssh vikkp@10.99.99.200` answered with both on. Stop of the Alpine row left `1 guest(s) still on`. Evidence [`2026-11-17-4f581a4d`](evidence/r640/2026-11-17-4f581a4d-wave-7-b6-two-guests-ok.md). A second guest on RAYNU-SPARE is the same PERC read and write path that Bar B already counts; no new piece closes. `RAYNU-V-M7-ISO-INSTALL-OK` on the journal replay is the known spurious print. Scores held. Bar A 94. Bar B 72. Overall 80. |
 | 2026-11-17 | wave-7-b6-one-guest-model | 94 | 72 | **B6 rebuilt: one guest model, N guest slots ([ADR-022](adr/ADR-022.md)).** The seated copy is removed. Each guest is the same machine on its own span of the spare; one scheduler shares the CPU; Stop names a row. Nested QEMU: two Alpine guests installed, rebooted and logged in from their own disks side by side. The second guest then powered off while the first kept running, and was started again in its slot. Two older faults found on the way are fixed for every guest: a SysRq BREAK in front of typed input, and an ACPI SCI line that was never lowered (a storm on the I/O APIC; B4 lived on the 8259). Nested is not lived. Not flashed. B7 is not on this flash. TLS 88. Scores held. Bar A 94. Bar B 72. Overall 80. PERC 86. Unmodified 45. SKU 94. |

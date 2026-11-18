@@ -402,6 +402,11 @@ pub fn event_from_disc(disc: u64) -> Option<AuditEvent> {
             source: 0,
             cert_len: 0,
         },
+        82 => AuditEvent::GuestCpuSaved {
+            spare_off: 0,
+            prev: 0,
+            n: 0,
+        },
         _ => return None,
     })
 }
@@ -444,6 +449,29 @@ mod persist_test {
         assert_eq!(boot2.get(0).unwrap().prev_hash, AUDIT_GENESIS_HASH);
         assert_eq!(boot2.get(2).unwrap().prev_hash, tip);
         assert_eq!(boot2.get(1).unwrap().hash, tip);
+    }
+
+    #[test]
+    fn guest_cpu_saved_survives_the_image_and_tag_82_decodes() {
+        let mut boot1 = AuditRing::new();
+        boot1
+            .append(AuditEvent::GuestCpuSaved {
+                spare_off: 42,
+                prev: 1,
+                n: 2,
+            })
+            .unwrap();
+        let tip = boot1.tip_hash();
+        let mut image = [0u8; IMAGE_BYTES];
+        assert!(encode_ring(&boot1, &mut image));
+        let mut boot2 = AuditRing::new();
+        assert!(boot2.adopt_image(&image));
+        assert!(boot2.verify_chain());
+        assert_eq!(boot2.get(0).unwrap().hash, tip);
+        assert!(matches!(
+            event_from_disc(82),
+            Some(AuditEvent::GuestCpuSaved { .. })
+        ));
     }
 
     #[test]

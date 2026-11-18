@@ -99,6 +99,9 @@ paths:
   /perc/nic/:
     post:
       summary: Save or clear a guest NIC
+  /perc/cpu/:
+    post:
+      summary: Save a guest vCPU count for the next Start
   /iso/install:
     post:
       summary: Start an install

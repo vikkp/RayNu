@@ -5,7 +5,6 @@ fn lock() -> std::sync::MutexGuard<'static, ()> {
     LOCK.lock().unwrap_or_else(|p| p.into_inner())
 }
 
-
 #[test]
 fn marker_and_range() {
     assert_eq!(M3_GTIMER3_OK_MARKER, "RAYNU-V-M3-GTIMER3-OK");
@@ -230,7 +229,10 @@ fn firmware_lapic_timer_expiry_masked_uses_vec20() {
     while take_highest_irr().is_some() {
         assert!(wrmsr(0x80B, 0).is_some());
     }
-    assert!(force_firmware_lapic_timer_expiry(), "firmware LAPIC timer expiry");
+    assert!(
+        force_firmware_lapic_timer_expiry(),
+        "firmware LAPIC timer expiry"
+    );
     let v = take_highest_irr().expect("firmware LAPIC timer expiry IRR");
     assert_eq!(v, 0x20);
     assert!(wrmsr(0x80B, 0).is_some());
@@ -244,7 +246,10 @@ fn firmware_lapic_timer_expiry_keeps_unmasked_vector() {
     while take_highest_irr().is_some() {
         assert!(wrmsr(0x80B, 0).is_some());
     }
-    assert!(force_firmware_lapic_timer_expiry(), "firmware LAPIC timer expiry");
+    assert!(
+        force_firmware_lapic_timer_expiry(),
+        "firmware LAPIC timer expiry"
+    );
     let v = take_highest_irr().expect("keep OVMF LVT vector");
     assert_eq!(v, 0x27);
     assert!(wrmsr(0x80B, 0).is_some());
@@ -280,15 +285,121 @@ fn icr_self_ipi_latches_irr_and_take_moves_to_isr() {
 }
 
 #[test]
-fn remote_init_then_startup_is_recorded_once() {
+fn dest_hit_matches_physical_flat_and_cluster() {
+    assert!(dest_hit(1, false, 1, 0, 0xFFFF_FFFF));
+    assert!(dest_hit(0xFF, false, 3, 0, 0xFFFF_FFFF));
+    assert!(!dest_hit(2, false, 1, 0, 0xFFFF_FFFF));
+    // Flat: LDR bit 1, destination bit 1.
+    assert!(dest_hit(0b0010, true, 1, 0b0010 << 24, 0xFFFF_FFFF));
+    assert!(!dest_hit(0b0001, true, 1, 0b0010 << 24, 0xFFFF_FFFF));
+    // Cluster model (DFR[31:28] == 0): cluster 0x1, logical bit 0b0010.
+    let ldr = 0x12u32 << 24;
+    assert!(dest_hit(0x12, true, 1, ldr, 0x0FFF_FFFF));
+    assert!(!dest_hit(0x22, true, 1, ldr, 0x0FFF_FFFF), "other cluster");
+    assert!(!dest_hit(0x11, true, 1, ldr, 0x0FFF_FFFF), "bit clear");
+}
+
+#[test]
+fn smp_ipi_init_sipi_and_nmi_follow_the_destination() {
     let _guard = lock();
-    reset();
+    let slot = crate::guest::slot::current();
+    let reset_cpus = || {
+        crate::guest::slot::set_vcpus(2);
+        crate::guest::slot::set_vcpu_up(slot, 1, true);
+        reset();
+        crate::guest::slot::with_vcpu(slot, 1, reset);
+    };
+    reset_cpus();
+    // Fixed IPI 0 → 1 sets vCPU 1's IRR and not vCPU 0's.
     assert!(mmio_access(APIC_GPA + 0x310, true, 1 << 24).is_some());
-    assert!(take_ap_startup().is_none());
-    assert!(mmio_access(APIC_GPA + 0x300, true, 5 << 8).is_some());
-    assert!(take_ap_startup().is_none());
+    assert!(mmio_access(APIC_GPA + 0x300, true, (1 << 14) | 0x30).is_some());
+    let irr1 = crate::guest::slot::with_vcpu(slot, 1, || {
+        mmio_access(APIC_GPA + 0x210, false, 0).unwrap().unwrap()
+    });
+    let irr0 = mmio_access(APIC_GPA + 0x210, false, 0).unwrap().unwrap();
+    assert_ne!(irr1 & (1 << 16), 0, "vCPU 1 IRR");
+    assert_eq!(irr0 & (1 << 16), 0, "vCPU 0 IRR");
+    assert_eq!(
+        crate::guest::slot::with_vcpu(slot, 1, take_self_ipi),
+        Some(0x30)
+    );
+
+    // Shorthand 3 skips the sender. Shorthand 2 includes it.
+    reset_cpus();
+    assert!(mmio_access(APIC_GPA + 0x300, true, (3 << 18) | (1 << 14) | 0x31).is_some());
+    assert!(take_self_ipi().is_none());
+    assert_eq!(
+        crate::guest::slot::with_vcpu(slot, 1, take_self_ipi),
+        Some(0x31)
+    );
+    reset_cpus();
+    assert!(mmio_access(APIC_GPA + 0x300, true, (2 << 18) | (1 << 14) | 0x32).is_some());
+    assert_eq!(take_self_ipi(), Some(0x32));
+    assert_eq!(
+        crate::guest::slot::with_vcpu(slot, 1, take_self_ipi),
+        Some(0x32)
+    );
+
+    // INIT assert then SIPI are latched for vCPU 1 and taken once.
+    reset_cpus();
+    assert!(mmio_access(APIC_GPA + 0x310, true, 1 << 24).is_some());
+    assert!(mmio_access(APIC_GPA + 0x300, true, (5 << 8) | (1 << 14) | (1 << 15)).is_some());
+    assert!(take_ap_init(1));
+    assert!(!take_ap_init(1));
     assert!(mmio_access(APIC_GPA + 0x300, true, (6 << 8) | 0x08).is_some());
-    assert_eq!(take_ap_startup(), Some(0x08));
-    assert!(take_ap_startup().is_none());
+    assert_eq!(take_ap_sipi(1), Some(0x08));
+    assert!(take_ap_sipi(1).is_none());
+
+    // INIT de-assert is ignored. INIT and SIPI to vCPU 0 are ignored.
+    assert!(mmio_access(APIC_GPA + 0x300, true, (5 << 8) | (1 << 15)).is_some());
+    assert!(!take_ap_init(1));
+    assert!(mmio_access(APIC_GPA + 0x310, true, 0).is_some());
+    assert!(mmio_access(APIC_GPA + 0x300, true, (5 << 8) | (1 << 14)).is_some());
+    assert!(!take_ap_init(0));
+    assert!(mmio_access(APIC_GPA + 0x300, true, (6 << 8) | 0x09).is_some());
+    assert!(take_ap_sipi(0).is_none());
+
+    // NMI latches on the target.
+    assert!(mmio_access(APIC_GPA + 0x310, true, 1 << 24).is_some());
+    assert!(mmio_access(APIC_GPA + 0x300, true, (4 << 8) | (1 << 14)).is_some());
+    assert!(crate::guest::slot::with_vcpu(slot, 1, nmi_pending));
+    assert!(crate::guest::slot::with_vcpu(slot, 1, take_nmi));
+    assert!(!crate::guest::slot::with_vcpu(slot, 1, nmi_pending));
+
+    // reset under vCPU 1 gives ID 1 << 24.
+    crate::guest::slot::with_vcpu(slot, 1, reset);
+    let id = crate::guest::slot::with_vcpu(slot, 1, || {
+        mmio_access(APIC_GPA + 0x20, false, 0).unwrap().unwrap()
+    });
+    assert_eq!(id, 1 << 24);
+
+    // With one vCPU a remote fixed IPI does nothing and LDR reads 0.
+    crate::guest::slot::set_vcpus(1);
     reset();
+    assert!(mmio_access(APIC_GPA + 0xD0, true, 0xFF00_0000).is_some());
+    assert_eq!(mmio_access(APIC_GPA + 0xD0, false, 0).unwrap().unwrap(), 0);
+    assert!(mmio_access(APIC_GPA + 0x310, true, 1 << 24).is_some());
+    assert!(mmio_access(APIC_GPA + 0x300, true, (1 << 14) | 0x33).is_some());
+    assert!(take_self_ipi().is_none());
+
+    crate::guest::slot::set_vcpus(1);
+    crate::guest::slot::set_vcpu_up(slot, 1, false);
+    reset();
+}
+
+#[test]
+fn remote_lapic_writes_go_through_one_seam() {
+    let src = include_str!("lapic_virt.rs");
+    assert_eq!(src.matches("APIC_IRR.p_at(").count(), 1);
+    assert_eq!(src.matches("SELF_IPI_MASK.p_at(").count(), 1);
+    let irq = include_str!("guest_irq.rs");
+    let msix = include_str!("guest_msix.rs");
+    assert!(
+        !irq.contains(".p_at("),
+        "IOAPIC must not write a LAPIC bank"
+    );
+    assert!(
+        !msix.contains(".p_at("),
+        "MSI-X must not write a LAPIC bank"
+    );
 }

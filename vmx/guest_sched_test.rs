@@ -1,6 +1,7 @@
 //! Host tests for the guest scheduler policy (ADR-022).
 
 use super::*;
+use crate::guest::slot;
 
 const Q: u64 = 4_000_000;
 const STARVE: u64 = 20_000_000;
@@ -47,70 +48,194 @@ fn busy_guest_keeps_its_quantum_and_does_not_ask_the_others() {
     assert_eq!(asked, 0);
 }
 
+fn bsp(slot_n: usize) -> usize {
+    slot::unit(slot_n, 0)
+}
+
+/// vCPU 0 of a slot is on; the other vCPUs of every slot are off.
+fn vcpu0_only(u: usize, on: impl Fn(usize) -> bool) -> Other {
+    if slot::unit_vcpu(u) == 0 && on(slot::unit_slot(u)) {
+        busy()
+    } else {
+        off()
+    }
+}
+
 #[test]
 fn two_busy_guests_alternate_at_the_quantum() {
-    let other = |s: usize| if s <= 1 { busy() } else { off() };
-    assert_eq!(pick(0, false, Q, Q, STARVE, other), Pick::Switch(1));
-    assert_eq!(pick(1, false, Q, Q, STARVE, other), Pick::Switch(0));
+    let other = |u: usize| vcpu0_only(u, |s| s <= 1);
+    assert_eq!(
+        pick(bsp(0), false, Q, Q, STARVE, other),
+        Pick::Switch(bsp(1))
+    );
+    assert_eq!(
+        pick(bsp(1), false, Q, Q, STARVE, other),
+        Pick::Switch(bsp(0))
+    );
 }
 
 #[test]
 fn idle_guest_yields_at_once_to_a_busy_one() {
-    let other = |s: usize| if s == 1 { busy() } else { off() };
-    assert_eq!(pick(0, true, 0, Q, STARVE, other), Pick::Switch(1));
+    let other = |u: usize| vcpu0_only(u, |s| s == 1);
+    assert_eq!(
+        pick(bsp(0), true, 0, Q, STARVE, other),
+        Pick::Switch(bsp(1))
+    );
 }
 
 #[test]
 fn halted_guest_without_work_is_left_alone_until_the_backstop() {
-    let quiet = |s: usize| if s == 1 { halted(false, STARVE - 1) } else { off() };
-    assert_eq!(pick(0, false, Q, Q, STARVE, quiet), Pick::Stay);
-    assert_eq!(pick(0, true, 0, Q, STARVE, quiet), Pick::Stay);
-    let starved = |s: usize| if s == 1 { halted(false, STARVE) } else { off() };
-    assert_eq!(pick(0, false, Q, Q, STARVE, starved), Pick::Switch(1));
-    assert_eq!(pick(0, true, 0, Q, STARVE, starved), Pick::Switch(1));
+    let quiet = |u: usize| {
+        if u == bsp(1) {
+            halted(false, STARVE - 1)
+        } else {
+            off()
+        }
+    };
+    assert_eq!(pick(bsp(0), false, Q, Q, STARVE, quiet), Pick::Stay);
+    assert_eq!(pick(bsp(0), true, 0, Q, STARVE, quiet), Pick::Stay);
+    let starved = |u: usize| {
+        if u == bsp(1) {
+            halted(false, STARVE)
+        } else {
+            off()
+        }
+    };
+    assert_eq!(
+        pick(bsp(0), false, Q, Q, STARVE, starved),
+        Pick::Switch(bsp(1))
+    );
+    assert_eq!(
+        pick(bsp(0), true, 0, Q, STARVE, starved),
+        Pick::Switch(bsp(1))
+    );
 }
 
 #[test]
 fn halted_guest_with_work_runs_at_the_next_quantum_edge() {
-    let other = |s: usize| if s == 1 { halted(true, 0) } else { off() };
-    assert_eq!(pick(0, false, Q - 1, Q, STARVE, other), Pick::Stay);
-    assert_eq!(pick(0, false, Q, Q, STARVE, other), Pick::Switch(1));
+    let other = |u: usize| {
+        if u == bsp(1) {
+            halted(true, 0)
+        } else {
+            off()
+        }
+    };
+    assert_eq!(pick(bsp(0), false, Q - 1, Q, STARVE, other), Pick::Stay);
+    assert_eq!(
+        pick(bsp(0), false, Q, Q, STARVE, other),
+        Pick::Switch(bsp(1))
+    );
 }
 
 #[test]
 fn round_robin_starts_after_the_current_slot_and_never_picks_it() {
-    let all = |_: usize| busy();
+    let all = |u: usize| vcpu0_only(u, |_| true);
     for cur in 0..MAX_GUESTS {
         assert_eq!(
-            pick(cur, false, Q, Q, STARVE, all),
-            Pick::Switch((cur + 1) % MAX_GUESTS)
+            pick(bsp(cur), false, Q, Q, STARVE, all),
+            Pick::Switch(bsp((cur + 1) % MAX_GUESTS))
         );
     }
-    let only_three = |s: usize| if s == 3 { busy() } else { off() };
-    assert_eq!(pick(0, false, Q, Q, STARVE, only_three), Pick::Switch(3));
-    assert_eq!(pick(3, false, Q, Q, STARVE, only_three), Pick::Stay);
+    let only_three = |u: usize| vcpu0_only(u, |s| s == 3);
+    assert_eq!(
+        pick(bsp(0), false, Q, Q, STARVE, only_three),
+        Pick::Switch(bsp(3))
+    );
+    assert_eq!(pick(bsp(3), false, Q, Q, STARVE, only_three), Pick::Stay);
+}
+
+#[test]
+fn two_units_of_one_slot_alternate_after_a_quantum() {
+    let other = |u: usize| {
+        if slot::unit_slot(u) == 0 && slot::unit_vcpu(u) <= 1 {
+            busy()
+        } else {
+            off()
+        }
+    };
+    assert_eq!(
+        pick(slot::unit(0, 0), false, Q, Q, STARVE, other),
+        Pick::Switch(slot::unit(0, 1))
+    );
+    assert_eq!(
+        pick(slot::unit(0, 1), false, Q, Q, STARVE, other),
+        Pick::Switch(slot::unit(0, 0))
+    );
+}
+
+#[test]
+fn an_idle_unit_yields_to_a_busy_sibling() {
+    let other = |u: usize| {
+        if u == slot::unit(0, 1) {
+            busy()
+        } else {
+            off()
+        }
+    };
+    assert_eq!(
+        pick(slot::unit(0, 0), true, 0, Q, STARVE, other),
+        Pick::Switch(slot::unit(0, 1))
+    );
+}
+
+#[test]
+fn a_halted_sibling_with_no_work_is_skipped_until_starve() {
+    let quiet = |u: usize| {
+        if u == slot::unit(0, 1) {
+            halted(false, STARVE - 1)
+        } else {
+            off()
+        }
+    };
+    assert_eq!(
+        pick(slot::unit(0, 0), false, Q, Q, STARVE, quiet),
+        Pick::Stay
+    );
+    let starved = |u: usize| {
+        if u == slot::unit(0, 1) {
+            halted(false, STARVE)
+        } else {
+            off()
+        }
+    };
+    assert_eq!(
+        pick(slot::unit(0, 0), false, Q, Q, STARVE, starved),
+        Pick::Switch(slot::unit(0, 1))
+    );
+}
+
+#[test]
+fn pick_never_returns_the_current_unit() {
+    for cur in 0..MAX_UNITS {
+        assert_eq!(
+            pick(cur, false, Q, Q, STARVE, |_| busy()),
+            Pick::Switch((cur + 1) % MAX_UNITS)
+        );
+    }
 }
 
 #[test]
 fn no_on_guest_waits_longer_than_the_backstop_plus_the_other_quanta() {
-    // Four busy guests, 1 tick per step: every guest gets the CPU again
-    // within (MAX_GUESTS - 1) quanta.
-    let mut cur = 0usize;
+    // Four busy guests, vCPU 0 only, 1 tick per step: every guest gets the
+    // CPU again within (MAX_GUESTS - 1) quanta.
+    let mut cur = bsp(0);
     let mut used = 0u64;
     let mut waited = [0u64; MAX_GUESTS];
     let mut worst = 0u64;
+    let bsp_busy = |u: usize| vcpu0_only(u, |_| true);
     for _ in 0..(Q * 40) / 1000 {
         used += 1000;
+        let cur_slot = slot::unit_slot(cur);
         for (s, w) in waited.iter_mut().enumerate() {
-            if s != cur {
+            if s != cur_slot {
                 *w += 1000;
                 worst = worst.max(*w);
             }
         }
-        if let Pick::Switch(n) = pick(cur, false, used, Q, STARVE, |_| busy()) {
+        if let Pick::Switch(n) = pick(cur, false, used, Q, STARVE, bsp_busy) {
             cur = n;
             used = 0;
-            waited[n] = 0;
+            waited[slot::unit_slot(n)] = 0;
         }
     }
     assert!(worst <= Q * (MAX_GUESTS as u64 - 1), "worst={worst}");
@@ -137,13 +262,19 @@ fn tsc_arithmetic() {
     assert_eq!(quantum_ticks(2_000_000_000, 1, 5), 125_000);
     assert_eq!(quantum_ticks(0, 2_000_000_000, 5), 125_000);
     assert_eq!(quantum_ticks(1, 1, 31), 1, "never zero");
-    assert_eq!(quantum_ticks(2_000_000_000, 1, 99), quantum_ticks(2_000_000_000, 1, 31));
+    assert_eq!(
+        quantum_ticks(2_000_000_000, 1, 99),
+        quantum_ticks(2_000_000_000, 1, 31)
+    );
 }
 
 #[test]
 fn idle_is_hlt_with_nothing_to_deliver() {
     assert!(guest_idle(true, 0));
-    assert!(!guest_idle(true, 0x8000_0020), "an interrupt is being delivered");
+    assert!(
+        !guest_idle(true, 0x8000_0020),
+        "an interrupt is being delivered"
+    );
     assert!(!guest_idle(false, 0));
     assert!(!guest_idle(false, 0x8000_0020));
 }
@@ -246,12 +377,18 @@ fn slot_overhead_counts_every_region() {
 fn slot_report_ram_is_capped_and_has_a_floor() {
     let over = 53;
     assert_eq!(slot_report_chunks(4096, over, 512, 1008), Some(1008));
-    assert_eq!(slot_report_chunks(over + 512 + 300, over, 512, 1008), Some(300));
+    assert_eq!(
+        slot_report_chunks(over + 512 + 300, over, 512, 1008),
+        Some(300)
+    );
     assert_eq!(
         slot_report_chunks(over + SLOT_MIN_REPORT_CHUNKS, over, 0, 1008),
         Some(SLOT_MIN_REPORT_CHUNKS)
     );
-    assert_eq!(slot_report_chunks(over + SLOT_MIN_REPORT_CHUNKS - 1, over, 0, 1008), None);
+    assert_eq!(
+        slot_report_chunks(over + SLOT_MIN_REPORT_CHUNKS - 1, over, 0, 1008),
+        None
+    );
     assert_eq!(slot_report_chunks(10, over, 0, 1008), None, "no underflow");
     assert_eq!(slot_report_chunks(0, 0, 0, 1008), None);
 }
@@ -259,7 +396,10 @@ fn slot_report_ram_is_capped_and_has_a_floor() {
 #[test]
 fn constants_are_sane() {
     assert!(QUANTUM_US < STARVE_US);
-    assert!(STARVE_US <= 20_000, "a halted guest's timer is at most this late");
+    assert!(
+        STARVE_US <= 20_000,
+        "a halted guest's timer is at most this late"
+    );
     assert_eq!(ARENA_CHUNK_BYTES, 2 << 20);
     assert_eq!(NESTED_SLOT_DISK_BYTES % ARENA_CHUNK_BYTES, 0);
     assert_eq!(XSAVE_AREA_BYTES % 64, 0);
@@ -280,7 +420,13 @@ fn scheduler_is_wired_into_the_one_exit_path() {
     assert!(!g.contains("finish_seat_firmware"));
     assert!(!g.contains("SeatUart"));
     // Every guest's CPU state is switched, not only the registers.
-    for needle in ["xsave64", "xrstor64", "MSR_KERNEL_GS_BASE", "write_dr(6", "MSR_PRED_CMD"] {
+    for needle in [
+        "xsave64",
+        "xrstor64",
+        "MSR_KERNEL_GS_BASE",
+        "write_dr(6",
+        "MSR_PRED_CMD",
+    ] {
         assert!(s.contains(needle), "{needle}");
     }
     // The scheduler never prints an iron marker.
