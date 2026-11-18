@@ -337,7 +337,7 @@
           "status": "in flight",
           "ships": "S1",
           "ref": "ADR-024",
-          "note": "Branch `cursor/wave-7-b21-host-cores-25ca`. Iron `a9301533682b` / run `44376126570`: `online=1 of 16`, every other core `not used: tsc`; guest `nproc` 2 on core 0. Not lived",
+          "note": "Branch `cursor/wave-7-b21-host-cores-25ca`. Iron `70afcdf9da0e` / run `44383802515`: `online=1 of 16`, cores 1–15 `not used: tsc`, no `tsc sync` line. x2APIC id was shifted like xAPIC. Not lived",
           "wave": "7"
         },
         {

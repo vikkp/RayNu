@@ -105,6 +105,14 @@ fn stack_top_is_aligned_inside_the_block() {
 }
 
 #[test]
+fn x2apic_id_is_not_shifted() {
+    assert_eq!(xapic_id(0x0200_0000), 2);
+    assert_eq!(x2apic_id(0x2), 2);
+    assert_eq!(x2apic_id(0x1e), 0x1e);
+    assert_ne!(x2apic_id(0x2), xapic_id(0x2));
+}
+
+#[test]
 fn tsc_sync_delta_is_the_paired_offset() {
     assert_eq!(tsc_sync_delta(5_000, 1_000), 4_000);
     assert_eq!(tsc_sync_delta(1_000, 1_000), 0);

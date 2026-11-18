@@ -3,7 +3,7 @@
 //! Core 0 writes the BSP registers before the first SIPI. Each AP reads them
 //! and writes only `AP_STATE[core]` and the TSC handshake words.
 
-use core::sync::atomic::{AtomicU64, AtomicU8, Ordering};
+use core::sync::atomic::{AtomicU32, AtomicU64, AtomicU8, Ordering};
 
 use super::{apic_id, ap_base, low_base, n_ap, stack_top, x2apic, BLOCK_BYTES, MAX_CORES};
 use crate::arch::cpu::{self, DescriptorTablePtr};
@@ -35,6 +35,7 @@ static TSC_GO: AtomicU8 = AtomicU8::new(0);
 /// Added to this core's IA32_TSC_ADJUST when TSC_SYNC is 1. 2 means applied.
 static TSC_DELTA: AtomicU64 = AtomicU64::new(0);
 static TSC_SYNC: AtomicU8 = AtomicU8::new(0);
+static APIC_SEEN: AtomicU32 = AtomicU32::new(0);
 
 #[repr(C, align(64))]
 struct Mail {
@@ -134,8 +135,12 @@ fn ap_lapic(core: usize) -> Result<(), u8> {
             }
             cpu::wrmsr(0x80F, u64::from((1u32 << 8) | 0xFF));
             cpu::wrmsr(0x808, 0);
-            let id = (cpu::rdmsr(0x802) >> 24) as u32;
+            // x2APIC MSR 0x802 holds the id in bits 31:0. The xAPIC
+            // shift (>> 24) reads 0 for every id on this R640 and the
+            // core is refused before the TSC sample (iron 70afcdf9).
+            let id = super::x2apic_id(cpu::rdmsr(0x802));
             if id != apic_id(core) {
+                APIC_SEEN.store(id, Ordering::Release);
                 return Err(AP_BAD_APIC);
             }
         } else {
@@ -149,8 +154,9 @@ fn ap_lapic(core: usize) -> Result<(), u8> {
             let svr = core::ptr::read_volatile((base + 0xF0) as *const u32);
             core::ptr::write_volatile((base + 0xF0) as *mut u32, svr | (1 << 8) | 0xFF);
             core::ptr::write_volatile((base + 0x80) as *mut u32, 0);
-            let id = core::ptr::read_volatile((base + 0x20) as *const u32) >> 24;
+            let id = super::xapic_id(core::ptr::read_volatile((base + 0x20) as *const u32));
             if id != apic_id(core) {
+                APIC_SEEN.store(id, Ordering::Release);
                 return Err(AP_BAD_APIC);
             }
         }
@@ -295,15 +301,17 @@ pub unsafe fn start_cores() {
         TSC_GO.store(0, Ordering::Release);
         send_init_sipi(id, low_base());
         let started = wait_state(core, AP_STARTED, hz, 100_000);
-        let tsc_ok = started && tsc_rounds_ok(core);
-        // Finish the three rounds before the next SIPI. The trampoline page
-        // and the handshake words are shared, and this core may still be
-        // entering VMX root.
-        let done = if started {
+        let early = AP_STATE[core].load(Ordering::Acquire);
+        // BAD_APIC is numerically above STARTED. Treating that as "started"
+        // ran the TSC wait and printed `not used: tsc` for an id mismatch.
+        let done = if early == AP_BAD_APIC || early == AP_BAD_TSC || early == AP_NO_VMX {
+            early
+        } else if early == AP_STARTED {
+            let tsc_ok = tsc_rounds_ok(core);
             let s = wait_state_done(core, hz, 200_000);
             if tsc_ok { s } else { AP_BAD_TSC }
         } else {
-            AP_STATE[core].load(Ordering::Acquire)
+            early
         };
         if done == AP_ONLINE {
             online += 1;
@@ -330,7 +338,12 @@ pub unsafe fn start_cores() {
             crate::boot::serial::write_str(" apic=0x");
             write_hex(u64::from(id));
             crate::boot::serial::write_str(" not used: ");
-            crate::boot::serial::write_line(why);
+            crate::boot::serial::write_str(why);
+            if done == AP_BAD_APIC {
+                crate::boot::serial::write_str(" saw=0x");
+                write_hex(u64::from(APIC_SEEN.load(Ordering::Acquire)));
+            }
+            crate::boot::serial::write_line("");
         }
     }
     write_online(online, n_ap() + 1);

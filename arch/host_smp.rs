@@ -547,6 +547,16 @@ pub fn stack_top(core: usize, ap_base: u64, core0_top: u64) -> u64 {
     end.saturating_sub(16) & !0xF
 }
 
+/// xAPIC ID register: the id is bits 31:24.
+pub fn xapic_id(reg: u32) -> u32 {
+    reg >> 24
+}
+
+/// x2APIC IA32_X2APIC_APICID (MSR 0x802): the id is the low 32 bits.
+pub fn x2apic_id(msr: u64) -> u32 {
+    msr as u32
+}
+
 /// Signed difference added to another core's `IA32_TSC_ADJUST` so a later
 /// `rdtsc` on that core matches `bsp`. The two arguments are one paired sample.
 pub fn tsc_sync_delta(bsp: u64, ap: u64) -> u64 {
