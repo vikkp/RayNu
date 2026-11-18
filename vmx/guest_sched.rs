@@ -302,8 +302,25 @@ mod hw {
     static AUTO_RESTART: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
     /// The guest takes COM2 when it launches (an operator Start).
     static TAKE_CONSOLE: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
-    /// TSC when the guest on the CPU got it.
-    static SLICE_START: AtomicU64 = AtomicU64::new(0);
+    /// TSC when the guest on this core got the CPU. `load` and `store` keep
+    /// the call text; the word is chosen by [`crate::arch::host_smp::this_core`].
+    struct SliceClock;
+    impl SliceClock {
+        fn load(&self, _order: Ordering) -> u64 {
+            let i = crate::arch::host_smp::this_core()
+                .min(crate::arch::host_smp::MAX_CORES - 1);
+            SLICE_CLOCKS[i].load(Ordering::Acquire)
+        }
+        fn store(&self, val: u64, _order: Ordering) {
+            let i = crate::arch::host_smp::this_core()
+                .min(crate::arch::host_smp::MAX_CORES - 1);
+            SLICE_CLOCKS[i].store(val, Ordering::Release);
+        }
+    }
+    /// TSC when the guest on this core got the CPU. One word per host core.
+    static SLICE_START: SliceClock = SliceClock;
+    static SLICE_CLOCKS: [AtomicU64; crate::arch::host_smp::MAX_CORES] =
+        [const { AtomicU64::new(0) }; crate::arch::host_smp::MAX_CORES];
     /// Lab only (`twoguest.txt`): slot + 1 that boots the retained product
     /// ISO beside slot 0. Zero when nothing is asked. Nested QEMU has no
     /// PERC catalog to start a second guest from.
@@ -781,6 +798,7 @@ mod hw {
         let quantum = us_to_tsc(QUANTUM_US, hz, fb);
         let starve = us_to_tsc(STARVE_US, hz, fb);
         beat(slot::current(), now, us_to_tsc(BEAT_US, hz, fb));
+        crate::arch::host_smp::maybe_core_line(now, us_to_tsc(BEAT_US, hz, fb));
         match pick(cu, idle, used, quantum, starve, |u| other(u, now)) {
             Pick::Stay => {
                 super::super::clamp_firmware_preempt();

@@ -382,12 +382,15 @@ impl<T> Deref for PerGuest<T> {
 /// INVARIANTS:
 ///   - An entry is touched only while its guest is not executing (VMX root,
 ///     one CPU), so access is exclusive without a lock.
+///   - With more than one host core, the writer is the core that holds the
+///     monitor lock (ADR-024).
 #[repr(transparent)]
 pub struct PerGuestCell<T>(UnsafeCell<[T; MAX_GUESTS]>);
 
 // SAFETY: every access is from VMX root on the one CPU that runs guests, and
 // an entry is only reached while its guest is stopped at a VM exit. There is
-// no concurrent access to share.
+// no concurrent access to share. With more than one host core, the writer is
+// the core that holds the monitor lock (ADR-024).
 // KANI-TARGET: per-guest cell access (outside Proven Core).
 unsafe impl<T> Sync for PerGuestCell<T> {}
 
@@ -441,12 +444,15 @@ impl<T> Deref for PerVcpu<T> {
 /// INVARIANTS:
 ///   - An entry is touched only while its vCPU is not executing (VMX root,
 ///     one CPU), or through the one remote-post seam (ADR-023 D12).
+///   - With more than one host core, the writer is the core that holds the
+///     monitor lock (ADR-024).
 #[repr(transparent)]
 pub struct PerVcpuCell<T>(UnsafeCell<[[T; MAX_VCPUS]; MAX_GUESTS]>);
 
 // SAFETY: every access is from VMX root on the one CPU that runs guests, and
 // an entry is only reached while its guest is stopped at a VM exit. There is
-// no concurrent access to share.
+// no concurrent access to share. With more than one host core, the writer is
+// the core that holds the monitor lock (ADR-024).
 // KANI-TARGET: per-guest cell access (outside Proven Core).
 unsafe impl<T> Sync for PerVcpuCell<T> {}
 

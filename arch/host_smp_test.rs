@@ -152,6 +152,75 @@ fn boot_tables_reject_a_nonzero_1gib_page() {
 }
 
 #[test]
+fn ticket_lock_counts_exactly() {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::thread;
+    reset_monitor_for_test();
+    assert_eq!(MON_NEXT.load(Ordering::Relaxed), 0);
+    assert_eq!(MON_OWNER.load(Ordering::Relaxed), 0);
+    for _ in 0..1000 {
+        acquire();
+        release();
+    }
+    assert_eq!(MON_NEXT.load(Ordering::Relaxed), 1000);
+    assert_eq!(MON_OWNER.load(Ordering::Relaxed), 1000);
+    reset_monitor_for_test();
+    let counter = AtomicU64::new(0);
+    thread::scope(|scope| {
+        for _ in 0..4 {
+            scope.spawn(|| {
+                for _ in 0..1000 {
+                    acquire();
+                    counter.fetch_add(1, Ordering::Relaxed);
+                    release();
+                }
+            });
+        }
+    });
+    assert_eq!(counter.load(Ordering::Relaxed), 4000);
+    assert_eq!(
+        MON_NEXT.load(Ordering::Relaxed),
+        MON_OWNER.load(Ordering::Relaxed)
+    );
+}
+
+#[test]
+fn monitor_stubs_take_the_lock_around_the_registers() {
+    let src = include_str!("../vmx/guest_uefi.rs");
+    let land = src
+        .find("fn guest_uefi_vmexit_landing")
+        .expect("landing");
+    let land_body = &src[land..land + 1800];
+    let xadd = land_body.find("lock xadd").expect("xadd");
+    let rax = land_body.find("slot_rax").expect("rax");
+    assert!(xadd < rax, "lock is taken before the guest RAX is stored");
+    for needle in [
+        "fn guest_uefi_vmresume()",
+        "fn guest_uefi_vmlaunch()",
+        "fn raynu_f_vmlaunch()",
+    ] {
+        let at = src.find(needle).unwrap_or_else(|| panic!("missing {needle}"));
+        let body = &src[at..at + 4500];
+        let inc = body.find("lock inc dword ptr [rip + {mon_owner}]").expect(needle);
+        let entry = if needle.contains("vmresume") {
+            body.find("\"vmresume\"").expect("vmresume")
+        } else {
+            body.find("\"vmlaunch\"").expect("vmlaunch")
+        };
+        assert!(inc < entry, "{needle} releases after the registers are loaded");
+    }
+    let exit = src.find("fn guest_uefi_vmexit()").expect("exit");
+    let exit_head = &src[exit..exit + 240];
+    assert!(
+        exit_head.contains("monitor_enter()"),
+        "vmexit starts in the monitor"
+    );
+    let enter = src.find("fn enter_guest()").expect("enter");
+    let enter_head = &src[enter..enter + 180];
+    assert!(enter_head.contains("monitor_leave()"));
+}
+
+#[test]
 fn pick_core_prefers_the_lightest_nonzero() {
     assert_eq!(pick_core(&[2, 2, 1], 3), 2);
     assert_eq!(pick_core(&[1, 1, 1], 3), 1);

@@ -5671,6 +5671,7 @@ unsafe fn launch_uefi(
         return Err(GuestUefiLaunchError::LaunchSetupFailed);
     };
     HOST_RSP_SHARED.store(host_rsp, Ordering::Release);
+    crate::arch::host_smp::note_core0_stack(host_rsp);
 
     let ept_need = frames_required_firmware_alias(gpa, fw_len);
     if ept_need > 8 {
@@ -6002,12 +6003,18 @@ unsafe fn launch_uefi(
     }
 
     serial::write_line("boot: guest-UEFI VMLAUNCH → reset vector 0xFFFF_FFF0");
+    crate::arch::host_smp::monitor_leave();
+    crate::arch::host_smp::release();
     match ops::vmlaunch() {
         Ok(()) => {
+            crate::arch::host_smp::acquire();
+            crate::arch::host_smp::monitor_reenter();
             serial::write_line("boot: ERROR — guest-UEFI VMLAUNCH returned Ok");
             Err(GuestUefiLaunchError::LaunchSetupFailed)
         }
         Err(_) => {
+            crate::arch::host_smp::acquire();
+            crate::arch::host_smp::monitor_reenter();
             let ierr = ops::vmread(VM_INSTRUCTION_ERROR).unwrap_or(0xFFFF) as u32;
             LAST_INSN_ERROR.store(ierr, Ordering::Release);
             serial::write_str("boot: guest-UEFI VMLAUNCH failed insn_error=0x");
@@ -6377,6 +6384,24 @@ unsafe fn vw(field: u64, value: u64) -> Result<(), LaunchError> {
 #[unsafe(naked)]
 pub unsafe extern "C" fn guest_uefi_vmexit_landing() -> ! {
     core::arch::naked_asm!(
+        "push rax",
+        "push rdx",
+        "rdtsc",
+        "shl rdx, 32",
+        "or rax, rdx",
+        "push rax",
+        "mov eax, 1",
+        "lock xadd dword ptr [rip + {mon_next}], eax",
+        "2:",
+        "cmp dword ptr [rip + {mon_owner}], eax",
+        "je 3f",
+        "pause",
+        "jmp 2b",
+        "3:",
+        "pop rax",
+        "mov [rip + {land_tsc}], rax",
+        "pop rdx",
+        "pop rax",
         "mov [rip + {slot_rax}], rax",
         "mov [rip + {slot_rbx}], rbx",
         "mov [rip + {slot_rcx}], rcx",
@@ -6431,6 +6456,9 @@ pub unsafe extern "C" fn guest_uefi_vmexit_landing() -> ! {
         xmm = sym SAVED_XMM,
         osfxsr = const crate::arch::cpu::CR4_OSFXSR,
         cont = sym guest_uefi_vmexit,
+        mon_next = sym crate::arch::host_smp::MON_NEXT,
+        mon_owner = sym crate::arch::host_smp::MON_OWNER,
+        land_tsc = sym crate::arch::host_smp::LAND_TSC,
     );
 }
 
@@ -6438,6 +6466,7 @@ pub unsafe extern "C" fn guest_uefi_vmexit_landing() -> ! {
 /// every later entry is `VMRESUME`.
 #[cfg(target_os = "uefi")]
 unsafe fn enter_guest() -> ! {
+    crate::arch::host_smp::monitor_leave();
     if AP_NEEDS_LAUNCH.swap(false, Ordering::AcqRel) {
         guest_uefi_vmlaunch()
     } else {
@@ -6481,7 +6510,16 @@ unsafe extern "C" fn guest_uefi_vmresume() -> ! {
         "mov r13, [rip + {slot_r13}]",
         "mov r14, [rip + {slot_r14}]",
         "mov r15, [rip + {slot_r15}]",
+        "lock inc dword ptr [rip + {mon_owner}]",
         "vmresume",
+        "mov eax, 1",
+        "lock xadd dword ptr [rip + {mon_next}], eax",
+        "2:",
+        "cmp dword ptr [rip + {mon_owner}], eax",
+        "je 3f",
+        "pause",
+        "jmp 2b",
+        "3:",
         "jmp {fail}",
         slot_rax = sym SAVED_RAX,
         slot_rbx = sym SAVED_RBX,
@@ -6500,11 +6538,14 @@ unsafe extern "C" fn guest_uefi_vmresume() -> ! {
         slot_r15 = sym SAVED_R15,
         xmm = sym SAVED_XMM,
         fail = sym guest_uefi_resume_failed,
+        mon_owner = sym crate::arch::host_smp::MON_OWNER,
+        mon_next = sym crate::arch::host_smp::MON_NEXT,
     );
 }
 
 #[cfg(target_os = "uefi")]
 unsafe extern "C" fn guest_uefi_resume_failed() -> ! {
+    crate::arch::host_smp::monitor_reenter();
     let ierr = ops::vmread(VM_INSTRUCTION_ERROR).unwrap_or(0xFFFF);
     serial::write_str_nowait("boot: guest-UEFI VMRESUME failed insn_error=");
     write_dec_nowait(ierr);
@@ -6548,7 +6589,16 @@ unsafe extern "C" fn guest_uefi_vmlaunch() -> ! {
         "mov r13, [rip + {slot_r13}]",
         "mov r14, [rip + {slot_r14}]",
         "mov r15, [rip + {slot_r15}]",
+        "lock inc dword ptr [rip + {mon_owner}]",
         "vmlaunch",
+        "mov eax, 1",
+        "lock xadd dword ptr [rip + {mon_next}], eax",
+        "2:",
+        "cmp dword ptr [rip + {mon_owner}], eax",
+        "je 3f",
+        "pause",
+        "jmp 2b",
+        "3:",
         "jmp {fail}",
         slot_rax = sym SAVED_RAX,
         slot_rbx = sym SAVED_RBX,
@@ -6567,11 +6617,14 @@ unsafe extern "C" fn guest_uefi_vmlaunch() -> ! {
         slot_r15 = sym SAVED_R15,
         xmm = sym SAVED_XMM,
         fail = sym guest_uefi_launch_failed,
+        mon_owner = sym crate::arch::host_smp::MON_OWNER,
+        mon_next = sym crate::arch::host_smp::MON_NEXT,
     );
 }
 
 #[cfg(target_os = "uefi")]
 unsafe extern "C" fn guest_uefi_launch_failed() -> ! {
+    crate::arch::host_smp::monitor_reenter();
     let ierr = ops::vmread(VM_INSTRUCTION_ERROR).unwrap_or(0xFFFF);
     serial::write_str_nowait("boot: B7 vcpu ");
     write_dec_nowait(slot::current_vcpu() as u64);
@@ -7333,6 +7386,7 @@ unsafe fn reserve_guest_uefi_host_stack(alloc: &mut FrameAllocator) -> Option<(u
 /// HOST_RIP continuation for the private guest-UEFI VMCS. Not the E4 SHELL landing.
 #[cfg(target_os = "uefi")]
 pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
+    crate::arch::host_smp::monitor_enter();
     LAUNCH_ENTERED.store(true, Ordering::Release);
     MMIO_INSN_LEN.store(0, Ordering::Relaxed);
     let reason = ops::vmread(EXIT_REASON).unwrap_or(0xFFFF) as u32;
@@ -7344,6 +7398,7 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     let cs_base = ops::vmread(GUEST_CS_BASE).unwrap_or(0);
     let gpa = ops::vmread(GUEST_PHYSICAL_ADDRESS).unwrap_or(0);
     let intr = ops::vmread(VM_EXIT_INTR_INFO).unwrap_or(0);
+    crate::arch::host_smp::note_kick_exit(reason, intr);
     // ADR-016 F2b: the RayNu-F test app owns the VMCS now — none of the OVMF
     // heuristics below apply to a guest whose firmware we authored.
     if RAYNU_F_MODE.load(Ordering::Acquire) {
@@ -8708,6 +8763,7 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
     // The slot is on from here: the scheduler may give it the CPU and a
     // leave is a guest that ran (ADR-022).
     guest_sched::mark_running();
+    crate::arch::host_smp::monitor_leave();
     raynu_f_vmlaunch();
 }
 
@@ -10058,7 +10114,16 @@ unsafe extern "C" fn raynu_f_vmlaunch() -> ! {
         "mov r13, [rip + {slot_r13}]",
         "mov r14, [rip + {slot_r14}]",
         "mov r15, [rip + {slot_r15}]",
+        "lock inc dword ptr [rip + {mon_owner}]",
         "vmlaunch",
+        "mov eax, 1",
+        "lock xadd dword ptr [rip + {mon_next}], eax",
+        "2:",
+        "cmp dword ptr [rip + {mon_owner}], eax",
+        "je 3f",
+        "pause",
+        "jmp 2b",
+        "3:",
         "jmp {fail}",
         slot_rax = sym SAVED_RAX,
         slot_rbx = sym SAVED_RBX,
@@ -10076,11 +10141,14 @@ unsafe extern "C" fn raynu_f_vmlaunch() -> ! {
         slot_r14 = sym SAVED_R14,
         slot_r15 = sym SAVED_R15,
         fail = sym raynu_f_launch_failed,
+        mon_owner = sym crate::arch::host_smp::MON_OWNER,
+        mon_next = sym crate::arch::host_smp::MON_NEXT,
     );
 }
 
 #[cfg(target_os = "uefi")]
 unsafe extern "C" fn raynu_f_launch_failed() -> ! {
+    crate::arch::host_smp::monitor_reenter();
     let ierr = ops::vmread(VM_INSTRUCTION_ERROR).unwrap_or(0xFFFF) as u32;
     RAYNU_F_MODE.store(false, Ordering::Release);
     serial::write_str("boot: RayNu-F VMLAUNCH failed insn_error=0x");

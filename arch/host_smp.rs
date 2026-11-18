@@ -7,7 +7,7 @@
 //! started here. Core 0 writes the statics below once, before any other core
 //! exists. Later cores read them.
 
-use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, AtomicUsize, Ordering};
 
 use crate::arch::cpu;
 
@@ -43,6 +43,343 @@ static X2APIC: AtomicBool = AtomicBool::new(false);
 static LOW_BASE: AtomicU64 = AtomicU64::new(0);
 /// APIC id of each selected core, index 0 = BSP. Written by core 0 in the probe.
 static APIC_IDS: [AtomicU32; MAX_CORES] = [const { AtomicU32::new(0) }; MAX_CORES];
+
+/// Ticket lock. Core 0 holds ticket 0 from boot: `MON_OWNER` is 0 and the
+/// next ticket handed out is 1. Written by whichever core takes or drops it.
+pub static MON_NEXT: AtomicU32 = AtomicU32::new(1);
+pub static MON_OWNER: AtomicU32 = AtomicU32::new(0);
+/// TSC at the last VM-exit landing. The landing stub writes it under the lock.
+pub static LAND_TSC: AtomicU64 = AtomicU64::new(0);
+/// Core inside the monitor, [`NO_CORE`] when none. Core 0 starts inside it.
+static MON_HOLDER: AtomicU8 = AtomicU8::new(0);
+static ENTER_TSC: AtomicU64 = AtomicU64::new(0);
+static HOLD_MAX: AtomicU64 = AtomicU64::new(0);
+static WAIT_MAX: AtomicU64 = AtomicU64::new(0);
+static KICKS_TAKEN: AtomicU64 = AtomicU64::new(0);
+static KICKS_SENT: AtomicU64 = AtomicU64::new(0);
+static RECALLS: AtomicU64 = AtomicU64::new(0);
+/// Core 0's host stack top, published when the guest VMCS is built.
+static CORE0_STACK: AtomicU64 = AtomicU64::new(0);
+/// Unit whose VMCS this core last entered. Written by that core as it leaves
+/// the monitor, read by that core as it enters.
+static CORE_UNIT: [AtomicU8; MAX_CORES] = [const { AtomicU8::new(0) }; MAX_CORES];
+static CORE_SPEC: [AtomicU64; MAX_CORES] = [const { AtomicU64::new(0) }; MAX_CORES];
+static CORE_APIC: [AtomicU64; MAX_CORES] = [const { AtomicU64::new(0) }; MAX_CORES];
+static IN_GUEST: [AtomicBool; MAX_CORES] = [const { AtomicBool::new(false) }; MAX_CORES];
+/// Set by the core that changed EPT. The target core flushes before its next entry.
+static INVEPT_PENDING: [AtomicBool; MAX_CORES] = [const { AtomicBool::new(false) }; MAX_CORES];
+/// Core whose queue holds the unit. 0 until placement (WP5). The monitor writes it.
+static ASSIGNED: [AtomicU8; MAX_CORES] = [const { AtomicU8::new(0) }; MAX_CORES];
+
+/// Take the monitor. Fair: callers run in ticket order.
+pub fn acquire() {
+    let ticket = MON_NEXT.fetch_add(1, Ordering::AcqRel);
+    while MON_OWNER.load(Ordering::Acquire) != ticket {
+        core::hint::spin_loop();
+    }
+}
+
+/// Drop the monitor. The entry stubs do this with `lock inc` instead.
+pub fn release() {
+    MON_OWNER.fetch_add(1, Ordering::Release);
+}
+
+pub fn kicks_taken() -> u64 {
+    KICKS_TAKEN.load(Ordering::Acquire)
+}
+
+pub fn kicks_sent() -> u64 {
+    KICKS_SENT.load(Ordering::Acquire)
+}
+
+pub fn recalls() -> u64 {
+    RECALLS.load(Ordering::Acquire)
+}
+
+pub fn hold_max_ticks() -> u64 {
+    HOLD_MAX.load(Ordering::Acquire)
+}
+
+pub fn wait_max_ticks() -> u64 {
+    WAIT_MAX.load(Ordering::Acquire)
+}
+
+pub fn assigned(unit: usize) -> usize {
+    if unit >= MAX_CORES {
+        return 0;
+    }
+    ASSIGNED[unit].load(Ordering::Acquire) as usize
+}
+
+/// Remember core 0's `HOST_RSP`. Called when that stack is reserved.
+pub fn note_core0_stack(top: u64) {
+    CORE0_STACK.store(top, Ordering::Release);
+}
+
+pub fn stack_top_of(core: usize) -> u64 {
+    if core == 0 {
+        CORE0_STACK.load(Ordering::Acquire)
+    } else {
+        stack_top(core, ap_base(), 0)
+    }
+}
+
+/// Last Rust before a guest entry. The entry stub releases [`MON_OWNER`].
+///
+/// # Safety
+/// Caller holds the monitor and is about to enter a guest on this core.
+pub unsafe fn monitor_leave() {
+    let core = this_core().min(MAX_CORES - 1);
+    #[cfg(target_os = "uefi")]
+    {
+        leave_hardware(core);
+    }
+    note_hold();
+    if core < MAX_CORES {
+        IN_GUEST[core].store(true, Ordering::Release);
+    }
+    let prev = MON_HOLDER.swap(NO_CORE, Ordering::AcqRel);
+    if prev != core as u8 {
+        two_in_monitor();
+    }
+}
+
+/// First line of `guest_uefi_vmexit`. The landing stub already took the lock.
+///
+/// # Safety
+/// Caller is the exit handler on the core that just left the guest.
+pub unsafe fn monitor_enter() {
+    let core = this_core().min(MAX_CORES - 1);
+    let prev = MON_HOLDER.swap(core as u8, Ordering::AcqRel);
+    if prev != NO_CORE {
+        two_in_monitor();
+    }
+    if core < MAX_CORES {
+        IN_GUEST[core].store(false, Ordering::Release);
+    }
+    let land = LAND_TSC.load(Ordering::Acquire);
+    if land != 0 {
+        note_wait(cpu::rdtsc().wrapping_sub(land));
+    }
+    ENTER_TSC.store(cpu::rdtsc(), Ordering::Release);
+    if cores_online() == 1 {
+        return;
+    }
+    #[cfg(target_os = "uefi")]
+    {
+        enter_hardware(core);
+    }
+}
+
+/// `monitor_enter` without the wait sample. The fail path retook the lock in asm.
+///
+/// # Safety
+/// Caller holds the monitor after a failed VM-entry.
+pub unsafe fn monitor_reenter() {
+    let core = this_core().min(MAX_CORES - 1);
+    let prev = MON_HOLDER.swap(core as u8, Ordering::AcqRel);
+    if prev != NO_CORE {
+        two_in_monitor();
+    }
+    if core < MAX_CORES {
+        IN_GUEST[core].store(false, Ordering::Release);
+    }
+    ENTER_TSC.store(cpu::rdtsc(), Ordering::Release);
+    if cores_online() == 1 {
+        return;
+    }
+    #[cfg(target_os = "uefi")]
+    {
+        enter_hardware(core);
+    }
+}
+
+fn note_wait(wait: u64) {
+    let mut cur = WAIT_MAX.load(Ordering::Acquire);
+    while wait > cur {
+        match WAIT_MAX.compare_exchange(cur, wait, Ordering::AcqRel, Ordering::Acquire) {
+            Ok(_) => break,
+            Err(v) => cur = v,
+        }
+    }
+}
+
+fn note_hold() {
+    let enter = ENTER_TSC.load(Ordering::Acquire);
+    if enter == 0 {
+        return;
+    }
+    let held = cpu::rdtsc().wrapping_sub(enter);
+    let mut cur = HOLD_MAX.load(Ordering::Acquire);
+    while held > cur {
+        match HOLD_MAX.compare_exchange(cur, held, Ordering::AcqRel, Ordering::Acquire) {
+            Ok(_) => break,
+            Err(v) => cur = v,
+        }
+    }
+}
+
+fn two_in_monitor() -> ! {
+    crate::boot::serial::write_line_nowait(
+        "boot: B21 two cores in the monitor (ADR-024; not ISO-INSTALL-OK)",
+    );
+    loop {
+        core::hint::spin_loop();
+    }
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn leave_hardware(core: usize) {
+    if cores_online() <= 1 {
+        return;
+    }
+    if INVEPT_PENDING[core].swap(false, Ordering::AcqRel) {
+        crate::memory::ept_hw::invept_global();
+    }
+    let u = crate::guest::slot::unit(
+        crate::guest::slot::current(),
+        crate::guest::slot::current_vcpu(),
+    );
+    CORE_UNIT[core].store(u as u8, Ordering::Release);
+    CORE_SPEC[core].store(
+        crate::sched::msr_firewall::shadow_read(crate::sched::msr_firewall::MSR_SPEC_CTRL),
+        Ordering::Release,
+    );
+    CORE_APIC[core].store(
+        crate::sched::msr_firewall::shadow_read(crate::sched::msr_firewall::MSR_APIC_BASE),
+        Ordering::Release,
+    );
+    let expect = stack_top_of(core);
+    if expect != 0 {
+        if let Ok(rsp) = crate::vmx::ops::vmread(crate::vmx::fields::HOST_RSP) {
+            if rsp != expect {
+                crate::boot::serial::write_line_nowait(
+                    "boot: B21 wrong host stack (ADR-024; not ISO-INSTALL-OK)",
+                );
+                loop {
+                    core::hint::spin_loop();
+                }
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn enter_hardware(core: usize) {
+    let u = CORE_UNIT[core].load(Ordering::Acquire) as usize;
+    crate::guest::slot::set_current(crate::guest::slot::unit_slot(u));
+    crate::guest::slot::set_current_vcpu(crate::guest::slot::unit_vcpu(u));
+    crate::sched::msr_firewall::shadow_write(
+        crate::sched::msr_firewall::MSR_SPEC_CTRL,
+        CORE_SPEC[core].load(Ordering::Acquire),
+    );
+    crate::sched::msr_firewall::shadow_write(
+        crate::sched::msr_firewall::MSR_APIC_BASE,
+        CORE_APIC[core].load(Ordering::Acquire),
+    );
+    if INVEPT_PENDING[core].swap(false, Ordering::AcqRel) {
+        crate::memory::ept_hw::invept_global();
+    }
+}
+
+/// Count a kick exit and acknowledge it. Other external interrupts are untouched.
+pub fn note_kick_exit(reason: u32, intr: u64) {
+    if reason & 0xFFFF != 1 {
+        return;
+    }
+    if intr & (1 << 31) == 0 {
+        return;
+    }
+    if (intr & 0xFF) as u8 != KICK_VECTOR {
+        return;
+    }
+    #[cfg(target_os = "uefi")]
+    unsafe {
+        let _ = crate::arch::apic::eoi();
+    }
+    KICKS_TAKEN.fetch_add(1, Ordering::Relaxed);
+}
+
+/// One status line on core 0, at the scheduler's beat, once more than one
+/// host core is online and a guest is on.
+pub fn maybe_core_line(now: u64, period: u64) {
+    if this_core() != 0 || cores_online() <= 1 || crate::guest::slot::on_count() == 0 {
+        return;
+    }
+    static LAST: AtomicU64 = AtomicU64::new(0);
+    let last = LAST.load(Ordering::Acquire);
+    if last != 0 && now.wrapping_sub(last) < period {
+        return;
+    }
+    LAST.store(now, Ordering::Release);
+    let hz = crate::boot::raynu_f_flag::tsc_hz().max(1_000_000);
+    let us = hz / 1_000_000;
+    crate::boot::serial::write_str_nowait("boot: B21 cores");
+    let n = cores_online().min(MAX_CORES);
+    for c in 0..n {
+        crate::boot::serial::write_str_nowait(" ");
+        write_dec_local(c as u64);
+        crate::boot::serial::write_str_nowait(":[");
+        let mut any = false;
+        for s in 0..crate::guest::slot::MAX_GUESTS {
+            if !crate::guest::slot::is_on(s) {
+                continue;
+            }
+            for v in 0..crate::guest::slot::MAX_VCPUS {
+                if !crate::guest::slot::vcpu_up(s, v) {
+                    continue;
+                }
+                let u = crate::guest::slot::unit(s, v);
+                if assigned(u) != c {
+                    continue;
+                }
+                if any {
+                    crate::boot::serial::write_str_nowait(" ");
+                }
+                any = true;
+                write_dec_local(s as u64);
+                crate::boot::serial::write_str_nowait(".");
+                write_dec_local(v as u64);
+            }
+        }
+        crate::boot::serial::write_str_nowait("]");
+    }
+    crate::boot::serial::write_str_nowait(" lock_wait_max_us=");
+    write_dec_local(wait_max_ticks() / us);
+    crate::boot::serial::write_str_nowait(" hold_max_us=");
+    write_dec_local(hold_max_ticks() / us);
+    crate::boot::serial::write_str_nowait(" kicks=");
+    write_dec_local(kicks_sent());
+    crate::boot::serial::write_str_nowait("/");
+    write_dec_local(kicks_taken());
+    crate::boot::serial::write_str_nowait(" recalls=");
+    write_dec_local(recalls());
+    crate::boot::serial::write_line_nowait("");
+}
+
+fn write_dec_local(mut v: u64) {
+    let mut tmp = [0u8; 20];
+    let mut k = tmp.len();
+    if v == 0 {
+        crate::boot::serial::write_byte_nowait(b'0');
+        return;
+    }
+    while v > 0 && k > 0 {
+        k -= 1;
+        tmp[k] = b'0' + (v % 10) as u8;
+        v /= 10;
+    }
+    for &b in &tmp[k..] {
+        crate::boot::serial::write_byte_nowait(b);
+    }
+}
+
+#[cfg(test)]
+pub fn reset_monitor_for_test() {
+    MON_NEXT.store(0, Ordering::Relaxed);
+    MON_OWNER.store(0, Ordering::Relaxed);
+    MON_HOLDER.store(0, Ordering::Relaxed);
+}
 
 #[cfg(test)]
 thread_local! {

@@ -145,6 +145,8 @@ fn com2_line(s: &str) {
 
 #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
 pub fn firmware_panic(info: &core::panic::PanicInfo) -> ! {
+    // The panicking core keeps the monitor (ADR-024 D16). This path does
+    // not release it, so every other core stops at its next VM exit.
     use core::fmt::Write;
     let mut reason = [0u8; 120];
     let mut w = LineBuf {
