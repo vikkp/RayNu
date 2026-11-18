@@ -447,10 +447,12 @@ fn cpu_rest(method: RestMethod, route: Result<(u64, u8), ()>, authed: bool) -> G
     if !(1..=crate::guest::slot::MAX_VCPUS as u8).contains(&n) {
         return ready(400, b"{\"ok\":false,\"reason\":\"n\"}", None);
     }
+    let prev = crate::mgmt::guest_cpu::count(spare_off);
     if crate::mgmt::guest_cpu::save(spare_off, n).is_err() {
         return ready(400, b"{\"ok\":false,\"reason\":\"n\"}", None);
     }
     crate::mgmt::megaraid::flush_guest_cpu();
+    crate::audit_log!(crate::audit::AuditEvent::GuestCpuSaved { spare_off, prev, n });
     let mut body = [0u8; 32];
     let mut w = JsonBuf::new(&mut body);
     w.s("{\"ok\":true,\"n\":");
@@ -2446,5 +2448,16 @@ mod guest_catalog_test {
         assert_eq!(st, 200, "{body}");
         assert!(body.contains("\"cpu_max\":4"), "{body}");
         assert!(body.contains("\"cpu\":[{\"off\":42,\"n\":2}]"), "{body}");
+        let src = include_str!("guest_catalog.rs");
+        let route = src
+            .split_once("fn cpu_rest")
+            .unwrap()
+            .1
+            .split_once("fn parse_nic_route")
+            .unwrap()
+            .0;
+        let flush = route.find("flush_guest_cpu()").unwrap();
+        let audit = route.find("AuditEvent::GuestCpuSaved").unwrap();
+        assert!(flush < audit, "the save is audited after the spare flush");
     }
 }

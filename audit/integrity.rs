@@ -435,6 +435,14 @@ pub enum AuditEvent {
         source: u8,
         cert_len: u16,
     },
+    /// SPA saved a guest's vCPU count (ADR-021 B7, ADR-023). `prev` is the
+    /// count the row had, `n` the new one (1..=4). The next Start uses it;
+    /// a running guest is unchanged.
+    GuestCpuSaved {
+        spare_off: u64,
+        prev: u8,
+        n: u8,
+    },
 }
 
 /// One sealed audit record in the hash chain.
@@ -682,6 +690,7 @@ pub(crate) fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::HostAddrSaved { .. } => 79,
         AuditEvent::OperatorAccountSet { .. } => 80,
         AuditEvent::HostCertSaved { .. } => 81,
+        AuditEvent::GuestCpuSaved { .. } => 82,
     }
 }
 
@@ -1260,6 +1269,15 @@ fn mirror_audit_to_com1(event: AuditEvent) {
             write_u32_nowait(u32::from(source));
             serial::write_str_nowait(" cert=");
             write_u32_nowait(u32::from(cert_len));
+            serial::write_byte_nowait(b'\n');
+        }
+        AuditEvent::GuestCpuSaved { spare_off, prev, n } => {
+            serial::write_str_nowait("RAYNU-V-AUDIT: GuestCpuSaved off_mib=");
+            write_u32_nowait((spare_off >> 20) as u32);
+            serial::write_str_nowait(" prev=");
+            write_u32_nowait(u32::from(prev));
+            serial::write_str_nowait(" n=");
+            write_u32_nowait(u32::from(n));
             serial::write_byte_nowait(b'\n');
         }
         AuditEvent::FrameAllocated { .. } | AuditEvent::FrameFreed { .. } => {}
