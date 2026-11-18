@@ -1,6 +1,6 @@
 ---
 hda_version: 1
-last_updated: 2026-11-17
+last_updated: 2026-11-18
 last_commit: PENDING
 last_commit_short: PENDING
 updated_by: cursor
@@ -355,7 +355,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | PENDING |
-| Summary | **QEMU boot gate (`44213030378`) stopped on the runner: shadow VMCS was on.** CI reloads `kvm_intel` with `enable_shadow_vmcs=0` before the gate. B7 stays in flight. Not lived. Months **0.0 held**. Overall **99 held**. |
+| Summary | **Iron `33698b27cda2` / run `44215529886` autostarted Ubuntu with 1 CPU. The page on that stick does not run.** `saveCpu` was inserted inside the Guests-row loop, so the script does not parse and Sign in has no handler. The guest itself reached `raynusrv2 login:` (`Brought up 1 node, 1 CPU`). B7 stays in flight. Not lived. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B7 in flight. B21 planned, S1, wave 7, after B7. B6 and B8 stay lived. Wave 7 open. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -384,6 +384,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-18 | wave-7-b7-spa-script | 0.0 | 99 | **Iron `33698b27cda2` / run `44215529886` autostarted the Ubuntu tail (`off=19327352832`) to `raynusrv2 login:` with one CPU.** ACPI APIC length `0x4A`, `smp: Brought up 1 node, 1 CPU`. No `boot: B7 guest slot` line, which prints only when N is greater than 1. `boot: B7 cpu rd lba=6190268890 set` is the sector read; a sector that is not a vCPU record still prints `set` and the count stays 1. The page script does not parse: the vCPU control closed the Guests-row loop early, so the tiles stay on Checking / Starting / No guest yet and Sign in has no handler. One `HOST-NIC TCP accept` is the HTML download. Not the N>1 close. B7 stays in flight. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-17 | wave-7-b7-qemu-shadow | 0.0 | 99 | **QEMU boot gate on push run `44213030378` failed before the guest: `kvm_intel.enable_shadow_vmcs=Y`.** The job retried seven times in one second. CI now reloads `kvm_intel` with `enable_shadow_vmcs=0` via `tools/enable-nested-kvm.sh` before that gate. Not an F11. B7 stays in flight. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-17 | wave-7-b7-smp | 0.0 | 99 | **B7 in flight ([ADR-023](adr/ADR-023.md)).** N vCPUs per guest slot, time-sliced on one host core: N CPUs visible, one core of capacity. Nested Alpine reported 2 CPUs and 4 CPUs (`smp: Brought up 1 node, N CPUs`; `nproc` printed 2 after disk reboot). Not lived. Not an F11. B21 added to the catalog as S1 in wave 7 by owner decision on 2026-11-17 (S1 count 67→68); the wave 9 soak now follows B21; wave 7 is still the current wave. Rollback stays `v0.1.7-b6`. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-17 | v0.1.7-b6 | 0.0 | 99 | **GitHub Latest is `v0.1.7-b6`.** B6 stays lived on `4f581a4dcd93` / run `44174137515`. The operator started the Alpine row again and it reached `localhost login:`, and Shut down on that row completed. COM2 for those two steps was not pasted. Wave 7 stays open on B7, which is not started. The next wave close stays `v0.1.7-wave7-closed`. Previous rollback `v0.1.6-wave6-closed`. Signed SHA256 of the stick was not recorded. Months **0.0 held**. Overall **99 held**. |
