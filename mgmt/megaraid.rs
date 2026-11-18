@@ -2248,6 +2248,7 @@ fn perc_fusion_post(bar: u64, bus: u8, dev: u8, func: u8, base: u64) {
     perc_load_fw_update(bar, target, bytes, dcmd_phys, data_phys);
     perc_load_host_addr(bar, target, bytes, dcmd_phys, data_phys);
     perc_load_operator(bar, target, bytes, dcmd_phys, data_phys);
+    perc_load_guest_cpu(bar, target, bytes, dcmd_phys, data_phys);
     perc_load_host_cert(bar, target, bytes, dcmd_phys, data_phys);
 
     // The read chain already lived. A write miss still arms read-only virtio.
@@ -2871,6 +2872,95 @@ fn perc_load_operator(bar: u64, target: u8, bytes: u64, frame_phys: u64, data_ph
         serial::write_line(" set");
     } else {
         serial::write_line("boot: E6 operator absent");
+    }
+}
+
+/// Read the vCPU-count sector. A miss leaves every row at 1.
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn perc_load_guest_cpu(bar: u64, target: u8, bytes: u64, frame_phys: u64, data_phys: u64) {
+    use crate::boot::serial;
+    let Some(lba) = crate::mgmt::guest_cpu::cpu_lba(bytes) else {
+        serial::write_line("boot: B7 cpu skip lba");
+        return;
+    };
+    let Some((st, timed_out)) = issue_ld_read16(bar, target, lba, frame_phys, data_phys) else {
+        serial::write_line("boot: B7 cpu rd skip frame");
+        return;
+    };
+    if timed_out || st != MFI_STAT_OK {
+        serial::write_line("boot: B7 cpu rd skip status");
+        return;
+    }
+    core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+    let mut sector = [0u8; 512];
+    // SAFETY: the READ(16) completed into the payload page.
+    // KANI-TARGET: host tests cover the sector, not this load.
+    unsafe {
+        core::ptr::copy_nonoverlapping(data_phys as *const u8, sector.as_mut_ptr(), 512);
+    }
+    crate::mgmt::guest_cpu::restore(&sector);
+    serial::write_str("boot: B7 cpu rd lba=");
+    write_dec64(lba);
+    serial::write_line(" set");
+}
+
+/// Write a staged vCPU-count sector. One WRITE(16), then a READ.
+/// Same shape as the operator sector. No doorbell.
+pub fn flush_guest_cpu() {
+    #[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+    {
+        flush_guest_cpu_uefi();
+    }
+}
+
+#[cfg(all(target_os = "uefi", feature = "uefi-bin"))]
+fn flush_guest_cpu_uefi() {
+    use crate::boot::serial;
+    let Some((gen, sector)) = crate::mgmt::guest_cpu::copy_dirty() else {
+        return;
+    };
+    let bar = PERC_SPARE_BAR.load(core::sync::atomic::Ordering::Acquire);
+    let target = PERC_SPARE_TARGET.load(core::sync::atomic::Ordering::Acquire);
+    let frame = PERC_SPARE_FRAME.load(core::sync::atomic::Ordering::Acquire);
+    let data = PERC_SPARE_DATA.load(core::sync::atomic::Ordering::Acquire);
+    let bytes = PERC_SPARE_BYTES.load(core::sync::atomic::Ordering::Acquire);
+    let Some(lba) = crate::mgmt::guest_cpu::cpu_lba(bytes) else {
+        return;
+    };
+    if bar == 0 || frame == 0 || data == 0 {
+        return;
+    }
+    serial::write_str_nowait("boot: B7 cpu wr lba=");
+    write_dec64_nowait(lba);
+    let Some((st, timed_out)) = issue_ld_write16_sector(bar, target, lba, frame, data, &sector)
+    else {
+        serial::write_line_nowait(" skip frame");
+        return;
+    };
+    if timed_out || st != MFI_STAT_OK {
+        serial::write_line_nowait(" status (staged, not acked)");
+        return;
+    }
+    let Some((rst, rto)) = issue_ld_read16(bar, target, lba, frame, data) else {
+        serial::write_line_nowait(" rd skip");
+        return;
+    };
+    if rto || rst != MFI_STAT_OK {
+        serial::write_line_nowait(" rd status (staged, not acked)");
+        return;
+    }
+    core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+    let mut back = [0u8; 512];
+    // SAFETY: the READ(16) completed into the payload page.
+    // KANI-TARGET: host tests cover the sector bytes, not this load.
+    unsafe {
+        core::ptr::copy_nonoverlapping(data as *const u8, back.as_mut_ptr(), 512);
+    }
+    if back == sector {
+        crate::mgmt::guest_cpu::ack_dirty(gen);
+        serial::write_line_nowait(" match");
+    } else {
+        serial::write_line_nowait(" mismatch (staged, not acked)");
     }
 }
 

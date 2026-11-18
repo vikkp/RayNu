@@ -279,6 +279,9 @@ pub enum GuestCatalogHttp {
 /// is `noguest` and a fitting `linux_iso` is `noimage`. A disk past the
 /// window is `window` even without a latch.
 pub fn guest_catalog_rest(method: RestMethod, path: &str, authed: bool) -> GuestCatalogHttp {
+    if let Some(cpu) = parse_cpu_route(path) {
+        return cpu_rest(method, cpu, authed);
+    }
     if let Some(nic) = parse_nic_route(path) {
         return nic_rest(method, nic, authed);
     }
@@ -418,6 +421,43 @@ enum NicRoute {
     Detach(u64),
     Discover(u64),
     Bad,
+}
+
+fn parse_cpu_route(path: &str) -> Option<Result<(u64, u8), ()>> {
+    let rest = path.strip_prefix("/perc/cpu/")?;
+    let mut parts = rest.split('/');
+    let off = parse_u64_token(parts.next()?)?;
+    let n = parse_u64_token(parts.next()?)?;
+    if parts.next().is_some() || n > u64::from(u8::MAX) {
+        return Some(Err(()));
+    }
+    Some(Ok((off, n as u8)))
+}
+
+fn cpu_rest(method: RestMethod, route: Result<(u64, u8), ()>, authed: bool) -> GuestCatalogHttp {
+    if !authed {
+        return GuestCatalogHttp::Unauthorized;
+    }
+    if !matches!(method, RestMethod::Post) {
+        return GuestCatalogHttp::BadMethod;
+    }
+    let Ok((spare_off, n)) = route else {
+        return ready(400, b"{\"ok\":false,\"reason\":\"n\"}", None);
+    };
+    if !(1..=crate::guest::slot::MAX_VCPUS as u8).contains(&n) {
+        return ready(400, b"{\"ok\":false,\"reason\":\"n\"}", None);
+    }
+    if crate::mgmt::guest_cpu::save(spare_off, n).is_err() {
+        return ready(400, b"{\"ok\":false,\"reason\":\"n\"}", None);
+    }
+    crate::mgmt::megaraid::flush_guest_cpu();
+    let mut body = [0u8; 32];
+    let mut w = JsonBuf::new(&mut body);
+    w.s("{\"ok\":true,\"n\":");
+    w.u(u64::from(n));
+    w.s("}");
+    let len = if w.fit { w.n } else { 0 };
+    ready(200, &body[..len], None)
 }
 
 fn parse_nic_route(path: &str) -> Option<NicRoute> {
@@ -878,6 +918,7 @@ fn start_tail() -> GuestCatalogHttp {
                 note_launch(slot, restarted);
                 crate::boot::raynu_f_flag::request_installed_boot();
                 crate::mgmt::guest_nic_start::on_accepted_start(off);
+                crate::mgmt::guest_cpu::on_accepted_start(off);
                 let mut body = [0u8; 128];
                 let mut w = JsonBuf::new(&mut body);
                 w.s("{\"ok\":true,\"choice\":\"tailboot\",\"spare_off\":");
@@ -917,6 +958,7 @@ fn start_disk_at(spare_off: u64) -> GuestCatalogHttp {
                 note_launch(slot, restarted);
                 crate::boot::raynu_f_flag::request_installed_boot();
                 crate::mgmt::guest_nic_start::on_accepted_start(disk.spare_off);
+                crate::mgmt::guest_cpu::on_accepted_start(disk.spare_off);
                 let mut body = [0u8; 192];
                 let mut w = JsonBuf::new(&mut body);
                 w.s("{\"ok\":true,\"choice\":\"tailboot\",\"spare_off\":");
@@ -1004,6 +1046,7 @@ fn store_choice(choice: u8, installed: bool) -> GuestCatalogHttp {
                 } else {
                     crate::boot::raynu_f_flag::request_installed_boot();
                     crate::mgmt::guest_nic_start::on_accepted_start(0);
+                    crate::mgmt::guest_cpu::on_accepted_start(0);
                 }
                 let body: &[u8] = if choice == CHOICE_REINSTALL {
                     b"{\"ok\":true,\"choice\":\"reinstall\"}"
@@ -1409,6 +1452,7 @@ fn write_list_json(
     }
     w.s("]");
     write_nic_json(&mut w);
+    write_cpu_json(&mut w);
     crate::mgmt::host_link::write_json(&mut w);
     write_build_identity(&mut w);
     write_last_stop(&mut w);
@@ -1490,6 +1534,32 @@ fn write_hex_field(w: &mut JsonBuf<'_>, mut n: u64) {
 /// change this row.
 pub fn row_power(this_on: bool) -> (bool, bool) {
     (!this_on, this_on)
+}
+
+fn write_cpu_json(w: &mut JsonBuf<'_>) {
+    w.s(",\"cpu_max\":");
+    w.u(u64::from(crate::mgmt::guest_cpu::cpu_max()));
+    let rows = crate::mgmt::guest_cpu::shown();
+    let mut any = false;
+    for (off, n) in rows {
+        if n <= 1 {
+            continue;
+        }
+        if !any {
+            w.s(",\"cpu\":[");
+            any = true;
+        } else {
+            w.s(",");
+        }
+        w.s("{\"off\":");
+        w.u(off);
+        w.s(",\"n\":");
+        w.u(u64::from(n));
+        w.s("}");
+    }
+    if any {
+        w.s("]");
+    }
 }
 
 fn write_nic_json(w: &mut JsonBuf<'_>) {
@@ -2353,5 +2423,28 @@ mod guest_catalog_test {
         );
         assert_eq!(st, 409, "{body}");
         assert!(body.contains("windows"), "{body}");
+    }
+
+    #[test]
+    fn vcpu_count_route_saves_and_the_page_posts_it() {
+        let html = include_str!("../assets/webui.html");
+        assert!(html.contains("\"/perc/cpu/\""));
+        let (st, _) = exchange("POST /perc/cpu/42/2 HTTP/1.1\r\n\r\n");
+        assert_eq!(st, 401);
+        let (st, body) = exchange(
+            "POST /perc/cpu/42/9 HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
+        );
+        assert_eq!(st, 400, "{body}");
+        let (st, body) = exchange(
+            "POST /perc/cpu/42/2 HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
+        );
+        assert_eq!(st, 200, "{body}");
+        assert!(body.contains("\"n\":2"), "{body}");
+        let (st, body) = exchange(
+            "GET /perc/guests HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
+        );
+        assert_eq!(st, 200, "{body}");
+        assert!(body.contains("\"cpu_max\":4"), "{body}");
+        assert!(body.contains("\"cpu\":[{\"off\":42,\"n\":2}]"), "{body}");
     }
 }

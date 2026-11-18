@@ -571,6 +571,7 @@ fn try_autostart(elapsed_secs: u32) {
     // A Guests click calls this before the guest starts. Without it the
     // disk comes up and the saved address does not (no virtio-net).
     crate::mgmt::guest_nic_start::on_accepted_start(e.spare_off);
+    crate::mgmt::guest_cpu::on_accepted_start(e.spare_off);
     if crate::mgmt::guest_nic_start::armed_start().is_some() {
         serial::write_line("boot: B5 autostart nic");
     } else {
@@ -623,6 +624,7 @@ fn firmware_wait() {
         crate::mgmt::megaraid::flush_autostart();
         crate::mgmt::megaraid::flush_host_addr();
         crate::mgmt::megaraid::flush_operator();
+        crate::mgmt::megaraid::flush_guest_cpu();
         crate::mgmt::megaraid::flush_host_cert();
         let now = crate::arch::cpu::rdtsc();
         let elapsed = (now.wrapping_sub(wait_start) / hz) as u32;

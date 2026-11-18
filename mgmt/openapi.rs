@@ -42,6 +42,7 @@ pub const API_V1_PATHS: &[&str] = &[
     "/perc/library/",
     "/perc/library/clear",
     "/perc/nic/",
+    "/perc/cpu/",
     "/iso/install",
     "/iso/deploy",
     "/iso/attach",
