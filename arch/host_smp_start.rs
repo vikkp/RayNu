@@ -31,6 +31,8 @@ static BSP_TSC_ADJ: AtomicU64 = AtomicU64::new(0);
 static TSC_ROUND: AtomicU64 = AtomicU64::new(0);
 static TSC_T0: AtomicU64 = AtomicU64::new(0);
 static TSC_T1: AtomicU64 = AtomicU64::new(0);
+/// 0 idle, 1 core 0 is sampling, 2 the sample is finished.
+static TSC_GO: AtomicU8 = AtomicU8::new(0);
 
 #[repr(C, align(64))]
 struct Mail {
@@ -45,6 +47,7 @@ unsafe extern "C" fn ap_entry() -> ! {
         "mov rax, qword ptr [rip + {cr3}]",
         "mov cr3, rax",
         "xor rbp, rbp",
+        "sub rsp, 32",
         "call {main}",
         "2:",
         "jmp 2b",
@@ -57,6 +60,8 @@ unsafe extern "C" fn ap_entry() -> ! {
 static BSP_CR3_SLOT: AtomicU64 = AtomicU64::new(0);
 
 extern "C" fn ap_main(core: usize) -> ! {
+    // UEFI x64 passes the first argument in RCX. The trampoline sets RCX
+    // and RDI to the core index.
     if core >= MAX_CORES {
         loop {
             core::hint::spin_loop();
@@ -71,10 +76,19 @@ extern "C" fn ap_main(core: usize) -> ! {
         };
         core::arch::asm!("lidt [{}]", in(reg) &idtr, options(readonly, nostack));
         cpu::write_cr0(BSP_CR0.load(Ordering::Acquire));
-        cpu::write_cr4(BSP_CR4.load(Ordering::Acquire) & !cpu::CR4_VMXE);
-        cpu::wrmsr(0xC000_0080, BSP_EFER.load(Ordering::Acquire));
+        let cr4 = BSP_CR4.load(Ordering::Acquire) & !cpu::CR4_VMXE;
+        cpu::write_cr4(cr4);
+        // Bit 10 (LMA) is read-only. The BSP value has it set once paging is
+        // on, and WRMSR of that bit #GPs. The firmware IDT then swallows the
+        // AP, so core 0 only sees "no answer".
+        let efer = BSP_EFER.load(Ordering::Acquire) & !(1 << 10);
+        cpu::wrmsr(0xC000_0080, efer);
         cpu::wrmsr(0x277, BSP_PAT.load(Ordering::Acquire));
-        cpu::xsetbv(0, BSP_XCR0.load(Ordering::Acquire));
+        // UEFI often leaves OSXSAVE clear (CR4=0x2668). XSETBV #UDs then.
+        let xcr0 = BSP_XCR0.load(Ordering::Acquire);
+        if cr4 & cpu::CR4_OSXSAVE != 0 && xcr0 != 0 {
+            cpu::xsetbv(0, xcr0);
+        }
         core::arch::asm!("fninit", options(nostack, preserves_flags));
     }
     if let Err(code) = ap_lapic(core) {
@@ -151,17 +165,23 @@ fn tsc_handshake_ap() -> bool {
             return false;
         }
     }
-    for _ in 0..3 {
+    for _ in 0..8 {
+        if TSC_GO.load(Ordering::Acquire) == 2 {
+            return true;
+        }
         let round = TSC_ROUND.load(Ordering::Acquire);
-        while TSC_ROUND.load(Ordering::Acquire) == round {
+        while TSC_ROUND.load(Ordering::Acquire) == round && TSC_GO.load(Ordering::Acquire) != 2 {
             core::hint::spin_loop();
         }
-        let t0 = TSC_T0.load(Ordering::Acquire);
+        if TSC_GO.load(Ordering::Acquire) == 2 {
+            return true;
+        }
         TSC_T1.store(cpu::rdtsc().max(1), Ordering::Release);
-        while TSC_ROUND.load(Ordering::Acquire) == round.wrapping_add(1) {
+        while TSC_ROUND.load(Ordering::Acquire) == round.wrapping_add(1)
+            && TSC_GO.load(Ordering::Acquire) != 2
+        {
             core::hint::spin_loop();
         }
-        let _ = t0;
     }
     true
 }
@@ -213,7 +233,13 @@ pub unsafe fn start_cores() {
     let cr4 = cpu::read_cr4();
     let efer = cpu::rdmsr(0xC000_0080);
     let pat = cpu::rdmsr(0x277);
-    let xcr0 = cpu::xgetbv(0);
+    // UEFI leaves CR4.OSXSAVE clear. XGETBV #UDs the BSP before any SIPI
+    // (nested d7291acc, CR4=0x2668, RIP on xgetbv). Same rule as the AP.
+    let xcr0 = if cr4 & cpu::CR4_OSXSAVE != 0 {
+        cpu::xgetbv(0)
+    } else {
+        0
+    };
     let idtr = cpu::sidt();
     let has_adj = cpu::cpuid(7, 0).ebx & (1 << 1) != 0;
     let adj = if has_adj { cpu::rdmsr(0x3B) } else { 0 };
@@ -253,15 +279,19 @@ pub unsafe fn start_cores() {
             low_base() as *mut u8,
             stack_top(core, ap_base(), 0),
             core as u64,
-            ap_entry as usize as u64,
+            ap_entry as *const () as usize as u64,
         );
         let id = apic_id(core);
+        TSC_GO.store(0, Ordering::Release);
         send_init_sipi(id, low_base());
         let started = wait_state(core, AP_STARTED, hz, 100_000);
-        let done = if started && tsc_rounds_ok() {
-            wait_state_done(core, hz, 200_000)
-        } else if started {
-            AP_BAD_TSC
+        let tsc_ok = started && tsc_rounds_ok();
+        // Finish the three rounds before the next SIPI. The trampoline page
+        // and the handshake words are shared, and this core may still be
+        // entering VMX root.
+        let done = if started {
+            let s = wait_state_done(core, hz, 200_000);
+            if tsc_ok { s } else { AP_BAD_TSC }
         } else {
             AP_STATE[core].load(Ordering::Acquire)
         };
@@ -393,30 +423,48 @@ fn wait_state_done(core: usize, hz: u64, us: u64) -> u8 {
     }
 }
 
-/// Core 0 side of the TSC check. Three rounds. A failure returns false.
+/// Core 0 side of the TSC check. Three samples within 1ms of core 0.
+/// A missed sample is retried: a nested vCPU can be off the CPU for a
+/// moment, and iron answers in microseconds. A stopped clock, or one
+/// more than 1ms ahead, fails. Eight misses and the core is not used.
 fn tsc_rounds_ok() -> bool {
-    for _ in 0..3 {
+    let hz = crate::boot::raynu_f_flag::tsc_hz().max(1);
+    let slack = (hz / 1000).max(1);
+    TSC_GO.store(1, Ordering::Release);
+    let mut good = 0u32;
+    let mut passed = false;
+    for _ in 0..8 {
         TSC_T1.store(0, Ordering::Release);
         let t0 = cpu::rdtsc().max(1);
         TSC_T0.store(t0, Ordering::Release);
         TSC_ROUND.fetch_add(1, Ordering::Release);
-        let hz = crate::boot::raynu_f_flag::tsc_hz().max(1);
-        let ticks = hz.saturating_mul(50_000) / 1_000_000;
+        let ticks = hz.saturating_mul(250_000) / 1_000_000;
         let start = cpu::rdtsc();
         while TSC_T1.load(Ordering::Acquire) == 0 {
             if cpu::rdtsc().wrapping_sub(start) > ticks {
-                return false;
+                break;
             }
             core::hint::spin_loop();
         }
         let t1 = TSC_T1.load(Ordering::Acquire);
         let t2 = cpu::rdtsc();
         TSC_ROUND.fetch_add(1, Ordering::Release);
-        if !(t0 <= t1 && t1 <= t2) {
-            return false;
+        if t1 == 0 {
+            continue;
+        }
+        let behind = t1.saturating_add(slack) < t0;
+        let ahead = t1 > t2.saturating_add(slack);
+        if behind || ahead {
+            break;
+        }
+        good += 1;
+        if good == 3 {
+            passed = true;
+            break;
         }
     }
-    true
+    TSC_GO.store(2, Ordering::Release);
+    passed
 }
 
 fn write_dec(mut v: u64) {

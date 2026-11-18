@@ -35,12 +35,14 @@ raynu_ap_tramp_start:
     shl ebx, 4
     mov ax, cs
     mov ds, ax
-    push ebx
+    mov ss, ax
+    mov sp, 0x800
+    mov esi, ebx
     .byte 0xBB
 raynu_ap_gdtr_off:
     .word 0
-    lgdt [bx]
-    pop ebx
+    .byte 0x66, 0x0F, 0x01, 0x17
+    mov ebx, esi
     mov eax, cr0
     or eax, 1
     mov cr0, eax
@@ -63,10 +65,10 @@ raynu_ap_cr3_off:
     mov cr3, eax
     mov ecx, 0xC0000080
     rdmsr
-    .byte 0xB8
+    .byte 0xBD
 raynu_ap_efer_off:
     .long 0
-    or eax, [ebx + eax]
+    or eax, [ebx + ebp]
     wrmsr
     mov eax, cr0
     or eax, 0x80000001
@@ -79,6 +81,7 @@ raynu_ap_t_jmp64:
 raynu_ap_tramp64:
     mov rsp, [rip + raynu_ap_t_stack]
     mov rdi, [rip + raynu_ap_t_core]
+    mov rcx, rdi
     mov rax, [rip + raynu_ap_t_entry]
     jmp rax
 .balign 8
