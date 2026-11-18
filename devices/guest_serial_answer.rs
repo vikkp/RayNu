@@ -103,8 +103,11 @@ pub(crate) const PROVE: &[u8] = b"cat /proc/cmdline; mount | head -3\r";
 /// Lab only (`twoguest.txt`, nested QEMU): typed after [`PROVE`] in the
 /// slot the lab armed, so one guest leaves the CPU while another runs.
 pub(crate) const LAB_POWEROFF: &[u8] = b"poweroff\r";
+/// Lab only (`vcpuN.txt`): typed after [`PROVE`] so nested QEMU can see `nproc`.
+pub(crate) const LAB_NPROC: &[u8] = b"nproc; grep -c ^processor /proc/cpuinfo\r";
 const _: () = assert!(REBOOT.len() <= QCAP);
 const _: () = assert!(PROVE.len() + LAB_POWEROFF.len() <= QCAP);
+const _: () = assert!(PROVE.len() + LAB_POWEROFF.len() + LAB_NPROC.len() <= QCAP);
 const PLEASE_REBOOT: &[u8] = b"Please reboot.";
 
 const PHASE_LOGIN: u8 = 0;
@@ -412,6 +415,9 @@ pub fn note_tx(b: u8) {
             }
             PHASE_SHELL if second && is_shell_prompt(&a.win, a.wlen) => {
                 enqueue(a, PROVE);
+                if crate::boot::raynu_f_flag::lab_vcpus() > 1 {
+                    enqueue(a, LAB_NPROC);
+                }
                 if LAB_OFF.swap(false, Ordering::AcqRel) {
                     // The same ask the Shut down button opens, so the
                     // guest's S5 is a power-off and not an ignored write.

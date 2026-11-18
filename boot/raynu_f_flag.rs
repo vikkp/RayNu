@@ -10,7 +10,7 @@
 
 use crate::guest::slot::PerGuest;
 use crate::per_guest;
-use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 
 static REQUESTED: AtomicBool = AtomicBool::new(false);
 /// TSC ticks per second, calibrated pre-EBS against a UEFI `Stall`. 0 = none.
@@ -70,6 +70,14 @@ pub const RAYNU_F_REQUESTED_MARKER: &str =
 /// has no PERC catalog to start one from; `TWO_GUESTS=1` stages the file.
 /// Iron starts guests from the Guests screen and never reads this.
 pub const TWO_GUESTS_FLAG_PATH: &str = "\\EFI\\RayNu\\twoguest.txt";
+/// Lab only. Iron never has these files (ADR-023).
+pub const VCPU2_FLAG_PATH: &str = "\\EFI\\RayNu\\vcpu2.txt";
+pub const VCPU4_FLAG_PATH: &str = "\\EFI\\RayNu\\vcpu4.txt";
+const LAB_VCPU2_NOTE: &str =
+    "boot: lab vCPU count 2 requested (EFI/RayNu/vcpu2.txt; ADR-023; not ISO-INSTALL-OK)";
+const LAB_VCPU4_NOTE: &str =
+    "boot: lab vCPU count 4 requested (EFI/RayNu/vcpu4.txt; ADR-023; not ISO-INSTALL-OK)";
+static LAB_VCPUS: AtomicU8 = AtomicU8::new(1);
 /// Serial line when the lab flag is found pre-EBS.
 pub const TWO_GUESTS_REQUESTED_NOTE: &str =
     "boot: lab second guest requested (EFI/RayNu/twoguest.txt; ADR-022; not ISO-INSTALL-OK)";
@@ -81,10 +89,12 @@ pub fn take_two_guests() -> bool {
     TWO_GUESTS.swap(false, Ordering::AcqRel)
 }
 
-/// Lab vCPU count from `vcpuN.txt`. WP8 reads the file. Until then the
-/// count is 1, so a product guest stays the N=1 machine.
+/// vCPUs the lab flag asked for. 1 when the files are absent.
 pub fn lab_vcpus() -> u8 {
-    1
+    match LAB_VCPUS.load(Ordering::Acquire) {
+        n @ (2 | 4) => n,
+        _ => 1,
+    }
 }
 
 /// Whether the operator asked for the RayNu-F F2 launch.
@@ -175,6 +185,27 @@ pub fn probe() {
             TWO_GUESTS.store(true, Ordering::Release);
             crate::boot::serial::write_line(TWO_GUESTS_REQUESTED_NOTE);
         }
+    }
+    let mut vcpus = 1u8;
+    if let Ok(p) = CString16::try_from(VCPU4_FLAG_PATH) {
+        if fs.read(p.as_ref()).is_ok() {
+            vcpus = 4;
+        }
+    }
+    if vcpus == 1 {
+        if let Ok(p) = CString16::try_from(VCPU2_FLAG_PATH) {
+            if fs.read(p.as_ref()).is_ok() {
+                vcpus = 2;
+            }
+        }
+    }
+    if vcpus > 1 {
+        LAB_VCPUS.store(vcpus, Ordering::Release);
+        crate::boot::serial::write_line(if vcpus == 4 {
+            LAB_VCPU4_NOTE
+        } else {
+            LAB_VCPU2_NOTE
+        });
     }
 }
 
