@@ -205,34 +205,53 @@ fn tsc_handshake_ap() -> bool {
     true
 }
 
-unsafe fn ap_idle(core: usize) -> ! {
+pub(super) fn wake_core(core: usize) {
+    if core == 0 || core >= MAX_CORES {
+        return;
+    }
+    MAILBOX[core].word.store(1, Ordering::Release);
+}
+
+/// Sleep until [`wake_core`] writes this core's mailbox, then clear it.
+///
+/// # Safety
+/// `core` is the caller. MONITOR/MWAIT address this core's mailbox line.
+pub(super) unsafe fn wait_mailbox(core: usize) {
+    if core >= MAX_CORES {
+        return;
+    }
     let mwait = HAS_MWAIT.load(Ordering::Acquire) != 0;
-    loop {
-        while MAILBOX[core].word.load(Ordering::Acquire) == 0 {
-            if mwait {
-                let addr = &MAILBOX[core].word as *const AtomicU64 as u64;
-                // SAFETY: MONITOR/MWAIT on this core's own mailbox line.
-                // KANI-TARGET: host_smp mwait
+    while MAILBOX[core].word.load(Ordering::Acquire) == 0 {
+        if mwait {
+            let addr = &MAILBOX[core].word as *const AtomicU64 as u64;
+            // SAFETY: MONITOR/MWAIT on this core's own mailbox line.
+            // KANI-TARGET: host_smp mwait
+            core::arch::asm!(
+                "monitor",
+                in("rax") addr,
+                in("rcx") 0u64,
+                in("rdx") 0u64,
+                options(nostack, preserves_flags)
+            );
+            if MAILBOX[core].word.load(Ordering::Acquire) == 0 {
                 core::arch::asm!(
-                    "monitor",
-                    in("rax") addr,
+                    "mwait",
+                    in("rax") 0u64,
                     in("rcx") 0u64,
-                    in("rdx") 0u64,
                     options(nostack, preserves_flags)
                 );
-                if MAILBOX[core].word.load(Ordering::Acquire) == 0 {
-                    core::arch::asm!(
-                        "mwait",
-                        in("rax") 0u64,
-                        in("rcx") 0u64,
-                        options(nostack, preserves_flags)
-                    );
-                }
-            } else {
-                core::hint::spin_loop();
             }
+        } else {
+            core::hint::spin_loop();
         }
-        MAILBOX[core].word.store(0, Ordering::Release);
+    }
+    MAILBOX[core].word.store(0, Ordering::Release);
+}
+
+unsafe fn ap_idle(core: usize) -> ! {
+    loop {
+        wait_mailbox(core);
+        crate::vmx::guest_uefi::on_ap_wake(core);
     }
 }
 

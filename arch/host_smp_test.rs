@@ -253,3 +253,18 @@ fn place_vcpu_keeps_vcpu0_on_core0() {
     assert_eq!(place_vcpu(1, &loads, 3), 1);
     assert_eq!(place_vcpu(2, &[0, 1, 0], 3), 2);
 }
+
+#[test]
+fn recall_stays_open_until_the_core_finishes() {
+    finish_recall(15);
+    assert!(recall_finished(15));
+    assert!(!recall_waiting(15));
+    request_recall(15);
+    assert!(recall_waiting(15));
+    assert!(!recall_finished(15));
+    finish_recall(15);
+    assert!(recall_finished(15));
+    assert!(!recall_waiting(15));
+    request_recall(0);
+    assert!(!recall_waiting(0));
+}

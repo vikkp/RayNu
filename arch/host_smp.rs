@@ -68,8 +68,14 @@ static CORE_APIC: [AtomicU64; MAX_CORES] = [const { AtomicU64::new(0) }; MAX_COR
 static IN_GUEST: [AtomicBool; MAX_CORES] = [const { AtomicBool::new(false) }; MAX_CORES];
 /// Set by the core that changed EPT. The target core flushes before its next entry.
 static INVEPT_PENDING: [AtomicBool; MAX_CORES] = [const { AtomicBool::new(false) }; MAX_CORES];
-/// Core whose queue holds the unit. 0 until placement (WP5). The monitor writes it.
+/// Core whose queue holds the unit. 0 until placement. The monitor writes it.
 static ASSIGNED: [AtomicU8; MAX_CORES] = [const { AtomicU8::new(0) }; MAX_CORES];
+/// Core 0 asked this core to VMCLEAR its VMCS and stop entering it.
+static RECALL: [AtomicBool; MAX_CORES] = [const { AtomicBool::new(false) }; MAX_CORES];
+/// The core has finished the recall. Starts finished so a wait is not stuck.
+static RECALL_DONE: [AtomicBool; MAX_CORES] = [const { AtomicBool::new(true) }; MAX_CORES];
+/// This core has VMPTRLDed a guest VMCS it must VMCLEAR before the VMCS moves.
+static VMCS_LOADED: [AtomicBool; MAX_CORES] = [const { AtomicBool::new(false) }; MAX_CORES];
 
 /// Take the monitor. Fair: callers run in ticket order.
 pub fn acquire() {
@@ -109,6 +115,96 @@ pub fn assigned(unit: usize) -> usize {
         return 0;
     }
     ASSIGNED[unit].load(Ordering::Acquire) as usize
+}
+
+/// Home the unit on `core`. The monitor is the only writer.
+pub fn assign_unit(unit: usize, core: usize) {
+    if unit >= MAX_CORES {
+        return;
+    }
+    ASSIGNED[unit].store(core.min(MAX_CORES - 1) as u8, Ordering::Release);
+}
+
+/// The core has a guest VMCS loaded. A later recall VMCLEARs it.
+pub fn note_loaded(core: usize) {
+    if core < MAX_CORES {
+        VMCS_LOADED[core].store(true, Ordering::Release);
+    }
+}
+
+/// `true` once, when this core had loaded a VMCS. The caller VMCLEARs it.
+pub fn take_loaded(core: usize) -> bool {
+    core < MAX_CORES && VMCS_LOADED[core].swap(false, Ordering::AcqRel)
+}
+
+/// Ask `core` to give its VMCS back. Core 0 is never recalled.
+pub fn request_recall(core: usize) {
+    if core == 0 || core >= MAX_CORES {
+        return;
+    }
+    RECALL_DONE[core].store(false, Ordering::Release);
+    RECALL[core].store(true, Ordering::Release);
+    RECALLS.fetch_add(1, Ordering::Relaxed);
+    wake_core(core);
+}
+
+pub fn recall_waiting(core: usize) -> bool {
+    core < MAX_CORES && RECALL[core].load(Ordering::Acquire)
+}
+
+pub fn recall_finished(core: usize) -> bool {
+    core >= MAX_CORES || RECALL_DONE[core].load(Ordering::Acquire)
+}
+
+pub fn finish_recall(core: usize) {
+    if core >= MAX_CORES {
+        return;
+    }
+    RECALL[core].store(false, Ordering::Release);
+    RECALL_DONE[core].store(true, Ordering::Release);
+}
+
+/// Flush this core's EPT TLB and ask every other online core to flush
+/// before its next guest entry.
+///
+/// # Safety
+/// VMX root. `INVEPT` is valid.
+pub unsafe fn invept_guests() {
+    crate::memory::ept_hw::invept_global();
+    let me = this_core();
+    let n = cores_online().min(MAX_CORES);
+    for c in 0..n {
+        if c != me {
+            INVEPT_PENDING[c].store(true, Ordering::Release);
+        }
+    }
+}
+
+/// Wake a sleeping core. A core in guest mode notices on its next exit.
+pub fn wake_core(core: usize) {
+    #[cfg(feature = "uefi-bin")]
+    {
+        start::wake_core(core);
+    }
+    #[cfg(not(feature = "uefi-bin"))]
+    {
+        let _ = core;
+    }
+}
+
+/// Sleep until [`wake_core`] stores this core's mailbox.
+///
+/// # Safety
+/// `core` is the caller. The caller does not hold the monitor.
+pub unsafe fn wait_mailbox(core: usize) {
+    #[cfg(feature = "uefi-bin")]
+    {
+        start::wait_mailbox(core);
+    }
+    #[cfg(not(feature = "uefi-bin"))]
+    {
+        let _ = core;
+    }
 }
 
 /// Remember core 0's `HOST_RSP`. Called when that stack is reserved.

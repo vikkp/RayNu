@@ -3911,6 +3911,21 @@ fn sipi_entry_and_mirror_masks_and_ap_state() {
 }
 
 #[test]
+fn a_vcpu_is_placed_when_it_starts_and_collapse_recalls_it() {
+    let g = include_str!("guest_uefi.rs");
+    let start = g.find("unsafe fn ap_start(").expect("ap_start");
+    let body = &g[start..start + 4500];
+    assert!(
+        body.contains("place_running_vcpu(s, v, ap)"),
+        "SIPI homes the new vCPU"
+    );
+    let collapse = g.find("unsafe fn smp_collapse()").expect("collapse");
+    assert!(g[collapse..collapse + 900].contains("recall_cores("));
+    assert!(g.contains("fn bind_host_rsp()"));
+    assert!(g.contains("pub unsafe fn on_ap_wake("));
+}
+
+#[test]
 fn smp_service_precedes_inject_and_collapse_is_on_the_leave_paths() {
     let g = include_str!("guest_uefi.rs");
     let call = g.find("smp_service();").expect("smp_service");

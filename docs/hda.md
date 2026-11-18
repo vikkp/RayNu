@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-11-18
-last_commit: 0b5df5095150e3e633f3864455036b5fc3b9aeda
-last_commit_short: 0b5df509
+last_commit: 9cfd4920729be1c8660d5014d370ba3b5905f96d
+last_commit_short: 9cfd4920
 updated_by: cursor
 mount_everest_target: "CLOSED on iron 2026-09-11: Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest). Next: M8 operator hardening (ADR-018)."
 months_to_everest: 0.0
@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | `0b5df509` |
-| Summary | **Iron `dc1bcc800c1e` / run `44389087185`: `online=16 of 16`.** Cores 1–15 each `online (VMXON ok)`. Guest stayed on core 0: `B21 cores 0:[0.0 0.1]` with cores 1–15 empty, `kicks=0/0 recalls=0`, `Brought up 1 node, 2 CPUs`, `raynusrv2 login:`. Gate 1. Not lived. Months **0.0 held**. Overall **99 held**. |
+| Commit | `9cfd4920` |
+| Summary | **Gate 2 code, not on iron.** vCPU 0 stays on core 0. vCPU 1 and later are VMCLEARed on core 0 and launched on another core, which writes its own `HOST_RSP`. Reset and Stop recall that VMCS back to core 0. The stick in the machine is still gate 1. Not lived. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B7 lived. B21 in flight, S1, wave 7. B6 and B8 stay lived. Wave 7 open. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -384,6 +384,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-18 | wave-7-b21-place | 0.0 | 99 | **Gate 2 code, not on iron.** vCPU 0 stays on core 0. When a later vCPU comes up and more than one host core is online, core 0 VMCLEARs its VMCS and wakes the least-loaded other core, which VMPTRLDs it, writes that core's `HOST_RSP`, and VMLAUNCHes. A reset or Stop recalls the VMCS back before core 0 clears it. One host core online keeps the B7 path. Not an F11. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-18 | wave-7-b21-gate1 | 0.0 | 99 | **Iron `dc1bcc800c1e` / run `44389087185`: gate 1.** `logical=32 enabled=32 cores=16 packages=2 threads_skipped=16 x2apic=1 use=16`. Cores 1–15 `apic=0x2`…`0x1e` each `online (VMXON ok)`, `VmxEnabled vcpu_id=1` through `15`. `boot: B21 host cores online=16 of 16`. Saved guest: `boot: B7 guest slot 0 vcpus=2`, `boot: B7 vcpu 1 long mode`, `smp: Brought up 1 node, 2 CPUs`, `raynusrv2 login:`. SSH `nproc` printed 2. `boot: B21 cores 0:[0.0 0.1] 1:[] … 15:[] lock_wait_max_us=0 hold_max_us=19875576 kicks=0/0 recalls=0`. vCPUs stayed on core 0. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-18 | wave-7-b21-x2apic-id | 0.0 | 99 | **Iron `70afcdf9da0e` / run `44383802515`: still `online=1 of 16`, every other core `not used: tsc`, no `tsc sync` line.** `x2apic=1`. MSR 0x802 was shifted by 24, so the id compared as 0 and the core stopped before the timestamp sample. That stop was then labeled `tsc`. The id is the low 32 bits in x2APIC mode. Guest still `boot: B7 guest slot 0 vcpus=2` and `Brought up 1 node, 2 CPUs`. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-18 | wave-7-b21-iron-tsc | 0.0 | 99 | **Iron `a9301533682b` / run `44376126570`: `boot: B21 host cores online=1 of 16`.** `logical=32 enabled=32 cores=16 packages=2 threads_skipped=16 x2apic=1 use=16`. Cores 1–15, APIC `0x2` through `0x1e`, each `not used: tsc`. The saved Ubuntu guest still started: `boot: B7 guest slot 0 vcpus=2`, `smp: Brought up 1 node, 2 CPUs`, SSH `nproc` printed 2. Equal `IA32_TSC_ADJUST` values were the refusal. A constant offset is now written once and three samples must land within 1 ms. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |

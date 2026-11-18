@@ -595,6 +595,13 @@ mod hw {
         if vmcs == 0 || ops::vmptrld(vmcs).is_err() {
             return false;
         }
+        if !super::super::bind_host_rsp() {
+            return false;
+        }
+        let core = crate::arch::host_smp::this_core();
+        if core != 0 {
+            crate::arch::host_smp::note_loaded(core);
+        }
         let c = &*CTX.p_at(s, v);
         ensure_osxsave();
         let mask = host_xcr0_mask();
@@ -794,11 +801,74 @@ mod hw {
         }
     }
 
+    /// A non-zero core runs only the units homed on it. It does not boot a
+    /// slot, tick the page, or leave to the idle loop.
+    unsafe fn resume_on_ap(idle: bool) -> ! {
+        let core = crate::arch::host_smp::this_core();
+        if crate::arch::host_smp::recall_waiting(core) {
+            super::super::remote_recall_and_park();
+        }
+        let cu = cur_unit();
+        let now = cpu::rdtsc();
+        let hz = tsc_hz();
+        let fb = super::super::UART_PACE_TSC_HZ_FALLBACK;
+        let used = now.wrapping_sub(SLICE_START.load(Ordering::Acquire));
+        let quantum = us_to_tsc(QUANTUM_US, hz, fb);
+        let starve = us_to_tsc(STARVE_US, hz, fb);
+        let home = |u: usize| crate::arch::host_smp::assigned(u);
+        match pick_on_core(core, cu, idle, used, quantum, starve, |u| other(u, now), home) {
+            Pick::Stay => {
+                if idle {
+                    switch_out(cu, true, now);
+                    super::super::ap_halt_pause(core, cu);
+                }
+                super::super::clamp_firmware_preempt();
+                super::super::enter_guest()
+            }
+            Pick::Switch(next) => {
+                switch_out(cu, idle, now);
+                if !switch_in(next, now) {
+                    super::super::remote_recall_and_park();
+                }
+                super::super::enter_guest()
+            }
+        }
+    }
+
+    /// Load `unit` and enter it. The caller holds the monitor.
+    pub unsafe fn launch_on_core(core: usize) -> bool {
+        if crate::arch::host_smp::recall_waiting(core) {
+            super::super::remote_recall_and_park();
+        }
+        let Some(unit) = (0..MAX_UNITS).find(|&u| {
+            crate::arch::host_smp::assigned(u) == core
+                && slot::is_on(slot::unit_slot(u))
+                && slot::vcpu_up(slot::unit_slot(u), slot::unit_vcpu(u))
+        }) else {
+            return false;
+        };
+        if !switch_in(unit, cpu::rdtsc()) {
+            return false;
+        }
+        resume(false)
+    }
+
+    /// After a halt pause, load `unit` again and enter it.
+    pub unsafe fn reenter(unit: usize) -> ! {
+        if !switch_in(unit, cpu::rdtsc()) {
+            super::super::remote_recall_and_park();
+        }
+        super::super::enter_guest()
+    }
+
     /// End of a VM exit: enter the guest that should run now.
     ///
     /// `idle` is [`guest_idle`] for the guest that took the exit. With one
     /// guest on and no Start waiting this is `VMRESUME`.
     pub unsafe fn resume(idle: bool) -> ! {
+        if crate::arch::host_smp::this_core() != 0 {
+            resume_on_ap(idle);
+        }
         let cu = cur_unit();
         if let Some(s) = pending_start(slot::current()) {
             let now = cpu::rdtsc();
@@ -827,7 +897,8 @@ mod hw {
         let starve = us_to_tsc(STARVE_US, hz, fb);
         beat(slot::current(), now, us_to_tsc(BEAT_US, hz, fb));
         crate::arch::host_smp::maybe_core_line(now, us_to_tsc(BEAT_US, hz, fb));
-        match pick(cu, idle, used, quantum, starve, |u| other(u, now)) {
+        let home = |u: usize| crate::arch::host_smp::assigned(u);
+        match pick_on_core(0, cu, idle, used, quantum, starve, |u| other(u, now), home) {
             Pick::Stay => {
                 super::super::clamp_firmware_preempt();
                 super::super::enter_guest()
