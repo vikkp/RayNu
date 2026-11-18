@@ -105,6 +105,14 @@ fn stack_top_is_aligned_inside_the_block() {
 }
 
 #[test]
+fn tsc_sync_delta_is_the_paired_offset() {
+    assert_eq!(tsc_sync_delta(5_000, 1_000), 4_000);
+    assert_eq!(tsc_sync_delta(1_000, 1_000), 0);
+    assert_eq!(1_000u64.wrapping_add(tsc_sync_delta(5_000, 1_000)), 5_000);
+    assert_eq!(5_000u64.wrapping_add(tsc_sync_delta(1_000, 5_000)), 1_000);
+}
+
+#[test]
 fn cpu_cap_keeps_b7_on_one_core() {
     assert_eq!(cpu_cap(4, 1, false), 4);
     assert_eq!(cpu_cap(4, 8, true), 4);

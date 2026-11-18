@@ -547,6 +547,12 @@ pub fn stack_top(core: usize, ap_base: u64, core0_top: u64) -> u64 {
     end.saturating_sub(16) & !0xF
 }
 
+/// Signed difference added to another core's `IA32_TSC_ADJUST` so a later
+/// `rdtsc` on that core matches `bsp`. The two arguments are one paired sample.
+pub fn tsc_sync_delta(bsp: u64, ap: u64) -> u64 {
+    bsp.wrapping_sub(ap)
+}
+
 /// vCPU cap. One core online, and `onecore.txt`, keep the B7 cap (`max_vcpus`).
 /// More than one core online: `min(max_vcpus, cores)`.
 pub fn cpu_cap(max_vcpus: u8, cores_online: usize, onecore_flag: bool) -> u8 {

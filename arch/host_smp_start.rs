@@ -27,12 +27,14 @@ static BSP_PAT: AtomicU64 = AtomicU64::new(0);
 static BSP_XCR0: AtomicU64 = AtomicU64::new(0);
 static BSP_IDT_LIMIT: AtomicU64 = AtomicU64::new(0);
 static BSP_IDT_BASE: AtomicU64 = AtomicU64::new(0);
-static BSP_TSC_ADJ: AtomicU64 = AtomicU64::new(0);
 static TSC_ROUND: AtomicU64 = AtomicU64::new(0);
 static TSC_T0: AtomicU64 = AtomicU64::new(0);
 static TSC_T1: AtomicU64 = AtomicU64::new(0);
 /// 0 idle, 1 core 0 is sampling, 2 the sample is finished.
 static TSC_GO: AtomicU8 = AtomicU8::new(0);
+/// Added to this core's IA32_TSC_ADJUST when TSC_SYNC is 1. 2 means applied.
+static TSC_DELTA: AtomicU64 = AtomicU64::new(0);
+static TSC_SYNC: AtomicU8 = AtomicU8::new(0);
 
 #[repr(C, align(64))]
 struct Mail {
@@ -157,14 +159,12 @@ fn ap_lapic(core: usize) -> Result<(), u8> {
 }
 
 fn tsc_handshake_ap() -> bool {
-    let leaf7 = unsafe { cpu::cpuid(7, 0) };
-    let has_adj = leaf7.ebx & (1 << 1) != 0;
-    if has_adj {
-        let adj = unsafe { cpu::rdmsr(0x3B) };
-        if adj != BSP_TSC_ADJ.load(Ordering::Acquire) {
-            return false;
-        }
-    }
+    // Iron a9301533682b: every AP's IA32_TSC_ADJUST differed from core 0, so
+    // requiring equal offsets left online=1 of 16. The value that matters is
+    // rdtsc. A constant offset is applied once, below, when core 0 asks.
+    // SAFETY: CPUID leaf 7 is architectural. This core, before VMXON.
+    // KANI-TARGET: host_smp tsc leaf
+    let has_adj = unsafe { cpu::cpuid(7, 0).ebx & (1 << 1) != 0 };
     for _ in 0..8 {
         if TSC_GO.load(Ordering::Acquire) == 2 {
             return true;
@@ -181,6 +181,19 @@ fn tsc_handshake_ap() -> bool {
             && TSC_GO.load(Ordering::Acquire) != 2
         {
             core::hint::spin_loop();
+        }
+        if TSC_GO.load(Ordering::Acquire) == 2 {
+            return true;
+        }
+        if has_adj && TSC_SYNC.load(Ordering::Acquire) == 1 {
+            let delta = TSC_DELTA.load(Ordering::Acquire);
+            // SAFETY: this core's IA32_TSC_ADJUST, before VMXON. Core 0
+            // published `delta` under TSC_SYNC. KANI-TARGET: host_smp tsc adjust
+            unsafe {
+                let adj = cpu::rdmsr(0x3B);
+                cpu::wrmsr(0x3B, adj.wrapping_add(delta));
+            }
+            TSC_SYNC.store(2, Ordering::Release);
         }
     }
     true
@@ -241,8 +254,6 @@ pub unsafe fn start_cores() {
         0
     };
     let idtr = cpu::sidt();
-    let has_adj = cpu::cpuid(7, 0).ebx & (1 << 1) != 0;
-    let adj = if has_adj { cpu::rdmsr(0x3B) } else { 0 };
     BSP_CR0.store(cr0, Ordering::Release);
     BSP_CR3_SLOT.store(cr3, Ordering::Release);
     BSP_CR3.store(cr3, Ordering::Release);
@@ -252,7 +263,6 @@ pub unsafe fn start_cores() {
     BSP_XCR0.store(xcr0, Ordering::Release);
     BSP_IDT_LIMIT.store(u64::from(idtr.limit), Ordering::Release);
     BSP_IDT_BASE.store(idtr.base, Ordering::Release);
-    BSP_TSC_ADJ.store(adj, Ordering::Release);
 
     let pdpt = low_base() + 0x2000;
     let pd = low_base() + 0x3000;
@@ -285,7 +295,7 @@ pub unsafe fn start_cores() {
         TSC_GO.store(0, Ordering::Release);
         send_init_sipi(id, low_base());
         let started = wait_state(core, AP_STARTED, hz, 100_000);
-        let tsc_ok = started && tsc_rounds_ok();
+        let tsc_ok = started && tsc_rounds_ok(core);
         // Finish the three rounds before the next SIPI. The trampoline page
         // and the handshake words are shared, and this core may still be
         // entering VMX root.
@@ -424,14 +434,20 @@ fn wait_state_done(core: usize, hz: u64, us: u64) -> u8 {
 }
 
 /// Core 0 side of the TSC check. Three samples within 1ms of core 0.
-/// A missed sample is retried: a nested vCPU can be off the CPU for a
-/// moment, and iron answers in microseconds. A stopped clock, or one
-/// more than 1ms ahead, fails. Eight misses and the core is not used.
-fn tsc_rounds_ok() -> bool {
+/// A missed sample is retried. One sample outside that window asks the
+/// other core to add the offset to `IA32_TSC_ADJUST`; three fresh samples
+/// then have to land inside the window. A clock that is still outside is
+/// not used.
+fn tsc_rounds_ok(core: usize) -> bool {
     let hz = crate::boot::raynu_f_flag::tsc_hz().max(1);
     let slack = (hz / 1000).max(1);
+    // SAFETY: CPUID leaf 7 is architectural. Core 0.
+    // KANI-TARGET: host_smp tsc leaf
+    let has_adj = unsafe { cpu::cpuid(7, 0).ebx & (1 << 1) != 0 };
     TSC_GO.store(1, Ordering::Release);
+    TSC_SYNC.store(0, Ordering::Release);
     let mut good = 0u32;
+    let mut synced = false;
     let mut passed = false;
     for _ in 0..8 {
         TSC_T1.store(0, Ordering::Release);
@@ -448,13 +464,38 @@ fn tsc_rounds_ok() -> bool {
         }
         let t1 = TSC_T1.load(Ordering::Acquire);
         let t2 = cpu::rdtsc();
+        let off = t1 != 0
+            && (t1.saturating_add(slack) < t0 || t1 > t2.saturating_add(slack));
+        if off && !synced && has_adj {
+            let delta = super::tsc_sync_delta(t0, t1);
+            TSC_DELTA.store(delta, Ordering::Release);
+            TSC_SYNC.store(1, Ordering::Release);
+            TSC_ROUND.fetch_add(1, Ordering::Release);
+            let wait = cpu::rdtsc();
+            while TSC_SYNC.load(Ordering::Acquire) != 2 {
+                if cpu::rdtsc().wrapping_sub(wait) > ticks {
+                    break;
+                }
+                core::hint::spin_loop();
+            }
+            if TSC_SYNC.load(Ordering::Acquire) != 2 {
+                break;
+            }
+            TSC_SYNC.store(0, Ordering::Release);
+            synced = true;
+            good = 0;
+            crate::boot::serial::write_str("boot: B21 host core ");
+            write_dec(core as u64);
+            crate::boot::serial::write_str(" tsc sync delta=0x");
+            write_hex(delta);
+            crate::boot::serial::write_line("");
+            continue;
+        }
         TSC_ROUND.fetch_add(1, Ordering::Release);
         if t1 == 0 {
             continue;
         }
-        let behind = t1.saturating_add(slack) < t0;
-        let ahead = t1 > t2.saturating_add(slack);
-        if behind || ahead {
+        if off {
             break;
         }
         good += 1;

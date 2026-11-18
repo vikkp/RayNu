@@ -8,6 +8,8 @@
 
 **ADR-021 B7 lived — two CPUs in one Ubuntu guest (2026-11-18):** [`2026-11-18-505ef6bd-wave-7-b7-smp-ok.md`](2026-11-18-505ef6bd-wave-7-b7-smp-ok.md) — EFI `505ef6bdbc73`, run `44336344309`. Autostart was 1 CPU (`nproc` printed `1`). After `GuestCpuSaved prev=1 n=2`: `boot: B7 vcpu 1 long mode`, `Brought up 1 node, 2 CPUs`, `nproc` printed `2`. Alpine then reached `localhost login:` beside that guest. **B7 lived.** Wave 7 stays open on B21. Latest stays `v0.1.7-b6`.
 
+**ADR-021 B21 gate 1, cores refused (2026-11-18):** [`2026-11-18-a9301533-b21-host-cores-tsc.md`](2026-11-18-a9301533-b21-host-cores-tsc.md) — EFI `a9301533682b`, run `44376126570`. `online=1 of 16`, cores 1–15 `not used: tsc`. Guest `nproc` printed 2. Not lived.
+
 **ADR-021 B6 lived — two product guests side by side (2026-11-17):** [`2026-11-17-4f581a4d-wave-7-b6-two-guests-ok.md`](2026-11-17-4f581a4d-wave-7-b6-two-guests-ok.md) — EFI `4f581a4dcd93`, run `44174137515`. Ubuntu at `raynusrv2 login:`, then Start of the Alpine row: `boot: guest slot 1 start guests_on=1`, `localhost login:`. `boot: guests on=2` five times with both `runs=` counts moving. `ssh vikkp@10.99.99.200` answered with both on. Stop of the Alpine row left `1 guest(s) still on`. **B6 lived.** Wave 7 stays open on B7.
 
 **Guest SSH back after the I/O APIC switch (2026-11-08):** [`2026-11-08-64ddddaf-wave-7-b8-guest-ssh-ok.md`](2026-11-08-64ddddaf-wave-7-b8-guest-ssh-ok.md) — EFI `64ddddafeffa`, run `42424856392`, merge of `9e3661fe`. No `PCI INT A: no GSI` on `00:05.0`. `ssh vikkp@10.99.99.200` reached a shell. B8 stays lived.
