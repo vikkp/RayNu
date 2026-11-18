@@ -1581,3 +1581,65 @@ fn ocw2_specific_eoi_clears_the_named_level_not_the_highest_bit_number() {
     reset_cd();
     guest_platform::reset();
 }
+
+#[test]
+fn ioapic_destination_selects_the_vcpu() {
+    let slot = crate::guest::slot::current();
+    struct Back(usize);
+    impl Drop for Back {
+        fn drop(&mut self) {
+            crate::guest::slot::set_vcpus(1);
+            crate::guest::slot::set_vcpu_up(self.0, 1, false);
+        }
+    }
+    let _back = Back(slot);
+    arm_product_iso();
+    crate::guest::slot::set_vcpus(2);
+    crate::guest::slot::set_vcpu_up(slot, 0, true);
+    crate::guest::slot::set_vcpu_up(slot, 1, true);
+
+    // Physical APIC ID 1.
+    ioapic_write(0, 0x10 + 2 * u32::from(ATA_GSI));
+    ioapic_write(0x10, 0x40);
+    ioapic_write(0, 0x11 + 2 * u32::from(ATA_GSI));
+    ioapic_write(0x10, 1 << 24);
+    raise_ata();
+    assert!(take_ioapic_ata_vector().is_none(), "vCPU 0 does not own APIC ID 1");
+    assert_eq!(
+        crate::guest::slot::with_vcpu(slot, 1, take_ioapic_ata_vector),
+        Some(0x40)
+    );
+
+    // Logical flat: vCPU 1's LDR bit 0, RTE logical destination 1.
+    crate::guest::slot::with_vcpu(slot, 1, || {
+        assert!(crate::devices::lapic_virt::mmio_access(0xFEE0_00D0, true, 1 << 24).is_some());
+    });
+    ioapic_write(0, 0x10 + 2 * u32::from(ATA_GSI));
+    ioapic_write(0x10, 0x41 | (1 << 11));
+    ioapic_write(0, 0x11 + 2 * u32::from(ATA_GSI));
+    ioapic_write(0x10, 1 << 24);
+    raise_ata();
+    assert!(take_ioapic_ata_vector().is_none());
+    assert_eq!(
+        crate::guest::slot::with_vcpu(slot, 1, take_ioapic_ata_vector),
+        Some(0x41)
+    );
+
+    // A destination nobody matches falls to vCPU 0.
+    ioapic_write(0, 0x10 + 2 * u32::from(ATA_GSI));
+    ioapic_write(0x10, 0x42);
+    ioapic_write(0, 0x11 + 2 * u32::from(ATA_GSI));
+    ioapic_write(0x10, 7 << 24);
+    raise_ata();
+    assert!(crate::guest::slot::with_vcpu(slot, 1, take_ioapic_ata_vector).is_none());
+    assert_eq!(take_ioapic_ata_vector(), Some(0x42));
+
+    // One vCPU: any destination is ready, as before.
+    crate::guest::slot::set_vcpus(1);
+    ioapic_write(0, 0x10 + 2 * u32::from(ATA_GSI));
+    ioapic_write(0x10, 0x43);
+    ioapic_write(0, 0x11 + 2 * u32::from(ATA_GSI));
+    ioapic_write(0x10, 1 << 24);
+    raise_ata();
+    assert_eq!(take_ioapic_ata_vector(), Some(0x43));
+}

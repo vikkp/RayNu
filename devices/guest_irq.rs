@@ -52,6 +52,8 @@ const RTE_MASK: u64 = 1 << 16;
 const RTE_TRIG_LEVEL: u64 = 1 << 15;
 /// IOAPIC RTE bit 14: remote IRR (in-service, wait for LAPIC EOI).
 const RTE_REMOTE_IRR: u64 = 1 << 14;
+/// IOAPIC RTE bit 11: 1 = logical destination, 0 = physical.
+const RTE_DEST_LOGICAL: u64 = 1 << 11;
 const PIC_SLAVE_IRQ: u8 = 2;
 
 struct Pic {
@@ -801,6 +803,14 @@ fn ioapic_pin_ready(c: &IrqChip, pin: u8) -> Option<u8> {
     }
     let vec = (rte & 0xff) as u8;
     if vec < 16 {
+        return None;
+    }
+    if crate::guest::slot::vcpus() > 1
+        && crate::devices::lapic_virt::pick_target(
+            (rte >> 56) as u8,
+            rte & RTE_DEST_LOGICAL != 0,
+        ) != crate::guest::slot::current_vcpu()
+    {
         return None;
     }
     Some(vec)
