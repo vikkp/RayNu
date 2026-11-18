@@ -455,6 +455,33 @@ pub const GUEST_UEFI_FEATURE_CONTROL_VALUE: u64 = 1;
 /// CPUID.1:EDX bit 28 — HTT / multi-thread package.
 pub const CPUID_EDX_HTT: u32 = 1 << 28;
 
+/// CPUID leaves a guest with `n` vCPUs sees. Leaves 0xB and 0x1F stay zero
+/// so Linux and Windows fall back to leaves 1 and 4 (ADR-023 D7).
+/// `n == 1` is unchanged: the uniprocessor filters stay the N=1 answer.
+pub fn guest_uefi_cpuid_smp(mut r: CpuidRegs, leaf: u32, vcpu: u32, n: u32) -> CpuidRegs {
+    if n <= 1 {
+        return r;
+    }
+    match leaf {
+        1 => {
+            r.ebx = (r.ebx & 0x0000_FFFF) | (n << 16) | (vcpu << 24);
+            r.edx |= CPUID_EDX_HTT;
+        }
+        4 if r.eax & 0x1F != 0 => {
+            let level = (r.eax >> 5) & 7;
+            let share = if level == 1 || level == 2 {
+                0
+            } else {
+                n.next_power_of_two().saturating_sub(1)
+            };
+            let low = r.eax & 0x0000_3FFF;
+            r.eax = low | (share << 14) | (n.saturating_sub(1) << 26);
+        }
+        _ => {}
+    }
+    r
+}
+
 /// Linux `cpuid_count(4, i)` terminator. Subleaf >= this returns type 0.
 /// Not `ISO-INSTALL-OK`.
 pub const GUEST_UEFI_CPUID_LEAF4_LAST_SUB: u32 = 4;
@@ -9918,6 +9945,11 @@ fn raynu_f_publish_acpi(layout: &crate::raynu_f::FirmwareImageLayout, img: &mut 
             serial::write_str("boot: B4 acpi rsdp gpa=0x");
             write_hex(gpa);
             serial::write_line(" (power button, PCI0 IRQ 11, MADT local APIC and I/O APIC)");
+            if slot::vcpus() > 1 {
+                serial::write_str_nowait("boot: B7 acpi madt local_apics=");
+                write_dec_nowait(slot::vcpus() as u64);
+                serial::write_byte_nowait(b'\n');
+            }
         }
         Err(_) => serial::write_line("boot: B4 WARN acpi publish failed"),
     }
@@ -16756,11 +16788,19 @@ unsafe fn handle_cpuid() -> bool {
     let linux_user = !guest_uefi_pf_should_deliver_to_guest(rip)
         && RAYNU_F_LINUX_HANDOFF.load(Ordering::Acquire);
     // Linux userspace (ld.so) must see the same CPU as the kernel.
-    let r = if guest_uefi_pf_should_deliver_to_guest(rip) || linux_user {
+    let mut r = if guest_uefi_pf_should_deliver_to_guest(rip) || linux_user {
         guest_uefi_filter_cpuid_for_linux(leaf, sub)
     } else {
         guest_uefi_filter_cpuid(leaf, sub)
     };
+    if slot::vcpus() > 1 {
+        r = guest_uefi_cpuid_smp(
+            r,
+            leaf,
+            slot::current_vcpu() as u32,
+            slot::vcpus() as u32,
+        );
+    }
     if linux_user && leaf == 0 && USER_CPUID_VENDOR_N.fetch_add(1, Ordering::AcqRel) < 2 {
         serial::write_str_nowait("boot: RayNu-F user cpuid vendor ebx=0x");
         write_hex_nowait(u64::from(r.ebx));

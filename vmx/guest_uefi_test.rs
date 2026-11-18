@@ -3849,6 +3849,48 @@ fn idt_vectoring_reinjects_a_lost_external_interrupt_and_the_trace_shows_eois() 
 }
 
 #[test]
+fn cpuid_names_n_cpus_and_leaves_topology_leaves_alone() {
+    use crate::sched::msr_firewall::CpuidRegs;
+    let base = CpuidRegs {
+        eax: 0x0000_0600 | (1 << 5) | 1,
+        ebx: 0x0000_1234,
+        ecx: 0,
+        edx: 0,
+    };
+    let r = super::guest_uefi_cpuid_smp(base, 1, 1, 2);
+    assert_eq!((r.ebx >> 16) & 0xFF, 2);
+    assert_eq!((r.ebx >> 24) & 0xFF, 1);
+    assert_ne!(r.edx & super::CPUID_EDX_HTT, 0);
+    // Level 1 (eax[7:5] == 1): core field stays 0. Package field is n-1.
+    let l1 = CpuidRegs {
+        eax: (1 << 5) | 1,
+        ebx: 0,
+        ecx: 0,
+        edx: 0,
+    };
+    let c = super::guest_uefi_cpuid_smp(l1, 4, 0, 2);
+    assert_eq!((c.eax >> 26) & 0x3F, 1);
+    assert_eq!((c.eax >> 14) & 0xFFF, 0);
+    let l3 = CpuidRegs {
+        eax: (3 << 5) | 1,
+        ebx: 9,
+        ecx: 0,
+        edx: 0,
+    };
+    let c3 = super::guest_uefi_cpuid_smp(l3, 4, 0, 4);
+    assert_eq!((c3.eax >> 26) & 0x3F, 3);
+    assert_eq!((c3.eax >> 14) & 0xFFF, 3, "4 is already a power of two");
+    let topo = CpuidRegs {
+        eax: 0x11,
+        ebx: 0x22,
+        ecx: 0x33,
+        edx: 0x44,
+    };
+    let b = super::guest_uefi_cpuid_smp(topo, 0xB, 1, 4);
+    assert_eq!((b.eax, b.ebx, b.ecx, b.edx), (0x11, 0x22, 0x33, 0x44));
+}
+
+#[test]
 fn sipi_entry_and_mirror_masks_and_ap_state() {
     assert_eq!(super::sipi_entry(0x08), (0x0800, 0x8000, 0));
     assert_eq!(super::sipi_entry(0), (0, 0, 0));

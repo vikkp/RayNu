@@ -28,6 +28,13 @@ pub const MADT_OFF: usize = 0x340;
 pub const FACP_LEN: usize = 129;
 pub const FACS_LEN: usize = 64;
 pub const MADT_LEN: usize = 74;
+
+/// MADT length for `n` local APICs, one I/O APIC and the IRQ 0 override.
+pub const fn madt_len(n: usize) -> usize {
+    44 + 8 * n + 12 + 10
+}
+
+const _: () = assert!(madt_len(1) == MADT_LEN);
 const RSDT_LEN: usize = 44;
 const XSDT_LEN: usize = 52;
 
@@ -64,11 +71,13 @@ pub fn write_acpi_page(page: &mut [u8], gpa: u64) -> bool {
     if dsdt_len == 0 || DSDT_OFF + dsdt_len > FACS_OFF {
         return false;
     }
-    if MADT_OFF + MADT_LEN > ACPI_PAGE {
+    let n = crate::guest::slot::vcpus().clamp(1, crate::guest::slot::MAX_VCPUS);
+    let mlen = madt_len(n);
+    if MADT_OFF + mlen > ACPI_PAGE {
         return false;
     }
     write_facp(&mut page[FACP_OFF..FACP_OFF + FACP_LEN], facs, dsdt);
-    write_madt(&mut page[MADT_OFF..MADT_OFF + MADT_LEN]);
+    write_madt(&mut page[MADT_OFF..MADT_OFF + mlen], n);
     write_rsdt(&mut page[RSDT_OFF..RSDT_OFF + RSDT_LEN], facp, madt);
     write_xsdt(&mut page[XSDT_OFF..XSDT_OFF + XSDT_LEN], facp, madt);
     write_rsdp(&mut page[RSDP_OFF..RSDP_OFF + 36], rsdt, xsdt);
@@ -203,21 +212,34 @@ fn write_xsdt(buf: &mut [u8], facp: u64, madt: u64) {
     fix_checksum(buf, 9);
 }
 
-/// ACPI MADT. One enabled local APIC, one I/O APIC at GSI 0, ISA IRQ 0 on GSI 2.
-fn write_madt(buf: &mut [u8]) {
-    sdt_header(buf, b"APIC", MADT_LEN as u32, 1);
+/// ACPI MADT. `n` enabled local APICs (id = processor id = v), then one
+/// I/O APIC at GSI 0 and ISA IRQ 0 on GSI 2. `n == 1` is the single-CPU
+/// table (`MADT_LEN`).
+fn write_madt(buf: &mut [u8], n: usize) {
+    let len = madt_len(n);
+    if buf.len() < len || n == 0 {
+        return;
+    }
+    sdt_header(buf, b"APIC", len as u32, 1);
     put_u32(buf, 36, 0xFEE0_0000);
     put_u32(buf, 40, 1);
-    buf[44] = 0;
-    buf[45] = 8;
-    buf[48] = 1;
-    buf[52] = 1;
-    buf[53] = 12;
-    put_u32(buf, 56, 0xFEC0_0000);
-    buf[64] = 2;
-    buf[65] = 10;
-    put_u32(buf, 68, 2);
-    fix_checksum(buf, 9);
+    for v in 0..n {
+        let off = 44 + 8 * v;
+        buf[off] = 0;
+        buf[off + 1] = 8;
+        buf[off + 2] = v as u8;
+        buf[off + 3] = v as u8;
+        buf[off + 4] = 1;
+    }
+    let io = 44 + 8 * n;
+    buf[io] = 1;
+    buf[io + 1] = 12;
+    put_u32(buf, io + 4, 0xFEC0_0000);
+    let ovr = io + 12;
+    buf[ovr] = 2;
+    buf[ovr + 1] = 10;
+    put_u32(buf, ovr + 4, 2);
+    fix_checksum(&mut buf[..len], 9);
 }
 
 fn write_rsdp(buf: &mut [u8], rsdt: u64, xsdt: u64) {
@@ -281,6 +303,47 @@ mod acpi_publish_test {
             u32::from_le_bytes(page[MADT_OFF + 56..MADT_OFF + 60].try_into().unwrap()),
             0xFEC0_0000
         );
+        // One CPU is the table this function published before B7.
+        assert_eq!(&page[MADT_OFF + 44..MADT_OFF + 52], &[0, 8, 0, 0, 1, 0, 0, 0]);
+        assert_eq!(page[MADT_OFF + 52], 1);
+        assert_eq!(page[MADT_OFF + 64], 2);
+        assert_eq!(
+            u32::from_le_bytes(page[MADT_OFF + 4..MADT_OFF + 8].try_into().unwrap()),
+            MADT_LEN as u32
+        );
+    }
+
+    #[test]
+    fn two_and_four_cpus_shift_the_ioapic_and_the_override() {
+        for n in [2usize, 4] {
+            crate::guest::slot::set_vcpus(n);
+            let mut page = [0u8; ACPI_PAGE];
+            assert!(write_acpi_page(&mut page, 0x804000));
+            let len = madt_len(n);
+            let m = &page[MADT_OFF..MADT_OFF + len];
+            assert_eq!(u32::from_le_bytes(m[4..8].try_into().unwrap()) as usize, len);
+            assert_eq!(sum(m), 0);
+            for v in 0..n {
+                let off = 44 + 8 * v;
+                assert_eq!(m[off], 0, "type");
+                assert_eq!(m[off + 1], 8, "len");
+                assert_eq!(m[off + 2], v as u8, "processor");
+                assert_eq!(m[off + 3], v as u8, "apic id");
+                assert_eq!(m[off + 4], 1, "flags");
+            }
+            let io = 44 + 8 * n;
+            assert_eq!(m[io], 1);
+            assert_eq!(m[io + 1], 12);
+            assert_eq!(
+                u32::from_le_bytes(m[io + 4..io + 8].try_into().unwrap()),
+                0xFEC0_0000
+            );
+            let ovr = io + 12;
+            assert_eq!(m[ovr], 2);
+            assert_eq!(m[ovr + 1], 10);
+            assert_eq!(u32::from_le_bytes(m[ovr + 4..ovr + 8].try_into().unwrap()), 2);
+        }
+        crate::guest::slot::set_vcpus(1);
     }
 
     #[test]
