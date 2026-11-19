@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-11-19
-last_commit: PENDING
-last_commit_short: PENDING
+last_commit: aa022ed8639d05eb4628bc0add5ff5e66ec6387e
+last_commit_short: aa022ed8
 updated_by: cursor
 mount_everest_target: "CLOSED on iron 2026-09-11: Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest). Next: M8 operator hardening (ADR-018)."
 months_to_everest: 0.0
@@ -354,7 +354,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | `PENDING` |
+| Commit | `aa022ed8` |
 | Summary | **THRE means fewer than 16 bytes are waiting for COM2.** Iron `236290d35ce5` / run `44579224343` shredded the log and the timestamp jumped to 29.7s. Not lived. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B7 lived. B21 in flight, S1, wave 7. B6 and B8 stay lived. Wave 7 open. No doorbell. No format of UBUNTU0. |
