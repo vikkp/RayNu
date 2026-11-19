@@ -387,6 +387,17 @@ fn on_ap_wake_enter_guest_does_not_two_in_monitor() {
 }
 
 #[test]
+fn stall_pulse_is_off_during_firmware_and_rearms() {
+    assert!(!stall_report_due(true, true, 1, 1, 10, false));
+    assert!(stall_report_due(true, false, 1, 2, 0, false));
+    assert!(!stall_report_due(false, false, 1, 2, 0, false));
+    assert!(stall_report_due(false, false, 4, 4, 1, false));
+    assert!(stall_rearm(4, 5));
+    assert!(!stall_rearm(4, 4));
+    assert!(!stall_rearm(u64::MAX, 1));
+}
+
+#[test]
 fn tx_dump_waits_for_a_second_unchanged_pulse() {
     assert!(!tx_dump_due(u64::MAX, 1, 10, false));
     assert!(!tx_dump_due(1, 2, 10, false));

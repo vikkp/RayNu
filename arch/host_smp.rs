@@ -70,6 +70,13 @@ pub static MON_HOLDER: AtomicU8 = AtomicU8::new(0);
 static ENTER_TSC: AtomicU64 = AtomicU64::new(0);
 static HOLD_MAX: AtomicU64 = AtomicU64::new(0);
 static WAIT_MAX: AtomicU64 = AtomicU64::new(0);
+/// Exit reason and RIP last seen on each core. The wait snapshot is the
+/// holder at the moment `lock_wait_max` grew.
+static LAST_REASON: [AtomicU8; MAX_CORES] = [const { AtomicU8::new(0) }; MAX_CORES];
+static LAST_RIP: [AtomicU64; MAX_CORES] = [const { AtomicU64::new(0) }; MAX_CORES];
+static WAIT_HOLDER: AtomicU8 = AtomicU8::new(NO_CORE);
+static WAIT_REASON: AtomicU8 = AtomicU8::new(0);
+static WAIT_RIP: AtomicU64 = AtomicU64::new(0);
 static KICKS_TAKEN: AtomicU64 = AtomicU64::new(0);
 static KICKS_SENT: AtomicU64 = AtomicU64::new(0);
 static RECALLS: AtomicU64 = AtomicU64::new(0);
@@ -150,7 +157,10 @@ pub fn note_exit_phase(phase: u8) {
 /// Core 0's exit reason and guest RIP, stored with checkpoint 1.
 /// Counts one core 0 exit.
 pub fn note_core0_exit(reason: u32, rip: u64) {
-    if this_core() != 0 {
+    let core = this_core().min(MAX_CORES - 1);
+    LAST_REASON[core].store((reason & 0xFF) as u8, Ordering::Release);
+    LAST_RIP[core].store(rip, Ordering::Release);
+    if core != 0 {
         return;
     }
     EXIT_REASON8.store((reason & 0xFF) as u8, Ordering::Release);
@@ -261,8 +271,48 @@ fn push_hex64(out: &mut [u8], mut n: usize, v: u64) -> usize {
 /// Called from the watchdog core, which does not hold the monitor. One line
 /// every time the caller asks, whether or not core 0 is still checkpointing.
 /// Writes straight to COM2, not the guest ring. `d` is drops before this line.
+/// Print the pulse when `pulse.txt` is present, or when core 0 has stalled.
+/// RayNu-F (`raynu_f_running`) prints neither and does not spend the dump.
+pub fn stall_report_due(
+    pulse: bool,
+    firmware: bool,
+    prev: u64,
+    exits: u64,
+    ring: u64,
+    already: bool,
+) -> bool {
+    if firmware {
+        return false;
+    }
+    pulse || tx_dump_due(prev, exits, ring, already)
+}
+
+/// The exit count moved, so the one-shot dump may fire on the next stall.
+pub fn stall_rearm(prev: u64, exits: u64) -> bool {
+    prev != u64::MAX && exits != prev
+}
+
 pub fn emit_core0_pulse(_now: u64) {
     let exits = CORE0_EXITS.load(Ordering::Acquire);
+    static PREV: AtomicU64 = AtomicU64::new(u64::MAX);
+    static DONE: AtomicBool = AtomicBool::new(false);
+    let prev = PREV.swap(exits, Ordering::AcqRel);
+    if stall_rearm(prev, exits) {
+        DONE.store(false, Ordering::Release);
+    }
+    let ring = crate::boot::serial::guest_tx_len() as u64;
+    let firmware = crate::vmx::guest_uefi::raynu_f_running();
+    let already = DONE.load(Ordering::Acquire);
+    if !stall_report_due(
+        crate::boot::raynu_f_flag::host_pulse(),
+        firmware,
+        prev,
+        exits,
+        ring,
+        already,
+    ) {
+        return;
+    }
     let mut buf = [0u8; 160];
     let n = format_b21_pulse(
         EXIT_PHASE.load(Ordering::Acquire),
@@ -273,29 +323,15 @@ pub fn emit_core0_pulse(_now: u64) {
         EXIT_REASON8.load(Ordering::Acquire),
         EXIT_RIP.load(Ordering::Acquire),
         exits,
-        crate::boot::serial::guest_tx_len() as u64,
+        ring,
         u64::from(crate::boot::serial::com2_direct_dropped()),
         &mut buf,
     );
     let n = n.min(buf.len());
     let _ = crate::boot::serial::com2_bytes_direct(&buf[..n]);
-    note_stall_tx(exits);
-}
-
-/// A second pulse with the same exit count is a stall. Dump the guest TX
-/// ring once so the lines still queued are visible on COM2.
-fn note_stall_tx(exits: u64) {
-    static PREV: AtomicU64 = AtomicU64::new(u64::MAX);
-    static DONE: AtomicBool = AtomicBool::new(false);
-    let prev = PREV.swap(exits, Ordering::AcqRel);
-    let ring = crate::boot::serial::guest_tx_len() as u64;
-    if !tx_dump_due(prev, exits, ring, DONE.load(Ordering::Acquire)) {
-        return;
+    if tx_dump_due(prev, exits, ring, already) && DONE.swap(true, Ordering::AcqRel) == false {
+        dump_guest_tx();
     }
-    if DONE.swap(true, Ordering::AcqRel) {
-        return;
-    }
-    dump_guest_tx();
 }
 
 /// `prev` is the exit count from the previous pulse. `u64::MAX` means there
@@ -626,10 +662,30 @@ fn note_wait(wait: u64) {
     let mut cur = WAIT_MAX.load(Ordering::Acquire);
     while wait > cur {
         match WAIT_MAX.compare_exchange(cur, wait, Ordering::AcqRel, Ordering::Acquire) {
-            Ok(_) => break,
+            Ok(_) => {
+                let holder = MON_HOLDER.load(Ordering::Acquire);
+                WAIT_HOLDER.store(holder, Ordering::Release);
+                if (holder as usize) < MAX_CORES {
+                    WAIT_REASON.store(LAST_REASON[holder as usize].load(Ordering::Acquire), Ordering::Release);
+                    WAIT_RIP.store(LAST_RIP[holder as usize].load(Ordering::Acquire), Ordering::Release);
+                }
+                break;
+            }
             Err(v) => cur = v,
         }
     }
+}
+
+pub fn wait_holder() -> u8 {
+    WAIT_HOLDER.load(Ordering::Acquire)
+}
+
+pub fn wait_reason() -> u8 {
+    WAIT_REASON.load(Ordering::Acquire)
+}
+
+pub fn wait_rip() -> u64 {
+    WAIT_RIP.load(Ordering::Acquire)
 }
 
 fn note_hold() {
@@ -790,6 +846,12 @@ pub fn maybe_core_line(now: u64, period: u64) {
     }
     crate::boot::serial::write_str_nowait(" lock_wait_max_us=");
     write_dec_local(wait_max_ticks() / us);
+    crate::boot::serial::write_str_nowait(" wait_h=");
+    write_dec_local(u64::from(wait_holder()));
+    crate::boot::serial::write_str_nowait(" wait_r=");
+    write_dec_local(u64::from(wait_reason()));
+    crate::boot::serial::write_str_nowait(" wait_rip=0x");
+    write_hex_local(wait_rip());
     crate::boot::serial::write_str_nowait(" hold_max_us=");
     write_dec_local(hold_max_ticks() / us);
     crate::boot::serial::write_str_nowait(" kicks=");
@@ -799,6 +861,13 @@ pub fn maybe_core_line(now: u64, period: u64) {
     crate::boot::serial::write_str_nowait(" recalls=");
     write_dec_local(recalls());
     crate::boot::serial::write_line_nowait("");
+}
+
+fn write_hex_local(v: u64) {
+    let hex = b"0123456789abcdef";
+    for i in (0..16).rev() {
+        crate::boot::serial::write_byte_nowait(hex[((v >> (i * 4)) & 0xF) as usize]);
+    }
 }
 
 fn write_dec_local(mut v: u64) {
