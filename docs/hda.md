@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-11-19
-last_commit: 373025d8076d6f270feb0d3af5c29ebcb0999ce9
-last_commit_short: 373025d8
+last_commit: d499da5026807e6df97415649340febb0f08ff25
+last_commit_short: d499da50
 updated_by: cursor
 mount_everest_target: "CLOSED on iron 2026-09-11: Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest). Next: M8 operator hardening (ADR-018)."
 months_to_everest: 0.0
@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | `373025d8` |
-| Summary | **The pulse line now carries `r=` and `rip=` from checkpoint 1, and checkpoint 3 is dispatch returned.** Iron `bd6811abb106` still did not load `https://10.99.99.201:8443`. Nested QEMU with 4 host cores did not run: `enable_shadow_vmcs=Y` is built in and the boot gate stops before QEMU. Not lived. Months **0.0 held**. Overall **99 held**. |
+| Commit | `d499da50` |
+| Summary | **Prepared, not flashed.** `tx_empty` and the overdue PIT raise match `dc1bcc800c1e`. The pulse waits up to 20 ms for COM2 THRE, runs on the highest core, and prints every 2 seconds. The onecore boot of `620f7c384b59` is still out. Not lived. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B7 lived. B21 in flight, S1, wave 7. B6 and B8 stay lived. Wave 7 open. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -384,6 +384,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-19 | wave-7-b21-pulse-wait | 0.0 | 99 | **Prepared, not flashed.** `devices/guest_uart.rs` matches `dc1bcc800c1e`. The overdue PIT raise is out. The pulse waits up to 20 ms per byte for COM2 THRE, runs on the highest core (not a vCPU home), and prints every 2 seconds with `x` `t` `d`. Iron `620f7c384b59` / run `44601192905` did not load `https://10.99.99.201:8443` and `10.99.99.201` did not answer ping. The onecore boot of that EFI is still out. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-19 | wave-7-b21-pulse-rip | 0.0 | 99 | **Checkpoint 1 stores the exit reason and guest RIP (`r=` `rip=`). Checkpoint 3 is the exit dispatch returning. Arming is 4, the host-stack check is 5, and the check passing is 6.** `n - o` is 0 when the lock is free or a release left the counters equal, 1 when one core holds it, and 2 or more when another core is queued. Iron `bd6811abb106` / run `44591450680` stopped at `Enabling conditiona` and `https://10.99.99.201:8443` did not load. This build's flash order is plain, then `EFI/RayNu/onecore.txt`, then `EFI/RayNu/nokick.txt`. Nested QEMU with 4 host cores did not start: `kvm_intel` is built in with `enable_shadow_vmcs=Y`, and the boot gate stops before QEMU (`VMWRITE` error 12). No bisect. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-19 | wave-7-b21-pulse | 0.0 | 99 | **Iron `bd6811abb106` / run `44591450680` printed a clean log and stopped at `Enabling conditiona`, and `https://10.99.99.201:8443` did not load.** The page is polled from the same core-0 exit that drains COM2, so that loop is not returning. Core 1 stays awake and, after two seconds of silence, writes `boot: B21 pulse` straight to COM2. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-19 | wave-7-b21-gate1-console | 0.0 | 99 | **Iron `7c2bb44b970f` / run `44584144107` shredded the kernel log and stopped near `process: using mwait` / `mitigations`.** Holding THRE at 16 queued bytes did not produce readable text. Gate 1 (`dc1bcc800c1e`) reached login on the normal exit path, with THRE from ring room and the physical port drained on that path. Console exits take that path again. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
