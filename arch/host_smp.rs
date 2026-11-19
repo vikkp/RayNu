@@ -46,12 +46,17 @@ static APIC_IDS: [AtomicU32; MAX_CORES] = [const { AtomicU32::new(0) }; MAX_CORE
 
 /// Ticket lock. Core 0 holds ticket 0 from boot: `MON_OWNER` is 0 and the
 /// next ticket handed out is 1. Written by whichever core takes or drops it.
+/// While core 0 is the only taker, the exit count equals the ticket it holds,
+/// so a pulse with `o = x + 1` means that exit's `lock inc` has run.
 pub static MON_NEXT: AtomicU32 = AtomicU32::new(1);
 pub static MON_OWNER: AtomicU32 = AtomicU32::new(0);
 /// TSC at the last VM-exit landing. The landing stub writes it under the lock.
 pub static LAND_TSC: AtomicU64 = AtomicU64::new(0);
-/// Core inside the monitor, [`NO_CORE`] when none. Core 0 starts inside it.
-static MON_HOLDER: AtomicU8 = AtomicU8::new(0);
+/// Core that holds the ticket, [`NO_CORE`] when the ticket is free.
+/// [`acquire`] and [`claim_holder`] set it. [`release`] and the entry
+/// stubs clear it in the same step as the owner increment. Core 0 starts
+/// holding ticket 0, so this starts at 0.
+pub static MON_HOLDER: AtomicU8 = AtomicU8::new(0);
 static ENTER_TSC: AtomicU64 = AtomicU64::new(0);
 static HOLD_MAX: AtomicU64 = AtomicU64::new(0);
 static WAIT_MAX: AtomicU64 = AtomicU64::new(0);
@@ -88,16 +93,34 @@ static RECALL_DONE: [AtomicBool; MAX_CORES] = [const { AtomicBool::new(true) }; 
 static VMCS_LOADED: [AtomicBool; MAX_CORES] = [const { AtomicBool::new(false) }; MAX_CORES];
 
 /// Take the monitor. Fair: callers run in ticket order.
+/// The winner is [`MON_HOLDER`] until [`release`].
 pub fn acquire() {
     let ticket = MON_NEXT.fetch_add(1, Ordering::AcqRel);
     while MON_OWNER.load(Ordering::Acquire) != ticket {
         core::hint::spin_loop();
     }
+    claim_holder();
 }
 
-/// Drop the monitor. The entry stubs do this with `lock inc` instead.
+/// Drop the monitor. The holder is cleared before the owner increment, so
+/// the next core cannot observe its ticket and then lose the holder byte.
+/// The entry stubs do these two stores after the last guest register load.
 pub fn release() {
+    MON_HOLDER.store(NO_CORE, Ordering::Release);
     MON_OWNER.fetch_add(1, Ordering::Release);
+}
+
+/// The ticket is already this core's. The VM-exit landing stub and the
+/// entry-failure stubs call this before any guest register is stored.
+#[inline(never)]
+pub extern "C" fn claim_holder() {
+    let core = this_core().min(MAX_CORES - 1) as u8;
+    MON_HOLDER.store(core, Ordering::Release);
+}
+
+/// `true` when `core` is the core recorded for the ticket now held.
+pub fn holder_is(core: usize) -> bool {
+    core < MAX_CORES && MON_HOLDER.load(Ordering::Acquire) == core as u8
 }
 
 /// Checkpoint on core 0's exit path. Core 1 reads it and does not take the lock.
@@ -142,7 +165,8 @@ pub fn is_watchdog_core(core: usize) -> bool {
 /// One COM2 line once core 0 has been silent for two seconds.
 ///
 /// `p` is the last checkpoint. `g` is core 0's in-guest flag. `h` is the
-/// monitor holder (`ff` is none). `o` and `n` are the ticket counters:
+/// core that holds the ticket (`ff` is none; it changes with the ticket,
+/// not in `monitor_leave`). `o` and `n` are the ticket counters:
 /// `n - o` is 0 when the lock is free or a release left the counters equal,
 /// 1 when one core holds it, and 2 or more when another core is queued.
 /// `r` is the low byte of the exit reason at checkpoint 1. `rip` is the
@@ -224,6 +248,7 @@ fn push_hex64(out: &mut [u8], mut n: usize, v: u64) -> usize {
 /// every time the caller asks, whether or not core 0 is still checkpointing.
 /// Writes straight to COM2, not the guest ring. `d` is drops before this line.
 pub fn emit_core0_pulse(_now: u64) {
+    let exits = CORE0_EXITS.load(Ordering::Acquire);
     let mut buf = [0u8; 160];
     let n = format_b21_pulse(
         EXIT_PHASE.load(Ordering::Acquire),
@@ -233,13 +258,54 @@ pub fn emit_core0_pulse(_now: u64) {
         MON_NEXT.load(Ordering::Acquire),
         EXIT_REASON8.load(Ordering::Acquire),
         EXIT_RIP.load(Ordering::Acquire),
-        CORE0_EXITS.load(Ordering::Acquire),
+        exits,
         crate::boot::serial::guest_tx_len() as u64,
         u64::from(crate::boot::serial::com2_direct_dropped()),
         &mut buf,
     );
     let n = n.min(buf.len());
     let _ = crate::boot::serial::com2_bytes_direct(&buf[..n]);
+    note_stall_tx(exits);
+}
+
+/// A second pulse with the same exit count is a stall. Dump the guest TX
+/// ring once so the lines still queued are visible on COM2.
+fn note_stall_tx(exits: u64) {
+    static PREV: AtomicU64 = AtomicU64::new(u64::MAX);
+    static DONE: AtomicBool = AtomicBool::new(false);
+    let prev = PREV.swap(exits, Ordering::AcqRel);
+    let ring = crate::boot::serial::guest_tx_len() as u64;
+    if !tx_dump_due(prev, exits, ring, DONE.load(Ordering::Acquire)) {
+        return;
+    }
+    if DONE.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    dump_guest_tx();
+}
+
+/// `prev` is the exit count from the previous pulse. `u64::MAX` means there
+/// was no previous pulse. A dump is due when that count has not moved and
+/// either an exit has been recorded or the ring is holding bytes.
+pub fn tx_dump_due(prev: u64, exits: u64, ring: u64, already: bool) -> bool {
+    !already && prev != u64::MAX && prev == exits && (exits > 0 || ring > 0)
+}
+
+fn dump_guest_tx() {
+    let mut hdr = [0u8; 24];
+    let n = push_bytes(&mut hdr, 0, b"boot: B21 guest tx\r\n");
+    let _ = crate::boot::serial::com2_bytes_direct(&hdr[..n.min(hdr.len())]);
+    let mut buf = [0u8; 128];
+    let mut off = 0usize;
+    loop {
+        let n = crate::boot::serial::guest_tx_copy_at(off, &mut buf);
+        if n == 0 {
+            break;
+        }
+        let _ = crate::boot::serial::com2_bytes_direct(&buf[..n]);
+        off += n;
+    }
+    let _ = crate::boot::serial::com2_bytes_direct(b"\r\n");
 }
 
 pub fn kicks_taken() -> u64 {
@@ -394,7 +460,8 @@ pub fn stack_top_of(core: usize) -> u64 {
     }
 }
 
-/// Last Rust before a guest entry. The entry stub releases [`MON_OWNER`].
+/// Last Rust before a guest entry. The entry stub releases the ticket.
+/// The holder stays this core until that release.
 ///
 /// # Safety
 /// Caller holds the monitor and is about to enter a guest on this core.
@@ -408,21 +475,22 @@ pub unsafe fn monitor_leave() {
     if core < MAX_CORES {
         IN_GUEST[core].store(true, Ordering::Release);
     }
-    let prev = MON_HOLDER.swap(NO_CORE, Ordering::AcqRel);
-    if prev != core as u8 {
-        two_in_monitor();
+    let prev = MON_HOLDER.load(Ordering::Acquire);
+    if !holder_is(core) {
+        two_in_monitor(core, prev);
     }
 }
 
-/// First line of `guest_uefi_vmexit`. The landing stub already took the lock.
+/// First line of `guest_uefi_vmexit`. The landing stub already took the
+/// ticket and called [`claim_holder`].
 ///
 /// # Safety
 /// Caller is the exit handler on the core that just left the guest.
 pub unsafe fn monitor_enter() {
     let core = this_core().min(MAX_CORES - 1);
-    let prev = MON_HOLDER.swap(core as u8, Ordering::AcqRel);
-    if prev != NO_CORE {
-        two_in_monitor();
+    let prev = MON_HOLDER.load(Ordering::Acquire);
+    if !holder_is(core) {
+        two_in_monitor(core, prev);
     }
     if core < MAX_CORES {
         IN_GUEST[core].store(false, Ordering::Release);
@@ -447,9 +515,9 @@ pub unsafe fn monitor_enter() {
 /// Caller holds the monitor after a failed VM-entry.
 pub unsafe fn monitor_reenter() {
     let core = this_core().min(MAX_CORES - 1);
-    let prev = MON_HOLDER.swap(core as u8, Ordering::AcqRel);
-    if prev != NO_CORE {
-        two_in_monitor();
+    let prev = MON_HOLDER.load(Ordering::Acquire);
+    if !holder_is(core) {
+        two_in_monitor(core, prev);
     }
     if core < MAX_CORES {
         IN_GUEST[core].store(false, Ordering::Release);
@@ -489,13 +557,23 @@ fn note_hold() {
     }
 }
 
-fn two_in_monitor() -> ! {
-    crate::boot::serial::write_line_nowait(
-        "boot: B21 two cores in the monitor (ADR-024; not ISO-INSTALL-OK)",
-    );
+fn two_in_monitor(core: usize, prev: u8) -> ! {
+    direct_fault_line(b"boot: B21 two cores in the monitor", core, prev);
     loop {
         core::hint::spin_loop();
     }
+}
+
+fn direct_fault_line(prefix: &[u8], core: usize, prev: u8) {
+    let mut buf = [0u8; 96];
+    let mut n = push_bytes(&mut buf, 0, prefix);
+    n = push_bytes(&mut buf, n, b" core=");
+    n = push_dec(&mut buf, n, core as u64);
+    n = push_bytes(&mut buf, n, b" prev=");
+    n = push_hex2(&mut buf, n, prev);
+    n = push_bytes(&mut buf, n, b" (ADR-024; not ISO-INSTALL-OK)\r\n");
+    let n = n.min(buf.len());
+    let _ = crate::boot::serial::com2_bytes_direct(&buf[..n]);
 }
 
 #[cfg(target_os = "uefi")]
@@ -526,8 +604,10 @@ unsafe fn leave_hardware(core: usize) {
     if expect != 0 {
         if let Ok(rsp) = crate::vmx::ops::vmread(crate::vmx::fields::HOST_RSP) {
             if rsp != expect {
-                crate::boot::serial::write_line_nowait(
-                    "boot: B21 wrong host stack (ADR-024; not ISO-INSTALL-OK)",
+                direct_fault_line(
+                    b"boot: B21 wrong host stack",
+                    core,
+                    MON_HOLDER.load(Ordering::Acquire),
                 );
                 loop {
                     core::hint::spin_loop();

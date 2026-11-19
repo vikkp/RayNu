@@ -206,18 +206,21 @@ fn monitor_stubs_take_the_lock_around_the_registers() {
     let land = src
         .find("fn guest_uefi_vmexit_landing")
         .expect("landing");
-    let land_body = &src[land..land + 1800];
+    let land_body = &src[land..land + 4500];
     let xadd = land_body.find("lock xadd").expect("xadd");
+    let claim = land_body.find("call {claim}").expect("claim");
     let rax = land_body.find("slot_rax").expect("rax");
-    assert!(xadd < rax, "lock is taken before the guest RAX is stored");
+    assert!(xadd < claim && claim < rax, "holder is claimed before guest RAX is stored");
     for needle in [
         "fn guest_uefi_vmresume()",
         "fn guest_uefi_vmlaunch()",
         "fn raynu_f_vmlaunch()",
     ] {
         let at = src.find(needle).unwrap_or_else(|| panic!("missing {needle}"));
-        let body = &src[at..at + 4500];
+        let body = &src[at..at + 5000];
         let inc = body.find("lock inc dword ptr [rip + {mon_owner}]").expect(needle);
+        let clear = body.find("mov byte ptr [rip + {mon_holder}], 0xff").expect(needle);
+        assert!(clear < inc, "{needle} clears the holder as it releases");
         let entry = if needle.contains("vmresume") {
             body.find("\"vmresume\"").expect("vmresume")
         } else {
@@ -324,6 +327,56 @@ fn exits_stay_on_core0_until_a_vcpu_is_placed() {
     assert!(!running_remote(0));
     assign_unit(1, 0);
     assert!(!remote_placed());
+}
+
+#[test]
+fn on_ap_wake_calls_enter_guest_while_it_holds() {
+    let g = include_str!("../vmx/guest_uefi.rs");
+    let wake = g.find("pub unsafe fn on_ap_wake(").expect("wake");
+    let body = &g[wake..wake + 500];
+    let acq = body.find("acquire()").expect("acquire");
+    let launch = body.find("launch_on_core").expect("launch");
+    assert!(acq < launch, "on_ap_wake takes the ticket before launch");
+    let enter = g.find("unsafe fn enter_guest()").expect("enter");
+    assert!(g[enter..enter + 240].contains("monitor_leave()"));
+    let smp = include_str!("host_smp.rs");
+    let leave = smp.find("fn monitor_leave()").expect("leave");
+    let lb = &smp[leave..leave + 800];
+    assert!(lb.contains("holder_is(core)"));
+    assert!(!lb.contains("swap(NO_CORE"), "leave does not clear the holder");
+}
+
+#[test]
+fn on_ap_wake_enter_guest_does_not_two_in_monitor() {
+    // Core 0 holds ticket 0 from boot. Its entry stub releases. on_ap_wake
+    // then acquire()s, and enter_guest's monitor_leave requires the holder
+    // to be that core. The old acquire left the holder at NO_CORE.
+    reset_monitor_for_test();
+    MON_NEXT.store(1, Ordering::Relaxed);
+    MON_OWNER.store(0, Ordering::Relaxed);
+    MON_HOLDER.store(0, Ordering::Relaxed);
+    set_test_core(0);
+    release();
+    assert!(!holder_is(0), "the entry stub clears the holder");
+    assert_eq!(MON_HOLDER.load(Ordering::Relaxed), NO_CORE);
+    set_test_core(1);
+    acquire();
+    assert!(
+        holder_is(1),
+        "enter_guest would two_in_monitor"
+    );
+    release();
+    assert_eq!(MON_HOLDER.load(Ordering::Relaxed), NO_CORE);
+    assert_eq!(MON_OWNER.load(Ordering::Relaxed), 2);
+}
+
+#[test]
+fn tx_dump_waits_for_a_second_unchanged_pulse() {
+    assert!(!tx_dump_due(u64::MAX, 1, 10, false));
+    assert!(!tx_dump_due(1, 2, 10, false));
+    assert!(!tx_dump_due(0, 0, 0, false));
+    assert!(tx_dump_due(0x01ec_bb54, 0x01ec_bb54, 3450, false));
+    assert!(!tx_dump_due(0x01ec_bb54, 0x01ec_bb54, 3450, true));
 }
 
 #[test]

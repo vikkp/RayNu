@@ -458,6 +458,26 @@ pub fn guest_tx_len() -> usize {
     unsafe { GUEST_TX_LEN }
 }
 
+/// Copy `out.len()` bytes of the guest TX ring starting `skip` bytes from
+/// the oldest, without removing them. The watchdog uses this when core 0
+/// has stopped taking exits.
+pub fn guest_tx_copy_at(skip: usize, out: &mut [u8]) -> usize {
+    // SAFETY: the ring is only written on the core that holds the monitor.
+    // The watchdog calls this when that core has stopped.
+    unsafe {
+        let len = GUEST_TX_LEN;
+        if skip >= len || out.is_empty() {
+            return 0;
+        }
+        let n = (len - skip).min(out.len());
+        let head = GUEST_TX_HEAD;
+        for i in 0..n {
+            out[i] = GUEST_TX[(head + skip + i) % GUEST_TX_CAP];
+        }
+        n
+    }
+}
+
 /// Free bytes in the guest UART TX ring.
 pub fn guest_tx_room() -> usize {
     GUEST_TX_CAP.saturating_sub(guest_tx_len())
@@ -1155,6 +1175,24 @@ mod serial_test {
         assert!(s.contains("guest UART COM2 FIFO burst"));
         assert!(s.contains("fn iir_reports_fifo"));
         assert!(s.contains("fn guest_tx_burst_for_window"));
+    }
+
+    #[test]
+    fn guest_tx_copy_at_keeps_the_ring() {
+        guest_tx_clear();
+        set_guest_tx_test_sol_not_ready(true);
+        for b in b"Spectre" {
+            guest_tx_push(*b);
+        }
+        let mut buf = [0u8; 4];
+        assert_eq!(guest_tx_copy_at(0, &mut buf), 4);
+        assert_eq!(&buf, b"Spec");
+        assert_eq!(guest_tx_len(), 7);
+        let mut rest = [0u8; 8];
+        assert_eq!(guest_tx_copy_at(4, &mut rest), 3);
+        assert_eq!(&rest[..3], b"tre");
+        set_guest_tx_test_sol_not_ready(false);
+        guest_tx_clear();
     }
 
     #[test]
