@@ -1,8 +1,8 @@
 ---
 loihda_version: 1
 last_updated: 2026-11-19
-last_commit: PENDING
-last_commit_short: PENDING
+last_commit: 8e367445167a6095cdd38ab84b28689962a0e60f
+last_commit_short: 8e367445
 updated_by: cursor
 loi_target: "Non-prod Letter of Intent. Bar A = dedicated-box lab. Bar B = RAID-fleet replacement. HDA 99% is Everest, not an LOI."
 months_to_loi_a: 0.25
@@ -207,7 +207,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | `PENDING` |
+| Commit | `8e367445` |
 | Summary | **Iron `bf1502b266e7` stopped at `AppArmor ... ready` with the timestamp stuck on 0.956832.** The guest COM exit no longer writes the physical UART. Console piece stays 82. No piece moves. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. TLS 88 held. |

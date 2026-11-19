@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-11-19
-last_commit: PENDING
-last_commit_short: PENDING
+last_commit: 8e367445167a6095cdd38ab84b28689962a0e60f
+last_commit_short: 8e367445
 updated_by: cursor
 mount_everest_target: "CLOSED on iron 2026-09-11: Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest). Next: M8 operator hardening (ADR-018)."
 months_to_everest: 0.0
@@ -354,7 +354,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | `PENDING` |
+| Commit | `8e367445` |
 | Summary | **A guest COM exit no longer writes the physical UART.** Iron `bf1502b266e7` / run `44572708273` stopped at `AppArmor ... ready` with the timestamp stuck on `0.956832`. Not lived. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B7 lived. B21 in flight, S1, wave 7. B6 and B8 stay lived. Wave 7 open. No doorbell. No format of UBUNTU0. |
