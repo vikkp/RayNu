@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-11-19
-last_commit: 9e7680202865caf20aabfe4cd79839491df058d4
-last_commit_short: 9e768020
+last_commit: ac067c07338550bdb863f77794ac6a685b3c4de0
+last_commit_short: ac067c07
 updated_by: cursor
 mount_everest_target: "CLOSED on iron 2026-09-11: Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest). Next: M8 operator hardening (ADR-018)."
 months_to_everest: 0.0
@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | `9e768020` |
-| Summary | **Console exits take the gate 1 path again.** Iron `7c2bb44b970f` / run `44584144107` shredded the log and stopped near `mwait`. Not lived. Months **0.0 held**. Overall **99 held**. |
+| Commit | `ac067c07` |
+| Summary | **Iron `bd6811abb106` / run `44591450680` stopped at `Enabling conditiona`, and `https://10.99.99.201:8443` did not load.** The page is polled from the core-0 exit, so that loop is not returning. Core 1 writes `boot: B21 pulse` straight to COM2 after two seconds of silence. Not lived. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B7 lived. B21 in flight, S1, wave 7. B6 and B8 stay lived. Wave 7 open. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -384,6 +384,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-19 | wave-7-b21-pulse | 0.0 | 99 | **Iron `bd6811abb106` / run `44591450680` printed a clean log and stopped at `Enabling conditiona`, and `https://10.99.99.201:8443` did not load.** The page is polled from the same core-0 exit that drains COM2, so that loop is not returning. Core 1 stays awake and, after two seconds of silence, writes `boot: B21 pulse` straight to COM2. `p` is the last checkpoint (1 handler, 2 page tick returned, 3 preemption arm, 4 host-stack check, 5 check passed), `g` is core 0 in the guest, `h` is the monitor holder (`ff` is none), `o` and `n` are the ticket. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-19 | wave-7-b21-gate1-console | 0.0 | 99 | **Iron `7c2bb44b970f` / run `44584144107` shredded the kernel log and stopped near `process: using mwait` / `mitigations`.** Holding THRE at 16 queued bytes did not produce readable text. Gate 1 (`dc1bcc800c1e`) reached login on the normal exit path, with THRE from ring room and the physical port drained on that path. Console exits take that path again. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-19 | wave-7-b21-wire | 0.0 | 99 | **Iron `236290d35ce5` / run `44579224343` shredded the kernel log and jumped to `[   29.706485]`.** The virtual clock advanced during the VM-exit, so THRE stayed set and printk filled the ring. An overdue tick added one second of HPET time. THRE is now clear once 16 bytes are waiting for the physical port. The timer drains one byte per character time. The overdue tick adds the elapsed host time, capped at 64 ms. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-19 | wave-7-b21-vuart | 0.0 | 99 | **Iron `bf1502b266e7` / run `44572708273` printed a clean kernel log and stopped at `AppArmor: AppArmor secmark mediation reserved: ready`.** The timestamp stayed on `0.956832`. Gate 1 (`dc1bcc800c1e`) reached login on the full exit path. After that, the console exit itself started draining the physical COM2 while the guest was stopped. A guest COM byte now only enters the virtual 16550. The preemption timer drains the real port. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
