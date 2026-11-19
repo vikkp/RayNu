@@ -1,8 +1,8 @@
 ---
 loihda_version: 1
 last_updated: 2026-11-19
-last_commit: d499da5026807e6df97415649340febb0f08ff25
-last_commit_short: d499da50
+last_commit: 4e2304c4e93b8699ce51181ff663567b9e8feac6
+last_commit_short: 4e2304c4
 updated_by: cursor
 loi_target: "Non-prod Letter of Intent. Bar A = dedicated-box lab. Bar B = RAID-fleet replacement. HDA 99% is Everest, not an LOI."
 months_to_loi_a: 0.25
@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | `d499da50` |
-| Summary | **UART and the overdue PIT raise match `dc1bcc800c1e`.** The pulse waits for COM2 THRE. The onecore boot was skipped. Console piece stays 82. No piece moves. Bar A 94. Bar B 72. Overall 80. |
+| Commit | `4e2304c4` |
+| Summary | **The monitor holder moves with the ticket.** Iron `b93fed44` had released the recorded exit. Console piece stays 82. No piece moves. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. TLS 88 held. |
 | Gates touched | B7 lived. B21 in flight, S1, wave 7. B6 and B8 stay lived. Wave 7 open. No doorbell. No format of UBUNTU0. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-19 | wave-7-b21-holder | 94 | 72 | **Iron `b93fed44` `o = x + 1`.** The recorded exit had resumed. Another core held the next ticket inside `two_in_monitor`. The holder now follows the ticket. Console piece stays 82. No piece score moves. Bar A 94. Bar B 72. Overall 80. |
 | 2026-11-19 | wave-7-b21-pulse-wait | 94 | 72 | **UART and the overdue PIT raise match `dc1bcc800c1e`.** The onecore boot was skipped. Console piece stays 82. No piece score moves. Bar A 94. Bar B 72. Overall 80. |
 | 2026-11-19 | wave-7-b21-pulse-rip | 94 | 72 | **Pulse checkpoint 1 stores `r=` and `rip=`. Checkpoint 3 is dispatch returned.** Nested 4-core QEMU did not start. Console piece stays 82. No piece score moves. Bar A 94. Bar B 72. Overall 80. |
 | 2026-11-19 | wave-7-b21-pulse | 94 | 72 | **Iron `bd6811abb106` / run `44591450680` stopped at `Enabling conditiona`, and the page at `10.99.99.201:8443` did not load.** Console piece stays 82. No piece score moves. Bar A 94. Bar B 72. Overall 80. |
