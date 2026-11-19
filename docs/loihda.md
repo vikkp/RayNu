@@ -1,8 +1,8 @@
 ---
 loihda_version: 1
 last_updated: 2026-11-19
-last_commit: ac067c07338550bdb863f77794ac6a685b3c4de0
-last_commit_short: ac067c07
+last_commit: 373025d8076d6f270feb0d3af5c29ebcb0999ce9
+last_commit_short: 373025d8
 updated_by: cursor
 loi_target: "Non-prod Letter of Intent. Bar A = dedicated-box lab. Bar B = RAID-fleet replacement. HDA 99% is Everest, not an LOI."
 months_to_loi_a: 0.25
@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | `ac067c07` |
-| Summary | **Iron `bd6811abb106` stopped at `Enabling conditiona` and `https://10.99.99.201:8443` did not load.** The core-0 exit loop is not returning. Core 1 writes `boot: B21 pulse` straight to COM2. Console piece stays 82. No piece moves. Bar A 94. Bar B 72. Overall 80. |
+| Commit | `373025d8` |
+| Summary | **The pulse stores exit reason and RIP at checkpoint 1, and checkpoint 3 is dispatch returned.** Nested 4-core QEMU did not start (`enable_shadow_vmcs=Y`). Console piece stays 82. No piece moves. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. TLS 88 held. |
 | Gates touched | B7 lived. B21 in flight, S1, wave 7. B6 and B8 stay lived. Wave 7 open. No doorbell. No format of UBUNTU0. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-19 | wave-7-b21-pulse-rip | 94 | 72 | **Pulse checkpoint 1 stores `r=` and `rip=`. Checkpoint 3 is dispatch returned.** Nested 4-core QEMU did not start. Console piece stays 82. No piece score moves. Bar A 94. Bar B 72. Overall 80. |
 | 2026-11-19 | wave-7-b21-pulse | 94 | 72 | **Iron `bd6811abb106` / run `44591450680` stopped at `Enabling conditiona`, and the page at `10.99.99.201:8443` did not load.** Console piece stays 82. No piece score moves. Bar A 94. Bar B 72. Overall 80. |
 | 2026-11-19 | wave-7-b21-gate1-console | 94 | 72 | **Iron `7c2bb44b970f` / run `44584144107` shredded the kernel log and stopped near `mwait`.** Console piece stays 82. No piece score moves. Bar A 94. Bar B 72. Overall 80. |
 | 2026-11-19 | wave-7-b21-wire | 94 | 72 | **Iron `236290d35ce5` / run `44579224343` shredded the kernel log and the timestamp reached 29.7s.** Console piece stays 82. No piece score moves. Bar A 94. Bar B 72. Overall 80. |
