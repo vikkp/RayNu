@@ -694,7 +694,11 @@ pub fn guest_tx_guest_lsr_thre() -> bool {
     }
     #[cfg(not(test))]
     {
-        virt_fifo_has_room()
+        // Baud FIFO paces a free ring. A ring past the reserve holds THRE
+        // clear so a stalled SOL pauses the guest instead of dropping the
+        // oldest bytes. Iron `90b6847768d5` kept the text clean up to
+        // `Mount-c`; the guest clock was the thing that stopped.
+        virt_fifo_has_room() && guest_tx_room_has_thre(guest_tx_room())
     }
 }
 
@@ -1125,6 +1129,9 @@ mod serial_test {
         assert_eq!(virt_fifo_after(16, 1), 15);
         assert!(virt_fifo_thre(15));
         assert!(!virt_fifo_thre(16));
+        let room = GUEST_TX_RESERVE + GUEST_TX_THRE_BURST;
+        assert!(virt_fifo_thre(0) && guest_tx_room_has_thre(room));
+        assert!(!guest_tx_room_has_thre(room - 1));
     }
 
     fn guest_thre_follows_ring_room_not_com2() {

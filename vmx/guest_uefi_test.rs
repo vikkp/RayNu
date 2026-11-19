@@ -147,7 +147,7 @@ use super::{
     guest_uefi_virtio_mmio_heartbeat_kick,
     guest_uefi_virtio_mmio_kick_line_due, VIRTIO_MMIO_KICK_LINE_MIN_TSC,
     guest_uefi_uart_pace_wanted, guest_uefi_uart_pace_ticks, guest_uefi_preempt_arm,
-    guest_uefi_preempt_nominal_due, guest_uefi_preempt_unpaced_value,
+    guest_uefi_nominal_tick_due, guest_uefi_preempt_nominal_due, guest_uefi_preempt_unpaced_value,
     guest_uefi_net_trace_due, guest_uefi_net_trace_begins, guest_uefi_idt_vectoring_reinject,
     UART_PACE_US,
     GUEST_UEFI_INTR_TYPE_NMI,
@@ -3688,8 +3688,13 @@ fn pit_wall_deadline_survives_unpaced_resumes() {
     assert_eq!(guest_uefi_preempt_unpaced_value(reload, due + 10, due, shift), 1);
     assert_eq!(guest_uefi_preempt_unpaced_value(0, t0, due, shift), 0);
     // Once the tick fired (or is overdue) the next deadline starts from now.
-    assert_eq!(guest_uefi_preempt_nominal_due(due, due, reload, shift), due + period);
     let late = due + 3 * period;
+    assert!(!guest_uefi_nominal_tick_due(0, t0, false));
+    assert!(!guest_uefi_nominal_tick_due(due, t1, false), "still inside the window");
+    assert!(guest_uefi_nominal_tick_due(due, due, false));
+    assert!(guest_uefi_nominal_tick_due(due, late, false));
+    assert!(!guest_uefi_nominal_tick_due(due, late, true), "timer exit already delivered it");
+    assert_eq!(guest_uefi_preempt_nominal_due(due, due, reload, shift), due + period);
     assert_eq!(guest_uefi_preempt_nominal_due(due, late, reload, shift), late + period);
     let src = include_str!("guest_uefi.rs");
     assert!(src.contains("M8.9 PIT wall deadline"));

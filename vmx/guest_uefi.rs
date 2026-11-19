@@ -1533,6 +1533,18 @@ pub fn guest_uefi_preempt_arm(
     }
 }
 
+/// The host deadline passed and this exit did not already deliver the tick.
+///
+/// The VMX preemption timer counts only while the guest runs. A printk
+/// storm exits every few microseconds, so the armed countdown never
+/// reaches zero, and refreshing the deadline without raising PIT leaves
+/// jiffies frozen (Ubuntu has no local-APIC timer). Iron `90b6847768d5`
+/// printed a clean kernel log that stayed on `[    0.958318]` and stopped
+/// at `Mount-c`.
+pub fn guest_uefi_nominal_tick_due(prev_due: u64, now: u64, already: bool) -> bool {
+    prev_due != 0 && now >= prev_due && !already
+}
+
 /// Wall-clock deadline of the next nominal PIT/HPET preemption tick.
 ///
 /// The VMX preemption timer counts only in guest mode and was re-armed to
@@ -7199,6 +7211,54 @@ pub fn guest_uefi_hpet_uart_tsc_step(tsc_delta: u64) -> u64 {
     crate::devices::guest_platform::hpet_ticks_from_tsc_delta(tsc_delta)
 }
 
+/// HPET step for one COM exit, from the host TSC delta. Capped so a
+/// poll storm cannot jump jiffies. The fast path never reaches
+/// [`tick_hpet_on_exit`].
+#[cfg(target_os = "uefi")]
+fn step_hpet_uart_tsc() {
+    if slot::current_vcpu() != 0 {
+        return;
+    }
+    let sink = SINK_HPA.load(Ordering::Acquire);
+    if sink == 0 {
+        return;
+    }
+    let now = cpu::rdtsc();
+    let prev = LAST_HPET_TSC.swap(now, Ordering::AcqRel);
+    let delta = if prev == 0 { 0 } else { now.wrapping_sub(prev) };
+    let step = guest_uefi_hpet_uart_tsc_step(delta);
+    // SAFETY: 2 MiB exclusive sink allocated at launch.
+    // KANI-TARGET: HPET tick on a Linux COM exit (outside Proven Core).
+    let v = crate::devices::guest_platform::hpet_tick_sink_by(
+        unsafe { core::slice::from_raw_parts_mut(sink as *mut u8, 2 * 1024 * 1024) },
+        step,
+    );
+    if step != 0 && v != 0 {
+        HPET_TICKS.fetch_add(1, Ordering::AcqRel);
+    }
+}
+
+/// One nominal PIT/HPET tick that the preemption timer did not get to run.
+#[cfg(target_os = "uefi")]
+fn deliver_nominal_tick() {
+    let sink = SINK_HPA.load(Ordering::Acquire);
+    if sink != 0 {
+        // SAFETY: same sink as [`tick_hpet_on_exit`].
+        // KANI-TARGET: overdue PIT tick during a UART storm (outside Proven Core).
+        let v = crate::devices::guest_platform::hpet_tick_sink_by(
+            unsafe { core::slice::from_raw_parts_mut(sink as *mut u8, 2 * 1024 * 1024) },
+            crate::devices::guest_platform::HPET_MAIN_STEP,
+        );
+        if v != 0 {
+            HPET_TICKS.fetch_add(1, Ordering::AcqRel);
+        }
+    }
+    if crate::devices::ide_cdrom::product_iso_window_armed() {
+        crate::devices::guest_irq::raise_pit();
+        let _ = crate::devices::lapic_virt::poll_timer_expiry();
+    }
+}
+
 /// Re-arm the VMX preemption timer for the next resume.
 ///
 /// Nominal: [`PREEMPT_RELOAD`] ticks (live HPET / PIT cadence) measured
@@ -7281,17 +7341,16 @@ fn arm_preempt_on_resume() {
         return;
     }
     let now = cpu::rdtsc();
+    let prev_due = PREEMPT_NOMINAL_DUE_TSC.load(Ordering::Acquire);
+    if guest_uefi_nominal_tick_due(prev_due, now, real_tick) {
+        deliver_nominal_tick();
+    }
     let pace = guest_uefi_uart_pace_wanted(
         serial::linux_earlycon_share(),
         crate::devices::ide_cdrom::product_iso_window_armed(),
         serial::guest_tx_len(),
     );
-    let due = guest_uefi_preempt_nominal_due(
-        PREEMPT_NOMINAL_DUE_TSC.load(Ordering::Acquire),
-        now,
-        reload,
-        shift,
-    );
+    let due = guest_uefi_preempt_nominal_due(prev_due, now, reload, shift);
     PREEMPT_NOMINAL_DUE_TSC.store(due, Ordering::Release);
     let (value, paced) = if pace {
         guest_uefi_preempt_arm(
@@ -7683,6 +7742,7 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     // what a console exit was dying inside (iron ebc8fb5ddb61, COM2 frozen
     // on `[` after the Spectre line, no later B21 cpu0 beat).
     if linux_com_exit(reason, qual) && linux_com_fast(qual) {
+        step_hpet_uart_tsc();
         let _ = serial::drain_guest_tx(serial::GUEST_TX_DRAIN_PACE);
         arm_preempt_on_resume();
         guest_sched::resume(false);

@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-11-19
-last_commit: 6b1d4fc3dedb62261725a57cfdbccd3e447254cd
-last_commit_short: 6b1d4fc3
+last_commit: PENDING
+last_commit_short: PENDING
 updated_by: cursor
 mount_everest_target: "CLOSED on iron 2026-09-11: Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest). Next: M8 operator hardening (ADR-018)."
 months_to_everest: 0.0
@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | `6b1d4fc3` |
-| Summary | **Virtual 16550 shifts a 16-byte FIFO at 115200.** Iron `ba07618258cd` / run `44558659087` reported THRE always, shredded the kernel text, and stopped at guest time 0.245s. Not lived. Months **0.0 held**. Overall **99 held**. |
+| Commit | `PENDING` |
+| Summary | **An overdue PIT tick is delivered during a printk storm.** Iron `90b6847768d5` / run `44566000546` printed a clean kernel log that stayed on `[    0.958318]` and stopped at `Mount-c`. Not lived. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B7 lived. B21 in flight, S1, wave 7. B6 and B8 stay lived. Wave 7 open. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -384,6 +384,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-19 | wave-7-b21-pit | 0.0 | 99 | **Iron `90b6847768d5` / run `44566000546` printed a clean kernel log and stopped at `Mount-c`.** Every line after `[    0.958318]` carried that same timestamp. The 115200 FIFO is what made the text readable. The PIT is this guest's clock, and a printk storm never lets the preemption timer finish, so the deadline was refreshed without raising PIT. An overdue tick is now delivered on the way back to the guest, and a COM exit steps HPET from the TSC delta. THRE also stays clear when the TX ring is past the reserve. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-19 | wave-7-b21-baud | 0.0 | 99 | **Iron `ba07618258cd` / run `44558659087` shredded the kernel log and stopped at `[    0.245703]`.** THRE was always set, so printk outran iDRAC SOL. LSR.THRE now follows a 16-byte virtual FIFO shifted at 115200 8N1 (10 bit times per character). A console port is answered without the host RX poll. The THRE interrupt still follows ring room. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-19 | wave-7-b21-thre-tests | 0.0 | 99 | **Host tests on `c301f116` failed two UART counter checks.** LSR stays THRE while the interrupt still follows ring room. The counters match that. Not an F11. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-19 | wave-7-b21-thre | 0.0 | 99 | **Iron `5a3f21154b55` / run `44412705019` stopped on `[    0.` after `Spectre v2 / SpectreRSB`.** The COM fast path was in that EFI and the stall remained. LSR.THRE now stays set while Linux owns the console: the byte is already in the ring, and the guest's `wait_for_xmitr` does not spin on ring room or on host COM2. The THRE interrupt still follows ring room. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |

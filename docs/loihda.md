@@ -1,8 +1,8 @@
 ---
 loihda_version: 1
 last_updated: 2026-11-19
-last_commit: 6b1d4fc3dedb62261725a57cfdbccd3e447254cd
-last_commit_short: 6b1d4fc3
+last_commit: PENDING
+last_commit_short: PENDING
 updated_by: cursor
 loi_target: "Non-prod Letter of Intent. Bar A = dedicated-box lab. Bar B = RAID-fleet replacement. HDA 99% is Everest, not an LOI."
 months_to_loi_a: 0.25
@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | `6b1d4fc3` |
-| Summary | **Iron `ba07618258cd` shredded the guest console and stopped at guest time 0.245s.** The virtual UART now paces THRE at 115200. Console piece stays 82. No piece moves. Bar A 94. Bar B 72. Overall 80. |
+| Commit | `PENDING` |
+| Summary | **Iron `90b6847768d5` printed a clean kernel log and stopped at `Mount-c` with the clock stuck on 0.958318.** Console piece stays 82. No piece moves. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. TLS 88 held. |
 | Gates touched | B7 lived. B21 in flight, S1, wave 7. B6 and B8 stay lived. Wave 7 open. No doorbell. No format of UBUNTU0. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-19 | wave-7-b21-pit | 94 | 72 | **Iron `90b6847768d5` / run `44566000546` printed a clean kernel log and stopped at `Mount-c`.** The timestamp stayed on 0.958318. Console piece stays 82. No piece score moves. Bar A 94. Bar B 72. Overall 80. |
 | 2026-11-19 | wave-7-b21-baud | 94 | 72 | **Iron `ba07618258cd` / run `44558659087` shredded the kernel text and stopped at guest time 0.245s.** Console piece stays 82. No piece score moves. Bar A 94. Bar B 72. Overall 80. |
 | 2026-11-18 | wave-7-b21-gate1 | 94 | 72 | **Iron `dc1bcc800c1e` / run `44389087185`: `online=16 of 16`.** Guest `vcpus=2` stayed on core 0 (`B21 cores 0:[0.0 0.1]`). No piece score moves. Bar A 94. Bar B 72. Overall 80. |
 | 2026-11-18 | wave-7-b21-x2apic-id | 94 | 72 | **Iron `70afcdf9da0e` / run `44383802515`: still `online=1 of 16`, `not used: tsc`, no `tsc sync` line.** x2APIC id was shifted. Guest `vcpus=2`. No piece score moves. Bar A 94. Bar B 72. Overall 80. |
