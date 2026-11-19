@@ -409,3 +409,33 @@ fn recall_stays_open_until_the_core_finishes() {
     request_recall(0);
     assert!(!recall_waiting(0));
 }
+
+#[test]
+fn ept_edits_flush_on_every_core() {
+    let g = include_str!("../vmx/guest_uefi.rs");
+    assert_eq!(
+        g.matches("host_smp::invept_everywhere()").count(),
+        8,
+        "plan WP7: eight guest-UEFI flush sites"
+    );
+    assert!(!g.contains("invept_guests()"));
+    assert!(!invept_owed_by_a_guest());
+}
+
+#[test]
+fn a_kick_is_counted_only_for_another_core_in_a_guest() {
+    use core::sync::atomic::Ordering;
+    set_test_core(0);
+    set_cores_online(2);
+    IN_GUEST[1].store(false, Ordering::Release);
+    let base = kicks_sent();
+    poke_core(1);
+    assert_eq!(kicks_sent(), base, "a core that is not in a guest is not kicked");
+    IN_GUEST[1].store(true, Ordering::Release);
+    poke_core(1);
+    assert_eq!(kicks_sent(), base + 1);
+    poke_core(0);
+    assert_eq!(kicks_sent(), base + 1, "a core does not kick itself");
+    IN_GUEST[1].store(false, Ordering::Release);
+    set_cores_online(1);
+}

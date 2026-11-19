@@ -376,25 +376,31 @@ pub fn raise_ioapic_gsi(gsi: u8) {
     if !product_live() {
         return;
     }
-    with_irq(|c| {
+    let target = with_irq(|c| {
         if (gsi as usize) < IOAPIC_PINS {
             c.ioapic.irr |= 1 << gsi;
+            ioapic_poke_target(c, gsi)
+        } else {
+            None
         }
     });
+    poke_ioapic_target(target);
 }
 
 pub fn raise_gsi(gsi: u8) {
     if !product_live() {
         return;
     }
-    with_irq(|c| {
+    let target = with_irq(|c| {
         if (gsi as usize) < IOAPIC_PINS {
             c.ioapic.irr |= 1 << gsi;
         }
         if gsi < 16 {
             raise_pic_locked(c, gsi);
         }
+        ioapic_poke_target(c, gsi)
     });
+    poke_ioapic_target(target);
 }
 
 pub fn lower_gsi(gsi: u8) {
@@ -780,6 +786,34 @@ pub fn ioapic_eoi(vec: u8) {
             }
         }
     });
+}
+
+/// vCPU the pin's redirection entry names, when that vCPU is not current.
+fn ioapic_poke_target(c: &IrqChip, gsi: u8) -> Option<usize> {
+    if (gsi as usize) >= IOAPIC_PINS {
+        return None;
+    }
+    let rte = c.ioapic.redir[gsi as usize];
+    if rte & RTE_MASK != 0 {
+        return None;
+    }
+    let v = crate::devices::lapic_virt::pick_target(
+        (rte >> 56) as u8,
+        rte & RTE_DEST_LOGICAL != 0,
+    );
+    if v == crate::guest::slot::current_vcpu() {
+        None
+    } else {
+        Some(v)
+    }
+}
+
+fn poke_ioapic_target(v: Option<usize>) {
+    let Some(v) = v else {
+        return;
+    };
+    let u = crate::guest::slot::unit(crate::guest::slot::current(), v);
+    crate::arch::host_smp::poke_unit(u);
 }
 
 fn ioapic_peek(c: &IrqChip) -> Option<u8> {

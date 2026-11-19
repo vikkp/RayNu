@@ -367,7 +367,7 @@ pub fn request_recall(core: usize) {
     RECALL_DONE[core].store(false, Ordering::Release);
     RECALL[core].store(true, Ordering::Release);
     RECALLS.fetch_add(1, Ordering::Relaxed);
-    wake_core(core);
+    poke_core(core);
 }
 
 pub fn recall_waiting(core: usize) -> bool {
@@ -403,25 +403,95 @@ pub fn running_remote(core: usize) -> bool {
     core != 0 && (remote_placed() || vmcs_loaded_on(core))
 }
 
-/// Flush this core's EPT TLB and ask every other online core to flush
-/// before its next guest entry.
+/// `true` while some other core is in a guest and still owes an INVEPT.
+pub fn invept_owed_by_a_guest() -> bool {
+    let me = this_core();
+    let n = cores_online().min(MAX_CORES);
+    (0..n).any(|c| {
+        c != me && IN_GUEST[c].load(Ordering::Acquire) && INVEPT_PENDING[c].load(Ordering::Acquire)
+    })
+}
+
+/// Flush this core, then the pending bit on every other online core.
+/// A core that is in a guest is kicked and this core waits until that
+/// guest has exited and flushed.
 ///
 /// # Safety
-/// VMX root. `INVEPT` is valid.
-pub unsafe fn invept_guests() {
+/// VMX root. The caller holds the monitor. `INVEPT` is valid.
+pub unsafe fn invept_everywhere() {
     crate::memory::ept_hw::invept_global();
-    // No other core is in a guest yet. Do not store the shootdown flags:
-    // those stores sit near the lines the idle cores monitor.
-    if !remote_placed() {
+    if cores_online() <= 1 {
         return;
     }
     let me = this_core();
     let n = cores_online().min(MAX_CORES);
+    let mut wait = false;
     for c in 0..n {
-        if c != me {
-            INVEPT_PENDING[c].store(true, Ordering::Release);
+        if c == me {
+            continue;
+        }
+        INVEPT_PENDING[c].store(true, Ordering::Release);
+        if IN_GUEST[c].load(Ordering::Acquire) {
+            poke_core(c);
+            wait = true;
         }
     }
+    if wait {
+        #[cfg(target_os = "uefi")]
+        crate::vmx::guest_uefi::yield_monitor_until(None, || !invept_owed_by_a_guest());
+    }
+}
+
+/// Flush this core's pending INVEPT. Called with the monitor held.
+///
+/// # Safety
+/// VMX root. `INVEPT` is valid.
+pub unsafe fn take_pending_invept() {
+    let core = this_core().min(MAX_CORES - 1);
+    if INVEPT_PENDING[core].swap(false, Ordering::AcqRel) {
+        crate::memory::ept_hw::invept_global();
+    }
+}
+
+/// Older name. The eight guest-UEFI sites call [`invept_everywhere`].
+///
+/// # Safety
+/// Same as [`invept_everywhere`].
+pub unsafe fn invept_guests() {
+    invept_everywhere();
+}
+
+/// Wake a sleeping core and, when it is in a guest, send the kick IPI.
+///
+/// One core online does not send. `EFI\\RayNu\\nokick.txt` does not send.
+/// The mailbox store still happens, so correctness does not depend on the IPI.
+pub fn poke_core(core: usize) {
+    wake_core(core);
+    if cores_online() <= 1 || core == this_core() || core >= MAX_CORES {
+        return;
+    }
+    if !IN_GUEST[core].load(Ordering::Acquire) {
+        return;
+    }
+    if crate::boot::raynu_f_flag::host_nokick() {
+        return;
+    }
+    #[cfg(target_os = "uefi")]
+    unsafe {
+        let id = APIC_IDS[core].load(Ordering::Acquire);
+        // SAFETY: this core holds the monitor; the destination is another
+        // online core's APIC id. KANI-TARGET: host kick IPI (outside Proven Core).
+        let _ = crate::arch::apic::send_ipi(id, KICK_VECTOR);
+    }
+    KICKS_SENT.fetch_add(1, Ordering::Relaxed);
+}
+
+/// Kick the core that owns unit `u`.
+pub fn poke_unit(unit: usize) {
+    if cores_online() <= 1 {
+        return;
+    }
+    poke_core(assigned(unit));
 }
 
 /// Wake a sleeping core. A core in guest mode notices on its next exit.
@@ -495,6 +565,11 @@ pub unsafe fn monitor_enter() {
     let prev = MON_HOLDER.swap(core as u8, Ordering::AcqRel);
     if prev != NO_CORE {
         two_in_monitor(core, prev);
+    }
+    if core < MAX_CORES && INVEPT_PENDING[core].swap(false, Ordering::AcqRel) {
+        // Before IN_GUEST is cleared, so a core waiting in
+        // invept_everywhere sees the flush happen first.
+        crate::memory::ept_hw::invept_global();
     }
     if core < MAX_CORES {
         IN_GUEST[core].store(false, Ordering::Release);

@@ -315,6 +315,11 @@ pub fn clear_aps(slot: usize) {
 pub fn wake(slot: usize) {
     if slot < MAX_GUESTS {
         WAKE[slot].fetch_or(0xFF, Ordering::Release);
+        for v in 0..MAX_VCPUS {
+            if vcpu_up(slot, v) {
+                crate::arch::host_smp::poke_unit(unit(slot, v));
+            }
+        }
     }
 }
 
@@ -322,6 +327,7 @@ pub fn wake(slot: usize) {
 pub fn wake_vcpu(slot: usize, v: usize) {
     if slot < MAX_GUESTS && v < MAX_VCPUS {
         WAKE[slot].fetch_or(1u8 << v, Ordering::Release);
+        crate::arch::host_smp::poke_unit(unit(slot, v));
     }
 }
 

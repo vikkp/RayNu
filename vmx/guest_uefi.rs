@@ -5834,7 +5834,7 @@ unsafe fn launch_uefi(
                 }
             }
             if pre != 0 {
-                crate::arch::host_smp::invept_guests();
+                crate::arch::host_smp::invept_everywhere();
                 REPORT_RAM_MAPS.store(pre as u32, Ordering::Release);
                 serial::write_str("boot: guest-UEFI report-RAM EPT pre-map n=");
                 write_dec(pre);
@@ -6851,6 +6851,47 @@ pub unsafe fn ap_halt_pause(core: usize, unit: usize) -> ! {
     guest_sched::reenter(unit)
 }
 
+/// Give the monitor to other cores until `done()`, then take it back with
+/// this core's guest context as it was. The only place a handler drops the lock.
+///
+/// # Safety
+/// Caller holds the monitor and is on the exit path.
+#[cfg(target_os = "uefi")]
+pub unsafe fn yield_monitor_until(wait_core: Option<usize>, mut done: impl FnMut() -> bool) {
+    let s = slot::current();
+    let v = slot::current_vcpu();
+    let gpr = saved_gprs();
+    let xmm = saved_xmm();
+    let spec = msr_firewall::shadow_read(msr_firewall::MSR_SPEC_CTRL);
+    let apic = msr_firewall::shadow_read(msr_firewall::MSR_APIC_BASE);
+    let core = crate::arch::host_smp::this_core();
+    let hz = crate::boot::raynu_f_flag::tsc_hz().max(1);
+    let start = cpu::rdtsc();
+    let mut late = false;
+    crate::arch::host_smp::release();
+    while !done() {
+        if !late && cpu::rdtsc().wrapping_sub(start) > hz.saturating_mul(2) {
+            late = true;
+        }
+        core::hint::spin_loop();
+    }
+    crate::arch::host_smp::acquire();
+    load_saved_gprs(&gpr);
+    load_saved_xmm(&xmm);
+    slot::set_current(s);
+    slot::set_current_vcpu(v);
+    msr_firewall::shadow_write(msr_firewall::MSR_SPEC_CTRL, spec);
+    msr_firewall::shadow_write(msr_firewall::MSR_APIC_BASE, apic);
+    crate::arch::host_smp::take_pending_invept();
+    if late {
+        serial::write_str("boot: B21 core ");
+        write_dec(core as u64);
+        serial::write_str(" waited 2 s for core ");
+        write_dec(u64::from(wait_core.unwrap_or(0xff)));
+        serial::write_line(" (ADR-024; not ISO-INSTALL-OK)");
+    }
+}
+
 /// Wait until each core has VMCLEARed the VMCS it holds. Restores the
 /// register image and the current slot around the wait.
 #[cfg(target_os = "uefi")]
@@ -6919,7 +6960,7 @@ unsafe fn place_running_vcpu(s: usize, v: usize, vmcs: u64) {
         return;
     }
     crate::arch::host_smp::assign_unit(u, core);
-    crate::arch::host_smp::wake_core(core);
+    crate::arch::host_smp::poke_core(core);
     serial::write_str_nowait("boot: B21 vcpu ");
     write_dec_nowait(v as u64);
     serial::write_str_nowait(" on host core ");
@@ -16295,7 +16336,7 @@ unsafe fn ept_install_xapic_4k(pt_hpa: u64, lapic_hpa: u64, trap: bool) -> bool 
         core::ptr::write_volatile(pt.add(i as usize), crate::memory::ept_hw::ept_leaf_4k(hpa, 0));
     }
     core::ptr::write_volatile((pd as *mut u64).add(pd_i), crate::memory::ept_hw::ept_link(pt_hpa));
-    crate::arch::host_smp::invept_guests();
+    crate::arch::host_smp::invept_everywhere();
     true
 }
 
@@ -16337,7 +16378,7 @@ unsafe fn ept_install_ioapic_trap(pt_hpa: u64) -> bool {
         core::ptr::write_volatile(pt.add(i as usize), crate::memory::ept_hw::ept_leaf_4k(hpa, 0));
     }
     core::ptr::write_volatile((pd as *mut u64).add(pd_i), crate::memory::ept_hw::ept_link(pt_hpa));
-    crate::arch::host_smp::invept_guests();
+    crate::arch::host_smp::invept_everywhere();
     true
 }
 
@@ -16377,7 +16418,7 @@ unsafe fn ept_split_2m_trap_4k(gpa: u64) -> bool {
     if (e2 & (1 << 7)) == 0 {
         let pt = e2 & !0xfff;
         core::ptr::write_volatile((pt as *mut u64).add(pt_i), 0);
-        crate::arch::host_smp::invept_guests();
+        crate::arch::host_smp::invept_everywhere();
         return true;
     }
     // A slot built after boot splits from its own table pool; slot 0
@@ -16410,7 +16451,7 @@ unsafe fn ept_split_2m_trap_4k(gpa: u64) -> bool {
         core::ptr::write_volatile(pt.add(i as usize), crate::memory::ept_hw::ept_leaf_4k(hpa, mt));
     }
     core::ptr::write_volatile((pd as *mut u64).add(pd_i), crate::memory::ept_hw::ept_link(pt_hpa));
-    crate::arch::host_smp::invept_guests();
+    crate::arch::host_smp::invept_everywhere();
     true
 }
 
@@ -16466,7 +16507,7 @@ unsafe fn ept_link_empty_pd(pdpt_i: usize, pd_hpa: u64) -> bool {
     }
     core::ptr::write_bytes(pd_hpa as *mut u8, 0, 4096);
     core::ptr::write_volatile((pdpt as *mut u64).add(pdpt_i), crate::memory::ept_hw::ept_link(pd_hpa));
-    crate::arch::host_smp::invept_guests();
+    crate::arch::host_smp::invept_everywhere();
     true
 }
 
@@ -16526,7 +16567,7 @@ unsafe fn ept_map_2m_hpa_mt(
     }
     core::ptr::write_volatile((pd as *mut u64).add(pd_i), want);
     if invept {
-        crate::arch::host_smp::invept_guests();
+        crate::arch::host_smp::invept_everywhere();
     }
     true
 }
@@ -18034,7 +18075,7 @@ unsafe fn build_slot_machine(lab: bool) -> Result<(), &'static str> {
             REPORT_RAM_GPA[i].store(u64::MAX, Ordering::Release);
         }
     }
-    crate::arch::host_smp::invept_guests();
+    crate::arch::host_smp::invept_everywhere();
     REPORT_RAM_MAPS.store(pre as u32, Ordering::Release);
 
     let _ = crate::mgmt::iso_install::present_boot_iso();
