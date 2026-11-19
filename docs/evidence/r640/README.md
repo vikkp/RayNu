@@ -6,6 +6,8 @@
 
 **GitHub Latest `v0.1.7-b6` (2026-11-17).** Previous rollback `v0.1.6-wave6-closed`.
 
+**ADR-021 B21 gate 2 (2026-11-19):** [`2026-11-19-b47e029d-b21-gate2-ok.md`](2026-11-19-b47e029d-b21-gate2-ok.md) — EFI `b47e029d88aa`, run `44622224710`. `boot: B21 vcpu 1 on host core 1`, `cores 0:[0.0] 1:[0.1]`, `Brought up 1 node, 2 CPUs`, `raynusrv2 login:`. SPA loaded. `ssh` to `10.99.99.200`, `nproc` printed `2`. vCPU 0 stayed on core 0. **Gate 2.** Not lived.
+
 **ADR-021 B7 lived — two CPUs in one Ubuntu guest (2026-11-18):** [`2026-11-18-505ef6bd-wave-7-b7-smp-ok.md`](2026-11-18-505ef6bd-wave-7-b7-smp-ok.md) — EFI `505ef6bdbc73`, run `44336344309`. Autostart was 1 CPU (`nproc` printed `1`). After `GuestCpuSaved prev=1 n=2`: `boot: B7 vcpu 1 long mode`, `Brought up 1 node, 2 CPUs`, `nproc` printed `2`. Alpine then reached `localhost login:` beside that guest. **B7 lived.** Wave 7 stays open on B21. Latest stays `v0.1.7-b6`.
 
 **ADR-021 B21 gate 1, cores refused (2026-11-18):** [`2026-11-18-a9301533-b21-host-cores-tsc.md`](2026-11-18-a9301533-b21-host-cores-tsc.md) — EFI `a9301533682b`, run `44376126570`. `online=1 of 16`, cores 1–15 `not used: tsc`. Guest `nproc` printed 2. Not lived. EFI `70afcdf9da0e`, run `44383802515`, same `online=1 of 16` and no `tsc sync` line: the x2APIC id was shifted like an xAPIC id, so the timestamp sample never ran. Guest still `vcpus=2`. EFI `dc1bcc800c1e`, run `44389087185`: `online=16 of 16`, each core `VMXON ok`. `B21 cores 0:[0.0 0.1]` and cores 1–15 empty. `Brought up 1 node, 2 CPUs`, `raynusrv2 login:`. Gate 1. Not lived.

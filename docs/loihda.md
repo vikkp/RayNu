@@ -1,8 +1,8 @@
 ---
 loihda_version: 1
 last_updated: 2026-11-19
-last_commit: 9ed0887a733b27c56a165a4724561a68be655e2f
-last_commit_short: 9ed0887a
+last_commit: b47e029d88aa1cabd6a93dfa343c79c01f42fb87
+last_commit_short: b47e029d
 updated_by: cursor
 loi_target: "Non-prod Letter of Intent. Bar A = dedicated-box lab. Bar B = RAID-fleet replacement. HDA 99% is Everest, not an LOI."
 months_to_loi_a: 0.25
@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | `9ed0887a` |
-| Summary | **The landing stub matches `dc1bcc80`.** `monitor_enter` stores the holder. Console piece stays 82. No piece moves. Bar A 94. Bar B 72. Overall 80. |
+| Commit | `b47e029d` |
+| Summary | **Gate 2 on iron.** vCPU 1 on host core 1. `nproc` printed `2`. Console piece stays 82. No piece moves. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. TLS 88 held. |
 | Gates touched | B7 lived. B21 in flight, S1, wave 7. B6 and B8 stay lived. Wave 7 open. No doorbell. No format of UBUNTU0. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-19 | wave-7-b21-gate2 | 94 | 72 | **Iron `b47e029d88aa`: gate 2.** `nproc` printed `2`. vCPU 0 stayed on core 0. Console piece stays 82. No piece score moves. Bar A 94. Bar B 72. Overall 80. |
 | 2026-11-19 | wave-7-b21-landing | 94 | 72 | **Landing stub matches `dc1bcc80`.** A call there would let the callee write the saved `xmm0`/`xmm1`. `monitor_enter` stores the holder. Console piece stays 82. No piece score moves. Bar A 94. Bar B 72. Overall 80. |
 | 2026-11-19 | wave-7-b21-holder | 94 | 72 | **Iron `b93fed44` `o = x + 1`.** The recorded exit had resumed. Another core held the next ticket inside `two_in_monitor`. The holder now follows the ticket. Console piece stays 82. No piece score moves. Bar A 94. Bar B 72. Overall 80. |
 | 2026-11-19 | wave-7-b21-pulse-wait | 94 | 72 | **UART and the overdue PIT raise match `dc1bcc800c1e`.** The onecore boot was skipped. Console piece stays 82. No piece score moves. Bar A 94. Bar B 72. Overall 80. |
