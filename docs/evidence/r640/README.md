@@ -6,7 +6,7 @@
 
 **GitHub Latest `v0.1.7-b6` (2026-11-17).** Previous rollback `v0.1.6-wave6-closed`.
 
-**ADR-021 B21 gate 2 (2026-11-19):** [`2026-11-19-b47e029d-b21-gate2-ok.md`](2026-11-19-b47e029d-b21-gate2-ok.md) — EFI `b47e029d88aa`, run `44622224710`. `boot: B21 vcpu 1 on host core 1`, `cores 0:[0.0] 1:[0.1]`, `Brought up 1 node, 2 CPUs`, `raynusrv2 login:`. SPA loaded. `ssh` to `10.99.99.200`, `nproc` printed `2`. vCPU 0 stayed on core 0. **Gate 2.** Not lived.
+**ADR-021 B21 gate 2 in progress (2026-11-19):** [`2026-11-19-b47e029d-b21-gate2-in-progress.md`](2026-11-19-b47e029d-b21-gate2-in-progress.md) — EFI `b47e029d88aa`, run `44622224710`. `boot: B21 vcpu 1 on host core 1`, `cores 0:[0.0] 1:[0.1]`, `Brought up 1 node, 2 CPUs`, `raynusrv2 login:`. SPA loaded. `ssh` to `10.99.99.200`, `nproc` printed `2`. Section 9 steps 2–5 and 7 are not run. vCPU 0 stayed on core 0. **Gate 2 in progress.** Not lived.
 
 **ADR-021 B7 lived — two CPUs in one Ubuntu guest (2026-11-18):** [`2026-11-18-505ef6bd-wave-7-b7-smp-ok.md`](2026-11-18-505ef6bd-wave-7-b7-smp-ok.md) — EFI `505ef6bdbc73`, run `44336344309`. Autostart was 1 CPU (`nproc` printed `1`). After `GuestCpuSaved prev=1 n=2`: `boot: B7 vcpu 1 long mode`, `Brought up 1 node, 2 CPUs`, `nproc` printed `2`. Alpine then reached `localhost login:` beside that guest. **B7 lived.** Wave 7 stays open on B21. Latest stays `v0.1.7-b6`.
 

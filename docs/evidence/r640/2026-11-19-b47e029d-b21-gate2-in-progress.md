@@ -1,6 +1,6 @@
-# 2026-11-19 — `b47e029d` gate 2, vCPU 1 on host core 1
+# 2026-11-19 — `b47e029d` gate 2 in progress
 
-EFI `b47e029d88aa`, push run `44622224710`. Gate 2. B21 stays in flight. vCPU 0 stayed on core 0.
+EFI `b47e029d88aa`, push run `44622224710`. Gate 2 in progress. A login and `nproc` 2 are not the plan's pass. B21 stays in flight. vCPU 0 stayed on core 0.
 
 COM2:
 
@@ -19,4 +19,10 @@ raynusrv2 login:
 
 The page at `https://10.99.99.201:8443` loaded. `ssh` to `10.99.99.200` logged in. `nproc` printed `2`.
 
-A later cores line on the same boot was `0:[0.0] 1:[0.1]` with `lock_wait_max_us=362043`. Gate 3 is vCPU 0 on another core. The row is lived at gate 3.
+A later cores line on the same boot was `0:[0.0] 1:[0.1]` with `lock_wait_max_us=362043`.
+
+Recorded on this boot: placement line, cores line, `Brought up 1 node, 2 CPUs`, `raynusrv2 login:`, SPA load, `ssh` to `10.99.99.200`, `nproc` printed `2`.
+
+Not run, so gate 2 stays in progress: plan section 9 steps 2–5 and 7. Also not run: Shut down and Start with `recalls=` above 0, 60 s of two busy loops, a second guest beside this one, a `nokick.txt` boot, 4 vCPUs.
+
+Gate 3 is not started. The row is lived at gate 3.
