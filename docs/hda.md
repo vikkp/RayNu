@@ -1,8 +1,8 @@
 ---
 hda_version: 1
-last_updated: 2026-11-18
-last_commit: 45ec0f9763f4fffb38f42aae8ae1b4ca699fb773
-last_commit_short: 45ec0f97
+last_updated: 2026-11-19
+last_commit: 51e624c95b456e84eb2f0be1b2dbd9580c25cf52
+last_commit_short: 51e624c9
 updated_by: cursor
 mount_everest_target: "CLOSED on iron 2026-09-11: Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest). Next: M8 operator hardening (ADR-018)."
 months_to_everest: 0.0
@@ -354,7 +354,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | `45ec0f97` |
+| Commit | `51e624c9` |
 | Summary | **Virtual 16550 reports the transmitter empty once the byte is queued.** Iron `5a3f21154b55` / run `44412705019` stopped on `[    0.` after the Spectre RSB line. Not lived. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B7 lived. B21 in flight, S1, wave 7. B6 and B8 stay lived. Wave 7 open. No doorbell. No format of UBUNTU0. |
