@@ -70,6 +70,10 @@ static IN_GUEST: [AtomicBool; MAX_CORES] = [const { AtomicBool::new(false) }; MA
 static EXIT_PHASE: AtomicU8 = AtomicU8::new(0);
 /// `rdtsc` of that checkpoint. Core 1 treats a silent beat as a stalled exit.
 static EXIT_BEAT: AtomicU64 = AtomicU64::new(0);
+/// Low byte of the exit reason stored at checkpoint 1. Core 0 only.
+static EXIT_REASON8: AtomicU8 = AtomicU8::new(0);
+/// Guest RIP stored at checkpoint 1. Core 0 only.
+static EXIT_RIP: AtomicU64 = AtomicU64::new(0);
 /// Set by the core that changed EPT. The target core flushes before its next entry.
 static INVEPT_PENDING: [AtomicBool; MAX_CORES] = [const { AtomicBool::new(false) }; MAX_CORES];
 /// Core whose queue holds the unit. 0 until placement. The monitor writes it.
@@ -96,23 +100,39 @@ pub fn release() {
 
 /// Checkpoint on core 0's exit path. Core 1 reads it and does not take the lock.
 ///
-/// 1 entered the handler, 2 the page tick returned, 3 arming the preemption
-/// timer, 4 leaving the monitor, 5 the host-stack check passed.
+/// 1 reason and RIP stored, 2 the page tick returned, 3 exit dispatch
+/// returned, 4 arming the preemption timer, 5 leaving the monitor,
+/// 6 the host-stack check passed.
 pub fn note_exit_phase(phase: u8) {
     EXIT_PHASE.store(phase, Ordering::Release);
     EXIT_BEAT.store(cpu::rdtsc(), Ordering::Release);
 }
 
+/// Core 0's exit reason and guest RIP, stored with checkpoint 1.
+pub fn note_core0_exit(reason: u32, rip: u64) {
+    if this_core() != 0 {
+        return;
+    }
+    EXIT_REASON8.store((reason & 0xFF) as u8, Ordering::Release);
+    EXIT_RIP.store(rip, Ordering::Release);
+}
+
 /// One COM2 line once core 0 has been silent for two seconds.
 ///
-/// `p` is the last checkpoint, `g` is core 0's in-guest flag, `h` is the
-/// monitor holder (`ff` is none), `o` and `n` are the ticket owner and next.
+/// `p` is the last checkpoint. `g` is core 0's in-guest flag. `h` is the
+/// monitor holder (`ff` is none). `o` and `n` are the ticket counters:
+/// `n - o` is 0 when the lock is free or a release left the counters equal,
+/// 1 when one core holds it, and 2 or more when another core is queued.
+/// `r` is the low byte of the exit reason at checkpoint 1. `rip` is the
+/// guest RIP stored there.
 pub fn format_b21_pulse(
     phase: u8,
     in_guest: bool,
     holder: u8,
     owner: u32,
     next: u32,
+    reason: u8,
+    rip: u64,
     out: &mut [u8],
 ) -> usize {
     let mut n = push_bytes(out, 0, b"boot: B21 pulse p=");
@@ -125,6 +145,10 @@ pub fn format_b21_pulse(
     n = push_hex32(out, n, owner);
     n = push_bytes(out, n, b" n=");
     n = push_hex32(out, n, next);
+    n = push_bytes(out, n, b" r=");
+    n = push_hex2(out, n, reason);
+    n = push_bytes(out, n, b" rip=");
+    n = push_hex64(out, n, rip);
     push_bytes(out, n, b"\r\n")
 }
 
@@ -156,6 +180,14 @@ fn push_hex32(out: &mut [u8], mut n: usize, v: u32) -> usize {
     n
 }
 
+fn push_hex64(out: &mut [u8], mut n: usize, v: u64) -> usize {
+    let hex = b"0123456789abcdef";
+    for i in (0..16).rev() {
+        n = push_byte(out, n, hex[((v >> (i * 4)) & 0xF) as usize]);
+    }
+    n
+}
+
 /// Called from core 1, which does not hold the monitor. Silent while core 0
 /// is still storing checkpoints. Writes straight to COM2, not the guest ring.
 pub fn emit_core0_pulse(now: u64) {
@@ -167,13 +199,15 @@ pub fn emit_core0_pulse(now: u64) {
     if now.wrapping_sub(beat) < hz.saturating_mul(2) {
         return;
     }
-    let mut buf = [0u8; 64];
+    let mut buf = [0u8; 96];
     let n = format_b21_pulse(
         EXIT_PHASE.load(Ordering::Acquire),
         IN_GUEST[0].load(Ordering::Acquire),
         MON_HOLDER.load(Ordering::Acquire),
         MON_OWNER.load(Ordering::Acquire),
         MON_NEXT.load(Ordering::Acquire),
+        EXIT_REASON8.load(Ordering::Acquire),
+        EXIT_RIP.load(Ordering::Acquire),
         &mut buf,
     );
     let n = n.min(buf.len());
@@ -438,10 +472,10 @@ fn two_in_monitor() -> ! {
 
 #[cfg(target_os = "uefi")]
 unsafe fn leave_hardware(core: usize) {
-    // 4 is before the host-stack check. A spin on a mismatch stays here.
-    note_exit_phase(4);
+    // 5 is before the host-stack check. A spin on a mismatch stays here.
+    note_exit_phase(5);
     if cores_online() <= 1 {
-        note_exit_phase(5);
+        note_exit_phase(6);
         return;
     }
     if INVEPT_PENDING[core].swap(false, Ordering::AcqRel) {
@@ -473,7 +507,7 @@ unsafe fn leave_hardware(core: usize) {
             }
         }
     }
-    note_exit_phase(5);
+    note_exit_phase(6);
 }
 
 #[cfg(target_os = "uefi")]

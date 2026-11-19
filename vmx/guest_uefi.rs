@@ -7210,7 +7210,7 @@ fn console_pace_ticks(shift: u32) -> u32 {
 /// guest UART line-rate pace. Not `ISO-INSTALL-OK`.
 #[cfg(target_os = "uefi")]
 fn arm_preempt_on_resume() {
-    crate::arch::host_smp::note_exit_phase(3);
+    crate::arch::host_smp::note_exit_phase(4);
     if slot::current_vcpu() != 0 {
         let shift = PREEMPT_SHIFT.load(Ordering::Acquire);
         let ticks = guest_sched::clamp_ticks(shift)
@@ -7654,7 +7654,6 @@ unsafe fn reserve_guest_uefi_host_stack(alloc: &mut FrameAllocator) -> Option<(u
 #[cfg(target_os = "uefi")]
 pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     crate::arch::host_smp::monitor_enter();
-    crate::arch::host_smp::note_exit_phase(1);
     let core_now = crate::arch::host_smp::this_core();
     if crate::arch::host_smp::running_remote(core_now)
         && crate::arch::host_smp::recall_waiting(core_now)
@@ -7674,6 +7673,9 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     let reason = ops::vmread(EXIT_REASON).unwrap_or(0xFFFF) as u32;
     let qual = ops::vmread(EXIT_QUALIFICATION).unwrap_or(0);
     let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+    // Checkpoint 1 stores this exit's reason and RIP before any dispatch.
+    crate::arch::host_smp::note_core0_exit(reason, rip);
+    crate::arch::host_smp::note_exit_phase(1);
     // Console exits take the same path as gate 1 (`dc1bcc800c1e`), which
     // reached login. A separate fast path was not that path.
     if slot::current_vcpu() != 0 {
@@ -8290,6 +8292,8 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
                 }
             }
         };
+        // Checkpoint 3: the exit-reason dispatch returned. Arming is 4.
+        crate::arch::host_smp::note_exit_phase(3);
         if resume {
             // Preemption (and any other resume) is not always an instruction
             // exit. CpuDeadLoop `pause` / `jmp $` never does I/O; skip those
