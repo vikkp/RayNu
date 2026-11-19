@@ -238,27 +238,34 @@ fn monitor_stubs_take_the_lock_around_the_registers() {
 
 #[test]
 fn pick_core_prefers_the_lightest_nonzero() {
-    assert_eq!(pick_core(&[2, 2, 1], 3), 2);
+    assert_eq!(pick_core(&[2, 2, 1, 0], 4), 2);
+    assert_eq!(pick_core(&[2, 2, 1], 3), 1, "core 2 is the watchdog");
     assert_eq!(pick_core(&[1, 1, 1], 3), 1);
     assert_eq!(pick_core(&[0, 2, 2], 3), 0);
     assert_eq!(pick_core(&[5, 3, 3], 3), 1);
     assert_eq!(pick_core(&[0], 1), 0);
+    assert_eq!(watchdog_core(1), None);
+    assert_eq!(watchdog_core(16), Some(15));
+    assert_eq!(place_vcpu(1, &[0, 9, 0, 0], 4), 2);
+    assert_eq!(place_vcpu(1, &[0, 0, 0], 3), 1);
 }
 
 #[test]
 fn b21_pulse_line_names_the_checkpoint() {
-    let mut buf = [0u8; 96];
-    let n = format_b21_pulse(4, false, 0, 0x12, 0x13, 0x1e, 0xffff_ffff_8100_1234, &mut buf);
-    let s = core::str::from_utf8(&buf[..n]).unwrap();
-    assert_eq!(
-        s,
-        "boot: B21 pulse p=4 g=0 h=00 o=00000012 n=00000013 r=1e rip=ffffffff81001234\r\n"
+    let mut buf = [0u8; 160];
+    let n = format_b21_pulse(
+        4, false, 0, 0x12, 0x13, 0x1e, 0xffff_ffff_8100_1234, 12, 4, 0, &mut buf,
     );
-    let n = format_b21_pulse(6, true, NO_CORE, 0, 1, 0x0a, 0, &mut buf);
     let s = core::str::from_utf8(&buf[..n]).unwrap();
     assert_eq!(
         s,
-        "boot: B21 pulse p=6 g=1 h=ff o=00000000 n=00000001 r=0a rip=0000000000000000\r\n"
+        "boot: B21 pulse p=4 g=0 h=00 o=00000012 n=00000013 r=1e rip=ffffffff81001234 x=12 t=4 d=0\r\n"
+    );
+    let n = format_b21_pulse(6, true, NO_CORE, 0, 1, 0x0a, 0, 0, 0, 3, &mut buf);
+    let s = core::str::from_utf8(&buf[..n]).unwrap();
+    assert_eq!(
+        s,
+        "boot: B21 pulse p=6 g=1 h=ff o=00000000 n=00000001 r=0a rip=0000000000000000 x=0 t=0 d=3\r\n"
     );
 }
 
@@ -288,7 +295,7 @@ fn core0_checkpoints_are_in_exit_order() {
     assert!(guest[arm..arm + 180].contains("note_exit_phase(4)"));
 
     let start = include_str!("host_smp_start.rs");
-    let wait = start.find("fn core1_wait()").expect("core1");
+    let wait = start.find("fn watchdog_wait(").expect("watchdog");
     let body = &start[wait..wait + 600];
     assert!(body.contains("emit_core0_pulse"));
     assert!(!body.contains("acquire("));
@@ -301,7 +308,7 @@ fn place_vcpu_keeps_vcpu0_on_core0() {
     assert_eq!(place_vcpu(0, &loads, 3), 0);
     assert_eq!(place_vcpu(1, &loads, 1), 0);
     assert_eq!(place_vcpu(1, &loads, 3), 1);
-    assert_eq!(place_vcpu(2, &[0, 1, 0], 3), 2);
+    assert_eq!(place_vcpu(2, &[0, 1, 0, 0], 4), 2);
 }
 
 #[test]

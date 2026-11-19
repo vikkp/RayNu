@@ -248,15 +248,14 @@ pub(super) unsafe fn wait_mailbox(core: usize) {
     MAILBOX[core].word.store(0, Ordering::Release);
 }
 
-/// Core 1 stays in C0 so it can see core 0 stop checkpointing.
-///
-/// It does not take the monitor. The other cores stay in [`wait_mailbox`].
-/// The mailbox word is cleared only after a wake stores into it.
-fn core1_wait() {
+/// The highest online core stays in C0 and writes the pulse every two
+/// seconds. It does not take the monitor. The mailbox word is cleared
+/// only after a wake stores into it.
+fn watchdog_wait(core: usize) {
     let hz = crate::boot::raynu_f_flag::tsc_hz().max(1_000_000);
     let gap = hz.saturating_mul(2);
     let mut next = cpu::rdtsc();
-    while MAILBOX[1].word.load(Ordering::Acquire) == 0 {
+    while MAILBOX[core].word.load(Ordering::Acquire) == 0 {
         let now = cpu::rdtsc();
         if now.wrapping_sub(next) >= gap {
             super::emit_core0_pulse(now);
@@ -264,13 +263,20 @@ fn core1_wait() {
         }
         core::hint::spin_loop();
     }
-    MAILBOX[1].word.store(0, Ordering::Release);
+    MAILBOX[core].word.store(0, Ordering::Release);
 }
 
 unsafe fn ap_idle(core: usize) -> ! {
+    // `cores_online` is published after the last AP has entered here.
+    // Spin briefly so that AP is still here when the count lands.
+    let hz = crate::boot::raynu_f_flag::tsc_hz().max(1_000_000);
+    let start = cpu::rdtsc();
+    while super::cores_online() <= 1 && cpu::rdtsc().wrapping_sub(start) < hz / 20 {
+        core::hint::spin_loop();
+    }
     loop {
-        if core == 1 {
-            core1_wait();
+        if super::is_watchdog_core(core) {
+            watchdog_wait(core);
         } else {
             wait_mailbox(core);
         }

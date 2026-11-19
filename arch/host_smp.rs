@@ -74,6 +74,8 @@ static EXIT_BEAT: AtomicU64 = AtomicU64::new(0);
 static EXIT_REASON8: AtomicU8 = AtomicU8::new(0);
 /// Guest RIP stored at checkpoint 1. Core 0 only.
 static EXIT_RIP: AtomicU64 = AtomicU64::new(0);
+/// Exits that stored checkpoint 1 on core 0.
+static CORE0_EXITS: AtomicU64 = AtomicU64::new(0);
 /// Set by the core that changed EPT. The target core flushes before its next entry.
 static INVEPT_PENDING: [AtomicBool; MAX_CORES] = [const { AtomicBool::new(false) }; MAX_CORES];
 /// Core whose queue holds the unit. 0 until placement. The monitor writes it.
@@ -109,12 +111,32 @@ pub fn note_exit_phase(phase: u8) {
 }
 
 /// Core 0's exit reason and guest RIP, stored with checkpoint 1.
+/// Counts one core 0 exit.
 pub fn note_core0_exit(reason: u32, rip: u64) {
     if this_core() != 0 {
         return;
     }
     EXIT_REASON8.store((reason & 0xFF) as u8, Ordering::Release);
     EXIT_RIP.store(rip, Ordering::Release);
+    CORE0_EXITS.fetch_add(1, Ordering::Release);
+}
+
+pub fn core0_exits() -> u64 {
+    CORE0_EXITS.load(Ordering::Acquire)
+}
+
+/// Highest online core, when there is one besides core 0. It writes the
+/// pulse and is not a place for a vCPU.
+pub fn watchdog_core(online: usize) -> Option<usize> {
+    if online <= 1 {
+        None
+    } else {
+        Some(online - 1)
+    }
+}
+
+pub fn is_watchdog_core(core: usize) -> bool {
+    watchdog_core(cores_online()) == Some(core)
 }
 
 /// One COM2 line once core 0 has been silent for two seconds.
@@ -124,7 +146,8 @@ pub fn note_core0_exit(reason: u32, rip: u64) {
 /// `n - o` is 0 when the lock is free or a release left the counters equal,
 /// 1 when one core holds it, and 2 or more when another core is queued.
 /// `r` is the low byte of the exit reason at checkpoint 1. `rip` is the
-/// guest RIP stored there.
+/// guest RIP stored there. `x` is core 0's exit count, `t` is the guest TX
+/// ring length, and `d` is bytes an earlier pulse did not get onto COM2.
 pub fn format_b21_pulse(
     phase: u8,
     in_guest: bool,
@@ -133,6 +156,9 @@ pub fn format_b21_pulse(
     next: u32,
     reason: u8,
     rip: u64,
+    exits: u64,
+    ring: u64,
+    dropped: u64,
     out: &mut [u8],
 ) -> usize {
     let mut n = push_bytes(out, 0, b"boot: B21 pulse p=");
@@ -149,6 +175,12 @@ pub fn format_b21_pulse(
     n = push_hex2(out, n, reason);
     n = push_bytes(out, n, b" rip=");
     n = push_hex64(out, n, rip);
+    n = push_bytes(out, n, b" x=");
+    n = push_dec(out, n, exits);
+    n = push_bytes(out, n, b" t=");
+    n = push_dec(out, n, ring);
+    n = push_bytes(out, n, b" d=");
+    n = push_dec(out, n, dropped);
     push_bytes(out, n, b"\r\n")
 }
 
@@ -188,18 +220,11 @@ fn push_hex64(out: &mut [u8], mut n: usize, v: u64) -> usize {
     n
 }
 
-/// Called from core 1, which does not hold the monitor. Silent while core 0
-/// is still storing checkpoints. Writes straight to COM2, not the guest ring.
-pub fn emit_core0_pulse(now: u64) {
-    let beat = EXIT_BEAT.load(Ordering::Acquire);
-    if beat == 0 {
-        return;
-    }
-    let hz = crate::boot::raynu_f_flag::tsc_hz().max(1_000_000);
-    if now.wrapping_sub(beat) < hz.saturating_mul(2) {
-        return;
-    }
-    let mut buf = [0u8; 96];
+/// Called from the watchdog core, which does not hold the monitor. One line
+/// every time the caller asks, whether or not core 0 is still checkpointing.
+/// Writes straight to COM2, not the guest ring. `d` is drops before this line.
+pub fn emit_core0_pulse(_now: u64) {
+    let mut buf = [0u8; 160];
     let n = format_b21_pulse(
         EXIT_PHASE.load(Ordering::Acquire),
         IN_GUEST[0].load(Ordering::Acquire),
@@ -208,10 +233,13 @@ pub fn emit_core0_pulse(now: u64) {
         MON_NEXT.load(Ordering::Acquire),
         EXIT_REASON8.load(Ordering::Acquire),
         EXIT_RIP.load(Ordering::Acquire),
+        CORE0_EXITS.load(Ordering::Acquire),
+        crate::boot::serial::guest_tx_len() as u64,
+        u64::from(crate::boot::serial::com2_direct_dropped()),
         &mut buf,
     );
     let n = n.min(buf.len());
-    crate::boot::serial::com2_bytes_direct(&buf[..n]);
+    let _ = crate::boot::serial::com2_bytes_direct(&buf[..n]);
 }
 
 pub fn kicks_taken() -> u64 {
@@ -827,8 +855,12 @@ pub fn pick_core(loads: &[u8], online: usize) -> usize {
     if n == 0 {
         return 0;
     }
+    let watch = watchdog_core(n);
     let mut best = 0usize;
     for i in 1..n {
+        if Some(i) == watch {
+            continue;
+        }
         if loads[i] < loads[best] || (loads[i] == loads[best] && best == 0) {
             best = i;
         }

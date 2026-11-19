@@ -232,8 +232,6 @@ const UART_PACE_TSC_HZ_FALLBACK: u64 = 2_000_000_000;
 /// FIFO 4 kB/s, still 250× the stall. guest UART line-rate pace.
 /// Not `ISO-INSTALL-OK`.
 pub const UART_PACE_US: u64 = 250;
-/// One 8N1 character at 115200. Earlycon drains one byte per this period.
-pub const UART_BYTE_US: u64 = 87;
 
 /// ADR-016: RayNu-F does not mutate a third-party firmware's internal control
 /// state to manufacture progress. The Stage 46 `3k–3o` OVMF forcing
@@ -1499,23 +1497,10 @@ pub fn guest_uefi_uart_pace_wanted(share: bool, product_iso: bool, ring_len: usi
 /// Preemption-timer ticks for [`UART_PACE_US`] at `tsc_hz` with rate shift
 /// `shift` (IA32_VMX_MISC bits 4:0). Never 0.
 pub fn guest_uefi_uart_pace_ticks(tsc_hz: u64, shift: u32) -> u32 {
-    guest_uefi_uart_pace_ticks_us(tsc_hz, shift, UART_PACE_US)
-}
-
-/// Same as [`guest_uefi_uart_pace_ticks`] for a caller-chosen period.
-pub fn guest_uefi_uart_pace_ticks_us(tsc_hz: u64, shift: u32, us: u64) -> u32 {
     let hz = if tsc_hz == 0 { UART_PACE_TSC_HZ_FALLBACK } else { tsc_hz };
-    let tsc = hz.saturating_mul(us.max(1)) / 1_000_000;
+    let tsc = hz.saturating_mul(UART_PACE_US) / 1_000_000;
     let ticks = tsc >> shift.min(31);
     ticks.clamp(1, u64::from(u32::MAX)) as u32
-}
-
-/// HPET ticks for `elapsed_tsc`, capped at 64 ms so one overdue tick cannot
-/// jump the guest clock. Iron `236290d35ce5` added [`HPET_MAIN_STEP`] (1 s)
-/// on every console exit and the log went from 0.13 s to 29 s.
-pub fn guest_uefi_hpet_ticks_for_elapsed(elapsed_tsc: u64) -> u64 {
-    let raw = elapsed_tsc / crate::devices::guest_platform::TSC_PER_HPET_TICK;
-    raw.min(6_400_000)
 }
 
 /// Value to arm on resume and whether that arming is a pacing clamp.
@@ -1546,18 +1531,6 @@ pub fn guest_uefi_preempt_arm(
     } else {
         (remaining.max(1), false)
     }
-}
-
-/// The host deadline passed and this exit did not already deliver the tick.
-///
-/// The VMX preemption timer counts only while the guest runs. A printk
-/// storm exits every few microseconds, so the armed countdown never
-/// reaches zero, and refreshing the deadline without raising PIT leaves
-/// jiffies frozen (Ubuntu has no local-APIC timer). Iron `90b6847768d5`
-/// printed a clean kernel log that stayed on `[    0.958318]` and stopped
-/// at `Mount-c`.
-pub fn guest_uefi_nominal_tick_due(prev_due: u64, now: u64, already: bool) -> bool {
-    prev_due != 0 && now >= prev_due && !already
 }
 
 /// Wall-clock deadline of the next nominal PIT/HPET preemption tick.
@@ -3811,12 +3784,6 @@ pub fn ud_is_ud2(bytes: &[u8]) -> bool {
 }
 
 /// I/O exit qualification → port (SDM 28.2.1 bits 31:16).
-/// Bytes of a `rep` string I/O one exit may perform. A COM `rep` with a
-/// huge count must not live inside the exit that printk is waiting on.
-pub fn com_io_string_budget(com: bool, count: u64) -> u64 {
-    if com { count.min(32) } else { count }
-}
-
 pub fn io_port_from_qual(qual: u64) -> u16 {
     ((qual >> 16) & 0xffff) as u16
 }
@@ -7167,34 +7134,6 @@ pub fn guest_uefi_hpet_uart_tsc_step(tsc_delta: u64) -> u64 {
     crate::devices::guest_platform::hpet_ticks_from_tsc_delta(tsc_delta)
 }
 
-/// One nominal PIT/HPET tick that the preemption timer did not get to run.
-#[cfg(target_os = "uefi")]
-fn deliver_nominal_tick(elapsed_tsc: u64) {
-    let sink = SINK_HPA.load(Ordering::Acquire);
-    if sink != 0 {
-        // SAFETY: same sink as [`tick_hpet_on_exit`].
-        // KANI-TARGET: overdue PIT tick during a UART storm (outside Proven Core).
-        let v = crate::devices::guest_platform::hpet_tick_sink_by(
-            unsafe { core::slice::from_raw_parts_mut(sink as *mut u8, 2 * 1024 * 1024) },
-            guest_uefi_hpet_ticks_for_elapsed(elapsed_tsc),
-        );
-        if v != 0 {
-            HPET_TICKS.fetch_add(1, Ordering::AcqRel);
-        }
-    }
-    if crate::devices::ide_cdrom::product_iso_window_armed() {
-        crate::devices::guest_irq::raise_pit();
-        let _ = crate::devices::lapic_virt::poll_timer_expiry();
-    }
-}
-
-/// One character of guest time while Linux owns the console, otherwise
-/// the wider [`UART_PACE_US`] window.
-#[cfg(target_os = "uefi")]
-fn console_pace_ticks(shift: u32) -> u32 {
-    guest_uefi_uart_pace_ticks(crate::boot::raynu_f_flag::tsc_hz(), shift)
-}
-
 /// Re-arm the VMX preemption timer for the next resume.
 ///
 /// Nominal: [`PREEMPT_RELOAD`] ticks (live HPET / PIT cadence) measured
@@ -7243,7 +7182,7 @@ fn arm_preempt_on_resume() {
             reload
         };
         let uart = if pace {
-            Some(console_pace_ticks(shift))
+            Some(guest_uefi_uart_pace_ticks(crate::boot::raynu_f_flag::tsc_hz(), shift))
         } else {
             None
         };
@@ -7278,22 +7217,23 @@ fn arm_preempt_on_resume() {
         return;
     }
     let now = cpu::rdtsc();
-    let prev_due = PREEMPT_NOMINAL_DUE_TSC.load(Ordering::Acquire);
-    if guest_uefi_nominal_tick_due(prev_due, now, real_tick) {
-        deliver_nominal_tick(now.saturating_sub(prev_due));
-    }
     let pace = guest_uefi_uart_pace_wanted(
         serial::linux_earlycon_share(),
         crate::devices::ide_cdrom::product_iso_window_armed(),
         serial::guest_tx_len(),
     );
-    let due = guest_uefi_preempt_nominal_due(prev_due, now, reload, shift);
+    let due = guest_uefi_preempt_nominal_due(
+        PREEMPT_NOMINAL_DUE_TSC.load(Ordering::Acquire),
+        now,
+        reload,
+        shift,
+    );
     PREEMPT_NOMINAL_DUE_TSC.store(due, Ordering::Release);
     let (value, paced) = if pace {
         guest_uefi_preempt_arm(
             reload,
             true,
-            console_pace_ticks(shift),
+            guest_uefi_uart_pace_ticks(crate::boot::raynu_f_flag::tsc_hz(), shift),
             now,
             due,
             shift,
@@ -14251,10 +14191,7 @@ unsafe fn emulate_io_port(port: u16, is_in: bool, size: u64) {
 #[cfg(target_os = "uefi")]
 unsafe fn handle_io_string(qual: u64, port: u16, is_in: bool, size: u8) -> bool {
     let long = guest_uefi_cs_ar_is_long(ops::vmread(GUEST_CS_ACCESS_RIGHTS).unwrap_or(0));
-    let count = com_io_string_budget(
-        is_com_uart_port(port),
-        guest_uefi_io_string_count(qual, guest_uefi_io_addr_reg(SAVED_RCX, long)),
-    );
+    let count = guest_uefi_io_string_count(qual, guest_uefi_io_addr_reg(SAVED_RCX, long));
     let rflags = ops::vmread(GUEST_RFLAGS).unwrap_or(0x2);
     let df = (rflags & (1 << 10)) != 0;
     let mut addr = guest_uefi_io_addr_reg(if is_in { SAVED_RDI } else { SAVED_RSI }, long);
