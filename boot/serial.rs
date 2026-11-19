@@ -469,6 +469,18 @@ pub fn guest_tx_room_has_thre(room: usize) -> bool {
     room >= GUEST_TX_RESERVE + GUEST_TX_THRE_BURST
 }
 
+/// Ring room the THRE interrupt follows. The polled LSR bit does not.
+/// A host test can force this low without changing LSR.
+pub fn guest_tx_irq_room() -> bool {
+    #[cfg(test)]
+    {
+        if GUEST_TX_TEST_RING_FULL.load(Ordering::Relaxed) {
+            return false;
+        }
+    }
+    guest_tx_room_has_thre(guest_tx_room())
+}
+
 /// Bytes moved to COM2 / THRE windows used since reset (stall heartbeat).
 pub fn guest_tx_drain_stats() -> (u32, u32) {
     (

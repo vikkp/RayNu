@@ -245,7 +245,7 @@ fn tx_empty() -> bool {
     // LSR tells the polled console the transmitter is empty (ESXi). The
     // THRE interrupt still follows ring room, so a full ring does not
     // storm IRQ 4. guest UART TX ring room.
-    crate::boot::serial::guest_tx_room_has_thre(crate::boot::serial::guest_tx_room())
+    crate::boot::serial::guest_tx_irq_room()
 }
 
 fn thre_pending(u: &Uart) -> bool {

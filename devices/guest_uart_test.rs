@@ -78,7 +78,7 @@ fn product_iso_thre_waits_for_sol_then_reasserts() {
     let (iir, _, _) = pio(0x03FA, true, 0);
     assert_eq!(iir, 0xC1, "no interrupt pending, latch kept");
     let (lsr, _, _) = pio(0x03FD, true, 0);
-    assert_eq!(lsr & 0x20, 0);
+    assert_eq!(lsr & 0x20, 0x20, "polled LSR stays THRE");
     reassert_irq();
     assert!(crate::devices::guest_irq::take_inject_vector().is_none());
     set_guest_tx_test_ring_full(false);
@@ -403,15 +403,16 @@ fn thre_chain_counts_every_link() {
     let before = c.reassert_raise;
     reassert_irq();
     assert_eq!(thre_chain().reassert_raise, before + 1);
-    // Ring full above the reserve: LSR reports THRE off, IIR no interrupt.
+    // Ring full above the reserve: the interrupt goes quiet. LSR stays THRE
+    // so the polled console does not spin.
     set_guest_tx_test_ring_full(true);
     let (lsr, _, _) = pio(0x03FD, true, 0);
-    assert_eq!(lsr & 0x20, 0);
+    assert_eq!(lsr & 0x20, 0x20);
     let (iir, _, _) = pio(0x03FA, true, 0);
     assert_eq!(iir & 0x07, 0x01);
     let c = thre_chain();
     assert!(!c.thre_pending && c.thre_irq, "latch kept, level low");
-    assert_eq!((c.lsr_thre_on, c.lsr_thre_off), (1, 1));
+    assert_eq!((c.lsr_thre_on, c.lsr_thre_off), (2, 0));
     assert_eq!((c.iir_rx, c.iir_thre, c.iir_none), (0, 1, 1));
     assert!(c.pio_lower >= 1, "PIO with nothing pending lowers IRQ 4");
     set_guest_tx_test_ring_full(false);
@@ -422,7 +423,7 @@ fn thre_chain_counts_every_link() {
     assert!(!c.thre_irq);
     // LSR reads with ETBEI clear are not classified (console polling path).
     let _ = pio(0x03FD, true, 0);
-    assert_eq!(thre_chain().lsr_thre_on, 1);
+    assert_eq!(thre_chain().lsr_thre_on, 2);
     // SysRq BREAK shows up as rx / brk and an RX-class IIR.
     let _ = pio(0x03F9, false, 0x01);
     assert!(inject_sysrq(b't'));
