@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-11-19
-last_commit: PENDING
-last_commit_short: PENDING
+last_commit: 1af01feaa4739bd1b1520135139aeefedd9a22fc
+last_commit_short: 1af01fea
 updated_by: cursor
 mount_everest_target: "CLOSED on iron 2026-09-11: Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest). Next: M8 operator hardening (ADR-018)."
 months_to_everest: 0.0
@@ -354,7 +354,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | `PENDING` |
+| Commit | `1af01fea` |
 | Summary | **An overdue PIT tick is delivered during a printk storm.** Iron `90b6847768d5` / run `44566000546` printed a clean kernel log that stayed on `[    0.958318]` and stopped at `Mount-c`. Not lived. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B7 lived. B21 in flight, S1, wave 7. B6 and B8 stay lived. Wave 7 open. No doorbell. No format of UBUNTU0. |
