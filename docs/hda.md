@@ -355,7 +355,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | `b47e029d` |
-| Summary | **Nested stage 1 job added. WP4 not ticked.** Gate 2 stays in progress. Months **0.0 held**. Overall **99 held**. |
+| Summary | **B21 plan saved at `docs/plans/b21_plan.md`.** Gate 2 stays in progress. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B7 lived. B21 in flight, S1, wave 7. B6 and B8 stay lived. Wave 7 open. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -384,6 +384,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-19 | wave-7-b21-plan | 0.0 | 99 | **The B21 execution plan is `docs/plans/b21_plan.md`.** Section and row numbers below cite that file. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-19 | wave-7-b21-nested-job | 0.0 | 99 | **`workflow_dispatch` job `b21-host-smp` runs section 6 stage 1 rows 1–5** (`tools/b21-host-smp-stage1.sh`). Stage 2 is not in the job. WP4 is not ticked: the job has not gone green on this head. Gate 2 stays in progress. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-19 | wave-7-b21-gate2 | 0.0 | 99 | **Iron `b47e029d88aa` / run `44622224710`: gate 2 in progress.** `boot: B21 vcpu 1 on host core 1`, `cores 0:[0.0] 1:[0.1]`, `Brought up 1 node, 2 CPUs`, `raynusrv2 login:`. SPA loaded. `ssh` to `10.99.99.200`, `nproc` printed `2`. That boot is not the section 9 pass. Steps 2–5 and 7 are not run. vCPU 0 stayed on core 0. Gate 3 is not started. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-19 | wave-7-b21-landing | 0.0 | 99 | **The landing stub matches `dc1bcc80`.** `4e2304c4` called `claim_holder` from that stub. Under the UEFI ABI the callee owns the 32 bytes at the call, and the saved `xmm0`/`xmm1` were there. `monitor_enter` stores the holder. `acquire` and the entry-failure stubs still call `claim_holder`, with `sub rsp, 40` (32-byte home, call kept 16-byte aligned). Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
