@@ -355,7 +355,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | `b47e029d` |
-| Summary | **The periodic pulse is off unless `pulse.txt` is on the stick.** WP4 stays open. Months **0.0 held**. Overall **99 held**. |
+| Summary | **Section 6 rows 6–15 are in the nested job.** A 4-CPU runner cannot host `HOST_SMP=4`. WP4 stays open. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B7 lived. B21 in flight, S1, wave 7. B6 and B8 stay lived. Wave 7 open. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -384,6 +384,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-19 | wave-7-b21-stage2 | 0.0 | 99 | **Section 6 rows 6–15 are in `tools/b21-host-smp-stage1.sh`.** A typed guest command, a 30 minute soak, and `HOST_SMP` above `nproc - 1` are `cannot-run`. WP4 stays open. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-19 | wave-7-b21-pulse | 0.0 | 99 | **Pulse is stall-only unless `EFI\\RayNu\\pulse.txt` is present.** A stall line and the ring dump are suppressed while RayNu-F is running, and the dump re-arms when core 0's exit count advances. `boot: B21 cores` adds `wait_h`, `wait_r`, and `wait_rip` from the holder at `lock_wait_max`. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-19 | wave-7-b21-yield | 0.0 | 99 | **WP5 gaps.** Recall, halt, and the park loop drop the monitor through `yield_monitor_until`. `assert_core0` is the first line of the section 2 functions. Leave and reset on a non-zero core hand the work to core 0. I1–I5 are in the `host_smp` module doc. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-19 | wave-7-b21-cap | 0.0 | 99 | **vCPU cap.** `cpu_max` is `cpu_cap`. Save and Start refuse a count above the cores online. Autostart prints `boot: B21 autostart skipped` and does not start. `GET /perc/guests` adds `host_cores`. The page sentence uses that number. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |

@@ -230,8 +230,58 @@ else
   consider row5-cpupm "stop line is the typed base-prod shell line (plan section 6 row 5); cpu-pm is -overcommit cpu-pm=on on that same run"
 fi
 
+# Stage 2, plan section 6 rows 6–15. Same limits as stage 1, plus the
+# rows whose must-show line is typed in the guest or is a 30 minute soak.
+echo "==> stage 2 rows 6-15"
+
+one row6-lab 600 lab "RAYNU-V-RAYNU-F-DISK-BOOT-OK|RayNu-F stop" 3 "" 512M 0 \
+  "boot: B21 host cores online=1 of 1"
+export ONECORE=1 VCPUS=2
+one row6-onecore 900 product "boot: B21 host cores online=1 of 1" 1 4 4096M 0 \
+  "boot: B21 host cores stay 1: onecore.txt"
+unset ONECORE VCPUS
+
+export VCPUS=2
+one row7-place 900 product "boot: B21 vcpu 0.1 on host core" 1 4 4096M 0 \
+  "boot: B21 vcpu 0.1 on host core"
+unset VCPUS
+consider row7-nproc "nproc and the parallel sha256sum are typed in the guest (plan section 6 row 7)"
+
+export VCPUS=4
+one row8-place 900 product "boot: B21 vcpu 0.3 on host core" 1 4 4096M 0 \
+  "boot: B21 vcpu 0.1 on host core"
+unset VCPUS
+consider row8-nproc "nproc is typed in the guest (plan section 6 row 8)"
+
+export TWO_GUESTS=1 VCPUS=2
+one row9-two 1200 product "boot: B21 vcpu 1.1 on host core" 1 4 8192M 0 \
+  "boot: B21 vcpu 0.1 on host core"
+unset TWO_GUESTS VCPUS
+consider row9-restart "powering one guest off and starting it again is an operator step (plan section 6 row 9)"
+
+consider row10-reboot "the installed-disk reboot is an operator step (plan section 6 row 10)"
+
+export TWO_GUESTS=1 VCPUS=2
+one row11-share 1200 product "boot: B21 cores" 1 2 8192M 0 \
+  "boot: B21 cores"
+unset TWO_GUESTS VCPUS
+consider row11-nproc "both guests printing 2 is typed (plan section 6 row 11)"
+
+export VCPUS=4
+one row12-cap 900 product "asked for 4 vCPUs" 1 2 4096M 0 \
+  "asked for 4 vCPUs"
+unset VCPUS
+
+export NOKICK=1 VCPUS=2
+one row13-nokick 900 product "kicks=0/" 1 4 4096M 0 \
+  "kicks=0/"
+unset NOKICK VCPUS
+
+consider row14-panic "POST /host/panic while both vCPUs are busy is an operator step (plan section 6 row 14)"
+consider row15-soak "a 30 minute soak with a typed fork loop is not an unattended runner job (plan section 6 row 15)"
+
 if [[ "$FAIL" -ne 0 ]]; then
-  echo "stage 1 incomplete: a row failed or cannot run on this runner"
+  echo "stage 1 or stage 2 incomplete: a row failed or cannot run on this runner"
   exit 1
 fi
-echo "stage 1 rows 1-5 passed"
+echo "section 6 rows 1-15 passed"
