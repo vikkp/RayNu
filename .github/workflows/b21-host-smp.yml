@@ -1,7 +1,8 @@
 # Manual nested check for ADR-024 host cores. Not on every push.
-# Stage 1 rows 1–5 only. Stage 2 is added to tools/b21-host-smp-stage1.sh
-# as WP6–WP9 land. WP4 is ticked only after this job is green on the
-# branch head. This file does not tick it.
+# Plan section 6 stage 1 rows 1–5 (docs/plans/b21_plan.md).
+# A 4-CPU runner cannot host HOST_SMP=4 (plan WP0: HOST_SMP <= nproc-1).
+# WP4 is ticked only after the operator's dispatch of this job is green
+# on the branch head, which means every row ran. This file does not tick it.
 name: b21-host-smp
 
 on:
