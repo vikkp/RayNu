@@ -899,13 +899,91 @@ thread_local! {
     static TEST_CORE: core::cell::Cell<usize> = const { core::cell::Cell::new(0) };
 }
 
+/// `true` on core 0. A non-zero core must not continue into `what`.
+///
+/// On failure, one line per call site goes straight to COM2 before the
+/// caller spins or returns: `boot: B21 <what> on core <n> (ADR-024)`.
+pub fn assert_core0(what: &str) -> bool {
+    if this_core() == 0 {
+        return true;
+    }
+    report_assert_core0(what);
+    false
+}
+
+const ASSERT_SITES: usize = 16;
+static ASSERT_SEEN: [AtomicUsize; ASSERT_SITES] = [const { AtomicUsize::new(0) }; ASSERT_SITES];
+static ASSERT_REPORTS: AtomicU32 = AtomicU32::new(0);
+
+fn claim_assert_site(key: usize) -> bool {
+    if key == 0 {
+        return false;
+    }
+    for slot in &ASSERT_SEEN {
+        let cur = slot.load(Ordering::Acquire);
+        if cur == key {
+            return false;
+        }
+        if cur == 0 {
+            match slot.compare_exchange(0, key, Ordering::AcqRel, Ordering::Acquire) {
+                Ok(_) => return true,
+                Err(seen) if seen == key => return false,
+                Err(_) => continue,
+            }
+        }
+    }
+    false
+}
+
+fn report_assert_core0(what: &str) {
+    if !claim_assert_site(what.as_ptr() as usize) {
+        return;
+    }
+    ASSERT_REPORTS.fetch_add(1, Ordering::Relaxed);
+    let mut buf = [0u8; 128];
+    let n = format_assert_line(what, this_core(), &mut buf);
+    let n = n.min(buf.len());
+    let _ = crate::boot::serial::com2_bytes_direct(&buf[..n]);
+}
+
+/// `boot: B21 <what> on core <n> (ADR-024)`.
+pub fn format_assert_line(what: &str, core: usize, out: &mut [u8]) -> usize {
+    let mut n = push(out, 0, b"boot: B21 ");
+    n = push(out, n, what.as_bytes());
+    n = push(out, n, b" on core ");
+    n = push_dec(out, n, core as u64);
+    push(out, n, b" (ADR-024)\r\n")
+}
+
+/// `boot: B21 core <n> waited 2 s for core <m> (ADR-024; not ISO-INSTALL-OK)`.
+pub fn format_waited_2s(core: usize, other: usize, out: &mut [u8]) -> usize {
+    let mut n = push(out, 0, b"boot: B21 core ");
+    n = push_dec(out, n, core as u64);
+    n = push(out, n, b" waited 2 s for core ");
+    n = push_dec(out, n, other as u64);
+    push(out, n, b" (ADR-024; not ISO-INSTALL-OK)\r\n")
+}
+
+/// The wait has passed two seconds and the line has not been written yet.
+pub fn waited_2s_due(elapsed_tsc: u64, hz: u64, already: bool) -> bool {
+    !already && elapsed_tsc > hz.saturating_mul(2)
+}
+
+#[cfg(test)]
+pub fn reset_assert_sites_for_test() {
+    for slot in &ASSERT_SEEN {
+        slot.store(0, Ordering::Relaxed);
+    }
+    ASSERT_REPORTS.store(0, Ordering::Relaxed);
+}
+
+#[cfg(test)]
+pub fn assert_report_count() -> u32 {
+    ASSERT_REPORTS.load(Ordering::Relaxed)
+}
+
 /// Core this thread is running on. Host tests use the override (default 0).
 /// Core 0's stacks are outside the block array, so "not in a block" is core 0.
-/// `true` on core 0. A non-zero core must not continue into the named function.
-pub fn assert_core0(what: &str) -> bool {
-    let _ = what;
-    this_core() == 0
-}
 
 pub fn this_core() -> usize {
     #[cfg(test)]

@@ -6886,8 +6886,20 @@ pub unsafe fn yield_monitor_until(wait_core: Option<usize>, mut done: impl FnMut
     let mut late = false;
     crate::arch::host_smp::release();
     while !done() {
-        if !late && cpu::rdtsc().wrapping_sub(start) > hz.saturating_mul(2) {
+        if crate::arch::host_smp::waited_2s_due(
+            cpu::rdtsc().wrapping_sub(start),
+            hz,
+            late,
+        ) {
             late = true;
+            let mut buf = [0u8; 96];
+            let n = crate::arch::host_smp::format_waited_2s(
+                core,
+                wait_core.unwrap_or(0xff),
+                &mut buf,
+            );
+            let n = n.min(buf.len());
+            let _ = serial::com2_bytes_direct(&buf[..n]);
         }
         core::hint::spin_loop();
     }
@@ -6899,13 +6911,6 @@ pub unsafe fn yield_monitor_until(wait_core: Option<usize>, mut done: impl FnMut
     msr_firewall::shadow_write(msr_firewall::MSR_SPEC_CTRL, spec);
     msr_firewall::shadow_write(msr_firewall::MSR_APIC_BASE, apic);
     crate::arch::host_smp::take_pending_invept();
-    if late {
-        serial::write_str("boot: B21 core ");
-        write_dec(core as u64);
-        serial::write_str(" waited 2 s for core ");
-        write_dec(u64::from(wait_core.unwrap_or(0xff)));
-        serial::write_line(" (ADR-024; not ISO-INSTALL-OK)");
-    }
 }
 
 /// Wait until each core has VMCLEARed the VMCS it holds. Restores the

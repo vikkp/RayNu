@@ -525,3 +525,58 @@ fn a_kick_is_counted_only_for_another_core_in_a_guest() {
     IN_GUEST[1].store(false, Ordering::Release);
     set_cores_online(1);
 }
+
+#[test]
+fn assert_core0_reports_each_site_once() {
+    reset_assert_sites_for_test();
+    set_test_core(0);
+    assert!(assert_core0("smp_collapse"));
+    assert_eq!(assert_report_count(), 0);
+
+    set_test_core(2);
+    let mut buf = [0u8; 128];
+    let n = format_assert_line("smp_collapse", 2, &mut buf);
+    assert_eq!(
+        &buf[..n],
+        b"boot: B21 smp_collapse on core 2 (ADR-024)\r\n"
+    );
+    assert!(!assert_core0("smp_collapse"));
+    assert_eq!(assert_report_count(), 1);
+    assert!(!assert_core0("smp_collapse"));
+    assert_eq!(assert_report_count(), 1, "one line per call site");
+    assert!(!assert_core0("ap_start"));
+    assert_eq!(assert_report_count(), 2);
+
+    let src = include_str!("host_smp.rs");
+    let start = src.find("fn report_assert_core0").expect("report");
+    let end = src.find("fn format_waited_2s").expect("wait line");
+    let body = &src[start..end];
+    assert!(body.contains("what.as_bytes()"));
+    assert!(body.contains("com2_bytes_direct"));
+    assert!(!body.contains("let _ = what"));
+    set_test_core(0);
+    reset_assert_sites_for_test();
+}
+
+#[test]
+fn waited_2s_line_is_written_during_the_wait() {
+    assert!(!waited_2s_due(1, 1_000, false));
+    assert!(waited_2s_due(2_001, 1_000, false));
+    assert!(!waited_2s_due(2_001, 1_000, true));
+    let mut buf = [0u8; 96];
+    let n = format_waited_2s(1, 3, &mut buf);
+    assert_eq!(
+        &buf[..n],
+        b"boot: B21 core 1 waited 2 s for core 3 (ADR-024; not ISO-INSTALL-OK)\r\n"
+    );
+    let g = include_str!("../vmx/guest_uefi.rs");
+    let start = g.find("fn yield_monitor_until").expect("yield");
+    let body = &g[start..start + 1600];
+    let wait = body.find("while !done()").expect("loop");
+    let retake = body.find("host_smp::acquire()").expect("retake");
+    assert!(wait < retake);
+    let spinning = &body[wait..retake];
+    assert!(spinning.contains("com2_bytes_direct"));
+    assert!(spinning.contains("format_waited_2s"));
+    assert!(!body[retake..].contains("waited 2 s"));
+}
