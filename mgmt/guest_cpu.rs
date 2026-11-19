@@ -82,9 +82,25 @@ pub fn cpu_lba(spare_bytes: u64) -> Option<u64> {
     }
 }
 
-/// Choices the Guests page offers. B21 narrows this to host cores online.
+/// Choices the Guests page offers. One core online, and `onecore.txt`,
+/// keep the B7 cap. More than one core online narrows it to that many.
 pub fn cpu_max() -> u8 {
-    slot::MAX_VCPUS as u8
+    crate::arch::host_smp::cpu_cap(
+        slot::MAX_VCPUS as u8,
+        crate::arch::host_smp::cores_online(),
+        crate::boot::raynu_f_flag::host_onecore(),
+    )
+}
+
+/// Saved count is above [`cpu_max`]. `(saved, cores online)`.
+pub fn start_refusal(spare_off: u64) -> Option<(u8, u8)> {
+    let saved = count(spare_off);
+    let cap = cpu_max();
+    if saved > cap {
+        Some((saved, cap))
+    } else {
+        None
+    }
 }
 
 /// Encode `rows` (`spare_off`, `n`). `false` when a count is out of range.
@@ -185,7 +201,7 @@ pub fn shown() -> [(u64, u8); MAX_ROWS] {
 
 /// Remember `n` for `spare_off`. Takes effect at the next Start.
 pub fn save(spare_off: u64, n: u8) -> Result<(), ()> {
-    if !(1..=slot::MAX_VCPUS as u8).contains(&n) {
+    if !(1..=cpu_max()).contains(&n) {
         return Err(());
     }
     with(|b| {
@@ -316,5 +332,19 @@ mod tests {
         assert_eq!(armed(), 1);
         assert!(save(42, 0).is_err());
         assert!(save(42, 9).is_err());
+    }
+
+    #[test]
+    fn save_and_start_refuse_more_vcpus_than_cores_online() {
+        restore(&[0u8; 512]);
+        assert!(save(99, 4).is_ok());
+        crate::arch::host_smp::set_cores_online_for_test(2);
+        assert_eq!(cpu_max(), 2);
+        assert!(save(99, 3).is_err());
+        assert_eq!(start_refusal(99), Some((4, 2)));
+        assert!(save(99, 2).is_ok());
+        assert_eq!(start_refusal(99), None);
+        crate::arch::host_smp::set_cores_online_for_test(1);
+        restore(&[0u8; 512]);
     }
 }

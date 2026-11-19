@@ -6686,6 +6686,19 @@ fn apply_vcpus_for_start() {
     let s = slot::current();
     let want = crate::boot::raynu_f_flag::lab_vcpus().max(crate::mgmt::guest_cpu::armed()) as usize;
     let mut n = want.clamp(1, slot::MAX_VCPUS);
+    let cap = crate::mgmt::guest_cpu::cpu_max() as usize;
+    if n > cap {
+        if (crate::boot::raynu_f_flag::lab_vcpus() as usize) > cap {
+            serial::write_str_nowait("boot: B21 guest slot ");
+            write_dec_nowait(s as u64);
+            serial::write_str_nowait(" asked for ");
+            write_dec_nowait(want as u64);
+            serial::write_str_nowait(" vCPUs; ");
+            write_dec_nowait(cap as u64);
+            serial::write_line_nowait(" host cores online");
+        }
+        n = cap.max(1);
+    }
     let pages_ok = (1..n).all(|v| unsafe { *SAVED_VMCS.p_at(s, v) != 0 });
     if n > 1 && (!guest_sched::can_share() || !pages_ok) {
         n = 1;

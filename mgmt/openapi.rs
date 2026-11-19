@@ -7,6 +7,7 @@
 //! [`API_V1_PATHS`] is the stable SKU surface. Each entry is a path the
 //! firmware matches. `docs/openapi/v1.yaml` is the same list at version 1.
 //! The `/fw/*` stage probes are not this contract.
+//! `GET /perc/guests` includes `host_cores`, the cores online.
 
 /// Published contract version. Bump the yaml `info.version` with this.
 pub const API_VERSION: &str = "1";

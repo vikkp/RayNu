@@ -43,6 +43,11 @@ fn spa_script_brackets_balance() {
         js.contains("async function saveCpu"),
         "vCPU save is a function the Guests row calls"
     );
+    assert!(js.contains("b.host_cores"));
+    assert!(js.contains("They share one host core in this build."));
+    assert!(js.contains(
+        "Each vCPU runs on its own host core while there are enough ("
+    ));
     assert!(
         bracket_fault(js).is_none(),
         "SPA script brackets: {:?}",

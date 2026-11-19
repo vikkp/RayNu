@@ -860,6 +860,11 @@ pub fn cores_online() -> usize {
     CORES_ONLINE.load(Ordering::Acquire).max(1)
 }
 
+#[cfg(test)]
+pub fn set_cores_online_for_test(n: usize) {
+    set_cores_online(n);
+}
+
 pub(super) fn set_cores_online(n: usize) {
     CORES_ONLINE.store(n.max(1), Ordering::Release);
 }

@@ -913,6 +913,9 @@ fn start_tail() -> GuestCatalogHttp {
     let installed = crate::mgmt::megaraid::perc_image_boot_latched();
     let spare = crate::mgmt::megaraid::perc_spare_bytes();
     let disk_bytes = known_tail_bytes(spare, installed);
+    if let Some((need, online)) = crate::mgmt::guest_cpu::start_refusal(off) {
+        return cpu_refused(need, online);
+    }
     crate::guest::slot::with_slot(slot, || {
         let restarted = crate::mgmt::perc_boot_choice::rearm_guest_after_stop();
         match apply_tail_boot_choice(installed, spare, disk_bytes) {
@@ -953,6 +956,9 @@ fn start_disk_at(spare_off: u64) -> GuestCatalogHttp {
         Ok(s) => s,
         Err(body) => return ready(200, body, None),
     };
+    if let Some((need, online)) = crate::mgmt::guest_cpu::start_refusal(spare_off) {
+        return cpu_refused(need, online);
+    }
     crate::guest::slot::with_slot(slot, || {
         let restarted = crate::mgmt::perc_boot_choice::rearm_guest_after_stop();
         match apply_tail_boot_at(installed, spare, disk.spare_off, disk.disk_bytes) {
@@ -1037,6 +1043,9 @@ fn store_choice(choice: u8, installed: bool) -> GuestCatalogHttp {
         Ok(s) => s,
         Err(body) => return ready(200, body, None),
     };
+    if let Some((need, online)) = crate::mgmt::guest_cpu::start_refusal(0) {
+        return cpu_refused(need, online);
+    }
     crate::guest::slot::with_slot(slot, || {
         let restarted = crate::mgmt::perc_boot_choice::rearm_guest_after_stop();
         match apply_spa_choice(installed, choice) {
@@ -1538,9 +1547,23 @@ pub fn row_power(this_on: bool) -> (bool, bool) {
     (!this_on, this_on)
 }
 
+fn cpu_refused(need: u8, online: u8) -> GuestCatalogHttp {
+    let mut body = [0u8; 80];
+    let mut w = JsonBuf::new(&mut body);
+    w.s("{\"ok\":false,\"error\":\"needs ");
+    w.u(u64::from(need));
+    w.s(" host cores, ");
+    w.u(u64::from(online));
+    w.s(" online\"}");
+    let n = if w.fit { w.n } else { 0 };
+    ready(409, &body[..n], None)
+}
+
 fn write_cpu_json(w: &mut JsonBuf<'_>) {
     w.s(",\"cpu_max\":");
     w.u(u64::from(crate::mgmt::guest_cpu::cpu_max()));
+    w.s(",\"host_cores\":");
+    w.u(crate::arch::host_smp::cores_online() as u64);
     let rows = crate::mgmt::guest_cpu::shown();
     let mut any = false;
     for (off, n) in rows {
