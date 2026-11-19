@@ -269,7 +269,7 @@ fn sysrq_break_then_key_follows_8250_rx_loop() {
 }
 
 #[test]
-fn linux_earlycon_lsr_thre_follows_sol() {
+fn linux_earlycon_lsr_thre_stays_set_when_the_ring_is_full() {
     reset();
     guest_tx_clear();
     set_linux_earlycon_share(true);
@@ -277,8 +277,8 @@ fn linux_earlycon_lsr_thre_follows_sol() {
     let (lsr, _, _) = pio(0x03FD, true, 0);
     assert_eq!(
         lsr & 0x60,
-        0,
-        "THRE/TEMT clear while the shared ring has no room"
+        0x60,
+        "virtual transmitter is empty once the byte is queued"
     );
     set_guest_tx_test_ring_full(false);
     let (lsr2, _, _) = pio(0x03FD, true, 0);
@@ -323,9 +323,13 @@ fn thre_level_follows_ring_room_and_reasserts_after_drain() {
     assert_eq!(guest_tx_len(), fill);
     assert!(!guest_tx_room_has_thre(guest_tx_room()));
     let (lsr, _, _) = pio(0x03FD, true, 0);
-    assert_eq!(lsr & 0x60, 0, "no room above the reserve: THRE low");
+    assert_eq!(
+        lsr & 0x60,
+        0x60,
+        "LSR stays THRE while the ring is over the reserve"
+    );
     let (iir, _, _) = pio(0x03FA, true, 0);
-    assert_eq!(iir & 0x07, 0x01, "IIR: no interrupt while THRE is low");
+    assert_eq!(iir & 0x07, 0x01, "IIR stays quiet until the ring has room");
     reassert_irq();
     assert!(crate::devices::guest_irq::take_inject_vector().is_none());
     // HV lines still fit in the reserve without evicting guest text.

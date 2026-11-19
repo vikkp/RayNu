@@ -355,7 +355,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | `45ec0f97` |
-| Summary | **A Linux COM exit returns before the host tick.** Iron `ebc8fb5ddb61` / run `44406469957` printed `B21 cpu0 core=0 reason=0xa rip=0x410004d tx=1088` once, then stopped on `[` after `Spectre V2 : Enabling IBPB for BPF` with no later beat. Not lived. Months **0.0 held**. Overall **99 held**. |
+| Summary | **Virtual 16550 reports the transmitter empty once the byte is queued.** Iron `5a3f21154b55` / run `44412705019` stopped on `[    0.` after the Spectre RSB line. Not lived. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B7 lived. B21 in flight, S1, wave 7. B6 and B8 stay lived. Wave 7 open. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -384,6 +384,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-19 | wave-7-b21-thre | 0.0 | 99 | **Iron `5a3f21154b55` / run `44412705019` stopped on `[    0.` after `Spectre v2 / SpectreRSB`.** The COM fast path was in that EFI and the stall remained. LSR.THRE now stays set while Linux owns the console: the byte is already in the ring, and the guest's `wait_for_xmitr` does not spin on ring room or on host COM2. The THRE interrupt still follows ring room. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-18 | wave-7-b21-com-exit | 0.0 | 99 | **Iron `ebc8fb5ddb61` / run `44406469957` (merge of `deee7a24`) printed one `boot: B21 cpu0 core=0 reason=0xa rip=0x410004d tx=1088`, then COM2 stopped on `[` after `Spectre V2 : Enabling IBPB for BPF`.** No later beat, so that exit never returned. A Linux COM exit is now answered and resumed before the host tick, and a COM `rep` is capped at 32 bytes per exit. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-18 | wave-7-b21-cpu0-stall | 0.0 | 99 | **Iron `f2acc7049770` / run `44400166428` reached `online=16 of 16` and Linux, then COM2 stopped on `[` after `Spectre V2 : Enabling IBPB for BPF` at guest time 0.809s.** No `boot: B21 vcpu 1 on host core` and no `smp: Brought up`. The second vCPU had not started. Until a vCPU is homed off core 0, exits stay on the gate 1 path, and a line every two seconds names `core`, `reason`, `rip`, and the guest TX ring. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-18 | wave-7-b21-place | 0.0 | 99 | **Gate 2 code, not on iron.** vCPU 0 stays on core 0. When a later vCPU comes up and more than one host core is online, core 0 VMCLEARs its VMCS and wakes the least-loaded other core, which VMPTRLDs it, writes that core's `HOST_RSP`, and VMLAUNCHes. A reset or Stop recalls the VMCS back before core 0 clears it. One host core online keeps the B7 path. Not an F11. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |

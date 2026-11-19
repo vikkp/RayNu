@@ -605,22 +605,14 @@ pub fn guest_tx_guest_lsr_thre() -> bool {
         let _ = drain_guest_tx(GUEST_TX_DRAIN_CHUNK);
         return side_q_room() >= SIDE_QUEUE_THRE_ROOM;
     }
-    if !linux_earlycon_share() {
-        return true;
-    }
-    // Nested QEMU `dcf8495` `/init` SIGSEGV 3/3 when LSR always called here
-    // (share off). Pace only after product-ISO earlycon share. iso=0 never
-    // latches share.
-    #[cfg(test)]
-    {
-        if GUEST_TX_TEST_RING_FULL.load(Ordering::Relaxed) {
-            return false;
-        }
-    }
-    if guest_tx_sol_ready() {
-        let _ = drain_guest_tx(GUEST_TX_DRAIN_CHUNK);
-    }
-    guest_tx_room_has_thre(guest_tx_room())
+    // ESXi's virtual 16550: the transmitter is empty once the byte is in
+    // the VMM buffer. Linux `wait_for_xmitr` polls LSR and must not spin
+    // on host COM2 or on ring room. The ring still absorbs the bytes and
+    // drops the oldest when full; the preemption timer drains it to SOL.
+    // Iron `5a3f21154b55` stopped on `[    0.` after the Spectre line
+    // because THRE followed ring room and the next wait never returned.
+    // linux earlycon pace LSR THRE.
+    true
 }
 
 fn guest_tx_write_ports(byte: u8) {

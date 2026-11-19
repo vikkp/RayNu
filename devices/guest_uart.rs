@@ -242,7 +242,10 @@ fn rx_ready(u: &Uart) -> bool {
 /// Linux earlycon share is on (not host COM2 LSR), else always empty.
 /// UART THRE level until stop_tx. guest UART TX ring room.
 fn tx_empty() -> bool {
-    crate::boot::serial::guest_tx_guest_lsr_thre()
+    // LSR tells the polled console the transmitter is empty (ESXi). The
+    // THRE interrupt still follows ring room, so a full ring does not
+    // storm IRQ 4. guest UART TX ring room.
+    crate::boot::serial::guest_tx_room_has_thre(crate::boot::serial::guest_tx_room())
 }
 
 fn thre_pending(u: &Uart) -> bool {

@@ -337,7 +337,7 @@
           "status": "in flight",
           "ships": "S1",
           "ref": "ADR-024",
-          "note": "Branch `cursor/wave-7-b21-host-cores-25ca`. Iron `dc1bcc800c1e` / run `44389087185`: `online=16 of 16`, each core `VMXON ok`. Guest vCPUs stayed on core 0 (`B21 cores 0:[0.0 0.1]`, `Brought up 1 node, 2 CPUs`). Gate 1. Gate 2 iron `ebc8fb5ddb61` / run `44406469957` printed one `B21 cpu0` beat (`core=0 reason=0xa tx=1088`) then COM2 stopped on `[`. A Linux COM exit now resumes before the host tick. Not lived",
+          "note": "Branch `cursor/wave-7-b21-host-cores-25ca`. Iron `dc1bcc800c1e` / run `44389087185`: `online=16 of 16`, each core `VMXON ok`. Guest vCPUs stayed on core 0 (`B21 cores 0:[0.0 0.1]`, `Brought up 1 node, 2 CPUs`). Gate 1. Gate 2 iron `5a3f21154b55` / run `44412705019` stopped on `[    0.` after the Spectre RSB line. LSR.THRE stays set while Linux owns the console (byte already queued). Not lived",
           "wave": "7"
         },
         {
