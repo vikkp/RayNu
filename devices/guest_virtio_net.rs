@@ -622,8 +622,12 @@ fn drain_one(translate: &impl Fn(u64) -> Option<u64>) -> bool {
     let mut frame = [0u8; VNET_HDR_LEN + 1514];
     let mut flen = 0usize;
     let mut unmapped = false;
-    let mut di = head % QSIZE;
+    let mut di = head;
     for _ in 0..CHAIN_MAX {
+        if head >= QSIZE {
+            unmapped = true;
+            break;
+        }
         let Some(d_hpa) = translate(desc.wrapping_add(u64::from(di) * 16)) else {
             unmapped = true;
             break;
@@ -650,7 +654,11 @@ fn drain_one(translate: &impl Fn(u64) -> Option<u64>) -> bool {
         if flags & 1 == 0 {
             break;
         }
-        di = next % QSIZE;
+        if next >= QSIZE {
+            unmapped = true;
+            break;
+        }
+        di = next;
     }
     let (used_base, used_slot, used_idx) = with_net(|n| {
         let q = &mut n.q[1];
@@ -973,7 +981,10 @@ fn post_rx(eth: &[u8], translate: &impl Fn(u64) -> Option<u64>) -> bool {
     let total = VNET_HDR_LEN + eth.len();
     pkt[VNET_HDR_LEN..total].copy_from_slice(eth);
     let mut off = 0usize;
-    let mut di = head % QSIZE;
+    if head >= QSIZE {
+        return false;
+    }
+    let mut di = head;
     for _ in 0..CHAIN_MAX {
         if off == total {
             break;
@@ -1006,7 +1017,10 @@ fn post_rx(eth: &[u8], translate: &impl Fn(u64) -> Option<u64>) -> bool {
         if flags & 1 == 0 {
             break;
         }
-        di = next % QSIZE;
+        if next >= QSIZE {
+            break;
+        }
+        di = next;
     }
     if off != total {
         return false;

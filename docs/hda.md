@@ -355,7 +355,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | `b47e029d` |
-| Summary | **Section 6 stage 1 rows match the plan.** `HOST_SMP=4` needs five CPUs. WP4 stays open. Months **0.0 held**. Overall **99 held**. |
+| Summary | **D17 guest-memory review is written and the virtio length and next checks are in.** WP4 stays open. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B7 lived. B21 in flight, S1, wave 7. B6 and B8 stay lived. Wave 7 open. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -384,6 +384,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-19 | wave-7-b21-d17 | 0.0 | 99 | **D17 review.** A virtio-blk `next` at or past the queue size is not followed, and a request whose data lengths sum past `MAX_REQ_BYTES` (8 MiB) is `IOERR` without a copy. Virtio-net does not fold an out-of-range `next`. List: `docs/reviews/b21-d17-guest-memory.md`. Host tests passed. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-19 | wave-7-b21-stage1-rows | 0.0 | 99 | **Section 6 stage 1 rows 1–5 are the five WP0 baselines, `HOST_SMP=4`, the threads row, `ONECORE`, and cpu-pm** (`tools/b21-host-smp-stage1.sh`, plan `docs/plans/b21_plan.md`). `HOST_SMP=4` needs `nproc >= 5`. A typed guest shell line is not in an unattended log. WP4 stays open until a dispatch of that job is green. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-19 | wave-7-b21-plan | 0.0 | 99 | **The B21 execution plan is `docs/plans/b21_plan.md`.** Section and row numbers below cite that file. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-19 | wave-7-b21-nested-job | 0.0 | 99 | **`workflow_dispatch` job `b21-host-smp` runs section 6 stage 1 rows 1–5** (`tools/b21-host-smp-stage1.sh`). Stage 2 is not in the job. WP4 is not ticked: the job has not gone green on this head. Gate 2 stays in progress. Scores held. Months **0.0 held**. Overall **99 held**. |

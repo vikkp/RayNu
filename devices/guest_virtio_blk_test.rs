@@ -1594,3 +1594,101 @@ fn b8_disk_msix_cap_and_queue_vector_round_trip() {
     assert_ne!(pci_read_data(0xCFC, 4) & 0x8000_0000, 0, "MSI-X enable");
     reset();
 }
+
+fn put_desc(mem: &mut [u8], at: usize, addr: u64, len: u32, flags: u16, next: u16) {
+    mem[at..at + 8].copy_from_slice(&addr.to_le_bytes());
+    mem[at + 8..at + 12].copy_from_slice(&len.to_le_bytes());
+    mem[at + 12..at + 14].copy_from_slice(&flags.to_le_bytes());
+    mem[at + 14..at + 16].copy_from_slice(&next.to_le_bytes());
+}
+
+/// `next >= qsize` is not followed. The status byte is IOERR.
+#[test]
+fn descriptor_next_past_qsize_is_ioerr() {
+    use core::sync::atomic::{AtomicU32, Ordering};
+    const QSIZE: u16 = 8;
+    let mut mem = vec![0u8; 0x4000];
+    put_desc(&mut mem, 0, 0x3000, 16, 1, 1);
+    put_desc(&mut mem, 16, 0x3100, 1, 2, 2);
+    put_desc(&mut mem, 32, 0x0000, 512, 3, QSIZE);
+    mem[0x1002] = 1;
+    let hits = AtomicU32::new(0);
+    let translate = |gpa: u64| {
+        if gpa == u64::from(QSIZE) * 16 {
+            hits.fetch_add(1, Ordering::Relaxed);
+        }
+        let g = gpa as usize;
+        if g < mem.len() {
+            Some(mem.as_ptr() as u64 + gpa)
+        } else {
+            None
+        }
+    };
+    let mut last = 0u16;
+    let mut used = 0u16;
+    let mut disk = [0u8; 512];
+    let mut req = super::LastReq::default();
+    let (_w, nreq, _idx) = super::process_blk_queue(
+        QSIZE,
+        &mut last,
+        &mut used,
+        0,
+        0x1000,
+        0x2000,
+        &mut disk,
+        &translate,
+        false,
+        &mut req,
+    );
+    assert_eq!(nreq, 1);
+    assert_eq!(mem[0x3100], VIRTIO_BLK_S_IOERR);
+    assert_eq!(hits.load(Ordering::Relaxed), 0, "next >= qsize was followed");
+    assert_eq!(disk, [0u8; 512]);
+}
+
+/// The sum of data-descriptor lengths above [`super::MAX_REQ_BYTES`] fails
+/// the request and does not copy.
+#[test]
+fn request_longer_than_max_req_bytes_is_ioerr() {
+    use core::sync::atomic::{AtomicU32, Ordering};
+    const QSIZE: u16 = 8;
+    let mut mem = vec![0u8; 0x4000];
+    let huge = super::MAX_REQ_BYTES.saturating_add(1);
+    put_desc(&mut mem, 0, 0x3000, 16, 1, 1);
+    mem[0x3000..0x3004].copy_from_slice(&VIRTIO_BLK_T_OUT.to_le_bytes());
+    put_desc(&mut mem, 16, 0x3100, 1, 3, 2);
+    put_desc(&mut mem, 32, 0x3200, huge, 2, 0);
+    mem[0x1002] = 1;
+    let hits = AtomicU32::new(0);
+    let translate = |gpa: u64| {
+        if (0x3200..0x3300).contains(&gpa) {
+            hits.fetch_add(1, Ordering::Relaxed);
+        }
+        let g = gpa as usize;
+        if g < mem.len() {
+            Some(mem.as_ptr() as u64 + gpa)
+        } else {
+            None
+        }
+    };
+    let mut last = 0u16;
+    let mut used = 0u16;
+    let mut disk = [0u8; 512];
+    let mut req = super::LastReq::default();
+    let (_w, nreq, _) = super::process_blk_queue(
+        QSIZE,
+        &mut last,
+        &mut used,
+        0,
+        0x1000,
+        0x2000,
+        &mut disk,
+        &translate,
+        false,
+        &mut req,
+    );
+    assert_eq!(nreq, 1);
+    assert_eq!(mem[0x3100], VIRTIO_BLK_S_IOERR);
+    assert_eq!(hits.load(Ordering::Relaxed), 0, "oversized data was copied");
+    assert_eq!(disk, [0u8; 512]);
+}

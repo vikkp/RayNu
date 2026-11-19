@@ -1,22 +1,32 @@
 # B21 WP8 — D17 guest memory review
 
-ADR-024 D17: a value read from guest memory that decides a host-side bound, index, or address is read once into a local and validated there.
+Plan section 5, WP8. ADR-024 D17: a value read from guest memory that decides a host-side bound, index, or address is read once into a local and validated there. Ring indices, descriptor fields, request headers, and page-table entries are read once, checked on the local, and used from the local. A descriptor chain has a bound. MMIO instruction bytes are copied once, at most 15 bytes, and decoded from the copy.
 
-This file is the start of that review. It is not finished. WP8 is not ticked.
+`devices/guest_virtio_console.rs` is not in the tree. There is no virtio-console device. The guest console is the virtual 16550.
 
-## Reviewed
+## Fixes
 
-`devices/guest_virtio_blk.rs` queue walk, `drain_queue` from the avail index.
+| Site | What changed |
+|---|---|
+| `devices/guest_virtio_blk.rs` `process_blk_queue` (1984) | `next >= qsize` at 2056 stops the chain. `head >= qsize` does not walk. The sum of data-descriptor lengths is capped at `MAX_REQ_BYTES` (165: `QUEUE_MAX` × `VIRTIO_XFER_CHUNK`, 8 MiB) at 2045. Above that the request is `VIRTIO_BLK_S_IOERR` and the data buffer is not copied. Host tests `descriptor_next_past_qsize_is_ioerr` and `request_longer_than_max_req_bytes_is_ioerr`. |
+| `devices/guest_virtio_net.rs` TX and RX walks | `next >= QSIZE` is not folded with `%`. `head >= QSIZE` is not used as an index. The walk is still bounded by `CHAIN_MAX` (32). A copied length is `min` of the descriptor length and the 1514-byte frame. |
 
-| Read | Line | Local | Validated there? |
-|---|---|---|---|
-| avail idx | `read_u16` into `avail_idx` | 1996 | The walk stops by comparing `last_avail` to that local. The slot is `last_avail % qsize` (2003). `qsize` is the device queue size, not a fresh guest read. |
-| avail ring entry | `head` | 2004 | Used as the first descriptor index. Not checked against `qsize` before the address is formed. |
-| descriptor | one 16-byte read into `raw` | 2020–2028 | `addr`, `len`, `flags`, `next` are each taken once from that buffer. `len` is a guest `u32`. The data copy loops `while off < len` and caps each step at 64 bytes (`2062–2064`) but does not cap `len` itself. `next` is stored into `desc` (`2044`) with no `next < qsize` check. The chain stops when `chain > qsize` (`2016`). |
-| sector | `hdr[8..16]` | 2048 | Passed into `xfer_data_seg` (`2083`). The sector is not range-checked in the walk. |
+## Sites
 
-`xfer_data_seg` (`1935`) turns `len` into `n` and computes `sec` from `sector` plus the byte offset (`1952`). A later disk-status return can reject an out-of-range sector. That check is not at the read.
+| Site | Line | Verdict |
+|---|---|---|
+| virtio-blk avail idx | `read_u16` into `avail_idx` | Once. The walk compares `last_avail` to that local. The slot is `last_avail % qsize`. |
+| virtio-blk avail entry | `head` | Once. `head >= qsize` does not walk. |
+| virtio-blk descriptor | one 16-byte read into `raw`, then `addr`, `len`, `flags`, `next` | Once each. `next >= qsize` rejects. Data sum capped. Chain stops when `chain > qsize`. |
+| virtio-blk header | 16 bytes into `hdr`, then `ty` and `sector` | Once. The disk function returns a status for an out-of-range sector. |
+| virtio-net avail idx | `read_unaligned` into `idx` | Once. Compared to `last_avail`. Slot is `last % QSIZE`. |
+| virtio-net avail entry | `head` | Once. `head >= QSIZE` is not an index. |
+| virtio-net descriptor | `addr`, `len`, `flags`, `next` each one `read_unaligned` | Once. `next >= QSIZE` stops the chain. `CHAIN_MAX` bounds it. Payload `take` is inside the frame buffer. |
+| ATAPI `copy_product_iso_range` | `from_raw_parts` of the product ISO window, not guest RAM | The caller `fill_read_drq` caps the DRQ at `XFER_CAP` / `XFER_SEC` and rejects `end > m.len` before the copy. The CDB allocation length is not used as that byte count. |
+| `guest_msix` | table lives in the device struct, written by MMIO | `fire` uses the stored address and vector. It does not read guest RAM. A vector below 32 or an address outside the MSI page is dropped. |
+| `read_guest_pte` | one `read_unaligned` of 8 bytes, returned as a local | The walk uses that local. The index is `linear` shifted and masked to 9 bits. Present and page-size bits are checked on the local before the next address is formed. |
+| `dump_low_ram_insn` | `copy_guest_linear_bytes` into a 16-byte local | Printed from the local. Not a bound for a later decision. |
+| `copy_mmio_insn` / `decode_mmio_or_retry` | copy into a 16-byte local; `mmio_effective_len` and `virtio_mmio_retry_decode_len` keep the decoded length in 1..=15 | Decode reads the copy. |
+| `raynu_f_read_backing` | host slice, length is `buf.len()` | CD offset is checked against `iso.len()` before the copy. The comment says the dispatcher already checked the offset against media geometry. No guest pointer is read twice. |
 
-## Not reviewed
-
-The rest of the exit path: virtio-net, the IDE/ATAPI path, EPT handlers, and RayNu-F service argument pointers. Not reviewed. WP8 stays open.
+Payload copies that do not decide a bound are not listed again.
