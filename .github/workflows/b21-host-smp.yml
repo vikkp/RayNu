@@ -1,0 +1,45 @@
+# Manual nested check for ADR-024 host cores. Not on every push.
+# Stage 1 rows 1–5 only. Stage 2 is added to tools/b21-host-smp-stage1.sh
+# as WP6–WP9 land. WP4 is ticked only after this job is green on the
+# branch head. This file does not tick it.
+name: b21-host-smp
+
+on:
+  workflow_dispatch:
+
+jobs:
+  stage1:
+    name: B21 host SMP stage 1
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-06-01
+          components: rust-src
+          targets: x86_64-unknown-uefi
+      - name: Install QEMU and OVMF
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq qemu-system-x86 ovmf
+      - name: Nested VT-x without shadow VMCS
+        run: |
+          if [[ -e /dev/kvm ]]; then
+            sudo chmod a+rw /dev/kvm || true
+          fi
+          if [[ -d /sys/module/kvm_intel ]]; then
+            sudo ./tools/enable-nested-kvm.sh
+          fi
+          if ! grep -qw vmx /proc/cpuinfo; then
+            echo "error: this runner has no VMX. WP4 nested rows need one that does." >&2
+            exit 1
+          fi
+      - name: Stage 1 rows 1-5
+        run: ./tools/b21-host-smp-stage1.sh
+      - name: Upload row logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: b21-host-smp-stage1
+          path: target/b21-smp-*
+          if-no-files-found: ignore
