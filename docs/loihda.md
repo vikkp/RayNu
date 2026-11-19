@@ -1,8 +1,8 @@
 ---
 loihda_version: 1
 last_updated: 2026-11-19
-last_commit: aa022ed8639d05eb4628bc0add5ff5e66ec6387e
-last_commit_short: aa022ed8
+last_commit: PENDING
+last_commit_short: PENDING
 updated_by: cursor
 loi_target: "Non-prod Letter of Intent. Bar A = dedicated-box lab. Bar B = RAID-fleet replacement. HDA 99% is Everest, not an LOI."
 months_to_loi_a: 0.25
@@ -207,8 +207,8 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Field | Value |
 |-------|-------|
-| Commit | `aa022ed8` |
-| Summary | **Iron `236290d35ce5` shredded the console and the guest clock jumped to 29.7s.** THRE now tracks bytes waiting for COM2. Console piece stays 82. No piece moves. Bar A 94. Bar B 72. Overall 80. |
+| Commit | `PENDING` |
+| Summary | **Iron `7c2bb44b970f` shredded the console and stopped near `mwait`.** The console exit is back on the gate 1 path. Console piece stays 82. No piece moves. Bar A 94. Bar B 72. Overall 80. |
 | Everest impact | none — HDA months 0.0 / 99% held |
 | LOI impact | none. Bar A 94 held. Bar B 72 held. SKU 94 held. perc 86 held. unmodified 45 held. Overall 80 held. Months A 0.25 held. Months B 1.25 held. TLS 88 held. |
 | Gates touched | B7 lived. B21 in flight, S1, wave 7. B6 and B8 stay lived. Wave 7 open. No doorbell. No format of UBUNTU0. |
@@ -219,6 +219,7 @@ Each row is a product effect, not a feature checkbox. Percents are **this tracke
 
 | Date | Slice | A% | B% | Note |
 |------|-------|----:|---:|------|
+| 2026-11-19 | wave-7-b21-gate1-console | 94 | 72 | **Iron `7c2bb44b970f` / run `44584144107` shredded the kernel log and stopped near `mwait`.** Console piece stays 82. No piece score moves. Bar A 94. Bar B 72. Overall 80. |
 | 2026-11-19 | wave-7-b21-wire | 94 | 72 | **Iron `236290d35ce5` / run `44579224343` shredded the kernel log and the timestamp reached 29.7s.** Console piece stays 82. No piece score moves. Bar A 94. Bar B 72. Overall 80. |
 | 2026-11-19 | wave-7-b21-vuart | 94 | 72 | **Iron `bf1502b266e7` / run `44572708273` stopped at `AppArmor ... ready`.** The timestamp stayed on 0.956832. Console piece stays 82. No piece score moves. Bar A 94. Bar B 72. Overall 80. |
 | 2026-11-19 | wave-7-b21-pit | 94 | 72 | **Iron `90b6847768d5` / run `44566000546` printed a clean kernel log and stopped at `Mount-c`.** The timestamp stayed on 0.958318. Console piece stays 82. No piece score moves. Bar A 94. Bar B 72. Overall 80. |

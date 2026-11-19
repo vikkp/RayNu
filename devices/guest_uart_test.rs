@@ -319,11 +319,7 @@ fn thre_level_follows_ring_room_and_reasserts_after_drain() {
     assert_eq!(guest_tx_len(), fill);
     assert!(!guest_tx_room_has_thre(guest_tx_room()));
     let (lsr, _, _) = pio(0x03FD, true, 0);
-    assert_eq!(
-        lsr & 0x60,
-        0x60,
-        "LSR stays THRE while the ring is over the reserve"
-    );
+    assert_eq!(lsr & 0x20, 0, "THRE clears once the ring is past the reserve");
     let (iir, _, _) = pio(0x03FA, true, 0);
     assert_eq!(iir & 0x07, 0x01, "IIR stays quiet until the ring has room");
     reassert_irq();

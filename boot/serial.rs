@@ -680,27 +680,23 @@ pub fn guest_tx_guest_lsr_thre() -> bool {
         let _ = drain_guest_tx(GUEST_TX_DRAIN_CHUNK);
         return side_q_room() >= SIDE_QUEUE_THRE_ROOM;
     }
-    // ESXi virtual 16550: THRE follows a 16-byte FIFO shifted at 115200 8N1,
-    // not host COM2 and not the big ring. Iron `ba07618258cd` reported THRE
-    // always and the console shredded; earlier sticks cleared THRE with the
-    // ring and `wait_for_xmitr` never returned (`[    0.`).
-    // linux earlycon pace LSR THRE.
+    if !linux_earlycon_share() {
+        return true;
+    }
+    // Gate 1 (`dc1bcc800c1e`) reached login with this: drain while the
+    // physical port has room, and report THRE from ring room. The later
+    // virtual-FIFO experiments shredded the log (iron `7c2bb44b970f`) or
+    // stopped it mid-line. linux earlycon pace LSR THRE.
     #[cfg(test)]
     {
         if GUEST_TX_TEST_RING_FULL.load(Ordering::Relaxed) {
             return false;
         }
-        return true;
     }
-    #[cfg(not(test))]
-    {
-        // The bytes still waiting for the physical COM2 are the FIFO.
-        // A TSC clock advanced during the VM-exit itself, so THRE stayed
-        // set, printk filled the ring, and iron `236290d35ce5` shredded
-        // the log. Sixteen bytes ahead of the drain is the whole cushion.
-        // linux earlycon pace LSR THRE.
-        guest_tx_wire_has_thre(guest_tx_len())
+    if guest_tx_sol_ready() {
+        let _ = drain_guest_tx(GUEST_TX_DRAIN_CHUNK);
     }
+    guest_tx_room_has_thre(guest_tx_room())
 }
 
 /// THRE while fewer than [`VIRT_FIFO_CAP`] bytes are waiting for the wire.
@@ -905,16 +901,7 @@ pub fn write_byte_nowait(byte: u8) {
     }
     guest_tx_push(byte);
     log_push(byte);
-    if linux_earlycon_share() {
-        // The byte is in the virtual 16550. The physical COM2 is drained
-        // by the preemption timer, not from inside this exit. ESXi's
-        // virtual UART never waits on the real port while the vCPU is
-        // stopped. Iron `bf1502b266e7` drained here and COM2 stopped at
-        // `AppArmor ... ready`.
-        note_guest_tx_byte(crate::arch::cpu::rdtsc(), crate::boot::raynu_f_flag::tsc_hz());
-    } else {
-        let _ = drain_guest_tx(GUEST_TX_DRAIN_CHUNK);
-    }
+    let _ = drain_guest_tx(GUEST_TX_DRAIN_CHUNK);
 }
 
 fn write_raw(byte: u8) {

@@ -3927,18 +3927,15 @@ fn a_com_string_is_capped_and_other_ports_are_not() {
 }
 
 #[test]
-fn linux_com_exit_resumes_before_the_host_tick() {
+fn console_exits_take_the_gate1_path() {
     let g = include_str!("guest_uefi.rs");
-    let fast = g.find("linux_com_fast(qual)").expect("fast com");
-    let tick = g[fast..]
-        .find("maybe_tick_standing_spa()")
-        .expect("tick");
-    assert!(tick > 0, "COM is answered before the host tick");
-    let block = &g[fast..fast + tick];
+    let exit = g.find("fn guest_uefi_vmexit()").expect("vmexit");
+    let body = &g[exit..exit + 2500];
     assert!(
-        !block.contains("drain_guest_tx"),
-        "a guest COM exit does not touch the physical UART"
+        !body.contains("linux_com_fast"),
+        "gate 1 answered COM on the normal exit path"
     );
+    assert!(body.contains("maybe_tick_standing_spa()"));
 }
 
 #[test]

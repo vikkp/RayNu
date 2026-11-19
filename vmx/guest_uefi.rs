@@ -6850,39 +6850,6 @@ unsafe fn bind_host_rsp() -> bool {
     ops::vmwrite(HOST_RSP, top).is_ok()
 }
 
-/// Answer a Linux console port without the host RX poll or the PIT.
-/// The physical COM2 is drained by the caller, a few bytes at a time.
-#[cfg(target_os = "uefi")]
-unsafe fn linux_com_fast(qual: u64) -> bool {
-    if guest_uefi_io_qual_is_string(qual) {
-        return handle_io(qual);
-    }
-    let size = (qual & 7) + 1;
-    let is_in = (qual & (1 << 3)) != 0;
-    let port = io_port_from_qual(qual);
-    let (out, thr, _) = crate::devices::guest_uart::pio(port, is_in, SAVED_RAX as u8);
-    if is_in {
-        let mask = if size == 1 {
-            0xffu64
-        } else if size == 2 {
-            0xffff
-        } else {
-            0xffff_ffff
-        };
-        SAVED_RAX = (SAVED_RAX & !mask) | (u64::from(out) & mask);
-    } else if let Some(b) = thr {
-        serial::write_byte_nowait(b);
-    }
-    skip_insn()
-}
-
-#[cfg(target_os = "uefi")]
-fn linux_com_exit(reason: u32, qual: u64) -> bool {
-    serial::linux_earlycon_share()
-        && (reason & 0xFFFF) == EXIT_REASON_IO_INSTRUCTION
-        && is_com_uart_port(io_port_from_qual(qual))
-}
-
 /// A halted vCPU's core waits outside the monitor, then enters it again.
 #[cfg(target_os = "uefi")]
 pub unsafe fn ap_halt_pause(core: usize, unit: usize) -> ! {
@@ -7225,12 +7192,7 @@ fn deliver_nominal_tick(elapsed_tsc: u64) {
 /// the wider [`UART_PACE_US`] window.
 #[cfg(target_os = "uefi")]
 fn console_pace_ticks(shift: u32) -> u32 {
-    let us = if serial::linux_earlycon_share() {
-        UART_BYTE_US
-    } else {
-        UART_PACE_US
-    };
-    guest_uefi_uart_pace_ticks_us(crate::boot::raynu_f_flag::tsc_hz(), shift, us)
+    guest_uefi_uart_pace_ticks(crate::boot::raynu_f_flag::tsc_hz(), shift)
 }
 
 /// Re-arm the VMX preemption timer for the next resume.
@@ -7710,15 +7672,8 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     let reason = ops::vmread(EXIT_REASON).unwrap_or(0xFFFF) as u32;
     let qual = ops::vmread(EXIT_QUALIFICATION).unwrap_or(0);
     let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
-    // Linux printk polls COM1 one byte at a time. Copy the byte into the
-    // virtual 16550 and resume. The physical COM2 is drained by the
-    // preemption timer (ESXi: the vCPU exit does not touch the real UART).
-    // Iron `bf1502b266e7` drained COM2 on this exit and stopped at
-    // `AppArmor ... ready`.
-    if linux_com_exit(reason, qual) && linux_com_fast(qual) {
-        arm_preempt_on_resume();
-        guest_sched::resume(false);
-    }
+    // Console exits take the same path as gate 1 (`dc1bcc800c1e`), which
+    // reached login. A separate fast path was not that path.
     if slot::current_vcpu() != 0 {
         ap_breadcrumb(reason, rip);
     }
@@ -7797,9 +7752,7 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     tick_hpet_on_exit(reason & 0xFFFF, gpa, qual);
     net_trace_tick(reason & 0xFFFF, rip);
     // linux earlycon hush HV (do not drain CHUNK on every exit).
-    let _ = serial::drain_guest_tx(if pace_exit && serial::linux_earlycon_share() {
-        1
-    } else if pace_exit {
+    let _ = serial::drain_guest_tx(if pace_exit {
         serial::GUEST_TX_DRAIN_PACE
     } else {
         guest_uefi_linux_earlycon_drain(serial::linux_earlycon_share())
