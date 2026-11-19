@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-11-19
-last_commit: 4e2304c4e93b8699ce51181ff663567b9e8feac6
-last_commit_short: 4e2304c4
+last_commit: 9ed0887a733b27c56a165a4724561a68be655e2f
+last_commit_short: 9ed0887a
 updated_by: cursor
 mount_everest_target: "CLOSED on iron 2026-09-11: Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest). Next: M8 operator hardening (ADR-018)."
 months_to_everest: 0.0
@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | `4e2304c4` |
-| Summary | **The core that holds the ticket is the monitor holder.** Iron `b93fed44` froze at `o=01ecbb55` `x=32291668` (`o = x + 1`) and `n=01ecbb57`. That exit's `lock inc` had run. Another core holds the next ticket. Not lived. Months **0.0 held**. Overall **99 held**. |
+| Commit | `9ed0887a` |
+| Summary | **The landing stub is the `dc1bcc80` bytes.** `monitor_enter` stores the holder. The failure stubs call `claim_holder` with 32 bytes of home space. Not lived. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B7 lived. B21 in flight, S1, wave 7. B6 and B8 stay lived. Wave 7 open. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -384,6 +384,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-19 | wave-7-b21-landing | 0.0 | 99 | **The landing stub matches `dc1bcc80`.** `4e2304c4` called `claim_holder` from that stub. Under the UEFI ABI the callee owns the 32 bytes at the call, and the saved `xmm0`/`xmm1` were there. `monitor_enter` stores the holder. `acquire` and the entry-failure stubs still call `claim_holder`, with `sub rsp, 40` (32-byte home, call kept 16-byte aligned). Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-19 | wave-7-b21-holder | 0.0 | 99 | **Iron `b93fed44` / run `44611120039` froze on `boot: B21 pulse p=6 g=1 h=ff o=01ecbb55 n=01ecbb57 r=30 rip=ffffffffb1bfd122 x=32291668 t=3450 d=0`.** `x` is `0x01ecbb54`, so `o = x + 1`: that exit's `lock inc` ran and core 0 resumed. `n = x + 3`: another core holds ticket `x + 1`, and core 0 is ticket `x + 2`, spinning in the landing stub. `on_ap_wake` took the ticket and did not set `MON_HOLDER`, so `enter_guest`'s holder check spun in `two_in_monitor` and `write_line_nowait` stayed in the guest ring. The holder is now set when the ticket is taken and cleared when it is released, after the last register load. A stall dumps the guest TX ring once, straight to COM2. Nested QEMU has not placed a vCPU on a second core. This host's `kvm_intel.enable_shadow_vmcs=Y` is built in and not writable, so that run did not start. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-19 | wave-7-b21-pulse-wait | 0.0 | 99 | **`devices/guest_uart.rs` matches `dc1bcc800c1e`. The overdue PIT raise is out.** The pulse waits up to 20 ms per byte for COM2 THRE, runs on the highest core (not a vCPU home), and prints every 2 seconds with `x` `t` `d`. Iron `620f7c384b59` / run `44601192905` did not load `https://10.99.99.201:8443` and `10.99.99.201` did not answer ping. The onecore boot was skipped. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-19 | wave-7-b21-pulse-rip | 0.0 | 99 | **Checkpoint 1 stores the exit reason and guest RIP (`r=` `rip=`). Checkpoint 3 is the exit dispatch returning. Arming is 4, the host-stack check is 5, and the check passing is 6.** `n - o` is 0 when the lock is free or a release left the counters equal, 1 when one core holds it, and 2 or more when another core is queued. Iron `bd6811abb106` / run `44591450680` stopped at `Enabling conditiona` and `https://10.99.99.201:8443` did not load. This build's flash order is plain, then `EFI/RayNu/onecore.txt`, then `EFI/RayNu/nokick.txt`. Nested QEMU with 4 host cores did not start: `kvm_intel` is built in with `enable_shadow_vmcs=Y`, and the boot gate stops before QEMU (`VMWRITE` error 12). No bisect. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
