@@ -355,7 +355,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | `b47e029d` |
-| Summary | **A guest cannot be given more vCPUs than host cores online.** WP4 stays open. Months **0.0 held**. Overall **99 held**. |
+| Summary | **Handler lock drops go through `yield_monitor_until`, and core 0 is asserted on the section 2 functions.** WP4 stays open. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B7 lived. B21 in flight, S1, wave 7. B6 and B8 stay lived. Wave 7 open. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -384,6 +384,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-19 | wave-7-b21-yield | 0.0 | 99 | **WP5 gaps.** Recall, halt, and the park loop drop the monitor through `yield_monitor_until`. `assert_core0` is the first line of the section 2 functions. Leave and reset on a non-zero core hand the work to core 0. I1–I5 are in the `host_smp` module doc. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-19 | wave-7-b21-cap | 0.0 | 99 | **vCPU cap.** `cpu_max` is `cpu_cap`. Save and Start refuse a count above the cores online. Autostart prints `boot: B21 autostart skipped` and does not start. `GET /perc/guests` adds `host_cores`. The page sentence uses that number. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-19 | wave-7-b21-kick-invept | 0.0 | 99 | **Kick and INVEPT.** `poke_core` sends vector `0xF2` when the target is in a guest and `nokick.txt` is absent, and `KICKS_SENT` counts it. `wake`, `wake_vcpu`, recall, placement, and an IOAPIC raise call it. The eight guest-UEFI flushes call `invept_everywhere`, which kicks a core that is in a guest and waits through `yield_monitor_until`. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-19 | wave-7-b21-d17 | 0.0 | 99 | **D17 review.** A virtio-blk `next` at or past the queue size is not followed, and a request whose data lengths sum past `MAX_REQ_BYTES` (8 MiB) is `IOERR` without a copy. Virtio-net does not fold an out-of-range `next`. List: `docs/reviews/b21-d17-guest-memory.md`. Host tests passed. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |

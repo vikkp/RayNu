@@ -36,7 +36,7 @@ pub fn tick_native_coexist() {
 
 /// Rate-limited standing-SPA poll (RayNu-F vmexit / USB BOT waits).
 pub fn maybe_tick_standing_spa() {
-    if crate::arch::host_smp::running_remote(crate::arch::host_smp::this_core()) {
+    if !crate::arch::host_smp::assert_core0("maybe_tick_standing_spa") {
         return;
     }
     #[cfg(feature = "uefi-bin")]

@@ -411,6 +411,81 @@ fn recall_stays_open_until_the_core_finishes() {
 }
 
 #[test]
+fn placement_transitions_keep_i1_through_i3() {
+    // assigned[unit] = core. loaded[core] = that core holds a VMCS.
+    // Steps: assign, load, clear. I1–I3 hold after every step.
+    #[derive(Clone, Copy)]
+    enum Step {
+        Assign(u8, u8),
+        Load(u8),
+        Clear(u8),
+    }
+    let steps = [
+        Step::Assign(1, 1),
+        Step::Load(1),
+        Step::Clear(1),
+        Step::Assign(1, 0),
+        Step::Load(0),
+        Step::Assign(2, 2),
+        Step::Load(2),
+        Step::Clear(2),
+        Step::Assign(2, 1),
+        Step::Load(1),
+    ];
+    let mut assigned = [0u8; 4];
+    let mut loaded = [false; 4];
+    let mut home = [0u8; 4];
+    for step in steps {
+        match step {
+            Step::Assign(u, c) => {
+                assigned[u as usize] = c;
+            }
+            Step::Load(c) => {
+                let u = assigned.iter().position(|a| *a == c).unwrap() as u8;
+                assert_eq!(assigned[u as usize], c, "I1");
+                loaded[c as usize] = true;
+                home[u as usize] = c;
+            }
+            Step::Clear(c) => {
+                loaded[c as usize] = false;
+                if let Some(u) = home.iter().position(|h| *h == c) {
+                    home[u] = 0xFF;
+                    assigned[u] = 0;
+                }
+            }
+        }
+        for (u, &c) in assigned.iter().enumerate() {
+            if loaded[c as usize] && home[u] != 0xFF {
+                assert!(home[u] == c || home[u] == 0xFF, "I2/I3 unit {u}");
+            }
+        }
+        assert!(!loaded[0] || home.iter().any(|h| *h == 0) || assigned.iter().any(|a| *a == 0));
+    }
+    let src = include_str!("../vmx/guest_uefi.rs");
+    let sched = include_str!("../vmx/guest_sched.rs");
+    let coexist = include_str!("../mgmt/host_nic_coexist.rs");
+    for name in [
+        "smp_collapse",
+        "ap_start",
+        "ap_init",
+        "launch_uefi",
+        "guest_start_waiting",
+        "raynu_f_launch_on_stopped_vmcs",
+        "launch_slot_guest",
+    ] {
+        assert!(src.contains(&format!("assert_core0(\"{name}\")")), "{name}");
+    }
+    for name in ["prepare_start", "launch", "on_guest_left"] {
+        assert!(
+            sched.contains(&format!("assert_core0(\"{name}\")")),
+            "{name}"
+        );
+    }
+    assert!(coexist.contains("assert_core0(\"maybe_tick_standing_spa\")"));
+    assert!(src.contains("yield_monitor_until("));
+}
+
+#[test]
 fn ept_edits_flush_on_every_core() {
     let g = include_str!("../vmx/guest_uefi.rs");
     assert_eq!(

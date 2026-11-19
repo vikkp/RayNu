@@ -5603,6 +5603,9 @@ unsafe fn launch_uefi(
     gpa: u64,
     fw_len: u64,
 ) -> Result<(), GuestUefiLaunchError> {
+    if !crate::arch::host_smp::assert_core0("launch_uefi") {
+        return Err(GuestUefiLaunchError::LaunchSetupFailed);
+    }
     capture_host_xsave_before_guest_uefi();
     guest_uefi_mtrr_reset();
     // Iron `6334704`: hold after FIX WB still ASSERT `mtrrv=0`
@@ -6724,6 +6727,9 @@ fn apply_vcpus_for_start() {
 /// Drop every AP back to off and make the BSP VMCS current.
 #[cfg(target_os = "uefi")]
 unsafe fn smp_collapse() {
+    if !crate::arch::host_smp::assert_core0("smp_collapse") {
+        return;
+    }
     let s = slot::current();
     if slot::vcpus() == 1 && slot::current_vcpu() == 0 {
         return;
@@ -6801,9 +6807,10 @@ pub unsafe fn remote_recall_and_park() -> ! {
     }
     crate::arch::host_smp::finish_recall(core);
     loop {
-        crate::arch::host_smp::release();
-        crate::arch::host_smp::wait_mailbox(core);
-        crate::arch::host_smp::acquire();
+        yield_monitor_until(None, || {
+            crate::arch::host_smp::wait_mailbox(core);
+            true
+        });
         if crate::arch::host_smp::recall_waiting(core) {
             crate::arch::host_smp::finish_recall(core);
             continue;
@@ -6847,15 +6854,11 @@ unsafe fn bind_host_rsp() -> bool {
 pub unsafe fn ap_halt_pause(core: usize, unit: usize) -> ! {
     let hz = crate::boot::raynu_f_flag::tsc_hz().max(1_000_000);
     let ticks = hz / 5_000;
-    crate::arch::host_smp::release();
     let start = cpu::rdtsc();
-    while cpu::rdtsc().wrapping_sub(start) < ticks {
-        if crate::arch::host_smp::recall_waiting(core) {
-            break;
-        }
-        core::hint::spin_loop();
-    }
-    crate::arch::host_smp::acquire();
+    yield_monitor_until(None, || {
+        crate::arch::host_smp::recall_waiting(core)
+            || cpu::rdtsc().wrapping_sub(start) >= ticks
+    });
     slot::set_current(slot::unit_slot(unit));
     slot::set_current_vcpu(slot::unit_vcpu(unit));
     if crate::arch::host_smp::recall_waiting(core) {
@@ -6909,29 +6912,13 @@ pub unsafe fn yield_monitor_until(wait_core: Option<usize>, mut done: impl FnMut
 /// register image and the current slot around the wait.
 #[cfg(target_os = "uefi")]
 unsafe fn recall_cores(homes: &[usize]) {
-    let cur_s = slot::current();
-    let cur_v = slot::current_vcpu();
-    let gprs = saved_gprs();
-    let xmm = saved_xmm();
-    let spec = msr_firewall::shadow_read(msr_firewall::MSR_SPEC_CTRL);
-    let apic = msr_firewall::shadow_read(msr_firewall::MSR_APIC_BASE);
     for &home in homes {
         if home == 0 || home == crate::arch::host_smp::this_core() {
             continue;
         }
         crate::arch::host_smp::request_recall(home);
-        while !crate::arch::host_smp::recall_finished(home) {
-            crate::arch::host_smp::release();
-            core::hint::spin_loop();
-            crate::arch::host_smp::acquire();
-        }
+        yield_monitor_until(Some(home), || crate::arch::host_smp::recall_finished(home));
     }
-    load_saved_gprs(&gprs);
-    load_saved_xmm(&xmm);
-    slot::set_current(cur_s);
-    slot::set_current_vcpu(cur_v);
-    msr_firewall::shadow_write(msr_firewall::MSR_SPEC_CTRL, spec);
-    msr_firewall::shadow_write(msr_firewall::MSR_APIC_BASE, apic);
 }
 
 /// Home a vCPU that just came up. vCPU 0 stays on core 0. A later vCPU is
@@ -6983,6 +6970,9 @@ unsafe fn place_running_vcpu(s: usize, v: usize, vmcs: u64) {
 
 #[cfg(target_os = "uefi")]
 unsafe fn ap_init(v: usize) {
+    if !crate::arch::host_smp::assert_core0("ap_init") {
+        return;
+    }
     let s = slot::current();
     let home = crate::arch::host_smp::assigned(slot::unit(s, v));
     if home != 0 {
@@ -7014,6 +7004,9 @@ unsafe fn ap_fail(sender: u64, v: usize) {
 
 #[cfg(target_os = "uefi")]
 unsafe fn ap_start(v: usize, page: u8) {
+    if !crate::arch::host_smp::assert_core0("ap_start") {
+        return;
+    }
     let s = slot::current();
     let sender = *SAVED_VMCS.p();
     let ap = *SAVED_VMCS.p_at(s, v);
@@ -8719,6 +8712,9 @@ pub fn try_spa_product_iso_start() {
 
 /// A Start is waiting for a guest slot. The idle loop boots it.
 pub fn guest_start_waiting() -> bool {
+    if !crate::arch::host_smp::assert_core0("guest_start_waiting") {
+        return false;
+    }
     #[cfg(target_os = "uefi")]
     {
         guest_sched::start_waiting()
@@ -8788,6 +8784,11 @@ unsafe fn try_spa_product_iso_start_firmware() {
 /// and leave to E4.
 #[cfg(target_os = "uefi")]
 unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
+    if !crate::arch::host_smp::assert_core0("raynu_f_launch_on_stopped_vmcs") {
+        loop {
+            core::hint::spin_loop();
+        }
+    }
     smp_collapse();
     apply_vcpus_for_start();
     use crate::raynu_f::{
@@ -9309,7 +9310,7 @@ unsafe fn raynu_f_reapply_host_xsave() {
 /// [`raynu_f_launch_on_stopped_vmcs`] (it `vmclear`s/`vmptrld`s first).
 #[cfg(target_os = "uefi")]
 unsafe fn raynu_f_reset_relaunch(_src: crate::devices::guest_platform::ResetSrc) -> ! {
-    if crate::arch::host_smp::running_remote(crate::arch::host_smp::this_core()) {
+    if crate::arch::host_smp::this_core() != 0 {
         hand_back_to_core0(true);
     }
     smp_collapse();
@@ -17650,7 +17651,7 @@ unsafe fn handle_wrmsr() -> bool {
 
 #[cfg(target_os = "uefi")]
 unsafe fn leave_to_e4() -> ! {
-    if crate::arch::host_smp::running_remote(crate::arch::host_smp::this_core()) {
+    if crate::arch::host_smp::this_core() != 0 {
         hand_back_to_core0(false);
     }
     smp_collapse();
@@ -18180,6 +18181,11 @@ unsafe fn build_slot_machine(lab: bool) -> Result<(), &'static str> {
 /// paths cannot drift.
 #[cfg(target_os = "uefi")]
 unsafe fn launch_slot_guest(operator: bool) -> ! {
+    if !crate::arch::host_smp::assert_core0("launch_slot_guest") {
+        loop {
+            core::hint::spin_loop();
+        }
+    }
     bind_slot_disk();
     if operator {
         zero_slot_report_ram();

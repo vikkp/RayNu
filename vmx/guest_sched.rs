@@ -737,6 +737,9 @@ mod hw {
     /// machine if the slot has none, and load reset CPU state. `None` when
     /// the slot cannot boot; it is then marked off so Start can try again.
     unsafe fn prepare_start() -> Option<Start> {
+        if !crate::arch::host_smp::assert_core0("prepare_start") {
+            return None;
+        }
         let s = slot::current();
         let lab = LAB_START.load(Ordering::Acquire) == s + 1;
         if lab {
@@ -772,6 +775,11 @@ mod hw {
 
     /// Boot the slot [`prepare_start`] readied. Ends in VM entry.
     unsafe fn launch(start: Start) -> ! {
+        if !crate::arch::host_smp::assert_core0("launch") {
+            loop {
+                core::hint::spin_loop();
+            }
+        }
         let s = slot::current();
         LAUNCHING.store(true, Ordering::Release);
         audit_log!(AuditEvent::VmStarted { guest_id: s as u64 });
@@ -1036,6 +1044,9 @@ mod hw {
     /// The lab guest (no product media) and a slot the scheduler never
     /// launched are not touched: the caller continues as it always did.
     pub unsafe fn on_guest_left() {
+        if !crate::arch::host_smp::assert_core0("on_guest_left") {
+            return;
+        }
         let cur = slot::current();
         serial::side_break();
         let was_on = slot::is_on(cur);

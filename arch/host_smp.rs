@@ -6,6 +6,16 @@
 //! Topology is read from EFI MP Services before ExitBootServices. No core is
 //! started here. Core 0 writes the statics below once, before any other core
 //! exists. Later cores read them.
+//!
+//! Invariants (plan section 5, WP5). `ASSIGNED[u]` is the core whose queue
+//! holds unit `u`. A loaded VMCS is the one `note_loaded` recorded.
+//!
+//! - I1. A core switches in unit `u` only when `assigned(u)` is that core.
+//! - I2. Only the core that loaded `u`'s VMCS executes VMX instructions on it.
+//! - I3. That home changes only when the loaded core clears it, then the
+//!   core that switches it in stores itself.
+//! - I4. Core 0 keeps a unit whenever a slot is on. vCPU 0 is not placed away.
+//! - I5. A slot handed back to core 0 is not picked until that hand-off is taken.
 
 use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, AtomicUsize, Ordering};
 
@@ -822,6 +832,12 @@ thread_local! {
 
 /// Core this thread is running on. Host tests use the override (default 0).
 /// Core 0's stacks are outside the block array, so "not in a block" is core 0.
+/// `true` on core 0. A non-zero core must not continue into the named function.
+pub fn assert_core0(what: &str) -> bool {
+    let _ = what;
+    this_core() == 0
+}
+
 pub fn this_core() -> usize {
     #[cfg(test)]
     {
