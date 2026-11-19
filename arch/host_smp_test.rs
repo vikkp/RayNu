@@ -208,9 +208,19 @@ fn monitor_stubs_take_the_lock_around_the_registers() {
         .expect("landing");
     let land_body = &src[land..land + 4500];
     let xadd = land_body.find("lock xadd").expect("xadd");
-    let claim = land_body.find("call {claim}").expect("claim");
     let rax = land_body.find("slot_rax").expect("rax");
-    assert!(xadd < claim && claim < rax, "holder is claimed before guest RAX is stored");
+    assert!(xadd < rax, "lock is taken before the guest RAX is stored");
+    assert!(
+        !land_body.contains("call {claim}"),
+        "the landing stub does not call out over live guest XMM"
+    );
+    let enter = include_str!("host_smp.rs");
+    let ment = enter.find("fn monitor_enter()").expect("enter");
+    let ment_body = &enter[ment..ment + 500];
+    assert!(
+        ment_body.contains("MON_HOLDER.swap(core as u8"),
+        "monitor_enter stores the holder"
+    );
     for needle in [
         "fn guest_uefi_vmresume()",
         "fn guest_uefi_vmlaunch()",
@@ -221,6 +231,12 @@ fn monitor_stubs_take_the_lock_around_the_registers() {
         let inc = body.find("lock inc dword ptr [rip + {mon_owner}]").expect(needle);
         let clear = body.find("mov byte ptr [rip + {mon_holder}], 0xff").expect(needle);
         assert!(clear < inc, "{needle} clears the holder as it releases");
+        let home = body.find("sub rsp, 40").expect(needle);
+        let call = body.find("call {claim}").expect(needle);
+        assert!(
+            inc < home && home < call,
+            "{needle} reserves 32 bytes of home space after the registers are dead"
+        );
         let entry = if needle.contains("vmresume") {
             body.find("\"vmresume\"").expect("vmresume")
         } else {

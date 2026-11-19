@@ -110,8 +110,12 @@ pub fn release() {
     MON_OWNER.fetch_add(1, Ordering::Release);
 }
 
-/// The ticket is already this core's. The VM-exit landing stub and the
-/// entry-failure stubs call this before any guest register is stored.
+/// The ticket is already this core's. [`acquire`] and the entry-failure
+/// stubs call this. The landing stub does not: guest XMM is still live
+/// there, and a call would let the callee write the 32-byte home area.
+/// A failure stub reserves that area with `sub rsp, 40` (32-byte home
+/// plus 8 so the call is 16-byte aligned). [`monitor_enter`] stores the
+/// holder for a normal exit.
 #[inline(never)]
 pub extern "C" fn claim_holder() {
     let core = this_core().min(MAX_CORES - 1) as u8;
@@ -482,14 +486,14 @@ pub unsafe fn monitor_leave() {
 }
 
 /// First line of `guest_uefi_vmexit`. The landing stub already took the
-/// ticket and called [`claim_holder`].
+/// ticket. This stores the holder. The landing stub does not call out.
 ///
 /// # Safety
 /// Caller is the exit handler on the core that just left the guest.
 pub unsafe fn monitor_enter() {
     let core = this_core().min(MAX_CORES - 1);
-    let prev = MON_HOLDER.load(Ordering::Acquire);
-    if !holder_is(core) {
+    let prev = MON_HOLDER.swap(core as u8, Ordering::AcqRel);
+    if prev != NO_CORE {
         two_in_monitor(core, prev);
     }
     if core < MAX_CORES {
@@ -509,14 +513,15 @@ pub unsafe fn monitor_enter() {
     }
 }
 
-/// `monitor_enter` without the wait sample. The fail path retook the lock in asm.
+/// `monitor_enter` without the wait sample. The fail path retook the
+/// lock and called [`claim_holder`], so the holder is already this core.
 ///
 /// # Safety
 /// Caller holds the monitor after a failed VM-entry.
 pub unsafe fn monitor_reenter() {
     let core = this_core().min(MAX_CORES - 1);
     let prev = MON_HOLDER.load(Ordering::Acquire);
-    if !holder_is(core) {
+    if prev != core as u8 {
         two_in_monitor(core, prev);
     }
     if core < MAX_CORES {
