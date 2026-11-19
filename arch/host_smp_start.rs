@@ -248,9 +248,32 @@ pub(super) unsafe fn wait_mailbox(core: usize) {
     MAILBOX[core].word.store(0, Ordering::Release);
 }
 
+/// Core 1 stays in C0 so it can see core 0 stop checkpointing.
+///
+/// It does not take the monitor. The other cores stay in [`wait_mailbox`].
+/// The mailbox word is cleared only after a wake stores into it.
+fn core1_wait() {
+    let hz = crate::boot::raynu_f_flag::tsc_hz().max(1_000_000);
+    let gap = hz.saturating_mul(2);
+    let mut next = cpu::rdtsc();
+    while MAILBOX[1].word.load(Ordering::Acquire) == 0 {
+        let now = cpu::rdtsc();
+        if now.wrapping_sub(next) >= gap {
+            super::emit_core0_pulse(now);
+            next = now;
+        }
+        core::hint::spin_loop();
+    }
+    MAILBOX[1].word.store(0, Ordering::Release);
+}
+
 unsafe fn ap_idle(core: usize) -> ! {
     loop {
-        wait_mailbox(core);
+        if core == 1 {
+            core1_wait();
+        } else {
+            wait_mailbox(core);
+        }
         crate::vmx::guest_uefi::on_ap_wake(core);
     }
 }

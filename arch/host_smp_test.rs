@@ -246,6 +246,51 @@ fn pick_core_prefers_the_lightest_nonzero() {
 }
 
 #[test]
+fn b21_pulse_line_names_the_checkpoint() {
+    let mut buf = [0u8; 64];
+    let n = format_b21_pulse(4, false, 0, 0x12, 0x13, &mut buf);
+    let s = core::str::from_utf8(&buf[..n]).unwrap();
+    assert_eq!(
+        s,
+        "boot: B21 pulse p=4 g=0 h=00 o=00000012 n=00000013\r\n"
+    );
+    let n = format_b21_pulse(5, true, NO_CORE, 0, 1, &mut buf);
+    let s = core::str::from_utf8(&buf[..n]).unwrap();
+    assert_eq!(
+        s,
+        "boot: B21 pulse p=5 g=1 h=ff o=00000000 n=00000001\r\n"
+    );
+}
+
+#[test]
+fn core0_checkpoints_are_in_exit_order() {
+    let smp = include_str!("host_smp.rs");
+    let leave = smp.find("fn leave_hardware").expect("leave");
+    let leave_body = &smp[leave..leave + 1600];
+    let p4 = leave_body.find("note_exit_phase(4)").expect("phase 4");
+    let spin = leave_body.find("wrong host stack").expect("stack");
+    let p5 = leave_body.rfind("note_exit_phase(5)").expect("phase 5");
+    assert!(p4 < spin && spin < p5, "a stack mismatch stays on phase 4");
+
+    let guest = include_str!("../vmx/guest_uefi.rs");
+    let exit = guest.find("fn guest_uefi_vmexit()").expect("exit");
+    let head = &guest[exit..exit + 2200];
+    let p1 = head.find("note_exit_phase(1)").expect("phase 1");
+    let tick = head.find("maybe_tick_standing_spa()").expect("tick");
+    let p2 = head.rfind("note_exit_phase(2)").expect("phase 2");
+    assert!(p1 < tick && tick < p2, "phase 2 is the tick returning");
+    let arm = guest.find("fn arm_preempt_on_resume()").expect("arm");
+    assert!(guest[arm..arm + 180].contains("note_exit_phase(3)"));
+
+    let start = include_str!("host_smp_start.rs");
+    let wait = start.find("fn core1_wait()").expect("core1");
+    let body = &start[wait..wait + 600];
+    assert!(body.contains("emit_core0_pulse"));
+    assert!(!body.contains("acquire("));
+    assert!(!body.contains("mwait"));
+}
+
+#[test]
 fn place_vcpu_keeps_vcpu0_on_core0() {
     let loads = [1u8, 0, 0];
     assert_eq!(place_vcpu(0, &loads, 3), 0);

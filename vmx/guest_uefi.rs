@@ -7210,6 +7210,7 @@ fn console_pace_ticks(shift: u32) -> u32 {
 /// guest UART line-rate pace. Not `ISO-INSTALL-OK`.
 #[cfg(target_os = "uefi")]
 fn arm_preempt_on_resume() {
+    crate::arch::host_smp::note_exit_phase(3);
     if slot::current_vcpu() != 0 {
         let shift = PREEMPT_SHIFT.load(Ordering::Acquire);
         let ticks = guest_sched::clamp_ticks(shift)
@@ -7653,6 +7654,7 @@ unsafe fn reserve_guest_uefi_host_stack(alloc: &mut FrameAllocator) -> Option<(u
 #[cfg(target_os = "uefi")]
 pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     crate::arch::host_smp::monitor_enter();
+    crate::arch::host_smp::note_exit_phase(1);
     let core_now = crate::arch::host_smp::this_core();
     if crate::arch::host_smp::running_remote(core_now)
         && crate::arch::host_smp::recall_waiting(core_now)
@@ -7688,6 +7690,7 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
         raynu_f_vmexit(reason, qual, rip, intr);
     }
     crate::mgmt::maybe_tick_standing_spa();
+    crate::arch::host_smp::note_exit_phase(2);
     // After EBS, RAYNU_F_MODE is clear and Linux owns this exit path.
     // SPA Stop is posted inside the tick above. Consume it here or the
     // flag sits until the next hypervisor boot (iron f44ba647).

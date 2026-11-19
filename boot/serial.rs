@@ -904,6 +904,39 @@ pub fn write_byte_nowait(byte: u8) {
     let _ = drain_guest_tx(GUEST_TX_DRAIN_CHUNK);
 }
 
+/// Bytes straight to COM2 from a core that does not hold the monitor.
+///
+/// Does not touch the guest TX ring, so a stalled drain on core 0 cannot
+/// hide the line or stall this caller past a short THRE poll.
+pub fn com2_bytes_direct(bytes: &[u8]) {
+    #[cfg(target_os = "uefi")]
+    {
+        for &byte in bytes {
+            // SAFETY: one bounded LSR poll and at most one THR store on COM2.
+            // KANI-TARGET: host COM2 direct pulse (outside Proven Core).
+            unsafe { com2_byte_direct(byte) }
+        }
+    }
+    #[cfg(not(target_os = "uefi"))]
+    {
+        let _ = bytes;
+    }
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn com2_byte_direct(byte: u8) {
+    if !COM2_LIVE {
+        return;
+    }
+    for _ in 0..4_000 {
+        if inb(COM2 + 5) & 0x20 != 0 {
+            outb(COM2, byte);
+            return;
+        }
+        core::hint::spin_loop();
+    }
+}
+
 fn write_raw(byte: u8) {
     // SAFETY: single-threaded boot / HV.
     unsafe {
@@ -1207,6 +1240,10 @@ mod serial_test {
         assert_eq!(guest_tx_len(), 0);
         let s = include_str!("serial.rs");
         assert!(s.contains("fn write_byte_nowait"));
+        let direct = s.find("fn com2_bytes_direct").expect("direct");
+        let direct_body = &s[direct..direct + 500];
+        assert!(direct_body.contains("com2_byte_direct"));
+        assert!(!direct_body.contains("guest_tx_push"));
         assert!(s.contains("fn drain_guest_tx"));
         assert!(s.contains("Keep the port live"));
         assert!(s.contains("guest UART nowait; do not clear COM2_LIVE"));
