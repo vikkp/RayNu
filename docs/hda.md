@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-11-19
-last_commit: 8e367445167a6095cdd38ab84b28689962a0e60f
-last_commit_short: 8e367445
+last_commit: PENDING
+last_commit_short: PENDING
 updated_by: cursor
 mount_everest_target: "CLOSED on iron 2026-09-11: Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest). Next: M8 operator hardening (ADR-018)."
 months_to_everest: 0.0
@@ -354,8 +354,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | `8e367445` |
-| Summary | **A guest COM exit no longer writes the physical UART.** Iron `bf1502b266e7` / run `44572708273` stopped at `AppArmor ... ready` with the timestamp stuck on `0.956832`. Not lived. Months **0.0 held**. Overall **99 held**. |
+| Commit | `PENDING` |
+| Summary | **THRE means fewer than 16 bytes are waiting for COM2.** Iron `236290d35ce5` / run `44579224343` shredded the log and the timestamp jumped to 29.7s. Not lived. Months **0.0 held**. Overall **99 held**. |
 | Everest impact | none — Everest stays closed. Not 100%. |
 | Gates touched | B7 lived. B21 in flight, S1, wave 7. B6 and B8 stay lived. Wave 7 open. No doorbell. No format of UBUNTU0. |
 | Months Δ | 0.0 held. Overall 99 held. LOIHDA Bar A 94, Bar B 72, overall 80, SKU 94 held. |
@@ -384,6 +384,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-19 | wave-7-b21-wire | 0.0 | 99 | **Iron `236290d35ce5` / run `44579224343` shredded the kernel log and jumped to `[   29.706485]`.** The virtual clock advanced during the VM-exit, so THRE stayed set and printk filled the ring. An overdue tick added one second of HPET time. THRE is now clear once 16 bytes are waiting for the physical port. The timer drains one byte per character time. The overdue tick adds the elapsed host time, capped at 64 ms. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-19 | wave-7-b21-vuart | 0.0 | 99 | **Iron `bf1502b266e7` / run `44572708273` printed a clean kernel log and stopped at `AppArmor: AppArmor secmark mediation reserved: ready`.** The timestamp stayed on `0.956832`. Gate 1 (`dc1bcc800c1e`) reached login on the full exit path. After that, the console exit itself started draining the physical COM2 while the guest was stopped. A guest COM byte now only enters the virtual 16550. The preemption timer drains the real port. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-19 | wave-7-b21-pit | 0.0 | 99 | **Iron `90b6847768d5` / run `44566000546` printed a clean kernel log and stopped at `Mount-c`.** Every line after `[    0.958318]` carried that same timestamp. The 115200 FIFO is what made the text readable. The PIT is this guest's clock, and a printk storm never lets the preemption timer finish, so the deadline was refreshed without raising PIT. An overdue tick is now delivered on the way back to the guest, and a COM exit steps HPET from the TSC delta. THRE also stays clear when the TX ring is past the reserve. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-19 | wave-7-b21-baud | 0.0 | 99 | **Iron `ba07618258cd` / run `44558659087` shredded the kernel log and stopped at `[    0.245703]`.** THRE was always set, so printk outran iDRAC SOL. LSR.THRE now follows a 16-byte virtual FIFO shifted at 115200 8N1 (10 bit times per character). A console port is answered without the host RX poll. The THRE interrupt still follows ring room. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |

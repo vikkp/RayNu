@@ -149,7 +149,7 @@ use super::{
     guest_uefi_uart_pace_wanted, guest_uefi_uart_pace_ticks, guest_uefi_preempt_arm,
     guest_uefi_nominal_tick_due, guest_uefi_preempt_nominal_due, guest_uefi_preempt_unpaced_value,
     guest_uefi_net_trace_due, guest_uefi_net_trace_begins, guest_uefi_idt_vectoring_reinject,
-    UART_PACE_US,
+    UART_PACE_US, UART_BYTE_US, guest_uefi_hpet_ticks_for_elapsed,
     GUEST_UEFI_INTR_TYPE_NMI,
     guest_uefi_pt_paint_vga_uc, guest_uefi_pt_leaf_4k_for, guest_uefi_gpa_in_vga_fix_uc,
     GUEST_UEFI_CPU_FLUSH_UNSUPPORTED, GUEST_UEFI_CPU_FLUSH_JNZ_OFF, GUEST_UEFI_IRON_CPU_FLUSH_GPA,
@@ -3624,6 +3624,10 @@ fn uart_line_rate_pace_clamps_preempt_without_stealing_the_nominal_tick() {
     assert!(!guest_uefi_uart_pace_wanted(false, true, 100), "firmware / iso=0 never pace");
     assert!(!guest_uefi_uart_pace_wanted(true, false, 100));
     assert_eq!(UART_PACE_US, 250);
+    assert_eq!(UART_BYTE_US, 87);
+    assert_eq!(guest_uefi_hpet_ticks_for_elapsed(0), 0);
+    assert_eq!(guest_uefi_hpet_ticks_for_elapsed(21 * 1_000), 1_000);
+    assert_eq!(guest_uefi_hpet_ticks_for_elapsed(u64::MAX), 6_400_000);
     // 2.1 GHz Xeon, IA32_VMX_MISC shift 5: 250 µs = 525_000 TSC = 16_406 ticks.
     assert_eq!(guest_uefi_uart_pace_ticks(2_100_000_000, 5), 16_406);
     // Uncalibrated TSC falls back to 2 GHz; never zero ticks.

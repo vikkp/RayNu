@@ -337,7 +337,7 @@
           "status": "in flight",
           "ships": "S1",
           "ref": "ADR-024",
-          "note": "Branch `cursor/wave-7-b21-host-cores-25ca`. Iron `dc1bcc800c1e` / run `44389087185`: `online=16 of 16`, each core `VMXON ok`. Guest vCPUs stayed on core 0 (`B21 cores 0:[0.0 0.1]`, `Brought up 1 node, 2 CPUs`). Gate 1. Iron `bf1502b266e7` / run `44572708273` printed a clean kernel log and stopped at `AppArmor ... ready` with the timestamp stuck on `0.956832`. A guest COM exit now only fills the virtual 16550. The preemption timer drains the physical COM2. Not lived",
+          "note": "Branch `cursor/wave-7-b21-host-cores-25ca`. Iron `dc1bcc800c1e` / run `44389087185`: `online=16 of 16`, each core `VMXON ok`. Guest vCPUs stayed on core 0 (`B21 cores 0:[0.0 0.1]`, `Brought up 1 node, 2 CPUs`). Gate 1. Iron `236290d35ce5` / run `44579224343` shredded the kernel log and the timestamp jumped to 29.7s. THRE now means fewer than 16 bytes are still waiting for COM2, and an overdue tick adds the elapsed host time. Not lived",
           "wave": "7"
         },
         {

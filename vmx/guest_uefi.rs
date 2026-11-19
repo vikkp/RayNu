@@ -232,6 +232,8 @@ const UART_PACE_TSC_HZ_FALLBACK: u64 = 2_000_000_000;
 /// FIFO 4 kB/s, still 250× the stall. guest UART line-rate pace.
 /// Not `ISO-INSTALL-OK`.
 pub const UART_PACE_US: u64 = 250;
+/// One 8N1 character at 115200. Earlycon drains one byte per this period.
+pub const UART_BYTE_US: u64 = 87;
 
 /// ADR-016: RayNu-F does not mutate a third-party firmware's internal control
 /// state to manufacture progress. The Stage 46 `3k–3o` OVMF forcing
@@ -1497,10 +1499,23 @@ pub fn guest_uefi_uart_pace_wanted(share: bool, product_iso: bool, ring_len: usi
 /// Preemption-timer ticks for [`UART_PACE_US`] at `tsc_hz` with rate shift
 /// `shift` (IA32_VMX_MISC bits 4:0). Never 0.
 pub fn guest_uefi_uart_pace_ticks(tsc_hz: u64, shift: u32) -> u32 {
+    guest_uefi_uart_pace_ticks_us(tsc_hz, shift, UART_PACE_US)
+}
+
+/// Same as [`guest_uefi_uart_pace_ticks`] for a caller-chosen period.
+pub fn guest_uefi_uart_pace_ticks_us(tsc_hz: u64, shift: u32, us: u64) -> u32 {
     let hz = if tsc_hz == 0 { UART_PACE_TSC_HZ_FALLBACK } else { tsc_hz };
-    let tsc = hz.saturating_mul(UART_PACE_US) / 1_000_000;
+    let tsc = hz.saturating_mul(us.max(1)) / 1_000_000;
     let ticks = tsc >> shift.min(31);
     ticks.clamp(1, u64::from(u32::MAX)) as u32
+}
+
+/// HPET ticks for `elapsed_tsc`, capped at 64 ms so one overdue tick cannot
+/// jump the guest clock. Iron `236290d35ce5` added [`HPET_MAIN_STEP`] (1 s)
+/// on every console exit and the log went from 0.13 s to 29 s.
+pub fn guest_uefi_hpet_ticks_for_elapsed(elapsed_tsc: u64) -> u64 {
+    let raw = elapsed_tsc / crate::devices::guest_platform::TSC_PER_HPET_TICK;
+    raw.min(6_400_000)
 }
 
 /// Value to arm on resume and whether that arming is a pacing clamp.
@@ -7187,14 +7202,14 @@ pub fn guest_uefi_hpet_uart_tsc_step(tsc_delta: u64) -> u64 {
 
 /// One nominal PIT/HPET tick that the preemption timer did not get to run.
 #[cfg(target_os = "uefi")]
-fn deliver_nominal_tick() {
+fn deliver_nominal_tick(elapsed_tsc: u64) {
     let sink = SINK_HPA.load(Ordering::Acquire);
     if sink != 0 {
         // SAFETY: same sink as [`tick_hpet_on_exit`].
         // KANI-TARGET: overdue PIT tick during a UART storm (outside Proven Core).
         let v = crate::devices::guest_platform::hpet_tick_sink_by(
             unsafe { core::slice::from_raw_parts_mut(sink as *mut u8, 2 * 1024 * 1024) },
-            crate::devices::guest_platform::HPET_MAIN_STEP,
+            guest_uefi_hpet_ticks_for_elapsed(elapsed_tsc),
         );
         if v != 0 {
             HPET_TICKS.fetch_add(1, Ordering::AcqRel);
@@ -7204,6 +7219,18 @@ fn deliver_nominal_tick() {
         crate::devices::guest_irq::raise_pit();
         let _ = crate::devices::lapic_virt::poll_timer_expiry();
     }
+}
+
+/// One character of guest time while Linux owns the console, otherwise
+/// the wider [`UART_PACE_US`] window.
+#[cfg(target_os = "uefi")]
+fn console_pace_ticks(shift: u32) -> u32 {
+    let us = if serial::linux_earlycon_share() {
+        UART_BYTE_US
+    } else {
+        UART_PACE_US
+    };
+    guest_uefi_uart_pace_ticks_us(crate::boot::raynu_f_flag::tsc_hz(), shift, us)
 }
 
 /// Re-arm the VMX preemption timer for the next resume.
@@ -7253,7 +7280,7 @@ fn arm_preempt_on_resume() {
             reload
         };
         let uart = if pace {
-            Some(guest_uefi_uart_pace_ticks(crate::boot::raynu_f_flag::tsc_hz(), shift))
+            Some(console_pace_ticks(shift))
         } else {
             None
         };
@@ -7290,7 +7317,7 @@ fn arm_preempt_on_resume() {
     let now = cpu::rdtsc();
     let prev_due = PREEMPT_NOMINAL_DUE_TSC.load(Ordering::Acquire);
     if guest_uefi_nominal_tick_due(prev_due, now, real_tick) {
-        deliver_nominal_tick();
+        deliver_nominal_tick(now.saturating_sub(prev_due));
     }
     let pace = guest_uefi_uart_pace_wanted(
         serial::linux_earlycon_share(),
@@ -7303,7 +7330,7 @@ fn arm_preempt_on_resume() {
         guest_uefi_preempt_arm(
             reload,
             true,
-            guest_uefi_uart_pace_ticks(crate::boot::raynu_f_flag::tsc_hz(), shift),
+            console_pace_ticks(shift),
             now,
             due,
             shift,
@@ -7770,7 +7797,9 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     tick_hpet_on_exit(reason & 0xFFFF, gpa, qual);
     net_trace_tick(reason & 0xFFFF, rip);
     // linux earlycon hush HV (do not drain CHUNK on every exit).
-    let _ = serial::drain_guest_tx(if pace_exit {
+    let _ = serial::drain_guest_tx(if pace_exit && serial::linux_earlycon_share() {
+        1
+    } else if pace_exit {
         serial::GUEST_TX_DRAIN_PACE
     } else {
         guest_uefi_linux_earlycon_drain(serial::linux_earlycon_share())

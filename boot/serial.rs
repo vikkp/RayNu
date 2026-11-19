@@ -694,12 +694,18 @@ pub fn guest_tx_guest_lsr_thre() -> bool {
     }
     #[cfg(not(test))]
     {
-        // Baud FIFO paces a free ring. A ring past the reserve holds THRE
-        // clear so a stalled SOL pauses the guest instead of dropping the
-        // oldest bytes. Iron `90b6847768d5` kept the text clean up to
-        // `Mount-c`; the guest clock was the thing that stopped.
-        virt_fifo_has_room() && guest_tx_room_has_thre(guest_tx_room())
+        // The bytes still waiting for the physical COM2 are the FIFO.
+        // A TSC clock advanced during the VM-exit itself, so THRE stayed
+        // set, printk filled the ring, and iron `236290d35ce5` shredded
+        // the log. Sixteen bytes ahead of the drain is the whole cushion.
+        // linux earlycon pace LSR THRE.
+        guest_tx_wire_has_thre(guest_tx_len())
     }
+}
+
+/// THRE while fewer than [`VIRT_FIFO_CAP`] bytes are waiting for the wire.
+pub fn guest_tx_wire_has_thre(queued: usize) -> bool {
+    queued < VIRT_FIFO_CAP as usize
 }
 
 fn guest_tx_write_ports(byte: u8) {
@@ -1135,9 +1141,8 @@ mod serial_test {
         assert_eq!(virt_fifo_after(16, 1), 15);
         assert!(virt_fifo_thre(15));
         assert!(!virt_fifo_thre(16));
-        let room = GUEST_TX_RESERVE + GUEST_TX_THRE_BURST;
-        assert!(virt_fifo_thre(0) && guest_tx_room_has_thre(room));
-        assert!(!guest_tx_room_has_thre(room - 1));
+        assert!(guest_tx_wire_has_thre(15));
+        assert!(!guest_tx_wire_has_thre(16));
     }
 
     fn guest_thre_follows_ring_room_not_com2() {
