@@ -3925,16 +3925,16 @@ fn a_com_string_is_capped_and_other_ports_are_not() {
 #[test]
 fn linux_com_exit_resumes_before_the_host_tick() {
     let g = include_str!("guest_uefi.rs");
-    let beat = g
-        .find("b21_exit_beat(core_now, reason, rip)")
-        .expect("beat");
-    let fast = g[beat..]
-        .find("linux_com_fast(qual)")
-        .expect("fast com");
-    let tick = g[beat..]
+    let fast = g.find("linux_com_fast(qual)").expect("fast com");
+    let tick = g[fast..]
         .find("maybe_tick_standing_spa()")
         .expect("tick");
-    assert!(fast < tick, "COM is answered before the host tick");
+    assert!(tick > 0, "COM is answered before the host tick");
+    let block = &g[fast..fast + tick];
+    assert!(
+        !block.contains("drain_guest_tx"),
+        "a guest COM exit does not touch the physical UART"
+    );
 }
 
 #[test]

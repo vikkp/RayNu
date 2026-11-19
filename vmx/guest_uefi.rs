@@ -6868,32 +6868,6 @@ fn linux_com_exit(reason: u32, qual: u64) -> bool {
         && is_com_uart_port(io_port_from_qual(qual))
 }
 
-/// One line every two seconds while Linux owns COM2, so a stall names the
-/// exit it stopped on.
-#[cfg(target_os = "uefi")]
-fn b21_exit_beat(core: usize, reason: u32, rip: u64) {
-    if crate::arch::host_smp::cores_online() <= 1 || !serial::linux_earlycon_share() {
-        return;
-    }
-    static LAST: AtomicU64 = AtomicU64::new(0);
-    let now = cpu::rdtsc();
-    let hz = crate::boot::raynu_f_flag::tsc_hz().max(1_000_000);
-    let last = LAST.load(Ordering::Acquire);
-    if last != 0 && now.wrapping_sub(last) < hz.saturating_mul(2) {
-        return;
-    }
-    LAST.store(now, Ordering::Release);
-    serial::write_str_nowait("boot: B21 cpu0 core=");
-    write_dec_nowait(core as u64);
-    serial::write_str_nowait(" reason=0x");
-    write_hex_u32_nowait(reason);
-    serial::write_str_nowait(" rip=0x");
-    write_hex_nowait(rip);
-    serial::write_str_nowait(" tx=");
-    write_dec_nowait(serial::guest_tx_len() as u64);
-    serial::write_line_nowait("");
-}
-
 /// A halted vCPU's core waits outside the monitor, then enters it again.
 #[cfg(target_os = "uefi")]
 pub unsafe fn ap_halt_pause(core: usize, unit: usize) -> ! {
@@ -7209,33 +7183,6 @@ pub fn guest_uefi_hpet_step_for_exit(basic: u32, hpet_ept: bool, acpi_io: bool) 
 /// VERIFICATION: L1 (host tests)
 pub fn guest_uefi_hpet_uart_tsc_step(tsc_delta: u64) -> u64 {
     crate::devices::guest_platform::hpet_ticks_from_tsc_delta(tsc_delta)
-}
-
-/// HPET step for one COM exit, from the host TSC delta. Capped so a
-/// poll storm cannot jump jiffies. The fast path never reaches
-/// [`tick_hpet_on_exit`].
-#[cfg(target_os = "uefi")]
-fn step_hpet_uart_tsc() {
-    if slot::current_vcpu() != 0 {
-        return;
-    }
-    let sink = SINK_HPA.load(Ordering::Acquire);
-    if sink == 0 {
-        return;
-    }
-    let now = cpu::rdtsc();
-    let prev = LAST_HPET_TSC.swap(now, Ordering::AcqRel);
-    let delta = if prev == 0 { 0 } else { now.wrapping_sub(prev) };
-    let step = guest_uefi_hpet_uart_tsc_step(delta);
-    // SAFETY: 2 MiB exclusive sink allocated at launch.
-    // KANI-TARGET: HPET tick on a Linux COM exit (outside Proven Core).
-    let v = crate::devices::guest_platform::hpet_tick_sink_by(
-        unsafe { core::slice::from_raw_parts_mut(sink as *mut u8, 2 * 1024 * 1024) },
-        step,
-    );
-    if step != 0 && v != 0 {
-        HPET_TICKS.fetch_add(1, Ordering::AcqRel);
-    }
 }
 
 /// One nominal PIT/HPET tick that the preemption timer did not get to run.
@@ -7736,14 +7683,12 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     let reason = ops::vmread(EXIT_REASON).unwrap_or(0xFFFF) as u32;
     let qual = ops::vmread(EXIT_QUALIFICATION).unwrap_or(0);
     let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
-    b21_exit_beat(core_now, reason, rip);
-    // Linux printk polls COM1 one byte at a time. Answer that here and
-    // resume. The host NIC, the SPA tick, and the firmware heuristics are
-    // what a console exit was dying inside (iron ebc8fb5ddb61, COM2 frozen
-    // on `[` after the Spectre line, no later B21 cpu0 beat).
+    // Linux printk polls COM1 one byte at a time. Copy the byte into the
+    // virtual 16550 and resume. The physical COM2 is drained by the
+    // preemption timer (ESXi: the vCPU exit does not touch the real UART).
+    // Iron `bf1502b266e7` drained COM2 on this exit and stopped at
+    // `AppArmor ... ready`.
     if linux_com_exit(reason, qual) && linux_com_fast(qual) {
-        step_hpet_uart_tsc();
-        let _ = serial::drain_guest_tx(serial::GUEST_TX_DRAIN_PACE);
         arm_preempt_on_resume();
         guest_sched::resume(false);
     }

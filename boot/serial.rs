@@ -900,9 +900,15 @@ pub fn write_byte_nowait(byte: u8) {
     guest_tx_push(byte);
     log_push(byte);
     if linux_earlycon_share() {
+        // The byte is in the virtual 16550. The physical COM2 is drained
+        // by the preemption timer, not from inside this exit. ESXi's
+        // virtual UART never waits on the real port while the vCPU is
+        // stopped. Iron `bf1502b266e7` drained here and COM2 stopped at
+        // `AppArmor ... ready`.
         note_guest_tx_byte(crate::arch::cpu::rdtsc(), crate::boot::raynu_f_flag::tsc_hz());
+    } else {
+        let _ = drain_guest_tx(GUEST_TX_DRAIN_CHUNK);
     }
-    let _ = drain_guest_tx(GUEST_TX_DRAIN_CHUNK);
 }
 
 fn write_raw(byte: u8) {
