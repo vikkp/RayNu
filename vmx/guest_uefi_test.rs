@@ -3924,7 +3924,7 @@ fn linux_com_exit_resumes_before_the_host_tick() {
         .find("b21_exit_beat(core_now, reason, rip)")
         .expect("beat");
     let fast = g[beat..]
-        .find("linux_com_exit(reason, qual)")
+        .find("linux_com_fast(qual)")
         .expect("fast com");
     let tick = g[beat..]
         .find("maybe_tick_standing_spa()")

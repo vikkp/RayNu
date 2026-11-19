@@ -14,7 +14,7 @@
 
 use crate::guest::slot::{PerGuest, PerGuestCell};
 use crate::{per_guest, per_guest_cell};
-use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 
 /// Distinctive M0 gate marker — CI greps for this exact string on the serial log.
 pub const M0_BOOT_OK_MARKER: &str = "RAYNU-V-M0-BOOT-OK";
@@ -610,6 +610,69 @@ pub fn set_guest_tx_test_ring_full(on: bool) {
 /// - Share off keeps LSR `0x60` (OVMF firmware serial / nested iso=0)
 ///
 /// VERIFICATION: L1 (host tests)
+/// 8N1. ESXi's virtual 16550 shifts one character at this rate.
+pub const UART_BAUD: u64 = 115_200;
+pub const UART_BITS_PER_CHAR: u64 = 10;
+/// Virtual TX FIFO depth. THRE means this FIFO has a free slot, not that
+/// the physical COM2 has drained.
+pub const VIRT_FIFO_CAP: u32 = 16;
+
+static VIRT_FIFO: AtomicU32 = AtomicU32::new(0);
+static VIRT_FIFO_TSC: AtomicU64 = AtomicU64::new(0);
+
+/// TSC ticks for one character at [`UART_BAUD`].
+pub fn uart_char_ticks(tsc_hz: u64) -> u64 {
+    let hz = if tsc_hz < 1_000 { 2_000_000_000 } else { tsc_hz };
+    (hz / (UART_BAUD / UART_BITS_PER_CHAR)).max(1)
+}
+
+/// Characters the virtual shifter has finished since `then`.
+pub fn uart_chars_shifted(now: u64, then: u64, tsc_hz: u64) -> u64 {
+    now.wrapping_sub(then) / uart_char_ticks(tsc_hz)
+}
+
+/// FIFO occupancy after `shifted` characters have left.
+pub fn virt_fifo_after(queued: u32, shifted: u64) -> u32 {
+    queued.saturating_sub(shifted.min(u64::from(queued)) as u32)
+}
+
+/// THRE: the 16-byte virtual FIFO has a free slot.
+pub fn virt_fifo_thre(queued: u32) -> bool {
+    queued < VIRT_FIFO_CAP
+}
+
+fn virt_fifo_sync(now: u64, tsc_hz: u64) -> u32 {
+    let then = VIRT_FIFO_TSC.load(Ordering::Acquire);
+    let queued = VIRT_FIFO.load(Ordering::Acquire);
+    if queued == 0 {
+        VIRT_FIFO_TSC.store(now, Ordering::Release);
+        return 0;
+    }
+    let shifted = uart_chars_shifted(now, then, tsc_hz);
+    let left = virt_fifo_after(queued, shifted);
+    if shifted > 0 {
+        let step = uart_char_ticks(tsc_hz).saturating_mul(shifted.min(u64::from(queued)));
+        VIRT_FIFO_TSC.store(then.wrapping_add(step), Ordering::Release);
+        VIRT_FIFO.store(left, Ordering::Release);
+    }
+    left
+}
+
+/// A guest THR byte entered the virtual FIFO. Bytes past 16 stay in the
+/// ring, but THRE stays clear until the baud clock catches up.
+pub fn note_guest_tx_byte(now: u64, tsc_hz: u64) {
+    let queued = virt_fifo_sync(now, tsc_hz);
+    if queued < VIRT_FIFO_CAP {
+        VIRT_FIFO.store(queued + 1, Ordering::Release);
+    }
+}
+
+fn virt_fifo_has_room() -> bool {
+    let now = crate::arch::cpu::rdtsc();
+    let hz = crate::boot::raynu_f_flag::tsc_hz();
+    virt_fifo_thre(virt_fifo_sync(now, hz))
+}
+
 pub fn guest_tx_guest_lsr_thre() -> bool {
     if side_console() {
         // A guest that does not own COM2 writes lines into the side queue.
@@ -617,14 +680,22 @@ pub fn guest_tx_guest_lsr_thre() -> bool {
         let _ = drain_guest_tx(GUEST_TX_DRAIN_CHUNK);
         return side_q_room() >= SIDE_QUEUE_THRE_ROOM;
     }
-    // ESXi's virtual 16550: the transmitter is empty once the byte is in
-    // the VMM buffer. Linux `wait_for_xmitr` polls LSR and must not spin
-    // on host COM2 or on ring room. The ring still absorbs the bytes and
-    // drops the oldest when full; the preemption timer drains it to SOL.
-    // Iron `5a3f21154b55` stopped on `[    0.` after the Spectre line
-    // because THRE followed ring room and the next wait never returned.
+    // ESXi virtual 16550: THRE follows a 16-byte FIFO shifted at 115200 8N1,
+    // not host COM2 and not the big ring. Iron `ba07618258cd` reported THRE
+    // always and the console shredded; earlier sticks cleared THRE with the
+    // ring and `wait_for_xmitr` never returned (`[    0.`).
     // linux earlycon pace LSR THRE.
-    true
+    #[cfg(test)]
+    {
+        if GUEST_TX_TEST_RING_FULL.load(Ordering::Relaxed) {
+            return false;
+        }
+        return true;
+    }
+    #[cfg(not(test))]
+    {
+        virt_fifo_has_room()
+    }
 }
 
 fn guest_tx_write_ports(byte: u8) {
@@ -824,6 +895,9 @@ pub fn write_byte_nowait(byte: u8) {
     }
     guest_tx_push(byte);
     log_push(byte);
+    if linux_earlycon_share() {
+        note_guest_tx_byte(crate::arch::cpu::rdtsc(), crate::boot::raynu_f_flag::tsc_hz());
+    }
     let _ = drain_guest_tx(GUEST_TX_DRAIN_CHUNK);
 }
 
@@ -1041,6 +1115,18 @@ mod serial_test {
     }
 
     #[test]
+    fn virtual_fifo_shifts_one_character_at_a_time() {
+        let hz = 115_200u64; // 10 ticks per character at 115200 8N1
+        assert_eq!(uart_char_ticks(hz), 10);
+        assert_eq!(uart_chars_shifted(0, 0, hz), 0);
+        assert_eq!(uart_chars_shifted(9, 0, hz), 0);
+        assert_eq!(uart_chars_shifted(10, 0, hz), 1);
+        assert_eq!(uart_chars_shifted(160, 0, hz), 16);
+        assert_eq!(virt_fifo_after(16, 1), 15);
+        assert!(virt_fifo_thre(15));
+        assert!(!virt_fifo_thre(16));
+    }
+
     fn guest_thre_follows_ring_room_not_com2() {
         // guest UART TX ring room: iron 916af96 coupled guest THRE to
         // com2_lsr bit 5 + empty ring sampled at ~15 exits/s (apk stuck in

@@ -6823,8 +6823,32 @@ unsafe fn bind_host_rsp() -> bool {
     ops::vmwrite(HOST_RSP, top).is_ok()
 }
 
-/// One line every two seconds while Linux owns COM2, so a stall names the
-/// exit it stopped on.
+/// Answer a Linux console port without the host RX poll or the PIT.
+/// The physical COM2 is drained by the caller, a few bytes at a time.
+#[cfg(target_os = "uefi")]
+unsafe fn linux_com_fast(qual: u64) -> bool {
+    if guest_uefi_io_qual_is_string(qual) {
+        return handle_io(qual);
+    }
+    let size = (qual & 7) + 1;
+    let is_in = (qual & (1 << 3)) != 0;
+    let port = io_port_from_qual(qual);
+    let (out, thr, _) = crate::devices::guest_uart::pio(port, is_in, SAVED_RAX as u8);
+    if is_in {
+        let mask = if size == 1 {
+            0xffu64
+        } else if size == 2 {
+            0xffff
+        } else {
+            0xffff_ffff
+        };
+        SAVED_RAX = (SAVED_RAX & !mask) | (u64::from(out) & mask);
+    } else if let Some(b) = thr {
+        serial::write_byte_nowait(b);
+    }
+    skip_insn()
+}
+
 #[cfg(target_os = "uefi")]
 fn linux_com_exit(reason: u32, qual: u64) -> bool {
     serial::linux_earlycon_share()
@@ -6832,6 +6856,8 @@ fn linux_com_exit(reason: u32, qual: u64) -> bool {
         && is_com_uart_port(io_port_from_qual(qual))
 }
 
+/// One line every two seconds while Linux owns COM2, so a stall names the
+/// exit it stopped on.
 #[cfg(target_os = "uefi")]
 fn b21_exit_beat(core: usize, reason: u32, rip: u64) {
     if crate::arch::host_smp::cores_online() <= 1 || !serial::linux_earlycon_share() {
@@ -7656,7 +7682,7 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     // resume. The host NIC, the SPA tick, and the firmware heuristics are
     // what a console exit was dying inside (iron ebc8fb5ddb61, COM2 frozen
     // on `[` after the Spectre line, no later B21 cpu0 beat).
-    if linux_com_exit(reason, qual) && handle_io(qual) {
+    if linux_com_exit(reason, qual) && linux_com_fast(qual) {
         let _ = serial::drain_guest_tx(serial::GUEST_TX_DRAIN_PACE);
         arm_preempt_on_resume();
         guest_sched::resume(false);
