@@ -19,6 +19,8 @@ pub const DEFAULT_APIC_PHYS: u64 = 0xFEE0_0000;
 
 // xAPIC MMIO offsets
 const OFF_EOI: u64 = 0xB0;
+const OFF_ICR_LOW: u64 = 0x300;
+const OFF_ICR_HIGH: u64 = 0x310;
 const OFF_SVR: u64 = 0xF0;
 const OFF_LVT_TIMER: u64 = 0x320;
 const OFF_INIT_COUNT: u64 = 0x380;
@@ -26,6 +28,7 @@ const OFF_DIVIDE: u64 = 0x3E0;
 
 // x2APIC MSRs (when EXTD=1)
 const MSR_EOI: u32 = 0x80B;
+const MSR_ICR: u32 = 0x830;
 const MSR_SVR: u32 = 0x80F;
 const MSR_LVT_TIMER: u32 = 0x832;
 const MSR_INIT_COUNT: u32 = 0x838;
@@ -89,6 +92,37 @@ unsafe fn outb(port: u16, val: u8) {
 pub unsafe fn mask_pic() {
     outb(0x21, 0xFF);
     outb(0xA1, 0xFF);
+}
+
+/// Fixed-delivery IPI. x2APIC writes MSR `0x830`. xAPIC writes `0x310`
+/// then `0x300` and waits until delivery-status bit 12 is clear.
+///
+/// SAFETY: APIC enabled; called from VMX root. The destination is a host APIC id.
+pub unsafe fn send_ipi(apic_id: u32, vector: u8) -> Result<(), ApicError> {
+    // Level assert, physical destination, fixed delivery.
+    let low = u32::from(vector) | (1 << 14);
+    match probe()? {
+        ApicMode::X2Apic => {
+            let icr = (u64::from(apic_id) << 32) | u64::from(low);
+            cpu::wrmsr(MSR_ICR, icr);
+            Ok(())
+        }
+        ApicMode::XApic { base } => {
+            let mut spins = 0u32;
+            while mmio_read(base, OFF_ICR_LOW) & (1 << 12) != 0 && spins < 10_000 {
+                core::hint::spin_loop();
+                spins = spins.saturating_add(1);
+            }
+            mmio_write(base, OFF_ICR_HIGH, apic_id << 24);
+            mmio_write(base, OFF_ICR_LOW, low);
+            spins = 0;
+            while mmio_read(base, OFF_ICR_LOW) & (1 << 12) != 0 && spins < 10_000 {
+                core::hint::spin_loop();
+                spins = spins.saturating_add(1);
+            }
+            Ok(())
+        }
+    }
 }
 
 /// Write APIC EOI (xAPIC MMIO or x2APIC MSR).

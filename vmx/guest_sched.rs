@@ -27,7 +27,7 @@
 //!
 //! VERIFICATION: L1 (host tests on the policy and the arithmetic).
 
-use crate::guest::slot::MAX_GUESTS;
+use crate::guest::slot::{MAX_GUESTS, MAX_UNITS};
 
 /// Longest a busy guest runs before another runnable guest gets the CPU.
 pub const QUANTUM_US: u64 = 2_000;
@@ -75,15 +75,16 @@ pub fn runnable(o: Other, starve_tsc: u64) -> bool {
     o.on && (!o.halted || o.work || o.waited_tsc >= starve_tsc)
 }
 
-/// Which guest runs next.
+/// Which unit runs next. A unit is `(slot, vcpu)` (ADR-023).
 ///
-/// A busy guest keeps the CPU for one quantum and `other` is not called.
-/// After that, or when the guest is idle, the slots are asked in
+/// A busy unit keeps the CPU for one quantum and `other` is not called.
+/// After that, or when the unit is idle, the units are asked in
 /// round-robin order starting after `cur` and the first runnable one wins.
+/// A 4-vCPU guest has four units to a 1-vCPU guest's one.
 ///
 /// INVARIANTS:
 ///   - Never returns `Switch(cur)`.
-///   - Returns `Stay` when no other slot is runnable.
+///   - Returns `Stay` when no other unit is runnable.
 pub fn pick(
     cur: usize,
     cur_idle: bool,
@@ -95,13 +96,41 @@ pub fn pick(
     if !cur_idle && slice_used_tsc < quantum_tsc {
         return Pick::Stay;
     }
-    for k in 1..MAX_GUESTS {
-        let s = (cur + k) % MAX_GUESTS;
-        if runnable(other(s), starve_tsc) {
-            return Pick::Switch(s);
+    for k in 1..MAX_UNITS {
+        let u = (cur + k) % MAX_UNITS;
+        if runnable(other(u), starve_tsc) {
+            return Pick::Switch(u);
         }
     }
     Pick::Stay
+}
+
+/// [`pick`] limited to the units whose home is `core`. A unit homed
+/// elsewhere is invisible, so a core does not run another core's vCPU.
+pub fn pick_on_core(
+    core: usize,
+    cur: usize,
+    cur_idle: bool,
+    slice_used_tsc: u64,
+    quantum_tsc: u64,
+    starve_tsc: u64,
+    mut other: impl FnMut(usize) -> Other,
+    mut home: impl FnMut(usize) -> usize,
+) -> Pick {
+    pick(
+        cur,
+        cur_idle,
+        slice_used_tsc,
+        quantum_tsc,
+        starve_tsc,
+        |u| {
+            if home(u) == core {
+                other(u)
+            } else {
+                Other::default()
+            }
+        },
+    )
 }
 
 /// TSC ticks in `us` microseconds. `tsc_hz == 0` uses `fallback_hz`.
@@ -218,6 +247,64 @@ pub fn slot_report_chunks(
     Some(left.min(want_chunks))
 }
 
+/// Why a slot must not be launched.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LaunchBlock {
+    /// vCPU index still marked up.
+    Up(usize),
+    /// vCPU index assigned to a core other than 0.
+    Assigned(usize, u8),
+    /// vCPU index whose VMCS is active on `core`.
+    Homed(usize, u8),
+}
+
+/// A slot may be launched only when every unit is down, not assigned away
+/// from core 0, and not homed on any core. `home[v] == 0xFF` means not homed.
+pub fn launch_block(up_mask: u8, assigned: &[u8], home: &[u8]) -> Option<LaunchBlock> {
+    let n = assigned.len().min(home.len()).min(4);
+    for v in 0..n {
+        if up_mask & (1u8 << v) != 0 {
+            return Some(LaunchBlock::Up(v));
+        }
+        if assigned[v] != 0 {
+            return Some(LaunchBlock::Assigned(v, assigned[v]));
+        }
+        if home[v] != 0xFF {
+            return Some(LaunchBlock::Homed(v, home[v]));
+        }
+    }
+    None
+}
+
+/// Scheduler booted the guest again after the guest left on its own.
+pub const RESTART_SCHEDULER: u8 = 1;
+/// Guest asked to reboot (CF9 / keyboard / ACPI reset).
+pub const RESTART_REBOOT: u8 = 2;
+
+/// `VmStarted` is the operator Start and autostart. A restart the
+/// hypervisor performs on its own is `GuestRestarted`.
+pub fn start_audit_is_vm_started(operator_or_autostart: bool) -> bool {
+    operator_or_autostart
+}
+
+/// vCPU of a slot that core 0 may `VMPTRLD`.
+///
+/// `assigned[v]` is the core that holds vCPU `v` (0 is core 0). vCPU 0 stays
+/// on core 0 while its up-bit is set (plan 5g, I4). A vCPU another core left
+/// in `CUR_VCPU` is not a VMCS this core can load.
+pub fn home_vcpu(up_mask: u8, assigned: &[u8]) -> Option<usize> {
+    let n = assigned.len().min(4);
+    if up_mask & 1 != 0 && assigned.first().copied().unwrap_or(1) == 0 {
+        return Some(0);
+    }
+    for v in 1..n {
+        if up_mask & (1u8 << v) != 0 && assigned[v] == 0 {
+            return Some(v);
+        }
+    }
+    None
+}
+
 #[cfg(target_os = "uefi")]
 pub(super) use hw::*;
 
@@ -228,11 +315,11 @@ mod hw {
     use crate::audit::AuditEvent;
     use crate::audit_log;
     use crate::boot::serial;
-    use crate::guest::slot::{self, PerGuest, PerGuestCell};
+    use crate::guest::slot::{self, PerGuest, PerVcpu, PerVcpuCell};
     use crate::sched::msr_firewall;
     use crate::vmx::ops;
-    use crate::{per_guest, per_guest_cell};
-    use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering};
+    use crate::{per_guest, per_vcpu, per_vcpu_cell};
+    use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, AtomicUsize, Ordering};
 
     const MSR_STAR: u32 = 0xC000_0081;
     const MSR_LSTAR: u32 = 0xC000_0082;
@@ -244,7 +331,13 @@ mod hw {
     const MSR_APIC_BASE: u32 = 0x1B;
     const MSR_PRED_CMD: u32 = 0x49;
     /// Syscall-path MSRs the firewall passes to hardware (`HostPassthrough`).
-    const PASS_MSRS: [u32; 5] = [MSR_STAR, MSR_LSTAR, MSR_CSTAR, MSR_SFMASK, MSR_KERNEL_GS_BASE];
+    const PASS_MSRS: [u32; 5] = [
+        MSR_STAR,
+        MSR_LSTAR,
+        MSR_CSTAR,
+        MSR_SFMASK,
+        MSR_KERNEL_GS_BASE,
+    ];
     const APIC_BASE_RESET: u64 = 0xFEE0_0000 | (1 << 11);
     const DR6_RESET: u64 = 0xFFFF_0FF0;
     const MXCSR_RESET: u32 = 0x1F80;
@@ -267,7 +360,7 @@ mod hw {
         xcr0: u64,
     }
 
-    static CTX: PerGuestCell<VcpuCtx> = per_guest_cell!(VcpuCtx {
+    static CTX: PerVcpuCell<VcpuCtx> = per_vcpu_cell!(VcpuCtx {
         gpr: [0; 15],
         xmm: [0; 256],
         cr2: 0,
@@ -279,22 +372,42 @@ mod hw {
         apic_base: APIC_BASE_RESET,
         xcr0: 1,
     });
-    static XSAVE: PerGuestCell<XsaveArea> = per_guest_cell!(XsaveArea([0; XSAVE_AREA_BYTES]));
+    static XSAVE: PerVcpuCell<XsaveArea> = per_vcpu_cell!(XsaveArea([0; XSAVE_AREA_BYTES]));
 
-    /// The guest was idle when it left the CPU.
-    static HALTED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
-    /// TSC when the guest left the CPU.
-    static OFF_TSC: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+    /// The vCPU was idle when it left the CPU.
+    static HALTED: PerVcpu<AtomicBool> = per_vcpu!(AtomicBool::new(false));
+    /// TSC when the vCPU left the CPU.
+    static OFF_TSC: PerVcpu<AtomicU64> = per_vcpu!(AtomicU64::new(0));
+    /// TSC when this guest last left the CPU for another guest.
+    static SLOT_OFF_TSC: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
     /// TSC ticks the guest has spent off the CPU while another guest ran.
     static AWAY_TSC: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
     /// Times the guest was booted again since the operator's Start.
     static RESTARTS: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
     /// The pending start is the scheduler's own restart, not the operator.
     static AUTO_RESTART: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+    static RESTART_REASON: PerGuest<AtomicU8> = per_guest!(AtomicU8::new(0));
     /// The guest takes COM2 when it launches (an operator Start).
     static TAKE_CONSOLE: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
-    /// TSC when the guest on the CPU got it.
-    static SLICE_START: AtomicU64 = AtomicU64::new(0);
+    /// TSC when the guest on this core got the CPU. `load` and `store` keep
+    /// the call text; the word is chosen by [`crate::arch::host_smp::this_core`].
+    struct SliceClock;
+    impl SliceClock {
+        fn load(&self, _order: Ordering) -> u64 {
+            let i = crate::arch::host_smp::this_core()
+                .min(crate::arch::host_smp::MAX_CORES - 1);
+            SLICE_CLOCKS[i].load(Ordering::Acquire)
+        }
+        fn store(&self, val: u64, _order: Ordering) {
+            let i = crate::arch::host_smp::this_core()
+                .min(crate::arch::host_smp::MAX_CORES - 1);
+            SLICE_CLOCKS[i].store(val, Ordering::Release);
+        }
+    }
+    /// TSC when the guest on this core got the CPU. One word per host core.
+    static SLICE_START: SliceClock = SliceClock;
+    static SLICE_CLOCKS: [AtomicU64; crate::arch::host_smp::MAX_CORES] =
+        [const { AtomicU64::new(0) }; crate::arch::host_smp::MAX_CORES];
     /// Lab only (`twoguest.txt`): slot + 1 that boots the retained product
     /// ISO beside slot 0. Zero when nothing is asked. Nested QEMU has no
     /// PERC catalog to start a second guest from.
@@ -305,13 +418,15 @@ mod hw {
     static LAB_AGAIN: AtomicUsize = AtomicUsize::new(0);
     static SWITCHES: AtomicU64 = AtomicU64::new(0);
     static SWITCH_LOGGED: AtomicBool = AtomicBool::new(false);
+    /// Printed once when a switch stays inside one slot (vCPUs share the core).
+    static VCPU_SHARE_LOGGED: AtomicBool = AtomicBool::new(false);
     /// The scheduler is booting this slot and it has not entered yet. A
     /// leave in that window is a launch that failed.
     static LAUNCHING: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
-    /// TSC ticks the guest has held the CPU while it shared it.
-    static RUN_TSC: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
-    /// Times the guest was given the CPU by a switch.
-    static RUNS: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+    /// TSC ticks the vCPU has held the CPU while it shared it.
+    static RUN_TSC: PerVcpu<AtomicU64> = per_vcpu!(AtomicU64::new(0));
+    /// Times the vCPU was given the CPU by a switch.
+    static RUNS: PerVcpu<AtomicU64> = per_vcpu!(AtomicU64::new(0));
     /// TSC of the last shared-CPU status line.
     static BEAT_TSC: AtomicU64 = AtomicU64::new(0);
 
@@ -320,7 +435,10 @@ mod hw {
         if slot != 0 && slot < MAX_GUESTS {
             LAB_START.store(slot + 1, Ordering::Release);
             LAB_AGAIN.store(slot + 1, Ordering::Release);
-            slot::with_slot(slot, crate::devices::guest_serial_answer::lab_power_off_after_prove);
+            slot::with_slot(
+                slot,
+                crate::devices::guest_serial_answer::lab_power_off_after_prove,
+            );
         }
     }
 
@@ -364,8 +482,12 @@ mod hw {
     /// Scheduling clamp for the preemption timer, when more than one guest
     /// is on.
     pub fn clamp_ticks(shift: u32) -> Option<u32> {
-        if slot::shared() {
-            Some(quantum_ticks(tsc_hz(), super::super::UART_PACE_TSC_HZ_FALLBACK, shift))
+        if slot::cpu_shared() {
+            Some(quantum_ticks(
+                tsc_hz(),
+                super::super::UART_PACE_TSC_HZ_FALLBACK,
+                shift,
+            ))
         } else {
             None
         }
@@ -376,11 +498,21 @@ mod hw {
         // SAFETY: CPL0; MOV from a debug register has no side effect.
         // KANI-TARGET: guest scheduler DR read (outside Proven Core).
         match n {
-            0 => core::arch::asm!("mov {}, dr0", out(reg) v, options(nomem, nostack, preserves_flags)),
-            1 => core::arch::asm!("mov {}, dr1", out(reg) v, options(nomem, nostack, preserves_flags)),
-            2 => core::arch::asm!("mov {}, dr2", out(reg) v, options(nomem, nostack, preserves_flags)),
-            3 => core::arch::asm!("mov {}, dr3", out(reg) v, options(nomem, nostack, preserves_flags)),
-            _ => core::arch::asm!("mov {}, dr6", out(reg) v, options(nomem, nostack, preserves_flags)),
+            0 => {
+                core::arch::asm!("mov {}, dr0", out(reg) v, options(nomem, nostack, preserves_flags))
+            }
+            1 => {
+                core::arch::asm!("mov {}, dr1", out(reg) v, options(nomem, nostack, preserves_flags))
+            }
+            2 => {
+                core::arch::asm!("mov {}, dr2", out(reg) v, options(nomem, nostack, preserves_flags))
+            }
+            3 => {
+                core::arch::asm!("mov {}, dr3", out(reg) v, options(nomem, nostack, preserves_flags))
+            }
+            _ => {
+                core::arch::asm!("mov {}, dr6", out(reg) v, options(nomem, nostack, preserves_flags))
+            }
         }
         v
     }
@@ -392,10 +524,18 @@ mod hw {
         // values so the write cannot #GP.
         // KANI-TARGET: guest scheduler DR write (outside Proven Core).
         match n {
-            0 => core::arch::asm!("mov dr0, {}", in(reg) v, options(nomem, nostack, preserves_flags)),
-            1 => core::arch::asm!("mov dr1, {}", in(reg) v, options(nomem, nostack, preserves_flags)),
-            2 => core::arch::asm!("mov dr2, {}", in(reg) v, options(nomem, nostack, preserves_flags)),
-            3 => core::arch::asm!("mov dr3, {}", in(reg) v, options(nomem, nostack, preserves_flags)),
+            0 => {
+                core::arch::asm!("mov dr0, {}", in(reg) v, options(nomem, nostack, preserves_flags))
+            }
+            1 => {
+                core::arch::asm!("mov dr1, {}", in(reg) v, options(nomem, nostack, preserves_flags))
+            }
+            2 => {
+                core::arch::asm!("mov dr2, {}", in(reg) v, options(nomem, nostack, preserves_flags))
+            }
+            3 => {
+                core::arch::asm!("mov dr3, {}", in(reg) v, options(nomem, nostack, preserves_flags))
+            }
             _ => {
                 let v = (v & 0xFFFF_FFFF) | DR6_RESET;
                 core::arch::asm!("mov dr6, {}", in(reg) v, options(nomem, nostack, preserves_flags))
@@ -459,10 +599,60 @@ mod hw {
         );
     }
 
-    /// Save the guest on the CPU. Its VMCS stays loaded and launched.
+    fn cur_unit() -> usize {
+        slot::unit(slot::current(), slot::current_vcpu())
+    }
+
+    /// Name a vCPU of `slot` whose VMCS is on core 0, and store it in
+    /// `CUR_VCPU[slot]`. vCPU 0 when it is up. Falls back to 0 when every
+    /// started vCPU sits on another core; the caller then reports the miss.
+    /// Bring every unit of `slot` back, then clear up/assigned/home.
+    /// Core 0: recall this slot's remote units, then clear them.
+    pub unsafe fn recall_slot(slot_n: usize) {
+        recall_and_release(slot_n);
+    }
+
+    fn recall_and_release(slot_n: usize) {
+        let mut homes = [0usize; slot::MAX_VCPUS];
+        let mut n = 0usize;
+        for v in 0..slot::MAX_VCPUS {
+            let u = slot::unit(slot_n, v);
+            let c = crate::arch::host_smp::assigned(u);
+            let homed = crate::arch::host_smp::home_of(u) != crate::arch::host_smp::NO_CORE as usize;
+            if c != 0 && (slot::vcpu_up(slot_n, v) || homed) && !homes[..n].contains(&c) {
+                homes[n] = c;
+                n += 1;
+            }
+        }
+        for &core in &homes[..n] {
+            crate::arch::host_smp::request_recall(core);
+            // SAFETY: caller holds the monitor on the exit path.
+            unsafe {
+                super::super::yield_monitor_until(Some(core), || {
+                    crate::arch::host_smp::recall_finished(core)
+                });
+            }
+        }
+        crate::arch::host_smp::release_slot_units(slot_n);
+    }
+
+    fn select_home_vcpu(slot_n: usize) -> usize {
+        let mut assigned = [0u8; slot::MAX_VCPUS];
+        for v in 0..slot::MAX_VCPUS {
+            assigned[v] = crate::arch::host_smp::assigned(slot::unit(slot_n, v)) as u8;
+        }
+        let v = super::home_vcpu(slot::up_mask(slot_n), &assigned).unwrap_or(0);
+        slot::set_slot_vcpu(slot_n, v);
+        v
+    }
+
+    /// Save the vCPU on the CPU. Its VMCS stays loaded and launched.
+    /// `cur` is a unit, `(slot, vcpu)`.
     unsafe fn switch_out(cur: usize, idle: bool, now: u64) {
+        let s = slot::unit_slot(cur);
+        let v = slot::unit_vcpu(cur);
         serial::side_break_stale(now);
-        let c = &mut *CTX.p_of(cur);
+        let c = &mut *CTX.p_at(s, v);
         c.gpr = super::super::saved_gprs();
         c.xmm = super::super::saved_xmm();
         c.cr2 = cpu::read_cr2();
@@ -485,27 +675,45 @@ mod hw {
         // enabled: the next guest must not find this one's values in a
         // component it enables later.
         cpu::xsetbv(0, mask);
-        xsave_all(XSAVE.p_of(cur), mask);
-        HALTED.of(cur).store(idle, Ordering::Release);
-        OFF_TSC.of(cur).store(now, Ordering::Release);
-        RUN_TSC
-            .of(cur)
-            .fetch_add(now.wrapping_sub(SLICE_START.load(Ordering::Acquire)), Ordering::AcqRel);
+        xsave_all(XSAVE.p_at(s, v), mask);
+        HALTED.at(s, v).store(idle, Ordering::Release);
+        OFF_TSC.at(s, v).store(now, Ordering::Release);
+        SLOT_OFF_TSC.of(s).store(now, Ordering::Release);
+        RUN_TSC.at(s, v).fetch_add(
+            now.wrapping_sub(SLICE_START.load(Ordering::Acquire)),
+            Ordering::AcqRel,
+        );
     }
 
-    /// Load `next` and make it the current slot. Its VMCS becomes current.
+    /// Load unit `next` and make it current. Its VMCS becomes current.
     /// Returns false when the VMCS cannot be loaded.
     unsafe fn switch_in(next: usize, now: u64) -> bool {
-        slot::set_current(next);
+        let s = slot::unit_slot(next);
+        let v = slot::unit_vcpu(next);
+        let prev_slot = slot::current();
+        let prev_vcpu = slot::slot_vcpu(prev_slot);
+        slot::set_current(s);
+        slot::set_current_vcpu(v);
         let vmcs = super::super::slot_vmcs();
         if vmcs == 0 || ops::vmptrld(vmcs).is_err() {
+            // The switch did not happen. Put the names back so a later
+            // leave does not treat `s` as the guest that was running.
+            slot::set_slot_vcpu(prev_slot, prev_vcpu);
+            slot::set_current(prev_slot);
             return false;
         }
-        let c = &*CTX.p_of(next);
+        let core = crate::arch::host_smp::this_core();
+        if core != 0 {
+            if !super::super::bind_host_rsp() {
+                return false;
+            }
+            crate::arch::host_smp::note_loaded(core);
+        }
+        let c = &*CTX.p_at(s, v);
         ensure_osxsave();
         let mask = host_xcr0_mask();
         cpu::xsetbv(0, mask);
-        xrstor_all(XSAVE.p_of(next), mask);
+        xrstor_all(XSAVE.p_at(s, v), mask);
         cpu::xsetbv(0, (c.xcr0 & mask) | 1);
         super::super::load_saved_gprs(&c.gpr);
         super::super::load_saved_xmm(&c.xmm);
@@ -526,22 +734,24 @@ mod hw {
             // The next guest must not steer on this one's branch history.
             cpu::wrmsr(MSR_PRED_CMD, 1);
         }
-        AWAY_TSC.of(next).fetch_add(
-            now.wrapping_sub(OFF_TSC.of(next).load(Ordering::Acquire)),
-            Ordering::AcqRel,
-        );
+        if prev_slot != s {
+            AWAY_TSC.of(s).fetch_add(
+                now.wrapping_sub(SLOT_OFF_TSC.of(s).load(Ordering::Acquire)),
+                Ordering::AcqRel,
+            );
+        }
         SLICE_START.store(now, Ordering::Release);
         SWITCHES.fetch_add(1, Ordering::AcqRel);
-        RUNS.of(next).fetch_add(1, Ordering::AcqRel);
+        RUNS.at(s, v).fetch_add(1, Ordering::AcqRel);
+        crate::arch::host_smp::set_home(next, core as u8);
         super::super::rearm_preempt_on_switch_in();
         true
     }
 
-    /// Reset state for a guest that is about to boot: no register, debug
-    /// register, MSR or extended-state value of the guest that ran before
-    /// it survives. The launch path loads RIP/RCX/RDX itself.
-    unsafe fn load_fresh_cpu_state(slot_n: usize) {
-        let c = &mut *CTX.p_of(slot_n);
+    /// Memory image of a vCPU that has not run. Does not touch live
+    /// registers: the caller may still be on another vCPU.
+    unsafe fn fill_fresh_ctx(s: usize, v: usize) {
+        let c = &mut *CTX.p_at(s, v);
         c.gpr = [0; 15];
         c.xmm = [0; 256];
         c.cr2 = 0;
@@ -552,16 +762,23 @@ mod hw {
         c.spec_ctrl = 0;
         c.apic_base = APIC_BASE_RESET;
         c.xcr0 = 1;
-        let area = XSAVE.p_of(slot_n);
+        let area = XSAVE.p_at(s, v);
         core::ptr::write_bytes(area as *mut u8, 0, XSAVE_AREA_BYTES);
         // Legacy region offset 24: MXCSR. XRSTOR loads it whenever SSE or
         // AVX is in the mask, and a reserved bit is #GP.
         core::ptr::write_unaligned((area as *mut u8).add(24) as *mut u32, MXCSR_RESET);
+    }
+
+    /// Reset state for a guest that is about to boot: no register, debug
+    /// register, MSR or extended-state value of the guest that ran before
+    /// it survives. The launch path loads RIP/RCX/RDX itself. vCPU 0.
+    unsafe fn load_fresh_cpu_state(slot_n: usize) {
+        fill_fresh_ctx(slot_n, 0);
         ensure_osxsave();
         let mask = host_xcr0_mask();
         if can_share() {
             cpu::xsetbv(0, mask);
-            xrstor_all(area, mask);
+            xrstor_all(XSAVE.p_at(slot_n, 0), mask);
         }
         for i in 0..4u8 {
             write_dr(i, 0);
@@ -579,6 +796,15 @@ mod hw {
         if has_ibpb() {
             cpu::wrmsr(MSR_PRED_CMD, 1);
         }
+    }
+
+    /// A vCPU that is about to be started by INIT/SIPI. Fills its saved
+    /// context and marks it not halted. Does not touch live registers: the
+    /// sender is still on the CPU.
+    pub unsafe fn ap_unit_ready(s: usize, v: usize, now: u64) {
+        fill_fresh_ctx(s, v);
+        HALTED.at(s, v).store(false, Ordering::Release);
+        OFF_TSC.at(s, v).store(now, Ordering::Release);
     }
 
     /// A slot other than `not` is waiting to boot.
@@ -613,12 +839,17 @@ mod hw {
     struct Start {
         /// The scheduler's own restart, not an operator Start.
         auto: bool,
+        /// [`super::RESTART_SCHEDULER`] or [`super::RESTART_REBOOT`].
+        reason: u8,
     }
 
     /// Ready the current slot to boot: consume the request, build the
     /// machine if the slot has none, and load reset CPU state. `None` when
     /// the slot cannot boot; it is then marked off so Start can try again.
     unsafe fn prepare_start() -> Option<Start> {
+        if !crate::arch::host_smp::assert_core0("prepare_start") {
+            return None;
+        }
         let s = slot::current();
         let lab = LAB_START.load(Ordering::Acquire) == s + 1;
         if lab {
@@ -626,6 +857,7 @@ mod hw {
         }
         let _ = crate::mgmt::perc_boot_choice::take_perc_relaunch();
         let auto = AUTO_RESTART.swap(false, Ordering::AcqRel);
+        let reason = RESTART_REASON.swap(0, Ordering::AcqRel);
         if !auto {
             RESTARTS.store(0, Ordering::Release);
             super::super::clear_guest_reset_count();
@@ -635,6 +867,11 @@ mod hw {
             serial::write_line(
                 "boot: guest slot refused: the CPU's XSAVE image is larger than a slot holds (ADR-022)",
             );
+            crate::mgmt::perc_boot_choice::note_guest_off();
+            return None;
+        }
+        if let Some(block) = crate::arch::host_smp::slot_launch_block(s) {
+            crate::arch::host_smp::report_launch_refused(s, block);
             crate::mgmt::perc_boot_choice::note_guest_off();
             return None;
         }
@@ -649,14 +886,26 @@ mod hw {
             }
         }
         load_fresh_cpu_state(s);
-        Some(Start { auto })
+        Some(Start { auto, reason })
     }
 
     /// Boot the slot [`prepare_start`] readied. Ends in VM entry.
     unsafe fn launch(start: Start) -> ! {
+        if !crate::arch::host_smp::assert_core0("launch") {
+            loop {
+                core::hint::spin_loop();
+            }
+        }
         let s = slot::current();
         LAUNCHING.store(true, Ordering::Release);
-        audit_log!(AuditEvent::VmStarted { guest_id: s as u64 });
+        if start.auto {
+            audit_log!(AuditEvent::GuestRestarted {
+                guest_id: s as u64,
+                reason: start.reason,
+            });
+        } else {
+            audit_log!(AuditEvent::VmStarted { guest_id: s as u64 });
+        }
         serial::write_str("boot: guest slot ");
         write_dec(s as u64);
         serial::write_str(if start.auto { " boots again" } else { " start" });
@@ -683,15 +932,79 @@ mod hw {
         }
     }
 
+    /// A non-zero core runs only the units homed on it. It does not boot a
+    /// slot, tick the page, or leave to the idle loop.
+    unsafe fn resume_on_ap(idle: bool) -> ! {
+        let core = crate::arch::host_smp::this_core();
+        if crate::arch::host_smp::recall_waiting(core) {
+            super::super::remote_recall_and_park();
+        }
+        let cu = cur_unit();
+        let now = cpu::rdtsc();
+        let hz = tsc_hz();
+        let fb = super::super::UART_PACE_TSC_HZ_FALLBACK;
+        let used = now.wrapping_sub(SLICE_START.load(Ordering::Acquire));
+        let quantum = us_to_tsc(QUANTUM_US, hz, fb);
+        let starve = us_to_tsc(STARVE_US, hz, fb);
+        let home = |u: usize| crate::arch::host_smp::assigned(u);
+        match pick_on_core(core, cu, idle, used, quantum, starve, |u| other(u, now), home) {
+            Pick::Stay => {
+                if idle {
+                    switch_out(cu, true, now);
+                    super::super::ap_halt_pause(core, cu);
+                }
+                super::super::clamp_firmware_preempt();
+                super::super::enter_guest()
+            }
+            Pick::Switch(next) => {
+                switch_out(cu, idle, now);
+                if !switch_in(next, now) {
+                    super::super::remote_recall_and_park();
+                }
+                super::super::enter_guest()
+            }
+        }
+    }
+
+    /// Load `unit` and enter it. The caller holds the monitor.
+    pub unsafe fn launch_on_core(core: usize) -> bool {
+        if crate::arch::host_smp::recall_waiting(core) {
+            super::super::remote_recall_and_park();
+        }
+        let Some(unit) = (0..MAX_UNITS).find(|&u| {
+            crate::arch::host_smp::assigned(u) == core
+                && slot::is_on(slot::unit_slot(u))
+                && slot::vcpu_up(slot::unit_slot(u), slot::unit_vcpu(u))
+        }) else {
+            return false;
+        };
+        if !switch_in(unit, cpu::rdtsc()) {
+            return false;
+        }
+        resume(false)
+    }
+
+    /// After a halt pause, load `unit` again and enter it.
+    pub unsafe fn reenter(unit: usize) -> ! {
+        if !switch_in(unit, cpu::rdtsc()) {
+            super::super::remote_recall_and_park();
+        }
+        super::super::enter_guest()
+    }
+
     /// End of a VM exit: enter the guest that should run now.
     ///
     /// `idle` is [`guest_idle`] for the guest that took the exit. With one
     /// guest on and no Start waiting this is `VMRESUME`.
     pub unsafe fn resume(idle: bool) -> ! {
-        let cur = slot::current();
-        if let Some(s) = pending_start(cur) {
+        let core_now = crate::arch::host_smp::this_core();
+        if crate::arch::host_smp::running_remote(core_now) {
+            resume_on_ap(idle);
+        }
+        let cu = cur_unit();
+        if let Some(s) = pending_start(slot::current()) {
             let now = cpu::rdtsc();
-            switch_out(cur, idle, now);
+            switch_out(cu, idle, now);
             // The new guest's first lines are written straight to COM2.
             // Whatever this guest still has queued goes out first.
             let _ = serial::flush_guest_tx();
@@ -700,13 +1013,13 @@ mod hw {
                 launch(start)
             }
             // The new slot could not boot. Give the CPU back.
-            if switch_in(cur, cpu::rdtsc()) {
-                super::super::guest_uefi_vmresume()
+            if switch_in(cu, cpu::rdtsc()) {
+                super::super::enter_guest()
             }
             super::super::leave_to_e4()
         }
-        if !slot::shared() {
-            super::super::guest_uefi_vmresume()
+        if !slot::cpu_shared() {
+            super::super::enter_guest()
         }
         let now = cpu::rdtsc();
         let hz = tsc_hz();
@@ -714,26 +1027,34 @@ mod hw {
         let used = now.wrapping_sub(SLICE_START.load(Ordering::Acquire));
         let quantum = us_to_tsc(QUANTUM_US, hz, fb);
         let starve = us_to_tsc(STARVE_US, hz, fb);
-        beat(cur, now, us_to_tsc(BEAT_US, hz, fb));
-        match pick(cur, idle, used, quantum, starve, |s| other(s, now)) {
+        beat(slot::current(), now, us_to_tsc(BEAT_US, hz, fb));
+        crate::arch::host_smp::maybe_core_line(now, us_to_tsc(BEAT_US, hz, fb));
+        let home = |u: usize| crate::arch::host_smp::assigned(u);
+        match pick_on_core(0, cu, idle, used, quantum, starve, |u| other(u, now), home) {
             Pick::Stay => {
                 super::super::clamp_firmware_preempt();
-                super::super::guest_uefi_vmresume()
+                super::super::enter_guest()
             }
             Pick::Switch(next) => {
-                switch_out(cur, idle, now);
+                switch_out(cu, idle, now);
                 if !switch_in(next, now) {
                     serial::write_line_nowait(
                         "boot: guest switch failed: VMPTRLD refused the next guest's VMCS",
                     );
                     super::super::leave_to_e4()
                 }
-                if !SWITCH_LOGGED.swap(true, Ordering::AcqRel) {
+                if slot::unit_slot(next) != slot::unit_slot(cu) {
+                    if !SWITCH_LOGGED.swap(true, Ordering::AcqRel) {
+                        serial::write_line_nowait(
+                            "boot: guest scheduler: two guests share the CPU (2 ms quantum; ADR-022; not ISO-INSTALL-OK)",
+                        );
+                    }
+                } else if !VCPU_SHARE_LOGGED.swap(true, Ordering::AcqRel) {
                     serial::write_line_nowait(
-                        "boot: guest scheduler: two guests share the CPU (2 ms quantum; ADR-022; not ISO-INSTALL-OK)",
+                        "boot: guest scheduler: vCPUs share the CPU (2 ms quantum; ADR-023; not ISO-INSTALL-OK)",
                     );
                 }
-                super::super::guest_uefi_vmresume()
+                super::super::enter_guest()
             }
         }
     }
@@ -768,10 +1089,16 @@ mod hw {
             }
             serial::write_str_nowait(" g");
             write_dec_nowait(s as u64);
+            let mut runs = 0u64;
+            let mut run_tsc = 0u64;
+            for v in 0..slot::MAX_VCPUS {
+                runs = runs.wrapping_add(RUNS.at(s, v).load(Ordering::Acquire));
+                run_tsc = run_tsc.wrapping_add(RUN_TSC.at(s, v).load(Ordering::Acquire));
+            }
             serial::write_str_nowait(" runs=");
-            write_dec_nowait(RUNS.of(s).load(Ordering::Acquire));
+            write_dec_nowait(runs);
             serial::write_str_nowait(" cpu_ms=");
-            write_dec_nowait(RUN_TSC.of(s).load(Ordering::Acquire) / (hz / 1000).max(1));
+            write_dec_nowait(run_tsc / (hz / 1000).max(1));
         }
         serial::write_line_nowait(" (ADR-022; not ISO-INSTALL-OK)");
     }
@@ -793,16 +1120,21 @@ mod hw {
         }
     }
 
-    unsafe fn other(s: usize, now: u64) -> Other {
-        if !slot::is_on(s) {
+    unsafe fn other(u: usize, now: u64) -> Other {
+        let s = slot::unit_slot(u);
+        let v = slot::unit_vcpu(u);
+        if crate::arch::host_smp::home_req_pending(s) {
             return Other::default();
         }
-        let halted = HALTED.of(s).load(Ordering::Acquire);
-        let waited_tsc = now.wrapping_sub(OFF_TSC.of(s).load(Ordering::Acquire));
+        if !slot::is_on(s) || !slot::vcpu_up(s, v) {
+            return Other::default();
+        }
+        let halted = HALTED.at(s, v).load(Ordering::Acquire);
+        let waited_tsc = now.wrapping_sub(OFF_TSC.at(s, v).load(Ordering::Acquire));
         let work = halted
-            && (slot::take_wake(s)
-                || slot::with_slot(s, || {
-                    crate::mgmt::perc_boot_choice::stop_pending()
+            && (slot::take_wake_vcpu(s, v)
+                || slot::with_vcpu(s, v, || {
+                    (v == 0 && crate::mgmt::perc_boot_choice::stop_pending())
                         || super::super::guest_irq_waiting(now)
                 }));
         Other {
@@ -837,18 +1169,27 @@ mod hw {
     ///
     /// The lab guest (no product media) and a slot the scheduler never
     /// launched are not touched: the caller continues as it always did.
-    pub unsafe fn on_guest_left() {
+    ///
+    /// Returns whether the caller should idle. `false` means another guest
+    /// is still on and the switch onto it failed: that guest stays on.
+    pub unsafe fn on_guest_left() -> bool {
+        if !crate::arch::host_smp::assert_core0("on_guest_left") {
+            return true;
+        }
         let cur = slot::current();
         serial::side_break();
         let was_on = slot::is_on(cur);
         let failed_launch = LAUNCHING.swap(false, Ordering::AcqRel);
+        // Recall every core that still holds this slot, then drop the
+        // unit words. set_on(false) is the on-bit only.
+        recall_and_release(cur);
         slot::set_on(cur, false);
         if !was_on && !failed_launch {
-            return;
+            return true;
         }
         let next = slot::first_on_except(cur);
         if next.is_none() && !crate::devices::ide_cdrom::product_iso_window_armed() {
-            return;
+            return true;
         }
         let plan = if was_on {
             leave_plan(
@@ -863,12 +1204,15 @@ mod hw {
             Leave::StayOff => {}
             Leave::Restart => {
                 RESTARTS.fetch_add(1, Ordering::AcqRel);
+                RESTART_REASON.store(super::RESTART_SCHEDULER, Ordering::Release);
                 AUTO_RESTART.store(true, Ordering::Release);
                 crate::mgmt::perc_boot_choice::note_perc_relaunch();
             }
             Leave::Off => crate::mgmt::perc_boot_choice::note_guest_off(),
         }
-        audit_log!(AuditEvent::VmStopped { guest_id: cur as u64 });
+        audit_log!(AuditEvent::VmStopped {
+            guest_id: cur as u64
+        });
         if was_on
             && LAB_AGAIN
                 .compare_exchange(cur + 1, 0, Ordering::AcqRel, Ordering::Acquire)
@@ -886,14 +1230,12 @@ mod hw {
             serial::write_byte(b'0' + cur as u8);
             serial::write_line(match plan {
                 Leave::StayOff => " is off (ADR-022; not ISO-INSTALL-OK)",
-                Leave::Restart => {
-                    " left the CPU and boots again (ADR-022; not ISO-INSTALL-OK)"
-                }
+                Leave::Restart => " left the CPU and boots again (ADR-022; not ISO-INSTALL-OK)",
                 Leave::Off => {
                     " left the CPU and is off; Start boots it (ADR-022; not ISO-INSTALL-OK)"
                 }
             });
-            return;
+            return true;
         };
         let vmcs = super::super::slot_vmcs();
         if vmcs != 0 {
@@ -905,13 +1247,13 @@ mod hw {
             slot::set_console_owner(next);
         }
         let now = cpu::rdtsc();
-        if !switch_in(next, now) {
-            serial::write_line_nowait(
-                "boot: guest switch failed: VMPTRLD refused the remaining guest's VMCS",
-            );
-            slot::set_on(next, false);
-            slot::set_current(cur);
-            return;
+        let home_v = select_home_vcpu(next);
+        if !switch_in(slot::unit(next, home_v), now) {
+            // The remaining guest keeps its units and its on-bit. Idling
+            // here is what restarted slot 0 after Stop of slot 1.
+            crate::arch::host_smp::report_switch_kept(next, home_v);
+            slot::set_current(next);
+            return false;
         }
         serial::write_str_nowait("boot: guest slot ");
         serial::write_byte_nowait(b'0' + cur as u8);
@@ -922,7 +1264,7 @@ mod hw {
         });
         serial::write_byte_nowait(b'0' + slot::on_count() as u8);
         serial::write_line_nowait(" guest(s) still on (ADR-022; not ISO-INSTALL-OK)");
-        super::super::guest_uefi_vmresume()
+        super::super::enter_guest()
     }
 }
 

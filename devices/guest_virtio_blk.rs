@@ -160,6 +160,9 @@ const VRING_DESC_F_WRITE: u16 = 2;
 /// Iron `6cfabee` / `34218742196`: 3:1 latch lived (`yield until mount`)
 /// then apk froze at virtio `n=1345`. `DATA_SEGS` was 16. virtio chain all segs.
 const DATA_SEGS: usize = QUEUE_MAX as usize;
+/// One request's data bytes: every descriptor in the queue at the
+/// transfer chunk. A larger sum is `VIRTIO_BLK_S_IOERR` (ADR-024 D17).
+pub const MAX_REQ_BYTES: u32 = (QUEUE_MAX as u32) * (VIRTIO_XFER_CHUNK as u32);
 
 struct VirtioPci {
     visible: bool,
@@ -2012,8 +2015,11 @@ fn process_blk_queue(
         let mut status_gpa = 0u64;
         let mut chain = 0u16;
         let mut got_hdr = false;
-        loop {
+        let mut data_sum = 0u64;
+        let mut bad = head >= qsize;
+        while !bad {
             if chain > qsize {
+                bad = true;
                 break;
             }
             let d_off = desc_gpa + u64::from(desc) * 16;
@@ -2035,10 +2041,20 @@ fn process_blk_queue(
             } else if (flags & VRING_DESC_F_WRITE) != 0 && len == 1 && status_gpa == 0 {
                 status_gpa = addr;
             } else if len > 0 && nseg < DATA_SEGS {
+                let add = u64::from(len);
+                if data_sum.saturating_add(add) > u64::from(MAX_REQ_BYTES) {
+                    bad = true;
+                    break;
+                }
+                data_sum += add;
                 segs[nseg] = (addr, len, (flags & VRING_DESC_F_WRITE) != 0);
                 nseg += 1;
             }
             if (flags & VRING_DESC_F_NEXT) == 0 {
+                break;
+            }
+            if next >= qsize {
+                bad = true;
                 break;
             }
             desc = next;
@@ -2049,7 +2065,9 @@ fn process_blk_queue(
         let mut status = VIRTIO_BLK_S_IOERR;
         let mut req_bytes = 0u32;
         let mut in_len = 0u32;
-        if ty == VIRTIO_BLK_T_FLUSH {
+        if bad {
+            status = VIRTIO_BLK_S_IOERR;
+        } else if ty == VIRTIO_BLK_T_FLUSH {
             // Status is stored in the used ring only after this returns.
             status = virtio_flush_status(readonly);
         } else if ty == VIRTIO_BLK_T_GET_ID {

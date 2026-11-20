@@ -10,8 +10,8 @@
 //! VMCS or EPT. Fixtures are refused. Host `cargo test` never executes the
 //! instruction.
 
-use crate::guest::slot::{PerGuest, PerGuestCell};
-use crate::{per_guest, per_guest_cell};
+use crate::guest::slot::{self, PerGuest, PerGuestCell, PerVcpu, PerVcpuCell};
+use crate::{per_guest, per_guest_cell, per_vcpu, per_vcpu_cell};
 use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, Ordering};
 
 use crate::arch::cpu::{CPUID_ECX_X2APIC, CPUID_ECX_HYPERVISOR};
@@ -454,6 +454,33 @@ pub const GUEST_UEFI_FEATURE_CONTROL_VALUE: u64 = 1;
 
 /// CPUID.1:EDX bit 28 — HTT / multi-thread package.
 pub const CPUID_EDX_HTT: u32 = 1 << 28;
+
+/// CPUID leaves a guest with `n` vCPUs sees. Leaves 0xB and 0x1F stay zero
+/// so Linux and Windows fall back to leaves 1 and 4 (ADR-023 D7).
+/// `n == 1` is unchanged: the uniprocessor filters stay the N=1 answer.
+pub fn guest_uefi_cpuid_smp(mut r: CpuidRegs, leaf: u32, vcpu: u32, n: u32) -> CpuidRegs {
+    if n <= 1 {
+        return r;
+    }
+    match leaf {
+        1 => {
+            r.ebx = (r.ebx & 0x0000_FFFF) | (n << 16) | (vcpu << 24);
+            r.edx |= CPUID_EDX_HTT;
+        }
+        4 if r.eax & 0x1F != 0 => {
+            let level = (r.eax >> 5) & 7;
+            let share = if level == 1 || level == 2 {
+                0
+            } else {
+                n.next_power_of_two().saturating_sub(1)
+            };
+            let low = r.eax & 0x0000_3FFF;
+            r.eax = low | (share << 14) | (n.saturating_sub(1) << 26);
+        }
+        _ => {}
+    }
+    r
+}
 
 /// Linux `cpuid_count(4, i)` terminator. Subleaf >= this returns type 0.
 /// Not `ISO-INSTALL-OK`.
@@ -2975,7 +3002,39 @@ pub fn guest_uefi_pf_is_linux_direct_map(cr2: u64) -> bool {
 /// Deliver `#PF` to the guest IDT (`early_make_pgtable`) instead of
 /// stopping or rebuilding SEC page tables.
 pub fn guest_uefi_pf_should_deliver_to_guest(rip: u64) -> bool {
-    (rip & (1u64 << 63)) != 0
+    // An AP never runs firmware. A low RIP is its trampoline (ADR-023).
+    // vCPU 0 keeps the high-half test, which is what `main` does.
+    slot::current_vcpu() != 0 || (rip & (1u64 << 63)) != 0
+}
+
+/// Real-mode entry an AP takes after SIPI `page`: selector, base, RIP.
+pub const fn sipi_entry(page: u8) -> (u16, u64, u64) {
+    ((page as u16) << 8, (page as u64) << 12, 0)
+}
+
+/// Primary proc-based controls for an AP: no interrupt-window, no NMI-window.
+pub const fn ap_mirror_primary(ctrl: u64) -> u64 {
+    ctrl & !((1u64 << 2) | (1u64 << 22))
+}
+
+/// VM-entry controls for an AP: not an IA-32e guest. It starts in real mode.
+pub const fn ap_mirror_entry(ctrl: u64) -> u64 {
+    ctrl & !(1u64 << 9)
+}
+
+/// AP bring-up: Off, then WaitSipi after INIT, then Running after one SIPI.
+pub const AP_OFF: u8 = 0;
+pub const AP_WAIT_SIPI: u8 = 1;
+pub const AP_RUNNING: u8 = 2;
+
+pub const fn ap_state_step(state: u8, init: bool, sipi: bool) -> u8 {
+    if init {
+        AP_WAIT_SIPI
+    } else if sipi && state == AP_WAIT_SIPI {
+        AP_RUNNING
+    } else {
+        state
+    }
 }
 
 /// SDM 24.8.3: VM-entry interruption type = NMI.
@@ -4398,10 +4457,10 @@ const NET_TRACE_N: usize = 25;
 /// 26.5.1.2); the old exit path never read the field.
 static IDTV_SEEN: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 static REINJECT_N: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
-static REINJECT_INFO: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static REINJECT_INFO: PerVcpu<AtomicU32> = per_vcpu!(AtomicU32::new(0));
 static SPIN_JMP_SKIPS: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
-static LAST_PREEMPT_RIP: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(u64::MAX));
-static PREEMPT_SAME_RIP: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
+static LAST_PREEMPT_RIP: PerVcpu<AtomicU64> = per_vcpu!(AtomicU64::new(u64::MAX));
+static PREEMPT_SAME_RIP: PerVcpu<AtomicU32> = per_vcpu!(AtomicU32::new(0));
 static CR_ACCESSES: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 static PCI_BDF_SEEN0: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
 static PCI_BDF_SEEN1: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
@@ -4434,17 +4493,17 @@ static PREEMPT_SHIFT: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(PREEMPT_SH
 /// timer is clamped for UART pacing. 0 = not tracking.
 static PREEMPT_NOMINAL_DUE_TSC: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
 /// The last resume armed a UART pacing clamp, not the nominal reload.
-static PREEMPT_UART_PACED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static PREEMPT_UART_PACED: PerVcpu<AtomicBool> = per_vcpu!(AtomicBool::new(false));
 /// This VM exit is a UART pacing tick (drain + inject only; no HPET step,
 /// no PIT raise, no exit-count bump). Cleared at resume.
-static UART_PACE_EXIT: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static UART_PACE_EXIT: PerVcpu<AtomicBool> = per_vcpu!(AtomicBool::new(false));
 /// The exit being handled is a nominal (HPET/PIT) preemption tick, not a
 /// pacing or scheduling one. The next arm starts a new nominal period.
-static PREEMPT_TICK_TAKEN: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static PREEMPT_TICK_TAKEN: PerVcpu<AtomicBool> = per_vcpu!(AtomicBool::new(false));
 /// The last arm clamped the timer for the guest scheduler (ADR-022). The
 /// first arm after the guest has the CPU to itself again puts back the
 /// value the VMCS held.
-static PREEMPT_SHARED_ARMED: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static PREEMPT_SHARED_ARMED: PerVcpu<AtomicBool> = per_vcpu!(AtomicBool::new(false));
 /// Pacing ticks taken since reset (stall heartbeat `pace=`).
 static UART_PACE_EXITS: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 static UART_PACE_LOG: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
@@ -4460,6 +4519,23 @@ static RAYNU_F_MODE: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// True after RayNu-F VMLAUNCH. Diskprime / GPT staging run before this.
 pub fn raynu_f_running() -> bool {
     RAYNU_F_MODE.load(Ordering::Acquire)
+}
+
+/// Set for the whole firmware phase of one slot, including the work before
+/// `RAYNU_F_MODE` is stored. Any slot in that phase suppresses the stall pulse.
+static FIRMWARE_PHASE: [AtomicBool; crate::guest::slot::MAX_GUESTS] =
+    [const { AtomicBool::new(false) }; crate::guest::slot::MAX_GUESTS];
+
+pub fn note_firmware_phase(slot: usize, on: bool) {
+    if slot < crate::guest::slot::MAX_GUESTS {
+        FIRMWARE_PHASE[slot].store(on, Ordering::Release);
+    }
+}
+
+pub fn any_firmware_phase() -> bool {
+    (0..crate::guest::slot::MAX_GUESTS).any(|s| {
+        FIRMWARE_PHASE[s].load(Ordering::Acquire) || RAYNU_F_MODE.of(s).load(Ordering::Acquire)
+    })
 }
 /// F2b one-shot: the RayNu-F launch has been attempted on this boot.
 static RAYNU_F_RAN: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
@@ -4604,9 +4680,9 @@ static PF_FIXUPS: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 #[cfg(target_os = "uefi")]
 static PF_LINUX_DELIVER: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 #[cfg(target_os = "uefi")]
-static PF_LINUX_CR2: PerGuest<AtomicU64> = per_guest!(AtomicU64::new(0));
+static PF_LINUX_CR2: PerVcpu<AtomicU64> = per_vcpu!(AtomicU64::new(0));
 #[cfg(target_os = "uefi")]
-static LINUX_EXC_INJECT: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+static LINUX_EXC_INJECT: PerVcpu<AtomicBool> = per_vcpu!(AtomicBool::new(false));
 #[cfg(target_os = "uefi")]
 static LINUX_CPUID: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
 #[cfg(target_os = "uefi")]
@@ -4727,7 +4803,17 @@ struct SavedXmm([u8; 256]);
 #[cfg(target_os = "uefi")]
 static mut SAVED_XMM: SavedXmm = SavedXmm([0; 256]);
 
-static SAVED_VMCS: PerGuestCell<u64> = per_guest_cell!(0);
+static SAVED_VMCS: PerVcpuCell<u64> = per_vcpu_cell!(0);
+/// GDT and TSS pages handed to an AP's `setup_guest_uefi_vmcs`.
+/// `install_host_tss` ignores them once the host TSS is installed.
+static AP_SCRATCH: PerGuestCell<[u64; 2]> = per_guest_cell!([0; 2]);
+/// 0 off, 1 waiting for SIPI, 2 running (ADR-023).
+static AP_STATE: PerVcpu<AtomicU8> = per_vcpu!(AtomicU8::new(0));
+/// The next entry of this vCPU is VMLAUNCH, not VMRESUME.
+static AP_NEEDS_LAUNCH: PerVcpu<AtomicBool> = per_vcpu!(AtomicBool::new(false));
+/// First-exit and long-mode breadcrumbs, once per AP start.
+static AP_SAW_EXIT: PerVcpu<AtomicBool> = per_vcpu!(AtomicBool::new(false));
+static AP_SAW_LONG: PerVcpu<AtomicBool> = per_vcpu!(AtomicBool::new(false));
 /// Host stack pages for the guest-UEFI VM-exit path (`HOST_RSP` points at
 /// the top). Every exit re-enters at the top, so only the deepest single
 /// exit matters. Was 4 (16 KiB); iron `59ac070` / `34425781629` F7 relaunch
@@ -4735,8 +4821,9 @@ static SAVED_VMCS: PerGuestCell<u64> = per_guest_cell!(0);
 /// into the private VMCS one frame below. 32 pages leaves headroom above
 /// the largest release frame (~74 KiB) even if such a temporary returns.
 /// guest-UEFI host stack pages.
-/// 1 MiB. Every guest slot's VMCS names this one stack as `HOST_RSP`: only
-/// one guest is in VMX non-root at a time and each exit starts at the top.
+/// 1 MiB. Core 0's VMCS names this stack as `HOST_RSP`. A vCPU homed on
+/// another core gets that core's stack when it is loaded (ADR-024). Each
+/// exit starts at the top of the stack it entered on.
 pub const GUEST_UEFI_HOST_STACK_PAGES: u64 = 256;
 /// One canary page below the host stack. Filled with
 /// [`GUEST_UEFI_HOST_STACK_GUARD_BYTE`]; checked before F7 `VMCLEAR`.
@@ -5530,6 +5617,9 @@ unsafe fn launch_uefi(
     gpa: u64,
     fw_len: u64,
 ) -> Result<(), GuestUefiLaunchError> {
+    if !crate::arch::host_smp::assert_core0("launch_uefi") {
+        return Err(GuestUefiLaunchError::LaunchSetupFailed);
+    }
     capture_host_xsave_before_guest_uefi();
     guest_uefi_mtrr_reset();
     // Iron `6334704`: hold after FIX WB still ASSERT `mtrrv=0`
@@ -5602,6 +5692,7 @@ unsafe fn launch_uefi(
         return Err(GuestUefiLaunchError::LaunchSetupFailed);
     };
     HOST_RSP_SHARED.store(host_rsp, Ordering::Release);
+    crate::arch::host_smp::note_core0_stack(host_rsp);
 
     let ept_need = frames_required_firmware_alias(gpa, fw_len);
     if ept_need > 8 {
@@ -5760,7 +5851,7 @@ unsafe fn launch_uefi(
                 }
             }
             if pre != 0 {
-                crate::memory::ept_hw::invept_global();
+                crate::arch::host_smp::invept_everywhere();
                 REPORT_RAM_MAPS.store(pre as u32, Ordering::Release);
                 serial::write_str("boot: guest-UEFI report-RAM EPT pre-map n=");
                 write_dec(pre);
@@ -5841,6 +5932,7 @@ unsafe fn launch_uefi(
     let msr_bmp = alloc_phys(alloc);
 
     *SAVED_VMCS.p() = vmcs;
+    store_ap_vmcs_pages(0, || alloc_phys(alloc));
     let _ = GUEST_UEFI_PRIVATE_VMCS_ID;
 
     serial::write_str("boot: guest-UEFI private VMCS=0x");
@@ -5932,12 +6024,18 @@ unsafe fn launch_uefi(
     }
 
     serial::write_line("boot: guest-UEFI VMLAUNCH → reset vector 0xFFFF_FFF0");
+    crate::arch::host_smp::monitor_leave();
+    crate::arch::host_smp::release();
     match ops::vmlaunch() {
         Ok(()) => {
+            crate::arch::host_smp::acquire();
+            crate::arch::host_smp::monitor_reenter();
             serial::write_line("boot: ERROR — guest-UEFI VMLAUNCH returned Ok");
             Err(GuestUefiLaunchError::LaunchSetupFailed)
         }
         Err(_) => {
+            crate::arch::host_smp::acquire();
+            crate::arch::host_smp::monitor_reenter();
             let ierr = ops::vmread(VM_INSTRUCTION_ERROR).unwrap_or(0xFFFF) as u32;
             LAST_INSN_ERROR.store(ierr, Ordering::Release);
             serial::write_str("boot: guest-UEFI VMLAUNCH failed insn_error=0x");
@@ -6307,6 +6405,24 @@ unsafe fn vw(field: u64, value: u64) -> Result<(), LaunchError> {
 #[unsafe(naked)]
 pub unsafe extern "C" fn guest_uefi_vmexit_landing() -> ! {
     core::arch::naked_asm!(
+        "push rax",
+        "push rdx",
+        "rdtsc",
+        "shl rdx, 32",
+        "or rax, rdx",
+        "push rax",
+        "mov eax, 1",
+        "lock xadd dword ptr [rip + {mon_next}], eax",
+        "2:",
+        "cmp dword ptr [rip + {mon_owner}], eax",
+        "je 3f",
+        "pause",
+        "jmp 2b",
+        "3:",
+        "pop rax",
+        "mov [rip + {land_tsc}], rax",
+        "pop rdx",
+        "pop rax",
         "mov [rip + {slot_rax}], rax",
         "mov [rip + {slot_rbx}], rbx",
         "mov [rip + {slot_rcx}], rcx",
@@ -6361,7 +6477,22 @@ pub unsafe extern "C" fn guest_uefi_vmexit_landing() -> ! {
         xmm = sym SAVED_XMM,
         osfxsr = const crate::arch::cpu::CR4_OSFXSR,
         cont = sym guest_uefi_vmexit,
+        mon_next = sym crate::arch::host_smp::MON_NEXT,
+        mon_owner = sym crate::arch::host_smp::MON_OWNER,
+        land_tsc = sym crate::arch::host_smp::LAND_TSC,
     );
+}
+
+/// Enter the current vCPU. An AP's first entry is `VMLAUNCH` (ADR-023);
+/// every later entry is `VMRESUME`.
+#[cfg(target_os = "uefi")]
+unsafe fn enter_guest() -> ! {
+    crate::arch::host_smp::monitor_leave();
+    if AP_NEEDS_LAUNCH.swap(false, Ordering::AcqRel) {
+        guest_uefi_vmlaunch()
+    } else {
+        guest_uefi_vmresume()
+    }
 }
 
 #[cfg(target_os = "uefi")]
@@ -6400,7 +6531,22 @@ unsafe extern "C" fn guest_uefi_vmresume() -> ! {
         "mov r13, [rip + {slot_r13}]",
         "mov r14, [rip + {slot_r14}]",
         "mov r15, [rip + {slot_r15}]",
+        "mov al, byte ptr [rip + {mon_holder}]",
+        "mov byte ptr [rip + {last_holder}], al",
+        "mov byte ptr [rip + {mon_holder}], 0xff",
+        "lock inc dword ptr [rip + {mon_owner}]",
         "vmresume",
+        "mov eax, 1",
+        "lock xadd dword ptr [rip + {mon_next}], eax",
+        "2:",
+        "cmp dword ptr [rip + {mon_owner}], eax",
+        "je 3f",
+        "pause",
+        "jmp 2b",
+        "3:",
+        "sub rsp, 40",
+        "call {claim}",
+        "add rsp, 40",
         "jmp {fail}",
         slot_rax = sym SAVED_RAX,
         slot_rbx = sym SAVED_RBX,
@@ -6419,16 +6565,614 @@ unsafe extern "C" fn guest_uefi_vmresume() -> ! {
         slot_r15 = sym SAVED_R15,
         xmm = sym SAVED_XMM,
         fail = sym guest_uefi_resume_failed,
+        mon_owner = sym crate::arch::host_smp::MON_OWNER,
+        mon_next = sym crate::arch::host_smp::MON_NEXT,
+        mon_holder = sym crate::arch::host_smp::MON_HOLDER,
+        last_holder = sym crate::arch::host_smp::LAST_RELEASED_HOLDER,
+        claim = sym crate::arch::host_smp::claim_holder,
     );
 }
 
 #[cfg(target_os = "uefi")]
 unsafe extern "C" fn guest_uefi_resume_failed() -> ! {
+    crate::arch::host_smp::monitor_reenter();
     let ierr = ops::vmread(VM_INSTRUCTION_ERROR).unwrap_or(0xFFFF);
     serial::write_str_nowait("boot: guest-UEFI VMRESUME failed insn_error=");
     write_dec_nowait(ierr);
     serial::write_byte_nowait(b'\n');
     leave_to_e4();
+}
+
+#[cfg(target_os = "uefi")]
+#[unsafe(naked)]
+unsafe extern "C" fn guest_uefi_vmlaunch() -> ! {
+    core::arch::naked_asm!(
+        "lea rax, [rip + {xmm}]",
+        "movdqu xmm0, [rax]",
+        "movdqu xmm1, [rax + 16]",
+        "movdqu xmm2, [rax + 32]",
+        "movdqu xmm3, [rax + 48]",
+        "movdqu xmm4, [rax + 64]",
+        "movdqu xmm5, [rax + 80]",
+        "movdqu xmm6, [rax + 96]",
+        "movdqu xmm7, [rax + 112]",
+        "movdqu xmm8, [rax + 128]",
+        "movdqu xmm9, [rax + 144]",
+        "movdqu xmm10, [rax + 160]",
+        "movdqu xmm11, [rax + 176]",
+        "movdqu xmm12, [rax + 192]",
+        "movdqu xmm13, [rax + 208]",
+        "movdqu xmm14, [rax + 224]",
+        "movdqu xmm15, [rax + 240]",
+        "mov rax, [rip + {slot_rax}]",
+        "mov rbx, [rip + {slot_rbx}]",
+        "mov rcx, [rip + {slot_rcx}]",
+        "mov rdx, [rip + {slot_rdx}]",
+        "mov rsi, [rip + {slot_rsi}]",
+        "mov rdi, [rip + {slot_rdi}]",
+        "mov rbp, [rip + {slot_rbp}]",
+        "mov r8, [rip + {slot_r8}]",
+        "mov r9, [rip + {slot_r9}]",
+        "mov r10, [rip + {slot_r10}]",
+        "mov r11, [rip + {slot_r11}]",
+        "mov r12, [rip + {slot_r12}]",
+        "mov r13, [rip + {slot_r13}]",
+        "mov r14, [rip + {slot_r14}]",
+        "mov r15, [rip + {slot_r15}]",
+        "mov al, byte ptr [rip + {mon_holder}]",
+        "mov byte ptr [rip + {last_holder}], al",
+        "mov byte ptr [rip + {mon_holder}], 0xff",
+        "lock inc dword ptr [rip + {mon_owner}]",
+        "vmlaunch",
+        "mov eax, 1",
+        "lock xadd dword ptr [rip + {mon_next}], eax",
+        "2:",
+        "cmp dword ptr [rip + {mon_owner}], eax",
+        "je 3f",
+        "pause",
+        "jmp 2b",
+        "3:",
+        "sub rsp, 40",
+        "call {claim}",
+        "add rsp, 40",
+        "jmp {fail}",
+        slot_rax = sym SAVED_RAX,
+        slot_rbx = sym SAVED_RBX,
+        slot_rcx = sym SAVED_RCX,
+        slot_rdx = sym SAVED_RDX,
+        slot_rsi = sym SAVED_RSI,
+        slot_rdi = sym SAVED_RDI,
+        slot_rbp = sym SAVED_RBP,
+        slot_r8 = sym SAVED_R8,
+        slot_r9 = sym SAVED_R9,
+        slot_r10 = sym SAVED_R10,
+        slot_r11 = sym SAVED_R11,
+        slot_r12 = sym SAVED_R12,
+        slot_r13 = sym SAVED_R13,
+        slot_r14 = sym SAVED_R14,
+        slot_r15 = sym SAVED_R15,
+        xmm = sym SAVED_XMM,
+        fail = sym guest_uefi_launch_failed,
+        mon_owner = sym crate::arch::host_smp::MON_OWNER,
+        mon_next = sym crate::arch::host_smp::MON_NEXT,
+        mon_holder = sym crate::arch::host_smp::MON_HOLDER,
+        last_holder = sym crate::arch::host_smp::LAST_RELEASED_HOLDER,
+        claim = sym crate::arch::host_smp::claim_holder,
+    );
+}
+
+#[cfg(target_os = "uefi")]
+unsafe extern "C" fn guest_uefi_launch_failed() -> ! {
+    crate::arch::host_smp::monitor_reenter();
+    let ierr = ops::vmread(VM_INSTRUCTION_ERROR).unwrap_or(0xFFFF);
+    serial::write_str_nowait("boot: B7 vcpu ");
+    write_dec_nowait(slot::current_vcpu() as u64);
+    serial::write_str_nowait(" VMLAUNCH failed insn_error=");
+    write_dec_nowait(ierr);
+    serial::write_byte_nowait(b'\n');
+    leave_to_e4();
+}
+
+/// TSC offset VMCS field (SDM Appendix B). Not in the clone list.
+#[cfg(target_os = "uefi")]
+const VMCS_TSC_OFFSET: u64 = 0x2010;
+
+/// Zeroed AP VMCS pages and two scratch pages, or nothing when the pool
+/// cannot hold them. A short pool leaves the slot at one vCPU.
+#[cfg(target_os = "uefi")]
+unsafe fn store_ap_vmcs_pages(slot_n: usize, mut next: impl FnMut() -> Option<u64>) {
+    let n = slot::MAX_VCPUS - 1 + 2;
+    let mut pages = [0u64; slot::MAX_VCPUS - 1 + 2];
+    for p in pages.iter_mut().take(n) {
+        let Some(pa) = next() else {
+            return;
+        };
+        // SAFETY: `pa` is a fresh 4 KiB frame from the caller's pool.
+        // KANI-TARGET: AP VMCS page zero (outside Proven Core).
+        core::ptr::write_bytes(pa as *mut u8, 0, 4096);
+        *p = pa;
+    }
+    for v in 1..slot::MAX_VCPUS {
+        // SAFETY: the bank entry is this slot's AP VMCS word.
+        // KANI-TARGET: AP VMCS word store (outside Proven Core).
+        *SAVED_VMCS.p_at(slot_n, v) = pages[v - 1];
+    }
+    // SAFETY: scratch belongs to this slot; the guest is not running it.
+    // KANI-TARGET: AP scratch pages (outside Proven Core).
+    let scratch = AP_SCRATCH.p_of(slot_n);
+    (*scratch)[0] = pages[slot::MAX_VCPUS - 1];
+    (*scratch)[1] = pages[slot::MAX_VCPUS];
+}
+
+#[cfg(target_os = "uefi")]
+fn apply_vcpus_for_start() {
+    let s = slot::current();
+    let want = crate::boot::raynu_f_flag::lab_vcpus().max(crate::mgmt::guest_cpu::armed()) as usize;
+    let mut n = want.clamp(1, slot::MAX_VCPUS);
+    let cap = crate::mgmt::guest_cpu::cpu_max() as usize;
+    if n > cap {
+        if (crate::boot::raynu_f_flag::lab_vcpus() as usize) > cap {
+            serial::write_str_nowait("boot: B21 guest slot ");
+            write_dec_nowait(s as u64);
+            serial::write_str_nowait(" asked for ");
+            write_dec_nowait(want as u64);
+            serial::write_str_nowait(" vCPUs; ");
+            write_dec_nowait(cap as u64);
+            serial::write_line_nowait(" host cores online");
+        }
+        n = cap.max(1);
+    }
+    let pages_ok = (1..n).all(|v| unsafe { *SAVED_VMCS.p_at(s, v) != 0 });
+    if n > 1 && (!guest_sched::can_share() || !pages_ok) {
+        n = 1;
+    }
+    slot::set_vcpus(n);
+    if n > 1 {
+        serial::write_str_nowait("boot: B7 guest slot ");
+        write_dec_nowait(s as u64);
+        serial::write_str_nowait(" vcpus=");
+        write_dec_nowait(n as u64);
+        if crate::arch::host_smp::cores_online() > 1 {
+            serial::write_line_nowait(
+                " (vCPUs are placed on host cores as they start; ADR-024; not ISO-INSTALL-OK)",
+            );
+        } else {
+            serial::write_line_nowait(
+                " (vCPUs share one host core; ADR-023; not ISO-INSTALL-OK)",
+            );
+        }
+    }
+}
+
+/// Drop every AP back to off and make the BSP VMCS current.
+#[cfg(target_os = "uefi")]
+unsafe fn smp_collapse() {
+    if !crate::arch::host_smp::assert_core0("smp_collapse") {
+        return;
+    }
+    let s = slot::current();
+    if slot::vcpus() == 1 && slot::current_vcpu() == 0 {
+        return;
+    }
+    let mut homes = [0usize; slot::MAX_VCPUS];
+    let mut n_homes = 0usize;
+    for v in 1..slot::MAX_VCPUS {
+        let home = crate::arch::host_smp::assigned(slot::unit(s, v));
+        if home != 0 && !homes[..n_homes].contains(&home) {
+            homes[n_homes] = home;
+            n_homes += 1;
+        }
+    }
+    if n_homes > 0 {
+        recall_cores(&homes[..n_homes]);
+    }
+    for v in 1..slot::MAX_VCPUS {
+        if AP_STATE.at(s, v).load(Ordering::Acquire) != AP_OFF {
+            let vmcs = *SAVED_VMCS.p_at(s, v);
+            if vmcs != 0 {
+                let _ = ops::vmclear(vmcs);
+            }
+            AP_STATE.at(s, v).store(AP_OFF, Ordering::Release);
+            crate::arch::host_smp::assign_unit(slot::unit(s, v), 0);
+            AP_NEEDS_LAUNCH.at(s, v).store(false, Ordering::Release);
+            AP_SAW_EXIT.at(s, v).store(false, Ordering::Release);
+            AP_SAW_LONG.at(s, v).store(false, Ordering::Release);
+        }
+    }
+    slot::clear_aps(s);
+    if slot::current_vcpu() != 0 {
+        slot::set_current_vcpu(0);
+        let bsp = *SAVED_VMCS.p();
+        if bsp != 0 && ops::vmptrld(bsp).is_err() {
+            serial::write_line_nowait(
+                "boot: B7 collapse VMPTRLD refused the BSP VMCS (ADR-023; not ISO-INSTALL-OK)",
+            );
+        }
+    }
+}
+
+/// A non-zero core cannot stop or reset the guest. It posts that slot's
+/// [`host_smp::post_home_req`] and parks. Core 0 switches to the slot first.
+#[cfg(target_os = "uefi")]
+unsafe fn hand_back_to_core0(reset: bool) -> ! {
+    let req = if reset {
+        crate::arch::host_smp::REQ_RESET
+    } else {
+        crate::arch::host_smp::REQ_LEAVE
+    };
+    crate::arch::host_smp::post_home_req(slot::current(), req);
+    remote_recall_and_park()
+}
+
+/// VMCLEAR the VMCS this core loaded, then sleep until core 0 hands it a unit.
+#[cfg(target_os = "uefi")]
+pub unsafe fn remote_recall_and_park() -> ! {
+    let core = crate::arch::host_smp::this_core();
+    if crate::arch::host_smp::take_loaded(core) {
+        let vmcs = slot_vmcs();
+        if vmcs != 0 {
+            let _ = ops::vmclear(vmcs);
+        }
+        let u = slot::unit(slot::current(), slot::current_vcpu());
+        crate::arch::host_smp::assign_unit(u, 0);
+    }
+    crate::arch::host_smp::finish_recall(core);
+    loop {
+        yield_monitor_until(None, || {
+            crate::arch::host_smp::wait_mailbox(core);
+            true
+        });
+        if crate::arch::host_smp::recall_waiting(core) {
+            crate::arch::host_smp::finish_recall(core);
+            continue;
+        }
+        let _ = guest_sched::launch_on_core(core);
+    }
+}
+
+/// The mailbox woke this core. The caller does not hold the monitor.
+#[cfg(target_os = "uefi")]
+pub unsafe fn on_ap_wake(core: usize) {
+    if !crate::arch::host_smp::remote_placed()
+        && !crate::arch::host_smp::recall_waiting(core)
+    {
+        return;
+    }
+    crate::arch::host_smp::acquire();
+    if !guest_sched::launch_on_core(core) {
+        crate::arch::host_smp::release();
+    }
+}
+
+/// Point the current VMCS at this core's host stack.
+#[cfg(target_os = "uefi")]
+unsafe fn bind_host_rsp() -> bool {
+    let core = crate::arch::host_smp::this_core();
+    // Core 0's VMCS already names its stack. Rewriting it from a
+    // mis-identified exit would point the next exit at another core's stack.
+    if core == 0 {
+        return true;
+    }
+    let top = crate::arch::host_smp::stack_top_of(core);
+    if top == 0 {
+        return true;
+    }
+    ops::vmwrite(HOST_RSP, top).is_ok()
+}
+
+/// A halted vCPU's core waits outside the monitor, then enters it again.
+#[cfg(target_os = "uefi")]
+pub unsafe fn ap_halt_pause(core: usize, unit: usize) -> ! {
+    let hz = crate::boot::raynu_f_flag::tsc_hz().max(1_000_000);
+    let ticks = hz / 5_000;
+    let start = cpu::rdtsc();
+    yield_monitor_until(None, || {
+        crate::arch::host_smp::recall_waiting(core)
+            || cpu::rdtsc().wrapping_sub(start) >= ticks
+    });
+    slot::set_current(slot::unit_slot(unit));
+    slot::set_current_vcpu(slot::unit_vcpu(unit));
+    if crate::arch::host_smp::recall_waiting(core) {
+        remote_recall_and_park();
+    }
+    guest_sched::reenter(unit)
+}
+
+/// Give the monitor to other cores until `done()`, then take it back with
+/// this core's guest context as it was. The only place a handler drops the lock.
+///
+/// # Safety
+/// Caller holds the monitor and is on the exit path.
+#[cfg(target_os = "uefi")]
+pub unsafe fn yield_monitor_until(wait_core: Option<usize>, mut done: impl FnMut() -> bool) {
+    let s = slot::current();
+    let v = slot::current_vcpu();
+    let gpr = saved_gprs();
+    let xmm = saved_xmm();
+    let spec = msr_firewall::shadow_read(msr_firewall::MSR_SPEC_CTRL);
+    let apic = msr_firewall::shadow_read(msr_firewall::MSR_APIC_BASE);
+    let core = crate::arch::host_smp::this_core();
+    let hz = crate::boot::raynu_f_flag::tsc_hz().max(1);
+    let start = cpu::rdtsc();
+    let mut late = false;
+    crate::arch::host_smp::release();
+    while !done() {
+        if crate::arch::host_smp::waited_2s_due(
+            cpu::rdtsc().wrapping_sub(start),
+            hz,
+            late,
+        ) {
+            late = true;
+            let mut buf = [0u8; 96];
+            let n = crate::arch::host_smp::format_waited_2s(
+                core,
+                wait_core.unwrap_or(0xff),
+                &mut buf,
+            );
+            let n = n.min(buf.len());
+            let _ = serial::com2_bytes_direct(&buf[..n]);
+        }
+        core::hint::spin_loop();
+    }
+    crate::arch::host_smp::acquire();
+    load_saved_gprs(&gpr);
+    load_saved_xmm(&xmm);
+    slot::set_current(s);
+    slot::set_current_vcpu(v);
+    msr_firewall::shadow_write(msr_firewall::MSR_SPEC_CTRL, spec);
+    msr_firewall::shadow_write(msr_firewall::MSR_APIC_BASE, apic);
+    crate::arch::host_smp::take_pending_invept();
+}
+
+/// Wait until each core has VMCLEARed the VMCS it holds. Restores the
+/// register image and the current slot around the wait.
+#[cfg(target_os = "uefi")]
+unsafe fn recall_cores(homes: &[usize]) {
+    for &home in homes {
+        if home == 0 || home == crate::arch::host_smp::this_core() {
+            continue;
+        }
+        crate::arch::host_smp::request_recall(home);
+        yield_monitor_until(Some(home), || crate::arch::host_smp::recall_finished(home));
+    }
+}
+
+/// Home a vCPU that just came up. vCPU 0 stays on core 0. A later vCPU is
+/// VMCLEARed here and launched by the core [`place_vcpu`] chose.
+#[cfg(target_os = "uefi")]
+unsafe fn place_running_vcpu(s: usize, v: usize, vmcs: u64) {
+    let u = slot::unit(s, v);
+    let online = crate::arch::host_smp::cores_online();
+    if v == 0 || online <= 1 {
+        crate::arch::host_smp::assign_unit(u, 0);
+        return;
+    }
+    let mut loads = [0u8; crate::arch::host_smp::MAX_CORES];
+    for s2 in 0..slot::MAX_GUESTS {
+        if !slot::is_on(s2) {
+            continue;
+        }
+        for v2 in 0..slot::MAX_VCPUS {
+            if s2 == s && v2 == v {
+                continue;
+            }
+            if !slot::vcpu_up(s2, v2) {
+                continue;
+            }
+            let c = crate::arch::host_smp::assigned(slot::unit(s2, v2));
+            if c < loads.len() {
+                loads[c] = loads[c].saturating_add(1);
+            }
+        }
+    }
+    let core = crate::arch::host_smp::place_vcpu(v, &loads, online);
+    if core == 0 || ops::vmclear(vmcs).is_err() {
+        crate::arch::host_smp::assign_unit(u, 0);
+        if core != 0 {
+            serial::write_line_nowait(
+                "boot: B21 VMCLEAR refused the vCPU; it stays on core 0 (ADR-024; not ISO-INSTALL-OK)",
+            );
+        }
+        return;
+    }
+    crate::arch::host_smp::assign_unit(u, core);
+    crate::arch::host_smp::poke_core(core);
+    serial::write_str_nowait("boot: B21 vcpu ");
+    write_dec_nowait(v as u64);
+    serial::write_str_nowait(" on host core ");
+    write_dec_nowait(core as u64);
+    serial::write_line_nowait(" (ADR-024; not ISO-INSTALL-OK)");
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn ap_init(v: usize) {
+    if !crate::arch::host_smp::assert_core0("ap_init") {
+        return;
+    }
+    let s = slot::current();
+    let home = crate::arch::host_smp::assigned(slot::unit(s, v));
+    if home != 0 {
+        recall_cores(&[home]);
+    }
+    if AP_STATE.at(s, v).load(Ordering::Acquire) == AP_RUNNING {
+        slot::set_vcpu_up(s, v, false);
+        let vmcs = *SAVED_VMCS.p_at(s, v);
+        if vmcs != 0 {
+            let _ = ops::vmclear(vmcs);
+        }
+    }
+    AP_STATE.at(s, v).store(ap_state_step(AP_STATE.at(s, v).load(Ordering::Acquire), true, false), Ordering::Release);
+    serial::write_str_nowait("boot: B7 vcpu ");
+    write_dec_nowait(v as u64);
+    serial::write_line_nowait(" init");
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn ap_fail(sender: u64, v: usize) {
+    if sender != 0 {
+        let _ = ops::vmptrld(sender);
+    }
+    AP_STATE.at(slot::current(), v).store(AP_OFF, Ordering::Release);
+    serial::write_str_nowait("boot: B7 vcpu ");
+    write_dec_nowait(v as u64);
+    serial::write_line_nowait(" start failed (ADR-023; not ISO-INSTALL-OK)");
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn ap_start(v: usize, page: u8) {
+    if !crate::arch::host_smp::assert_core0("ap_start") {
+        return;
+    }
+    let s = slot::current();
+    let sender = *SAVED_VMCS.p();
+    let ap = *SAVED_VMCS.p_at(s, v);
+    if sender == 0 || ap == 0 {
+        ap_fail(sender, v);
+        return;
+    }
+    let read = |enc: u64| ops::vmread(enc);
+    let Ok(eptp) = read(EPT_POINTER) else { ap_fail(sender, v); return; };
+    let Ok(io_a) = read(IO_BITMAP_A) else { ap_fail(sender, v); return; };
+    let Ok(io_b) = read(IO_BITMAP_B) else { ap_fail(sender, v); return; };
+    let Ok(msr_bmp) = read(MSR_BITMAP) else { ap_fail(sender, v); return; };
+    let Ok(pin) = read(PIN_BASED_VM_EXEC_CONTROL) else { ap_fail(sender, v); return; };
+    let Ok(primary) = read(PRIMARY_PROC_BASED_VM_EXEC_CONTROL) else { ap_fail(sender, v); return; };
+    let Ok(secondary) = read(SECONDARY_VM_EXEC_CONTROL) else { ap_fail(sender, v); return; };
+    let Ok(exc) = read(EXCEPTION_BITMAP) else { ap_fail(sender, v); return; };
+    let Ok(pf_mask) = read(PAGE_FAULT_ERROR_CODE_MASK) else { ap_fail(sender, v); return; };
+    let Ok(pf_match) = read(PAGE_FAULT_ERROR_CODE_MATCH) else { ap_fail(sender, v); return; };
+    let Ok(cr0m) = read(CR0_GUEST_HOST_MASK) else { ap_fail(sender, v); return; };
+    let Ok(cr4m) = read(CR4_GUEST_HOST_MASK) else { ap_fail(sender, v); return; };
+    let Ok(exit_ctl) = read(VM_EXIT_CONTROLS) else { ap_fail(sender, v); return; };
+    let Ok(entry_ctl) = read(VM_ENTRY_CONTROLS) else { ap_fail(sender, v); return; };
+    let Ok(tsc_off) = read(VMCS_TSC_OFFSET) else { ap_fail(sender, v); return; };
+    let scratch = *AP_SCRATCH.p();
+    let host_rsp = HOST_RSP_SHARED.load(Ordering::Acquire);
+    if setup_guest_uefi_vmcs(
+        ap,
+        host_rsp,
+        scratch[0],
+        scratch[1],
+        eptp,
+        Some(io_a),
+        Some(io_b),
+        Some(msr_bmp),
+    )
+    .is_err()
+    {
+        ap_fail(sender, v);
+        return;
+    }
+    let primary = ap_mirror_primary(primary);
+    let entry_ctl = ap_mirror_entry(entry_ctl);
+    let writes = [
+        (PIN_BASED_VM_EXEC_CONTROL, pin),
+        (PRIMARY_PROC_BASED_VM_EXEC_CONTROL, primary),
+        (SECONDARY_VM_EXEC_CONTROL, secondary),
+        (EXCEPTION_BITMAP, exc),
+        (PAGE_FAULT_ERROR_CODE_MASK, pf_mask),
+        (PAGE_FAULT_ERROR_CODE_MATCH, pf_match),
+        (CR0_GUEST_HOST_MASK, cr0m),
+        (CR4_GUEST_HOST_MASK, cr4m),
+        (VM_EXIT_CONTROLS, exit_ctl),
+        (VM_ENTRY_CONTROLS, entry_ctl),
+        (VMCS_TSC_OFFSET, tsc_off),
+        (EPT_POINTER, eptp),
+        (IO_BITMAP_A, io_a),
+        (IO_BITMAP_B, io_b),
+        (MSR_BITMAP, msr_bmp),
+    ];
+    for (enc, val) in writes {
+        if ops::vmwrite(enc, val).is_err() {
+            ap_fail(sender, v);
+            return;
+        }
+    }
+    let (sel, base, rip) = sipi_entry(page);
+    if ops::vmwrite(GUEST_CS_SELECTOR, u64::from(sel)).is_err()
+        || ops::vmwrite(GUEST_CS_BASE, base).is_err()
+        || ops::vmwrite(GUEST_RIP, rip).is_err()
+    {
+        ap_fail(sender, v);
+        return;
+    }
+    if ops::vmptrld(sender).is_err() {
+        serial::write_line_nowait(
+            "boot: B7 VMPTRLD refused the sender VMCS (ADR-023; not ISO-INSTALL-OK)",
+        );
+        leave_to_e4();
+    }
+    slot::with_vcpu(s, v, || {
+        crate::devices::lapic_virt::reset();
+        let reinject_clear = 0u32;
+        REINJECT_INFO.store(reinject_clear, Ordering::Release);
+        LINUX_EXC_INJECT.store(false, Ordering::Release);
+        PF_LINUX_CR2.store(0, Ordering::Release);
+        LAST_PREEMPT_RIP.store(u64::MAX, Ordering::Release);
+        PREEMPT_SAME_RIP.store(0, Ordering::Release);
+        PREEMPT_UART_PACED.store(false, Ordering::Release);
+        UART_PACE_EXIT.store(false, Ordering::Release);
+        PREEMPT_TICK_TAKEN.store(false, Ordering::Release);
+        PREEMPT_SHARED_ARMED.store(false, Ordering::Release);
+        AP_SAW_EXIT.store(false, Ordering::Release);
+        AP_SAW_LONG.store(false, Ordering::Release);
+    });
+    guest_sched::ap_unit_ready(s, v, cpu::rdtsc());
+    AP_NEEDS_LAUNCH.at(s, v).store(true, Ordering::Release);
+    AP_STATE.at(s, v).store(AP_RUNNING, Ordering::Release);
+    slot::set_vcpu_up(s, v, true);
+    place_running_vcpu(s, v, ap);
+    crate::audit::integrity::record_event(AuditEvent::VmcsCreated {
+        vcpu_id: ((s as u32) << 8) | v as u32,
+        vmcs_id: ap,
+    });
+    serial::write_str_nowait("boot: B7 vcpu ");
+    write_dec_nowait(v as u64);
+    serial::write_str_nowait(" start page=0x");
+    write_hex_nowait(u64::from(page));
+    serial::write_line_nowait(" (INIT then SIPI; ADR-023; not ISO-INSTALL-OK)");
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn smp_service() {
+    if !crate::arch::host_smp::on_core0() {
+        return;
+    }
+    if crate::arch::host_smp::running_remote(crate::arch::host_smp::this_core()) {
+        return;
+    }
+    let s = slot::current();
+    for v in 1..slot::vcpus() {
+        if crate::devices::lapic_virt::take_ap_init(v) {
+            ap_init(v);
+        }
+        if let Some(page) = crate::devices::lapic_virt::take_ap_sipi(v) {
+            if AP_STATE.at(s, v).load(Ordering::Acquire) == AP_WAIT_SIPI {
+                ap_start(v, page);
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn ap_breadcrumb(reason: u32, rip: u64) {
+    let s = slot::current();
+    let v = slot::current_vcpu();
+    if !AP_SAW_EXIT.at(s, v).swap(true, Ordering::AcqRel) {
+        serial::write_str_nowait("boot: B7 vcpu ");
+        write_dec_nowait(v as u64);
+        serial::write_str_nowait(" first exit reason=0x");
+        write_hex_nowait(u64::from(reason));
+        serial::write_str_nowait(" rip=0x");
+        write_hex_nowait(rip);
+        serial::write_byte_nowait(b'\n');
+    }
+    let efer = ops::vmread(GUEST_IA32_EFER).unwrap_or(0);
+    if efer & (1 << 10) != 0 && !AP_SAW_LONG.at(s, v).swap(true, Ordering::AcqRel) {
+        serial::write_str_nowait("boot: B7 vcpu ");
+        write_dec_nowait(v as u64);
+        serial::write_line_nowait(" long mode");
+    }
 }
 
 /// HPET main-counter step for this VM-exit.
@@ -6483,6 +7227,18 @@ pub fn guest_uefi_hpet_uart_tsc_step(tsc_delta: u64) -> u64 {
 /// guest UART line-rate pace. Not `ISO-INSTALL-OK`.
 #[cfg(target_os = "uefi")]
 fn arm_preempt_on_resume() {
+    crate::arch::host_smp::note_exit_phase(4);
+    if slot::current_vcpu() != 0 {
+        let shift = PREEMPT_SHIFT.load(Ordering::Acquire);
+        let ticks = guest_sched::clamp_ticks(shift)
+            .map(u64::from)
+            .unwrap_or(VMX_PREEMPTION_TIMER_TICKS);
+        // SAFETY: VMX root, the AP's VMCS is current. Scheduling ticks only.
+        // KANI-TARGET: AP preemption timer (outside Proven Core).
+        let _ = unsafe { ops::vmwrite(VMX_PREEMPTION_TIMER_VALUE, ticks) };
+        PREEMPT_UART_PACED.store(true, Ordering::Release);
+        return;
+    }
     let reload = PREEMPT_RELOAD.load(Ordering::Acquire);
     UART_PACE_EXIT.store(false, Ordering::Release);
     let real_tick = PREEMPT_TICK_TAKEN.swap(false, Ordering::AcqRel);
@@ -6596,6 +7352,9 @@ fn tick_hpet_on_exit(basic: u32, gpa: u64, qual: u64) {
         if linux_up {
             let _ = crate::devices::lapic_virt::relatch_if_idle(cpu::rdtsc());
         }
+    }
+    if slot::current_vcpu() != 0 {
+        return;
     }
     let sink = SINK_HPA.load(Ordering::Acquire);
     if sink == 0 {
@@ -6912,14 +7671,41 @@ unsafe fn reserve_guest_uefi_host_stack(alloc: &mut FrameAllocator) -> Option<(u
 /// HOST_RIP continuation for the private guest-UEFI VMCS. Not the E4 SHELL landing.
 #[cfg(target_os = "uefi")]
 pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
+    crate::arch::host_smp::monitor_enter();
+    let core_now = crate::arch::host_smp::this_core();
+    if crate::arch::host_smp::running_remote(core_now)
+        && crate::arch::host_smp::recall_waiting(core_now)
+    {
+        remote_recall_and_park();
+    }
+    if core_now == 0 {
+        if let Some((s, req)) = crate::arch::host_smp::take_home_req() {
+            slot::set_current(s);
+            if req == crate::arch::host_smp::REQ_RESET {
+                raynu_f_reset_relaunch(crate::devices::guest_platform::ResetSrc::Acpi);
+            }
+            serial::set_linux_earlycon_share(false);
+            serial::set_linux_high_half(false);
+            raynu_f_stop("home-leave");
+        }
+    }
     LAUNCH_ENTERED.store(true, Ordering::Release);
     MMIO_INSN_LEN.store(0, Ordering::Relaxed);
     let reason = ops::vmread(EXIT_REASON).unwrap_or(0xFFFF) as u32;
     let qual = ops::vmread(EXIT_QUALIFICATION).unwrap_or(0);
     let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+    // Checkpoint 1 stores this exit's reason and RIP before any dispatch.
+    crate::arch::host_smp::note_core0_exit(reason, rip);
+    crate::arch::host_smp::note_exit_phase(1);
+    // Console exits take the same path as gate 1 (`dc1bcc800c1e`), which
+    // reached login. A separate fast path was not that path.
+    if slot::current_vcpu() != 0 {
+        ap_breadcrumb(reason, rip);
+    }
     let cs_base = ops::vmread(GUEST_CS_BASE).unwrap_or(0);
     let gpa = ops::vmread(GUEST_PHYSICAL_ADDRESS).unwrap_or(0);
     let intr = ops::vmread(VM_EXIT_INTR_INFO).unwrap_or(0);
+    crate::arch::host_smp::note_kick_exit(reason, intr);
     // ADR-016 F2b: the RayNu-F test app owns the VMCS now — none of the OVMF
     // heuristics below apply to a guest whose firmware we authored.
     if RAYNU_F_MODE.load(Ordering::Acquire) {
@@ -6927,10 +7713,13 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
         raynu_f_vmexit(reason, qual, rip, intr);
     }
     crate::mgmt::maybe_tick_standing_spa();
+    crate::arch::host_smp::note_exit_phase(2);
     // After EBS, RAYNU_F_MODE is clear and Linux owns this exit path.
     // SPA Stop is posted inside the tick above. Consume it here or the
     // flag sits until the next hypervisor boot (iron f44ba647).
-    if crate::mgmt::perc_boot_choice::take_guest_stop() {
+    if !crate::arch::host_smp::running_remote(crate::arch::host_smp::this_core())
+        && crate::mgmt::perc_boot_choice::take_guest_stop()
+    {
         serial::set_linux_earlycon_share(false);
         serial::set_linux_high_half(false);
         raynu_f_stop("spa-stop");
@@ -7524,6 +8313,8 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
                 }
             }
         };
+        // Checkpoint 3: the exit-reason dispatch returned. Arming is 4.
+        crate::arch::host_smp::note_exit_phase(3);
         if resume {
             // Preemption (and any other resume) is not always an instruction
             // exit. CpuDeadLoop `pause` / `jmp $` never does I/O; skip those
@@ -7551,6 +8342,8 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
             } else if guest_uefi_pf_should_deliver_to_guest(rip) {
                 // Identity peek of high-half is empty or leftover DRAM.
                 // Do not let firmware `eb f3` skip rewrite Linux RIP.
+                false
+            } else if slot::current_vcpu() != 0 {
                 false
             } else {
                 skip_spin_short_jmp(linear, rip)
@@ -7598,6 +8391,9 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
 
     if resume {
         drain_virtio_product_iso();
+        if slot::vcpus() > 1 {
+            smp_service();
+        }
         try_inject_guest_irq();
         if guest_uefi_poll_iso_install_ok(guest_uefi_host_hypervisor_present())
             && crate::devices::guest_virtio_blk::take_iso_install_ok()
@@ -7938,6 +8734,9 @@ pub fn try_spa_product_iso_start() {
 
 /// A Start is waiting for a guest slot. The idle loop boots it.
 pub fn guest_start_waiting() -> bool {
+    if !crate::arch::host_smp::assert_core0("guest_start_waiting") {
+        return false;
+    }
     #[cfg(target_os = "uefi")]
     {
         guest_sched::start_waiting()
@@ -8007,6 +8806,13 @@ unsafe fn try_spa_product_iso_start_firmware() {
 /// and leave to E4.
 #[cfg(target_os = "uefi")]
 unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
+    if !crate::arch::host_smp::assert_core0("raynu_f_launch_on_stopped_vmcs") {
+        loop {
+            core::hint::spin_loop();
+        }
+    }
+    smp_collapse();
+    apply_vcpus_for_start();
     use crate::raynu_f::{
         build_firmware_image, build_test_app, load_pe32plus, plan_f2, IMAGE_BYTES,
         TESTAPP_FILE_BYTES,
@@ -8277,6 +9083,7 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
     // The slot is on from here: the scheduler may give it the CPU and a
     // leave is a guest that ran (ADR-022).
     guest_sched::mark_running();
+    crate::arch::host_smp::monitor_leave();
     raynu_f_vmlaunch();
 }
 
@@ -8340,6 +9147,7 @@ unsafe fn raynu_f_linux_handoff() {
     RAYNU_F_LINUX_HANDOFF.store(true, Ordering::Release);
     LINUX_EFER_NX_HOLD.store(true, Ordering::Release);
     RAYNU_F_MODE.store(false, Ordering::Release);
+    note_firmware_phase(slot::current(), false);
     serial::write_str("boot: RayNu-F EBS hand-off to Stage-46 Linux exit path exits=");
     write_dec(u64::from(RAYNU_F_EXITS.load(Ordering::Acquire)));
     serial::write_str(" svc=");
@@ -8351,6 +9159,10 @@ unsafe fn raynu_f_linux_handoff() {
 /// relaunch, then jump to [`raynu_f_reset_relaunch`].
 #[cfg(target_os = "uefi")]
 unsafe fn raynu_f_on_guest_reset(src: crate::devices::guest_platform::ResetSrc) -> ! {
+    crate::audit_log!(crate::audit::AuditEvent::GuestRestarted {
+        guest_id: slot::current() as u64,
+        reason: guest_sched::RESTART_REBOOT,
+    });
     RAYNU_F_RESET_PENDING.store(true, Ordering::Release);
     let n = RAYNU_F_RESET_N.fetch_add(1, Ordering::AcqRel) + 1;
     // Linux earlycon share is still on here: blocking HV writes are dropped
@@ -8505,7 +9317,8 @@ unsafe fn raynu_f_reapply_host_xsave() {
 /// | virtio queues/PCI | RESET | `reset_keep_disk` then `present` |
 /// | `guest_serial_answer` | RESET | then `begin_second_boot` (never SETUP on second boot) |
 /// | `serial` earlycon/high-half share | RESET | false until next Linux |
-/// | `SAVED_VMCS` | KEEP | same private VMCS |
+/// | `SAVED_VMCS` | KEEP | same private VMCS; AP VMCS words stay allocated |
+/// | `AP_STATE` / `AP_NEEDS_LAUNCH` / `AP_SAW_*` | RESET | `smp_collapse` before relaunch |
 /// | `RAM_HPA` | KEEP | same 32 MiB slab (contents zeroed, then launch rebuilds) |
 /// | `EPT_PML4` / `SINK_HPA` / `HOLE_ZERO_HPA` / `MMIO_SCRATCH_*` / `REPORT_RAM_*` | KEEP | EPT maps; do not zero 1 GiB extra |
 /// | `FLASH_HPA`/`FLASH_LEN` | KEEP | retained OVMF copy unused on this path |
@@ -8524,6 +9337,18 @@ unsafe fn raynu_f_reapply_host_xsave() {
 /// [`raynu_f_launch_on_stopped_vmcs`] (it `vmclear`s/`vmptrld`s first).
 #[cfg(target_os = "uefi")]
 unsafe fn raynu_f_reset_relaunch(_src: crate::devices::guest_platform::ResetSrc) -> ! {
+    note_firmware_phase(slot::current(), true);
+    if crate::arch::host_smp::this_core() != 0 {
+        hand_back_to_core0(true);
+    }
+    smp_collapse();
+    let relaunch_slot = slot::current();
+    guest_sched::recall_slot(relaunch_slot);
+    if let Some(block) = crate::arch::host_smp::slot_launch_block(relaunch_slot) {
+        crate::arch::host_smp::report_launch_refused(relaunch_slot, block);
+        slot::set_on(relaunch_slot, false);
+        leave_to_e4();
+    }
     // Push the queued `guest reset requested src=` line (and the guest's
     // own `reboot: Restarting`) to COM2 before leaving share mode — iron
     // `59ac070` lost it because no VM exit drained the ring in between.
@@ -9512,6 +10337,11 @@ fn raynu_f_publish_acpi(layout: &crate::raynu_f::FirmwareImageLayout, img: &mut 
             serial::write_str("boot: B4 acpi rsdp gpa=0x");
             write_hex(gpa);
             serial::write_line(" (power button, PCI0 IRQ 11, MADT local APIC and I/O APIC)");
+            if slot::vcpus() > 1 {
+                serial::write_str_nowait("boot: B7 acpi madt local_apics=");
+                write_dec_nowait(slot::vcpus() as u64);
+                serial::write_byte_nowait(b'\n');
+            }
         }
         Err(_) => serial::write_line("boot: B4 WARN acpi publish failed"),
     }
@@ -9620,7 +10450,22 @@ unsafe extern "C" fn raynu_f_vmlaunch() -> ! {
         "mov r13, [rip + {slot_r13}]",
         "mov r14, [rip + {slot_r14}]",
         "mov r15, [rip + {slot_r15}]",
+        "mov al, byte ptr [rip + {mon_holder}]",
+        "mov byte ptr [rip + {last_holder}], al",
+        "mov byte ptr [rip + {mon_holder}], 0xff",
+        "lock inc dword ptr [rip + {mon_owner}]",
         "vmlaunch",
+        "mov eax, 1",
+        "lock xadd dword ptr [rip + {mon_next}], eax",
+        "2:",
+        "cmp dword ptr [rip + {mon_owner}], eax",
+        "je 3f",
+        "pause",
+        "jmp 2b",
+        "3:",
+        "sub rsp, 40",
+        "call {claim}",
+        "add rsp, 40",
         "jmp {fail}",
         slot_rax = sym SAVED_RAX,
         slot_rbx = sym SAVED_RBX,
@@ -9638,11 +10483,17 @@ unsafe extern "C" fn raynu_f_vmlaunch() -> ! {
         slot_r14 = sym SAVED_R14,
         slot_r15 = sym SAVED_R15,
         fail = sym raynu_f_launch_failed,
+        mon_owner = sym crate::arch::host_smp::MON_OWNER,
+        mon_next = sym crate::arch::host_smp::MON_NEXT,
+        mon_holder = sym crate::arch::host_smp::MON_HOLDER,
+        last_holder = sym crate::arch::host_smp::LAST_RELEASED_HOLDER,
+        claim = sym crate::arch::host_smp::claim_holder,
     );
 }
 
 #[cfg(target_os = "uefi")]
 unsafe extern "C" fn raynu_f_launch_failed() -> ! {
+    crate::arch::host_smp::monitor_reenter();
     let ierr = ops::vmread(VM_INSTRUCTION_ERROR).unwrap_or(0xFFFF) as u32;
     RAYNU_F_MODE.store(false, Ordering::Release);
     serial::write_str("boot: RayNu-F VMLAUNCH failed insn_error=0x");
@@ -9655,6 +10506,7 @@ unsafe extern "C" fn raynu_f_launch_failed() -> ! {
 #[cfg(target_os = "uefi")]
 unsafe fn raynu_f_stop(why: &str) -> ! {
     RAYNU_F_MODE.store(false, Ordering::Release);
+    note_firmware_phase(slot::current(), false);
     crate::mgmt::guest_stop::note_raynu_f(
         why,
         ops::vmread(EXIT_REASON).unwrap_or(0) as u32,
@@ -9714,7 +10566,9 @@ unsafe fn raynu_f_stop(why: &str) -> ! {
 #[cfg(target_os = "uefi")]
 unsafe fn raynu_f_vmexit(reason: u32, qual: u64, rip: u64, intr: u64) -> ! {
     crate::mgmt::maybe_tick_standing_spa();
-    if crate::mgmt::perc_boot_choice::take_guest_stop() {
+    if !crate::arch::host_smp::running_remote(crate::arch::host_smp::this_core())
+        && crate::mgmt::perc_boot_choice::take_guest_stop()
+    {
         raynu_f_stop("spa-stop");
     }
     b4_service();
@@ -11483,7 +12337,7 @@ unsafe fn handle_cr(qual: u64) -> bool {
             // Iron 19b0c11: firmware MOV CR3 to a 1GiB PDPT[0] covering
             // [32MiB, 1GiB). Split back to RAM-only 2MiB before RIP leaves.
             let ram_hpa = RAM_HPA.load(Ordering::Acquire);
-            if ram_hpa != 0 && val != 0 {
+            if ram_hpa != 0 && val != 0 && slot::current_vcpu() == 0 {
                 guest_uefi_split_low_ram_1g(val, ram_hpa);
             }
             guest_uefi_paint_live_uc_hole_now();
@@ -15028,6 +15882,19 @@ unsafe fn try_inject_guest_irq() {
         REINJECT_N.fetch_add(1, Ordering::AcqRel);
         return;
     }
+    let intr_state = ops::vmread(GUEST_INTERRUPTIBILITY_STATE).unwrap_or(0);
+    if crate::devices::lapic_virt::nmi_pending() {
+        if intr_state & 0xB == 0 {
+            if crate::devices::lapic_virt::take_nmi() {
+                let _ = ops::vmwrite(
+                    VM_ENTRY_INTERRUPTION_INFO,
+                    u64::from(guest_uefi_nmi_entry_info()),
+                );
+                let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
+                return;
+            }
+        }
+    }
     if !crate::devices::ide_cdrom::product_iso_window_armed() {
         INJECT_SKIP[INJECT_SKIP_UNARMED].fetch_add(1, Ordering::AcqRel);
         return;
@@ -15117,7 +15984,7 @@ unsafe fn try_inject_guest_irq() {
     let leftover_gsi2 = crate::devices::guest_irq::ioapic_gsi2_armed();
     let linux_gsi2 = crate::devices::guest_irq::linux_ioapic_gsi2_programmed();
     let gsi2_armed = if linux { linux_gsi2 } else { leftover_gsi2 };
-    let pic_ready = crate::devices::guest_irq::pic_has_deliverable();
+    let pic_ready = crate::devices::guest_irq::pic_has_deliverable() && slot::current_vcpu() == 0;
     let mut use_pic = guest_uefi_pic_before_lapic(pic_ready, gsi2_armed, linux);
     if linux
         && leftover_gsi2
@@ -15522,7 +16389,7 @@ unsafe fn ept_install_xapic_4k(pt_hpa: u64, lapic_hpa: u64, trap: bool) -> bool 
         core::ptr::write_volatile(pt.add(i as usize), crate::memory::ept_hw::ept_leaf_4k(hpa, 0));
     }
     core::ptr::write_volatile((pd as *mut u64).add(pd_i), crate::memory::ept_hw::ept_link(pt_hpa));
-    crate::memory::ept_hw::invept_global();
+    crate::arch::host_smp::invept_everywhere();
     true
 }
 
@@ -15564,7 +16431,7 @@ unsafe fn ept_install_ioapic_trap(pt_hpa: u64) -> bool {
         core::ptr::write_volatile(pt.add(i as usize), crate::memory::ept_hw::ept_leaf_4k(hpa, 0));
     }
     core::ptr::write_volatile((pd as *mut u64).add(pd_i), crate::memory::ept_hw::ept_link(pt_hpa));
-    crate::memory::ept_hw::invept_global();
+    crate::arch::host_smp::invept_everywhere();
     true
 }
 
@@ -15604,7 +16471,7 @@ unsafe fn ept_split_2m_trap_4k(gpa: u64) -> bool {
     if (e2 & (1 << 7)) == 0 {
         let pt = e2 & !0xfff;
         core::ptr::write_volatile((pt as *mut u64).add(pt_i), 0);
-        crate::memory::ept_hw::invept_global();
+        crate::arch::host_smp::invept_everywhere();
         return true;
     }
     // A slot built after boot splits from its own table pool; slot 0
@@ -15637,7 +16504,7 @@ unsafe fn ept_split_2m_trap_4k(gpa: u64) -> bool {
         core::ptr::write_volatile(pt.add(i as usize), crate::memory::ept_hw::ept_leaf_4k(hpa, mt));
     }
     core::ptr::write_volatile((pd as *mut u64).add(pd_i), crate::memory::ept_hw::ept_link(pt_hpa));
-    crate::memory::ept_hw::invept_global();
+    crate::arch::host_smp::invept_everywhere();
     true
 }
 
@@ -15693,7 +16560,7 @@ unsafe fn ept_link_empty_pd(pdpt_i: usize, pd_hpa: u64) -> bool {
     }
     core::ptr::write_bytes(pd_hpa as *mut u8, 0, 4096);
     core::ptr::write_volatile((pdpt as *mut u64).add(pdpt_i), crate::memory::ept_hw::ept_link(pd_hpa));
-    crate::memory::ept_hw::invept_global();
+    crate::arch::host_smp::invept_everywhere();
     true
 }
 
@@ -15753,7 +16620,7 @@ unsafe fn ept_map_2m_hpa_mt(
     }
     core::ptr::write_volatile((pd as *mut u64).add(pd_i), want);
     if invept {
-        crate::memory::ept_hw::invept_global();
+        crate::arch::host_smp::invept_everywhere();
     }
     true
 }
@@ -16337,11 +17204,19 @@ unsafe fn handle_cpuid() -> bool {
     let linux_user = !guest_uefi_pf_should_deliver_to_guest(rip)
         && RAYNU_F_LINUX_HANDOFF.load(Ordering::Acquire);
     // Linux userspace (ld.so) must see the same CPU as the kernel.
-    let r = if guest_uefi_pf_should_deliver_to_guest(rip) || linux_user {
+    let mut r = if guest_uefi_pf_should_deliver_to_guest(rip) || linux_user {
         guest_uefi_filter_cpuid_for_linux(leaf, sub)
     } else {
         guest_uefi_filter_cpuid(leaf, sub)
     };
+    if slot::vcpus() > 1 {
+        r = guest_uefi_cpuid_smp(
+            r,
+            leaf,
+            slot::current_vcpu() as u32,
+            slot::vcpus() as u32,
+        );
+    }
     if linux_user && leaf == 0 && USER_CPUID_VENDOR_N.fetch_add(1, Ordering::AcqRel) < 2 {
         serial::write_str_nowait("boot: RayNu-F user cpuid vendor ebx=0x");
         write_hex_nowait(u64::from(r.ebx));
@@ -16725,7 +17600,9 @@ unsafe fn guest_uefi_rdmsr(msr: u32) -> u64 {
         msr_firewall::MsrAction::VmcsGsBase => ops::vmread(GUEST_GS_BASE).unwrap_or(0),
         msr_firewall::MsrAction::Shadow => {
             if msr == 0x1B {
-                0xFEE0_0000 | (1 << 8) | (1 << 11)
+                let bsp = 1u64 << 8;
+                let v = 0xFEE0_0000 | (1 << 11) | if slot::current_vcpu() == 0 { bsp } else { 0 };
+                v
             } else {
                 msr_firewall::shadow_read(msr)
             }
@@ -16813,9 +17690,17 @@ unsafe fn handle_wrmsr() -> bool {
 
 #[cfg(target_os = "uefi")]
 unsafe fn leave_to_e4() -> ! {
+    if crate::arch::host_smp::this_core() != 0 {
+        hand_back_to_core0(false);
+    }
+    smp_collapse();
     // The guest in the current slot is done. While another guest is on,
     // the CPU goes to it and this does not return (ADR-022).
-    guest_sched::on_guest_left();
+    if !guest_sched::on_guest_left() {
+        // Another guest is still on. Do not restore host XSAVE and do not
+        // enter the stop-idle loop; that loop boots a slot that looks free.
+        guest_sched::resume(false);
+    }
     restore_host_xsave_after_guest_uefi();
     let vmcs = *SAVED_VMCS.p();
     if vmcs != 0 {
@@ -16963,7 +17848,14 @@ unsafe fn clamp_firmware_preempt() {
 fn guest_irq_waiting(now: u64) -> bool {
     let _ = crate::devices::lapic_virt::poll_timer_expiry();
     if crate::devices::lapic_virt::has_pending_irr()
-        || crate::devices::guest_irq::pic_has_deliverable()
+        || crate::devices::lapic_virt::nmi_pending()
+    {
+        return true;
+    }
+    if slot::current_vcpu() != 0 {
+        return crate::devices::guest_irq::has_deliverable();
+    }
+    if crate::devices::guest_irq::pic_has_deliverable()
         || crate::devices::guest_irq::has_deliverable()
     {
         return true;
@@ -17240,7 +18132,7 @@ unsafe fn build_slot_machine(lab: bool) -> Result<(), &'static str> {
             REPORT_RAM_GPA[i].store(u64::MAX, Ordering::Release);
         }
     }
-    crate::memory::ept_hw::invept_global();
+    crate::arch::host_smp::invept_everywhere();
     REPORT_RAM_MAPS.store(pre as u32, Ordering::Release);
 
     let _ = crate::mgmt::iso_install::present_boot_iso();
@@ -17314,6 +18206,7 @@ unsafe fn build_slot_machine(lab: bool) -> Result<(), &'static str> {
         return Err("VMCS setup");
     }
     *SAVED_VMCS.p() = vmcs;
+    store_ap_vmcs_pages(s, || unsafe { slot_pool_page() });
     crate::audit::integrity::record_event(AuditEvent::VmcsCreated {
         vcpu_id: s as u32,
         vmcs_id: vmcs,
@@ -17331,6 +18224,12 @@ unsafe fn build_slot_machine(lab: bool) -> Result<(), &'static str> {
 /// paths cannot drift.
 #[cfg(target_os = "uefi")]
 unsafe fn launch_slot_guest(operator: bool) -> ! {
+    note_firmware_phase(slot::current(), true);
+    if !crate::arch::host_smp::assert_core0("launch_slot_guest") {
+        loop {
+            core::hint::spin_loop();
+        }
+    }
     bind_slot_disk();
     if operator {
         zero_slot_report_ram();

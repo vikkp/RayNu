@@ -52,6 +52,8 @@ const RTE_MASK: u64 = 1 << 16;
 const RTE_TRIG_LEVEL: u64 = 1 << 15;
 /// IOAPIC RTE bit 14: remote IRR (in-service, wait for LAPIC EOI).
 const RTE_REMOTE_IRR: u64 = 1 << 14;
+/// IOAPIC RTE bit 11: 1 = logical destination, 0 = physical.
+const RTE_DEST_LOGICAL: u64 = 1 << 11;
 const PIC_SLAVE_IRQ: u8 = 2;
 
 struct Pic {
@@ -369,30 +371,57 @@ fn raise_pic_irq(irq: u8) {
     with_irq(|c| raise_pic_locked(c, irq));
 }
 
+/// A kick is due only when this raise is the 0→1 edge. Repeating the raise
+/// while the pin is already latched was one IPI per VM exit.
+pub fn kick_if_new(was_pending: bool) -> bool {
+    !was_pending
+}
+
 /// Latch an IOAPIC pin without touching the 8259 (GSI 2 is the cascade).
 pub fn raise_ioapic_gsi(gsi: u8) {
     if !product_live() {
         return;
     }
-    with_irq(|c| {
+    let target = with_irq(|c| {
         if (gsi as usize) < IOAPIC_PINS {
-            c.ioapic.irr |= 1 << gsi;
+            let bit = 1u32 << gsi;
+            let fresh = kick_if_new(c.ioapic.irr & bit != 0);
+            c.ioapic.irr |= bit;
+            if fresh {
+                ioapic_poke_target(c, gsi)
+            } else {
+                None
+            }
+        } else {
+            None
         }
     });
+    poke_ioapic_target(target);
 }
 
 pub fn raise_gsi(gsi: u8) {
     if !product_live() {
         return;
     }
-    with_irq(|c| {
-        if (gsi as usize) < IOAPIC_PINS {
-            c.ioapic.irr |= 1 << gsi;
-        }
+    let target = with_irq(|c| {
+        let fresh = if (gsi as usize) < IOAPIC_PINS {
+            let bit = 1u32 << gsi;
+            let fresh = kick_if_new(c.ioapic.irr & bit != 0);
+            c.ioapic.irr |= bit;
+            fresh
+        } else {
+            false
+        };
         if gsi < 16 {
             raise_pic_locked(c, gsi);
         }
+        if fresh {
+            ioapic_poke_target(c, gsi)
+        } else {
+            None
+        }
     });
+    poke_ioapic_target(target);
 }
 
 pub fn lower_gsi(gsi: u8) {
@@ -780,6 +809,34 @@ pub fn ioapic_eoi(vec: u8) {
     });
 }
 
+/// vCPU the pin's redirection entry names, when that vCPU is not current.
+fn ioapic_poke_target(c: &IrqChip, gsi: u8) -> Option<usize> {
+    if (gsi as usize) >= IOAPIC_PINS {
+        return None;
+    }
+    let rte = c.ioapic.redir[gsi as usize];
+    if rte & RTE_MASK != 0 {
+        return None;
+    }
+    let v = crate::devices::lapic_virt::pick_target(
+        (rte >> 56) as u8,
+        rte & RTE_DEST_LOGICAL != 0,
+    );
+    if v == crate::guest::slot::current_vcpu() {
+        None
+    } else {
+        Some(v)
+    }
+}
+
+fn poke_ioapic_target(v: Option<usize>) {
+    let Some(v) = v else {
+        return;
+    };
+    let u = crate::guest::slot::unit(crate::guest::slot::current(), v);
+    crate::arch::host_smp::poke_unit(u);
+}
+
 fn ioapic_peek(c: &IrqChip) -> Option<u8> {
     ioapic_peek_pin(c).map(|(_, v)| v)
 }
@@ -801,6 +858,14 @@ fn ioapic_pin_ready(c: &IrqChip, pin: u8) -> Option<u8> {
     }
     let vec = (rte & 0xff) as u8;
     if vec < 16 {
+        return None;
+    }
+    if crate::guest::slot::vcpus() > 1
+        && crate::devices::lapic_virt::pick_target(
+            (rte >> 56) as u8,
+            rte & RTE_DEST_LOGICAL != 0,
+        ) != crate::guest::slot::current_vcpu()
+    {
         return None;
     }
     Some(vec)

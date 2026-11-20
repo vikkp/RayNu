@@ -279,6 +279,9 @@ pub enum GuestCatalogHttp {
 /// is `noguest` and a fitting `linux_iso` is `noimage`. A disk past the
 /// window is `window` even without a latch.
 pub fn guest_catalog_rest(method: RestMethod, path: &str, authed: bool) -> GuestCatalogHttp {
+    if let Some(cpu) = parse_cpu_route(path) {
+        return cpu_rest(method, cpu, authed);
+    }
     if let Some(nic) = parse_nic_route(path) {
         return nic_rest(method, nic, authed);
     }
@@ -418,6 +421,45 @@ enum NicRoute {
     Detach(u64),
     Discover(u64),
     Bad,
+}
+
+fn parse_cpu_route(path: &str) -> Option<Result<(u64, u8), ()>> {
+    let rest = path.strip_prefix("/perc/cpu/")?;
+    let mut parts = rest.split('/');
+    let off = parse_u64_token(parts.next()?)?;
+    let n = parse_u64_token(parts.next()?)?;
+    if parts.next().is_some() || n > u64::from(u8::MAX) {
+        return Some(Err(()));
+    }
+    Some(Ok((off, n as u8)))
+}
+
+fn cpu_rest(method: RestMethod, route: Result<(u64, u8), ()>, authed: bool) -> GuestCatalogHttp {
+    if !authed {
+        return GuestCatalogHttp::Unauthorized;
+    }
+    if !matches!(method, RestMethod::Post) {
+        return GuestCatalogHttp::BadMethod;
+    }
+    let Ok((spare_off, n)) = route else {
+        return ready(400, b"{\"ok\":false,\"reason\":\"n\"}", None);
+    };
+    if !(1..=crate::guest::slot::MAX_VCPUS as u8).contains(&n) {
+        return ready(400, b"{\"ok\":false,\"reason\":\"n\"}", None);
+    }
+    let prev = crate::mgmt::guest_cpu::count(spare_off);
+    if crate::mgmt::guest_cpu::save(spare_off, n).is_err() {
+        return ready(400, b"{\"ok\":false,\"reason\":\"n\"}", None);
+    }
+    crate::mgmt::megaraid::flush_guest_cpu();
+    crate::audit_log!(crate::audit::AuditEvent::GuestCpuSaved { spare_off, prev, n });
+    let mut body = [0u8; 32];
+    let mut w = JsonBuf::new(&mut body);
+    w.s("{\"ok\":true,\"n\":");
+    w.u(u64::from(n));
+    w.s("}");
+    let len = if w.fit { w.n } else { 0 };
+    ready(200, &body[..len], None)
 }
 
 fn parse_nic_route(path: &str) -> Option<NicRoute> {
@@ -871,6 +913,9 @@ fn start_tail() -> GuestCatalogHttp {
     let installed = crate::mgmt::megaraid::perc_image_boot_latched();
     let spare = crate::mgmt::megaraid::perc_spare_bytes();
     let disk_bytes = known_tail_bytes(spare, installed);
+    if let Some((need, online)) = crate::mgmt::guest_cpu::start_refusal(off) {
+        return cpu_refused(need, online);
+    }
     crate::guest::slot::with_slot(slot, || {
         let restarted = crate::mgmt::perc_boot_choice::rearm_guest_after_stop();
         match apply_tail_boot_choice(installed, spare, disk_bytes) {
@@ -878,6 +923,7 @@ fn start_tail() -> GuestCatalogHttp {
                 note_launch(slot, restarted);
                 crate::boot::raynu_f_flag::request_installed_boot();
                 crate::mgmt::guest_nic_start::on_accepted_start(off);
+                crate::mgmt::guest_cpu::on_accepted_start(off);
                 let mut body = [0u8; 128];
                 let mut w = JsonBuf::new(&mut body);
                 w.s("{\"ok\":true,\"choice\":\"tailboot\",\"spare_off\":");
@@ -910,6 +956,9 @@ fn start_disk_at(spare_off: u64) -> GuestCatalogHttp {
         Ok(s) => s,
         Err(body) => return ready(200, body, None),
     };
+    if let Some((need, online)) = crate::mgmt::guest_cpu::start_refusal(spare_off) {
+        return cpu_refused(need, online);
+    }
     crate::guest::slot::with_slot(slot, || {
         let restarted = crate::mgmt::perc_boot_choice::rearm_guest_after_stop();
         match apply_tail_boot_at(installed, spare, disk.spare_off, disk.disk_bytes) {
@@ -917,6 +966,7 @@ fn start_disk_at(spare_off: u64) -> GuestCatalogHttp {
                 note_launch(slot, restarted);
                 crate::boot::raynu_f_flag::request_installed_boot();
                 crate::mgmt::guest_nic_start::on_accepted_start(disk.spare_off);
+                crate::mgmt::guest_cpu::on_accepted_start(disk.spare_off);
                 let mut body = [0u8; 192];
                 let mut w = JsonBuf::new(&mut body);
                 w.s("{\"ok\":true,\"choice\":\"tailboot\",\"spare_off\":");
@@ -993,6 +1043,9 @@ fn store_choice(choice: u8, installed: bool) -> GuestCatalogHttp {
         Ok(s) => s,
         Err(body) => return ready(200, body, None),
     };
+    if let Some((need, online)) = crate::mgmt::guest_cpu::start_refusal(0) {
+        return cpu_refused(need, online);
+    }
     crate::guest::slot::with_slot(slot, || {
         let restarted = crate::mgmt::perc_boot_choice::rearm_guest_after_stop();
         match apply_spa_choice(installed, choice) {
@@ -1004,6 +1057,7 @@ fn store_choice(choice: u8, installed: bool) -> GuestCatalogHttp {
                 } else {
                     crate::boot::raynu_f_flag::request_installed_boot();
                     crate::mgmt::guest_nic_start::on_accepted_start(0);
+                    crate::mgmt::guest_cpu::on_accepted_start(0);
                 }
                 let body: &[u8] = if choice == CHOICE_REINSTALL {
                     b"{\"ok\":true,\"choice\":\"reinstall\"}"
@@ -1409,6 +1463,7 @@ fn write_list_json(
     }
     w.s("]");
     write_nic_json(&mut w);
+    write_cpu_json(&mut w);
     crate::mgmt::host_link::write_json(&mut w);
     write_build_identity(&mut w);
     write_last_stop(&mut w);
@@ -1490,6 +1545,46 @@ fn write_hex_field(w: &mut JsonBuf<'_>, mut n: u64) {
 /// change this row.
 pub fn row_power(this_on: bool) -> (bool, bool) {
     (!this_on, this_on)
+}
+
+fn cpu_refused(need: u8, online: u8) -> GuestCatalogHttp {
+    let mut body = [0u8; 80];
+    let mut w = JsonBuf::new(&mut body);
+    w.s("{\"ok\":false,\"error\":\"needs ");
+    w.u(u64::from(need));
+    w.s(" host cores, ");
+    w.u(u64::from(online));
+    w.s(" online\"}");
+    let n = if w.fit { w.n } else { 0 };
+    ready(409, &body[..n], None)
+}
+
+fn write_cpu_json(w: &mut JsonBuf<'_>) {
+    w.s(",\"cpu_max\":");
+    w.u(u64::from(crate::mgmt::guest_cpu::cpu_max()));
+    w.s(",\"host_cores\":");
+    w.u(crate::arch::host_smp::cores_online() as u64);
+    let rows = crate::mgmt::guest_cpu::shown();
+    let mut any = false;
+    for (off, n) in rows {
+        if n <= 1 {
+            continue;
+        }
+        if !any {
+            w.s(",\"cpu\":[");
+            any = true;
+        } else {
+            w.s(",");
+        }
+        w.s("{\"off\":");
+        w.u(off);
+        w.s(",\"n\":");
+        w.u(u64::from(n));
+        w.s("}");
+    }
+    if any {
+        w.s("]");
+    }
 }
 
 fn write_nic_json(w: &mut JsonBuf<'_>) {
@@ -2353,5 +2448,39 @@ mod guest_catalog_test {
         );
         assert_eq!(st, 409, "{body}");
         assert!(body.contains("windows"), "{body}");
+    }
+
+    #[test]
+    fn vcpu_count_route_saves_and_the_page_posts_it() {
+        let html = include_str!("../assets/webui.html");
+        assert!(html.contains("\"/perc/cpu/\""));
+        let (st, _) = exchange("POST /perc/cpu/42/2 HTTP/1.1\r\n\r\n");
+        assert_eq!(st, 401);
+        let (st, body) = exchange(
+            "POST /perc/cpu/42/9 HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
+        );
+        assert_eq!(st, 400, "{body}");
+        let (st, body) = exchange(
+            "POST /perc/cpu/42/2 HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
+        );
+        assert_eq!(st, 200, "{body}");
+        assert!(body.contains("\"n\":2"), "{body}");
+        let (st, body) = exchange(
+            "GET /perc/guests HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
+        );
+        assert_eq!(st, 200, "{body}");
+        assert!(body.contains("\"cpu_max\":4"), "{body}");
+        assert!(body.contains("\"cpu\":[{\"off\":42,\"n\":2}]"), "{body}");
+        let src = include_str!("guest_catalog.rs");
+        let route = src
+            .split_once("fn cpu_rest")
+            .unwrap()
+            .1
+            .split_once("fn parse_nic_route")
+            .unwrap()
+            .0;
+        let flush = route.find("flush_guest_cpu()").unwrap();
+        let audit = route.find("AuditEvent::GuestCpuSaved").unwrap();
+        assert!(flush < audit, "the save is audited after the spare flush");
     }
 }

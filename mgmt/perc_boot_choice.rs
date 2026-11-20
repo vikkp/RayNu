@@ -549,6 +549,26 @@ pub fn wait_perc_spa_choice_if_latched() {
     firmware_wait();
 }
 
+#[cfg(feature = "uefi-bin")]
+fn write_u8_dec(v: u8) {
+    let mut buf = [0u8; 3];
+    let mut n = 0usize;
+    let mut x = v;
+    if x >= 100 {
+        buf[n] = b'0' + x / 100;
+        n += 1;
+        x %= 100;
+    }
+    if n > 0 || x >= 10 {
+        buf[n] = b'0' + x / 10;
+        n += 1;
+        x %= 10;
+    }
+    buf[n] = b'0' + x;
+    n += 1;
+    crate::boot::serial::write_str(core::str::from_utf8(&buf[..n]).unwrap_or("0"));
+}
+
 /// Start the first saved guest once its delay has elapsed. An empty list
 /// returns without touching the choice.
 #[cfg(feature = "uefi-bin")]
@@ -559,6 +579,14 @@ fn try_autostart(elapsed_secs: u32) {
     };
     let installed = crate::mgmt::megaraid::perc_image_boot_latched();
     let spare = crate::mgmt::megaraid::perc_spare_bytes();
+    if let Some((need, online)) = crate::mgmt::guest_cpu::start_refusal(e.spare_off) {
+        serial::write_str("boot: B21 autostart skipped: guest needs ");
+        write_u8_dec(need);
+        serial::write_str(" host cores, ");
+        write_u8_dec(online);
+        serial::write_line(" online (ADR-024)");
+        return;
+    }
     let applied = if e.kind == CHOICE_TAIL_BOOT {
         apply_tail_boot_at(installed, spare, e.spare_off, e.disk_bytes)
     } else {
@@ -571,6 +599,7 @@ fn try_autostart(elapsed_secs: u32) {
     // A Guests click calls this before the guest starts. Without it the
     // disk comes up and the saved address does not (no virtio-net).
     crate::mgmt::guest_nic_start::on_accepted_start(e.spare_off);
+    crate::mgmt::guest_cpu::on_accepted_start(e.spare_off);
     if crate::mgmt::guest_nic_start::armed_start().is_some() {
         serial::write_line("boot: B5 autostart nic");
     } else {
@@ -623,6 +652,7 @@ fn firmware_wait() {
         crate::mgmt::megaraid::flush_autostart();
         crate::mgmt::megaraid::flush_host_addr();
         crate::mgmt::megaraid::flush_operator();
+        crate::mgmt::megaraid::flush_guest_cpu();
         crate::mgmt::megaraid::flush_host_cert();
         let now = crate::arch::cpu::rdtsc();
         let elapsed = (now.wrapping_sub(wait_start) / hz) as u32;
