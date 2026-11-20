@@ -946,6 +946,19 @@ fn report_assert_core0(what: &str) {
     let _ = crate::boot::serial::com2_bytes_direct(&buf[..n]);
 }
 
+/// The switch onto a guest that is still on failed. The guest stays on.
+/// Straight to COM2: the caller does not retake a path that drains the ring.
+pub fn report_switch_kept(slot: usize, vcpu: usize) {
+    let mut buf = [0u8; 96];
+    let mut n = push(&mut buf, 0, b"boot: B21 switch to guest ");
+    n = push_dec(&mut buf, n, slot as u64);
+    n = push(&mut buf, n, b" vcpu ");
+    n = push_dec(&mut buf, n, vcpu as u64);
+    n = push(&mut buf, n, b" failed; guest stays on (ADR-024)\r\n");
+    let n = n.min(buf.len());
+    let _ = crate::boot::serial::com2_bytes_direct(&buf[..n]);
+}
+
 /// `boot: B21 <what> on core <n> (ADR-024)`.
 pub fn format_assert_line(what: &str, core: usize, out: &mut [u8]) -> usize {
     let mut n = push(out, 0, b"boot: B21 ");

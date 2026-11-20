@@ -620,10 +620,15 @@ mod hw {
         let s = slot::unit_slot(next);
         let v = slot::unit_vcpu(next);
         let prev_slot = slot::current();
+        let prev_vcpu = slot::slot_vcpu(prev_slot);
         slot::set_current(s);
         slot::set_current_vcpu(v);
         let vmcs = super::super::slot_vmcs();
         if vmcs == 0 || ops::vmptrld(vmcs).is_err() {
+            // The switch did not happen. Put the names back so a later
+            // leave does not treat `s` as the guest that was running.
+            slot::set_slot_vcpu(prev_slot, prev_vcpu);
+            slot::set_current(prev_slot);
             return false;
         }
         let core = crate::arch::host_smp::this_core();
@@ -1074,9 +1079,12 @@ mod hw {
     ///
     /// The lab guest (no product media) and a slot the scheduler never
     /// launched are not touched: the caller continues as it always did.
-    pub unsafe fn on_guest_left() {
+    ///
+    /// Returns whether the caller should idle. `false` means another guest
+    /// is still on and the switch onto it failed: that guest stays on.
+    pub unsafe fn on_guest_left() -> bool {
         if !crate::arch::host_smp::assert_core0("on_guest_left") {
-            return;
+            return true;
         }
         let cur = slot::current();
         serial::side_break();
@@ -1084,11 +1092,11 @@ mod hw {
         let failed_launch = LAUNCHING.swap(false, Ordering::AcqRel);
         slot::set_on(cur, false);
         if !was_on && !failed_launch {
-            return;
+            return true;
         }
         let next = slot::first_on_except(cur);
         if next.is_none() && !crate::devices::ide_cdrom::product_iso_window_armed() {
-            return;
+            return true;
         }
         let plan = if was_on {
             leave_plan(
@@ -1133,7 +1141,7 @@ mod hw {
                     " left the CPU and is off; Start boots it (ADR-022; not ISO-INSTALL-OK)"
                 }
             });
-            return;
+            return true;
         };
         let vmcs = super::super::slot_vmcs();
         if vmcs != 0 {
@@ -1147,12 +1155,11 @@ mod hw {
         let now = cpu::rdtsc();
         let home_v = select_home_vcpu(next);
         if !switch_in(slot::unit(next, home_v), now) {
-            serial::write_line_nowait(
-                "boot: guest switch failed: VMPTRLD refused the remaining guest's VMCS",
-            );
-            slot::set_on(next, false);
-            slot::set_current(cur);
-            return;
+            // The remaining guest keeps its units and its on-bit. Idling
+            // here is what restarted slot 0 after Stop of slot 1.
+            crate::arch::host_smp::report_switch_kept(next, home_v);
+            slot::set_current(next);
+            return false;
         }
         serial::write_str_nowait("boot: guest slot ");
         serial::write_byte_nowait(b'0' + cur as u8);

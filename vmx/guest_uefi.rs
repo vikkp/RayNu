@@ -17662,7 +17662,11 @@ unsafe fn leave_to_e4() -> ! {
     smp_collapse();
     // The guest in the current slot is done. While another guest is on,
     // the CPU goes to it and this does not return (ADR-022).
-    guest_sched::on_guest_left();
+    if !guest_sched::on_guest_left() {
+        // Another guest is still on. Do not restore host XSAVE and do not
+        // enter the stop-idle loop; that loop boots a slot that looks free.
+        guest_sched::resume(false);
+    }
     restore_host_xsave_after_guest_uefi();
     let vmcs = *SAVED_VMCS.p();
     if vmcs != 0 {

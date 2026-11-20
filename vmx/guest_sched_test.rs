@@ -29,6 +29,21 @@ fn halted(work: bool, waited_tsc: u64) -> Other {
 }
 
 #[test]
+fn a_failed_switch_does_not_clear_the_guest_that_stays() {
+    let s = include_str!("guest_sched.rs");
+    let left = s.find("fn on_guest_left()").expect("left");
+    let body = &s[left..s.len()];
+    let fail = body.find("report_switch_kept(next, home_v)").expect("report");
+    let tail = &body[fail..fail + 400];
+    assert!(tail.contains("return false"));
+    assert!(!tail.contains("set_on(next, false)"));
+    assert!(!s.contains("set_on(next, false)"));
+    let h = include_str!("../arch/host_smp.rs");
+    assert!(h.contains("failed; guest stays on (ADR-024)"));
+    assert!(h.contains("com2_bytes_direct"));
+}
+
+#[test]
 fn home_vcpu_is_the_one_on_core_0() {
     // vCPU 1 was left current by core 1. vCPU 0 is still assigned to core 0.
     assert_eq!(home_vcpu(0b11, &[0, 1, 0, 0]), Some(0));
