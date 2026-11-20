@@ -247,6 +247,24 @@ pub fn slot_report_chunks(
     Some(left.min(want_chunks))
 }
 
+/// vCPU of a slot that core 0 may `VMPTRLD`.
+///
+/// `assigned[v]` is the core that holds vCPU `v` (0 is core 0). vCPU 0 stays
+/// on core 0 while its up-bit is set (plan 5g, I4). A vCPU another core left
+/// in `CUR_VCPU` is not a VMCS this core can load.
+pub fn home_vcpu(up_mask: u8, assigned: &[u8]) -> Option<usize> {
+    let n = assigned.len().min(4);
+    if up_mask & 1 != 0 && assigned.first().copied().unwrap_or(1) == 0 {
+        return Some(0);
+    }
+    for v in 1..n {
+        if up_mask & (1u8 << v) != 0 && assigned[v] == 0 {
+            return Some(v);
+        }
+    }
+    None
+}
+
 #[cfg(target_os = "uefi")]
 pub(super) use hw::*;
 
@@ -542,6 +560,19 @@ mod hw {
 
     fn cur_unit() -> usize {
         slot::unit(slot::current(), slot::current_vcpu())
+    }
+
+    /// Name a vCPU of `slot` whose VMCS is on core 0, and store it in
+    /// `CUR_VCPU[slot]`. vCPU 0 when it is up. Falls back to 0 when every
+    /// started vCPU sits on another core; the caller then reports the miss.
+    fn select_home_vcpu(slot_n: usize) -> usize {
+        let mut assigned = [0u8; slot::MAX_VCPUS];
+        for v in 0..slot::MAX_VCPUS {
+            assigned[v] = crate::arch::host_smp::assigned(slot::unit(slot_n, v)) as u8;
+        }
+        let v = super::home_vcpu(slot::up_mask(slot_n), &assigned).unwrap_or(0);
+        slot::set_slot_vcpu(slot_n, v);
+        v
     }
 
     /// Save the vCPU on the CPU. Its VMCS stays loaded and launched.
@@ -1114,10 +1145,8 @@ mod hw {
             slot::set_console_owner(next);
         }
         let now = cpu::rdtsc();
-        if !switch_in(
-            slot::unit(next, slot::with_slot(next, slot::current_vcpu)),
-            now,
-        ) {
+        let home_v = select_home_vcpu(next);
+        if !switch_in(slot::unit(next, home_v), now) {
             serial::write_line_nowait(
                 "boot: guest switch failed: VMPTRLD refused the remaining guest's VMCS",
             );

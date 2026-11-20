@@ -29,6 +29,14 @@ fn halted(work: bool, waited_tsc: u64) -> Other {
 }
 
 #[test]
+fn home_vcpu_is_the_one_on_core_0() {
+    // vCPU 1 was left current by core 1. vCPU 0 is still assigned to core 0.
+    assert_eq!(home_vcpu(0b11, &[0, 1, 0, 0]), Some(0));
+    assert_eq!(home_vcpu(0b10, &[0, 1, 0, 0]), None);
+    assert_eq!(home_vcpu(0b01, &[0, 2, 0, 0]), Some(0));
+}
+
+#[test]
 fn one_guest_always_stays() {
     for idle in [false, true] {
         for used in [0, Q - 1, Q, 10 * Q] {
@@ -434,6 +442,12 @@ fn scheduler_is_wired_into_the_one_exit_path() {
     assert!(g.contains("guest_sched::resume("));
     assert!(g.contains("guest_sched::mark_running()"));
     assert!(g.contains("guest_sched::on_guest_left()"));
+    let left = s.find("fn on_guest_left()").expect("on_guest_left");
+    let end = (left + 8000).min(s.len());
+    let body = &s[left..end];
+    let home = body.find("select_home_vcpu(next)").expect("home");
+    let sw = body.find("switch_in(slot::unit(next, home_v)").expect("switch");
+    assert!(home < sw, "name the core-0 vCPU before VMPTRLD");
     assert!(g.contains("guest_sched::start_pending_from_idle()"));
     assert!(g.contains("unsafe fn build_slot_machine("));
     // The seated second-guest copy stays gone: one launch path, one exit path.

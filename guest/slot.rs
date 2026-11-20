@@ -126,6 +126,23 @@ pub fn current_vcpu() -> usize {
     }
 }
 
+/// Select vCPU `v` of `slot` without changing which slot is current.
+pub fn set_slot_vcpu(slot: usize, v: usize) {
+    if slot < MAX_GUESTS && v < MAX_VCPUS {
+        store_cur_vcpu(slot, v);
+    }
+}
+
+/// vCPU last stored for `slot`, not necessarily the slot that is current.
+pub fn slot_vcpu(slot: usize) -> usize {
+    let v = load_cur_vcpu(slot);
+    if v < MAX_VCPUS {
+        v
+    } else {
+        0
+    }
+}
+
 /// Select vCPU `v` for the current slot. Returns the vCPU that was current.
 ///
 /// An out-of-range vCPU is refused and the current vCPU is left alone.
