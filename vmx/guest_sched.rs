@@ -1096,6 +1096,9 @@ mod hw {
     unsafe fn other(u: usize, now: u64) -> Other {
         let s = slot::unit_slot(u);
         let v = slot::unit_vcpu(u);
+        if crate::arch::host_smp::home_req_pending(s) {
+            return Other::default();
+        }
         if !slot::is_on(s) || !slot::vcpu_up(s, v) {
             return Other::default();
         }

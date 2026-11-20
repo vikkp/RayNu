@@ -527,6 +527,26 @@ fn a_kick_is_counted_only_for_another_core_in_a_guest() {
 }
 
 #[test]
+fn home_req_leave_outranks_reset_and_names_its_slot() {
+    assert_eq!(merge_home_req(REQ_RESET, REQ_LEAVE), REQ_LEAVE);
+    assert_eq!(merge_home_req(REQ_LEAVE, REQ_RESET), REQ_LEAVE);
+    assert_eq!(merge_home_req(REQ_NONE, REQ_RESET), REQ_RESET);
+    post_home_req(1, REQ_RESET);
+    post_home_req(1, REQ_LEAVE);
+    assert!(home_req_pending(1));
+    let (slot, req) = take_home_req().expect("posted");
+    assert_eq!(slot, 1);
+    assert_eq!(req, REQ_LEAVE);
+    assert!(!home_req_pending(1));
+    let g = include_str!("../vmx/guest_uefi.rs");
+    let at = g.find("take_home_req()").expect("take");
+    let body = &g[at..at + 500];
+    assert!(body.contains("set_current(s)"), "core 0 switches to the slot first");
+    assert!(!g.contains("REMOTE_STOP"));
+    assert!(!g.contains("REMOTE_RESET"));
+}
+
+#[test]
 fn assert_core0_reports_each_site_once() {
     reset_assert_sites_for_test();
     set_test_core(0);

@@ -100,8 +100,58 @@ static EXIT_RIP: AtomicU64 = AtomicU64::new(0);
 static CORE0_EXITS: AtomicU64 = AtomicU64::new(0);
 /// Set by the core that changed EPT. The target core flushes before its next entry.
 static INVEPT_PENDING: [AtomicBool; MAX_CORES] = [const { AtomicBool::new(false) }; MAX_CORES];
+/// Work core 0 must do for a slot. Leave outranks reset so a stop is not
+/// turned into a relaunch if both are posted.
+pub const REQ_NONE: u8 = 0;
+pub const REQ_RESET: u8 = 1;
+pub const REQ_LEAVE: u8 = 2;
+
+static HOME_REQ: [AtomicU8; crate::guest::slot::MAX_GUESTS] =
+    [const { AtomicU8::new(REQ_NONE) }; crate::guest::slot::MAX_GUESTS];
+
+/// Higher request wins. Leave is 2, reset is 1.
+pub fn merge_home_req(cur: u8, req: u8) -> u8 {
+    cur.max(req)
+}
+
+pub fn post_home_req(slot: usize, req: u8) {
+    if slot >= crate::guest::slot::MAX_GUESTS || req == REQ_NONE {
+        return;
+    }
+    let cell = &HOME_REQ[slot];
+    let mut cur = cell.load(Ordering::Acquire);
+    loop {
+        let next = merge_home_req(cur, req);
+        if next == cur {
+            return;
+        }
+        match cell.compare_exchange(cur, next, Ordering::AcqRel, Ordering::Acquire) {
+            Ok(_) => return,
+            Err(seen) => cur = seen,
+        }
+    }
+}
+
+pub fn home_req_pending(slot: usize) -> bool {
+    slot < crate::guest::slot::MAX_GUESTS && HOME_REQ[slot].load(Ordering::Acquire) != REQ_NONE
+}
+
+/// Lowest slot with a request. Clears it. Core 0 switches to that slot
+/// before it stops or resets.
+pub fn take_home_req() -> Option<(usize, u8)> {
+    for s in 0..crate::guest::slot::MAX_GUESTS {
+        let v = HOME_REQ[s].swap(REQ_NONE, Ordering::AcqRel);
+        if v != REQ_NONE {
+            return Some((s, v));
+        }
+    }
+    None
+}
+
 /// Core whose queue holds the unit. 0 until placement. The monitor writes it.
 static ASSIGNED: [AtomicU8; MAX_CORES] = [const { AtomicU8::new(0) }; MAX_CORES];
+/// Core whose VMCS for this unit is active. [`NO_CORE`] when it is not.
+static HOME: [AtomicU8; MAX_CORES] = [const { AtomicU8::new(NO_CORE) }; MAX_CORES];
 /// Core 0 asked this core to VMCLEAR its VMCS and stop entering it.
 static RECALL: [AtomicBool; MAX_CORES] = [const { AtomicBool::new(false) }; MAX_CORES];
 /// The core has finished the recall. Starts finished so a wait is not stuck.
@@ -386,6 +436,74 @@ pub fn assigned(unit: usize) -> usize {
 }
 
 /// Home the unit on `core`. The monitor is the only writer.
+/// Core that last loaded `unit`'s VMCS, or [`NO_CORE`] when none has.
+pub fn home_of(unit: usize) -> usize {
+    if unit >= MAX_CORES {
+        return NO_CORE as usize;
+    }
+    HOME[unit].load(Ordering::Acquire) as usize
+}
+
+pub fn set_home(unit: usize, core: u8) {
+    if unit < MAX_CORES {
+        HOME[unit].store(core, Ordering::Release);
+    }
+}
+
+/// `None` when every unit of `slot` is down, on core 0's queue, and not homed.
+pub fn slot_launch_block(slot: usize) -> Option<crate::vmx::guest_uefi::guest_sched::LaunchBlock> {
+    use crate::guest::slot;
+    use crate::vmx::guest_uefi::guest_sched::launch_block;
+    let mut assigned = [0u8; slot::MAX_VCPUS];
+    let mut home = [NO_CORE; slot::MAX_VCPUS];
+    for v in 0..slot::MAX_VCPUS {
+        let u = slot::unit(slot, v);
+        assigned[v] = self::assigned(u) as u8;
+        home[v] = home_of(u) as u8;
+    }
+    launch_block(slot::up_mask(slot), &assigned, &home)
+}
+
+/// Drop bookkeeping for every unit of `slot`. The caller has already
+/// recalled any core that still holds a VMCS.
+pub fn release_slot_units(slot: usize) {
+    use crate::guest::slot;
+    for v in 0..slot::MAX_VCPUS {
+        let u = slot::unit(slot, v);
+        assign_unit(u, 0);
+        set_home(u, NO_CORE);
+        slot::set_vcpu_up(slot, v, false);
+    }
+    slot::set_slot_vcpu(slot, 0);
+}
+
+/// COM2: this start or relaunch is refused.
+pub fn report_launch_refused(
+    slot: usize,
+    block: crate::vmx::guest_uefi::guest_sched::LaunchBlock,
+) {
+    use crate::vmx::guest_uefi::guest_sched::LaunchBlock;
+    let (word, v, core) = match block {
+        LaunchBlock::Up(v) => ("up", v, 0u8),
+        LaunchBlock::Assigned(v, c) => ("assigned", v, c),
+        LaunchBlock::Homed(v, c) => ("homed", v, c),
+    };
+    let mut buf = [0u8; 128];
+    let mut n = push(&mut buf, 0, b"boot: B21 guest slot ");
+    n = push_dec(&mut buf, n, slot as u64);
+    n = push(&mut buf, n, b" not launched: vcpu ");
+    n = push_dec(&mut buf, n, v as u64);
+    n = push(&mut buf, n, b" ");
+    n = push(&mut buf, n, word.as_bytes());
+    if !matches!(block, LaunchBlock::Up(_)) {
+        n = push(&mut buf, n, b" ");
+        n = push_dec(&mut buf, n, u64::from(core));
+    }
+    n = push(&mut buf, n, b" (ADR-024)\r\n");
+    let n = n.min(buf.len());
+    let _ = crate::boot::serial::com2_bytes_direct(&buf[..n]);
+}
+
 pub fn assign_unit(unit: usize, core: usize) {
     if unit >= MAX_CORES {
         return;

@@ -4820,9 +4820,6 @@ static HOST_STACK_GUARD: AtomicU64 = AtomicU64::new(0);
 /// `HOST_RSP` of the first guest's VMCS. A slot built later names the same
 /// stack (ADR-022): one guest is in VMX non-root at a time.
 static HOST_RSP_SHARED: AtomicU64 = AtomicU64::new(0);
-/// A non-zero core asked core 0 to stop or reset the guest.
-static REMOTE_STOP: AtomicBool = AtomicBool::new(false);
-static REMOTE_RESET: AtomicBool = AtomicBool::new(false);
 /// 4 KiB table pages of a slot built after boot: `[next, end)` inside one
 /// 2 MiB chunk of leftover DRAM. Zero for slot 0 (its tables come from the
 /// frame allocator).
@@ -6771,25 +6768,16 @@ unsafe fn smp_collapse() {
     }
 }
 
-#[cfg(target_os = "uefi")]
-fn take_remote_reset() -> bool {
-    REMOTE_RESET.swap(false, Ordering::AcqRel)
-}
-
-#[cfg(target_os = "uefi")]
-fn take_remote_stop() -> bool {
-    REMOTE_STOP.swap(false, Ordering::AcqRel)
-}
-
-/// A non-zero core cannot stop or reset the guest. It hands the VMCS back
-/// and asks core 0 to do it on core 0's next exit.
+/// A non-zero core cannot stop or reset the guest. It posts that slot's
+/// [`host_smp::post_home_req`] and parks. Core 0 switches to the slot first.
 #[cfg(target_os = "uefi")]
 unsafe fn hand_back_to_core0(reset: bool) -> ! {
-    if reset {
-        REMOTE_RESET.store(true, Ordering::Release);
+    let req = if reset {
+        crate::arch::host_smp::REQ_RESET
     } else {
-        REMOTE_STOP.store(true, Ordering::Release);
-    }
+        crate::arch::host_smp::REQ_LEAVE
+    };
+    crate::arch::host_smp::post_home_req(slot::current(), req);
     remote_recall_and_park()
 }
 
@@ -7664,13 +7652,16 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     {
         remote_recall_and_park();
     }
-    if core_now == 0 && take_remote_reset() {
-        raynu_f_reset_relaunch(crate::devices::guest_platform::ResetSrc::Acpi);
-    }
-    if core_now == 0 && take_remote_stop() {
-        serial::set_linux_earlycon_share(false);
-        serial::set_linux_high_half(false);
-        raynu_f_stop("remote-core");
+    if core_now == 0 {
+        if let Some((s, req)) = crate::arch::host_smp::take_home_req() {
+            slot::set_current(s);
+            if req == crate::arch::host_smp::REQ_RESET {
+                raynu_f_reset_relaunch(crate::devices::guest_platform::ResetSrc::Acpi);
+            }
+            serial::set_linux_earlycon_share(false);
+            serial::set_linux_high_half(false);
+            raynu_f_stop("home-leave");
+        }
     }
     LAUNCH_ENTERED.store(true, Ordering::Release);
     MMIO_INSN_LEN.store(0, Ordering::Relaxed);
