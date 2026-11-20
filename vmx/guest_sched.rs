@@ -247,6 +247,35 @@ pub fn slot_report_chunks(
     Some(left.min(want_chunks))
 }
 
+/// Why a slot must not be launched.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LaunchBlock {
+    /// vCPU index still marked up.
+    Up(usize),
+    /// vCPU index assigned to a core other than 0.
+    Assigned(usize, u8),
+    /// vCPU index whose VMCS is active on `core`.
+    Homed(usize, u8),
+}
+
+/// A slot may be launched only when every unit is down, not assigned away
+/// from core 0, and not homed on any core. `home[v] == 0xFF` means not homed.
+pub fn launch_block(up_mask: u8, assigned: &[u8], home: &[u8]) -> Option<LaunchBlock> {
+    let n = assigned.len().min(home.len()).min(4);
+    for v in 0..n {
+        if up_mask & (1u8 << v) != 0 {
+            return Some(LaunchBlock::Up(v));
+        }
+        if assigned[v] != 0 {
+            return Some(LaunchBlock::Assigned(v, assigned[v]));
+        }
+        if home[v] != 0xFF {
+            return Some(LaunchBlock::Homed(v, home[v]));
+        }
+    }
+    None
+}
+
 /// vCPU of a slot that core 0 may `VMPTRLD`.
 ///
 /// `assigned[v]` is the core that holds vCPU `v` (0 is core 0). vCPU 0 stays
@@ -565,6 +594,31 @@ mod hw {
     /// Name a vCPU of `slot` whose VMCS is on core 0, and store it in
     /// `CUR_VCPU[slot]`. vCPU 0 when it is up. Falls back to 0 when every
     /// started vCPU sits on another core; the caller then reports the miss.
+    /// Bring every unit of `slot` back, then clear up/assigned/home.
+    /// Core 0: recall this slot's remote units, then clear them.
+    pub unsafe fn recall_slot(slot_n: usize) {
+        recall_and_release(slot_n);
+    }
+
+    fn recall_and_release(slot_n: usize) {
+        let mut homes = [0usize; slot::MAX_VCPUS];
+        let mut n = 0usize;
+        for v in 0..slot::MAX_VCPUS {
+            let u = slot::unit(slot_n, v);
+            let c = crate::arch::host_smp::assigned(u);
+            let homed = crate::arch::host_smp::home_of(u) != crate::arch::host_smp::NO_CORE as usize;
+            if c != 0 && (slot::vcpu_up(slot_n, v) || homed) && !homes[..n].contains(&c) {
+                homes[n] = c;
+                n += 1;
+            }
+        }
+        for &core in &homes[..n] {
+            crate::arch::host_smp::request_recall(core);
+            yield_monitor_until(Some(core), || crate::arch::host_smp::recall_finished(core));
+        }
+        crate::arch::host_smp::release_slot_units(slot_n);
+    }
+
     fn select_home_vcpu(slot_n: usize) -> usize {
         let mut assigned = [0u8; slot::MAX_VCPUS];
         for v in 0..slot::MAX_VCPUS {
@@ -672,6 +726,7 @@ mod hw {
         SLICE_START.store(now, Ordering::Release);
         SWITCHES.fetch_add(1, Ordering::AcqRel);
         RUNS.at(s, v).fetch_add(1, Ordering::AcqRel);
+        crate::arch::host_smp::set_home(next, core as u8);
         super::super::rearm_preempt_on_switch_in();
         true
     }
@@ -792,6 +847,11 @@ mod hw {
             serial::write_line(
                 "boot: guest slot refused: the CPU's XSAVE image is larger than a slot holds (ADR-022)",
             );
+            crate::mgmt::perc_boot_choice::note_guest_off();
+            return None;
+        }
+        if let Some(block) = crate::arch::host_smp::slot_launch_block(s) {
+            crate::arch::host_smp::report_launch_refused(s, block);
             crate::mgmt::perc_boot_choice::note_guest_off();
             return None;
         }
@@ -1090,6 +1150,9 @@ mod hw {
         serial::side_break();
         let was_on = slot::is_on(cur);
         let failed_launch = LAUNCHING.swap(false, Ordering::AcqRel);
+        // Recall every core that still holds this slot, then drop the
+        // unit words. set_on(false) is the on-bit only.
+        recall_and_release(cur);
         slot::set_on(cur, false);
         if !was_on && !failed_launch {
             return true;

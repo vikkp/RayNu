@@ -9319,6 +9319,13 @@ unsafe fn raynu_f_reset_relaunch(_src: crate::devices::guest_platform::ResetSrc)
         hand_back_to_core0(true);
     }
     smp_collapse();
+    let relaunch_slot = slot::current();
+    guest_sched::recall_slot(relaunch_slot);
+    if let Some(block) = crate::arch::host_smp::slot_launch_block(relaunch_slot) {
+        crate::arch::host_smp::report_launch_refused(relaunch_slot, block);
+        slot::set_on(relaunch_slot, false);
+        leave_to_e4();
+    }
     // Push the queued `guest reset requested src=` line (and the guest's
     // own `reboot: Restarting`) to COM2 before leaving share mode — iron
     // `59ac070` lost it because no VM exit drained the ring in between.

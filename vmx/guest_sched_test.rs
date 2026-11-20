@@ -44,6 +44,46 @@ fn a_failed_switch_does_not_clear_the_guest_that_stays() {
 }
 
 #[test]
+fn turning_a_slot_off_clears_its_units_before_the_on_bit() {
+    let s = include_str!("guest_sched.rs");
+    let left = s.find("fn on_guest_left()").expect("left");
+    let body = &s[left..s.len()];
+    let recall = body.find("recall_and_release(cur)").expect("recall");
+    let off = body.find("set_on(cur, false)").expect("off");
+    assert!(recall < off, "recall and clear before the on-bit drops");
+    let g = include_str!("guest_uefi.rs");
+    let reset = g.find("fn raynu_f_reset_relaunch(").expect("reset");
+    let reset_body = &g[reset..reset + 2500];
+    let q = reset_body.find("recall_slot(").expect("quiesce");
+    let check = reset_body.find("slot_launch_block(").expect("check");
+    assert!(q < check);
+    // After a clear, the launch check is quiet.
+    let assigned = [0u8; 4];
+    let home = [0xFFu8; 4];
+    assert_eq!(launch_block(0, &assigned, &home), None);
+}
+
+#[test]
+fn a_slot_is_launched_only_when_its_units_are_clear() {
+    let clear = [0xFFu8; 4];
+    assert_eq!(launch_block(0, &[0, 0, 0, 0], &clear), None);
+    assert_eq!(launch_block(0b01, &[0, 0, 0, 0], &clear), Some(LaunchBlock::Up(0)));
+    assert_eq!(
+        launch_block(0, &[0, 2, 0, 0], &clear),
+        Some(LaunchBlock::Assigned(1, 2))
+    );
+    assert_eq!(
+        launch_block(0, &[0, 0, 0, 0], &[0xFF, 0xFF, 1, 0xFF]),
+        Some(LaunchBlock::Homed(2, 1))
+    );
+    let s = include_str!("guest_sched.rs");
+    let g = include_str!("guest_uefi.rs");
+    assert!(s.contains("slot_launch_block(s)"));
+    assert!(g.contains("slot_launch_block(relaunch_slot)"));
+    assert!(g.contains("release_slot_units(relaunch_slot)"));
+}
+
+#[test]
 fn home_vcpu_is_the_one_on_core_0() {
     // vCPU 1 was left current by core 1. vCPU 0 is still assigned to core 0.
     assert_eq!(home_vcpu(0b11, &[0, 1, 0, 0]), Some(0));
