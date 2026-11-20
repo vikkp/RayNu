@@ -4520,6 +4520,23 @@ static RAYNU_F_MODE: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 pub fn raynu_f_running() -> bool {
     RAYNU_F_MODE.load(Ordering::Acquire)
 }
+
+/// Set for the whole firmware phase of one slot, including the work before
+/// `RAYNU_F_MODE` is stored. Any slot in that phase suppresses the stall pulse.
+static FIRMWARE_PHASE: [AtomicBool; crate::guest::slot::MAX_GUESTS] =
+    [const { AtomicBool::new(false) }; crate::guest::slot::MAX_GUESTS];
+
+pub fn note_firmware_phase(slot: usize, on: bool) {
+    if slot < crate::guest::slot::MAX_GUESTS {
+        FIRMWARE_PHASE[slot].store(on, Ordering::Release);
+    }
+}
+
+pub fn any_firmware_phase() -> bool {
+    (0..crate::guest::slot::MAX_GUESTS).any(|s| {
+        FIRMWARE_PHASE[s].load(Ordering::Acquire) || RAYNU_F_MODE.of(s).load(Ordering::Acquire)
+    })
+}
 /// F2b one-shot: the RayNu-F launch has been attempted on this boot.
 static RAYNU_F_RAN: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
 /// F2b exit counter (cap guards a runaway guest).
@@ -9130,6 +9147,7 @@ unsafe fn raynu_f_linux_handoff() {
     RAYNU_F_LINUX_HANDOFF.store(true, Ordering::Release);
     LINUX_EFER_NX_HOLD.store(true, Ordering::Release);
     RAYNU_F_MODE.store(false, Ordering::Release);
+    note_firmware_phase(slot::current(), false);
     serial::write_str("boot: RayNu-F EBS hand-off to Stage-46 Linux exit path exits=");
     write_dec(u64::from(RAYNU_F_EXITS.load(Ordering::Acquire)));
     serial::write_str(" svc=");
@@ -9319,6 +9337,7 @@ unsafe fn raynu_f_reapply_host_xsave() {
 /// [`raynu_f_launch_on_stopped_vmcs`] (it `vmclear`s/`vmptrld`s first).
 #[cfg(target_os = "uefi")]
 unsafe fn raynu_f_reset_relaunch(_src: crate::devices::guest_platform::ResetSrc) -> ! {
+    note_firmware_phase(slot::current(), true);
     if crate::arch::host_smp::this_core() != 0 {
         hand_back_to_core0(true);
     }
@@ -10487,6 +10506,7 @@ unsafe extern "C" fn raynu_f_launch_failed() -> ! {
 #[cfg(target_os = "uefi")]
 unsafe fn raynu_f_stop(why: &str) -> ! {
     RAYNU_F_MODE.store(false, Ordering::Release);
+    note_firmware_phase(slot::current(), false);
     crate::mgmt::guest_stop::note_raynu_f(
         why,
         ops::vmread(EXIT_REASON).unwrap_or(0) as u32,
@@ -18204,6 +18224,7 @@ unsafe fn build_slot_machine(lab: bool) -> Result<(), &'static str> {
 /// paths cannot drift.
 #[cfg(target_os = "uefi")]
 unsafe fn launch_slot_guest(operator: bool) -> ! {
+    note_firmware_phase(slot::current(), true);
     if !crate::arch::host_smp::assert_core0("launch_slot_guest") {
         loop {
             core::hint::spin_loop();

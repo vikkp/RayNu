@@ -357,7 +357,7 @@ pub fn emit_core0_pulse(_now: u64) {
         DONE.store(false, Ordering::Release);
     }
     let ring = crate::boot::serial::guest_tx_len() as u64;
-    let firmware = crate::vmx::guest_uefi::raynu_f_running();
+    let firmware = crate::vmx::guest_uefi::any_firmware_phase();
     let already = DONE.load(Ordering::Acquire);
     if !stall_report_due(
         crate::boot::raynu_f_flag::host_pulse(),

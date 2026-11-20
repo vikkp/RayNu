@@ -531,6 +531,17 @@ fn a_kick_is_counted_only_for_another_core_in_a_guest() {
 }
 
 #[test]
+fn firmware_on_any_slot_suppresses_the_stall_pulse() {
+    assert!(!stall_report_due(true, true, 1, 2, 8, false));
+    assert!(!stall_report_due(false, true, 1, 2, 8, false));
+    let src = include_str!("host_smp.rs");
+    assert!(src.contains("any_firmware_phase()"));
+    let g = include_str!("../vmx/guest_uefi.rs");
+    assert!(g.contains("note_firmware_phase(slot::current(), true)"));
+    assert!(g.contains("note_firmware_phase(slot::current(), false)"));
+}
+
+#[test]
 fn wait_sample_names_the_waiter_and_the_previous_holder() {
     assert_eq!(sample_wait(2, 0, 0x30, 0xabc), (2, 0, 0x30, 0xabc));
     assert_eq!(sample_wait(1, NO_CORE, 0x1c, 0x99), (1, NO_CORE, 0, 0));
