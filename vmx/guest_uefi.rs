@@ -7118,6 +7118,9 @@ unsafe fn ap_start(v: usize, page: u8) {
 
 #[cfg(target_os = "uefi")]
 unsafe fn smp_service() {
+    if !crate::arch::host_smp::on_core0() {
+        return;
+    }
     if crate::arch::host_smp::running_remote(crate::arch::host_smp::this_core()) {
         return;
     }

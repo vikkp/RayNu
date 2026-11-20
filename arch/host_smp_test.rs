@@ -492,7 +492,11 @@ fn placement_transitions_keep_i1_through_i3() {
             "{name}"
         );
     }
-    assert!(coexist.contains("assert_core0(\"maybe_tick_standing_spa\")"));
+    assert!(coexist.contains("on_core0()"));
+    assert!(!coexist.contains("assert_core0(\"maybe_tick_standing_spa\")"));
+    assert!(src.contains("fn smp_service()"));
+    let smp = src.find("fn smp_service()").expect("smp");
+    assert!(src[smp..smp + 200].contains("on_core0()"));
     assert!(src.contains("yield_monitor_until("));
 }
 

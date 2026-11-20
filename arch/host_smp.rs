@@ -1049,6 +1049,12 @@ thread_local! {
     static TEST_CORE: core::cell::Cell<usize> = const { core::cell::Cell::new(0) };
 }
 
+/// `true` on core 0. No COM2 line. For paths a non-zero core is allowed
+/// to enter and must simply return: the standing-SPA poll and `smp_service`.
+pub fn on_core0() -> bool {
+    this_core() == 0
+}
+
 /// `true` on core 0. A non-zero core must not continue into `what`.
 ///
 /// On failure, one line per call site goes straight to COM2 before the
