@@ -83,6 +83,130 @@ fn a_slot_is_launched_only_when_its_units_are_clear() {
     assert!(g.contains("release_slot_units(relaunch_slot)"));
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum NoteHold {
+    Stopped(usize),
+    Started(usize),
+    Restarted(usize),
+}
+
+#[derive(Clone, Copy)]
+struct Guest {
+    on: bool,
+    up: u8,
+    assigned: [u8; 4],
+    home: [u8; 4],
+    cur: usize,
+}
+
+fn two_guests_three_cores() -> [Guest; 2] {
+    [
+        Guest {
+            on: true,
+            up: 0b11,
+            assigned: [0, 1, 0, 0],
+            home: [0, 1, 0xFF, 0xFF],
+            cur: 1,
+        },
+        Guest {
+            on: true,
+            up: 0b11,
+            assigned: [0, 2, 0, 0],
+            home: [0, 2, 0xFF, 0xFF],
+            cur: 1,
+        },
+    ]
+}
+
+/// Stop, shut down, reboot, or power off `which`. A failed switch does not
+/// clear the other guest. Reboot relaunches only `which`, as GuestRestarted.
+fn leave_one(gs: &mut [Guest; 2], which: usize, reboot: bool, switch_ok: bool) -> Vec<NoteHold> {
+    gs[which].up = 0;
+    gs[which].assigned = [0; 4];
+    gs[which].home = [0xFF; 4];
+    gs[which].cur = 0;
+    gs[which].on = false;
+    let mut notes = vec![NoteHold::Stopped(which)];
+    for i in 0..2 {
+        if i == which || !gs[i].on {
+            continue;
+        }
+        if let Some(v) = home_vcpu(gs[i].up, &gs[i].assigned) {
+            if switch_ok {
+                gs[i].cur = v;
+            }
+        }
+    }
+    if reboot {
+        assert_eq!(
+            launch_block(gs[which].up, &gs[which].assigned, &gs[which].home),
+            None
+        );
+        gs[which].on = true;
+        gs[which].up = 0b01;
+        gs[which].cur = 0;
+        notes.push(NoteHold::Restarted(which));
+    }
+    notes
+}
+
+#[test]
+fn stop_shutdown_reboot_and_poweroff_leave_the_other_guest() {
+    // Stop, Shut down, and poweroff leave the slot off. Reboot brings
+    // that slot back and records GuestRestarted, not VmStarted.
+    for (name, reboot) in [("stop", false), ("shutdown", false), ("poweroff", false), ("reboot", true)] {
+        let _ = name;
+        for which in [0usize, 1] {
+            for switch_ok in [false, true] {
+                let mut gs = two_guests_three_cores();
+                let other = 1 - which;
+                let saved_up = gs[other].up;
+                let saved_assigned = gs[other].assigned;
+                let saved_home = gs[other].home;
+                let notes = leave_one(&mut gs, which, reboot, switch_ok);
+                assert!(gs[other].on, "guest {other} stays on");
+                assert_eq!(gs[other].up, saved_up);
+                assert_eq!(gs[other].assigned, saved_assigned);
+                assert_eq!(gs[other].home, saved_home);
+                assert!(notes.contains(&NoteHold::Stopped(which)), "{name}");
+                assert!(!notes.iter().any(|n| matches!(
+                    n,
+                    NoteHold::Stopped(s) | NoteHold::Started(s) | NoteHold::Restarted(s) if *s == other
+                )));
+                if reboot {
+                    assert!(notes.contains(&NoteHold::Restarted(which)));
+                    assert!(gs[which].on);
+                    assert_eq!(gs[which].cur, 0);
+                } else {
+                    assert!(!gs[which].on);
+                    assert!(!notes.iter().any(|n| matches!(n, NoteHold::Started(_))));
+                }
+                if switch_ok {
+                    assert_eq!(gs[other].cur, 0, "home_vcpu names core 0");
+                } else {
+                    assert_eq!(gs[other].cur, 1, "a failed switch does not rewrite it");
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn a_hypervisor_restart_is_not_vm_started() {
+    assert!(start_audit_is_vm_started(true));
+    assert!(!start_audit_is_vm_started(false));
+    let s = include_str!("guest_sched.rs");
+    let launch = s.find("fn launch(start: Start)").expect("launch");
+    let body = &s[launch..launch + 900];
+    let restarted = body.find("GuestRestarted").expect("restarted");
+    let started = body.find("VmStarted").expect("started");
+    assert!(body.contains("if start.auto"));
+    assert!(restarted < started, "auto path is GuestRestarted");
+    let g = include_str!("guest_uefi.rs");
+    assert!(g.contains("GuestRestarted"));
+    assert!(g.contains("RESTART_REBOOT"));
+}
+
 #[test]
 fn home_vcpu_is_the_one_on_core_0() {
     // vCPU 1 was left current by core 1. vCPU 0 is still assigned to core 0.
