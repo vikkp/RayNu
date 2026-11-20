@@ -319,7 +319,7 @@ mod hw {
     use crate::sched::msr_firewall;
     use crate::vmx::ops;
     use crate::{per_guest, per_vcpu, per_vcpu_cell};
-    use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering};
+    use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, AtomicUsize, Ordering};
 
     const MSR_STAR: u32 = 0xC000_0081;
     const MSR_LSTAR: u32 = 0xC000_0082;
@@ -626,7 +626,12 @@ mod hw {
         }
         for &core in &homes[..n] {
             crate::arch::host_smp::request_recall(core);
-            yield_monitor_until(Some(core), || crate::arch::host_smp::recall_finished(core));
+            // SAFETY: caller holds the monitor on the exit path.
+            unsafe {
+                super::super::yield_monitor_until(Some(core), || {
+                    crate::arch::host_smp::recall_finished(core)
+                });
+            }
         }
         crate::arch::host_smp::release_slot_units(slot_n);
     }

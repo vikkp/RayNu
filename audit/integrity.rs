@@ -1279,11 +1279,11 @@ fn mirror_audit_to_com1(event: AuditEvent) {
             serial::write_byte_nowait(b'\n');
         }
         AuditEvent::GuestRestarted { guest_id, reason } => {
-            serial::write_str("RAYNU-V-AUDIT: GuestRestarted guest_id=");
-            write_u64(guest_id);
-            serial::write_str(" reason=");
-            write_u32(u32::from(reason));
-            serial::write_byte(b'\n');
+            serial::write_str_nowait("RAYNU-V-AUDIT: GuestRestarted guest_id=");
+            write_u32_nowait(guest_id as u32);
+            serial::write_str_nowait(" reason=");
+            write_u32_nowait(u32::from(reason));
+            serial::write_byte_nowait(b'\n');
         }
         AuditEvent::GuestCpuSaved { spare_off, prev, n } => {
             serial::write_str_nowait("RAYNU-V-AUDIT: GuestCpuSaved off_mib=");

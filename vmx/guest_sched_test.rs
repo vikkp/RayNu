@@ -80,7 +80,7 @@ fn a_slot_is_launched_only_when_its_units_are_clear() {
     let g = include_str!("guest_uefi.rs");
     assert!(s.contains("slot_launch_block(s)"));
     assert!(g.contains("slot_launch_block(relaunch_slot)"));
-    assert!(g.contains("release_slot_units(relaunch_slot)"));
+    assert!(g.contains("recall_slot(relaunch_slot)"));
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
