@@ -1,5 +1,5 @@
     use super::{
-    has_deliverable, ioapic_read, ioapic_write, is_hpet_split_2m_gpa, is_ioapic_gpa, lower_ata,
+    has_deliverable, ioapic_read, ioapic_write, is_hpet_split_2m_gpa, is_ioapic_gpa, kick_if_new, lower_ata,
     pic_has_deliverable, pic_io, prefer_pit_once, prefer_pit_until_driver_ok,     raise_ata, raise_gsi, note_linux_dev_irq,
     raise_pit, raise_virtio, lower_virtio, reset, take_inject_vector, take_ioapic_ata_vector, take_ioapic_vector, take_pic_vector,
     pic_ocw2_eoi_bit, pic_ocw2_is_eoi,
@@ -162,6 +162,12 @@ fn pic_init_unmask_all() {
     let _ = pic_io(0xA1, false, 1, 0x01);
     let _ = pic_io(0x21, false, 1, 0x00);
     let _ = pic_io(0xA1, false, 1, 0x00);
+}
+
+#[test]
+fn an_already_latched_pin_does_not_kick_again() {
+    assert!(kick_if_new(false));
+    assert!(!kick_if_new(true));
 }
 
 #[test]

@@ -331,9 +331,9 @@ pub fn clear_aps(slot: usize) {
 
 pub fn wake(slot: usize) {
     if slot < MAX_GUESTS {
-        WAKE[slot].fetch_or(0xFF, Ordering::Release);
+        let prev = WAKE[slot].fetch_or(0xFF, Ordering::Release);
         for v in 0..MAX_VCPUS {
-            if vcpu_up(slot, v) {
+            if vcpu_up(slot, v) && prev & (1u8 << v) == 0 {
                 crate::arch::host_smp::poke_unit(unit(slot, v));
             }
         }
@@ -343,8 +343,11 @@ pub fn wake(slot: usize) {
 /// A host-side event for one vCPU of `slot` arrived.
 pub fn wake_vcpu(slot: usize, v: usize) {
     if slot < MAX_GUESTS && v < MAX_VCPUS {
-        WAKE[slot].fetch_or(1u8 << v, Ordering::Release);
-        crate::arch::host_smp::poke_unit(unit(slot, v));
+        let bit = 1u8 << v;
+        let prev = WAKE[slot].fetch_or(bit, Ordering::Release);
+        if prev & bit == 0 {
+            crate::arch::host_smp::poke_unit(unit(slot, v));
+        }
     }
 }
 

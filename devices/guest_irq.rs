@@ -371,6 +371,12 @@ fn raise_pic_irq(irq: u8) {
     with_irq(|c| raise_pic_locked(c, irq));
 }
 
+/// A kick is due only when this raise is the 0→1 edge. Repeating the raise
+/// while the pin is already latched was one IPI per VM exit.
+pub fn kick_if_new(was_pending: bool) -> bool {
+    !was_pending
+}
+
 /// Latch an IOAPIC pin without touching the 8259 (GSI 2 is the cascade).
 pub fn raise_ioapic_gsi(gsi: u8) {
     if !product_live() {
@@ -378,8 +384,14 @@ pub fn raise_ioapic_gsi(gsi: u8) {
     }
     let target = with_irq(|c| {
         if (gsi as usize) < IOAPIC_PINS {
-            c.ioapic.irr |= 1 << gsi;
-            ioapic_poke_target(c, gsi)
+            let bit = 1u32 << gsi;
+            let fresh = kick_if_new(c.ioapic.irr & bit != 0);
+            c.ioapic.irr |= bit;
+            if fresh {
+                ioapic_poke_target(c, gsi)
+            } else {
+                None
+            }
         } else {
             None
         }
@@ -392,13 +404,22 @@ pub fn raise_gsi(gsi: u8) {
         return;
     }
     let target = with_irq(|c| {
-        if (gsi as usize) < IOAPIC_PINS {
-            c.ioapic.irr |= 1 << gsi;
-        }
+        let fresh = if (gsi as usize) < IOAPIC_PINS {
+            let bit = 1u32 << gsi;
+            let fresh = kick_if_new(c.ioapic.irr & bit != 0);
+            c.ioapic.irr |= bit;
+            fresh
+        } else {
+            false
+        };
         if gsi < 16 {
             raise_pic_locked(c, gsi);
         }
-        ioapic_poke_target(c, gsi)
+        if fresh {
+            ioapic_poke_target(c, gsi)
+        } else {
+            None
+        }
     });
     poke_ioapic_target(target);
 }
