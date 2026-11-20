@@ -9132,6 +9132,10 @@ unsafe fn raynu_f_linux_handoff() {
 /// relaunch, then jump to [`raynu_f_reset_relaunch`].
 #[cfg(target_os = "uefi")]
 unsafe fn raynu_f_on_guest_reset(src: crate::devices::guest_platform::ResetSrc) -> ! {
+    crate::audit_log!(crate::audit::AuditEvent::GuestRestarted {
+        guest_id: slot::current() as u64,
+        reason: guest_sched::RESTART_REBOOT,
+    });
     RAYNU_F_RESET_PENDING.store(true, Ordering::Release);
     let n = RAYNU_F_RESET_N.fetch_add(1, Ordering::AcqRel) + 1;
     // Linux earlycon share is still on here: blocking HV writes are dropped

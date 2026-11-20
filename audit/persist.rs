@@ -407,6 +407,10 @@ pub fn event_from_disc(disc: u64) -> Option<AuditEvent> {
             prev: 0,
             n: 0,
         },
+        83 => AuditEvent::GuestRestarted {
+            guest_id: 0,
+            reason: 0,
+        },
         _ => return None,
     })
 }

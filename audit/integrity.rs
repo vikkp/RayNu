@@ -443,6 +443,12 @@ pub enum AuditEvent {
         prev: u8,
         n: u8,
     },
+    /// The hypervisor booted this guest again. Not an operator Start and
+    /// not autostart. `reason`: 1 scheduler, 2 guest reboot.
+    GuestRestarted {
+        guest_id: u64,
+        reason: u8,
+    },
 }
 
 /// One sealed audit record in the hash chain.
@@ -691,6 +697,7 @@ pub(crate) fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::OperatorAccountSet { .. } => 80,
         AuditEvent::HostCertSaved { .. } => 81,
         AuditEvent::GuestCpuSaved { .. } => 82,
+        AuditEvent::GuestRestarted { .. } => 83,
     }
 }
 
@@ -1270,6 +1277,13 @@ fn mirror_audit_to_com1(event: AuditEvent) {
             serial::write_str_nowait(" cert=");
             write_u32_nowait(u32::from(cert_len));
             serial::write_byte_nowait(b'\n');
+        }
+        AuditEvent::GuestRestarted { guest_id, reason } => {
+            serial::write_str("RAYNU-V-AUDIT: GuestRestarted guest_id=");
+            write_u64(guest_id);
+            serial::write_str(" reason=");
+            write_u32(u32::from(reason));
+            serial::write_byte(b'\n');
         }
         AuditEvent::GuestCpuSaved { spare_off, prev, n } => {
             serial::write_str_nowait("RAYNU-V-AUDIT: GuestCpuSaved off_mib=");

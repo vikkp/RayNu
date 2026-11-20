@@ -276,6 +276,17 @@ pub fn launch_block(up_mask: u8, assigned: &[u8], home: &[u8]) -> Option<LaunchB
     None
 }
 
+/// Scheduler booted the guest again after the guest left on its own.
+pub const RESTART_SCHEDULER: u8 = 1;
+/// Guest asked to reboot (CF9 / keyboard / ACPI reset).
+pub const RESTART_REBOOT: u8 = 2;
+
+/// `VmStarted` is the operator Start and autostart. A restart the
+/// hypervisor performs on its own is `GuestRestarted`.
+pub fn start_audit_is_vm_started(operator_or_autostart: bool) -> bool {
+    operator_or_autostart
+}
+
 /// vCPU of a slot that core 0 may `VMPTRLD`.
 ///
 /// `assigned[v]` is the core that holds vCPU `v` (0 is core 0). vCPU 0 stays
@@ -375,6 +386,7 @@ mod hw {
     static RESTARTS: PerGuest<AtomicU32> = per_guest!(AtomicU32::new(0));
     /// The pending start is the scheduler's own restart, not the operator.
     static AUTO_RESTART: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
+    static RESTART_REASON: PerGuest<AtomicU8> = per_guest!(AtomicU8::new(0));
     /// The guest takes COM2 when it launches (an operator Start).
     static TAKE_CONSOLE: PerGuest<AtomicBool> = per_guest!(AtomicBool::new(false));
     /// TSC when the guest on this core got the CPU. `load` and `store` keep
@@ -822,6 +834,8 @@ mod hw {
     struct Start {
         /// The scheduler's own restart, not an operator Start.
         auto: bool,
+        /// [`super::RESTART_SCHEDULER`] or [`super::RESTART_REBOOT`].
+        reason: u8,
     }
 
     /// Ready the current slot to boot: consume the request, build the
@@ -838,6 +852,7 @@ mod hw {
         }
         let _ = crate::mgmt::perc_boot_choice::take_perc_relaunch();
         let auto = AUTO_RESTART.swap(false, Ordering::AcqRel);
+        let reason = RESTART_REASON.swap(0, Ordering::AcqRel);
         if !auto {
             RESTARTS.store(0, Ordering::Release);
             super::super::clear_guest_reset_count();
@@ -866,7 +881,7 @@ mod hw {
             }
         }
         load_fresh_cpu_state(s);
-        Some(Start { auto })
+        Some(Start { auto, reason })
     }
 
     /// Boot the slot [`prepare_start`] readied. Ends in VM entry.
@@ -878,7 +893,14 @@ mod hw {
         }
         let s = slot::current();
         LAUNCHING.store(true, Ordering::Release);
-        audit_log!(AuditEvent::VmStarted { guest_id: s as u64 });
+        if start.auto {
+            audit_log!(AuditEvent::GuestRestarted {
+                guest_id: s as u64,
+                reason: start.reason,
+            });
+        } else {
+            audit_log!(AuditEvent::VmStarted { guest_id: s as u64 });
+        }
         serial::write_str("boot: guest slot ");
         write_dec(s as u64);
         serial::write_str(if start.auto { " boots again" } else { " start" });
@@ -1177,6 +1199,7 @@ mod hw {
             Leave::StayOff => {}
             Leave::Restart => {
                 RESTARTS.fetch_add(1, Ordering::AcqRel);
+                RESTART_REASON.store(super::RESTART_SCHEDULER, Ordering::Release);
                 AUTO_RESTART.store(true, Ordering::Release);
                 crate::mgmt::perc_boot_choice::note_perc_relaunch();
             }
