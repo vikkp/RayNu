@@ -6514,6 +6514,8 @@ unsafe extern "C" fn guest_uefi_vmresume() -> ! {
         "mov r13, [rip + {slot_r13}]",
         "mov r14, [rip + {slot_r14}]",
         "mov r15, [rip + {slot_r15}]",
+        "mov al, byte ptr [rip + {mon_holder}]",
+        "mov byte ptr [rip + {last_holder}], al",
         "mov byte ptr [rip + {mon_holder}], 0xff",
         "lock inc dword ptr [rip + {mon_owner}]",
         "vmresume",
@@ -6549,6 +6551,7 @@ unsafe extern "C" fn guest_uefi_vmresume() -> ! {
         mon_owner = sym crate::arch::host_smp::MON_OWNER,
         mon_next = sym crate::arch::host_smp::MON_NEXT,
         mon_holder = sym crate::arch::host_smp::MON_HOLDER,
+        last_holder = sym crate::arch::host_smp::LAST_RELEASED_HOLDER,
         claim = sym crate::arch::host_smp::claim_holder,
     );
 }
@@ -6599,6 +6602,8 @@ unsafe extern "C" fn guest_uefi_vmlaunch() -> ! {
         "mov r13, [rip + {slot_r13}]",
         "mov r14, [rip + {slot_r14}]",
         "mov r15, [rip + {slot_r15}]",
+        "mov al, byte ptr [rip + {mon_holder}]",
+        "mov byte ptr [rip + {last_holder}], al",
         "mov byte ptr [rip + {mon_holder}], 0xff",
         "lock inc dword ptr [rip + {mon_owner}]",
         "vmlaunch",
@@ -6634,6 +6639,7 @@ unsafe extern "C" fn guest_uefi_vmlaunch() -> ! {
         mon_owner = sym crate::arch::host_smp::MON_OWNER,
         mon_next = sym crate::arch::host_smp::MON_NEXT,
         mon_holder = sym crate::arch::host_smp::MON_HOLDER,
+        last_holder = sym crate::arch::host_smp::LAST_RELEASED_HOLDER,
         claim = sym crate::arch::host_smp::claim_holder,
     );
 }
@@ -10422,6 +10428,8 @@ unsafe extern "C" fn raynu_f_vmlaunch() -> ! {
         "mov r13, [rip + {slot_r13}]",
         "mov r14, [rip + {slot_r14}]",
         "mov r15, [rip + {slot_r15}]",
+        "mov al, byte ptr [rip + {mon_holder}]",
+        "mov byte ptr [rip + {last_holder}], al",
         "mov byte ptr [rip + {mon_holder}], 0xff",
         "lock inc dword ptr [rip + {mon_owner}]",
         "vmlaunch",
@@ -10456,6 +10464,7 @@ unsafe extern "C" fn raynu_f_vmlaunch() -> ! {
         mon_owner = sym crate::arch::host_smp::MON_OWNER,
         mon_next = sym crate::arch::host_smp::MON_NEXT,
         mon_holder = sym crate::arch::host_smp::MON_HOLDER,
+        last_holder = sym crate::arch::host_smp::LAST_RELEASED_HOLDER,
         claim = sym crate::arch::host_smp::claim_holder,
     );
 }

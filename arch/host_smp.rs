@@ -67,6 +67,9 @@ pub static LAND_TSC: AtomicU64 = AtomicU64::new(0);
 /// stubs clear it in the same step as the owner increment. Core 0 starts
 /// holding ticket 0, so this starts at 0.
 pub static MON_HOLDER: AtomicU8 = AtomicU8::new(0);
+/// Holder recorded by the release that woke the waiter. [`NO_CORE`] if the
+/// release had already cleared the byte before this store existed.
+pub static LAST_RELEASED_HOLDER: AtomicU8 = AtomicU8::new(NO_CORE);
 static ENTER_TSC: AtomicU64 = AtomicU64::new(0);
 static HOLD_MAX: AtomicU64 = AtomicU64::new(0);
 static WAIT_MAX: AtomicU64 = AtomicU64::new(0);
@@ -74,7 +77,8 @@ static WAIT_MAX: AtomicU64 = AtomicU64::new(0);
 /// holder at the moment `lock_wait_max` grew.
 static LAST_REASON: [AtomicU8; MAX_CORES] = [const { AtomicU8::new(0) }; MAX_CORES];
 static LAST_RIP: [AtomicU64; MAX_CORES] = [const { AtomicU64::new(0) }; MAX_CORES];
-static WAIT_HOLDER: AtomicU8 = AtomicU8::new(NO_CORE);
+static WAIT_CORE: AtomicU8 = AtomicU8::new(NO_CORE);
+static WAIT_PREV: AtomicU8 = AtomicU8::new(NO_CORE);
 static WAIT_REASON: AtomicU8 = AtomicU8::new(0);
 static WAIT_RIP: AtomicU64 = AtomicU64::new(0);
 static KICKS_TAKEN: AtomicU64 = AtomicU64::new(0);
@@ -173,6 +177,8 @@ pub fn acquire() {
 /// the next core cannot observe its ticket and then lose the holder byte.
 /// The entry stubs do these two stores after the last guest register load.
 pub fn release() {
+    let prev = MON_HOLDER.load(Ordering::Acquire);
+    LAST_RELEASED_HOLDER.store(prev, Ordering::Release);
     MON_HOLDER.store(NO_CORE, Ordering::Release);
     MON_OWNER.fetch_add(1, Ordering::Release);
 }
@@ -776,17 +782,37 @@ pub unsafe fn monitor_reenter() {
     }
 }
 
+/// `wait_core` is the core that just finished waiting. `prev` is the core
+/// that released the monitor. Reason and RIP are that previous holder's
+/// last exit, not the waiter's.
+pub fn sample_wait(waiter: u8, prev: u8, reason: u8, rip: u64) -> (u8, u8, u8, u64) {
+    if (prev as usize) < MAX_CORES {
+        (waiter, prev, reason, rip)
+    } else {
+        (waiter, prev, 0, 0)
+    }
+}
+
 fn note_wait(wait: u64) {
     let mut cur = WAIT_MAX.load(Ordering::Acquire);
     while wait > cur {
         match WAIT_MAX.compare_exchange(cur, wait, Ordering::AcqRel, Ordering::Acquire) {
             Ok(_) => {
-                let holder = MON_HOLDER.load(Ordering::Acquire);
-                WAIT_HOLDER.store(holder, Ordering::Release);
-                if (holder as usize) < MAX_CORES {
-                    WAIT_REASON.store(LAST_REASON[holder as usize].load(Ordering::Acquire), Ordering::Release);
-                    WAIT_RIP.store(LAST_RIP[holder as usize].load(Ordering::Acquire), Ordering::Release);
-                }
+                let waiter = this_core().min(MAX_CORES - 1) as u8;
+                let prev = LAST_RELEASED_HOLDER.load(Ordering::Acquire);
+                let (reason, rip) = if (prev as usize) < MAX_CORES {
+                    (
+                        LAST_REASON[prev as usize].load(Ordering::Acquire),
+                        LAST_RIP[prev as usize].load(Ordering::Acquire),
+                    )
+                } else {
+                    (0, 0)
+                };
+                let (waiter, prev, reason, rip) = sample_wait(waiter, prev, reason, rip);
+                WAIT_CORE.store(waiter, Ordering::Release);
+                WAIT_PREV.store(prev, Ordering::Release);
+                WAIT_REASON.store(reason, Ordering::Release);
+                WAIT_RIP.store(rip, Ordering::Release);
                 break;
             }
             Err(v) => cur = v,
@@ -794,8 +820,12 @@ fn note_wait(wait: u64) {
     }
 }
 
-pub fn wait_holder() -> u8 {
-    WAIT_HOLDER.load(Ordering::Acquire)
+pub fn wait_core() -> u8 {
+    WAIT_CORE.load(Ordering::Acquire)
+}
+
+pub fn wait_prev() -> u8 {
+    WAIT_PREV.load(Ordering::Acquire)
 }
 
 pub fn wait_reason() -> u8 {
@@ -964,11 +994,13 @@ pub fn maybe_core_line(now: u64, period: u64) {
     }
     crate::boot::serial::write_str_nowait(" lock_wait_max_us=");
     write_dec_local(wait_max_ticks() / us);
-    crate::boot::serial::write_str_nowait(" wait_h=");
-    write_dec_local(u64::from(wait_holder()));
-    crate::boot::serial::write_str_nowait(" wait_r=");
+    crate::boot::serial::write_str_nowait(" wait_core=");
+    write_dec_local(u64::from(wait_core()));
+    crate::boot::serial::write_str_nowait(" prev_h=");
+    write_dec_local(u64::from(wait_prev()));
+    crate::boot::serial::write_str_nowait(" prev_r=");
     write_dec_local(u64::from(wait_reason()));
-    crate::boot::serial::write_str_nowait(" wait_rip=0x");
+    crate::boot::serial::write_str_nowait(" prev_rip=0x");
     write_hex_local(wait_rip());
     crate::boot::serial::write_str_nowait(" hold_max_us=");
     write_dec_local(hold_max_ticks() / us);

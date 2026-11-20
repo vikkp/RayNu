@@ -527,6 +527,22 @@ fn a_kick_is_counted_only_for_another_core_in_a_guest() {
 }
 
 #[test]
+fn wait_sample_names_the_waiter_and_the_previous_holder() {
+    assert_eq!(sample_wait(2, 0, 0x30, 0xabc), (2, 0, 0x30, 0xabc));
+    assert_eq!(sample_wait(1, NO_CORE, 0x1c, 0x99), (1, NO_CORE, 0, 0));
+    let src = include_str!("host_smp.rs");
+    assert!(src.contains("wait_core="));
+    assert!(src.contains("prev_h="));
+    assert!(src.contains("prev_rip="));
+    assert!(!src.contains("wait_h="));
+    let g = include_str!("../vmx/guest_uefi.rs");
+    assert!(g.contains("LAST_RELEASED_HOLDER"));
+    let save = g.find("mov byte ptr [rip + {last_holder}], al").expect("save");
+    let clear = g[save..].find("mov byte ptr [rip + {mon_holder}], 0xff").expect("clear");
+    assert!(clear > 0);
+}
+
+#[test]
 fn home_req_leave_outranks_reset_and_names_its_slot() {
     assert_eq!(merge_home_req(REQ_RESET, REQ_LEAVE), REQ_LEAVE);
     assert_eq!(merge_home_req(REQ_LEAVE, REQ_RESET), REQ_LEAVE);
