@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-11-19
-last_commit: b47e029d88aa1cabd6a93dfa343c79c01f42fb87
-last_commit_short: b47e029d
+last_commit: dec4f2872c643aefd79db3e143805dc8eb8cc694
+last_commit_short: dec4f287
 updated_by: cursor
 mount_everest_target: "CLOSED on iron 2026-09-11: Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest). Next: M8 operator hardening (ADR-018)."
 months_to_everest: 0.0
@@ -384,6 +384,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-11-19 | wave-7-b21-step5 | 0.0 | 99 | **Gate 2 step 5 on `772a9fc3`.** Stop of slot 1 returned from `on_guest_left` after `switch_in` of `CUR_VCPU` (vCPU 1, homed on another core) and `set_on` cleared the guest that was still running. The idle loop then booted slot 0 (`guest slot 0 boots again guests_on=0`). The switch now names a core-0 vCPU, a failed switch leaves the other guest on, a launch is refused while a unit is up or homed, and a slot is recalled before it is turned off. `GuestRestarted` is the hypervisor's own restart. `wait_core` is the waiter; `prev_h` is who released the monitor. IOAPIC and wake kicks are edge-triggered. The stall pulse is suppressed for any slot in firmware. The 10–20 s freeze is core 0 holding the monitor across the initrd `LoadFile` (`try_copy_ext4_initrd`); yielding there is the B22 question, not done. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-19 | wave-7-b21-pmtimer | 0.0 | 99 | **PM timer known limit.** `0xc00000` then `0x800000` is the shared `0x400000` step after a 24-bit wrap, with the other vCPU's reads in between. Linux rejects it because `0x800000` is not below `0xFFF`. No code change. `guest_uart.rs`, `guest_platform.rs`, and `lapic_virt.rs` match `dc1bcc80`. `boot/serial.rs` adds the stall dump and the direct COM2 writer. `guest_irq.rs` adds the kick on an IOAPIC raise. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-19 | wave-7-b21-stage2 | 0.0 | 99 | **Section 6 rows 6–15 are in `tools/b21-host-smp-stage1.sh`.** A typed guest command, a 30 minute soak, and `HOST_SMP` above `nproc - 1` are `cannot-run`. WP4 stays open. Scores held. Months **0.0 held**. Overall **99 held**. |
 | 2026-11-19 | wave-7-b21-pulse | 0.0 | 99 | **Pulse is stall-only unless `EFI\\RayNu\\pulse.txt` is present.** A stall line and the ring dump are suppressed while RayNu-F is running, and the dump re-arms when core 0's exit count advances. `boot: B21 cores` adds `wait_h`, `wait_r`, and `wait_rip` from the holder at `lock_wait_max`. Not lived. Scores held. Months **0.0 held**. Overall **99 held**. |
