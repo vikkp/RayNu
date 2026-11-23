@@ -330,6 +330,7 @@ pub mod guest_addr;
 pub mod guest_autostart;
 pub mod guest_catalog;
 pub mod guest_close;
+pub mod guest_cpu;
 pub mod guest_dhcp;
 pub mod guest_egress;
 pub mod guest_fw;

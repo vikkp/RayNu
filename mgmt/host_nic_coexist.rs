@@ -29,12 +29,16 @@ pub fn tick_native_coexist() {
         crate::mgmt::megaraid::flush_autostart();
         crate::mgmt::megaraid::flush_host_addr();
         crate::mgmt::megaraid::flush_operator();
+        crate::mgmt::megaraid::flush_guest_cpu();
         crate::mgmt::megaraid::flush_host_cert();
     }
 }
 
 /// Rate-limited standing-SPA poll (RayNu-F vmexit / USB BOT waits).
 pub fn maybe_tick_standing_spa() {
+    if !crate::arch::host_smp::on_core0() {
+        return;
+    }
     #[cfg(feature = "uefi-bin")]
     {
         crate::mgmt::host_nic_listen::maybe_tick_bcm5720_standing_spa();

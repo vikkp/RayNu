@@ -458,6 +458,26 @@ pub fn guest_tx_len() -> usize {
     unsafe { GUEST_TX_LEN }
 }
 
+/// Copy `out.len()` bytes of the guest TX ring starting `skip` bytes from
+/// the oldest, without removing them. The watchdog uses this when core 0
+/// has stopped taking exits.
+pub fn guest_tx_copy_at(skip: usize, out: &mut [u8]) -> usize {
+    // SAFETY: the ring is only written on the core that holds the monitor.
+    // The watchdog calls this when that core has stopped.
+    unsafe {
+        let len = GUEST_TX_LEN;
+        if skip >= len || out.is_empty() {
+            return 0;
+        }
+        let n = (len - skip).min(out.len());
+        let head = GUEST_TX_HEAD;
+        for i in 0..n {
+            out[i] = GUEST_TX[(head + skip + i) % GUEST_TX_CAP];
+        }
+        n
+    }
+}
+
 /// Free bytes in the guest UART TX ring.
 pub fn guest_tx_room() -> usize {
     GUEST_TX_CAP.saturating_sub(guest_tx_len())
@@ -823,6 +843,64 @@ pub fn write_byte_nowait(byte: u8) {
     let _ = drain_guest_tx(GUEST_TX_DRAIN_CHUNK);
 }
 
+/// How long one direct COM2 byte waits for THRE. A 16-byte FIFO at 115200
+/// 8N1 empties in about 1.4 ms. 20 ms covers that and still returns.
+const COM2_DIRECT_WAIT_US: u64 = 20_000;
+
+static COM2_DIRECT_DROPPED: AtomicU32 = AtomicU32::new(0);
+
+/// Bytes [`com2_bytes_direct`] did not write because THRE stayed clear.
+pub fn com2_direct_dropped() -> u32 {
+    COM2_DIRECT_DROPPED.load(Ordering::Acquire)
+}
+
+/// Bytes straight to COM2 from a core that does not hold the monitor.
+///
+/// Does not touch the guest TX ring. Each byte waits at most
+/// [`COM2_DIRECT_WAIT_US`] for THRE. Returns how many bytes were not written.
+pub fn com2_bytes_direct(bytes: &[u8]) -> usize {
+    #[cfg(target_os = "uefi")]
+    {
+        let mut dropped = 0usize;
+        for &byte in bytes {
+            // SAFETY: bounded LSR poll and at most one THR store on COM2.
+            // KANI-TARGET: host COM2 direct pulse (outside Proven Core).
+            if unsafe { !com2_byte_direct(byte) } {
+                dropped += 1;
+            }
+        }
+        if dropped != 0 {
+            COM2_DIRECT_DROPPED.fetch_add(dropped as u32, Ordering::Release);
+        }
+        dropped
+    }
+    #[cfg(not(target_os = "uefi"))]
+    {
+        let _ = bytes;
+        0
+    }
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn com2_byte_direct(byte: u8) -> bool {
+    if !COM2_LIVE {
+        return false;
+    }
+    let hz = crate::boot::raynu_f_flag::tsc_hz().max(1_000_000);
+    let wait = hz.saturating_mul(COM2_DIRECT_WAIT_US) / 1_000_000;
+    let start = crate::arch::cpu::rdtsc();
+    loop {
+        if inb(COM2 + 5) & 0x20 != 0 {
+            outb(COM2, byte);
+            return true;
+        }
+        if crate::arch::cpu::rdtsc().wrapping_sub(start) >= wait {
+            return false;
+        }
+        core::hint::spin_loop();
+    }
+}
+
 fn write_raw(byte: u8) {
     // SAFETY: single-threaded boot / HV.
     unsafe {
@@ -1100,6 +1178,24 @@ mod serial_test {
     }
 
     #[test]
+    fn guest_tx_copy_at_keeps_the_ring() {
+        guest_tx_clear();
+        set_guest_tx_test_sol_not_ready(true);
+        for b in b"Spectre" {
+            guest_tx_push(*b);
+        }
+        let mut buf = [0u8; 4];
+        assert_eq!(guest_tx_copy_at(0, &mut buf), 4);
+        assert_eq!(&buf, b"Spec");
+        assert_eq!(guest_tx_len(), 7);
+        let mut rest = [0u8; 8];
+        assert_eq!(guest_tx_copy_at(4, &mut rest), 3);
+        assert_eq!(&rest[..3], b"tre");
+        set_guest_tx_test_sol_not_ready(false);
+        guest_tx_clear();
+    }
+
+    #[test]
     fn write_byte_nowait_logs_without_clearing_live() {
         serial_log_clear();
         guest_tx_clear();
@@ -1112,6 +1208,10 @@ mod serial_test {
         assert_eq!(guest_tx_len(), 0);
         let s = include_str!("serial.rs");
         assert!(s.contains("fn write_byte_nowait"));
+        let direct = s.find("fn com2_bytes_direct").expect("direct");
+        let direct_body = &s[direct..direct + 500];
+        assert!(direct_body.contains("com2_byte_direct"));
+        assert!(!direct_body.contains("guest_tx_push"));
         assert!(s.contains("fn drain_guest_tx"));
         assert!(s.contains("Keep the port live"));
         assert!(s.contains("guest UART nowait; do not clear COM2_LIVE"));

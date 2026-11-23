@@ -254,10 +254,12 @@ impl Msix {
     fn fire(&self, idx: usize) {
         let e = &self.entry[idx];
         let vec = (e.data & 0xFF) as u8;
-        if e.addr & 0xFFFF_F000 != MSI_ADDR_PAGE || vec < 32 {
+        // Bits 31:20 are the APIC base. Bits 19:12 are the destination ID
+        // (ADR-023); a non-zero ID is still this LAPIC's page.
+        if e.addr & 0xFFF0_0000 != MSI_ADDR_PAGE || vec < 32 {
             return;
         }
-        lapic_virt::latch_irr(vec);
+        lapic_virt::latch_irr_msi(e.addr, vec);
         LAST_VEC.store(vec, Ordering::Release);
         if NOTE_ONCE.swap(true, Ordering::AcqRel) {
             return;
@@ -412,5 +414,32 @@ mod tests {
         refuse.set_queue_vec(0, 0);
         assert!(refuse.deliver_queue(0));
         assert!(lapic_virt::has_irr_vec(0x33));
+    }
+
+    #[test]
+    fn msix_destination_lands_in_that_vcpus_irr() {
+        let slot = crate::guest::slot::current();
+        struct Back(usize);
+        impl Drop for Back {
+            fn drop(&mut self) {
+                crate::guest::slot::set_vcpus(1);
+                crate::guest::slot::set_vcpu_up(self.0, 1, false);
+                lapic_virt::reset();
+            }
+        }
+        let _back = Back(slot);
+        lapic_virt::reset();
+        crate::guest::slot::set_vcpus(2);
+        crate::guest::slot::set_vcpu_up(slot, 1, true);
+        let mut m = Msix::empty();
+        // Destination APIC ID 1 sits in address bits 19:12.
+        m.mmio_write(TABLE_OFF, 4, MSI_ADDR_PAGE | (1 << 12));
+        m.mmio_write(TABLE_OFF + 8, 4, 0x51);
+        m.mmio_write(TABLE_OFF + 12, 4, 0);
+        m.set_queue_vec(0, 0);
+        m.set_control(CTRL_ENABLE | CTRL_SIZE);
+        assert!(m.deliver_queue(0));
+        assert!(!lapic_virt::has_irr_vec(0x51), "vCPU 0");
+        assert!(crate::guest::slot::with_vcpu(slot, 1, || lapic_virt::has_irr_vec(0x51)));
     }
 }

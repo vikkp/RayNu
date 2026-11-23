@@ -71,7 +71,7 @@ paths:
       summary: List images
   /perc/guests:
     get:
-      summary: Spare boot policy and link rows
+      summary: Spare boot policy and link rows. The body includes host_cores, the cores online.
   /perc/guests/1/start:
     post:
       summary: Start the installed guest
@@ -99,6 +99,9 @@ paths:
   /perc/nic/:
     post:
       summary: Save or clear a guest NIC
+  /perc/cpu/:
+    post:
+      summary: Save a guest vCPU count for the next Start. Refused when it is above host_cores, unless one core is online.
   /iso/install:
     post:
       summary: Start an install

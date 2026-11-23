@@ -96,6 +96,10 @@ fn main() -> Status {
     r640_hypervisor::mgmt::probe_product_linux_iso();
     r640_hypervisor::mgmt::probe_durable_lun();
     r640_hypervisor::mgmt::probe_host_nic_lab_flag();
+    // ADR-024: MP Services topology and per-core blocks. No core is started.
+    unsafe {
+        r640_hypervisor::arch::host_smp::probe_pre_ebs();
+    }
     let _ = r640_hypervisor::mgmt::run_pre_ebs_mgmt_listen();
 
     boot_note("boot: calling ExitBootServices — ConOut/video ends after this line");
@@ -189,6 +193,10 @@ fn run_m1_vmx(alloc: &mut memory::FrameAllocator) {
         Ok(()) => {
             boot::serial::write_line(vmx::M1_VMXON_OK_MARKER);
             audit::integrity::record_event(audit::AuditEvent::VmxEnabled { vcpu_id: 0 });
+            // ADR-024: other host cores, one at a time, then they sleep.
+            unsafe {
+                r640_hypervisor::arch::host_smp::start_cores();
+            }
             run_m2_ept_launch(alloc, &mut life);
         }
         Err(e) => {

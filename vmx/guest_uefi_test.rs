@@ -3688,8 +3688,8 @@ fn pit_wall_deadline_survives_unpaced_resumes() {
     assert_eq!(guest_uefi_preempt_unpaced_value(reload, due + 10, due, shift), 1);
     assert_eq!(guest_uefi_preempt_unpaced_value(0, t0, due, shift), 0);
     // Once the tick fired (or is overdue) the next deadline starts from now.
-    assert_eq!(guest_uefi_preempt_nominal_due(due, due, reload, shift), due + period);
     let late = due + 3 * period;
+    assert_eq!(guest_uefi_preempt_nominal_due(due, due, reload, shift), due + period);
     assert_eq!(guest_uefi_preempt_nominal_due(due, late, reload, shift), late + period);
     let src = include_str!("guest_uefi.rs");
     assert!(src.contains("M8.9 PIT wall deadline"));
@@ -3846,4 +3846,108 @@ fn idt_vectoring_reinjects_a_lost_external_interrupt_and_the_trace_shows_eois() 
         assert!(dump.contains(field), "wire field {field}");
     }
     assert!(dump.contains("crate::mgmt::bcm5720_mmio::egress_wire()"));
+}
+
+#[test]
+fn cpuid_names_n_cpus_and_leaves_topology_leaves_alone() {
+    use crate::sched::msr_firewall::CpuidRegs;
+    let base = CpuidRegs {
+        eax: 0x0000_0600 | (1 << 5) | 1,
+        ebx: 0x0000_1234,
+        ecx: 0,
+        edx: 0,
+    };
+    let r = super::guest_uefi_cpuid_smp(base, 1, 1, 2);
+    assert_eq!((r.ebx >> 16) & 0xFF, 2);
+    assert_eq!((r.ebx >> 24) & 0xFF, 1);
+    assert_ne!(r.edx & super::CPUID_EDX_HTT, 0);
+    // Level 1 (eax[7:5] == 1): core field stays 0. Package field is n-1.
+    let l1 = CpuidRegs {
+        eax: (1 << 5) | 1,
+        ebx: 0,
+        ecx: 0,
+        edx: 0,
+    };
+    let c = super::guest_uefi_cpuid_smp(l1, 4, 0, 2);
+    assert_eq!((c.eax >> 26) & 0x3F, 1);
+    assert_eq!((c.eax >> 14) & 0xFFF, 0);
+    let l3 = CpuidRegs {
+        eax: (3 << 5) | 1,
+        ebx: 9,
+        ecx: 0,
+        edx: 0,
+    };
+    let c3 = super::guest_uefi_cpuid_smp(l3, 4, 0, 4);
+    assert_eq!((c3.eax >> 26) & 0x3F, 3);
+    assert_eq!((c3.eax >> 14) & 0xFFF, 3, "4 is already a power of two");
+    let topo = CpuidRegs {
+        eax: 0x11,
+        ebx: 0x22,
+        ecx: 0x33,
+        edx: 0x44,
+    };
+    let b = super::guest_uefi_cpuid_smp(topo, 0xB, 1, 4);
+    assert_eq!((b.eax, b.ebx, b.ecx, b.edx), (0x11, 0x22, 0x33, 0x44));
+}
+
+#[test]
+fn sipi_entry_and_mirror_masks_and_ap_state() {
+    assert_eq!(super::sipi_entry(0x08), (0x0800, 0x8000, 0));
+    assert_eq!(super::sipi_entry(0), (0, 0, 0));
+    let primary = (1u64 << 2) | (1u64 << 22) | (1u64 << 31);
+    assert_eq!(super::ap_mirror_primary(primary), 1u64 << 31);
+    let entry = (1u64 << 9) | (1u64 << 15);
+    assert_eq!(super::ap_mirror_entry(entry), 1u64 << 15);
+    assert_eq!(super::ap_state_step(super::AP_OFF, true, false), super::AP_WAIT_SIPI);
+    assert_eq!(
+        super::ap_state_step(super::AP_WAIT_SIPI, false, true),
+        super::AP_RUNNING
+    );
+    assert_eq!(
+        super::ap_state_step(super::AP_RUNNING, false, true),
+        super::AP_RUNNING,
+        "a second SIPI does not move a running AP"
+    );
+}
+
+
+#[test]
+fn console_exits_take_the_gate1_path() {
+    let g = include_str!("guest_uefi.rs");
+    let exit = g.find("fn guest_uefi_vmexit()").expect("vmexit");
+    let body = &g[exit..exit + 2500];
+    assert!(
+        !body.contains("linux_com_fast"),
+        "gate 1 answered COM on the normal exit path"
+    );
+    assert!(body.contains("maybe_tick_standing_spa()"));
+}
+
+#[test]
+fn a_vcpu_is_placed_when_it_starts_and_collapse_recalls_it() {
+    let g = include_str!("guest_uefi.rs");
+    let start = g.find("unsafe fn ap_start(").expect("ap_start");
+    let body = &g[start..start + 4500];
+    assert!(
+        body.contains("place_running_vcpu(s, v, ap)"),
+        "SIPI homes the new vCPU"
+    );
+    let collapse = g.find("unsafe fn smp_collapse()").expect("collapse");
+    assert!(g[collapse..collapse + 900].contains("recall_cores("));
+    assert!(g.contains("fn bind_host_rsp()"));
+    assert!(g.contains("pub unsafe fn on_ap_wake("));
+}
+
+#[test]
+fn smp_service_precedes_inject_and_collapse_is_on_the_leave_paths() {
+    let g = include_str!("guest_uefi.rs");
+    let call = g.find("smp_service();").expect("smp_service");
+    let inj = g[call..].find("try_inject_guest_irq();").expect("inject");
+    assert!(inj < 120, "INIT/SIPI drain before inject");
+    let leave = g.find("unsafe fn leave_to_e4()").expect("leave");
+    let left = g[leave..].find("guest_sched::on_guest_left()").expect("left");
+    assert!(g[leave..leave + left].contains("smp_collapse()"));
+    let reset = g.find("unsafe fn raynu_f_reset_relaunch(").expect("reset");
+    let flush = g[reset..].find("serial::flush_guest_tx()").expect("flush");
+    assert!(g[reset..reset + flush].contains("smp_collapse()"));
 }

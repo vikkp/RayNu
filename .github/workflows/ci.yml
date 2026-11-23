@@ -104,7 +104,11 @@ jobs:
           # Actions runners often have /dev/kvm root-only; open it for the job.
           if [[ -e /dev/kvm ]]; then
             sudo chmod a+rw /dev/kvm || true
-            echo 1 | sudo tee /sys/module/kvm_intel/parameters/nested 2>/dev/null || true
+            # Shadow VMCS makes nested VMWRITE fail with insn error 12.
+            # The param is applied at module load, so reload when it is on.
+            if [[ -d /sys/module/kvm_intel ]]; then
+              sudo ./tools/enable-nested-kvm.sh
+            fi
             echo 1 | sudo tee /sys/module/kvm_amd/parameters/nested 2>/dev/null || true
           fi
           ls -l /dev/kvm 2>&1 || true
