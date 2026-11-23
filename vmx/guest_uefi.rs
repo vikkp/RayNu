@@ -6516,6 +6516,10 @@ unsafe extern "C" fn guest_uefi_vmresume() -> ! {
         "movdqu xmm13, [rax + 208]",
         "movdqu xmm14, [rax + 224]",
         "movdqu xmm15, [rax + 240]",
+        // Copy the holder before guest RAX is loaded. `mov al` after
+        // `slot_rax` replaces the guest's return byte (GRUB's PIT status).
+        "mov al, byte ptr [rip + {mon_holder}]",
+        "mov byte ptr [rip + {last_holder}], al",
         "mov rax, [rip + {slot_rax}]",
         "mov rbx, [rip + {slot_rbx}]",
         "mov rcx, [rip + {slot_rcx}]",
@@ -6531,8 +6535,6 @@ unsafe extern "C" fn guest_uefi_vmresume() -> ! {
         "mov r13, [rip + {slot_r13}]",
         "mov r14, [rip + {slot_r14}]",
         "mov r15, [rip + {slot_r15}]",
-        "mov al, byte ptr [rip + {mon_holder}]",
-        "mov byte ptr [rip + {last_holder}], al",
         "mov byte ptr [rip + {mon_holder}], 0xff",
         "lock inc dword ptr [rip + {mon_owner}]",
         "vmresume",
@@ -6604,6 +6606,10 @@ unsafe extern "C" fn guest_uefi_vmlaunch() -> ! {
         "movdqu xmm13, [rax + 208]",
         "movdqu xmm14, [rax + 224]",
         "movdqu xmm15, [rax + 240]",
+        // Copy the holder before guest RAX is loaded. `mov al` after
+        // `slot_rax` replaces the guest's return byte (GRUB's PIT status).
+        "mov al, byte ptr [rip + {mon_holder}]",
+        "mov byte ptr [rip + {last_holder}], al",
         "mov rax, [rip + {slot_rax}]",
         "mov rbx, [rip + {slot_rbx}]",
         "mov rcx, [rip + {slot_rcx}]",
@@ -6619,8 +6625,6 @@ unsafe extern "C" fn guest_uefi_vmlaunch() -> ! {
         "mov r13, [rip + {slot_r13}]",
         "mov r14, [rip + {slot_r14}]",
         "mov r15, [rip + {slot_r15}]",
-        "mov al, byte ptr [rip + {mon_holder}]",
-        "mov byte ptr [rip + {last_holder}], al",
         "mov byte ptr [rip + {mon_holder}], 0xff",
         "lock inc dword ptr [rip + {mon_owner}]",
         "vmlaunch",
@@ -10435,6 +10439,10 @@ unsafe fn raynu_f_publish_block_devices(
 #[unsafe(naked)]
 unsafe extern "C" fn raynu_f_vmlaunch() -> ! {
     core::arch::naked_asm!(
+        // Copy the holder before guest RAX is loaded. `mov al` after
+        // `slot_rax` replaces the guest's return byte (GRUB's PIT status).
+        "mov al, byte ptr [rip + {mon_holder}]",
+        "mov byte ptr [rip + {last_holder}], al",
         "mov rax, [rip + {slot_rax}]",
         "mov rbx, [rip + {slot_rbx}]",
         "mov rcx, [rip + {slot_rcx}]",
@@ -10450,8 +10458,6 @@ unsafe extern "C" fn raynu_f_vmlaunch() -> ! {
         "mov r13, [rip + {slot_r13}]",
         "mov r14, [rip + {slot_r14}]",
         "mov r15, [rip + {slot_r15}]",
-        "mov al, byte ptr [rip + {mon_holder}]",
-        "mov byte ptr [rip + {last_holder}], al",
         "mov byte ptr [rip + {mon_holder}], 0xff",
         "lock inc dword ptr [rip + {mon_owner}]",
         "vmlaunch",

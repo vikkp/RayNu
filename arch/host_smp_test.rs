@@ -552,9 +552,19 @@ fn wait_sample_names_the_waiter_and_the_previous_holder() {
     assert!(!src.contains("wait_h="));
     let g = include_str!("../vmx/guest_uefi.rs");
     assert!(g.contains("LAST_RELEASED_HOLDER"));
-    let save = g.find("mov byte ptr [rip + {last_holder}], al").expect("save");
-    let clear = g[save..].find("mov byte ptr [rip + {mon_holder}], 0xff").expect("clear");
-    assert!(clear > 0);
+    let mut rest = g;
+    let mut stubs = 0;
+    while rest.contains("mov byte ptr [rip + {last_holder}], al") {
+        let save = rest.find("mov byte ptr [rip + {last_holder}], al").expect("save");
+        let rax = rest.find("mov rax, [rip + {slot_rax}]").expect("rax");
+        assert!(save < rax, "holder copy runs before guest RAX is loaded");
+        let clear = rest[rax..]
+            .find("mov byte ptr [rip + {mon_holder}], 0xff")
+            .expect("clear");
+        rest = &rest[rax + clear + 1..];
+        stubs += 1;
+    }
+    assert_eq!(stubs, 3, "vmresume, vmlaunch, and RayNu-F vmlaunch");
 }
 
 #[test]
